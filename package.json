@@ -1,0 +1,51 @@
+{
+  "name": "homechef",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HomeChef - Connect with home chefs for authentic homemade food",
+  "keywords": ["food-delivery", "home-chef", "catering", "homemade-food"],
+  "license": "UNLICENSED",
+  "author": "HomeChef Team",
+  "scripts": {
+    "dev": "pnpm --filter @homechef/web dev",
+    "dev:vendor": "pnpm --filter @homechef/vendor-portal dev",
+    "dev:admin": "pnpm --filter @homechef/admin-portal dev",
+    "dev:delivery": "pnpm --filter @homechef/delivery-portal dev",
+    "dev:api": "cd apps/api && go run cmd/server/main.go",
+    "build": "pnpm --filter @homechef/web build",
+    "build:vendor": "pnpm --filter @homechef/vendor-portal build",
+    "build:admin": "pnpm --filter @homechef/admin-portal build",
+    "build:delivery": "pnpm --filter @homechef/delivery-portal build",
+    "build:all": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.1",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}

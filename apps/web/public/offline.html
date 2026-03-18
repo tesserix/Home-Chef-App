@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f97316">
+  <title>Offline - Fe3dr</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 400px;
+    }
+
+    .icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 2rem;
+      background: #f97316;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .icon svg {
+      width: 60px;
+      height: 60px;
+      fill: white;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      color: #1f2937;
+      margin-bottom: 0.75rem;
+    }
+
+    p {
+      color: #6b7280;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #f97316;
+      color: white;
+      border: none;
+      padding: 0.875rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      touch-action: manipulation;
+    }
+
+    .retry-btn:hover {
+      background: #ea580c;
+      transform: translateY(-1px);
+    }
+
+    .retry-btn:active {
+      transform: translateY(0);
+    }
+
+    .retry-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .tips {
+      margin-top: 3rem;
+      padding: 1.5rem;
+      background: white;
+      border-radius: 1rem;
+      text-align: left;
+    }
+
+    .tips h2 {
+      font-size: 1rem;
+      color: #1f2937;
+      margin-bottom: 0.75rem;
+    }
+
+    .tips ul {
+      list-style: none;
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+
+    .tips li {
+      padding: 0.5rem 0;
+      padding-left: 1.5rem;
+      position: relative;
+    }
+
+    .tips li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 6px;
+      height: 6px;
+      background: #f97316;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M2.28 3.28a.75.75 0 0 1 1.06-.04l18.5 17a.75.75 0 0 1-1.02 1.1l-3.28-3.02A8.94 8.94 0 0 1 12 20c-4.97 0-9-4.03-9-9 0-1.95.62-3.76 1.68-5.24L2.24 4.34a.75.75 0 0 1 .04-1.06ZM6.12 7.14A7.45 7.45 0 0 0 4.5 11c0 4.14 3.36 7.5 7.5 7.5 1.88 0 3.6-.69 4.92-1.83L6.12 7.14ZM12 2c4.97 0 9 4.03 9 9 0 1.45-.34 2.82-.95 4.03l-1.14-1.05c.38-.91.59-1.91.59-2.98 0-4.14-3.36-7.5-7.5-7.5-1.24 0-2.42.3-3.45.84L7.38 3.24A8.94 8.94 0 0 1 12 2Z"/>
+      </svg>
+    </div>
+
+    <h1>You're Offline</h1>
+    <p>It looks like you've lost your internet connection. Don't worry, you can still browse some cached content.</p>
+
+    <button class="retry-btn" onclick="window.location.reload()">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clip-rule="evenodd"/>
+      </svg>
+      Try Again
+    </button>
+
+    <div class="tips">
+      <h2>While you're offline, you can:</h2>
+      <ul>
+        <li>View previously loaded chef profiles</li>
+        <li>Browse your cached menu items</li>
+        <li>Check your saved orders</li>
+        <li>Changes will sync when you're back online</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

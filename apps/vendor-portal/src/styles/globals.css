@@ -1,0 +1,425 @@
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+
+/* Custom utilities (Tailwind 4 @utility — available in @apply) */
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility safe-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+@utility safe-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+@utility safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* HomeChef Design System - CSS Variables (full HSL values for Tailwind 4) */
+:root {
+  /* Core */
+  --background: hsl(30 100% 98%);         /* #FFFAF5 warm cream */
+  --foreground: hsl(24 10% 10%);          /* #1C1917 stone 900 */
+  --card: hsl(0 0% 100%);                 /* #FFFFFF */
+  --card-foreground: hsl(24 10% 10%);     /* #1C1917 */
+  --popover: hsl(0 0% 100%);             /* #FFFFFF */
+  --popover-foreground: hsl(24 10% 10%); /* #1C1917 */
+
+  /* Primary - Terracotta */
+  --primary: hsl(17 88% 40%);             /* #C2410C */
+  --primary-foreground: hsl(0 0% 100%);   /* #FFFFFF */
+
+  /* Secondary - Warm stone */
+  --secondary: hsl(29 33% 94%);           /* #F5F0EB */
+  --secondary-foreground: hsl(30 6% 25%); /* #44403C */
+
+  /* Muted */
+  --muted: hsl(30 50% 96%);               /* #FAF5F0 */
+  --muted-foreground: hsl(25 5% 45%);     /* #78716C */
+
+  /* Accent - Amber/Golden */
+  --accent: hsl(48 96% 89%);              /* #FEF3C7 */
+  --accent-foreground: hsl(23 83% 31%);   /* #92400E */
+
+  /* Destructive */
+  --destructive: hsl(0 72% 51%);          /* #DC2626 */
+  --destructive-foreground: hsl(0 0% 100%); /* #FFFFFF */
+
+  /* Border & Input */
+  --border: hsl(30 23% 88%);              /* #E7E0D9 */
+  --input: hsl(30 23% 88%);               /* #E7E0D9 */
+  --ring: hsl(17 88% 40%);                /* #C2410C */
+
+  /* Status */
+  --success: hsl(161 93% 30%);            /* #059669 */
+  --success-foreground: hsl(0 0% 100%);   /* #FFFFFF */
+  --warning: hsl(32 95% 44%);             /* #D97706 */
+  --warning-foreground: hsl(24 10% 10%);  /* #1C1917 */
+  --error: hsl(0 72% 51%);                /* #DC2626 */
+  --error-foreground: hsl(0 0% 100%);     /* #FFFFFF */
+  --info: hsl(221 83% 53%);               /* #2563EB */
+  --info-foreground: hsl(0 0% 100%);      /* #FFFFFF */
+
+  /* Sidebar (Chef/Admin) */
+  --sidebar: hsl(24 10% 10%);             /* #1C1917 */
+  --sidebar-foreground: hsl(29 33% 94%);  /* #F5F0EB */
+  --sidebar-primary: hsl(17 88% 40%);     /* #C2410C */
+  --sidebar-accent: hsl(12 7% 15%);       /* #292524 */
+  --sidebar-border: hsl(30 6% 25%);       /* #44403C */
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Mobile-specific spacing */
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  --spacing-safe-left: env(safe-area-inset-left);
+  --spacing-safe-right: env(safe-area-inset-right);
+}
+
+/* CSS Keyframe Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bounce-in {
+  from { opacity: 0; transform: scale(0.3); }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    overscroll-behavior-y: contain;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+  }
+
+  /* Better tap targets on mobile */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Disable text selection on interactive elements */
+  button, .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Remove tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Card hover effects */
+  .card-hover-lift {
+    @apply transition-all duration-200;
+  }
+  .card-hover-lift:hover {
+    @apply -translate-y-1 shadow-card-hover;
+  }
+
+  .card-hover-scale {
+    @apply transition-transform duration-200;
+  }
+  .card-hover-scale:hover {
+    @apply scale-[1.02];
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md;
+  }
+
+  .glass-dark {
+    @apply bg-[#1C1917]/80 backdrop-blur-md;
+  }
+
+  /* Food overlay gradient */
+  .bg-gradient-food-overlay {
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 100%);
+  }
+
+  /* Touch-friendly sizing */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  .touch-target-lg {
+    @apply min-h-[48px] min-w-[48px];
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-muted animate-pulse rounded;
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Haptic feedback simulation */
+  .haptic-light:active {
+    transform: scale(0.98);
+  }
+
+  .haptic-medium:active {
+    transform: scale(0.95);
+  }
+
+  /* Visibility utilities */
+  .mobile-hidden {
+    @apply hidden md:block;
+  }
+
+  .mobile-only {
+    @apply block md:hidden;
+  }
+
+  /* Bottom navigation spacing */
+  .pb-safe-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
+  }
+
+  /* Snap scroll for carousels */
+  .snap-x-mandatory {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .snap-start {
+    scroll-snap-align: start;
+  }
+
+  .snap-center {
+    scroll-snap-align: center;
+  }
+
+  /* Momentum scrolling */
+  .momentum-scroll {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
+  /* Prevent overscroll bounce */
+  .no-overscroll {
+    overscroll-behavior: none;
+  }
+
+  /* Swipeable container */
+  .swipeable {
+    touch-action: pan-x;
+    cursor: grab;
+  }
+
+  .swipeable:active {
+    cursor: grabbing;
+  }
+
+  /* Image loading placeholder */
+  .img-loading {
+    @apply bg-muted animate-pulse;
+  }
+}
+
+/* Component patterns */
+@layer components {
+  /* Container */
+  .container-app {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-mobile {
+    @apply mx-auto w-full px-4;
+    max-width: min(100%, 640px);
+  }
+
+  /* Page layout */
+  .page-header {
+    @apply mb-6 space-y-2;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-foreground md:text-3xl;
+  }
+
+  .page-description {
+    @apply text-muted-foreground text-sm md:text-base;
+  }
+
+  .section {
+    @apply py-8 md:py-12 lg:py-16;
+  }
+
+  /* Mobile bottom navigation */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card
+           safe-bottom md:hidden;
+  }
+
+  .bottom-nav-item {
+    @apply flex flex-1 flex-col items-center justify-center gap-1 py-2
+           text-xs font-medium text-muted-foreground transition-colors
+           active:bg-secondary;
+  }
+
+  .bottom-nav-item-active {
+    @apply flex flex-1 flex-col items-center justify-center gap-1 py-2
+           text-xs font-medium text-primary transition-colors
+           active:bg-secondary;
+  }
+
+  /* Mobile sheet */
+  .mobile-sheet {
+    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-card
+           shadow-2xl safe-bottom transform transition-transform duration-300;
+  }
+
+  .mobile-sheet-handle {
+    @apply mx-auto mt-3 h-1 w-10 rounded-full bg-border;
+  }
+
+  /* Swipe indicator dots */
+  .swipe-dots {
+    @apply flex items-center justify-center gap-1.5 py-2;
+  }
+
+  .swipe-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-border transition-all duration-200;
+  }
+
+  .swipe-dot-active {
+    @apply h-1.5 w-4 rounded-full bg-primary transition-all duration-200;
+  }
+
+  /* List items */
+  .list-item {
+    @apply flex items-center gap-4 px-4 py-3 transition-colors active:bg-secondary;
+  }
+
+  .list-item-border {
+    @apply flex items-center gap-4 px-4 py-3 transition-colors active:bg-secondary
+           border-b border-border;
+  }
+
+  /* Sticky header */
+  .sticky-header {
+    @apply sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur safe-top;
+  }
+
+  /* Notification dot */
+  .notification-dot {
+    @apply absolute -right-1 -top-1 h-3 w-3 rounded-full bg-destructive
+           ring-2 ring-card;
+  }
+
+  /* Empty state */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+  }
+
+  .empty-state-icon {
+    @apply h-16 w-16 text-border;
+  }
+
+  .empty-state-title {
+    @apply mt-4 text-lg font-semibold text-foreground;
+  }
+
+  .empty-state-description {
+    @apply mt-2 max-w-sm text-muted-foreground;
+  }
+
+  /* Logo */
+  .logo {
+    @apply flex items-center gap-2;
+  }
+
+  .logo-icon {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl bg-primary;
+  }
+
+  .logo-icon span {
+    @apply text-xl font-bold text-primary-foreground;
+  }
+
+  .logo-text {
+    @apply text-xl font-bold text-foreground;
+  }
+
+  .logo-tagline {
+    @apply text-xs text-muted-foreground;
+  }
+}

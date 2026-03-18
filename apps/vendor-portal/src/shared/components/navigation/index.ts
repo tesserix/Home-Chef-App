@@ -1,0 +1,1 @@
+export { VendorBottomNav } from './VendorBottomNav';
