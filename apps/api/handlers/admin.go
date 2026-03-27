@@ -607,7 +607,9 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
 	cfg := config.AppConfig
 
-	configured := cfg.RazorpayKeyID != "" && cfg.RazorpayKeySecret != ""
+	// Check if Razorpay client is initialized (secrets are inside the client, not config)
+	client := services.GetRazorpay()
+	configured := client != nil
 
 	mode := "unknown"
 	keyPrefix := ""
@@ -617,7 +619,7 @@ func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
 		} else if strings.HasPrefix(cfg.RazorpayKeyID, "rzp_live_") {
 			mode = "live"
 		}
-		// Show first 12 chars + "..."
+		// Show first 12 chars + "..." — key ID is a publishable key, safe to show prefix
 		if len(cfg.RazorpayKeyID) > 12 {
 			keyPrefix = cfg.RazorpayKeyID[:12] + "..."
 		} else {
@@ -625,19 +627,13 @@ func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
 		}
 	}
 
-	webhookSecretSet := cfg.RazorpayWebhookSecret != ""
+	webhookSecretSet := client != nil && client.HasWebhookSecret()
 	webhookURL := "https://api.fe3dr.com/webhooks/razorpay"
 
 	var healthErr string
 	if configured {
-		client := services.GetRazorpay()
-		if client != nil {
-			if err := client.HealthCheck(); err != nil {
-				healthErr = err.Error()
-				configured = false
-			}
-		} else {
-			healthErr = "Razorpay client not initialized"
+		if err := client.HealthCheck(); err != nil {
+			healthErr = err.Error()
 			configured = false
 		}
 	}

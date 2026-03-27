@@ -17,15 +17,19 @@ import (
 
 const razorpayBaseURL = "https://api.razorpay.com/v1"
 
-// RazorpayClient handles all Razorpay API interactions
+// RazorpayClient handles all Razorpay API interactions.
+// All sensitive fields are unexported — secrets cannot be read from outside this package.
 type RazorpayClient struct {
-	keyID     string
-	keySecret string
+	keyID         string
+	keySecret     string
+	webhookSecret string
 }
 
 var razorpayClient *RazorpayClient
 
-// InitRazorpay initializes the Razorpay client
+// InitRazorpay initializes the Razorpay client and clears secrets from config.
+// After this call, the key secret is only held inside the RazorpayClient struct
+// (unexported fields) and cannot be accessed from handlers or logged.
 func InitRazorpay() {
 	cfg := config.AppConfig
 	if cfg.RazorpayKeyID == "" || cfg.RazorpayKeySecret == "" {
@@ -33,9 +37,16 @@ func InitRazorpay() {
 		return
 	}
 	razorpayClient = &RazorpayClient{
-		keyID:     cfg.RazorpayKeyID,
-		keySecret: cfg.RazorpayKeySecret,
+		keyID:         cfg.RazorpayKeyID,
+		keySecret:     cfg.RazorpayKeySecret,
+		webhookSecret: cfg.RazorpayWebhookSecret,
 	}
+
+	// Clear secrets from in-memory config — they're now only inside RazorpayClient
+	// (unexported fields). The key ID stays because it's a publishable key.
+	cfg.RazorpayKeySecret = ""
+	cfg.RazorpayWebhookSecret = ""
+
 	log.Println("Razorpay client initialized")
 }
 
@@ -233,23 +244,29 @@ func (c *RazorpayClient) FetchPayment(paymentID string) (*PaymentResponse, error
 
 // --- Webhook Verification ---
 
-// VerifyWebhookSignature validates that a webhook payload came from Razorpay
+// VerifyWebhookSignature validates that a webhook payload came from Razorpay.
+// The webhook secret is held inside the RazorpayClient, not in global config.
 func VerifyWebhookSignature(payload []byte, signature string) bool {
-	cfg := config.AppConfig
-	if cfg.RazorpayWebhookSecret == "" {
+	if razorpayClient == nil || razorpayClient.webhookSecret == "" {
 		log.Println("Warning: Razorpay webhook secret not configured")
 		return false
 	}
 
-	mac := hmac.New(sha256.New, []byte(cfg.RazorpayWebhookSecret))
+	mac := hmac.New(sha256.New, []byte(razorpayClient.webhookSecret))
 	mac.Write(payload)
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
-// GetKeyID returns the Razorpay publishable key ID (for frontend checkout)
+// GetKeyID returns the Razorpay publishable key ID (for frontend checkout).
+// This is safe to expose — it's the equivalent of a Stripe publishable key.
 func (c *RazorpayClient) GetKeyID() string {
 	return c.keyID
+}
+
+// HasWebhookSecret returns whether a webhook secret is configured (without exposing it).
+func (c *RazorpayClient) HasWebhookSecret() bool {
+	return c.webhookSecret != ""
 }
 
 // HealthCheck validates Razorpay credentials by making a lightweight API call
