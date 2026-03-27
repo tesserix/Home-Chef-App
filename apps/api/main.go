@@ -47,6 +47,9 @@ func main() {
 		defer services.CloseSecretManager()
 	}
 
+	// Load Razorpay keys from GCP Secret Manager (overrides env vars)
+	services.LoadRazorpayKeysFromSM()
+
 	// Initialize Razorpay
 	services.InitRazorpay()
 
