@@ -80,7 +80,7 @@ Lucide Icons:   Latest
 
 ### Backend
 ```
-Go:             1.25.5
+Go:             1.26.1
 Gin:            1.10.x
 GORM:           1.25.x
 JWT-Go:         5.x
@@ -601,7 +601,7 @@ src/mock/data/
 ```bash
 # Required versions
 node --version    # v25.2.1
-go version        # go1.25.5
+go version        # go1.26.1
 pnpm --version    # 9.x
 
 # Install pnpm if needed

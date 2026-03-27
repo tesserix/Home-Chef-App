@@ -1,6 +1,6 @@
 module github.com/homechef/api
 
-go 1.25.5
+go 1.26.1
 
 require (
 	cloud.google.com/go/secretmanager v1.16.0
