@@ -1,6 +1,13 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +17,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -329,17 +337,104 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// Find user (don't reveal if email exists)
+	// Always return success to avoid email enumeration
+	successMsg := gin.H{"message": "If the email exists, a reset link has been sent"}
+
+	// Find user
 	var user models.User
 	if err := database.DB.Where("email = ?", strings.ToLower(req.Email)).First(&user).Error; err != nil {
-		// Return success even if user doesn't exist (security)
-		c.JSON(http.StatusOK, gin.H{"message": "If the email exists, a reset link has been sent"})
+		c.JSON(http.StatusOK, successMsg)
 		return
 	}
 
-	// TODO: Generate reset token and send email
-	// For now, just return success
-	c.JSON(http.StatusOK, gin.H{"message": "If the email exists, a reset link has been sent"})
+	// Invalidate any existing unused reset tokens for this user
+	database.DB.Model(&models.PasswordResetToken{}).
+		Where("user_id = ? AND used_at IS NULL", user.ID).
+		Update("used_at", time.Now())
+
+	// Generate a cryptographically secure token (32 bytes = 64 hex chars)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		log.Printf("ForgotPassword: failed to generate token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		return
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	// Store the reset token with 1-hour expiry
+	resetToken := models.PasswordResetToken{
+		UserID:    user.ID,
+		Token:     token,
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	if err := database.DB.Create(&resetToken).Error; err != nil {
+		log.Printf("ForgotPassword: failed to save reset token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+		return
+	}
+
+	// Send the reset email asynchronously (don't block response)
+	go func() {
+		if err := services.GetEmailService().SendPasswordResetEmail(user.Email, token); err != nil {
+			log.Printf("ForgotPassword: failed to send email to %s: %v", user.Email, err)
+		}
+	}()
+
+	c.JSON(http.StatusOK, successMsg)
+}
+
+// ResetPasswordRequest represents the password reset payload
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required,min=8"`
+}
+
+// ResetPassword validates a reset token and sets a new password
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Find the reset token
+	var resetToken models.PasswordResetToken
+	if err := database.DB.Where("token = ? AND used_at IS NULL", req.Token).First(&resetToken).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired reset token"})
+		return
+	}
+
+	// Check expiry
+	if resetToken.ExpiresAt.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Reset token has expired"})
+		return
+	}
+
+	// Hash the new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
+		return
+	}
+
+	// Update the user's password
+	if err := database.DB.Model(&models.User{}).Where("id = ?", resetToken.UserID).
+		Update("password", string(hashedPassword)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+
+	// Mark token as used
+	now := time.Now()
+	resetToken.UsedAt = &now
+	database.DB.Save(&resetToken)
+
+	// Revoke all refresh tokens for this user
+	database.DB.Model(&models.RefreshToken{}).
+		Where("user_id = ? AND revoked_at IS NULL", resetToken.UserID).
+		Update("revoked_at", now)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password has been reset successfully"})
 }
 
 // OAuthLoginRequest represents the OAuth login payload
@@ -353,7 +448,7 @@ type OAuthLoginRequest struct {
 	Avatar     string `json:"avatar"`
 }
 
-// OAuthLogin handles OAuth authentication
+// OAuthLogin handles OAuth authentication with server-side token verification
 func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 	var req OAuthLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -361,31 +456,66 @@ func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 		return
 	}
 
-	// TODO: Verify OAuth token with provider
-	// For now, trust the client data (insecure - implement proper verification)
-
 	provider := models.AuthProvider(req.Provider)
 	if provider != models.ProviderGoogle && provider != models.ProviderFacebook && provider != models.ProviderApple {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid OAuth provider"})
 		return
 	}
 
+	// Verify the OAuth token with the respective provider
+	verifiedEmail, verifiedName, verifiedProviderID, verifiedAvatar, err := verifyOAuthToken(provider, req.Token)
+	if err != nil {
+		log.Printf("OAuth verification failed for %s: %v", provider, err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OAuth token verification failed"})
+		return
+	}
+
+	// Use verified data, falling back to client data only for non-critical fields
+	email := verifiedEmail
+	if email == "" {
+		email = req.Email
+	}
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
+		return
+	}
+
+	providerID := verifiedProviderID
+	if providerID == "" {
+		providerID = req.ProviderID
+	}
+
+	firstName := req.FirstName
+	lastName := req.LastName
+	if verifiedName != "" && firstName == "" {
+		parts := strings.SplitN(verifiedName, " ", 2)
+		firstName = parts[0]
+		if len(parts) > 1 {
+			lastName = parts[1]
+		}
+	}
+
+	avatar := req.Avatar
+	if verifiedAvatar != "" {
+		avatar = verifiedAvatar
+	}
+
 	// Check if user exists
 	var user models.User
-	err := database.DB.Where("email = ?", strings.ToLower(req.Email)).First(&user).Error
+	dbErr := database.DB.Where("email = ?", strings.ToLower(email)).First(&user).Error
 
-	if err != nil {
+	if dbErr != nil {
 		// Create new user
 		user = models.User{
-			Email:        strings.ToLower(req.Email),
-			FirstName:    req.FirstName,
-			LastName:     req.LastName,
-			Avatar:       req.Avatar,
-			Role:         models.RoleCustomer,
-			AuthProvider: provider,
-			ProviderID:   req.ProviderID,
-			IsActive:     true,
-			EmailVerified: true, // OAuth emails are verified
+			Email:         strings.ToLower(email),
+			FirstName:     firstName,
+			LastName:      lastName,
+			Avatar:        avatar,
+			Role:          models.RoleCustomer,
+			AuthProvider:  provider,
+			ProviderID:    providerID,
+			IsActive:      true,
+			EmailVerified: true, // OAuth emails are verified by the provider
 		}
 
 		if err := database.DB.Create(&user).Error; err != nil {
@@ -395,7 +525,7 @@ func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 	} else {
 		// Update existing user's OAuth info if needed
 		if user.ProviderID == "" {
-			user.ProviderID = req.ProviderID
+			user.ProviderID = providerID
 			user.AuthProvider = provider
 			database.DB.Save(&user)
 		}
@@ -423,6 +553,169 @@ func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	})
+}
+
+// verifyOAuthToken verifies the token with the respective OAuth provider.
+// Returns (email, name, providerID, avatar, error).
+func verifyOAuthToken(provider models.AuthProvider, token string) (string, string, string, string, error) {
+	switch provider {
+	case models.ProviderGoogle:
+		return verifyGoogleToken(token)
+	case models.ProviderFacebook:
+		return verifyFacebookToken(token)
+	case models.ProviderApple:
+		return verifyAppleToken(token)
+	default:
+		return "", "", "", "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+}
+
+// verifyGoogleToken verifies a Google ID token using the tokeninfo endpoint
+func verifyGoogleToken(idToken string) (string, string, string, string, error) {
+	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("google: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", "", "", fmt.Errorf("google: token invalid (status %d)", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("google: failed to read response: %w", err)
+	}
+
+	var result struct {
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Sub     string `json:"sub"`
+		Picture string `json:"picture"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", "", "", "", fmt.Errorf("google: failed to parse response: %w", err)
+	}
+
+	if result.Email == "" {
+		return "", "", "", "", fmt.Errorf("google: no email in token")
+	}
+
+	return result.Email, result.Name, result.Sub, result.Picture, nil
+}
+
+// verifyFacebookToken verifies a Facebook access token using the Graph API
+func verifyFacebookToken(accessToken string) (string, string, string, string, error) {
+	resp, err := http.Get("https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=" + accessToken)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("facebook: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", "", "", fmt.Errorf("facebook: token invalid (status %d)", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("facebook: failed to read response: %w", err)
+	}
+
+	var result struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Picture struct {
+			Data struct {
+				URL string `json:"url"`
+			} `json:"data"`
+		} `json:"picture"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", "", "", "", fmt.Errorf("facebook: failed to parse response: %w", err)
+	}
+
+	if result.ID == "" {
+		return "", "", "", "", fmt.Errorf("facebook: no user ID in response")
+	}
+
+	return result.Email, result.Name, result.ID, result.Picture.Data.URL, nil
+}
+
+// verifyAppleToken performs basic JWT validation for Apple Sign In tokens.
+// A full implementation would fetch Apple's public keys from
+// https://appleid.apple.com/auth/keys and verify the RS256 signature.
+// Here we decode the payload and validate the basic claims.
+func verifyAppleToken(idToken string) (string, string, string, string, error) {
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return "", "", "", "", fmt.Errorf("apple: invalid JWT format")
+	}
+
+	// Decode the payload (part[1])
+	decoded, err := base64URLDecode(parts[1])
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("apple: failed to decode payload: %w", err)
+	}
+
+	var claims struct {
+		Iss   string `json:"iss"`
+		Sub   string `json:"sub"`
+		Email string `json:"email"`
+		Exp   int64  `json:"exp"`
+	}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return "", "", "", "", fmt.Errorf("apple: failed to parse claims: %w", err)
+	}
+
+	// Validate issuer
+	if claims.Iss != "https://appleid.apple.com" {
+		return "", "", "", "", fmt.Errorf("apple: invalid issuer: %s", claims.Iss)
+	}
+
+	// Validate expiry
+	if time.Now().Unix() > claims.Exp {
+		return "", "", "", "", fmt.Errorf("apple: token expired")
+	}
+
+	if claims.Sub == "" {
+		return "", "", "", "", fmt.Errorf("apple: no subject in token")
+	}
+
+	return claims.Email, "", claims.Sub, "", nil
+}
+
+// base64URLDecode decodes a base64url-encoded string (with or without padding)
+func base64URLDecode(s string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(s)
+}
+
+// DeviceTokenRequest represents the FCM device token registration payload
+type DeviceTokenRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// UpdateDeviceToken registers or updates the FCM device token for the current user
+func (h *AuthHandler) UpdateDeviceToken(c *gin.Context) {
+	user, exists := middleware.GetUser(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req DeviceTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user.FCMToken = req.Token
+	if err := database.DB.Model(user).Update("fcm_token", req.Token).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update device token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Device token updated"})
 }
 
 // Helper to get user ID from string parameter

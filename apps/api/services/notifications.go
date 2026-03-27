@@ -1,14 +1,18 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 	"github.com/nats-io/nats.go"
@@ -782,20 +786,111 @@ func (s *NotificationService) handleApprovalCreated(event Event) {
 
 func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 	log.Printf("Sending email notification to user %s: %s", notif.UserID.String(), notif.Title)
-	// TODO: Implement actual email sending via SendGrid
-	// For now, just log it
+
+	// Look up user email
+	var user models.User
+	if err := database.DB.Select("id, email, first_name").First(&user, "id = ?", notif.UserID).Error; err != nil {
+		log.Printf("Email dispatch: user %s not found: %v", notif.UserID, err)
+		return
+	}
+
+	emailSvc := GetEmailService()
+
+	// Route to the appropriate email template based on notification data
+	notifType, _ := notif.Data["type"].(string)
+	switch notifType {
+	case "order_confirmation":
+		orderNumber, _ := notif.Data["order_number"].(string)
+		total, _ := notif.Data["total"].(float64)
+		if err := emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total); err != nil {
+			log.Printf("Failed to send order confirmation email: %v", err)
+		}
+	case "order_status":
+		orderNumber, _ := notif.Data["order_number"].(string)
+		status, _ := notif.Data["status"].(string)
+		if err := emailSvc.SendOrderStatusUpdate(user.Email, orderNumber, status); err != nil {
+			log.Printf("Failed to send order status email: %v", err)
+		}
+	case "chef_verified":
+		if err := emailSvc.SendChefVerificationApproved(user.Email, user.FirstName); err != nil {
+			log.Printf("Failed to send chef verification email: %v", err)
+		}
+	case "welcome":
+		if err := emailSvc.SendWelcomeEmail(user.Email, user.FirstName); err != nil {
+			log.Printf("Failed to send welcome email: %v", err)
+		}
+	default:
+		// Generic: send as a simple HTML email via the low-level send method
+		html := fmt.Sprintf("<h2>%s</h2><p>%s</p>", notif.Title, notif.Message)
+		if err := emailSvc.send(user.Email, notif.Title, html); err != nil {
+			log.Printf("Failed to send generic email: %v", err)
+		}
+	}
 }
 
 func (s *NotificationService) sendPushNotification(notif NotificationEvent) {
 	log.Printf("Sending push notification to user %s: %s", notif.UserID.String(), notif.Title)
-	// TODO: Implement actual push notification via FCM/APNS
-	// For now, just log it
+
+	// Convert data map to string map for FCM
+	data := make(map[string]string)
+	for k, v := range notif.Data {
+		data[k] = fmt.Sprintf("%v", v)
+	}
+
+	if err := SendPushNotification(notif.UserID, notif.Title, notif.Message, data); err != nil {
+		log.Printf("Failed to send push notification to user %s: %v", notif.UserID, err)
+	}
 }
 
 func (s *NotificationService) sendSMSNotification(notif NotificationEvent) {
-	log.Printf("Sending SMS notification to user #%s: %s", notif.UserID.String(), notif.Title)
-	// TODO: Implement actual SMS sending via Twilio
-	// For now, just log it
+	log.Printf("Sending SMS notification to user %s: %s", notif.UserID.String(), notif.Title)
+
+	cfg := config.AppConfig
+	if cfg.TwilioAccountSID == "" || cfg.TwilioAuthToken == "" || cfg.TwilioPhoneNumber == "" {
+		log.Printf("SMS skipped (Twilio not configured): user=%s", notif.UserID)
+		return
+	}
+
+	// Look up user phone
+	var user models.User
+	if err := database.DB.Select("id, phone").First(&user, "id = ?", notif.UserID).Error; err != nil {
+		log.Printf("SMS dispatch: user %s not found: %v", notif.UserID, err)
+		return
+	}
+	if user.Phone == "" {
+		log.Printf("SMS skipped: user %s has no phone number", notif.UserID)
+		return
+	}
+
+	// Twilio REST API
+	twilioURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", cfg.TwilioAccountSID)
+	formData := fmt.Sprintf("From=%s&To=%s&Body=%s",
+		url.QueryEscape(cfg.TwilioPhoneNumber),
+		url.QueryEscape(user.Phone),
+		url.QueryEscape(fmt.Sprintf("%s: %s", notif.Title, notif.Message)),
+	)
+
+	req, err := http.NewRequest(http.MethodPost, twilioURL, bytes.NewBufferString(formData))
+	if err != nil {
+		log.Printf("SMS: failed to create request: %v", err)
+		return
+	}
+	req.SetBasicAuth(cfg.TwilioAccountSID, cfg.TwilioAuthToken)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("SMS: request failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Printf("SMS: Twilio returned status %d for user %s", resp.StatusCode, notif.UserID)
+		return
+	}
+
+	log.Printf("SMS sent to user %s", notif.UserID)
 }
 
 // saveNotification saves a notification to the database

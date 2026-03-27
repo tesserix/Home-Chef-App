@@ -69,6 +69,7 @@ func Migrate() error {
 		// Users & Auth
 		&models.User{},
 		&models.RefreshToken{},
+		&models.PasswordResetToken{},
 		&models.CustomerProfile{},
 		&models.PreferenceOption{},
 
@@ -158,6 +159,18 @@ func Migrate() error {
 
 		// Invoices
 		&models.OrderInvoice{},
+
+		// Support Tickets
+		&models.SupportTicket{},
+		&models.SupportMessage{},
+
+		// Promo Codes
+		&models.PromoCode{},
+		&models.PromoCodeUsage{},
+
+		// Chat
+		&models.ChatRoom{},
+		&models.ChatMessage{},
 	)
 
 	if err != nil {

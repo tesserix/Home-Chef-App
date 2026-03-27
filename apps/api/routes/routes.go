@@ -63,6 +63,11 @@ func SetupRouter() *gin.Engine {
 	paymentHandler := handlers.NewPaymentHandler()
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
+	socialHandler := handlers.NewSocialHandler()
+	cateringHandler := handlers.NewCateringHandler()
+	supportHandler := handlers.NewSupportHandler()
+	promoHandler := handlers.NewPromoHandler()
+	chatHandler := handlers.NewChatHandler()
 
 	// Health check endpoints
 	r.GET("/health", healthHandler.Health)
@@ -112,6 +117,7 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 
 		// Staff invitation routes (public - token validates)
@@ -131,6 +137,7 @@ func SetupRouter() *gin.Engine {
 			profile.GET("", authHandler.GetProfile)
 			profile.PUT("", authHandler.UpdateProfile)
 			profile.PUT("/password", authHandler.ChangePassword)
+			profile.PUT("/device-token", authHandler.UpdateDeviceToken)
 		}
 
 		// Public chef routes
@@ -204,6 +211,36 @@ func SetupRouter() *gin.Engine {
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
+			// Order-specific chat rooms
+			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
+		}
+
+		// Chat routes (authenticated)
+		chat := v1.Group("/chat")
+		chat.Use(middleware.AuthMiddleware())
+		{
+			chat.GET("/rooms", chatHandler.ListChatRooms)
+			chat.GET("/:roomId/messages", chatHandler.GetMessages)
+			chat.POST("/:roomId/messages", chatHandler.SendMessage)
+			chat.PUT("/:roomId/messages/:messageId/read", chatHandler.MarkAsRead)
+		}
+
+		// Support ticket routes (authenticated)
+		support := v1.Group("/support")
+		support.Use(middleware.AuthMiddleware())
+		{
+			support.POST("/tickets", supportHandler.CreateTicket)
+			support.GET("/tickets", supportHandler.GetMyTickets)
+			support.GET("/tickets/:id", supportHandler.GetTicket)
+			support.POST("/tickets/:id/messages", supportHandler.AddMessage)
+			support.PUT("/tickets/:id/close", supportHandler.CloseTicket)
+		}
+
+		// Promo code validation (authenticated)
+		promo := v1.Group("/promo")
+		promo.Use(middleware.AuthMiddleware())
+		{
+			promo.POST("/validate", promoHandler.ValidatePromoCode)
 		}
 
 		// Cart routes
@@ -221,41 +258,40 @@ func SetupRouter() *gin.Engine {
 		social := v1.Group("/social")
 		social.Use(middleware.OptionalAuthMiddleware())
 		{
-			// social.GET("/feed", socialHandler.GetFeed)
-			// social.GET("/posts/:id", socialHandler.GetPost)
-			// social.POST("/posts/:id/like", socialHandler.LikePost) // requires auth
-			// social.POST("/posts/:id/comments", socialHandler.AddComment) // requires auth
+			social.GET("/feed", socialHandler.GetFeed)
+			social.GET("/posts/:id", socialHandler.GetPost)
+			social.POST("/posts/:id/like", socialHandler.LikePost)
+			social.POST("/posts/:id/comments", socialHandler.AddComment)
 		}
 
 		// Chef social posts (chef only)
 		chefSocial := v1.Group("/chef/posts")
 		chefSocial.Use(middleware.AuthMiddleware(), middleware.RequireChef())
 		{
-			// chefSocial.GET("", socialHandler.GetChefPosts)
-			// chefSocial.POST("", socialHandler.CreatePost)
-			// chefSocial.PUT("/:id", socialHandler.UpdatePost)
-			// chefSocial.DELETE("/:id", socialHandler.DeletePost)
+			chefSocial.GET("", socialHandler.GetChefPosts)
+			chefSocial.POST("", socialHandler.CreatePost)
+			chefSocial.PUT("/:id", socialHandler.UpdatePost)
+			chefSocial.DELETE("/:id", socialHandler.DeletePost)
 		}
 
 		// Catering routes
 		catering := v1.Group("/catering")
 		catering.Use(middleware.AuthMiddleware())
 		{
-			// Customer catering
-			// catering.POST("/requests", cateringHandler.CreateRequest)
-			// catering.GET("/requests", cateringHandler.GetMyRequests)
-			// catering.GET("/requests/:id", cateringHandler.GetRequest)
-			// catering.GET("/requests/:id/quotes", cateringHandler.GetQuotes)
-			// catering.POST("/quotes/:id/accept", cateringHandler.AcceptQuote)
+			catering.POST("/requests", cateringHandler.CreateRequest)
+			catering.GET("/requests", cateringHandler.GetMyRequests)
+			catering.GET("/requests/:id", cateringHandler.GetRequest)
+			catering.GET("/requests/:id/quotes", cateringHandler.GetQuotes)
+			catering.POST("/quotes/:id/accept", cateringHandler.AcceptQuote)
 		}
 
 		// Chef catering (chef only)
 		chefCatering := v1.Group("/chef/catering")
 		chefCatering.Use(middleware.AuthMiddleware(), middleware.RequireChef())
 		{
-			// chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
-			// chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
-			// chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
+			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
+			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
+			chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
 		}
 
 		// Delivery partner onboarding (authenticated, no delivery role required)
@@ -465,6 +501,21 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/approvals/:id/request-info", approvalHandler.RequestMoreInfo)
 			admin.GET("/approvals/:id/history", approvalHandler.GetApprovalHistory)
 			admin.GET("/approvals/:id/documents/:docId", approvalHandler.GetDocumentDownload)
+
+			// Support ticket management
+			admin.GET("/support/tickets", supportHandler.AdminGetTickets)
+			admin.GET("/support/tickets/:id", supportHandler.AdminGetTicket)
+			admin.PUT("/support/tickets/:id/assign", supportHandler.AdminAssignTicket)
+			admin.PUT("/support/tickets/:id/status", supportHandler.AdminUpdateTicketStatus)
+			admin.POST("/support/tickets/:id/messages", supportHandler.AdminAddMessage)
+			admin.GET("/support/stats", supportHandler.AdminGetSupportStats)
+
+			// Promo code management
+			admin.GET("/promos", promoHandler.AdminListPromos)
+			admin.POST("/promos", promoHandler.AdminCreatePromo)
+			admin.PUT("/promos/:id", promoHandler.AdminUpdatePromo)
+			admin.DELETE("/promos/:id", promoHandler.AdminDeletePromo)
+			admin.GET("/promos/:id/usage", promoHandler.AdminGetPromoUsage)
 
 			// Subscription management
 			admin.GET("/subscriptions", subscriptionHandler.AdminGetSubscriptions)

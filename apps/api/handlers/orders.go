@@ -116,7 +116,17 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	tip := req.Tip
 	discount := 0.0
 
-	// TODO: Apply promo code discount
+	// Apply promo code discount
+	var appliedPromo *models.PromoCode
+	if req.PromoCode != "" {
+		promoDiscount, promo, promoErr := validateAndCalculateDiscount(req.PromoCode, userID, subtotal)
+		if promoErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": promoErr})
+			return
+		}
+		discount = promoDiscount
+		appliedPromo = promo
+	}
 
 	total := subtotal + deliveryFee + serviceFee + tax + tip - discount
 
@@ -194,6 +204,24 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order items"})
 		return
+	}
+
+	// Record promo code usage
+	if appliedPromo != nil {
+		usage := models.PromoCodeUsage{
+			PromoCodeID: appliedPromo.ID,
+			UserID:      userID,
+			OrderID:     order.ID,
+			Discount:    discount,
+		}
+		if err := tx.Create(&usage).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record promo usage"})
+			return
+		}
+		// Increment usage count
+		tx.Model(&models.PromoCode{}).Where("id = ?", appliedPromo.ID).
+			Update("usage_count", appliedPromo.UsageCount+1)
 	}
 
 	// Clear user's cart for this chef

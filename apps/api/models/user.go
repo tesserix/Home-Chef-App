@@ -40,6 +40,7 @@ type User struct {
 	IsActive      bool         `gorm:"default:true" json:"isActive"`
 	EmailVerified bool         `gorm:"default:false" json:"emailVerified"`
 	PhoneVerified bool         `gorm:"default:false" json:"phoneVerified"`
+	FCMToken      string       `gorm:"column:fcm_token" json:"-"`
 	LastLoginAt   *time.Time   `gorm:"" json:"lastLoginAt"`
 	CreatedAt     time.Time    `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt     time.Time    `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -63,6 +64,17 @@ type RefreshToken struct {
 	ExpiresAt time.Time  `gorm:"not null" json:"expiresAt"`
 	RevokedAt *time.Time `gorm:"" json:"revokedAt"`
 	CreatedAt time.Time  `gorm:"autoCreateTime" json:"createdAt"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+type PasswordResetToken struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	Token     string    `gorm:"uniqueIndex;not null" json:"-"`
+	ExpiresAt time.Time `gorm:"not null" json:"expiresAt"`
+	UsedAt    *time.Time `gorm:"" json:"usedAt,omitempty"`
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
