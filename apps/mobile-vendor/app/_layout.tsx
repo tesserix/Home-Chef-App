@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth-store';
+import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +16,12 @@ export default function RootLayout() {
   useEffect(() => {
     hydrateFromStorage();
   }, []);
+
+  // useBiometricLock internally waits for isLoading === false before registering
+  // the AppState listener — safe to call unconditionally here.
+  useBiometricLock({
+    onLockout: () => router.replace('/(auth)/login'),
+  });
 
   useEffect(() => {
     if (!isLoading) {
