@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "resourceClass": "m-medium" },
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_BACKGROUND_LOCATION": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": { "resourceClass": "m-medium" }
+    },
+    "production": {
+      "channel": "production",
+      "ios": { "resourceClass": "m-medium" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": { "appleId": "" },
+      "android": { "serviceAccountKeyPath": "" }
+    }
+  }
+}
