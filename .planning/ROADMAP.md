@@ -46,7 +46,13 @@ Plans:
   2. Customer can browse the chef grid, open a chef detail page, add menu items to cart, and complete Razorpay checkout
   3. Customer can see a live map showing the driver's current location while an order is active
   4. Customer can view past orders, manage their profile, save chefs to favorites, browse the social feed, and submit a catering request
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 02-01-PLAN.md — Tab nav shell (4 tabs), customer onboarding wizard (3 steps), cart store + type definitions
+- [ ] 02-02-PLAN.md — Chef browse home screen, chef detail with menu tabs, cart bottom sheet (CUST-01, 02, 03)
+- [ ] 02-03-PLAN.md — Checkout screen + Razorpay web-browser payment flow + order hooks (CUST-04)
+- [ ] 02-04-PLAN.md — Live order tracking map with 5s polling and status timeline (CUST-05)
+- [ ] 02-05-PLAN.md — Secondary screens: order history, favorites, social feed, catering, profile (CUST-06–10)
 **UI hint**: yes
 
 ### Phase 3: Vendor App + Driver Core
@@ -83,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation + Auth | 0/4 | Not started | - |
-| 2. Customer App | 0/TBD | Not started | - |
+| 2. Customer App | 0/5 | Not started | - |
 | 3. Vendor App + Driver Core | 0/TBD | Not started | - |
 | 4. GPS, Push + Polish | 0/TBD | Not started | - |
