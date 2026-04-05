@@ -23,6 +23,9 @@ interface LoginScreenProps {
   onNavigateToRegister?: () => void;
   /** Vendor-only: show forgot password link */
   onNavigateToForgotPassword?: () => void;
+  onGoogleSignIn?: () => Promise<void>;
+  onAppleSignIn?: () => Promise<void>;
+  onBiometricLogin?: () => Promise<void>;
   title?: string;
 }
 
@@ -30,6 +33,9 @@ export function LoginScreen({
   onLogin,
   onNavigateToRegister,
   onNavigateToForgotPassword,
+  onGoogleSignIn,
+  onAppleSignIn,
+  onBiometricLogin,
   title = 'Welcome back',
 }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +131,65 @@ export function LoginScreen({
       >
         Sign in
       </Button>
+
+      {(onGoogleSignIn || onAppleSignIn || onBiometricLogin) ? (
+        <>
+          {/* Divider */}
+          <View className="flex-row items-center my-6">
+            <View className="flex-1 h-px bg-gray-200" />
+            <Text size="sm" color="#9ca3af" className="mx-4">or</Text>
+            <View className="flex-1 h-px bg-gray-200" />
+          </View>
+
+          {onGoogleSignIn ? (
+            <View className="mb-3">
+              <Button
+                variant="outline"
+                fullWidth
+                onPress={async () => {
+                  setError(null);
+                  try { await onGoogleSignIn(); }
+                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Google sign-in failed'); }
+                }}
+              >
+                Continue with Google
+              </Button>
+            </View>
+          ) : null}
+
+          {onAppleSignIn ? (
+            <View className="mb-3">
+              <Button
+                variant="solid"
+                colorScheme="secondary"
+                fullWidth
+                onPress={async () => {
+                  setError(null);
+                  try { await onAppleSignIn(); }
+                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Apple sign-in failed'); }
+                }}
+              >
+                Continue with Apple
+              </Button>
+            </View>
+          ) : null}
+
+          {onBiometricLogin ? (
+            <View className="items-center py-3">
+              <Button
+                variant="outline"
+                onPress={async () => {
+                  setError(null);
+                  try { await onBiometricLogin(); }
+                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Biometric auth failed'); }
+                }}
+              >
+                Use Face ID / Touch ID
+              </Button>
+            </View>
+          ) : null}
+        </>
+      ) : null}
 
       {onNavigateToRegister ? (
         <View className="mt-6 items-center">
