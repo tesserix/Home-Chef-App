@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       // Mock @tesserix/native since it's a peerDep not installed in this package
       '@tesserix/native': new URL('./src/__mocks__/@tesserix/native.ts', import.meta.url).pathname,
+      // Mock react-native so screen files can be imported in the node test env
+      'react-native': new URL('./src/__mocks__/react-native.ts', import.meta.url).pathname,
     },
   },
 });

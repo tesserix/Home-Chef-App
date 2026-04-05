@@ -1,5 +1,5 @@
 // Mock for @tesserix/native used in vitest
-// Provides the same shape that tokens.ts expects
+// Provides the same shape that tokens.ts expects AND stub React components for tests
 
 export const colors = {
   primary: '#FF6B35',
@@ -38,3 +38,11 @@ export const typography = {
     xl: 20,
   },
 };
+
+// Stub components — only used in tests that import @tesserix/native directly
+// Screen rendering tests live in each app's jest-expo test suite
+export const Button = () => null;
+export const Input = () => null;
+export const Text = () => null;
+export const H1 = () => null;
+export const H2 = () => null;
