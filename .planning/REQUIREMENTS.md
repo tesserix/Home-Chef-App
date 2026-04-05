@@ -133,70 +133,70 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Pending | Pending |
-| FOUND-02 | Pending | Pending |
-| FOUND-03 | Pending | Pending |
-| FOUND-04 | Pending | Pending |
-| FOUND-05 | Pending | Pending |
-| FOUND-06 | Pending | Pending |
-| AUTH-01 | Pending | Pending |
-| AUTH-02 | Pending | Pending |
-| AUTH-03 | Pending | Pending |
-| AUTH-04 | Pending | Pending |
-| AUTH-05 | Pending | Pending |
-| AUTH-06 | Pending | Pending |
-| AUTH-07 | Pending | Pending |
-| CUST-01 | Pending | Pending |
-| CUST-02 | Pending | Pending |
-| CUST-03 | Pending | Pending |
-| CUST-04 | Pending | Pending |
-| CUST-05 | Pending | Pending |
-| CUST-06 | Pending | Pending |
-| CUST-07 | Pending | Pending |
-| CUST-08 | Pending | Pending |
-| CUST-09 | Pending | Pending |
-| CUST-10 | Pending | Pending |
-| CUST-11 | Pending | Pending |
-| VEND-01 | Pending | Pending |
-| VEND-02 | Pending | Pending |
-| VEND-03 | Pending | Pending |
-| VEND-04 | Pending | Pending |
-| VEND-05 | Pending | Pending |
-| VEND-06 | Pending | Pending |
-| VEND-07 | Pending | Pending |
-| VEND-08 | Pending | Pending |
-| VEND-09 | Pending | Pending |
-| VEND-10 | Pending | Pending |
-| VEND-11 | Pending | Pending |
-| DRIV-01 | Pending | Pending |
-| DRIV-02 | Pending | Pending |
-| DRIV-03 | Pending | Pending |
-| DRIV-04 | Pending | Pending |
-| DRIV-05 | Pending | Pending |
-| DRIV-06 | Pending | Pending |
-| DRIV-07 | Pending | Pending |
-| DRIV-08 | Pending | Pending |
-| DRIV-09 | Pending | Pending |
-| DRIV-10 | Pending | Pending |
-| DRIV-11 | Pending | Pending |
-| DRIV-12 | Pending | Pending |
-| DRIV-13 | Pending | Pending |
-| PUSH-01 | Pending | Pending |
-| PUSH-02 | Pending | Pending |
-| PUSH-03 | Pending | Pending |
-| PUSH-04 | Pending | Pending |
-| PUSH-05 | Pending | Pending |
-| PUSH-06 | Pending | Pending |
-| UX-01 | Pending | Pending |
-| UX-02 | Pending | Pending |
-| UX-03 | Pending | Pending |
-| UX-04 | Pending | Pending |
+| FOUND-01 | Phase 1 | Pending |
+| FOUND-02 | Phase 1 | Pending |
+| FOUND-03 | Phase 1 | Pending |
+| FOUND-04 | Phase 1 | Pending |
+| FOUND-05 | Phase 1 | Pending |
+| FOUND-06 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| AUTH-05 | Phase 1 | Pending |
+| AUTH-06 | Phase 1 | Pending |
+| AUTH-07 | Phase 1 | Pending |
+| CUST-01 | Phase 2 | Pending |
+| CUST-02 | Phase 2 | Pending |
+| CUST-03 | Phase 2 | Pending |
+| CUST-04 | Phase 2 | Pending |
+| CUST-05 | Phase 2 | Pending |
+| CUST-06 | Phase 2 | Pending |
+| CUST-07 | Phase 2 | Pending |
+| CUST-08 | Phase 2 | Pending |
+| CUST-09 | Phase 2 | Pending |
+| CUST-10 | Phase 2 | Pending |
+| CUST-11 | Phase 2 | Pending |
+| VEND-01 | Phase 3 | Pending |
+| VEND-02 | Phase 3 | Pending |
+| VEND-03 | Phase 3 | Pending |
+| VEND-04 | Phase 3 | Pending |
+| VEND-05 | Phase 3 | Pending |
+| VEND-06 | Phase 3 | Pending |
+| VEND-07 | Phase 3 | Pending |
+| VEND-08 | Phase 3 | Pending |
+| VEND-09 | Phase 3 | Pending |
+| VEND-10 | Phase 3 | Pending |
+| VEND-11 | Phase 3 | Pending |
+| DRIV-01 | Phase 3 | Pending |
+| DRIV-02 | Phase 3 | Pending |
+| DRIV-03 | Phase 3 | Pending |
+| DRIV-04 | Phase 3 | Pending |
+| DRIV-05 | Phase 3 | Pending |
+| DRIV-06 | Phase 3 | Pending |
+| DRIV-07 | Phase 3 | Pending |
+| DRIV-08 | Phase 3 | Pending |
+| DRIV-09 | Phase 3 | Pending |
+| DRIV-10 | Phase 3 | Pending |
+| DRIV-11 | Phase 3 | Pending |
+| DRIV-12 | Phase 4 | Pending |
+| DRIV-13 | Phase 4 | Pending |
+| PUSH-01 | Phase 4 | Pending |
+| PUSH-02 | Phase 4 | Pending |
+| PUSH-03 | Phase 4 | Pending |
+| PUSH-04 | Phase 4 | Pending |
+| PUSH-05 | Phase 4 | Pending |
+| PUSH-06 | Phase 4 | Pending |
+| UX-01 | Phase 4 | Pending |
+| UX-02 | Phase 4 | Pending |
+| UX-03 | Phase 4 | Pending |
+| UX-04 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 56 total
-- Mapped to phases: 0
-- Unmapped: 56
+- v1 requirements: 58 total
+- Mapped to phases: 58
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation — all 58 requirements mapped*
