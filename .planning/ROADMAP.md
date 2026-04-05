@@ -29,7 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user can register a new account and a vendor can reset their password via email link
   4. Google Sign-In and Apple Sign-In complete successfully on device; biometric login works after first email login
   5. EAS Build produces a valid iOS and Android binary for each of the three apps (verified via `eas build --local`)
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 01-01-PLAN.md — Monorepo scaffold: 3 Expo app skeletons with Metro monorepo config and EAS build profiles
+- [ ] 01-02-PLAN.md — Shared package: packages/mobile-shared with API client, types, auth hooks, and secure storage
+- [ ] 01-03-PLAN.md — Email/password auth: shared screens wired into all 3 apps with JWT persistence and auth guard
+- [ ] 01-04-PLAN.md — Social login and biometrics: Google, Apple, and Face ID/fingerprint across all 3 apps
 **UI hint**: yes
 
 ### Phase 2: Customer App
@@ -77,7 +82,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation + Auth | 0/TBD | Not started | - |
+| 1. Foundation + Auth | 0/4 | Not started | - |
 | 2. Customer App | 0/TBD | Not started | - |
 | 3. Vendor App + Driver Core | 0/TBD | Not started | - |
 | 4. GPS, Push + Polish | 0/TBD | Not started | - |
