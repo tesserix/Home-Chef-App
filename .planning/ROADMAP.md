@@ -31,10 +31,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. EAS Build produces a valid iOS and Android binary for each of the three apps (verified via `eas build --local`)
 **Plans**: 4 plans
 Plans:
-- [ ] 01-01-PLAN.md — Monorepo scaffold: 3 Expo app skeletons with Metro monorepo config and EAS build profiles
-- [ ] 01-02-PLAN.md — Shared package: packages/mobile-shared with API client, types, auth hooks, and secure storage
-- [ ] 01-03-PLAN.md — Email/password auth: shared screens wired into all 3 apps with JWT persistence and auth guard
-- [ ] 01-04-PLAN.md — Social login and biometrics: Google, Apple, and Face ID/fingerprint across all 3 apps
+- [x] 01-01-PLAN.md — Monorepo scaffold: 3 Expo app skeletons with Metro monorepo config and EAS build profiles
+- [x] 01-02-PLAN.md — Shared package: packages/mobile-shared with API client, types, auth hooks, and secure storage
+- [x] 01-03-PLAN.md — Email/password auth: shared screens wired into all 3 apps with JWT persistence and auth guard
+- [x] 01-04-PLAN.md — Social login and biometrics: Google, Apple, and Face ID/fingerprint across all 3 apps
 **UI hint**: yes
 
 ### Phase 2: Customer App
