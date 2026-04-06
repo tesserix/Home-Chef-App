@@ -14,7 +14,10 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
-        "NSCameraUsageDescription": "Used to take photos"
+        "NSCameraUsageDescription": "Used to take photos",
+        "NSLocationWhenInUseUsageDescription": "HomeChef Delivery needs your location to show your position on the delivery map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.",
+        "UIBackgroundModes": ["location", "fetch"]
       }
     },
     "android": {
@@ -23,6 +26,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -36,6 +46,11 @@
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",
+      ["expo-location", {
+        "locationAlwaysAndWhenInUsePermission": "HomeChef Delivery tracks your location during deliveries to keep customers updated.",
+        "isAndroidBackgroundLocationEnabled": true,
+        "isAndroidForegroundServiceEnabled": true
+      }],
       ["expo-build-properties", {
         "ios": { "newArchEnabled": true },
         "android": { "newArchEnabled": true }

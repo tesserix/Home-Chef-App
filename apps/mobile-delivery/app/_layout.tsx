@@ -1,3 +1,4 @@
+import '../lib/background-location'; // registers background task at module load
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
