@@ -69,10 +69,10 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Vendor onboarding wizard (6 steps), pending/rejected holding screen, 4-tab shell (VEND-11)
 - [x] 03-02-PLAN.md — Vendor dashboard and live order queue with 10s polling, optimistic accept/reject + 3s undo (VEND-01, 04, 05)
-- [ ] 03-03-PLAN.md — Vendor menu CRUD with camera photo upload, earnings, analytics, reviews, profile, settings (VEND-02, 03, 06, 07, 08, 09, 10)
+- [x] 03-03-PLAN.md — Vendor menu CRUD with camera photo upload, earnings, analytics, reviews, profile, settings (VEND-02, 03, 06, 07, 08, 09, 10)
 - [x] 03-04-PLAN.md — Driver onboarding wizard (6 steps), pending/rejected holding screen, 4-tab shell (DRIV-11)
 - [x] 03-05-PLAN.md — Driver dashboard, available deliveries, active delivery with native maps + swipe-to-confirm status (DRIV-01, 02, 03, 04, 05)
-- [ ] 03-06-PLAN.md — Driver history, earnings, fleet + staff (403 graceful), profile, settings (DRIV-06, 07, 08, 09, 10)
+- [x] 03-06-PLAN.md — Driver history, earnings, fleet + staff (403 graceful), profile, settings (DRIV-06, 07, 08, 09, 10)
 **UI hint**: yes
 
 ### Phase 4: GPS, Push + Polish
