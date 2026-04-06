@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'access_token',
   REFRESH_TOKEN: 'refresh_token',
   BIOMETRICS_ENABLED: 'biometrics_enabled',
+  ONBOARDING_COMPLETE: 'onboarding_complete',
 } as const;
 
 export async function getAccessToken(): Promise<string | null> {
@@ -44,5 +45,17 @@ export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
   await SecureStore.setItemAsync(
     STORAGE_KEYS.BIOMETRICS_ENABLED,
     enabled ? 'true' : 'false'
+  );
+}
+
+export async function isOnboardingComplete(): Promise<boolean> {
+  const val = await SecureStore.getItemAsync(STORAGE_KEYS.ONBOARDING_COMPLETE);
+  return val === 'true';
+}
+
+export async function setOnboardingCompleteInStore(complete: boolean): Promise<void> {
+  await SecureStore.setItemAsync(
+    STORAGE_KEYS.ONBOARDING_COMPLETE,
+    complete ? 'true' : 'false'
   );
 }

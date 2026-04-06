@@ -42,7 +42,8 @@
     "zod": "^3.25.33",
     "@hookform/resolvers": "^5.0.1",
     "@homechef/mobile-shared": "workspace:*",
-    "@tesserix/native": "^1.0.0"
+    "@tesserix/native": "^1.0.0",
+    "lucide-react-native": "^0.475.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",

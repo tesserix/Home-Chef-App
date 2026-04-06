@@ -10,6 +10,8 @@ import {
   clearTokens,
   isBiometricsEnabled,
   setBiometricsEnabled,
+  isOnboardingComplete,
+  setOnboardingCompleteInStore,
 } from '../utils/storage';
 import { User, AuthResponse } from '../types/user';
 
@@ -20,6 +22,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   biometricsEnabled: boolean;
+  onboardingComplete: boolean;
 
   // Actions
   /** Load tokens from expo-secure-store into memory on app start */
@@ -30,6 +33,8 @@ interface AuthState {
   logout: () => Promise<void>;
   /** Update biometrics preference */
   setBiometricsEnabled: (enabled: boolean) => Promise<void>;
+  /** Mark onboarding as complete (persisted to SecureStore) */
+  setOnboardingComplete: (complete: boolean) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -38,17 +43,20 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   biometricsEnabled: false,
+  onboardingComplete: false,
 
   hydrateFromStorage: async () => {
     try {
-      const [token, biometrics] = await Promise.all([
+      const [token, biometrics, onboarding] = await Promise.all([
         getAccessToken(),
         isBiometricsEnabled(),
+        isOnboardingComplete(),
       ]);
       set({
         accessToken: token,
         isAuthenticated: !!token,
         biometricsEnabled: biometrics,
+        onboardingComplete: onboarding,
         isLoading: false,
       });
     } catch {
@@ -75,6 +83,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       user: null,
       accessToken: null,
       isAuthenticated: false,
+      onboardingComplete: false,
       isLoading: false,
     });
   },
@@ -82,5 +91,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   setBiometricsEnabled: async (enabled: boolean) => {
     await setBiometricsEnabled(enabled);
     set({ biometricsEnabled: enabled });
+  },
+
+  setOnboardingComplete: async (complete: boolean) => {
+    await setOnboardingCompleteInStore(complete);
+    set({ onboardingComplete: complete });
   },
 }));
