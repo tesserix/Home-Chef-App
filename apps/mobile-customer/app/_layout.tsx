@@ -11,7 +11,8 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, hydrateFromStorage } = useAuthStore();
+  const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
+    useAuthStore();
 
   useEffect(() => {
     hydrateFromStorage();
@@ -25,13 +26,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!isLoading) {
-      if (isAuthenticated) {
-        router.replace('/(tabs)');
-      } else {
+      if (!isAuthenticated) {
         router.replace('/(auth)/login');
+      } else if (!onboardingComplete) {
+        // Gate: authenticated but hasn't completed onboarding wizard
+        router.replace('/(onboarding)/user-info');
+      } else {
+        router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, onboardingComplete]);
 
   return (
     <QueryClientProvider client={queryClient}>
