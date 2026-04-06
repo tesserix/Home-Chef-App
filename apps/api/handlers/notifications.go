@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +13,8 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
+	natsclient "github.com/nats-io/nats.go"
 )
 
 type NotificationHandler struct{}
@@ -99,4 +104,151 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 		Updates(map[string]interface{}{"is_read": true, "read_at": &now})
 
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
+}
+
+// RegisterPushConsumers starts NATS queue subscribers that fire FCM push notifications
+// when order/delivery events are received. Uses the "push-workers" queue group so it
+// runs alongside the existing "notification-workers" group without duplicate processing
+// within each group.
+//
+// Call this once after NATS connects, inside the NATS-available block in main.go.
+func RegisterPushConsumers() {
+	nats := services.GetNATSClient()
+
+	// SubjectChefNewOrder → actionable push (Accept/Reject lock-screen buttons) to vendor.
+	// T-04-13: the API endpoint verifies chef_id = current user before accepting the action.
+	_, err := nats.QueueSubscribe(services.SubjectChefNewOrder, "push-workers", func(msg *natsclient.Msg) {
+		var event services.OrderEvent
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			log.Printf("[push] Failed to parse SubjectChefNewOrder event: %v", err)
+			return
+		}
+		if event.ChefID == uuid.Nil {
+			return
+		}
+
+		// Resolve the chef's UserID so SendActionablePush can look up the FCM token.
+		var chef models.ChefProfile
+		if err := database.DB.Select("id, user_id").Where("id = ?", event.ChefID).First(&chef).Error; err != nil {
+			log.Printf("[push] Chef not found for push (chef_id=%s): %v", event.ChefID, err)
+			return
+		}
+
+		// Non-blocking: push failure must not crash the NATS consumer loop (T-04-15).
+		go func() {
+			if err := services.SendActionablePush(
+				chef.UserID,
+				"New Order",
+				"You have a new order waiting for your confirmation",
+				"new-orders", // Android channel ID (D-09)
+				"new_order",  // iOS category — matches what vendor _layout.tsx registers
+				map[string]string{
+					"type":    "new_order",
+					"orderId": event.OrderID.String(),
+					"action":  "vendor_new_order",
+				},
+			); err != nil {
+				log.Printf("[push] SendActionablePush failed for chef user %s: %v", chef.UserID, err)
+			}
+		}()
+	})
+	if err != nil {
+		log.Printf("[push] Failed to subscribe to SubjectChefNewOrder for push: %v", err)
+	}
+
+	// SubjectDeliveryAssigned → plain push to driver (new delivery alert).
+	_, err = nats.QueueSubscribe(services.SubjectDeliveryAssigned, "push-workers", func(msg *natsclient.Msg) {
+		var event services.Event
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			log.Printf("[push] Failed to parse SubjectDeliveryAssigned event: %v", err)
+			return
+		}
+
+		driverIDStr, _ := event.Data["driver_id"].(string)
+		deliveryIDStr, _ := event.Data["delivery_id"].(string)
+		if driverIDStr == "" {
+			return
+		}
+
+		driverID, parseErr := uuid.Parse(driverIDStr)
+		if parseErr != nil {
+			log.Printf("[push] Invalid driver_id in SubjectDeliveryAssigned: %v", parseErr)
+			return
+		}
+
+		// Resolve the driver's UserID so SendPushNotification can look up the FCM token.
+		var partner models.DeliveryPartner
+		if err := database.DB.Select("id, user_id").Where("id = ?", driverID).First(&partner).Error; err != nil {
+			log.Printf("[push] DeliveryPartner not found for push (partner_id=%s): %v", driverID, err)
+			return
+		}
+
+		go func() {
+			if err := services.SendPushNotification(
+				partner.UserID,
+				"New Delivery Available",
+				"A delivery near you is ready for pickup",
+				map[string]string{
+					"type":       "new_delivery",
+					"deliveryId": deliveryIDStr,
+				},
+			); err != nil {
+				log.Printf("[push] SendPushNotification failed for driver user %s: %v", partner.UserID, err)
+			}
+		}()
+	})
+	if err != nil {
+		log.Printf("[push] Failed to subscribe to SubjectDeliveryAssigned for push: %v", err)
+	}
+
+	// SubjectOrderUpdated → plain push to customer on order status changes.
+	// The existing "notification-workers" group stores a DB record; this consumer
+	// fires the FCM push with structured data for deep linking into the order screen.
+	_, err = nats.QueueSubscribe(services.SubjectOrderUpdated, "push-workers", func(msg *natsclient.Msg) {
+		var event services.OrderEvent
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			log.Printf("[push] Failed to parse SubjectOrderUpdated event: %v", err)
+			return
+		}
+		if event.CustomerID == uuid.Nil {
+			return
+		}
+
+		go func() {
+			if err := services.SendPushNotification(
+				event.CustomerID,
+				"Order Update",
+				fmt.Sprintf("Your order is now %s", humanReadableOrderStatus(event.Status)),
+				map[string]string{
+					"type":    "order_update",
+					"orderId": event.OrderID.String(),
+					"status":  event.Status,
+				},
+			); err != nil {
+				log.Printf("[push] SendPushNotification failed for customer %s: %v", event.CustomerID, err)
+			}
+		}()
+	})
+	if err != nil {
+		log.Printf("[push] Failed to subscribe to SubjectOrderUpdated for push: %v", err)
+	}
+
+	log.Println("[push] Push consumers registered (SubjectChefNewOrder, SubjectDeliveryAssigned, SubjectOrderUpdated)")
+}
+
+// humanReadableOrderStatus returns a customer-friendly label for an order status string.
+func humanReadableOrderStatus(status string) string {
+	labels := map[string]string{
+		"accepted":   "accepted by the chef",
+		"preparing":  "being prepared",
+		"ready":      "ready for pickup",
+		"picked_up":  "picked up by the driver",
+		"delivering": "on the way to you",
+		"delivered":  "delivered",
+		"cancelled":  "cancelled",
+	}
+	if label, ok := labels[status]; ok {
+		return label
+	}
+	return status
 }

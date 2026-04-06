@@ -11,6 +11,7 @@ import (
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/handlers"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
 )
@@ -77,6 +78,9 @@ func main() {
 		} else {
 			defer notificationService.Stop()
 		}
+
+		// Register push consumers (NATS → FCM bridge for vendor/driver/customer pushes)
+		handlers.RegisterPushConsumers()
 	}
 
 	// Setup router
