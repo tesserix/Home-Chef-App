@@ -1,0 +1,390 @@
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Camera, Image as ImageIcon, ChevronLeft } from 'lucide-react-native';
+import { useVendorMenu, useCreateMenuItem, useUploadMenuPhoto } from '../../hooks/useVendorMenu';
+
+const PREP_TIME_OPTIONS = [5, 10, 15, 30, 45, 60];
+
+const schema = z.object({
+  name: z.string().min(3, 'Name must be at least 3 characters'),
+  description: z.string().min(20, 'Description must be at least 20 characters'),
+  price: z
+    .string()
+    .min(1, 'Price is required')
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0 && Number(v) <= 10000, {
+      message: 'Price must be between ₹1 and ₹10,000',
+    }),
+  category: z.string().min(1, 'Please select a category'),
+  isVeg: z.boolean(),
+  preparationTime: z.number(),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+export default function NewMenuItemScreen() {
+  const { data: menuData } = useVendorMenu();
+  const createMutation = useCreateMenuItem();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [uploadItemId, setUploadItemId] = useState<string | null>(null);
+  const uploadMutation = useUploadMenuPhoto(uploadItemId ?? '');
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    watch,
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: '',
+      description: '',
+      price: '',
+      category: '',
+      isVeg: true,
+      preparationTime: 15,
+    },
+  });
+
+  const selectedCategory = watch('category');
+
+  async function handleTakePhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Camera permission is needed to take photos.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function handleChooseFromGallery() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function onSubmit(values: FormValues) {
+    try {
+      const result = await createMutation.mutateAsync({
+        name: values.name,
+        description: values.description,
+        price: Number(values.price),
+        category: values.category,
+        isVeg: values.isVeg,
+        preparationTime: values.preparationTime,
+      });
+
+      const newItemId = result.item.id;
+
+      if (photoUri && newItemId) {
+        setUploadItemId(newItemId);
+        const formData = new FormData();
+        formData.append('file', {
+          uri: photoUri,
+          name: 'menu-photo.jpg',
+          type: 'image/jpeg',
+        } as unknown as Blob);
+        await uploadMutation.mutateAsync(photoUri);
+      }
+
+      router.back();
+    } catch {
+      Alert.alert('Error', 'Failed to create menu item. Please try again.');
+    }
+  }
+
+  const categories = menuData?.categories?.map((c) => c.name) ?? [];
+  const isSubmitting = createMutation.isPending || uploadMutation.isPending;
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        {/* Header */}
+        <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+            <ChevronLeft size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text className="text-lg font-semibold text-gray-900">Add Menu Item</Text>
+        </View>
+
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Photo section */}
+          <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+            <Text className="text-base font-semibold text-gray-700 mb-3">Food Photo</Text>
+            {photoUri ? (
+              <View className="rounded-xl overflow-hidden mb-3">
+                <Image
+                  source={{ uri: photoUri }}
+                  style={{ width: '100%', height: 180 }}
+                  contentFit="cover"
+                />
+              </View>
+            ) : (
+              <View className="w-full h-36 bg-gray-100 rounded-xl items-center justify-center mb-3 border-2 border-dashed border-gray-300">
+                <ImageIcon size={32} color="#9CA3AF" />
+                <Text className="text-gray-400 text-sm mt-2">No photo selected</Text>
+              </View>
+            )}
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={handleTakePhoto}
+                className="flex-1 flex-row items-center justify-center gap-2 border border-orange-500 rounded-xl py-3"
+                activeOpacity={0.7}
+              >
+                <Camera size={18} color="#EA580C" />
+                <Text className="text-orange-600 font-medium text-sm">Take Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleChooseFromGallery}
+                className="flex-1 flex-row items-center justify-center gap-2 border border-gray-300 rounded-xl py-3"
+                activeOpacity={0.7}
+              >
+                <ImageIcon size={18} color="#6B7280" />
+                <Text className="text-gray-600 font-medium text-sm">Gallery</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Item details */}
+          <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+            <Text className="text-base font-semibold text-gray-700 mb-4">Item Details</Text>
+
+            {/* Name */}
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-600 mb-1">Item Name *</Text>
+              <Controller
+                control={control}
+                name="name"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <TextInput
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="e.g. Butter Chicken"
+                    placeholderTextColor="#9CA3AF"
+                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
+                  />
+                )}
+              />
+              {errors.name && (
+                <Text className="text-red-500 text-xs mt-1">{errors.name.message}</Text>
+              )}
+            </View>
+
+            {/* Description */}
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-600 mb-1">Description *</Text>
+              <Controller
+                control={control}
+                name="description"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <TextInput
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="Describe your dish (at least 20 characters)"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 min-h-[80px] ${errors.description ? 'border-red-400' : 'border-gray-200'}`}
+                  />
+                )}
+              />
+              {errors.description && (
+                <Text className="text-red-500 text-xs mt-1">{errors.description.message}</Text>
+              )}
+            </View>
+
+            {/* Price */}
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-600 mb-1">Price (₹) *</Text>
+              <Controller
+                control={control}
+                name="price"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <TextInput
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="0.00"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="decimal-pad"
+                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 ${errors.price ? 'border-red-400' : 'border-gray-200'}`}
+                  />
+                )}
+              />
+              {errors.price && (
+                <Text className="text-red-500 text-xs mt-1">{errors.price.message}</Text>
+              )}
+            </View>
+
+            {/* Category */}
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-600 mb-2">Category *</Text>
+              <Controller
+                control={control}
+                name="category"
+                render={({ field: { onChange } }) => (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View className="flex-row gap-2">
+                      {categories.map((cat) => (
+                        <TouchableOpacity
+                          key={cat}
+                          onPress={() => onChange(cat)}
+                          className={`px-4 py-2 rounded-full border ${
+                            selectedCategory === cat
+                              ? 'bg-orange-500 border-orange-500'
+                              : 'bg-white border-gray-200'
+                          }`}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            className={`text-sm font-medium ${
+                              selectedCategory === cat ? 'text-white' : 'text-gray-600'
+                            }`}
+                          >
+                            {cat}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              />
+              {errors.category && (
+                <Text className="text-red-500 text-xs mt-1">{errors.category.message}</Text>
+              )}
+            </View>
+
+            {/* Veg / Non-Veg */}
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-gray-600 mb-2">Type</Text>
+              <Controller
+                control={control}
+                name="isVeg"
+                render={({ field: { value, onChange } }) => (
+                  <View className="flex-row gap-3">
+                    <TouchableOpacity
+                      onPress={() => onChange(true)}
+                      className={`flex-1 py-3 rounded-xl border items-center ${
+                        value ? 'bg-green-500 border-green-500' : 'bg-white border-gray-200'
+                      }`}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        className={`font-medium text-sm ${value ? 'text-white' : 'text-gray-600'}`}
+                      >
+                        Veg
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onChange(false)}
+                      className={`flex-1 py-3 rounded-xl border items-center ${
+                        !value ? 'bg-red-500 border-red-500' : 'bg-white border-gray-200'
+                      }`}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        className={`font-medium text-sm ${!value ? 'text-white' : 'text-gray-600'}`}
+                      >
+                        Non-Veg
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
+            </View>
+
+            {/* Preparation Time */}
+            <View>
+              <Text className="text-sm font-medium text-gray-600 mb-2">Preparation Time</Text>
+              <Controller
+                control={control}
+                name="preparationTime"
+                render={({ field: { value, onChange } }) => (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View className="flex-row gap-2">
+                      {PREP_TIME_OPTIONS.map((mins) => (
+                        <TouchableOpacity
+                          key={mins}
+                          onPress={() => onChange(mins)}
+                          className={`px-4 py-2 rounded-full border ${
+                            value === mins
+                              ? 'bg-orange-500 border-orange-500'
+                              : 'bg-white border-gray-200'
+                          }`}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            className={`text-sm font-medium ${
+                              value === mins ? 'text-white' : 'text-gray-600'
+                            }`}
+                          >
+                            {mins} min
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              />
+            </View>
+          </View>
+
+          {/* Submit */}
+          <TouchableOpacity
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+            className={`py-4 rounded-2xl items-center ${isSubmitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+            activeOpacity={0.85}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="text-white font-semibold text-base">Add Item</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}

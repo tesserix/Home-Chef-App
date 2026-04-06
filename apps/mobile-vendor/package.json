@@ -48,6 +48,7 @@
     "expo-image": "~55.0.8",
     "lucide-react-native": "^0.475.0",
     "expo-document-picker": "~13.0.3",
+    "expo-image-picker": "~16.0.6",
     "date-fns": "^4.1.0"
   },
   "devDependencies": {
