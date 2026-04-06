@@ -74,7 +74,12 @@ export interface TrackingResponse {
   delivery?: {
     id: string;
     status: string;
-    currentLatitude?: number;
-    currentLongitude?: number;
+    currentLatitude?: number;    // driver live location (from DeliveryPartner.CurrentLatitude)
+    currentLongitude?: number;   // driver live location (from DeliveryPartner.CurrentLongitude)
+    dropoffLatitude?: number;    // customer destination (from Delivery.DropoffLatitude)
+    dropoffLongitude?: number;   // customer destination (from Delivery.DropoffLongitude)
+    // NOTE: Backend gap — DeliveryResponse DTO (ToResponse()) omits dropoff and driver coords.
+    // These fields will be undefined until backend adds them to the TrackOrder handler response.
+    // Fallback: use chef.latitude / chef.longitude as destination marker when dropoff is missing.
   };
 }

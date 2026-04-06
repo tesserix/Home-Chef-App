@@ -14,7 +14,8 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
-        "NSCameraUsageDescription": "Used to take photos"
+        "NSCameraUsageDescription": "Used to take photos",
+        "NSLocationWhenInUseUsageDescription": "Used to show your location on the delivery tracking map"
       }
     },
     "android": {
