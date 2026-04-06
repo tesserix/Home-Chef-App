@@ -669,20 +669,23 @@ export function openNativeNavigation(lat: number, lng: number, label: string): v
 
 ## Open Questions
 
-1. **Vendor Pending Review Screen**
+1. **Vendor Pending Review Screen** — (RESOLVED)
    - What we know: After onboarding submission (`status: "pending_review"`), `onboardingComplete: true` routes app away from onboarding wizard.
    - What's unclear: Should the holding screen be part of `(onboarding)/` or `(tabs)/` route group? If part of `(tabs)`, does the tab bar show?
    - Recommendation: Create `app/(pending)/index.tsx` as a third route group — no tab bar, shows status banner + estimated review time. Same pattern as multi-step forms that need a post-submit state.
+   - **RESOLUTION:** Use `(onboarding)/pending.tsx` (part of the onboarding route group, no tab bar). Simpler than introducing a third route group — the pending screen is a continuation of the onboarding sequence, not a standalone section. Plan 03-01 implements this at `apps/mobile-vendor/app/(onboarding)/pending.tsx`.
 
-2. **Fleet/Staff Screen Authorization for Average Drivers**
+2. **Fleet/Staff Screen Authorization for Average Drivers** — (RESOLVED)
    - What we know: `GET /delivery/staff/fleet/*` requires `SPViewFleet` permission. A typical delivery partner does NOT have this staff role.
    - What's unclear: Whether the "Fleet" and "Staff" tabs/screens should be hidden entirely for non-staff drivers or shown as locked.
    - Recommendation: Conditionally render fleet/staff entries in More screen based on `GET /delivery/staff/me` response. If 404 (not a staff member), hide fleet/staff menu items entirely.
+   - **RESOLUTION:** Use LOCKED screen approach — fleet/staff menu items are always visible in More tab but show a "Permission Required" locked state (lock icon + explanation text) when the driver does not have the staff role. Reason: simpler UX (one less API call per load to conditionally render items), and users understand why they cannot access the feature rather than wondering where it went. This overrides the research recommendation to hide items. Plan 03-06 implements this.
 
-3. **Chef Dashboard "Today's Orders" Count vs Live Queue**
+3. **Chef Dashboard "Today's Orders" Count vs Live Queue** — (RESOLVED)
    - What we know: `/chef/dashboard` returns today's summary stats. `/chef/orders?status=pending` returns live queue.
    - What's unclear: Does the dashboard page also poll, or does it show static data refreshed on pull-to-refresh?
    - Recommendation: Dashboard shows static data (no polling). Only the Orders tab polls every 10s. This matches the web portal pattern.
+   - **RESOLUTION:** No polling on the dashboard. Pull-to-refresh only. Aligns with research recommendation and the web portal pattern — the dashboard is a summary view, not a live feed. Plan 03-02 implements this (staleTime: 30_000, no refetchInterval on useVendorDashboard).
 
 ---
 
@@ -746,7 +749,7 @@ Directives extracted from `./CLAUDE.md` that affect Phase 3 implementation:
 | A1 | Optimistic update + undo timer pattern is the correct approach for D-03 | Code Examples | Low — if React Query cache invalidation behaves differently, undo may cause flicker |
 | A2 | Slide-to-confirm should use reanimated + gesture-handler (not a library) | Don't Hand-Roll | Low — a community library like `rn-slide-to-confirm` may be simpler; planner should verify if team prefers it |
 | A3 | @gorhom/bottom-sheet needs `GestureHandlerRootView` + `BottomSheetModalProvider` in root layout | Pitfalls | Medium — v5 docs should be checked; wrong root setup causes rendering bugs |
-| A4 | Fleet/staff screens should be hidden (not locked) for non-staff drivers | Open Questions | Low — UX choice, either approach works technically |
+| A4 | Fleet/staff screens should be **locked** (not hidden) for non-staff drivers | Open Questions | RESOLVED — locked approach chosen; see Q2 resolution above |
 | A5 | `expo-document-picker` is needed for PDF uploads (not in vendor/delivery package.json) | Standard Stack | Medium — if only image documents required for this version, `expo-image-picker` alone may suffice |
 
 **If this table is empty:** All claims in this research were verified or cited.
