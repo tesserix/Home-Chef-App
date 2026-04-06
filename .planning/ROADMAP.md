@@ -88,9 +88,9 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [x] 04-01-PLAN.md — Go API backend: DeliveryResponse serialization fix, rate limiter on PUT /delivery/location, NATS location publish, WebSocket tracking endpoint, actionable push payload structs
-- [ ] 04-02-PLAN.md — Driver background GPS: expo-location + expo-task-manager setup, rationale modal, background task with SecureStore JWT, GPS start/stop wired to delivery accept/complete; customer WebSocket tracking hook
-- [ ] 04-03-PLAN.md — Push notifications: FCM token wiring + Android channels + iOS vendor categories across all 3 apps; backend NATS-to-push bridge for vendor/driver/customer events
-- [ ] 04-04-PLAN.md — UX polish: pull-to-refresh on all list views, skeleton screens, OfflineBanner, haptic feedback on key actions
+- [x] 04-02-PLAN.md — Driver background GPS: expo-location + expo-task-manager setup, rationale modal, background task with SecureStore JWT, GPS start/stop wired to delivery accept/complete; customer WebSocket tracking hook
+- [x] 04-03-PLAN.md — Push notifications: FCM token wiring + Android channels + iOS vendor categories across all 3 apps; backend NATS-to-push bridge for vendor/driver/customer events
+- [x] 04-04-PLAN.md — UX polish: pull-to-refresh on all list views, skeleton screens, OfflineBanner, haptic feedback on key actions
 **UI hint**: yes
 
 ## Progress
