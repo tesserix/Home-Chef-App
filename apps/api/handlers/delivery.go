@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,12 +16,32 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"golang.org/x/time/rate"
 )
 
-type DeliveryHandler struct{}
+type DeliveryHandler struct {
+	locationRateLimit map[uuid.UUID]*rate.Limiter
+	locationRateMu    sync.RWMutex
+}
 
 func NewDeliveryHandler() *DeliveryHandler {
-	return &DeliveryHandler{}
+	return &DeliveryHandler{
+		locationRateLimit: make(map[uuid.UUID]*rate.Limiter),
+	}
+}
+
+// getLocationLimiter returns (or creates) a per-user rate limiter allowing 1 location update per 10 seconds.
+func (h *DeliveryHandler) getLocationLimiter(userID uuid.UUID) *rate.Limiter {
+	h.locationRateMu.RLock()
+	limiter, exists := h.locationRateLimit[userID]
+	h.locationRateMu.RUnlock()
+	if !exists {
+		limiter = rate.NewLimiter(rate.Every(10*time.Second), 1)
+		h.locationRateMu.Lock()
+		h.locationRateLimit[userID] = limiter
+		h.locationRateMu.Unlock()
+	}
+	return limiter
 }
 
 // GetProfile returns the delivery partner profile for the authenticated user
@@ -204,9 +225,20 @@ func (h *DeliveryHandler) ToggleOnline(c *gin.Context) {
 	})
 }
 
-// UpdateLocation updates the delivery partner's current location
+// UpdateLocation updates the delivery partner's current location.
+// Rate-limited to 1 request per 10 seconds per user (HTTP 429 on excess).
 func (h *DeliveryHandler) UpdateLocation(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
+
+	// Per-user rate limit: 1 update per 10 seconds to prevent DB saturation from background GPS polling.
+	limiter := h.getLocationLimiter(userID)
+	if !limiter.Allow() {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":   "location_rate_limit",
+			"message": "Location update rate limit exceeded. Wait 10 seconds between updates.",
+		})
+		return
+	}
 
 	var partner models.DeliveryPartner
 	if err := database.DB.Where("user_id = ?", userID).First(&partner).Error; err != nil {
@@ -232,6 +264,30 @@ func (h *DeliveryHandler) UpdateLocation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+
+	// Non-blocking NATS publish: find the active delivery for this partner and fan-out the location event.
+	partnerID := partner.ID
+	go func() {
+		var delivery models.Delivery
+		if err := database.DB.Select("id").
+			Where("delivery_partner_id = ? AND status NOT IN ?", partnerID,
+				[]string{string(models.DeliveryDelivered), string(models.DeliveryCancelled), string(models.DeliveryFailed)}).
+			First(&delivery).Error; err != nil {
+			// No active delivery — location event not needed.
+			return
+		}
+		deliveryID := delivery.ID.String()
+		subject := fmt.Sprintf("%s.%s", services.SubjectDeliveryLocation, deliveryID)
+		payload := map[string]interface{}{
+			"deliveryId": deliveryID,
+			"latitude":   req.Latitude,
+			"longitude":  req.Longitude,
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		}
+		if err := services.GetNATSClient().Publish(subject, payload); err != nil {
+			log.Printf("Failed to publish location event for delivery %s: %v", deliveryID, err)
+		}
+	}()
 }
 
 // GetCurrentDelivery returns the current active delivery

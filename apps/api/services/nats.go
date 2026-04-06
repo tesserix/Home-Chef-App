@@ -22,6 +22,7 @@ const (
 	SubjectChefNewOrder      = "chef.new_order"
 	SubjectDeliveryAssigned  = "delivery.assigned"
 	SubjectDeliveryPickedUp  = "delivery.picked_up"
+	SubjectDeliveryLocation  = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
 	SubjectPaymentSuccess    = "payments.success"
 	SubjectPaymentFailed     = "payments.failed"
 	SubjectUserRegistered    = "users.registered"

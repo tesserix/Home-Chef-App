@@ -283,10 +283,17 @@ type DeliveryResponse struct {
 	AssignedAt        time.Time      `json:"assignedAt"`
 	PickedUpAt        *time.Time     `json:"pickedUpAt,omitempty"`
 	DeliveredAt       *time.Time     `json:"deliveredAt,omitempty"`
+	// Location fields for real-time tracking
+	CurrentLatitude  float64 `json:"currentLatitude"`
+	CurrentLongitude float64 `json:"currentLongitude"`
+	DropoffLatitude  float64 `json:"dropoffLatitude"`
+	DropoffLongitude float64 `json:"dropoffLongitude"`
+	PickupLatitude   float64 `json:"pickupLatitude"`
+	PickupLongitude  float64 `json:"pickupLongitude"`
 }
 
 func (d *Delivery) ToResponse() DeliveryResponse {
-	return DeliveryResponse{
+	resp := DeliveryResponse{
 		ID:                d.ID,
 		OrderID:           d.OrderID,
 		Status:            d.Status,
@@ -296,7 +303,18 @@ func (d *Delivery) ToResponse() DeliveryResponse {
 		AssignedAt:        d.AssignedAt,
 		PickedUpAt:        d.PickedUpAt,
 		DeliveredAt:       d.DeliveredAt,
+		DropoffLatitude:   d.DropoffLatitude,
+		DropoffLongitude:  d.DropoffLongitude,
+		PickupLatitude:    d.PickupLatitude,
+		PickupLongitude:   d.PickupLongitude,
 	}
+	// Populate driver's current position from preloaded DeliveryPartner relationship.
+	// Defaults to 0.0 if DeliveryPartner was not preloaded — acceptable for non-tracking contexts.
+	if d.DeliveryPartner.ID != uuid.Nil {
+		resp.CurrentLatitude = d.DeliveryPartner.CurrentLatitude
+		resp.CurrentLongitude = d.DeliveryPartner.CurrentLongitude
+	}
+	return resp
 }
 
 // DeliveryPartnerDetailResponse includes more info than the basic response
