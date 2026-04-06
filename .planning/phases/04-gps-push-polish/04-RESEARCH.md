@@ -755,22 +755,16 @@ The GPS start should be triggered in the `useUpdateDeliveryStatus` success callb
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **NATS location event JetStream persistence**
-   - What we know: `Publish()` uses core NATS but DELIVERY stream subjects include `delivery.*`
-   - What's unclear: Whether NATS JetStream intercepts core NATS publishes to matching subjects or not (behavior depends on NATS server config)
-   - Recommendation: Use `conn.Publish()` directly (core NATS, already the behavior of `NATSClient.Publish()`) to avoid accidental JetStream persistence; add a comment in the handler noting this distinction
+1. **NATS location event JetStream persistence** — RESOLVED: Use core NATS (not JetStream)
+   - Decision: `NATSClient.Publish()` uses `conn.Publish()` (core NATS) which is NOT intercepted by JetStream on most server configs. Confirmed: use core NATS `Publish` for location events. Location events are ephemeral fan-out and must NOT accumulate in JetStream storage. This is the existing behavior of `NATSClient.Publish()` — no change needed.
 
-2. **Driver active delivery ID for GPS location publish**
-   - What we know: `UpdateLocation` receives driver userID and lat/lng but not deliveryID
-   - What's unclear: The handler needs to look up the active delivery to construct the NATS subject `delivery.location.{deliveryID}`. This adds a DB query to every location update
-   - Recommendation: Query `WHERE delivery_partner_id = ? AND status IN (assigned, picked_up, in_transit)` — add an index on `(delivery_partner_id, status)` if one doesn't exist
+2. **Driver active delivery ID for GPS location publish** — RESOLVED: WHERE clause query with DB index
+   - Decision: In `UpdateLocation`, query `SELECT id FROM deliveries WHERE delivery_partner_id = ? AND status IN ('assigned','picked_up','in_transit') LIMIT 1`. Add a DB migration creating an index on `deliveries(delivery_partner_id, status)` to keep this lookup fast. Plan 04-01 Task 1 includes this migration (see below).
 
-3. **gorilla/websocket vs nhooyr.io/websocket**
-   - What we know: Neither is in go.mod. `gorilla/websocket` is the established standard but is officially in maintenance mode (no new features since 2021)
-   - What's unclear: Whether `nhooyr.io/websocket` (the modern replacement) has better Gin integration
-   - Recommendation: Use `gorilla/websocket` for MVP — it is battle-tested, abundant Go examples exist, and the maintenance-mode concern doesn't affect correctness. Can migrate later.
+3. **gorilla/websocket vs nhooyr.io/websocket** — RESOLVED: Use gorilla/websocket
+   - Decision: `gorilla/websocket` v1.5.3. Battle-tested, abundant Gin examples, maintenance-mode does not affect correctness for MVP. Can migrate to `nhooyr.io/websocket` later if needed.
 
 ---
 
