@@ -132,13 +132,28 @@ All VEND-01 through VEND-10 requirements are now implemented:
 - **Issue:** `expo-image-picker` was imported and used in `app/(onboarding)/documents.tsx` (pre-existing) but was missing from `package.json` dependencies
 - **Fix:** Added `"expo-image-picker": "~16.0.6"` to dependencies
 - **Files modified:** `apps/mobile-vendor/package.json`
-- **Commit:** 3b8a2e6
+- **Commit:** 0c90b75
 
 ## Commits
 
 | Hash | Task | Description |
 |------|------|-------------|
-| 3b8a2e6 | Task 1 | Menu CRUD hooks, menu list with availability toggle, and menu item create/edit screens |
-| 8165b72 | Task 2 | More-tab destination screens — earnings, analytics, reviews, profile, settings |
+| 0c90b75 | Task 1 | feat(03-03): menu CRUD hooks, menu list with availability toggle, create/edit screens |
+| 5cfee8e | Task 2 | feat(03-03): earnings, analytics, settings, profile, reviews screens and wire More tab |
 
 ## Self-Check: PASSED
+
+Files exist:
+- apps/mobile-vendor/hooks/useVendorMenu.ts — FOUND
+- apps/mobile-vendor/components/vendor/MenuItemCard.tsx — FOUND
+- apps/mobile-vendor/app/(tabs)/menu.tsx — FOUND
+- apps/mobile-vendor/app/menu/new.tsx — FOUND
+- apps/mobile-vendor/app/menu/[itemId]/edit.tsx — FOUND
+- apps/mobile-vendor/app/earnings.tsx — FOUND
+- apps/mobile-vendor/app/analytics.tsx — FOUND
+- apps/mobile-vendor/app/settings.tsx — FOUND
+- apps/mobile-vendor/app/profile.tsx — FOUND
+- apps/mobile-vendor/app/reviews.tsx — FOUND
+- apps/mobile-vendor/app/review/[reviewId].tsx — FOUND
+
+Commits exist: 0c90b75, 5cfee8e — FOUND
