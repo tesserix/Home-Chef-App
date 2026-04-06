@@ -65,6 +65,36 @@ type fcmMessageBody struct {
 	Token        string            `json:"token"`
 	Notification *fcmNotification  `json:"notification,omitempty"`
 	Data         map[string]string `json:"data,omitempty"`
+	Android      *fcmAndroid       `json:"android,omitempty"`
+	APNS         *fcmAPNS          `json:"apns,omitempty"`
+}
+
+// fcmAndroid carries Android-specific message options for actionable notifications.
+type fcmAndroid struct {
+	Priority     string           `json:"priority,omitempty"` // "high"
+	Notification *fcmAndroidNotif `json:"notification,omitempty"`
+}
+
+type fcmAndroidNotif struct {
+	ChannelID string `json:"channel_id,omitempty"`
+	Sound     string `json:"sound,omitempty"`
+	Priority  string `json:"notification_priority,omitempty"` // "PRIORITY_MAX"
+}
+
+// fcmAPNS carries Apple Push Notification Service options for actionable notifications.
+type fcmAPNS struct {
+	Payload *fcmAPNSPayload   `json:"payload,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+type fcmAPNSPayload struct {
+	APS *fcmAPS `json:"aps,omitempty"`
+}
+
+type fcmAPS struct {
+	Category         string `json:"category,omitempty"`          // iOS notification category identifier
+	Sound            string `json:"sound,omitempty"`             // "default"
+	ContentAvailable int    `json:"content-available,omitempty"` // 1 for background updates
 }
 
 type fcmNotification struct {
@@ -85,14 +115,15 @@ func (s *PushService) getAccessToken() (string, error) {
 	return tok.AccessToken, nil
 }
 
-// sendToToken sends a push notification to a single FCM device token
-func (s *PushService) sendToToken(token, title, body string, data map[string]string) error {
+// sendFCMMessage sends a fully-constructed fcmMessageBody to FCM HTTP v1 API.
+// Both sendToToken and SendActionablePush use this shared path.
+func (s *PushService) sendFCMMessage(body *fcmMessageBody) error {
 	s.mu.RLock()
 	available := s.available
 	s.mu.RUnlock()
 
 	if !available {
-		log.Printf("Push skipped (not available): title=%s", title)
+		log.Printf("Push skipped (not available): title=%s", body.Notification.Title)
 		return nil
 	}
 
@@ -101,14 +132,7 @@ func (s *PushService) sendToToken(token, title, body string, data map[string]str
 		return err
 	}
 
-	msg := fcmMessage{
-		Message: fcmMessageBody{
-			Token:        token,
-			Notification: &fcmNotification{Title: title, Body: body},
-			Data:         data,
-		},
-	}
-
+	msg := fcmMessage{Message: *body}
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("push: failed to marshal message: %w", err)
@@ -134,8 +158,17 @@ func (s *PushService) sendToToken(token, title, body string, data map[string]str
 		return fmt.Errorf("push: FCM returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	log.Printf("Push notification sent: token=%s...%s title=%s", token[:6], token[len(token)-4:], title)
+	log.Printf("Push notification sent: token=%s...%s title=%s", body.Token[:6], body.Token[len(body.Token)-4:], body.Notification.Title)
 	return nil
+}
+
+// sendToToken sends a push notification to a single FCM device token
+func (s *PushService) sendToToken(token, title, body string, data map[string]string) error {
+	return s.sendFCMMessage(&fcmMessageBody{
+		Token:        token,
+		Notification: &fcmNotification{Title: title, Body: body},
+		Data:         data,
+	})
 }
 
 // SendPushNotification sends a push notification to a single user by looking up their FCM token
@@ -151,6 +184,41 @@ func SendPushNotification(userID uuid.UUID, title, body string, data map[string]
 	}
 
 	return GetPushService().sendToToken(user.FCMToken, title, body, data)
+}
+
+// SendActionablePush sends a push notification with platform-specific action metadata.
+// Use for vendor new-order notifications that need lock-screen Accept/Reject buttons.
+// androidChannelID: e.g. "new-orders"; iosCategory: e.g. "new_order"
+func SendActionablePush(userID uuid.UUID, title, body, androidChannelID, iosCategory string, data map[string]string) error {
+	var user models.User
+	if err := database.DB.Select("id, fcm_token").First(&user, "id = ?", userID).Error; err != nil {
+		return fmt.Errorf("push: user %s not found: %w", userID, err)
+	}
+	if user.FCMToken == "" {
+		log.Printf("Push skipped: user %s has no FCM token", userID)
+		return nil
+	}
+	return GetPushService().sendFCMMessage(&fcmMessageBody{
+		Token:        user.FCMToken,
+		Notification: &fcmNotification{Title: title, Body: body},
+		Data:         data,
+		Android: &fcmAndroid{
+			Priority: "high",
+			Notification: &fcmAndroidNotif{
+				ChannelID: androidChannelID,
+				Sound:     "default",
+				Priority:  "PRIORITY_MAX",
+			},
+		},
+		APNS: &fcmAPNS{
+			Payload: &fcmAPNSPayload{
+				APS: &fcmAPS{
+					Category: iosCategory,
+					Sound:    "default",
+				},
+			},
+		},
+	})
 }
 
 // SendPushToMultiple sends a push notification to multiple users
