@@ -65,7 +65,14 @@ Plans:
   3. Chef can view incoming live orders and accept or reject them from the order queue screen
   4. New driver completes onboarding (personal info, vehicle, payout, documents, subscription) and reaches the driver dashboard
   5. Driver can view available deliveries, accept one, view pickup/dropoff details, update status (picked up / in transit / delivered), and tap Navigate to open Google Maps or Apple Maps with the destination pre-loaded
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 03-01-PLAN.md — Vendor onboarding wizard (6 steps), pending/rejected holding screen, 4-tab shell (VEND-11)
+- [ ] 03-02-PLAN.md — Vendor dashboard and live order queue with 10s polling, optimistic accept/reject + 3s undo (VEND-01, 04, 05)
+- [ ] 03-03-PLAN.md — Vendor menu CRUD with camera photo upload, earnings, analytics, reviews, profile, settings (VEND-02, 03, 06, 07, 08, 09, 10)
+- [ ] 03-04-PLAN.md — Driver onboarding wizard (6 steps), pending/rejected holding screen, 4-tab shell (DRIV-11)
+- [ ] 03-05-PLAN.md — Driver dashboard, available deliveries, active delivery with native maps + swipe-to-confirm status (DRIV-01, 02, 03, 04, 05)
+- [ ] 03-06-PLAN.md — Driver history, earnings, fleet + staff (403 graceful), profile, settings (DRIV-06, 07, 08, 09, 10)
 **UI hint**: yes
 
 ### Phase 4: GPS, Push + Polish
@@ -90,5 +97,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundation + Auth | 0/4 | Not started | - |
 | 2. Customer App | 0/5 | Not started | - |
-| 3. Vendor App + Driver Core | 0/TBD | Not started | - |
+| 3. Vendor App + Driver Core | 0/6 | Not started | - |
 | 4. GPS, Push + Polish | 0/TBD | Not started | - |
