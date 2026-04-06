@@ -1,0 +1,41 @@
+// Checkout-specific hooks for order creation and payment status polling.
+// NOTE: useOrders / useOrder (order history) live in hooks/useOrderHistory.ts — Plan 05.
+// Do NOT add general order list/detail hooks here.
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import type { Order } from '../types/customer';
+
+interface CreateOrderPayload {
+  chefId: string;
+  items: { menuItemId: string; quantity: number }[];
+  deliveryAddressId: string;
+  note?: string;
+}
+
+export function useCreateOrder() {
+  const queryClient = useQueryClient();
+  return useMutation<{ data: Order }, Error, CreateOrderPayload>({
+    mutationFn: (payload) => api.post('/v1/orders', payload).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+// Used for polling after payment — stops when order status shows payment confirmed or beyond.
+// Interval: 3 seconds while status === 'pending'; stops on any other status.
+export function useOrderStatus(id: string, enabled: boolean) {
+  return useQuery<{ data: Order }>({
+    queryKey: ['order-status', id],
+    queryFn: () => api.get(`/v1/orders/${id}`).then((r) => r.data),
+    enabled: enabled && !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.data?.status;
+      // Stop polling when order has moved past pending (payment confirmed, or any terminal state)
+      if (status && status !== 'pending') return false;
+      return 3000; // poll every 3 seconds
+    },
+    refetchIntervalInBackground: false,
+  });
+}
