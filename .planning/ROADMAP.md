@@ -48,11 +48,11 @@ Plans:
   4. Customer can view past orders, manage their profile, save chefs to favorites, browse the social feed, and submit a catering request
 **Plans**: 5 plans
 Plans:
-- [ ] 02-01-PLAN.md — Tab nav shell (4 tabs), customer onboarding wizard (3 steps), cart store + type definitions
-- [ ] 02-02-PLAN.md — Chef browse home screen, chef detail with menu tabs, cart bottom sheet (CUST-01, 02, 03)
-- [ ] 02-03-PLAN.md — Checkout screen + Razorpay web-browser payment flow + order hooks (CUST-04)
-- [ ] 02-04-PLAN.md — Live order tracking map with 5s polling and status timeline (CUST-05)
-- [ ] 02-05-PLAN.md — Secondary screens: order history, favorites, social feed, catering, profile (CUST-06–10)
+- [x] 02-01-PLAN.md — Tab nav shell (4 tabs), customer onboarding wizard (3 steps), cart store + type definitions
+- [x] 02-02-PLAN.md — Chef browse home screen, chef detail with menu tabs, cart bottom sheet (CUST-01, 02, 03)
+- [x] 02-03-PLAN.md — Checkout screen + Razorpay web-browser payment flow + order hooks (CUST-04)
+- [x] 02-04-PLAN.md — Live order tracking map with 5s polling and status timeline (CUST-05)
+- [x] 02-05-PLAN.md — Secondary screens: order history, favorites, social feed, catering, profile (CUST-06–10)
 **UI hint**: yes
 
 ### Phase 3: Vendor App + Driver Core
