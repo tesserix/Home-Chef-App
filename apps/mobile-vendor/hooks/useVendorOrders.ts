@@ -95,6 +95,9 @@ export function useOrderAction() {
   });
 
   function triggerAction(orderId: string, action: 'accepted' | 'rejected', reason?: string) {
+    // Haptic feedback on decisive order action (accept or reject)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     // Optimistically remove card, set undo state, schedule API call after delay
     queryClient.setQueryData<OrdersResponse>(['chef', 'orders', 'pending'], (old) => {
       if (!old) return old;

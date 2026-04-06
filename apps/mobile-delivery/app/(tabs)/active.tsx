@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SlideToConfirm } from '../../components/driver/SlideToConfirm';
 import { StatusStepIndicator } from '../../components/driver/StatusStepIndicator';
@@ -265,12 +266,15 @@ export default function ActiveScreen() {
           {action && delivery.status !== 'cancelled' && (
             <SlideToConfirm
               label={action.label}
-              onConfirm={() =>
-                statusMutation.mutate({
-                  id: delivery.id,
-                  status: action.nextStatus,
-                })
-              }
+              onConfirm={() => {
+                const nextStatus = action.nextStatus;
+                if (nextStatus === 'delivered') {
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } else {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }
+                statusMutation.mutate({ id: delivery.id, status: nextStatus });
+              }}
               disabled={statusMutation.isPending}
             />
           )}
