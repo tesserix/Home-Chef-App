@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -85,7 +85,7 @@ export function StatusStepIndicator({ currentStatus }: StatusStepIndicatorProps)
         const isLast = index === STEPS.length - 1;
 
         return (
-          <React.Fragment key={step}>
+          <Fragment key={step}>
             <View style={styles.stepWrapper}>
               <PulsingDot color={dotColor} isPulsing={isCurrent} />
               <Text
@@ -106,7 +106,7 @@ export function StatusStepIndicator({ currentStatus }: StatusStepIndicatorProps)
                 ]}
               />
             )}
-          </React.Fragment>
+          </Fragment>
         );
       })}
     </View>
