@@ -12,3 +12,4 @@ export * from './types';
 export * from './utils';
 export * from './theme';
 export * from './screens';
+export { OfflineBanner } from './components/OfflineBanner';

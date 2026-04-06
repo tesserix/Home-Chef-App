@@ -59,7 +59,7 @@ function HistoryOrderRow({ order }: { order: Order }) {
 }
 
 function LiveQueue() {
-  const { data, isLoading } = useVendorPendingOrders();
+  const { data, isLoading, isRefetching, refetch } = useVendorPendingOrders();
   const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } = useOrderAction();
   const orders = data?.orders ?? [];
 
@@ -79,6 +79,14 @@ function LiveQueue() {
         data={orders}
         keyExtractor={(item) => item.id}
         contentContainerClassName="px-4 pt-4 pb-24"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor="#f97316"
+            colors={['#f97316']}
+          />
+        }
         renderItem={({ item }) => (
           <OrderCard
             order={item}

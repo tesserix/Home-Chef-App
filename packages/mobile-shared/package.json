@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
+    "@react-native-community/netinfo": "~11.4.1",
     "@tesserix/native": "^1.0.0",
     "axios": "^1.13.0",
     "expo-device": "~7.1.4",

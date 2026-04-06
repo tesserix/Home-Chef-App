@@ -86,8 +86,14 @@ export default function OrdersScreen() {
   if (isLoading && page === 1) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+        <View style={styles.header}>
+          <Text style={styles.title}>My Orders</Text>
+        </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <View style={styles.skeletonRow} />
+          <View style={styles.skeletonRow} />
+          <View style={styles.skeletonRow} />
+          <View style={styles.skeletonRow} />
         </View>
       </SafeAreaView>
     );
@@ -238,5 +244,11 @@ const styles = StyleSheet.create({
   },
   footerLoader: {
     paddingVertical: 16,
+  },
+  skeletonRow: {
+    height: 80,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 12,
+    marginBottom: 12,
   },
 });

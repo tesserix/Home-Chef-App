@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { DeliveryCard } from '../../components/driver/DeliveryCard';
@@ -72,6 +73,7 @@ export default function AvailableScreen() {
   function handleAccept(deliveryId: string) {
     acceptMutation.mutate(deliveryId, {
       onSuccess: () => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         requestGPSAndStartTracking(deliveryId).catch((err: unknown) => {
           console.warn('[GPS] Failed to start tracking after accept:', err);
         });
@@ -85,8 +87,15 @@ export default function AvailableScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="px-4 pt-4 pb-2">
+          <Text className="text-2xl font-bold text-gray-900">Available</Text>
+        </View>
+        <View className="px-4 pt-2">
+          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
+          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
+          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
+        </View>
       </SafeAreaView>
     );
   }

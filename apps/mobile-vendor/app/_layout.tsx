@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -205,7 +206,12 @@ function AppNavigator() {
     }
   }, [isAuthenticated, isLoading, onboardingStatus, onboardingLoading]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <OfflineBanner />
+      <Stack screenOptions={{ headerShown: false }} />
+    </View>
+  );
 }
 
 export default function RootLayout() {

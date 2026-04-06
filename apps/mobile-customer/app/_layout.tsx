@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/auth-store';
@@ -129,7 +130,10 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Stack screenOptions={{ headerShown: false }} />
+      <View style={{ flex: 1 }}>
+        <OfflineBanner />
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
     </QueryClientProvider>
   );
 }

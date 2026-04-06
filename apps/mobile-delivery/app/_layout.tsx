@@ -1,6 +1,7 @@
 import '../lib/background-location'; // registers background task at module load
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
+import { OfflineBanner } from '@homechef/mobile-shared';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -151,7 +152,12 @@ function AppNavigator() {
     }
   }, [isAuthenticated, isLoading, onboardingStatus, onboardingLoading]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <OfflineBanner />
+      <Stack screenOptions={{ headerShown: false }} />
+    </View>
+  );
 }
 
 export default function RootLayout() {

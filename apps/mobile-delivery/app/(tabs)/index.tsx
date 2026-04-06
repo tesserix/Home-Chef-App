@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   Switch,
@@ -32,8 +31,21 @@ export default function DashboardScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="px-4 pt-4 pb-2">
+          <Text className="text-2xl font-bold text-gray-900">Dashboard</Text>
+        </View>
+        <View className="px-4 pt-2">
+          <View className="h-16 bg-gray-200 rounded-2xl mb-3" />
+          <View className="flex-row gap-3 mb-3">
+            <View className="flex-1 h-24 bg-gray-200 rounded-2xl" />
+            <View className="flex-1 h-24 bg-gray-200 rounded-2xl" />
+          </View>
+          <View className="flex-row gap-3">
+            <View className="flex-1 h-24 bg-gray-200 rounded-2xl" />
+            <View className="flex-1 h-24 bg-gray-200 rounded-2xl" />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
