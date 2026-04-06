@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -7,21 +8,75 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { DeliveryCard } from '../../components/driver/DeliveryCard';
+import { LocationRationaleModal } from '../../components/LocationRationaleModal';
 import { useDriverDashboard, useToggleOnline } from '../../hooks/useDriverDashboard';
 import { useAcceptDelivery, useAvailableDeliveries, type AvailableDelivery } from '../../hooks/useDriverDeliveries';
+import { startTracking } from '../../lib/background-location';
+import { useDeliveryStore } from '../../store/delivery-store';
 
 export default function AvailableScreen() {
   const { data: dashboard } = useDriverDashboard();
   const { data: available, refetch, isLoading, isRefetching } = useAvailableDeliveries();
   const acceptMutation = useAcceptDelivery();
   const toggleOnlineMutation = useToggleOnline();
+  const [showRationale, setShowRationale] = useState(false);
+  const [pendingDeliveryAccept, setPendingDeliveryAccept] = useState<string | null>(null);
 
   const isOnline = dashboard?.isOnline ?? false;
   const deliveries = available?.deliveries ?? [];
 
+  async function requestGPSAndStartTracking(deliveryId: string) {
+    const { status: foreground } = await Location.getForegroundPermissionsAsync();
+    const { status: background } = await Location.getBackgroundPermissionsAsync();
+
+    if (background === 'granted') {
+      await startTracking();
+      useDeliveryStore.getState().setTrackingLocation(true, deliveryId);
+      return;
+    }
+
+    if (foreground !== 'granted') {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('[GPS] Foreground location denied — delivery proceeds without tracking');
+        return;
+      }
+    }
+
+    // Show rationale modal before requesting background permission (D-03)
+    setPendingDeliveryAccept(deliveryId);
+    setShowRationale(true);
+  }
+
+  async function handleRationaleAllow() {
+    setShowRationale(false);
+    const { status } = await Location.requestBackgroundPermissionsAsync();
+    if (pendingDeliveryAccept) {
+      await startTracking();
+      useDeliveryStore.getState().setTrackingLocation(true, pendingDeliveryAccept);
+    }
+    if (status !== 'granted') {
+      console.warn('[GPS] Background location denied — tracking foreground only');
+    }
+    setPendingDeliveryAccept(null);
+  }
+
+  function handleRationaleDeny() {
+    setShowRationale(false);
+    setPendingDeliveryAccept(null);
+    // Delivery proceeds without background tracking — acceptable per D-03
+  }
+
   function handleAccept(deliveryId: string) {
-    acceptMutation.mutate(deliveryId);
+    acceptMutation.mutate(deliveryId, {
+      onSuccess: () => {
+        requestGPSAndStartTracking(deliveryId).catch((err: unknown) => {
+          console.warn('[GPS] Failed to start tracking after accept:', err);
+        });
+      },
+    });
   }
 
   function handleGoOnline() {
@@ -97,6 +152,13 @@ export default function AvailableScreen() {
           )}
         />
       )}
+
+      {/* Background location rationale modal — shown before system permission prompt */}
+      <LocationRationaleModal
+        visible={showRationale}
+        onAllow={handleRationaleAllow}
+        onDeny={handleRationaleDeny}
+      />
     </SafeAreaView>
   );
 }

@@ -2,6 +2,7 @@ import { useRef, useMemo, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, useIsFocused } from 'expo-router';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
 import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { OrderTimeline } from '../../../components/orders/OrderTimeline';
@@ -10,6 +11,14 @@ export default function TrackOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isFocused = useIsFocused(); // T-02-04-02: guard polling with focus
 
+  // WS hook: real-time driver location with polling fallback after 3 failures
+  const { driverLocation, isPollingFallback } = useOrderTrackingWS(
+    id ?? '',
+    isFocused,
+  );
+
+  // REST polling: provides order metadata (status, chef, timeline) and serves
+  // as the driver-location source when WS fallback is active
   const { data, isLoading } = useOrderTracking(id ?? '', isFocused);
   const tracking = data?.data;
 
@@ -35,12 +44,23 @@ export default function TrackOrderScreen() {
     );
   }
 
+  // Driver coords: prefer real-time WS location; fall back to polling coords
+  // isPollingFallback flag indicates WS failed — polling data is already live
+  const effectiveDriverLat =
+    driverLocation != null && !isPollingFallback
+      ? driverLocation.latitude
+      : tracking.delivery?.currentLatitude;
+  const effectiveDriverLng =
+    driverLocation != null && !isPollingFallback
+      ? driverLocation.longitude
+      : tracking.delivery?.currentLongitude;
+
   return (
     <View style={styles.container}>
-      {/* Full-screen map — occupies entire screen behind bottom sheet */}
+      {/* Full-screen map — driver position from WS (or polling when WS falls back) */}
       <DeliveryMap
-        driverLat={tracking.delivery?.currentLatitude}
-        driverLng={tracking.delivery?.currentLongitude}
+        driverLat={effectiveDriverLat}
+        driverLng={effectiveDriverLng}
         dropoffLat={tracking.delivery?.dropoffLatitude}
         dropoffLng={tracking.delivery?.dropoffLongitude}
         chefLat={tracking.chef?.latitude}

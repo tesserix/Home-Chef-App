@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SlideToConfirm } from '../../components/driver/SlideToConfirm';
 import { StatusStepIndicator } from '../../components/driver/StatusStepIndicator';
 import { useCurrentDelivery, useUpdateDeliveryStatus } from '../../hooks/useDriverDeliveries';
+import { stopTracking } from '../../lib/background-location';
+import { useDeliveryStore } from '../../store/delivery-store';
 
 const STATUS_LABELS: Record<string, string> = {
   assigned: 'Head to Kitchen',
@@ -51,6 +53,18 @@ export default function ActiveScreen() {
   const { data: currentDelivery, isLoading, refetch, isRefetching } = useCurrentDelivery();
   const statusMutation = useUpdateDeliveryStatus();
   const [orderExpanded, setOrderExpanded] = useState(false);
+
+  // Stop background GPS tracking when delivery reaches a terminal status
+  useEffect(() => {
+    const status = currentDelivery?.status;
+    if (status === 'delivered' || status === 'cancelled') {
+      stopTracking().then(() => {
+        useDeliveryStore.getState().setTrackingLocation(false, null);
+      }).catch((err: unknown) => {
+        console.warn('[GPS] Failed to stop tracking:', err);
+      });
+    }
+  }, [currentDelivery?.status]);
 
   if (isLoading) {
     return (
