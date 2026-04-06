@@ -10,11 +10,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	natsclient "github.com/nats-io/nats.go"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// wsUpgrader upgrades HTTP connections to WebSocket.
+// CheckOrigin allows all origins — mobile clients do not send an Origin header.
+var wsUpgrader = websocket.Upgrader{
+	CheckOrigin:     func(r *http.Request) bool { return true },
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
 
 type OrderHandler struct{}
 
@@ -373,7 +384,7 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 	orderID := c.Param("id")
 
 	var order models.Order
-	if err := database.DB.Preload("Delivery").Preload("Chef").
+	if err := database.DB.Preload("Delivery").Preload("Delivery.DeliveryPartner").Preload("Chef").
 		Where("id = ? AND customer_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
@@ -429,6 +440,80 @@ func (h *OrderHandler) GetOrderInvoice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, invoice.ToResponse())
+}
+
+// TrackOrderWS upgrades the HTTP connection to WebSocket and streams real-time driver location
+// updates from NATS delivery.location.{deliveryID} to the connected client.
+// Security: verifies the authenticated customer owns the order before upgrading (T-04-03).
+func (h *OrderHandler) TrackOrderWS(c *gin.Context) {
+	orderID := c.Param("id")
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Verify customer owns this order and load the delivery relationship.
+	var order models.Order
+	if err := database.DB.Preload("Delivery").
+		Where("id = ? AND customer_id = ?", orderID, userID).
+		First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "order_not_found", "message": "Order not found"})
+		return
+	}
+	if order.Delivery == nil || order.Delivery.ID == uuid.Nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no_active_delivery", "message": "No active delivery for this order"})
+		return
+	}
+	deliveryID := order.Delivery.ID.String()
+
+	// Upgrade HTTP → WebSocket.
+	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade failed for order %s: %v", orderID, err)
+		return // Upgrader writes the error response automatically.
+	}
+	defer conn.Close()
+
+	// Buffered write channel — only one goroutine calls conn.WriteMessage (gorilla is not concurrent-write-safe).
+	// T-04-05: non-blocking send drops messages when full rather than blocking.
+	writeCh := make(chan []byte, 32)
+	defer close(writeCh)
+
+	// Write pump — serialises all WebSocket writes.
+	go func() {
+		for msg := range writeCh {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("WS write error for order %s: %v", orderID, err)
+				return
+			}
+		}
+	}()
+
+	// Subscribe to core NATS (not JetStream) for live location fan-out.
+	subject := fmt.Sprintf("%s.%s", services.SubjectDeliveryLocation, deliveryID)
+	sub, err := services.GetNATSClient().Subscribe(subject, func(msg *natsclient.Msg) {
+		select {
+		case writeCh <- msg.Data:
+		default:
+			// Channel full — drop this message rather than block the NATS dispatcher.
+		}
+	})
+	if err != nil {
+		log.Printf("NATS subscribe failed for delivery %s: %v", deliveryID, err)
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1011, "Internal error"))
+		return
+	}
+	defer sub.Unsubscribe()
+
+	// Read pump — blocks until client disconnects or sends a close frame.
+	// T-04-05: SetReadLimit caps inbound frame size at 512 bytes.
+	conn.SetReadLimit(512)
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
 }
 
 // Helper to generate order number

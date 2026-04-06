@@ -210,6 +210,7 @@ func SetupRouter() *gin.Engine {
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
 			orders.GET("/:id/track", orderHandler.TrackOrder)
+			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
 			// Order-specific chat rooms
 			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
