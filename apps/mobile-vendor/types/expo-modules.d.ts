@@ -55,3 +55,67 @@ declare module 'expo-document-picker' {
   };
   export function getDocumentAsync(options?: DocumentPickerOptions): Promise<DocumentPickerResult>;
 }
+
+declare module 'lucide-react-native' {
+  import type { ComponentType } from 'react';
+  interface IconProps {
+    size?: number;
+    color?: string;
+    strokeWidth?: number;
+  }
+  export const LayoutDashboard: ComponentType<IconProps>;
+  export const ClipboardList: ComponentType<IconProps>;
+  export const UtensilsCrossed: ComponentType<IconProps>;
+  export const MoreHorizontal: ComponentType<IconProps>;
+  export const ChevronRight: ComponentType<IconProps>;
+  export const Check: ComponentType<IconProps>;
+  export const X: ComponentType<IconProps>;
+  export const Camera: ComponentType<IconProps>;
+  export const Upload: ComponentType<IconProps>;
+  export const FileText: ComponentType<IconProps>;
+  export const Star: ComponentType<IconProps>;
+  export const Settings: ComponentType<IconProps>;
+  export const User: ComponentType<IconProps>;
+  export const DollarSign: ComponentType<IconProps>;
+  export const BarChart2: ComponentType<IconProps>;
+  export const LogOut: ComponentType<IconProps>;
+}
+
+declare module '@gorhom/bottom-sheet' {
+  import type { ComponentType, ReactNode, RefObject } from 'react';
+  import type { ViewStyle } from 'react-native';
+
+  interface BottomSheetModalProviderProps {
+    children: ReactNode;
+  }
+  export const BottomSheetModalProvider: ComponentType<BottomSheetModalProviderProps>;
+
+  interface BottomSheetProps {
+    index?: number;
+    snapPoints?: (string | number)[];
+    children?: ReactNode;
+    style?: ViewStyle;
+    onChange?: (index: number) => void;
+    onClose?: () => void;
+    enablePanDownToClose?: boolean;
+    backgroundStyle?: ViewStyle;
+  }
+  export class BottomSheet extends Object {
+    snapToIndex(index: number): void;
+    snapToPosition(position: string | number): void;
+    expand(): void;
+    collapse(): void;
+    close(): void;
+  }
+  export const BottomSheetView: ComponentType<{ children?: ReactNode; style?: ViewStyle }>;
+  export const BottomSheetScrollView: ComponentType<{ children?: ReactNode; style?: ViewStyle }>;
+
+  interface BottomSheetModalProps extends BottomSheetProps {
+    ref?: RefObject<unknown>;
+  }
+  export class BottomSheetModal extends Object {
+    present(): void;
+    dismiss(): void;
+  }
+  export function useBottomSheetModal(): { dismiss: () => void; dismissAll: () => void };
+}
