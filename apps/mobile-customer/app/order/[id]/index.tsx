@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useOrder } from '../../hooks/useOrderHistory';
-import type { Order } from '../../types/customer';
+import { useOrder } from '../../../hooks/useOrderHistory';
+import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
   'confirmed',
@@ -141,7 +141,7 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Items</Text>
           {order.items.map((item, index) => (
-            <View key={index} style={styles.itemRow}>
+            <View key={String(index)} style={styles.itemRow}>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemQty}>x{item.quantity}</Text>
