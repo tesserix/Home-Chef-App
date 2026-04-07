@@ -328,6 +328,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.2.2(react-hook-form@7.68.0(react@19.2.0))
+      '@react-native-community/netinfo':
+        specifier: ~11.4.1
+        version: 11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))
       '@react-native-google-signin/google-signin':
         specifier: ^16.1.2
         version: 16.1.2(expo@55.0.11)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
@@ -449,6 +452,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.2.2(react-hook-form@7.68.0(react@19.2.0))
+      '@react-native-community/netinfo':
+        specifier: ~11.4.1
+        version: 11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))
       '@react-native-google-signin/google-signin':
         specifier: ^16.1.2
         version: 16.1.2(expo@55.0.11)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
@@ -579,6 +585,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.2.2(react-hook-form@7.68.0(react@19.2.0))
+      '@react-native-community/netinfo':
+        specifier: ~11.4.1
+        version: 11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))
       '@react-native-google-signin/google-signin':
         specifier: ^16.1.2
         version: 16.1.2(expo@55.0.11)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
@@ -1005,6 +1014,9 @@ importers:
 
   packages/mobile-shared:
     dependencies:
+      '@react-native-community/netinfo':
+        specifier: ~11.4.1
+        version: 11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.2.0))
       '@tesserix/native':
         specifier: ^1.0.0
         version: 1.0.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.2.0))(react@19.2.0)
@@ -2880,6 +2892,11 @@ packages:
 
   '@radix-ui/rect@1.1.1':
     resolution: {integrity: sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==}
+
+  '@react-native-community/netinfo@11.4.1':
+    resolution: {integrity: sha512-B0BYAkghz3Q2V09BF88RA601XursIEA111tnc2JOaN7axJWmNefmfjZqw/KdSxKZp7CZUuPpjBmz/WCR9uaHYg==}
+    peerDependencies:
+      react-native: '>=0.59'
 
   '@react-native-google-signin/google-signin@16.1.2':
     resolution: {integrity: sha512-1hf4pRmpnS5t0dHtqU72Q1FmWzsCZR2Sm3uVQbbfMKeNPl5TKjpAsP6F8QTZ9L+Q6Cnn9tL9BXpDCb1nyutdCQ==}
@@ -9812,6 +9829,14 @@ snapshots:
       '@types/react-dom': 19.2.3(@types/react@19.2.7)
 
   '@radix-ui/rect@1.1.1': {}
+
+  '@react-native-community/netinfo@11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.2.0))':
+    dependencies:
+      react-native: 0.83.4(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.2.0)
+
+  '@react-native-community/netinfo@11.4.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))':
+    dependencies:
+      react-native: 0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0)
 
   '@react-native-google-signin/google-signin@16.1.2(expo@55.0.11)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)':
     dependencies:
