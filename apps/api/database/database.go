@@ -70,6 +70,7 @@ func Migrate() error {
 		&models.User{},
 		&models.RefreshToken{},
 		&models.PasswordResetToken{},
+		&models.EmailVerificationToken{},
 		&models.CustomerProfile{},
 		&models.PreferenceOption{},
 

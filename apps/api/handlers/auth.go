@@ -88,6 +88,28 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Send welcome email + verification email asynchronously
+	go func() {
+		emailSvc := services.GetEmailService()
+		emailSvc.SendWelcomeEmail(user.Email, user.FirstName)
+
+		// Generate email verification token (24h expiry)
+		verifyToken := make([]byte, 32)
+		if _, err := rand.Read(verifyToken); err == nil {
+			tokenHex := hex.EncodeToString(verifyToken)
+			evToken := models.EmailVerificationToken{
+				UserID:    user.ID,
+				Token:     tokenHex,
+				ExpiresAt: time.Now().Add(24 * time.Hour),
+			}
+			if database.DB.Create(&evToken).Error == nil {
+				baseURL := "https://fe3dr.com"
+				verifyURL := fmt.Sprintf("%s/verify-email?token=%s", baseURL, tokenHex)
+				emailSvc.SendEmailVerification(user.Email, user.FirstName, verifyURL)
+			}
+		}
+	}()
+
 	// Generate tokens
 	accessToken, refreshToken, err := middleware.GenerateTokens(&user)
 	if err != nil {
@@ -435,6 +457,88 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		Update("revoked_at", now)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Password has been reset successfully"})
+}
+
+// VerifyEmail validates an email verification token and marks the user as verified
+func (h *AuthHandler) VerifyEmail(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verification token is required"})
+		return
+	}
+
+	var evToken models.EmailVerificationToken
+	if err := database.DB.Where("token = ?", token).First(&evToken).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification token"})
+		return
+	}
+
+	if !evToken.IsValid() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verification token has expired or already been used"})
+		return
+	}
+
+	// Mark the user as email-verified
+	if err := database.DB.Model(&models.User{}).Where("id = ?", evToken.UserID).
+		Update("email_verified", true).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify email"})
+		return
+	}
+
+	// Mark token as used
+	now := time.Now()
+	evToken.UsedAt = &now
+	database.DB.Save(&evToken)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}
+
+// ResendVerification resends the email verification link
+func (h *AuthHandler) ResendVerification(c *gin.Context) {
+	userID, exists := c.Get("userId")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if user.EmailVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email is already verified"})
+		return
+	}
+
+	// Invalidate old tokens
+	database.DB.Model(&models.EmailVerificationToken{}).
+		Where("user_id = ? AND used_at IS NULL", user.ID).
+		Update("used_at", time.Now())
+
+	// Generate new token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+	tokenHex := hex.EncodeToString(tokenBytes)
+	evToken := models.EmailVerificationToken{
+		UserID:    user.ID,
+		Token:     tokenHex,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	if err := database.DB.Create(&evToken).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create verification token"})
+		return
+	}
+
+	baseURL := "https://fe3dr.com"
+	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", baseURL, tokenHex)
+	go services.GetEmailService().SendEmailVerification(user.Email, user.FirstName, verifyURL)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
 }
 
 // OAuthLoginRequest represents the OAuth login payload

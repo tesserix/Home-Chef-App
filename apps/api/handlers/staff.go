@@ -3,6 +3,8 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 type StaffHandler struct{}
@@ -320,8 +323,21 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 		}
 	}
 
-	// TODO: Send email via SendGrid when integrated
-	// For now, the invite URL is returned in the response
+	// Send invitation email via SendGrid
+	inviterName := ""
+	if invitation.InvitedBy.FirstName != "" {
+		inviterName = invitation.InvitedBy.FirstName + " " + invitation.InvitedBy.LastName
+	} else {
+		inviterName = invitation.InvitedBy.Email
+	}
+	acceptURL := fmt.Sprintf("%s/staff/invite?token=%s", baseURL, invitation.Token)
+	go func() {
+		if err := services.GetEmailService().SendStaffInvitation(
+			invitation.Email, inviterName, string(invitation.StaffRole), acceptURL,
+		); err != nil {
+			log.Printf("Warning: failed to send staff invitation email to %s: %v", invitation.Email, err)
+		}
+	}()
 
 	c.JSON(http.StatusCreated, invitation.ToResponse(baseURL))
 }

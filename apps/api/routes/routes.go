@@ -118,6 +118,8 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/forgot-password", authHandler.ForgotPassword)
 			auth.POST("/reset-password", authHandler.ResetPassword)
+			auth.GET("/verify-email", authHandler.VerifyEmail)
+			auth.POST("/resend-verification", middleware.AuthMiddleware(), authHandler.ResendVerification)
 		}
 
 		// Staff invitation routes (public - token validates)

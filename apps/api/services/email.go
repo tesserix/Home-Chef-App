@@ -223,25 +223,20 @@ func (s *EmailService) SendSupportTicketUpdate(to, ticketNumber, status string) 
 	return s.send(to, fmt.Sprintf("Ticket Update — #%s", ticketNumber), html)
 }
 
-// SendWelcomeEmail sends a welcome email to newly registered users
+// SendWelcomeEmail sends a branded welcome email to newly registered users
 func (s *EmailService) SendWelcomeEmail(to, firstName string) error {
-	html := fmt.Sprintf(`
-<h2>Welcome to HomeChef, %s!</h2>
-<p>We're thrilled to have you. Discover amazing home-cooked meals from talented local chefs right in your neighbourhood.</p>
-<p><a href="https://fe3dr.com">Start Exploring</a></p>
-`, firstName)
-
-	return s.send(to, "Welcome to HomeChef!", html)
+	subject, html := WelcomeEmailHTML(firstName)
+	return s.send(to, subject, html)
 }
 
-// SendStaffInvitation sends a staff invitation email
-func (s *EmailService) SendStaffInvitation(to, inviterName, role, acceptURL string) error {
-	html := fmt.Sprintf(`
-<h2>You've Been Invited!</h2>
-<p><strong>%s</strong> has invited you to join the HomeChef team as <strong>%s</strong>.</p>
-<p><a href="%s">Accept Invitation</a></p>
-<p>This invitation will expire in 7 days.</p>
-`, inviterName, role, acceptURL)
+// SendEmailVerification sends an email verification link
+func (s *EmailService) SendEmailVerification(to, firstName, verifyURL string) error {
+	subject, html := EmailVerificationHTML(firstName, verifyURL)
+	return s.send(to, subject, html)
+}
 
-	return s.send(to, "You're Invited to Join HomeChef", html)
+// SendStaffInvitation sends a branded staff invitation email
+func (s *EmailService) SendStaffInvitation(to, inviterName, role, acceptURL string) error {
+	subject, html := StaffInvitationHTML(inviterName, role, acceptURL)
+	return s.send(to, subject, html)
 }
