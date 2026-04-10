@@ -1,7 +1,14 @@
 import type { ApiError } from '@/shared/types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => {
+  const env = import.meta.env.VITE_BFF_URL;
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return `${window.location.origin}/bff`;
+  }
+  return '/bff';
+})();
 const MOCK_MODE = import.meta.env.VITE_MOCK_MODE === 'true';
 
 // In production, use same-origin /bff/ prefix to avoid cross-origin CORS issues.

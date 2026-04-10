@@ -13,8 +13,14 @@ import { apiClient } from '@/shared/services/api-client';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 import type { OnboardingStatus, CustomerProfile } from '@/shared/types';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
-// Same-origin proxy for fetch calls — browser redirects still use full BFF_URL
+const BFF_URL = (() => {
+  const env = import.meta.env.VITE_BFF_URL;
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return `${window.location.origin}/bff`;
+  }
+  return '/bff';
+})();
 const _isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const BFF_FETCH = _isLocal ? BFF_URL : '/bff';
 

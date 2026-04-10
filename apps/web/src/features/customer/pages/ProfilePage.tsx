@@ -1071,8 +1071,14 @@ function NotificationsTab() {
   );
 }
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
-// Same-origin BFF proxy to avoid CORS — Istio rewrites /bff/* → / on BFF
+const BFF_URL = (() => {
+  const env = import.meta.env.VITE_BFF_URL;
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return `${window.location.origin}/bff`;
+  }
+  return '/bff';
+})();
 const _isLocalDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const BFF_BASE = _isLocalDev ? BFF_URL : '/bff';
 
