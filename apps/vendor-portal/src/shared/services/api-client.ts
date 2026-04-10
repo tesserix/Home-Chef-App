@@ -1,7 +1,7 @@
 import type { ApiError } from '@/shared/types';
 
 // API calls go through the BFF proxy which handles session auth (cookies → JWT)
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 const API_URL = `${BFF_URL}/api/v1`;
 
 interface RequestOptions extends RequestInit {

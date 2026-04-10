@@ -24,7 +24,7 @@ import { Card } from '@/shared/components/ui/Card';
 import { Input } from '@/shared/components/ui/Input';
 import type { Chef, OperatingHours, DayHours } from '@/shared/types';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 
 const MAX_KITCHEN_PHOTOS = 5;
 

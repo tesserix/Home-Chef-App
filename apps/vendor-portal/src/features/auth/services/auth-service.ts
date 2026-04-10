@@ -1,6 +1,6 @@
 import type { SessionResponse, SocialProvider } from '@/shared/types/auth';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 
 /**
  * Auth service that integrates with the Keycloak-backed BFF at identity.fe3dr.com.

@@ -29,7 +29,7 @@ WORKDIR /app/apps/vendor-portal
 
 # Build arguments
 ARG VITE_API_URL
-ARG VITE_BFF_URL=https://identity.fe3dr.com
+ARG VITE_BFF_URL=
 ARG GIT_COMMIT
 ARG GIT_BRANCH
 ARG BUILD_DATE

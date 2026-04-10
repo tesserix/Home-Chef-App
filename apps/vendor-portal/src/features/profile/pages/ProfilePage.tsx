@@ -39,7 +39,7 @@ import { Input, Textarea } from '@/shared/components/ui/Input';
 import { Avatar } from '@/shared/components/ui/Avatar';
 import type { Chef } from '@/shared/types';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 
 const profileSchema = z.object({
   businessName: z.string().min(2, 'Business name must be at least 2 characters'),

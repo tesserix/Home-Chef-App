@@ -1,6 +1,6 @@
 // File uploads go through the BFF proxy which handles session auth
 // and forwards the request with proper Authorization header to the API
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 
 // Max file sizes
 const MAX_DOC_SIZE = 5 * 1024 * 1024; // 5MB for documents (PAN, Aadhaar, FSSAI, etc.)
