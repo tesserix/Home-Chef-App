@@ -30,10 +30,10 @@ class ApiClient {
     this.bffProxyBase = bffProxyBase;
   }
 
-  private async getAuthState(): Promise<{ isAuthenticated: boolean; csrfToken: string | null }> {
+  private async getAuthState(): Promise<{ isAuthenticated: boolean; csrfToken: string | null; accessToken: string | null }> {
     const { useAuthStore } = await import('@/app/store/auth-store');
     const state = useAuthStore.getState();
-    return { isAuthenticated: state.isAuthenticated, csrfToken: state.csrfToken };
+    return { isAuthenticated: state.isAuthenticated, csrfToken: state.csrfToken, accessToken: state.accessToken };
   }
 
   private buildUrl(base: string, endpoint: string, params?: RequestOptions['params']): string {
@@ -69,17 +69,24 @@ class ApiClient {
     }
 
     const { params, ...fetchOptions } = options;
-    const { isAuthenticated, csrfToken } = await this.getAuthState();
+    const { isAuthenticated, csrfToken, accessToken } = await this.getAuthState();
 
-    // Route through BFF when authenticated so session cookie is validated
-    // and x-jwt-claim-sub header is injected for the API
-    const base = isAuthenticated ? this.bffProxyBase : this.baseUrl;
+    // When using API-issued JWT (email/password login), call the API directly
+    // at /api/v1 with a Bearer token. When using BFF session (social login),
+    // route through the BFF proxy so the session cookie is validated.
+    const useDirectApi = isAuthenticated && !!accessToken;
+    const base = useDirectApi ? this.baseUrl : (isAuthenticated ? this.bffProxyBase : this.baseUrl);
     const url = this.buildUrl(base, endpoint, params);
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
+
+    // Add Bearer token for API-issued JWT auth (email/password login)
+    if (accessToken) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+    }
 
     // Add CSRF token for state-changing requests (BFF requires it)
     if (method !== 'GET' && csrfToken) {

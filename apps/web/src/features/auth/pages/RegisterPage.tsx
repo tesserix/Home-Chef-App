@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ChefHat, Check } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChefHat, Check, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { Button } from '@/shared/components/ui';
 import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
@@ -13,7 +14,44 @@ const BENEFITS = [
 ];
 
 export default function RegisterPage() {
-  const { register, login } = useAuth();
+  const { login, registerWithEmail } = useAuth();
+  const navigate = useNavigate();
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!firstName || !lastName || !email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await registerWithEmail({ email, password, firstName, lastName });
+      navigate('/user-info');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -137,14 +175,141 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => register()}
-              className="w-full"
-            >
-              Sign up with email
-            </Button>
+            <AnimatePresence mode="wait">
+              {!showEmailForm ? (
+                <motion.div key="reg-btn" exit={{ opacity: 0, height: 0 }}>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => setShowEmailForm(true)}
+                    className="w-full"
+                  >
+                    Sign up with email
+                  </Button>
+                </motion.div>
+              ) : (
+                <motion.form
+                  key="reg-form"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  transition={{ duration: 0.3 }}
+                  onSubmit={handleRegister}
+                  className="space-y-4"
+                >
+                  {error && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="reg-first" className="block text-sm font-medium text-gray-700">
+                        First name
+                      </label>
+                      <input
+                        id="reg-first"
+                        type="text"
+                        autoComplete="given-name"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="reg-last" className="block text-sm font-medium text-gray-700">
+                        Last name
+                      </label>
+                      <input
+                        id="reg-last"
+                        type="text"
+                        autoComplete="family-name"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-email" className="block text-sm font-medium text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      id="reg-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700">
+                      Password
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        id="reg-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        required
+                        minLength={8}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        placeholder="Min. 8 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reg-confirm" className="block text-sm font-medium text-gray-700">
+                      Confirm password
+                    </label>
+                    <input
+                      id="reg-confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      placeholder="Re-enter password"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : (
+                      'Create account'
+                    )}
+                  </Button>
+                </motion.form>
+              )}
+            </AnimatePresence>
 
             <p className="mt-4 text-center text-xs text-gray-500">
               By signing up, you agree to our{' '}

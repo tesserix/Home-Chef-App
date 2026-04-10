@@ -1,15 +1,42 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ChefHat } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChefHat, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { Button } from '@/shared/components/ui';
 import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithEmail } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authError = searchParams.get('error');
   const sessionExpired = authError === 'session_expired' || authError === 'invalid_state';
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleEmailLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please enter your email and password');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await loginWithEmail(email, password);
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -110,14 +137,101 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => login()}
-              className="w-full"
-            >
-              Sign in with email
-            </Button>
+            <AnimatePresence mode="wait">
+              {!showEmailForm ? (
+                <motion.div key="email-btn" exit={{ opacity: 0, height: 0 }}>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => setShowEmailForm(true)}
+                    className="w-full"
+                  >
+                    Sign in with email
+                  </Button>
+                </motion.div>
+              ) : (
+                <motion.form
+                  key="email-form"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  transition={{ duration: 0.3 }}
+                  onSubmit={handleEmailLogin}
+                  className="space-y-4"
+                >
+                  {error && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      {error}
+                    </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="login-email" className="block text-sm font-medium text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      id="login-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">
+                        Password
+                      </label>
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm text-brand-600 hover:text-brand-500"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <div className="relative mt-1">
+                      <input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        placeholder="Enter your password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      'Sign in'
+                    )}
+                  </Button>
+                </motion.form>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
       </motion.div>

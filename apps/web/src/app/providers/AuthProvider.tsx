@@ -31,6 +31,8 @@ interface AuthContextValue {
   csrfToken: string | null;
   login: (provider?: SocialProvider) => void;
   register: () => void;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -119,6 +121,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
   }, []);
 
+  const loginWithEmail = useCallback(async (email: string, password: string) => {
+    const { authService } = await import('@/features/auth/services/auth-service');
+    const result = await authService.loginWithEmail(email, password);
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(result.user, result.accessToken, result.refreshToken);
+  }, []);
+
+  const registerWithEmail = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string }) => {
+    const { authService } = await import('@/features/auth/services/auth-service');
+    const result = await authService.registerWithEmail(data);
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(result.user, result.accessToken, result.refreshToken);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await fetch(`${BFF_FETCH}/auth/logout`, {
@@ -139,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     csrfToken,
     login,
     register,
+    loginWithEmail,
+    registerWithEmail,
     logout,
   };
 
