@@ -33,7 +33,7 @@ const BENEFITS = [
 ];
 
 export default function RegisterPage() {
-  const { register, login, registerWithEmail } = useAuth();
+  const { login, registerWithEmail } = useAuth();
   const navigate = useNavigate();
 
   const [showEmailForm, setShowEmailForm] = useState(false);

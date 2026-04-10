@@ -88,7 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           '@/features/auth/services/auth-service'
         );
         const result = await authService.refreshApiToken(storedRefresh);
-        const payload = JSON.parse(atob(result.accessToken.split('.')[1]));
+        const payload = JSON.parse(atob(result.accessToken.split('.')[1] ?? ''));
         const user: SessionUser = {
           id: payload.userId || payload.sub,
           email: payload.email,
