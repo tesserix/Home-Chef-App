@@ -9,24 +9,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 import type { SessionUser } from '@/shared/types/auth';
 
-// Staff BFF — internal Keycloak realm (tesserix-internal) via x-auth-context: admin
-const STAFF_BFF_URL = (() => {
+// Both driver and staff use the customer Keycloak realm (homechef).
+// Staff are 3rd party fleet managers, NOT platform admins — they register
+// alongside drivers in the same realm. Platform admins use admin.fe3dr.com.
+// The /bff/ and /driver-bff/ routes on delivery.fe3dr.com both default to
+// the customer realm (no x-auth-context header).
+const BFF_URL = (() => {
   const env = import.meta.env.VITE_BFF_URL;
   if (env) return env;
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
     return `${window.location.origin}/bff`;
   }
   return '/bff';
-})();
-
-// Driver BFF — customer Keycloak realm (homechef) via /driver-bff (no x-auth-context)
-const DRIVER_BFF_URL = (() => {
-  const env = import.meta.env.VITE_DRIVER_BFF_URL;
-  if (env) return env;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}/driver-bff`;
-  }
-  return '/driver-bff';
 })();
 
 interface AuthContextValue {
@@ -67,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (provider) {
       params.set('kc_idp_hint', provider);
     }
-    window.location.href = `${STAFF_BFF_URL}/auth/login?${params.toString()}`;
+    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
   }, []);
 
   const loginDriver = useCallback((provider?: 'google' | 'facebook') => {
@@ -77,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (provider) {
       params.set('kc_idp_hint', provider);
     }
-    window.location.href = `${DRIVER_BFF_URL}/auth/login?${params.toString()}`;
+    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
@@ -101,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { authService } = await import('@/features/auth/services/auth-service');
       await authService.logoutApi(rt);
     }
-    const bffUrl = authMode === 'driver' ? DRIVER_BFF_URL : STAFF_BFF_URL;
+    const bffUrl = BFF_URL;
     try {
       await fetch(`${bffUrl}/auth/logout`, {
         method: 'POST',

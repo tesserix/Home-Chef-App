@@ -1,17 +1,14 @@
 import type { ApiError } from '@/shared/types';
 
-// API calls go through whichever BFF the user authenticated with.
-// Staff uses /bff (internal realm), drivers use /driver-bff (customer realm).
-// Both proxy API requests to the same backend.
+// Both driver and staff use the same customer realm BFF (/bff/).
+// Staff are 3rd party fleet managers, not platform admins.
 function getApiUrl(): string {
-  const mode = typeof localStorage !== 'undefined' ? localStorage.getItem('fe3dr-auth-mode') : null;
-  const bffPath = mode === 'driver' ? '/driver-bff' : '/bff';
-  const env = mode === 'driver' ? import.meta.env.VITE_DRIVER_BFF_URL : import.meta.env.VITE_BFF_URL;
+  const env = import.meta.env.VITE_BFF_URL;
   if (env) return `${env}/api/v1`;
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}${bffPath}/api/v1`;
+    return `${window.location.origin}/bff/api/v1`;
   }
-  return `${bffPath}/api/v1`;
+  return '/bff/api/v1';
 }
 // API_URL is resolved dynamically per request via getApiUrl()
 

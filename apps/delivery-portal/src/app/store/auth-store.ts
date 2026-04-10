@@ -19,7 +19,9 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-const STAFF_BFF_URL = (() => {
+// Both driver and staff use the same customer realm BFF (/bff/).
+// Staff are 3rd party fleet managers, not platform admins.
+const BFF_URL = (() => {
   const env = import.meta.env.VITE_BFF_URL;
   if (env) return env;
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
@@ -28,18 +30,9 @@ const STAFF_BFF_URL = (() => {
   return '/bff';
 })();
 
-const DRIVER_BFF_URL = (() => {
-  const env = import.meta.env.VITE_DRIVER_BFF_URL;
-  if (env) return env;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}/driver-bff`;
-  }
-  return '/driver-bff';
-})();
-
-async function trySession(bffUrl: string): Promise<{ authenticated: boolean; user?: SessionUser; csrfToken?: string } | null> {
+async function trySession(): Promise<{ authenticated: boolean; user?: SessionUser; csrfToken?: string } | null> {
   try {
-    const res = await fetch(`${bffUrl}/auth/session`, { credentials: 'include' });
+    const res = await fetch(`${BFF_URL}/auth/session`, { credentials: 'include' });
     if (!res.ok) return null;
     const data = await res.json();
     if (data?.authenticated && data.user) return data;
@@ -112,52 +105,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
-    // 2. Check BFF sessions (social login via Keycloak — dual mode)
-    // Check which mode was last used
+    // 2. Check BFF session (social login via customer realm — single realm)
     const savedMode = localStorage.getItem('fe3dr-auth-mode') as 'staff' | 'driver' | null;
-
-    // Try the saved mode first, then the other
-    const primaryBff = savedMode === 'driver' ? DRIVER_BFF_URL : STAFF_BFF_URL;
-    const primaryMode = savedMode === 'driver' ? 'driver' : 'staff';
-    const secondaryBff = savedMode === 'driver' ? STAFF_BFF_URL : DRIVER_BFF_URL;
-    const secondaryMode = savedMode === 'driver' ? 'staff' : 'driver';
-
-    // Try primary BFF
-    let session = await trySession(primaryBff);
-    let activeMode: 'staff' | 'driver' | null = null;
+    const session = await trySession();
 
     if (session) {
-      activeMode = primaryMode;
-    } else {
-      // Try secondary BFF
-      session = await trySession(secondaryBff);
-      if (session) {
-        activeMode = secondaryMode;
-      }
-    }
-
-    if (session && activeMode) {
-      // For staff mode, verify the user has an authorized role
-      if (activeMode === 'staff') {
-        const roles = session.user?.roles || [];
-        const isAuthorized =
-          roles.includes('admin') ||
-          roles.includes('super_admin') ||
-          roles.includes('delivery') ||
-          roles.includes('fleet_manager');
-
-        if (!isAuthorized) {
-          set({ user: null, isAuthenticated: false, isLoading: false, authMode: null });
-          return;
-        }
-      }
-
-      localStorage.setItem('fe3dr-auth-mode', activeMode);
+      localStorage.setItem('fe3dr-auth-mode', savedMode || 'driver');
       set({
         user: session.user!,
         isAuthenticated: true,
         csrfToken: session.csrfToken ?? null,
-        authMode: activeMode,
+        authMode: savedMode || 'driver',
         isLoading: false,
       });
     } else {
