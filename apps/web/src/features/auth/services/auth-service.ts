@@ -1,10 +1,29 @@
 import type { SessionResponse, SocialProvider } from '@/shared/types/auth';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL || 'https://identity.fe3dr.com';
+// BFF_URL must point at the customer-facing host (https://fe3dr.com/bff),
+// NOT at the Keycloak host (https://identity.fe3dr.com). When the browser
+// navigates to ${BFF_URL}/auth/login, Istio routes /bff/* on the same origin
+// to the homechef-auth-bff service, which derives its OIDC redirect_uri from
+// the request Host header. If we send the user to identity.fe3dr.com instead,
+// the BFF builds redirect_uri=https://identity.fe3dr.com/auth/callback, which
+// is not in the homechef-bff client's allowed redirect URIs, and Keycloak
+// rejects with "Invalid parameter: redirect_uri".
+//
+// Resolution order:
+//   1. VITE_BFF_URL env var (escape hatch — should be unset in normal builds)
+//   2. Same-origin /bff in any non-localhost browser context
+//   3. /bff fallback for SSR / build-time evaluation
+const BFF_URL = (() => {
+  const env = import.meta.env.VITE_BFF_URL;
+  if (env) return env;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return `${window.location.origin}/bff`;
+  }
+  return '/bff';
+})();
 
-// Same-origin BFF proxy to avoid CORS — Istio rewrites /bff/* → / on BFF.
-// Login/register URLs need the full BFF_URL because the browser navigates to them.
 // Fetch-based calls use same-origin /bff/ prefix to avoid cross-origin preflight issues.
+// Browser navigation redirects (login, register) use the full BFF_URL above.
 const isLocalDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const BFF_FETCH_BASE = isLocalDev ? BFF_URL : '/bff';
 

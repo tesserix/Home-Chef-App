@@ -33,7 +33,13 @@ WORKDIR /app/apps/web
 
 # Build arguments
 ARG VITE_API_URL
-ARG VITE_BFF_URL=https://identity.fe3dr.com
+# VITE_BFF_URL is intentionally unset by default — when empty, the web app
+# falls back to same-origin /bff which is the correct production behaviour
+# (Istio rewrites /bff/* on fe3dr.com to the homechef-auth-bff service).
+# Setting it to https://identity.fe3dr.com (the Keycloak host) caused
+# "Invalid parameter: redirect_uri" because the BFF then derives its
+# OIDC redirect_uri from identity.fe3dr.com instead of fe3dr.com.
+ARG VITE_BFF_URL=
 ARG GIT_COMMIT
 ARG GIT_BRANCH
 ARG BUILD_DATE
