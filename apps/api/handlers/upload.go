@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -728,9 +729,17 @@ func (h *UploadHandler) GetDocuments(c *gin.Context) {
 	responses := make([]models.ChefDocumentResponse, len(docs))
 	for i, doc := range docs {
 		resp := doc.ToResponse()
-		// For public files, URL is already stored
-		// For private files, no URL is exposed (admin uses signed URLs)
-		if !models.IsPrivateDoc(doc.Type) {
+		if models.IsPrivateDoc(doc.Type) {
+			// Private files: generate a short-lived signed URL so the chef can view their own docs
+			signedURL, err := services.GenerateSignedURL(c.Request.Context(), doc.FilePath, 15*time.Minute)
+			if err != nil {
+				log.Printf("Failed to generate signed URL for doc %s: %v", doc.ID, err)
+				// Don't expose the raw path — just leave URL empty
+			} else {
+				resp.FileURL = signedURL
+			}
+		} else {
+			// Public files: URL is the public GCS path
 			resp.FileURL = doc.FilePath
 		}
 		responses[i] = resp

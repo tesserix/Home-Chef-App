@@ -535,7 +535,7 @@ func (h *ApprovalHandler) GetApprovalHistory(c *gin.Context) {
 // GetDocumentDownload returns a download URL for a document associated with an approval
 // GET /admin/approvals/:id/documents/:docId
 func (h *ApprovalHandler) GetDocumentDownload(c *gin.Context) {
-	_, err := uuid.Parse(c.Param("id"))
+	approvalID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid approval ID"})
 		return
@@ -547,9 +547,23 @@ func (h *ApprovalHandler) GetDocumentDownload(c *gin.Context) {
 		return
 	}
 
+	// Verify the approval exists and get its chef_id
+	var approval models.ApprovalRequest
+	if err := database.DB.First(&approval, "id = ?", approvalID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Approval not found"})
+		return
+	}
+
+	// Find the document and verify it belongs to the same chef as the approval
 	var doc models.ChefDocument
 	if err := database.DB.First(&doc, "id = ?", docID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	// Verify the document belongs to the chef associated with this approval
+	if approval.ChefID == nil || doc.ChefID != *approval.ChefID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Document does not belong to this approval"})
 		return
 	}
 
