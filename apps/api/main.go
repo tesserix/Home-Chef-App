@@ -54,6 +54,14 @@ func main() {
 	// Initialize Razorpay
 	services.InitRazorpay()
 
+	// Initialize SendGrid email service
+	services.InitEmailService()
+
+	// Initialize FCM push notification service
+	if err := services.InitPushService(); err != nil {
+		log.Printf("Warning: Failed to initialize push service: %v", err)
+	}
+
 	// Connect to Redis
 	redisClient := services.GetRedisClient()
 	if err := redisClient.Connect(); err != nil {

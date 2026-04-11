@@ -119,86 +119,41 @@ func (s *EmailService) send(to, subject, htmlBody string) error {
 	return nil
 }
 
-// SendOrderConfirmation sends an order confirmation email to the customer
+// SendOrderConfirmation sends a branded order confirmation email to the customer
 func (s *EmailService) SendOrderConfirmation(to, orderNumber string, items []OrderItemSummary, total float64) error {
-	var itemsHTML string
-	for _, item := range items {
-		itemsHTML += fmt.Sprintf("<tr><td>%s</td><td>%d</td><td>$%.2f</td></tr>", item.Name, item.Quantity, item.Price)
-	}
-
-	html := fmt.Sprintf(`
-<h2>Order Confirmed!</h2>
-<p>Thank you for your order <strong>#%s</strong>.</p>
-<table border="1" cellpadding="8" cellspacing="0">
-<tr><th>Item</th><th>Qty</th><th>Price</th></tr>
-%s
-</table>
-<p><strong>Total: $%.2f</strong></p>
-<p>We'll notify you when your order is being prepared.</p>
-`, orderNumber, itemsHTML, total)
-
-	return s.send(to, fmt.Sprintf("Order Confirmed — #%s", orderNumber), html)
+	subject, html := OrderConfirmationHTML(orderNumber, items, total)
+	return s.send(to, subject, html)
 }
 
 // SendOrderStatusUpdate notifies a customer about an order status change
 func (s *EmailService) SendOrderStatusUpdate(to, orderNumber, status string) error {
-	html := fmt.Sprintf(`
-<h2>Order Status Update</h2>
-<p>Your order <strong>#%s</strong> status has been updated to: <strong>%s</strong></p>
-<p>%s</p>
-`, orderNumber, status, getOrderStatusMessage(status))
-
-	return s.send(to, fmt.Sprintf("Order Update — #%s", orderNumber), html)
+	subject, html := OrderStatusUpdateHTML(orderNumber, status)
+	return s.send(to, subject, html)
 }
 
-// SendPasswordResetEmail sends a password reset link
+// SendPasswordResetEmail sends a branded password reset link
 func (s *EmailService) SendPasswordResetEmail(to, resetToken string) error {
-	// In production the link would point to the storefront reset page
 	resetLink := fmt.Sprintf("https://fe3dr.com/reset-password?token=%s", resetToken)
-
-	html := fmt.Sprintf(`
-<h2>Password Reset</h2>
-<p>You requested a password reset. Click the link below to set a new password:</p>
-<p><a href="%s">Reset Password</a></p>
-<p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>
-`, resetLink)
-
-	return s.send(to, "Reset Your Password", html)
+	subject, html := PasswordResetHTML(resetLink)
+	return s.send(to, subject, html)
 }
 
 // SendChefVerificationApproved notifies a chef that their profile was approved
 func (s *EmailService) SendChefVerificationApproved(to, chefName string) error {
-	html := fmt.Sprintf(`
-<h2>Congratulations, %s!</h2>
-<p>Your chef profile has been verified and approved. You can now start listing dishes and accepting orders on HomeChef.</p>
-<p><a href="https://vendors.fe3dr.com/dashboard">Go to Dashboard</a></p>
-`, chefName)
-
-	return s.send(to, "Your Chef Profile Is Approved!", html)
+	subject, html := ChefVerificationApprovedHTML(chefName)
+	return s.send(to, subject, html)
 }
 
 // SendChefNewOrder notifies a chef about a new incoming order
 func (s *EmailService) SendChefNewOrder(to, orderNumber string, total float64) error {
-	html := fmt.Sprintf(`
-<h2>New Order Received!</h2>
-<p>You have a new order <strong>#%s</strong> worth <strong>$%.2f</strong>.</p>
-<p>Please log in to your dashboard to review and confirm.</p>
-<p><a href="https://vendors.fe3dr.com/orders">View Orders</a></p>
-`, orderNumber, total)
-
-	return s.send(to, fmt.Sprintf("New Order — #%s", orderNumber), html)
+	subject, html := ChefNewOrderHTML(orderNumber, total)
+	return s.send(to, subject, html)
 }
 
 // SendDeliveryAssigned notifies a customer that a delivery partner was assigned
 func (s *EmailService) SendDeliveryAssigned(to, orderNumber, pickupAddress string) error {
-	html := fmt.Sprintf(`
-<h2>Delivery Partner Assigned</h2>
-<p>A delivery partner has been assigned to your order <strong>#%s</strong>.</p>
-<p>Pickup from: %s</p>
-<p>You will be notified when your order is on its way!</p>
-`, orderNumber, pickupAddress)
-
-	return s.send(to, fmt.Sprintf("Delivery Assigned — #%s", orderNumber), html)
+	subject, html := DeliveryAssignedHTML(orderNumber, pickupAddress)
+	return s.send(to, subject, html)
 }
 
 // SendSupportTicketCreated confirms that a support ticket was created

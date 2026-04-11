@@ -350,6 +350,32 @@ func (s *NotificationService) handleOrderCreated(event OrderEvent) {
 		Message: "You have a new order waiting to be prepared!",
 		Data:    map[string]interface{}{"order_id": event.OrderID.String()},
 	})
+
+	// Send order confirmation email to customer
+	PublishNotification(NotificationEvent{
+		UserID:  event.CustomerID,
+		Type:    "email",
+		Title:   "Order Confirmed",
+		Message: "Your order has been placed successfully!",
+		Data: map[string]interface{}{
+			"type":         "order_confirmation",
+			"order_number": event.OrderNumber,
+			"total":        event.Total,
+		},
+	})
+
+	// Send new order email to chef
+	PublishNotification(NotificationEvent{
+		UserID:  event.ChefID,
+		Type:    "email",
+		Title:   "New Order Received",
+		Message: "You have a new order to prepare!",
+		Data: map[string]interface{}{
+			"type":         "chef_new_order",
+			"order_number": event.OrderNumber,
+			"total":        event.Total,
+		},
+	})
 }
 
 func (s *NotificationService) handleOrderUpdated(event OrderEvent) {
@@ -376,6 +402,19 @@ func (s *NotificationService) handleOrderUpdated(event OrderEvent) {
 		Message: getOrderStatusMessage(event.Status),
 		Data:    map[string]interface{}{"order_id": event.OrderID.String(), "status": event.Status},
 	})
+
+	// Send order status email to customer
+	PublishNotification(NotificationEvent{
+		UserID:  event.CustomerID,
+		Type:    "email",
+		Title:   "Order Update",
+		Message: getOrderStatusMessage(event.Status),
+		Data: map[string]interface{}{
+			"type":         "order_status",
+			"order_number": event.OrderNumber,
+			"status":       event.Status,
+		},
+	})
 }
 
 func (s *NotificationService) handleOrderCancelled(event OrderEvent) {
@@ -394,7 +433,29 @@ func (s *NotificationService) handleOrderCancelled(event OrderEvent) {
 		if err := s.saveNotification(notification); err != nil {
 			log.Printf("Failed to save notification: %v", err)
 		}
+
+		// Send push notification
+		PublishNotification(NotificationEvent{
+			UserID:  userID,
+			Type:    "push",
+			Title:   "Order Cancelled",
+			Message: "Order has been cancelled",
+			Data:    map[string]interface{}{"order_id": event.OrderID.String()},
+		})
 	}
+
+	// Send cancellation email to customer
+	PublishNotification(NotificationEvent{
+		UserID:  event.CustomerID,
+		Type:    "email",
+		Title:   "Order Cancelled",
+		Message: "Your order has been cancelled",
+		Data: map[string]interface{}{
+			"type":         "order_status",
+			"order_number": event.OrderNumber,
+			"status":       "cancelled",
+		},
+	})
 }
 
 func (s *NotificationService) handleOrderDelivered(event OrderEvent) {
@@ -496,6 +557,28 @@ func (s *NotificationService) handleDeliveryAssigned(event Event) {
 		if err := s.saveNotification(notification); err != nil {
 			log.Printf("Failed to save notification: %v", err)
 		}
+
+		// Send push notification
+		PublishNotification(NotificationEvent{
+			UserID:  customerID,
+			Type:    "push",
+			Title:   "Delivery Partner Assigned",
+			Message: "A delivery partner has been assigned to your order and will pick it up soon!",
+			Data:    event.Data,
+		})
+
+		// Send delivery assigned email
+		PublishNotification(NotificationEvent{
+			UserID:  customerID,
+			Type:    "email",
+			Title:   "Delivery Partner Assigned",
+			Message: "A delivery partner has been assigned to your order",
+			Data: map[string]interface{}{
+				"type":        "delivery_assigned",
+				"driver_name": event.Data["driver_name"],
+				"order_id":    event.Data["order_id"],
+			},
+		})
 	}
 }
 
@@ -810,6 +893,17 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 		status, _ := notif.Data["status"].(string)
 		if err := emailSvc.SendOrderStatusUpdate(user.Email, orderNumber, status); err != nil {
 			log.Printf("Failed to send order status email: %v", err)
+		}
+	case "chef_new_order":
+		orderNumber, _ := notif.Data["order_number"].(string)
+		total, _ := notif.Data["total"].(float64)
+		if err := emailSvc.SendChefNewOrder(user.Email, orderNumber, total); err != nil {
+			log.Printf("Failed to send chef new order email: %v", err)
+		}
+	case "delivery_assigned":
+		orderID, _ := notif.Data["order_id"].(string)
+		if err := emailSvc.SendDeliveryAssigned(user.Email, orderID, ""); err != nil {
+			log.Printf("Failed to send delivery assigned email: %v", err)
 		}
 	case "chef_verified":
 		if err := emailSvc.SendChefVerificationApproved(user.Email, user.FirstName); err != nil {
