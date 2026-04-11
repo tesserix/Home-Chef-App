@@ -175,6 +175,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       isLoading;
 
     if (!needsLocalStyling && !asChild) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dsChildren = children as any;
       return (
         <DSButton
           ref={ref}
@@ -184,7 +186,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           disabled={disabled}
           {...props}
         >
-          {children}
+          {dsChildren}
         </DSButton>
       );
     }
