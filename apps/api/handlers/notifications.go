@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -104,6 +105,92 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 		Updates(map[string]interface{}{"is_read": true, "read_at": &now})
 
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
+}
+
+// notifWSUpgrader upgrades HTTP connections to WebSocket for the notification stream.
+var notifWSUpgrader = websocket.Upgrader{
+	CheckOrigin:  func(r *http.Request) bool { return true },
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+// StreamNotificationsWS upgrades to WebSocket and streams real-time notifications to
+// the authenticated user. Subscribes to the per-user NATS subject notifications.user.{userID}.
+// On connect, sends the current unread count so the bell badge can be set immediately.
+// GET /api/v1/notifications/ws
+func (h *NotificationHandler) StreamNotificationsWS(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	conn, err := notifWSUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Notification WS upgrade failed for user %s: %v", userID, err)
+		return
+	}
+	defer conn.Close()
+
+	// Send initial unread count on connect
+	var unreadCount int64
+	database.DB.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&unreadCount)
+	initial, _ := json.Marshal(map[string]interface{}{
+		"type":        "unread_count",
+		"unreadCount": unreadCount,
+	})
+	conn.WriteMessage(websocket.TextMessage, initial)
+
+	// Buffered channel for serialised writes
+	writeCh := make(chan []byte, 64)
+	defer close(writeCh)
+
+	// Write pump
+	go func() {
+		for msg := range writeCh {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("Notification WS write error for user %s: %v", userID, err)
+				return
+			}
+		}
+	}()
+
+	// Subscribe to per-user NATS subject
+	subject := fmt.Sprintf("%s.%s", services.SubjectNotificationUser, userID.String())
+	sub, err := services.GetNATSClient().Subscribe(subject, func(msg *natsclient.Msg) {
+		// Wrap the notification payload with a type field
+		var notif map[string]interface{}
+		if err := json.Unmarshal(msg.Data, &notif); err != nil {
+			return
+		}
+		notif["type"] = "new_notification"
+
+		// Also include updated unread count
+		var count int64
+		database.DB.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&count)
+		notif["unreadCount"] = count
+
+		payload, _ := json.Marshal(notif)
+		select {
+		case writeCh <- payload:
+		default:
+			// Channel full — drop
+		}
+	})
+	if err != nil {
+		log.Printf("NATS subscribe failed for notification stream user %s: %v", userID, err)
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1011, "Internal error"))
+		return
+	}
+	defer sub.Unsubscribe()
+
+	// Read pump — blocks until client disconnects
+	conn.SetReadLimit(512)
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
 }
 
 // RegisterPushConsumers starts NATS queue subscribers that fire FCM push notifications

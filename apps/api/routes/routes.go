@@ -583,6 +583,7 @@ func SetupRouter() *gin.Engine {
 		{
 			notifications.GET("", notificationHandler.GetNotifications)
 			notifications.GET("/unread-count", notificationHandler.GetUnreadCount)
+			notifications.GET("/ws", notificationHandler.StreamNotificationsWS)
 			notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
 			notifications.PUT("/read-all", notificationHandler.MarkAllAsRead)
 		}

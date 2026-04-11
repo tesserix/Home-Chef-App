@@ -15,12 +15,12 @@ import {
   ChevronDown,
   ChefHat,
 } from 'lucide-react';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { apiClient } from '@/shared/services/api-client';
 import { VendorBottomNav } from '@/shared/components/navigation';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
+import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 
 const navigation = [
@@ -43,12 +43,16 @@ export function VendorLayout() {
   const isMobile = useIsMobile('lg');
   const isOnline = useOnlineStatus();
 
-  const { data: notifCountData } = useQuery({
-    queryKey: ['notification-count'],
-    queryFn: () => apiClient.get<{ unreadCount: number }>('/notifications/unread-count'),
-    refetchInterval: 30000,
-  });
-  const unreadCount = (notifCountData as unknown as { unreadCount: number } | undefined)?.unreadCount ?? 0;
+  const { unreadCount, lastNotification } = useNotificationsWS();
+
+  // Show toast when a new real-time notification arrives
+  useEffect(() => {
+    if (lastNotification?.title) {
+      toast(lastNotification.title, {
+        description: lastNotification.message,
+      });
+    }
+  }, [lastNotification]);
 
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');

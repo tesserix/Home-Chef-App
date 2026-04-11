@@ -987,10 +987,29 @@ func (s *NotificationService) sendSMSNotification(notif NotificationEvent) {
 	log.Printf("SMS sent to user %s", notif.UserID)
 }
 
-// saveNotification saves a notification to the database
+// saveNotification saves a notification to the database and publishes it to the
+// per-user NATS subject so WebSocket clients receive it in real time.
 func (s *NotificationService) saveNotification(notification *models.Notification) error {
 	notification.CreatedAt = time.Now()
-	return database.DB.Create(notification).Error
+	if err := database.DB.Create(notification).Error; err != nil {
+		return err
+	}
+
+	// Publish to per-user subject for real-time bell updates (fire-and-forget)
+	subject := fmt.Sprintf("%s.%s", SubjectNotificationUser, notification.UserID.String())
+	payload := map[string]interface{}{
+		"id":        notification.ID.String(),
+		"type":      notification.Type,
+		"title":     notification.Title,
+		"message":   notification.Message,
+		"data":      notification.Data,
+		"isRead":    notification.IsRead,
+		"createdAt": notification.CreatedAt.Format(time.RFC3339),
+	}
+	if err := s.nats.Publish(subject, payload); err != nil {
+		log.Printf("Failed to publish real-time notification for user %s: %v", notification.UserID, err)
+	}
+	return nil
 }
 
 // Helper functions

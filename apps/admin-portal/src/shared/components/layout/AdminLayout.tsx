@@ -16,11 +16,13 @@ import {
   Bell,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
+import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 
 const navigation = [
@@ -50,6 +52,14 @@ export function AdminLayout() {
   });
   const countsData = approvalCounts as unknown as { byStatus?: Record<string, number>; total?: number } | undefined;
   const pendingCount = countsData?.byStatus?.pending ?? 0;
+
+  const { unreadCount, lastNotification } = useNotificationsWS();
+
+  useEffect(() => {
+    if (lastNotification?.title) {
+      toast(lastNotification.title, { description: lastNotification.message });
+    }
+  }, [lastNotification]);
 
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
@@ -209,9 +219,14 @@ export function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <button className="relative rounded-lg p-2 hover:bg-secondary">
+            <Link to="/approvals" className="relative rounded-lg p-2 hover:bg-secondary">
               <Bell className="h-5 w-5 text-muted-foreground" />
-            </button>
+              {unreadCount > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
 
             {/* Desktop user info */}
             <div className="hidden items-center gap-2 lg:flex">

@@ -17,11 +17,13 @@ import {
   Truck,
   MapPin,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
+import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { DeliveryBottomNav } from '@/shared/components/navigation/DeliveryBottomNav';
 
@@ -71,6 +73,14 @@ export function DeliveryLayout() {
 
   const isStaff = !!staffProfile?.id;
   const staffPermissions = staffProfile?.permissions ?? [];
+
+  const { unreadCount, lastNotification } = useNotificationsWS();
+
+  useEffect(() => {
+    if (lastNotification?.title) {
+      toast(lastNotification.title, { description: lastNotification.message });
+    }
+  }, [lastNotification]);
 
   const navigation = useMemo(() => {
     if (!isStaff) return partnerNavigation;
@@ -221,6 +231,11 @@ export function DeliveryLayout() {
             {!isStaff && (
               <Link to="/available" className="relative rounded-lg p-2 hover:bg-secondary">
                 <Bell className="h-5 w-5 text-muted-foreground" />
+                {unreadCount > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
             )}
           </div>

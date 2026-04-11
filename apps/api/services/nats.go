@@ -52,6 +52,10 @@ const (
 	SubjectProviderDeliveryCreated = "provider.delivery.created"
 	SubjectProviderDeliveryUpdated = "provider.delivery.updated"
 	SubjectProviderDeliveryFailed  = "provider.delivery.failed"
+
+	// Per-user notification subject for real-time bell updates.
+	// Full subject: notifications.user.{userID}
+	SubjectNotificationUser = "notifications.user"
 )
 
 // Event represents a generic event message
