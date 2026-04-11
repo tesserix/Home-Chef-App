@@ -93,4 +93,38 @@ export const authService = {
       return null;
     }
   },
+
+  // =========================================================================
+  // Direct API auth (email/password — no Keycloak redirect)
+  // =========================================================================
+
+  async loginWithEmail(email: string, password: string) {
+    const res = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid email or password');
+    return data as { user: import('@/shared/types/auth').SessionUser; accessToken: string; refreshToken: string };
+  },
+
+  async refreshApiToken(refreshToken: string) {
+    const res = await fetch('/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error('Token refresh failed');
+    return data as { accessToken: string; refreshToken: string };
+  },
+
+  async logoutApi(refreshToken: string) {
+    await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    }).catch(() => {});
+  },
 };

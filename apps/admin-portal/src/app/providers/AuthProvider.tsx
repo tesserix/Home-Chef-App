@@ -25,6 +25,7 @@ interface AuthContextValue {
   isLoading: boolean;
   csrfToken: string | null;
   login: (provider?: 'google' | 'facebook') => void;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -54,7 +55,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
   }, []);
 
+  const loginWithEmail = useCallback(async (email: string, password: string) => {
+    const { authService } = await import('@/features/auth/services/auth-service');
+    const result = await authService.loginWithEmail(email, password);
+
+    // Verify admin role before allowing login
+    const roles = result.user.roles || [];
+    const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+    if (!isAdmin) {
+      throw new Error('Access denied. Only administrators can sign in to this portal.');
+    }
+
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(result.user, result.accessToken, result.refreshToken);
+  }, []);
+
   const logout = useCallback(async () => {
+    // Revoke API JWT if present
+    const { refreshToken: rt } = useAuthStore.getState();
+    if (rt) {
+      const { authService } = await import('@/features/auth/services/auth-service');
+      await authService.logoutApi(rt);
+    }
     try {
       await fetch(`${BFF_URL}/auth/logout`, {
         method: 'POST',
@@ -73,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     csrfToken,
     login,
+    loginWithEmail,
     logout,
   };
 
