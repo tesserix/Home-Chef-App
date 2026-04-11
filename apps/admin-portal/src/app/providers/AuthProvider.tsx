@@ -60,8 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await authService.loginWithEmail(email, password);
 
     // Verify admin role before allowing login
+    // API returns role as singular string (user.role) not array (user.roles)
+    const role = (result.user as Record<string, unknown>).role as string || '';
     const roles = result.user.roles || [];
-    const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+    const isAdmin = role === 'admin' || role === 'super_admin'
+      || roles.includes('admin') || roles.includes('super_admin');
     if (!isAdmin) {
       throw new Error('Access denied. Only administrators can sign in to this portal.');
     }
