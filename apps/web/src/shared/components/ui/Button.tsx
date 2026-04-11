@@ -188,9 +188,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           size={mapSize(size)}
           className={className}
           disabled={disabled}
-          {...props}
+          {...(props as React.ComponentPropsWithoutRef<typeof DSButton>)}
         >
-          {children}
+          {children as Parameters<typeof DSButton>[0]['children']}
         </DSButton>
       );
     }

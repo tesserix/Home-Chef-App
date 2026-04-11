@@ -92,7 +92,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           ref={ref}
           className={cn(showError && 'border-destructive', className)}
-          {...props}
+          {...(props as React.ComponentPropsWithoutRef<typeof DSInput>)}
         />
       );
     }

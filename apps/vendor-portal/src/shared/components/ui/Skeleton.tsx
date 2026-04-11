@@ -32,7 +32,7 @@ function Skeleton({
 
   // For simple default usage, delegate to DS Skeleton
   if (variant === 'default' && animation === 'pulse' && !width && !height) {
-    return <DSSkeleton className={className} style={style} {...props} />;
+    return <DSSkeleton className={className} style={style} {...(props as React.ComponentPropsWithoutRef<typeof DSSkeleton>)} />;
   }
 
   return (

@@ -128,7 +128,7 @@ const SimpleDialog = ({
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
       )}
-      {children}
+      {children as Parameters<typeof DialogContent>[0]['children']}
       <DialogClose />
     </DialogContent>
   </Dialog>

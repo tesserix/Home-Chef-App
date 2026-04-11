@@ -65,7 +65,7 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
           fallback={fallback || getInitials(alt)}
           size={size === 'md' || !size ? 'default' : (size as 'sm' | 'lg' | 'xl')}
           className={className}
-          {...props}
+          {...(props as React.ComponentPropsWithoutRef<typeof DSAvatar>)}
         />
       );
     }
