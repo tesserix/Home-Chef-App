@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Verify admin role before allowing login
     // API returns role as singular string (user.role) not array (user.roles)
-    const role = (result.user as Record<string, unknown>).role as string || '';
+    const role = (result.user as unknown as { role?: string }).role || '';
     const roles = result.user.roles || [];
     const isAdmin = role === 'admin' || role === 'super_admin'
       || roles.includes('admin') || roles.includes('super_admin');
