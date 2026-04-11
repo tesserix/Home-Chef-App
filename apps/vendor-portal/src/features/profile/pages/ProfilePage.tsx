@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { uploadProfileImage, uploadBannerImage, uploadDocument } from '@/shared/services/upload-service';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { Button } from '@/shared/components/ui/Button';
 import { Badge } from '@/shared/components/ui/Badge';
@@ -38,8 +39,6 @@ import { Card } from '@/shared/components/ui/Card';
 import { Input, Textarea } from '@/shared/components/ui/Input';
 import { Avatar } from '@/shared/components/ui/Avatar';
 import type { Chef } from '@/shared/types';
-
-const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
 
 const profileSchema = z.object({
   businessName: z.string().min(2, 'Business name must be at least 2 characters'),
@@ -69,25 +68,6 @@ const CUISINES = [
   'Chinese',
   'Continental',
 ];
-
-async function uploadImage(endpoint: string, file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const res = await fetch(`${BFF_URL}/api/v1${endpoint}`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-    throw new Error(err.error || 'Upload failed');
-  }
-
-  const data = await res.json();
-  return data.url;
-}
 
 export default function ProfilePage() {
   const queryClient = useQueryClient();
@@ -150,7 +130,7 @@ export default function ProfilePage() {
   });
 
   const avatarMutation = useMutation({
-    mutationFn: (file: File) => uploadImage('/chef/profile-image', file),
+    mutationFn: (file: File) => uploadProfileImage(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef-profile'] });
       toast.success('Profile photo updated');
@@ -161,7 +141,7 @@ export default function ProfilePage() {
   });
 
   const bannerMutation = useMutation({
-    mutationFn: (file: File) => uploadImage('/chef/banner-image', file),
+    mutationFn: (file: File) => uploadBannerImage(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef-profile'] });
       toast.success('Cover photo updated');
@@ -653,25 +633,7 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
   const handleUpload = async (file: File, docType: string) => {
     setUploadingType(docType);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', docType);
-
-      const BFF_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? `${window.location.origin}/bff`
-        : '/bff';
-
-      const res = await fetch(`${BFF_URL}/api/v1/chef/documents`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(err.error || 'Upload failed');
-      }
-
+      await uploadDocument(file, docType);
       toast.success(`${DOCUMENT_TYPES.find(d => d.type === docType)?.label || docType} uploaded`);
       queryClient.invalidateQueries({ queryKey: ['chef-documents'] });
     } catch (err) {

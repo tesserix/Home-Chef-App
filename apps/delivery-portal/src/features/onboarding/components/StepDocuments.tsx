@@ -117,10 +117,16 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
         headers['X-CSRF-Token'] = csrfToken;
       }
 
-      const authMode = localStorage.getItem('fe3dr-auth-mode');
-      const bffPath = authMode === 'driver' ? '/driver-bff' : '/bff';
+      const bffBase = (() => {
+        const env = import.meta.env.VITE_BFF_URL;
+        if (env) return env;
+        if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+          return `${window.location.origin}/bff`;
+        }
+        return '/bff';
+      })();
       const response = await fetch(
-        `${window.location.origin}${bffPath}/api/v1/driver/onboarding/documents`,
+        `${bffBase}/api/v1/driver/onboarding/documents`,
         {
           method: 'POST',
           credentials: 'include',

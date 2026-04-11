@@ -7,7 +7,7 @@ const MAX_DOC_SIZE = 5 * 1024 * 1024; // 5MB for documents (PAN, Aadhaar, FSSAI,
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB for photos
 
 // Allowed file types
-const ALLOWED_DOC_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+const ALLOWED_DOC_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 function validateFile(file: File, allowedTypes: string[], maxSize: number): string | null {
@@ -107,6 +107,28 @@ export async function deleteMenuItemImage(
     const err = await res.json().catch(() => ({ error: 'Delete failed' }));
     throw new Error(err.error || err.message || 'Delete failed');
   }
+}
+
+export async function uploadBannerImage(file: File): Promise<string> {
+  const error = validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE);
+  if (error) throw new Error(error);
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${BFF_URL}/api/v1/chef/banner-image`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error || err.message || 'Upload failed');
+  }
+
+  const data = await res.json();
+  return data.url;
 }
 
 export async function uploadProfileImage(file: File): Promise<string> {
