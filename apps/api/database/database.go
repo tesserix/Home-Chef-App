@@ -136,6 +136,7 @@ func Migrate() error {
 
 		// Notifications
 		&models.Notification{},
+		&models.NotificationPreference{},
 
 		// Admin
 		&models.PlatformSettings{},

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/base64"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -363,11 +364,21 @@ func (h *SecurityHandler) AdminUpdateSecurityPolicy(c *gin.Context) {
 	if v, ok := req["twoFactorRequiredForAdmins"].(bool); ok {
 		current.TwoFactorRequiredForAdmins = v
 	}
+	if v, ok := req["twoFactorExemptEmails"].([]any); ok {
+		emails := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
+				emails = append(emails, strings.TrimSpace(s))
+			}
+		}
+		current.TwoFactorExemptEmails = emails
+	}
 
 	if err := services.SaveSecurityPolicy(current, &userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	services.LogAudit(c, "security.policy.update", "security_policy", "", nil, current)
 	c.JSON(http.StatusOK, current)
 }
 
@@ -426,5 +437,59 @@ func (h *SecurityHandler) AdminRevokeApiKey(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	services.LogAudit(c, "api_key.revoke", "api_key", id.String(), nil, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "Key revoked"})
+}
+
+// ========================================================================
+// Admin: Audit log viewer
+// ========================================================================
+
+// AdminListAuditLogs returns paginated audit entries with optional filters.
+// Query params: action (prefix match), entityType, userId, from, to, page, limit.
+func (h *SecurityHandler) AdminListAuditLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 500 {
+		limit = 50
+	}
+
+	q := database.DB.Model(&models.AuditLog{}).Preload("User")
+	if action := c.Query("action"); action != "" {
+		q = q.Where("action LIKE ?", action+"%")
+	}
+	if et := c.Query("entityType"); et != "" {
+		q = q.Where("entity_type = ?", et)
+	}
+	if uid := c.Query("userId"); uid != "" {
+		if parsed, err := uuid.Parse(uid); err == nil {
+			q = q.Where("user_id = ?", parsed)
+		}
+	}
+	if fromStr := c.Query("from"); fromStr != "" {
+		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
+			q = q.Where("created_at >= ?", t)
+		}
+	}
+	if toStr := c.Query("to"); toStr != "" {
+		if t, err := time.Parse("2006-01-02", toStr); err == nil {
+			q = q.Where("created_at < ?", t.Add(24*time.Hour))
+		}
+	}
+
+	var total int64
+	q.Count(&total)
+
+	var logs []models.AuditLog
+	q.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&logs)
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
 }

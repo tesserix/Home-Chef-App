@@ -107,6 +107,61 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
 }
 
+// GetPreferences returns the caller's notification preferences as a
+// category → channel-toggles grid. Missing categories come back with
+// their built-in defaults so the UI can render the complete matrix.
+func (h *NotificationHandler) GetPreferences(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	prefs := services.GetUserPreferences(userID)
+	categories := models.AllNotificationCategories()
+	c.JSON(http.StatusOK, gin.H{
+		"categories":  categories,
+		"preferences": prefs,
+	})
+}
+
+// UpdatePreference upserts one category row for the caller. Body:
+// { "category": "order", "emailEnabled": true, "pushEnabled": false, "smsEnabled": false }
+func (h *NotificationHandler) UpdatePreference(c *gin.Context) {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req struct {
+		Category     string `json:"category" binding:"required"`
+		EmailEnabled bool   `json:"emailEnabled"`
+		PushEnabled  bool   `json:"pushEnabled"`
+		SMSEnabled   bool   `json:"smsEnabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Validate the category is one of the known values so we don't accept
+	// arbitrary strings into the DB.
+	valid := false
+	for _, cat := range models.AllNotificationCategories() {
+		if string(cat) == req.Category {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unknown category"})
+		return
+	}
+	if err := services.UpsertUserPreference(userID, models.NotificationCategory(req.Category), req.EmailEnabled, req.PushEnabled, req.SMSEnabled); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Preference saved"})
+}
+
 // notifWSUpgrader upgrades HTTP connections to WebSocket for the notification stream.
 var notifWSUpgrader = websocket.Upgrader{
 	CheckOrigin:  func(r *http.Request) bool { return true },

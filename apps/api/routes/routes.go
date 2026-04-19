@@ -69,6 +69,8 @@ func SetupRouter() *gin.Engine {
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
 	securityHandler := handlers.NewSecurityHandler()
+	platformHandler := handlers.NewPlatformHandler()
+	exportsHandler := handlers.NewExportsHandler()
 
 	// Health check endpoints
 	r.GET("/health", healthHandler.Health)
@@ -112,6 +114,11 @@ func SetupRouter() *gin.Engine {
 
 		// Preference options (public)
 		v1.GET("/preferences", preferenceHandler.GetPreferenceOptions)
+
+		// Public platform config — fees + operating-hours status for checkout
+		v1.GET("/platform/config", platformHandler.GetPublicConfig)
+		// Check if a lat/lon falls inside a configured delivery zone.
+		v1.GET("/platform/zone-coverage", platformHandler.CheckZoneCoverage)
 
 		// Currency routes (public)
 		currencies := v1.Group("/currencies")
@@ -535,6 +542,18 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/security/api-keys", securityHandler.AdminCreateApiKey)
 			admin.DELETE("/security/api-keys/:id", securityHandler.AdminRevokeApiKey)
 
+			// Platform policy — commission, delivery fees, operating hours
+			admin.GET("/platform/policy", platformHandler.AdminGetPolicy)
+			admin.PUT("/platform/policy", platformHandler.AdminUpdatePolicy)
+
+			// CSV exports for reporting / data review
+			admin.GET("/exports/users.csv", exportsHandler.ExportUsers)
+			admin.GET("/exports/orders.csv", exportsHandler.ExportOrders)
+			admin.GET("/exports/revenue.csv", exportsHandler.ExportRevenue)
+
+			// Audit log viewer
+			admin.GET("/audit-logs", securityHandler.AdminListAuditLogs)
+
 			// Settings
 			admin.GET("/settings", adminHandler.GetSettings)
 			admin.PUT("/settings", adminHandler.UpdateSettings)
@@ -630,6 +649,10 @@ func SetupRouter() *gin.Engine {
 			notifications.GET("/ws", notificationHandler.StreamNotificationsWS)
 			notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
 			notifications.PUT("/read-all", notificationHandler.MarkAllAsRead)
+			// Per-user opt-in/out by category — dispatch checks these
+			// before email/push so users can mute non-critical channels.
+			notifications.GET("/preferences", notificationHandler.GetPreferences)
+			notifications.PUT("/preferences", notificationHandler.UpdatePreference)
 		}
 	}
 

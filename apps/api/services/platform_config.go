@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,11 @@ type SecurityPolicy struct {
 	// 2FA enforcement — when true, admins without TOTP enrolled are
 	// forced through setup before they can use the admin portal.
 	TwoFactorRequiredForAdmins bool `json:"twoFactorRequiredForAdmins"`
+
+	// Emails exempt from the forced-2FA flow even when the policy is on.
+	// Kept for service accounts (E2E tests, automation) that can't scan a QR.
+	// Match is case-insensitive.
+	TwoFactorExemptEmails []string `json:"twoFactorExemptEmails,omitempty"`
 }
 
 // DefaultSecurityPolicy returns sensible built-in defaults so the app is
@@ -52,7 +58,26 @@ func DefaultSecurityPolicy() SecurityPolicy {
 		SessionAccessTTLHours:      24,
 		SessionRefreshTTLDays:      30,
 		TwoFactorRequiredForAdmins: false,
+		// E2E service accounts ship exempt by default so automated tests
+		// don't get forced through a QR-scan flow they can't complete.
+		// Any real admin added to this list bypasses 2FA enforcement too,
+		// so admins should only extend it for non-interactive accounts.
+		TwoFactorExemptEmails: []string{
+			"e2e-admin@fe3dr.com",
+			"e2e-test@fe3dr.com",
+		},
 	}
+}
+
+// IsTwoFactorExempt reports whether an email should skip forced 2FA
+// enrollment even when the platform policy requires it. Case-insensitive.
+func (p SecurityPolicy) IsTwoFactorExempt(email string) bool {
+	for _, e := range p.TwoFactorExemptEmails {
+		if strings.EqualFold(strings.TrimSpace(e), strings.TrimSpace(email)) {
+			return true
+		}
+	}
+	return false
 }
 
 var (

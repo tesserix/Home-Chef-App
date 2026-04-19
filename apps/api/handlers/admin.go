@@ -20,6 +20,15 @@ func NewAdminHandler() *AdminHandler {
 	return &AdminHandler{}
 }
 
+// boolField returns the field name when present, "" otherwise — cheap
+// helper to build a list of which fields an update actually touched.
+func boolField(name string, present bool) string {
+	if present {
+		return name
+	}
+	return ""
+}
+
 // GetStats returns dashboard statistics
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	db := database.DB
@@ -278,6 +287,7 @@ func (h *AdminHandler) SuspendUser(c *gin.Context) {
 		return
 	}
 
+	services.LogAudit(c, "user.suspend", "user", id.String(), nil, map[string]any{"isActive": false})
 	c.JSON(http.StatusOK, gin.H{"message": "User suspended"})
 }
 
@@ -295,6 +305,7 @@ func (h *AdminHandler) ActivateUser(c *gin.Context) {
 		return
 	}
 
+	services.LogAudit(c, "user.activate", "user", id.String(), nil, map[string]any{"isActive": true})
 	c.JSON(http.StatusOK, gin.H{"message": "User activated"})
 }
 
@@ -417,6 +428,7 @@ func (h *AdminHandler) VerifyChef(c *gin.Context) {
 	database.DB.First(&chef, "id = ?", id)
 	database.DB.Model(&models.User{}).Where("id = ?", chef.UserID).Update("role", "chef")
 
+	services.LogAudit(c, "chef.verify", "chef", id.String(), nil, map[string]any{"isVerified": true})
 	c.JSON(http.StatusOK, gin.H{"message": "Chef verified"})
 }
 
@@ -442,6 +454,7 @@ func (h *AdminHandler) RejectChef(c *gin.Context) {
 		return
 	}
 
+	services.LogAudit(c, "chef.reject", "chef", id.String(), nil, map[string]any{"reason": req.Reason})
 	c.JSON(http.StatusOK, gin.H{"message": "Chef rejected", "reason": req.Reason})
 }
 
@@ -462,6 +475,7 @@ func (h *AdminHandler) SuspendChef(c *gin.Context) {
 		return
 	}
 
+	services.LogAudit(c, "chef.suspend", "chef", id.String(), nil, map[string]any{"isActive": false})
 	c.JSON(http.StatusOK, gin.H{"message": "Chef suspended"})
 }
 
@@ -707,6 +721,13 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 
 	// Drop the cached client so the next GetRazorpay() rereads from SM.
 	services.InvalidateRazorpay()
+	services.LogAudit(c, "payment.keys.update", "payment_gateway", "razorpay", nil, map[string]any{
+		"updatedFields": []string{
+			boolField("keyId", req.KeyID != ""),
+			boolField("keySecret", req.KeySecret != ""),
+			boolField("webhookSecret", req.WebhookSecret != ""),
+		},
+	})
 
 	// Validate by actually calling Razorpay. If the keys are wrong, surface
 	// the exact error to the UI so the admin can fix it immediately.

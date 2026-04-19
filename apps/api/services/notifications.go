@@ -870,6 +870,13 @@ func (s *NotificationService) handleApprovalCreated(event Event) {
 func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 	log.Printf("Sending email notification to user %s: %s", notif.UserID.String(), notif.Title)
 
+	notifType, _ := notif.Data["type"].(string)
+	if !ShouldSendForType(notif.UserID, notifType, ChannelEmail) {
+		log.Printf("Email dispatch skipped for user %s (category=%s opted-out)",
+			notif.UserID, notificationTypeCategory(notifType))
+		return
+	}
+
 	// Look up user email
 	var user models.User
 	if err := database.DB.Select("id, email, first_name").First(&user, "id = ?", notif.UserID).Error; err != nil {
@@ -880,7 +887,7 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 	emailSvc := GetEmailService()
 
 	// Route to the appropriate email template based on notification data
-	notifType, _ := notif.Data["type"].(string)
+	// (notifType already extracted above for the opt-out check).
 	switch notifType {
 	case "order_confirmation":
 		orderNumber, _ := notif.Data["order_number"].(string)
@@ -924,6 +931,13 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 
 func (s *NotificationService) sendPushNotification(notif NotificationEvent) {
 	log.Printf("Sending push notification to user %s: %s", notif.UserID.String(), notif.Title)
+
+	notifType, _ := notif.Data["type"].(string)
+	if !ShouldSendForType(notif.UserID, notifType, ChannelPush) {
+		log.Printf("Push dispatch skipped for user %s (category=%s opted-out)",
+			notif.UserID, notificationTypeCategory(notifType))
+		return
+	}
 
 	// Convert data map to string map for FCM
 	data := make(map[string]string)

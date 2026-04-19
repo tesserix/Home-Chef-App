@@ -73,6 +73,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Platform operating-hours gate — admins can set open/close times in
+	// Settings → Platform, and IsPlatformOpen evaluates them against the
+	// configured timezone. Unconfigured = always open (current behavior).
+	if open, msg := services.IsPlatformOpen(); !open {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
 	// Verify chef exists and is active
 	var chef models.ChefProfile
 	if err := database.DB.Where("id = ? AND is_active = ? AND is_verified = ?", req.ChefID, true, true).
@@ -120,10 +128,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Calculate fees
-	deliveryFee := 2.99 // Base fee, could be calculated based on distance
-	serviceFee := subtotal * 0.10 // 10% service fee
-	tax := subtotal * 0.08 // 8% tax
+	// Calculate fees from the platform policy (Settings → Platform).
+	// Defaults match the prior hardcoded values (10% service, 8% tax, $2.99
+	// delivery) so behavior doesn't change until an admin edits the policy.
+	policy := services.GetPlatformPolicy()
+	deliveryFee := policy.BaseDeliveryFee
+	serviceFee := subtotal * (policy.ServiceFeePercent / 100.0)
+	tax := subtotal * (policy.TaxPercent / 100.0)
 	tip := req.Tip
 	discount := 0.0
 
@@ -164,6 +175,24 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery address required"})
 		return
+	}
+
+	// If the admin has configured delivery zones, enforce coverage. When no
+	// zones exist we skip — feature is opt-in so existing customers aren't
+	// suddenly unable to order.
+	if services.HasActiveZones() {
+		if deliveryAddr.Latitude == 0 && deliveryAddr.Longitude == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Delivery address needs location coordinates. Please select your address from the map.",
+			})
+			return
+		}
+		if zone := services.FindZoneForAddress(deliveryAddr.Latitude, deliveryAddr.Longitude); zone == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "We don't deliver to this address yet. Please pick a supported area.",
+			})
+			return
+		}
 	}
 
 	// Generate order number

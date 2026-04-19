@@ -179,7 +179,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		})
 		return
 	}
-	if policy.TwoFactorRequiredForAdmins && user.Role == models.RoleAdmin {
+	if policy.TwoFactorRequiredForAdmins && user.Role == models.RoleAdmin && !policy.IsTwoFactorExempt(user.Email) {
 		enroll, cerr := middleware.GenerateTwoFactorChallenge(&user, middleware.ChallengeEnroll)
 		if cerr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start 2FA enrollment"})
