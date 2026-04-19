@@ -31,6 +31,10 @@ const OrdersPage = lazyWithRetry(() => import('@/features/orders/pages/OrdersPag
 const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/AnalyticsPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
 const SecuritySettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SecuritySettingsPage'));
+const PlatformSettingsPage = lazyWithRetry(() => import('@/features/settings/pages/PlatformSettingsPage'));
+const NotificationSettingsPage = lazyWithRetry(() => import('@/features/settings/pages/NotificationSettingsPage'));
+const DataExportsPage = lazyWithRetry(() => import('@/features/settings/pages/DataExportsPage'));
+const AuditLogsPage = lazyWithRetry(() => import('@/features/settings/pages/AuditLogsPage'));
 const UserDetailPage = lazyWithRetry(() => import('@/features/users/pages/UserDetailPage'));
 const ApprovalsPage = lazyWithRetry(() => import('@/features/approvals/pages/ApprovalsPage'));
 const ApprovalDetailPage = lazyWithRetry(() => import('@/features/approvals/pages/ApprovalDetailPage'));
@@ -101,6 +105,10 @@ export function AppRoutes() {
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/security" element={<SecuritySettingsPage />} />
+          <Route path="settings/platform" element={<PlatformSettingsPage />} />
+          <Route path="settings/notifications" element={<NotificationSettingsPage />} />
+          <Route path="settings/data-exports" element={<DataExportsPage />} />
+          <Route path="settings/audit-logs" element={<AuditLogsPage />} />
         </Route>
 
         {/* Catch all */}

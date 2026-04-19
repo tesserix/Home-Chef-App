@@ -26,6 +26,7 @@ interface SecurityPolicy {
   sessionAccessTtlHours: number;
   sessionRefreshTtlDays: number;
   twoFactorRequiredForAdmins: boolean;
+  twoFactorExemptEmails?: string[];
 }
 
 export default function SecuritySettingsPage() {
@@ -534,8 +535,78 @@ function TwoFactorSection() {
             When enabled, admins without 2FA are prompted to enroll on their next login.
           </p>
         </div>
+
+        <TwoFactorExemptList />
       </div>
     </Card>
+  );
+}
+
+// Admin-facing editor for the TwoFactorExemptEmails list on the SecurityPolicy.
+// Kept as a small separate component so the main 2FA card stays readable.
+function TwoFactorExemptList() {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['security-policy'],
+    queryFn: () => apiClient.get<SecurityPolicy>('/admin/security/policy'),
+  });
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+
+  const current = draft ?? (data?.twoFactorExemptEmails ?? []).join('\n');
+
+  const save = useMutation({
+    mutationFn: (emails: string[]) =>
+      apiClient.put('/admin/security/policy', { twoFactorExemptEmails: emails }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['security-policy'] });
+      setDraft(null);
+      setSaveFeedback('Exempt list saved');
+      setTimeout(() => setSaveFeedback(null), 3000);
+    },
+  });
+
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3">
+      <p className="text-sm text-foreground">2FA exempt emails</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        One per line. Useful for service accounts (E2E tests, automation)
+        that can't scan a QR. Leave empty to enforce 2FA on every admin.
+      </p>
+      <textarea
+        value={current}
+        onChange={(e) => setDraft(e.target.value)}
+        rows={3}
+        placeholder="service@fe3dr.com"
+        className="mt-2 w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-xs focus:border-primary focus:outline-none"
+      />
+      {saveFeedback && (
+        <p className="mt-1 text-xs text-green-700">{saveFeedback}</p>
+      )}
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          onClick={() => setDraft(null)}
+          disabled={draft === null || save.isPending}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground hover:bg-secondary disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() =>
+            save.mutate(
+              (draft ?? '')
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            )
+          }
+          disabled={draft === null || save.isPending}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {save.isPending ? 'Saving...' : 'Save list'}
+        </button>
+      </div>
+    </div>
   );
 }
 

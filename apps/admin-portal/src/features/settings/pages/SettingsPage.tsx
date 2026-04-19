@@ -42,23 +42,41 @@ export default function SettingsPage() {
             { label: 'API keys', cta: 'Manage' },
           ]}
         />
-        <SettingsCard
+        <SettingsLinkCard
           icon={Bell}
           title="Notifications"
           description="Email, push, and in-app notification preferences"
-          items={['Order alerts', 'Chef verification alerts', 'Revenue reports', 'System notifications']}
+          to="/settings/notifications"
+          items={[
+            { label: 'Order alerts', cta: 'Manage' },
+            { label: 'Chef verification alerts', cta: 'Manage' },
+            { label: 'Delivery updates', cta: 'Manage' },
+            { label: 'Marketing & promos', cta: 'Manage' },
+          ]}
         />
-        <SettingsCard
+        <SettingsLinkCard
           icon={Globe}
           title="Platform"
-          description="General platform configuration"
-          items={['Service areas', 'Commission rates', 'Delivery fees', 'Operating hours']}
+          description="Commission, delivery fees, service areas, hours"
+          to="/settings/platform"
+          items={[
+            { label: 'Commission rates', cta: 'Manage' },
+            { label: 'Delivery fees', cta: 'Manage' },
+            { label: 'Operating hours', cta: 'Manage' },
+            { label: 'Service areas', cta: 'Manage' },
+          ]}
         />
-        <SettingsCard
+        <SettingsLinkCard
           icon={Database}
           title="Data & Exports"
-          description="Data management and report exports"
-          items={['Export user data', 'Order reports', 'Revenue reports', 'Audit logs']}
+          description="CSV downloads and audit history"
+          to="/settings/data-exports"
+          items={[
+            { label: 'Users CSV', cta: 'Download' },
+            { label: 'Orders CSV', cta: 'Download' },
+            { label: 'Revenue CSV', cta: 'Download' },
+            { label: 'Audit logs', cta: 'View' },
+          ]}
         />
       </div>
     </div>
@@ -387,40 +405,3 @@ function SettingsLinkCard({
   );
 }
 
-function SettingsCard({
-  icon: Icon,
-  title,
-  description,
-  items,
-}: {
-  icon: typeof Settings;
-  title: string;
-  description: string;
-  items: string[];
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <Icon className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h3 className="font-semibold text-foreground">{title}</h3>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {items.map((item) => (
-          <div
-            key={item}
-            className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm"
-          >
-            <span className="text-foreground">{item}</span>
-            <span className="text-xs text-muted-foreground">Configure</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
