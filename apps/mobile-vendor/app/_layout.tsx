@@ -155,7 +155,7 @@ function AppNavigator() {
               {
                 method: 'PUT',
                 headers: {
-                  Authorization: `Bearer ${authToken}`,
+                  'X-Auth-Token': authToken,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ status: orderStatus }),

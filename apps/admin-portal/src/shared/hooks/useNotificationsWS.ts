@@ -54,7 +54,7 @@ export function useNotificationsWS(enabled = true) {
     try {
       const accessToken = await readAccessToken();
       const headers: Record<string, string> = {};
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      if (accessToken) headers['X-Auth-Token'] = accessToken;
       const res = await fetch(`${BFF_URL}/api/v1/notifications/unread-count`, {
         credentials: 'include',
         headers,

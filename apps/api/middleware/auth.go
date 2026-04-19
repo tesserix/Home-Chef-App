@@ -133,13 +133,20 @@ func ParseTwoFactorChallenge(tokenString string, expected TwoFactorChallengeKind
 }
 
 // AuthMiddleware validates JWT tokens and sets user context.
-// Supports four authentication methods:
+// Supports five authentication methods:
 //  1. Authorization: ApiKey <secret> — platform integration key, short-circuits
 //     the rest so third-party callers don't need a user login
-//  2. Authorization: Bearer <JWT> — traditional JWT from the app's own auth
-//  3. ?token=<JWT> query param — only honored on WebSocket upgrade requests,
+//  2. X-Auth-Token: <JWT> — first-party session header used by the web, admin,
+//     vendor, and delivery portals (and the mobile apps). Lives in a custom
+//     header so the Cloudflare Access JWT-validator sitting in front of the
+//     public *.fe3dr.com hostnames doesn't reject our HS256 tokens as if they
+//     were Cloudflare-issued identity tokens. Third-party integrations that
+//     expect Authorization: Bearer are still served via method #3.
+//  3. Authorization: Bearer <JWT> — traditional JWT for API clients that
+//     cannot set a custom header (curl tooling, external partners).
+//  4. ?token=<JWT> query param — only honored on WebSocket upgrade requests,
 //     because browsers cannot set custom headers on the WS handshake
-//  4. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
+//  5. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
 //     (only accepted for internal mesh requests where the BFF already validated the session)
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -162,16 +169,19 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		tokenString := ""
-		if authHeader != "" {
+		// Preferred for first-party clients: X-Auth-Token. See note above —
+		// bypasses the Cloudflare Access Bearer-token validator that would
+		// otherwise reject our HS256 JWTs at the edge.
+		tokenString := c.GetHeader("X-Auth-Token")
+		if tokenString == "" && authHeader != "" {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) == 2 && parts[0] == "Bearer" {
 				tokenString = parts[1]
 			}
 		}
-		// WebSocket handshakes can't carry an Authorization header, so allow
-		// the JWT to ride in as ?token=... — but ONLY for WS upgrade requests
-		// to avoid tokens leaking into access logs / referer on normal traffic.
+		// WebSocket handshakes can't carry custom headers, so allow the JWT
+		// to ride in as ?token=... — but ONLY for WS upgrade requests to
+		// avoid tokens leaking into access logs / referer on normal traffic.
 		if tokenString == "" && strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 			tokenString = c.Query("token")
 		}
@@ -313,22 +323,28 @@ func AuthMiddleware() gin.HandlerFunc {
 // Supports both JWT and x-jwt-claim-sub header.
 func OptionalAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Try JWT first
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			parts := strings.Split(authHeader, " ")
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				claims := &Claims{}
-				token, err := jwt.ParseWithClaims(parts[1], claims, func(token *jwt.Token) (interface{}, error) {
-					return []byte(config.AppConfig.JWTSecret), nil
-				})
-				if err == nil && token.Valid {
-					c.Set("userID", claims.UserID)
-					c.Set("userEmail", claims.Email)
-					c.Set("userRole", claims.Role)
-					c.Next()
-					return
+		// First-party clients use X-Auth-Token (see AuthMiddleware doc for why);
+		// fall back to Authorization: Bearer for legacy callers.
+		tokenString := c.GetHeader("X-Auth-Token")
+		if tokenString == "" {
+			if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					tokenString = parts[1]
 				}
+			}
+		}
+		if tokenString != "" {
+			claims := &Claims{}
+			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				return []byte(config.AppConfig.JWTSecret), nil
+			})
+			if err == nil && token.Valid {
+				c.Set("userID", claims.UserID)
+				c.Set("userEmail", claims.Email)
+				c.Set("userRole", claims.Role)
+				c.Next()
+				return
 			}
 		}
 

@@ -90,7 +90,7 @@ class ApiClient {
 
     // Add Bearer token for API-issued JWT auth (email/password login)
     if (accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+      (headers as Record<string, string>)['X-Auth-Token'] = accessToken;
     }
 
     // Add CSRF token for state-changing requests (BFF requires it)
@@ -160,11 +160,17 @@ class ApiClient {
 
   /** Upload a file via multipart/form-data. Do NOT set Content-Type — the browser handles it. */
   async upload<T>(endpoint: string, formData: FormData): Promise<T> {
-    const { isAuthenticated, csrfToken } = await this.getAuthState();
-    const base = isAuthenticated ? this.bffProxyBase : this.baseUrl;
+    const { isAuthenticated, csrfToken, accessToken } = await this.getAuthState();
+    // JWT auth bypasses the BFF (same reasoning as request()); BFF session
+    // goes through /bff/ so the cookie is validated.
+    const useDirectApi = isAuthenticated && !!accessToken;
+    const base = useDirectApi ? this.baseUrl : (isAuthenticated ? this.bffProxyBase : this.baseUrl);
     const url = this.buildUrl(base, endpoint);
 
     const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers['X-Auth-Token'] = accessToken;
+    }
     if (csrfToken) {
       headers['X-CSRF-Token'] = csrfToken;
     }

@@ -22,7 +22,7 @@ async function updateDriverLocationAPI(
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'X-Auth-Token': token,
       },
       body: JSON.stringify({ latitude, longitude }),
     });

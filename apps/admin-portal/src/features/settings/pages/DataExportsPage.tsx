@@ -20,7 +20,7 @@ async function fetchAndDownload(path: string, filename: string) {
   const { useAuthStore } = await import('@/app/store/auth-store');
   const { accessToken } = useAuthStore.getState();
   const headers: Record<string, string> = {};
-  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  if (accessToken) headers['X-Auth-Token'] = accessToken;
 
   const res = await fetch(`${BFF_URL}${path}`, {
     credentials: 'include',

@@ -57,7 +57,7 @@ class ApiClient {
 
     // Add Bearer token for API-issued JWT auth (email/password login)
     if (accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+      (headers as Record<string, string>)['X-Auth-Token'] = accessToken;
     }
 
     // Include CSRF token for state-changing requests
