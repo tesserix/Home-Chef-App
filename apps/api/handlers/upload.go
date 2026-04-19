@@ -15,6 +15,7 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 type UploadHandler struct{}
@@ -389,28 +390,31 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		approvalNotes = latestApproval.AdminNotes
 	}
 
-	// Determine onboarding completion:
-	// - Verified → completed (dashboard access)
-	// - Has business name + pending/approved approval → completed (awaiting/passed review)
-	// - Has business name + rejected approval → NOT completed (must re-submit)
-	// - Has business name + info_requested → NOT completed (must provide more info)
-	// - No business name → NOT completed (hasn't started)
+	// Determine onboarding completion. The full submit flow always creates an
+	// ApprovalRequest (transactionally, alongside the chef row). If no approval
+	// exists, the chef row is either a doc-upload stub or a half-saved wizard
+	// record — not a completed application, so keep the user on /onboarding.
 	completed := false
 	onboardingStatus := "not_started"
-	if chef.IsVerified {
+	switch {
+	case chef.IsVerified:
 		completed = true
 		onboardingStatus = "verified"
-	} else if chef.BusinessName != "" {
-		if hasApproval && (approvalStatus == "rejected" || approvalStatus == "info_requested") {
-			completed = false
-			onboardingStatus = approvalStatus
-		} else {
-			completed = true
+	case chef.BusinessName == "":
+		// Stub profile from document upload or partial wizard save.
+		onboardingStatus = "in_progress"
+	case hasApproval && (approvalStatus == "rejected" || approvalStatus == "info_requested"):
+		onboardingStatus = approvalStatus
+	case hasApproval:
+		completed = true
+		onboardingStatus = "pending_review"
+		if approvalStatus == "approved" {
 			onboardingStatus = "submitted"
-			if hasApproval && approvalStatus == "pending" {
-				onboardingStatus = "pending_review"
-			}
 		}
+	default:
+		// Business name set but no approval row — means the submit tx failed.
+		// Treat as in_progress so the user re-submits rather than silently hanging.
+		onboardingStatus = "in_progress"
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -450,22 +454,24 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 // POST /chef/onboarding
 func (h *UploadHandler) Onboarding(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
+	log.Printf("[onboarding] POST /chef/onboarding user=%s", userID)
 
-	// Check if profile already exists (may have been auto-created by upload handler)
+	// Check if profile already exists (may have been auto-created by upload handler
+	// via document upload, or by a prior partial-save from the wizard's Step 3 hand-off).
 	var existing models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&existing).Error; err == nil {
-		// Profile exists — update it
 		h.updateOnboarding(c, &existing)
 		return
 	}
 
 	var req OnboardingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[onboarding] bind failed user=%s err=%v", userID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Validate uniqueness: business name, email, and phone must be unique
+	// Validate uniqueness before opening the transaction so clashes return 409 cleanly.
 	if req.BusinessName != "" {
 		var existingByName models.ChefProfile
 		if err := database.DB.Where("business_name = ? AND user_id != ?", req.BusinessName, userID).First(&existingByName).Error; err == nil {
@@ -481,7 +487,6 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		}
 	}
 
-	// Create chef profile
 	chef := models.ChefProfile{
 		UserID:          userID,
 		BusinessName:    req.BusinessName,
@@ -498,57 +503,74 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		State:           req.KitchenAddress.State,
 		PostalCode:      req.KitchenAddress.PostalCode,
 		IsActive:        true,
-		AcceptingOrders: false, // Not accepting until verified
+		AcceptingOrders: false,
 	}
 
-	if err := database.DB.Create(&chef).Error; err != nil {
-		log.Printf("Failed to create chef profile: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create profile"})
-		return
-	}
-
-	// Update user's role to chef and name/phone
-	database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-		"role":       models.RoleChef,
-		"first_name": req.FullName,
-		"phone":      req.Phone,
-	})
-
-	// Create schedules
-	h.createSchedules(&chef, req.OperatingHours)
-
-	// Seed default menu categories for the new chef
-	h.seedDefaultCategories(chef.ID)
-
-	// Create approval request for admin review (mask PII in submitted data)
-	submittedData, _ := json.Marshal(map[string]interface{}{
-		"businessName": req.BusinessName,
-		"fullName":     req.FullName,
-		"phone":        maskPhone(req.Phone),
-		"city":         req.KitchenAddress.City,
-		"cuisines":     req.Cuisines,
-		"panNumber":    maskPAN(req.PanNumber),
-		"fssaiNumber":  maskID(req.FSSAINumber),
-	})
 	approvalReq := models.ApprovalRequest{
 		Type:          models.ApprovalKitchenOnboarding,
 		Status:        models.ApprovalPending,
 		Priority:      "high",
-		ChefID:        &chef.ID,
 		SubmittedByID: userID,
 		EntityType:    "chef_profile",
-		EntityID:      chef.ID,
-		Title:         fmt.Sprintf("Kitchen Onboarding: %s", req.BusinessName),
-		Description:   fmt.Sprintf("%s submitted kitchen onboarding for review", req.FullName),
-		SubmittedData: string(submittedData),
 	}
-	// Cancel any existing pending request of same type+chef
-	database.DB.Model(&models.ApprovalRequest{}).
-		Where("chef_id = ? AND type = ? AND status = ?", chef.ID, models.ApprovalKitchenOnboarding, models.ApprovalPending).
-		Update("status", models.ApprovalCancelled)
-	database.DB.Create(&approvalReq)
 
-	// Publish NATS event
+	// Single transaction — profile, user role, schedules, categories, approval row
+	// must all succeed together, or none of them persist. Prior code silently
+	// swallowed errors on approval_request.Create which let the user see a 200
+	// response while the admin never saw the submission.
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&chef).Error; err != nil {
+			return fmt.Errorf("create chef profile: %w", err)
+		}
+
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+			"role":       models.RoleChef,
+			"first_name": req.FullName,
+			"phone":      req.Phone,
+		}).Error; err != nil {
+			return fmt.Errorf("update user role: %w", err)
+		}
+
+		if err := h.createSchedulesTx(tx, &chef, req.OperatingHours); err != nil {
+			return fmt.Errorf("create schedules: %w", err)
+		}
+
+		if err := h.seedDefaultCategoriesTx(tx, chef.ID); err != nil {
+			return fmt.Errorf("seed categories: %w", err)
+		}
+
+		submittedData, _ := json.Marshal(map[string]interface{}{
+			"businessName": req.BusinessName,
+			"fullName":     req.FullName,
+			"phone":        maskPhone(req.Phone),
+			"city":         req.KitchenAddress.City,
+			"cuisines":     req.Cuisines,
+			"panNumber":    maskPAN(req.PanNumber),
+			"fssaiNumber":  maskID(req.FSSAINumber),
+		})
+		approvalReq.ChefID = &chef.ID
+		approvalReq.EntityID = chef.ID
+		approvalReq.Title = fmt.Sprintf("Kitchen Onboarding: %s", req.BusinessName)
+		approvalReq.Description = fmt.Sprintf("%s submitted kitchen onboarding for review", req.FullName)
+		approvalReq.SubmittedData = string(submittedData)
+
+		if err := tx.Model(&models.ApprovalRequest{}).
+			Where("chef_id = ? AND type = ? AND status = ?", chef.ID, models.ApprovalKitchenOnboarding, models.ApprovalPending).
+			Update("status", models.ApprovalCancelled).Error; err != nil {
+			return fmt.Errorf("cancel prior approvals: %w", err)
+		}
+		if err := tx.Create(&approvalReq).Error; err != nil {
+			return fmt.Errorf("create approval request: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("[onboarding] tx failed user=%s err=%v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit onboarding. Please try again."})
+		return
+	}
+
+	// Fire-and-forget event publication outside the transaction.
 	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(),
 		"type":        string(approvalReq.Type),
@@ -556,6 +578,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		"title":       approvalReq.Title,
 	})
 
+	log.Printf("[onboarding] created user=%s chef=%s approval=%s", userID, chef.ID, approvalReq.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Onboarding submitted successfully",
 		"chefId":  chef.ID,
@@ -563,13 +586,15 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 }
 
 func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfile) {
+	log.Printf("[onboarding] update user=%s chef=%s", chef.UserID, chef.ID)
+
 	var req OnboardingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[onboarding] bind failed user=%s err=%v", chef.UserID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Validate uniqueness on update too
 	if req.BusinessName != "" && req.BusinessName != chef.BusinessName {
 		var existingByName models.ChefProfile
 		if err := database.DB.Where("business_name = ? AND id != ?", req.BusinessName, chef.ID).First(&existingByName).Error; err == nil {
@@ -600,32 +625,6 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.PostalCode = req.KitchenAddress.PostalCode
 	chef.IsActive = true
 
-	if err := database.DB.Save(chef).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
-		return
-	}
-
-	// Update user details and role
-	database.DB.Model(&models.User{}).Where("id = ?", chef.UserID).Updates(map[string]interface{}{
-		"role":       models.RoleChef,
-		"first_name": req.FullName,
-		"phone":      req.Phone,
-	})
-
-	// Recreate schedules
-	database.DB.Where("chef_id = ?", chef.ID).Delete(&models.ChefSchedule{})
-	h.createSchedules(chef, req.OperatingHours)
-
-	// Create approval request for admin review (mask PII in submitted data)
-	submittedData, _ := json.Marshal(map[string]interface{}{
-		"businessName": req.BusinessName,
-		"fullName":     req.FullName,
-		"phone":        maskPhone(req.Phone),
-		"city":         req.KitchenAddress.City,
-		"cuisines":     req.Cuisines,
-		"panNumber":    maskPAN(req.PanNumber),
-		"fssaiNumber":  maskID(req.FSSAINumber),
-	})
 	approvalReq := models.ApprovalRequest{
 		Type:          models.ApprovalKitchenOnboarding,
 		Status:        models.ApprovalPending,
@@ -634,17 +633,57 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		SubmittedByID: chef.UserID,
 		EntityType:    "chef_profile",
 		EntityID:      chef.ID,
-		Title:         fmt.Sprintf("Kitchen Onboarding: %s", req.BusinessName),
-		Description:   fmt.Sprintf("%s submitted kitchen onboarding for review", req.FullName),
-		SubmittedData: string(submittedData),
 	}
-	// Upsert: cancel any existing pending request of same type+chef
-	database.DB.Model(&models.ApprovalRequest{}).
-		Where("chef_id = ? AND type = ? AND status = ?", chef.ID, models.ApprovalKitchenOnboarding, models.ApprovalPending).
-		Update("status", models.ApprovalCancelled)
-	database.DB.Create(&approvalReq)
 
-	// Publish NATS event
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(chef).Error; err != nil {
+			return fmt.Errorf("save chef: %w", err)
+		}
+
+		if err := tx.Model(&models.User{}).Where("id = ?", chef.UserID).Updates(map[string]interface{}{
+			"role":       models.RoleChef,
+			"first_name": req.FullName,
+			"phone":      req.Phone,
+		}).Error; err != nil {
+			return fmt.Errorf("update user role: %w", err)
+		}
+
+		if err := tx.Where("chef_id = ?", chef.ID).Delete(&models.ChefSchedule{}).Error; err != nil {
+			return fmt.Errorf("delete schedules: %w", err)
+		}
+		if err := h.createSchedulesTx(tx, chef, req.OperatingHours); err != nil {
+			return fmt.Errorf("create schedules: %w", err)
+		}
+
+		submittedData, _ := json.Marshal(map[string]interface{}{
+			"businessName": req.BusinessName,
+			"fullName":     req.FullName,
+			"phone":        maskPhone(req.Phone),
+			"city":         req.KitchenAddress.City,
+			"cuisines":     req.Cuisines,
+			"panNumber":    maskPAN(req.PanNumber),
+			"fssaiNumber":  maskID(req.FSSAINumber),
+		})
+		approvalReq.Title = fmt.Sprintf("Kitchen Onboarding: %s", req.BusinessName)
+		approvalReq.Description = fmt.Sprintf("%s submitted kitchen onboarding for review", req.FullName)
+		approvalReq.SubmittedData = string(submittedData)
+
+		if err := tx.Model(&models.ApprovalRequest{}).
+			Where("chef_id = ? AND type = ? AND status = ?", chef.ID, models.ApprovalKitchenOnboarding, models.ApprovalPending).
+			Update("status", models.ApprovalCancelled).Error; err != nil {
+			return fmt.Errorf("cancel prior approvals: %w", err)
+		}
+		if err := tx.Create(&approvalReq).Error; err != nil {
+			return fmt.Errorf("create approval request: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("[onboarding] update tx failed user=%s err=%v", chef.UserID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update onboarding. Please try again."})
+		return
+	}
+
 	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", chef.UserID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(),
 		"type":        string(approvalReq.Type),
@@ -652,6 +691,7 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		"title":       approvalReq.Title,
 	})
 
+	log.Printf("[onboarding] updated user=%s chef=%s approval=%s", chef.UserID, chef.ID, approvalReq.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Onboarding updated successfully",
 		"chefId":  chef.ID,
@@ -659,11 +699,14 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 }
 
 func (h *UploadHandler) createSchedules(chef *models.ChefProfile, hours map[string]*DayHoursReq) {
+	_ = h.createSchedulesTx(database.DB, chef, hours)
+}
+
+func (h *UploadHandler) createSchedulesTx(tx *gorm.DB, chef *models.ChefProfile, hours map[string]*DayHoursReq) error {
 	dayMap := map[string]int{
 		"monday": 1, "tuesday": 2, "wednesday": 3, "thursday": 4,
 		"friday": 5, "saturday": 6, "sunday": 0,
 	}
-
 	for day, dayNum := range dayMap {
 		schedule := models.ChefSchedule{
 			ChefID:    chef.ID,
@@ -675,13 +718,20 @@ func (h *UploadHandler) createSchedules(chef *models.ChefProfile, hours map[stri
 			schedule.OpenTime = dh.Open
 			schedule.CloseTime = dh.Close
 		}
-		database.DB.Create(&schedule)
+		if err := tx.Create(&schedule).Error; err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // seedDefaultCategories inserts the standard starter menu categories for a new chef.
 // Skips any category whose name already exists (case-insensitive) for this chef.
 func (h *UploadHandler) seedDefaultCategories(chefID uuid.UUID) {
+	_ = h.seedDefaultCategoriesTx(database.DB, chefID)
+}
+
+func (h *UploadHandler) seedDefaultCategoriesTx(tx *gorm.DB, chefID uuid.UUID) error {
 	categories := []string{
 		"Starters & Snacks",
 		"Main Course",
@@ -696,8 +746,8 @@ func (h *UploadHandler) seedDefaultCategories(chefID uuid.UUID) {
 	}
 	for i, name := range categories {
 		var existing models.MenuCategory
-		if err := database.DB.Where("chef_id = ? AND LOWER(name) = LOWER(?)", chefID, name).First(&existing).Error; err == nil {
-			continue // already exists
+		if err := tx.Where("chef_id = ? AND LOWER(name) = LOWER(?)", chefID, name).First(&existing).Error; err == nil {
+			continue
 		}
 		cat := models.MenuCategory{
 			ChefID:    chefID,
@@ -705,10 +755,11 @@ func (h *UploadHandler) seedDefaultCategories(chefID uuid.UUID) {
 			SortOrder: i,
 			IsActive:  true,
 		}
-		if err := database.DB.Create(&cat).Error; err != nil {
-			log.Printf("Failed to seed category %q for chef %s: %v", name, chefID, err)
+		if err := tx.Create(&cat).Error; err != nil {
+			return fmt.Errorf("seed category %q: %w", name, err)
 		}
 	}
+	return nil
 }
 
 // GetDocuments returns the chef's uploaded documents
