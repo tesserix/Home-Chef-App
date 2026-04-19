@@ -49,7 +49,7 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := database.DB.Model(&models.ChefProfile{}).
-		Where("is_verified = ? AND is_active = ?", true, true)
+		Where("is_active = ?", true)
 
 	// Search filter
 	if search != "" {
@@ -163,7 +163,7 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	category := c.Query("category")
 
-	query := database.DB.Where("chef_id = ? AND is_available = ? AND is_approved = ?", chefID, true, true).Preload("Images")
+	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).Preload("Images")
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)

@@ -83,7 +83,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// Verify chef exists and is active
 	var chef models.ChefProfile
-	if err := database.DB.Where("id = ? AND is_active = ? AND is_verified = ?", req.ChefID, true, true).
+	if err := database.DB.Where("id = ? AND is_active = ?", req.ChefID, true).
 		First(&chef).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef not found or not available"})
 		return
