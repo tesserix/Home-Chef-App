@@ -68,6 +68,7 @@ func SetupRouter() *gin.Engine {
 	supportHandler := handlers.NewSupportHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
+	securityHandler := handlers.NewSecurityHandler()
 
 	// Health check endpoints
 	r.GET("/health", healthHandler.Health)
@@ -120,6 +121,27 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/reset-password", authHandler.ResetPassword)
 			auth.GET("/verify-email", authHandler.VerifyEmail)
 			auth.POST("/resend-verification", middleware.AuthMiddleware(), authHandler.ResendVerification)
+
+			// Password policy (public — clients use it to render live rules)
+			auth.GET("/password-policy", securityHandler.GetPasswordPolicy)
+
+			// 2FA — login-flow continuation & forced enrollment
+			auth.POST("/2fa/verify", securityHandler.VerifyTOTP)
+			auth.POST("/2fa/enroll-start", securityHandler.ForcedEnrollTOTPStart)
+			auth.POST("/2fa/enroll-verify", securityHandler.ForcedEnrollTOTPVerify)
+		}
+
+		// 2FA — management endpoints for already-authenticated users
+		security := v1.Group("/security")
+		security.Use(middleware.AuthMiddleware())
+		{
+			security.POST("/2fa/enroll", securityHandler.StartTOTPEnrollment)
+			security.POST("/2fa/confirm", securityHandler.VerifyTOTPEnrollment)
+			security.POST("/2fa/disable", securityHandler.DisableTOTP)
+
+			security.GET("/sessions", securityHandler.ListMySessions)
+			security.DELETE("/sessions/:sessionId", securityHandler.RevokeMySession)
+			security.POST("/sessions/revoke-all", securityHandler.RevokeAllMySessions)
 		}
 
 		// Staff invitation routes (public - token validates)
@@ -490,6 +512,13 @@ func SetupRouter() *gin.Engine {
 			// Payment gateway
 			admin.GET("/payment-gateway/status", adminHandler.GetPaymentGatewayStatus)
 			admin.PUT("/payment-gateway/keys", adminHandler.UpdatePaymentGatewayKeys)
+
+			// Security policy + API keys
+			admin.GET("/security/policy", securityHandler.AdminGetSecurityPolicy)
+			admin.PUT("/security/policy", securityHandler.AdminUpdateSecurityPolicy)
+			admin.GET("/security/api-keys", securityHandler.AdminListApiKeys)
+			admin.POST("/security/api-keys", securityHandler.AdminCreateApiKey)
+			admin.DELETE("/security/api-keys/:id", securityHandler.AdminRevokeApiKey)
 
 			// Settings
 			admin.GET("/settings", adminHandler.GetSettings)

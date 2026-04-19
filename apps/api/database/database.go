@@ -140,6 +140,7 @@ func Migrate() error {
 		// Admin
 		&models.PlatformSettings{},
 		&models.AuditLog{},
+		&models.ApiKey{},
 
 		// Currency
 		&models.Currency{},

@@ -41,6 +41,10 @@ type User struct {
 	EmailVerified bool         `gorm:"default:false" json:"emailVerified"`
 	PhoneVerified bool         `gorm:"default:false" json:"phoneVerified"`
 	FCMToken      string       `gorm:"column:fcm_token" json:"-"`
+	// 2FA (TOTP). The actual shared secret is stored in GCP Secret Manager
+	// keyed by user ID; only a flag lives in the DB.
+	TOTPEnabled    bool       `gorm:"default:false" json:"totpEnabled"`
+	TOTPVerifiedAt *time.Time `gorm:"" json:"totpVerifiedAt,omitempty"`
 	LastLoginAt   *time.Time   `gorm:"" json:"lastLoginAt"`
 	CreatedAt     time.Time    `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt     time.Time    `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -58,12 +62,17 @@ type User struct {
 }
 
 type RefreshToken struct {
-	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`
-	Token     string     `gorm:"uniqueIndex;not null" json:"-"`
-	ExpiresAt time.Time  `gorm:"not null" json:"expiresAt"`
-	RevokedAt *time.Time `gorm:"" json:"revokedAt"`
-	CreatedAt time.Time  `gorm:"autoCreateTime" json:"createdAt"`
+	ID         uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID     uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`
+	Token      string     `gorm:"uniqueIndex;not null" json:"-"`
+	ExpiresAt  time.Time  `gorm:"not null" json:"expiresAt"`
+	RevokedAt  *time.Time `gorm:"" json:"revokedAt"`
+	// Session metadata — populated at token issuance so admins and users
+	// can see what device / IP a session came from and revoke specific ones.
+	UserAgent  string     `gorm:"type:text" json:"userAgent,omitempty"`
+	IPAddress  string     `gorm:"" json:"ipAddress,omitempty"`
+	LastUsedAt *time.Time `gorm:"" json:"lastUsedAt,omitempty"`
+	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }

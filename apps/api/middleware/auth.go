@@ -13,6 +13,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // extractKeycloakRoles decodes a JWT payload (without signature verification)
@@ -78,16 +79,88 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// TwoFactorChallengeKind distinguishes the two 2FA flow entry points. The
+// client can only use a "verify" challenge to call /auth/2fa/verify, and an
+// "enroll" challenge to call /auth/2fa/enroll-*. Separate claim values mean
+// a verify token can't be replayed against the enroll endpoints or vice versa.
+type TwoFactorChallengeKind string
+
+const (
+	ChallengeVerify TwoFactorChallengeKind = "verify"
+	ChallengeEnroll TwoFactorChallengeKind = "enroll"
+)
+
+// twoFactorChallengeClaims is the JWT payload for a short-lived token handed
+// back after a successful password step but before 2FA is satisfied.
+type twoFactorChallengeClaims struct {
+	UserID uuid.UUID              `json:"userId"`
+	Kind   TwoFactorChallengeKind `json:"kind"`
+	jwt.RegisteredClaims
+}
+
+// GenerateTwoFactorChallenge mints a 10-minute JWT that proves the user
+// cleared the password step. It is not an access token — it can only be
+// consumed by /auth/2fa/verify or /auth/2fa/enroll-*.
+func GenerateTwoFactorChallenge(user *models.User, kind TwoFactorChallengeKind) (string, error) {
+	claims := &twoFactorChallengeClaims{
+		UserID: user.ID,
+		Kind:   kind,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "homechef-2fa",
+			Subject:   user.ID.String(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(config.AppConfig.JWTSecret))
+}
+
+// ParseTwoFactorChallenge validates a challenge token and returns the user
+// ID + kind. Rejects expired tokens and mismatched-kind tokens.
+func ParseTwoFactorChallenge(tokenString string, expected TwoFactorChallengeKind) (uuid.UUID, error) {
+	claims := &twoFactorChallengeClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(config.AppConfig.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return uuid.Nil, err
+	}
+	if claims.Kind != expected {
+		return uuid.Nil, jwt.ErrTokenInvalidClaims
+	}
+	return claims.UserID, nil
+}
+
 // AuthMiddleware validates JWT tokens and sets user context.
-// Supports three authentication methods:
-//  1. Authorization: Bearer <JWT> — traditional JWT from the app's own auth
-//  2. ?token=<JWT> query param — only honored on WebSocket upgrade requests,
+// Supports four authentication methods:
+//  1. Authorization: ApiKey <secret> — platform integration key, short-circuits
+//     the rest so third-party callers don't need a user login
+//  2. Authorization: Bearer <JWT> — traditional JWT from the app's own auth
+//  3. ?token=<JWT> query param — only honored on WebSocket upgrade requests,
 //     because browsers cannot set custom headers on the WS handshake
-//  3. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
+//  4. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
 //     (only accepted for internal mesh requests where the BFF already validated the session)
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
+
+		// API key short-circuit. Platform keys represent an integration, not
+		// a user, so we set userID to the key's creator (for audit) and stash
+		// the key on the context for scope checks.
+		if strings.HasPrefix(authHeader, "ApiKey ") {
+			key, err := services.LookupApiKey(strings.TrimPrefix(authHeader, "ApiKey "))
+			if err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+				c.Abort()
+				return
+			}
+			c.Set("apiKey", key)
+			c.Set("userID", key.CreatedBy)
+			c.Set("userRole", models.RoleAdmin)
+			c.Next()
+			return
+		}
 
 		tokenString := ""
 		if authHeader != "" {
@@ -277,15 +350,35 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// GenerateTokens creates access and refresh tokens for a user
+// GenerateTokens creates access and refresh tokens for a user. The returned
+// gin.Context is optional — when provided, the request's User-Agent and IP
+// are recorded on the RefreshToken row so admins can see where a session
+// came from and revoke specific devices.
 func GenerateTokens(user *models.User) (string, string, error) {
-	// Access token
+	return GenerateTokensWithContext(user, nil)
+}
+
+// GenerateTokensWithContext is the capture-device-metadata form used by
+// handlers that have a *gin.Context handy. Access / refresh TTLs come from
+// the platform SecurityPolicy (falls back to config defaults).
+func GenerateTokensWithContext(user *models.User, c *gin.Context) (string, string, error) {
+	policy := services.GetSecurityPolicy()
+
+	accessTTLHours := policy.SessionAccessTTLHours
+	if accessTTLHours <= 0 {
+		accessTTLHours = config.AppConfig.JWTExpirationHours
+	}
+	refreshTTLDays := policy.SessionRefreshTTLDays
+	if refreshTTLDays <= 0 {
+		refreshTTLDays = config.AppConfig.RefreshTokenDays
+	}
+
 	accessClaims := &Claims{
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * time.Duration(config.AppConfig.JWTExpirationHours))),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * time.Duration(accessTTLHours))),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "homechef",
@@ -299,15 +392,17 @@ func GenerateTokens(user *models.User) (string, string, error) {
 		return "", "", err
 	}
 
-	// Refresh token
 	refreshToken := uuid.New().String()
-	expiresAt := time.Now().AddDate(0, 0, config.AppConfig.RefreshTokenDays)
+	expiresAt := time.Now().AddDate(0, 0, refreshTTLDays)
 
-	// Store refresh token in database
 	refreshTokenModel := models.RefreshToken{
 		UserID:    user.ID,
 		Token:     refreshToken,
 		ExpiresAt: expiresAt,
+	}
+	if c != nil {
+		refreshTokenModel.UserAgent = c.Request.UserAgent()
+		refreshTokenModel.IPAddress = c.ClientIP()
 	}
 	if err := database.DB.Create(&refreshTokenModel).Error; err != nil {
 		return "", "", err

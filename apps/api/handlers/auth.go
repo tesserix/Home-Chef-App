@@ -64,6 +64,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Enforce the currently configured platform password policy.
+	if err := services.ValidatePasswordAgainstPolicy(req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -111,7 +117,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}()
 
 	// Generate tokens
-	accessToken, refreshToken, err := middleware.GenerateTokens(&user)
+	accessToken, refreshToken, err := middleware.GenerateTokensWithContext(&user, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
 		return
@@ -151,13 +157,48 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// 2FA gating — two branches before we issue real tokens:
+	//
+	//  (a) The user has TOTP enrolled → they must present a 6-digit code on
+	//      /auth/2fa/verify. We return a short-lived challenge token that
+	//      proves they cleared the password step.
+	//
+	//  (b) Platform policy requires 2FA for admins but this admin hasn't
+	//      enrolled yet → force them through enrollment before login
+	//      completes. Same challenge-token pattern, just a different claim.
+	policy := services.GetSecurityPolicy()
+	if user.TOTPEnabled {
+		challenge, cerr := middleware.GenerateTwoFactorChallenge(&user, middleware.ChallengeVerify)
+		if cerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start 2FA challenge"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"twoFactorRequired": true,
+			"challengeToken":    challenge,
+		})
+		return
+	}
+	if policy.TwoFactorRequiredForAdmins && user.Role == models.RoleAdmin {
+		enroll, cerr := middleware.GenerateTwoFactorChallenge(&user, middleware.ChallengeEnroll)
+		if cerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start 2FA enrollment"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"twoFactorEnrollmentRequired": true,
+			"enrollmentToken":             enroll,
+		})
+		return
+	}
+
 	// Update last login
 	now := time.Now()
 	user.LastLoginAt = &now
 	database.DB.Save(&user)
 
 	// Generate tokens
-	accessToken, refreshToken, err := middleware.GenerateTokens(&user)
+	accessToken, refreshToken, err := middleware.GenerateTokensWithContext(&user, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
 		return
@@ -215,7 +256,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	database.DB.Save(&refreshToken)
 
 	// Generate new tokens
-	accessToken, newRefreshToken, err := middleware.GenerateTokens(&user)
+	accessToken, newRefreshToken, err := middleware.GenerateTokensWithContext(&user, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
 		return
@@ -325,6 +366,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// Enforce platform password policy on the new password.
+	if err := services.ValidatePasswordAgainstPolicy(req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -429,6 +476,12 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	// Check expiry
 	if resetToken.ExpiresAt.Before(time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Reset token has expired"})
+		return
+	}
+
+	// Enforce platform password policy on the reset password.
+	if err := services.ValidatePasswordAgainstPolicy(req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -646,7 +699,7 @@ func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 	database.DB.Save(&user)
 
 	// Generate tokens
-	accessToken, refreshToken, err := middleware.GenerateTokens(&user)
+	accessToken, refreshToken, err := middleware.GenerateTokensWithContext(&user, c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
 		return
