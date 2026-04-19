@@ -48,6 +48,14 @@ type SecurityPolicy struct {
 
 // DefaultSecurityPolicy returns sensible built-in defaults so the app is
 // always usable, even before an admin configures the policy.
+//
+// TwoFactorExemptEmails is intentionally empty: shipping a hardcoded list of
+// exempt accounts (we previously seeded the e2e service users here) was a
+// weak-default credential vector — anyone who learned the e2e plaintext
+// password could log in as admin and bypass forced-2FA without an audit
+// trail. If an organization legitimately needs an exemption for a service
+// account, an admin must add it explicitly via Settings → Security so the
+// decision is intentional and visible.
 func DefaultSecurityPolicy() SecurityPolicy {
 	return SecurityPolicy{
 		PasswordMinLength:          8,
@@ -58,14 +66,7 @@ func DefaultSecurityPolicy() SecurityPolicy {
 		SessionAccessTTLHours:      24,
 		SessionRefreshTTLDays:      30,
 		TwoFactorRequiredForAdmins: false,
-		// E2E service accounts ship exempt by default so automated tests
-		// don't get forced through a QR-scan flow they can't complete.
-		// Any real admin added to this list bypasses 2FA enforcement too,
-		// so admins should only extend it for non-interactive accounts.
-		TwoFactorExemptEmails: []string{
-			"e2e-admin@fe3dr.com",
-			"e2e-test@fe3dr.com",
-		},
+		TwoFactorExemptEmails:      nil,
 	}
 }
 

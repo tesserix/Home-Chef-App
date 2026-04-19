@@ -680,16 +680,60 @@ func (h *AuthHandler) OAuthLogin(c *gin.Context) {
 			return
 		}
 	} else {
-		// Update existing user's OAuth info if needed
+		// Refuse to silently rebind an existing account that registered with
+		// a different auth method to a new OAuth provider. Allowing a silent
+		// rebind made OAuthLogin a permanent account-takeover primitive: any
+		// attacker who controlled the matching Google/Facebook/Apple email
+		// could overwrite an email-password admin's AuthProvider/ProviderID
+		// and authenticate going forward without ever knowing the password.
+		// Linking a different provider must go through an authenticated
+		// "link account" flow that re-verifies the original credential.
+		if user.AuthProvider != provider {
+			log.Printf("OAuthLogin: refused rebind for %s — existing provider=%s, attempted=%s",
+				user.Email, user.AuthProvider, provider)
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "This email is registered with a different sign-in method. Sign in with your original method, then link this provider from your profile.",
+			})
+			return
+		}
+		// Same provider — fill in providerID if it wasn't recorded yet (legacy
+		// rows). Don't touch AuthProvider; it was already validated above.
 		if user.ProviderID == "" {
 			user.ProviderID = providerID
-			user.AuthProvider = provider
 			database.DB.Save(&user)
 		}
 	}
 
 	if !user.IsActive {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Account is suspended"})
+		return
+	}
+
+	// 2FA gate — same as the email/password Login path. The OAuth provider's
+	// authentication is not a substitute for the platform's TOTP requirement.
+	policy := services.GetSecurityPolicy()
+	if user.TOTPEnabled {
+		challenge, cerr := middleware.GenerateTwoFactorChallenge(&user, middleware.ChallengeVerify)
+		if cerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start 2FA challenge"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"twoFactorRequired": true,
+			"challengeToken":    challenge,
+		})
+		return
+	}
+	if policy.TwoFactorRequiredForAdmins && user.Role == models.RoleAdmin && !policy.IsTwoFactorExempt(user.Email) {
+		enroll, cerr := middleware.GenerateTwoFactorChallenge(&user, middleware.ChallengeEnroll)
+		if cerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start 2FA enrollment"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"twoFactorEnrollmentRequired": true,
+			"enrollmentToken":             enroll,
+		})
 		return
 	}
 
