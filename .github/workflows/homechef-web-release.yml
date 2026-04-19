@@ -21,7 +21,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/homechef-web
+  IMAGE_NAME: tesserix/home-chef-app/homechef-web
 
 jobs:
   release:
