@@ -5,7 +5,6 @@
 [![HomeChef Admin Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml)
 [![HomeChef Vendor Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-vendor-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-vendor-portal-build.yml)
 [![HomeChef Delivery Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-delivery-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-delivery-portal-build.yml)
-[![Security alert](https://github.com/tesserix/Home-Chef-App/actions/workflows/security-alert.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/security-alert.yml)
 
 Food-delivery platform at [fe3dr.com](https://fe3dr.com) — home chefs cook,
 drivers deliver, customers order. Go / Gin backend, four React SPAs,
@@ -46,7 +45,7 @@ Home-Chef-App/
 ├── packages/                Shared TS libs (if any)
 ├── docker-compose.yml       Local stack — Postgres, Redis, NATS, API, web
 ├── pnpm-workspace.yaml      Workspace definition (apps/* + packages/*)
-└── .github/workflows/       7 CI workflows + base-image-refresh + security-alert
+└── .github/workflows/       7 CI workflows + base-image-refresh
 ```
 
 Each app has its own `Dockerfile` — all built from the monorepo root
@@ -135,10 +134,6 @@ Each workflow:
    fails the run and short-circuits the deploy.
 5. Uploads a SARIF report to the GitHub Security tab.
 
-On any build failure, `security-alert.yml` fires via `workflow_run`
-and emails the security distribution list (`SMTP_USERNAME` +
-`SMTP_PASSWORD` repo secrets required).
-
 The `base-image-refresh.yml` workflow listens for the weekly
 `repository_dispatch: tesserix-base-images-updated` event from
 [`tesserix/base-docker-images`](https://github.com/tesserix/base-docker-images)
@@ -203,8 +198,6 @@ All Helm charts and ArgoCD apps live in
 |--------------------|-----------------------------------------|
 | `PKG_READ_TOKEN`   | Installing `@tesserix/web` from GHCR    |
 | `NPM_TOKEN`        | BuildKit secret mount in every frontend Dockerfile |
-| `SMTP_USERNAME`    | `security-alert.yml` (Gmail)            |
-| `SMTP_PASSWORD`    | `security-alert.yml` (Gmail app password) |
 
 WIF (`workload_identity_provider`) and the CI service account are set
 as repo variables, not secrets.
