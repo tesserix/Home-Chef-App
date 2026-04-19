@@ -48,8 +48,13 @@ class ApiClient {
     const url = this.buildUrl(endpoint, params);
     const { csrfToken, accessToken } = await this.getAuthState();
 
+    // Only advertise JSON content when we're actually sending a body.
+    // The auth-bff in front is Fastify-based and rejects
+    // (FST_ERR_CTP_EMPTY_JSON_BODY / 400) any POST that claims
+    // Content-Type: application/json but arrives empty.
+    const hasBody = fetchOptions.body !== undefined && fetchOptions.body !== null;
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     };
 
