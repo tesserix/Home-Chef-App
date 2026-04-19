@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
+import type { ApiError } from '@/shared/types';
 import { Settings, Shield, Bell, Globe, Database, CreditCard, RefreshCw, Copy, CheckCircle2, Pencil, Save, X } from 'lucide-react';
 
 interface PaymentGatewayStatus {
@@ -10,6 +11,12 @@ interface PaymentGatewayStatus {
   webhookSecretSet: boolean;
   keyPrefix: string;
   error: string;
+}
+
+interface UpdateKeysResponse {
+  message: string;
+  verified?: boolean;
+  testError?: string;
 }
 
 export default function SettingsPage() {
@@ -56,6 +63,9 @@ function PaymentGatewayCard() {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [keyForm, setKeyForm] = useState({ keyId: '', keySecret: '', webhookSecret: '' });
+  const [saveFeedback, setSaveFeedback] = useState<
+    { kind: 'success' | 'error'; message: string } | null
+  >(null);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['payment-gateway-status'],
@@ -63,11 +73,32 @@ function PaymentGatewayCard() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (keys: typeof keyForm) => apiClient.put('/admin/payment-gateway/keys', keys),
-    onSuccess: () => {
+    mutationFn: (keys: typeof keyForm) =>
+      apiClient.put<UpdateKeysResponse>('/admin/payment-gateway/keys', keys),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['payment-gateway-status'] });
-      setEditing(false);
       setKeyForm({ keyId: '', keySecret: '', webhookSecret: '' });
+      if (result.verified === false && result.testError) {
+        // Saved to Secret Manager but Razorpay rejected them — keep the form
+        // open so the admin can correct the keys without re-typing context.
+        setSaveFeedback({
+          kind: 'error',
+          message: `Saved, but Razorpay rejected the keys: ${result.testError}`,
+        });
+        return;
+      }
+      setSaveFeedback({
+        kind: 'success',
+        message: result.message ?? 'Payment gateway keys saved and verified',
+      });
+      setEditing(false);
+    },
+    onError: (err) => {
+      const apiErr = err as Partial<ApiError>;
+      const message =
+        apiErr?.error?.message ??
+        (err instanceof Error ? err.message : 'Failed to save keys');
+      setSaveFeedback({ kind: 'error', message });
     },
   });
 
@@ -103,7 +134,10 @@ function PaymentGatewayCard() {
         </div>
         {!editing && (
           <button
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setSaveFeedback(null);
+              setEditing(true);
+            }}
             className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
             title="Edit keys"
           >
@@ -111,6 +145,25 @@ function PaymentGatewayCard() {
           </button>
         )}
       </div>
+
+      {saveFeedback && (
+        <div
+          className={`mt-4 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
+            saveFeedback.kind === 'success'
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          <span>{saveFeedback.message}</span>
+          <button
+            onClick={() => setSaveFeedback(null)}
+            className="shrink-0 opacity-60 hover:opacity-100"
+            title="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 space-y-2">
         {editing ? (
@@ -150,7 +203,10 @@ function PaymentGatewayCard() {
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => saveMutation.mutate(keyForm)}
+                onClick={() => {
+                  setSaveFeedback(null);
+                  saveMutation.mutate(keyForm);
+                }}
                 disabled={saveMutation.isPending || (!keyForm.keyId && !keyForm.keySecret && !keyForm.webhookSecret)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
@@ -158,7 +214,11 @@ function PaymentGatewayCard() {
                 {saveMutation.isPending ? 'Saving...' : 'Save Keys'}
               </button>
               <button
-                onClick={() => { setEditing(false); setKeyForm({ keyId: '', keySecret: '', webhookSecret: '' }); }}
+                onClick={() => {
+                  setEditing(false);
+                  setKeyForm({ keyId: '', keySecret: '', webhookSecret: '' });
+                  setSaveFeedback(null);
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
               >
                 <X className="h-3.5 w-3.5" />

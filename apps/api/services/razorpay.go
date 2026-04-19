@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/homechef/api/config"
@@ -17,42 +19,133 @@ import (
 
 const razorpayBaseURL = "https://api.razorpay.com/v1"
 
+// razorpayCacheTTL controls how often GetRazorpay refetches credentials from
+// GCP Secret Manager. Admin writes call InvalidateRazorpay() so the next read
+// picks up new keys immediately — the TTL only matters for external rotations
+// (e.g. someone bumping the secret version via gcloud).
+const razorpayCacheTTL = 5 * time.Minute
+
+// Razorpay credentials live in three GCP Secret Manager secrets. These names
+// are the source of truth for both reads (GetRazorpay) and writes (admin
+// UpdatePaymentGatewayKeys handler).
+const (
+	secretRazorpayKeyID         = "prod-razorpay-key-id"
+	secretRazorpayKeySecret     = "prod-razorpay-key-secret"
+	secretRazorpayWebhookSecret = "prod-razorpay-webhook-secret"
+)
+
 // RazorpayClient handles all Razorpay API interactions.
 // All sensitive fields are unexported — secrets cannot be read from outside this package.
 type RazorpayClient struct {
 	keyID         string
 	keySecret     string
 	webhookSecret string
+	fetchedAt     time.Time
 }
 
-var razorpayClient *RazorpayClient
+var (
+	razorpayClient *RazorpayClient
+	razorpayMu     sync.Mutex
+)
 
-// InitRazorpay initializes the Razorpay client and clears secrets from config.
-// After this call, the key secret is only held inside the RazorpayClient struct
-// (unexported fields) and cannot be accessed from handlers or logged.
+// isPlaceholderValue treats blank strings and the literal "placeholder"
+// (used as a seed value by Helm bootstrap) as "not configured".
+func isPlaceholderValue(v string) bool {
+	return v == "" || v == "placeholder"
+}
+
+// fetchRazorpayFromSM pulls the three Razorpay credentials from GCP Secret
+// Manager. The webhook secret is optional; the key ID and key secret are
+// required. If SM is unreachable, we fall back to env-provided credentials
+// — but only if they look real (not blank, not "placeholder"). This keeps
+// local dev working without GCP access.
+func fetchRazorpayFromSM(ctx context.Context) (*RazorpayClient, error) {
+	keyID, idErr := GetPlatformSecret(ctx, secretRazorpayKeyID)
+	keySecret, secErr := GetPlatformSecret(ctx, secretRazorpayKeySecret)
+	// Webhook secret is optional — webhooks simply won't verify if it's missing.
+	webhookSecret, _ := GetPlatformSecret(ctx, secretRazorpayWebhookSecret)
+
+	if idErr != nil || secErr != nil || isPlaceholderValue(keyID) || isPlaceholderValue(keySecret) {
+		// Dev fallback: env-provided credentials (never used in prod since prod
+		// relies on Secret Manager).
+		cfg := config.AppConfig
+		if !isPlaceholderValue(cfg.RazorpayKeyID) && !isPlaceholderValue(cfg.RazorpayKeySecret) {
+			return &RazorpayClient{
+				keyID:         cfg.RazorpayKeyID,
+				keySecret:     cfg.RazorpayKeySecret,
+				webhookSecret: cfg.RazorpayWebhookSecret,
+				fetchedAt:     time.Now(),
+			}, nil
+		}
+		if idErr != nil {
+			return nil, fmt.Errorf("razorpay credentials not configured: %w", idErr)
+		}
+		return nil, fmt.Errorf("razorpay credentials missing or still set to placeholder — configure them in Admin → Settings → Payment Gateway")
+	}
+
+	return &RazorpayClient{
+		keyID:         keyID,
+		keySecret:     keySecret,
+		webhookSecret: webhookSecret,
+		fetchedAt:     time.Now(),
+	}, nil
+}
+
+// GetRazorpay returns a Razorpay client whose credentials are sourced from GCP
+// Secret Manager at runtime. Results are cached for razorpayCacheTTL; after
+// that, the next call triggers a fresh fetch. Callers that mutate the secret
+// (the admin settings handler) should call InvalidateRazorpay() so the next
+// read picks up new keys immediately.
+//
+// Returns nil when no credentials are configured. Callers must handle nil.
+func GetRazorpay() *RazorpayClient {
+	razorpayMu.Lock()
+	defer razorpayMu.Unlock()
+
+	if razorpayClient != nil && time.Since(razorpayClient.fetchedAt) < razorpayCacheTTL {
+		return razorpayClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fresh, err := fetchRazorpayFromSM(ctx)
+	if err != nil {
+		// If the fetch fails but we have a cached client, keep serving it
+		// (better than going dark during a transient SM outage). Only the
+		// fetchedAt timestamp goes stale.
+		if razorpayClient != nil {
+			log.Printf("razorpay: SM fetch failed, using cached credentials: %v", err)
+			return razorpayClient
+		}
+		log.Printf("razorpay: not configured (%v)", err)
+		return nil
+	}
+
+	razorpayClient = fresh
+	return razorpayClient
+}
+
+// InvalidateRazorpay clears the cached client so the next GetRazorpay() call
+// re-reads credentials from GCP Secret Manager. Call this after updating
+// secrets via the admin API.
+func InvalidateRazorpay() {
+	razorpayMu.Lock()
+	defer razorpayMu.Unlock()
+	razorpayClient = nil
+	log.Println("razorpay: credential cache invalidated")
+}
+
+// InitRazorpay triggers an initial fetch to surface configuration problems at
+// startup. Safe to call when secrets aren't set yet — it just logs a warning
+// and returns. The client will be populated the first time a payment call or
+// admin status check runs.
 func InitRazorpay() {
-	cfg := config.AppConfig
-	if cfg.RazorpayKeyID == "" || cfg.RazorpayKeySecret == "" {
-		log.Println("Warning: Razorpay credentials not configured")
+	if GetRazorpay() != nil {
+		log.Println("razorpay: client initialized from Secret Manager")
 		return
 	}
-	razorpayClient = &RazorpayClient{
-		keyID:         cfg.RazorpayKeyID,
-		keySecret:     cfg.RazorpayKeySecret,
-		webhookSecret: cfg.RazorpayWebhookSecret,
-	}
-
-	// Clear secrets from in-memory config — they're now only inside RazorpayClient
-	// (unexported fields). The key ID stays because it's a publishable key.
-	cfg.RazorpayKeySecret = ""
-	cfg.RazorpayWebhookSecret = ""
-
-	log.Println("Razorpay client initialized")
-}
-
-// GetRazorpay returns the initialized Razorpay client
-func GetRazorpay() *RazorpayClient {
-	return razorpayClient
+	log.Println("razorpay: no credentials yet — configure via Admin → Settings → Payment Gateway")
 }
 
 // --- Linked Accounts (Razorpay Route) ---
@@ -269,9 +362,11 @@ func (c *RazorpayClient) HasWebhookSecret() bool {
 	return c.webhookSecret != ""
 }
 
-// HealthCheck validates Razorpay credentials by making a lightweight API call
+// HealthCheck validates Razorpay credentials by making a lightweight API call.
+// We fetch one payment (count=1) — Razorpay rejects count=0 with a 400, so
+// this is the smallest valid request that still proves auth + connectivity.
 func (c *RazorpayClient) HealthCheck() error {
-	_, err := c.doRequest("GET", "/payments?count=0", nil)
+	_, err := c.doRequest("GET", "/payments?count=1", nil)
 	return err
 }
 

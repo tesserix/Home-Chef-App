@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
@@ -603,53 +602,66 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, settings)
 }
 
-// GetPaymentGatewayStatus returns the Razorpay payment gateway configuration status
+// GetPaymentGatewayStatus reports whether Razorpay is configured and reachable.
+// Credentials come straight from the live client (which reads GCP Secret
+// Manager at runtime) — there's no hidden env/config path that can show stale
+// or placeholder values here.
 func (h *AdminHandler) GetPaymentGatewayStatus(c *gin.Context) {
-	cfg := config.AppConfig
-
-	// Check if Razorpay client is initialized (secrets are inside the client, not config)
 	client := services.GetRazorpay()
-	configured := client != nil
 
-	mode := "unknown"
-	keyPrefix := ""
-	if cfg.RazorpayKeyID != "" {
-		if strings.HasPrefix(cfg.RazorpayKeyID, "rzp_test_") {
-			mode = "test"
-		} else if strings.HasPrefix(cfg.RazorpayKeyID, "rzp_live_") {
-			mode = "live"
-		}
-		// Show first 12 chars + "..." — key ID is a publishable key, safe to show prefix
-		if len(cfg.RazorpayKeyID) > 12 {
-			keyPrefix = cfg.RazorpayKeyID[:12] + "..."
-		} else {
-			keyPrefix = cfg.RazorpayKeyID
-		}
-	}
-
-	webhookSecretSet := client != nil && client.HasWebhookSecret()
 	webhookURL := "https://api.fe3dr.com/webhooks/razorpay"
 
-	var healthErr string
-	if configured {
-		if err := client.HealthCheck(); err != nil {
-			healthErr = err.Error()
-			configured = false
-		}
+	if client == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"configured":       false,
+			"mode":             "unknown",
+			"webhookUrl":       webhookURL,
+			"webhookSecretSet": false,
+			"keyPrefix":        "",
+			"error":            "Razorpay is not configured. Enter your keys to set up the gateway.",
+		})
+		return
+	}
+
+	keyID := client.GetKeyID()
+	mode := "unknown"
+	if strings.HasPrefix(keyID, "rzp_test_") {
+		mode = "test"
+	} else if strings.HasPrefix(keyID, "rzp_live_") {
+		mode = "live"
+	}
+
+	// Key ID is a publishable identifier — safe to surface a short prefix.
+	keyPrefix := keyID
+	if len(keyID) > 12 {
+		keyPrefix = keyID[:12] + "..."
+	}
+
+	// Validate credentials by making a lightweight call to Razorpay.
+	healthErr := ""
+	configured := true
+	if err := client.HealthCheck(); err != nil {
+		healthErr = err.Error()
+		configured = false
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"configured":       configured,
 		"mode":             mode,
 		"webhookUrl":       webhookURL,
-		"webhookSecretSet": webhookSecretSet,
+		"webhookSecretSet": client.HasWebhookSecret(),
 		"keyPrefix":        keyPrefix,
 		"error":            healthErr,
 	})
 }
 
-// UpdatePaymentGatewayKeys saves Razorpay API keys to GCP Secret Manager
-// and re-initializes the Razorpay client. Only super admins should call this.
+// UpdatePaymentGatewayKeys writes the Razorpay credentials to GCP Secret
+// Manager, invalidates the in-memory cache so the next use picks them up, and
+// runs an immediate health check so the admin sees pass/fail right in the UI
+// response (no second round trip needed).
+//
+// Secrets are never persisted to the DB or to config. The app reads them
+// dynamically from Secret Manager on demand.
 func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 	var req struct {
 		KeyID         string `json:"keyId"`
@@ -668,13 +680,21 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Store each non-empty key in GCP Secret Manager
+	// Writing the key ID and key secret together is the only sensible mode —
+	// a mismatched pair guarantees a 401 from Razorpay. Require both or neither.
+	if (req.KeyID == "") != (req.KeySecret == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "keyId and keySecret must be provided together"})
+		return
+	}
+
+	// Persist each provided value to GCP Secret Manager. StorePlatformSecret
+	// creates the secret on first call (idempotent) and appends a new version
+	// on subsequent calls, so the most recent version is always "latest".
 	secretMap := map[string]string{
 		"prod-razorpay-key-id":         req.KeyID,
 		"prod-razorpay-key-secret":     req.KeySecret,
 		"prod-razorpay-webhook-secret": req.WebhookSecret,
 	}
-
 	for secretName, value := range secretMap {
 		if value == "" {
 			continue
@@ -685,21 +705,29 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 		}
 	}
 
-	// Update in-memory config so the API uses the new keys immediately
-	if req.KeyID != "" {
-		config.AppConfig.RazorpayKeyID = req.KeyID
+	// Drop the cached client so the next GetRazorpay() rereads from SM.
+	services.InvalidateRazorpay()
+
+	// Validate by actually calling Razorpay. If the keys are wrong, surface
+	// the exact error to the UI so the admin can fix it immediately.
+	client := services.GetRazorpay()
+	if client == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
+		return
 	}
-	if req.KeySecret != "" {
-		config.AppConfig.RazorpayKeySecret = req.KeySecret
-	}
-	if req.WebhookSecret != "" {
-		config.AppConfig.RazorpayWebhookSecret = req.WebhookSecret
+	if err := client.HealthCheck(); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "Keys saved, but validation failed",
+			"testError": err.Error(),
+			"verified":  false,
+		})
+		return
 	}
 
-	// Re-initialize Razorpay client with new keys
-	services.InitRazorpay()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Payment gateway keys updated"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Payment gateway keys saved and verified",
+		"verified": true,
+	})
 }
 
 // UpdateSettings updates platform settings

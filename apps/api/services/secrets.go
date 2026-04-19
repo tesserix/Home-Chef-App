@@ -199,41 +199,6 @@ func GetPlatformSecret(ctx context.Context, secretName string) (string, error) {
 	return getSecret(ctx, secretName)
 }
 
-// LoadRazorpayKeysFromSM reads Razorpay keys from GCP Secret Manager and
-// updates the in-memory config. Called on startup so the app doesn't depend
-// on ESO for payment gateway credentials.
-func LoadRazorpayKeysFromSM() {
-	if secretClient == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	secrets := map[string]*string{
-		"prod-razorpay-key-id":         &config.AppConfig.RazorpayKeyID,
-		"prod-razorpay-key-secret":     &config.AppConfig.RazorpayKeySecret,
-		"prod-razorpay-webhook-secret": &config.AppConfig.RazorpayWebhookSecret,
-	}
-
-	loaded := 0
-	for name, target := range secrets {
-		val, err := getSecret(ctx, name)
-		if err != nil {
-			log.Printf("Could not load %s from Secret Manager: %v", name, err)
-			continue
-		}
-		if val != "" && val != "placeholder" {
-			*target = val
-			loaded++
-		}
-	}
-
-	if loaded > 0 {
-		log.Printf("Loaded %d Razorpay key(s) from GCP Secret Manager", loaded)
-	}
-}
-
 // DeleteVendorSecret destroys all versions of a vendor payment secret.
 func DeleteVendorSecret(ctx context.Context, vendorID, field string) error {
 	if secretClient == nil {

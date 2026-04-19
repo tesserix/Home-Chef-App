@@ -48,10 +48,9 @@ func main() {
 		defer services.CloseSecretManager()
 	}
 
-	// Load Razorpay keys from GCP Secret Manager (overrides env vars)
-	services.LoadRazorpayKeysFromSM()
-
-	// Initialize Razorpay
+	// Warm up the Razorpay client. Credentials are fetched lazily from GCP
+	// Secret Manager on first use (and refreshed every razorpayCacheTTL), so
+	// this is just a best-effort pre-fetch to log any config gap at startup.
 	services.InitRazorpay()
 
 	// Initialize SendGrid email service
