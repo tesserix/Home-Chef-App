@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import type { ApiError } from '@/shared/types';
-import { Settings, Shield, Bell, Globe, Database, CreditCard, RefreshCw, Copy, CheckCircle2, Pencil, Save, X } from 'lucide-react';
+import { Settings, Shield, Bell, Globe, Database, CreditCard, RefreshCw, Copy, CheckCircle2, Pencil, Save, X, ChevronRight } from 'lucide-react';
 
 interface PaymentGatewayStatus {
   configured: boolean;
@@ -29,11 +30,17 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <PaymentGatewayCard />
-        <SettingsCard
+        <SettingsLinkCard
           icon={Shield}
           title="Security"
           description="Authentication, passwords, and access control"
-          items={['Two-factor authentication', 'Password policies', 'Session management', 'API keys']}
+          to="/settings/security"
+          items={[
+            { label: 'Two-factor authentication', cta: 'Manage' },
+            { label: 'Password policies', cta: 'Manage' },
+            { label: 'Session management', cta: 'Manage' },
+            { label: 'API keys', cta: 'Manage' },
+          ]}
         />
         <SettingsCard
           icon={Bell}
@@ -334,6 +341,49 @@ function PaymentGatewayCard() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function SettingsLinkCard({
+  icon: Icon,
+  title,
+  description,
+  items,
+  to,
+}: {
+  icon: typeof Settings;
+  title: string;
+  description: string;
+  items: { label: string; cta: string }[];
+  to: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group block rounded-xl border border-border bg-card p-6 shadow-card transition-colors hover:border-primary/40"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-semibold text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+      <div className="mt-4 space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm"
+          >
+            <span className="text-foreground">{item.label}</span>
+            <span className="text-xs text-primary">{item.cta}</span>
+          </div>
+        ))}
+      </div>
+    </Link>
   );
 }
 

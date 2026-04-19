@@ -30,6 +30,7 @@ const ChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/ChefsPage')
 const OrdersPage = lazyWithRetry(() => import('@/features/orders/pages/OrdersPage'));
 const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/AnalyticsPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
+const SecuritySettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SecuritySettingsPage'));
 const UserDetailPage = lazyWithRetry(() => import('@/features/users/pages/UserDetailPage'));
 const ApprovalsPage = lazyWithRetry(() => import('@/features/approvals/pages/ApprovalsPage'));
 const ApprovalDetailPage = lazyWithRetry(() => import('@/features/approvals/pages/ApprovalDetailPage'));
@@ -99,6 +100,7 @@ export function AppRoutes() {
           <Route path="staff/:id" element={<StaffDetailPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/security" element={<SecuritySettingsPage />} />
         </Route>
 
         {/* Catch all */}

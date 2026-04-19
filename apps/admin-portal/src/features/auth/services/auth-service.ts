@@ -1,4 +1,9 @@
-import type { SessionResponse } from '@/shared/types/auth';
+import type { SessionResponse, SessionUser } from '@/shared/types/auth';
+
+export type LoginResult =
+  | { kind: 'success'; user: SessionUser; accessToken: string; refreshToken: string }
+  | { kind: '2fa_required'; challengeToken: string }
+  | { kind: '2fa_enrollment_required'; enrollmentToken: string };
 
 /**
  * Admin auth service — uses same-origin /bff/ proxy to the auth BFF.
@@ -98,7 +103,7 @@ export const authService = {
   // Direct API auth (email/password — no Keycloak redirect)
   // =========================================================================
 
-  async loginWithEmail(email: string, password: string) {
+  async loginWithEmail(email: string, password: string): Promise<LoginResult> {
     const res = await fetch('/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -106,7 +111,65 @@ export const authService = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Invalid email or password');
-    return data as { user: import('@/shared/types/auth').SessionUser; accessToken: string; refreshToken: string };
+    if (data.twoFactorRequired) {
+      return { kind: '2fa_required', challengeToken: data.challengeToken as string };
+    }
+    if (data.twoFactorEnrollmentRequired) {
+      return {
+        kind: '2fa_enrollment_required',
+        enrollmentToken: data.enrollmentToken as string,
+      };
+    }
+    return {
+      kind: 'success',
+      user: data.user,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    };
+  },
+
+  /** Complete 2FA login by submitting the 6-digit TOTP code. */
+  async verifyTotp(challengeToken: string, code: string) {
+    const res = await fetch('/api/v1/auth/2fa/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+    return data as {
+      user: import('@/shared/types/auth').SessionUser;
+      accessToken: string;
+      refreshToken: string;
+    };
+  },
+
+  /** Begin TOTP enrollment during a forced-enrollment login flow. */
+  async enrollTotpDuringLogin(enrollmentToken: string) {
+    const res = await fetch('/api/v1/auth/2fa/enroll-start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enrollmentToken }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to start enrollment');
+    return data as { secret: string; otpAuthUrl: string; qrCodeBase64: string };
+  },
+
+  /** Complete forced enrollment; returns real session tokens. */
+  async confirmTotpDuringLogin(enrollmentToken: string, code: string) {
+    const res = await fetch('/api/v1/auth/2fa/enroll-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enrollmentToken, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+    return data as {
+      user: import('@/shared/types/auth').SessionUser;
+      accessToken: string;
+      refreshToken: string;
+    };
   },
 
   async refreshApiToken(refreshToken: string) {

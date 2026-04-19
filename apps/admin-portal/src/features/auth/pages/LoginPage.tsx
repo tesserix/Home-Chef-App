@@ -35,7 +35,7 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-  const { login, loginWithEmail } = useAuth();
+  const { login, loginWithEmail, completeTotpLogin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -50,6 +50,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // 2FA state — populated when the server says the password step wasn't enough.
+  const [twoFactor, setTwoFactor] = useState<
+    | { mode: 'verify'; challengeToken: string }
+    | {
+        mode: 'enroll';
+        enrollmentToken: string;
+        qr?: { secret: string; qrCodeBase64: string };
+      }
+    | null
+  >(null);
+  const [totpCode, setTotpCode] = useState('');
+
   const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -59,10 +71,42 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await loginWithEmail(email, password);
-      navigate('/dashboard');
+      const result = await loginWithEmail(email, password);
+      if (result.kind === 'success') {
+        navigate('/dashboard');
+        return;
+      }
+      if (result.kind === '2fa_required') {
+        setTwoFactor({ mode: 'verify', challengeToken: result.challengeToken });
+        return;
+      }
+      // Forced enrollment — fetch the QR code now so the admin can scan it.
+      const { authService } = await import('@/features/auth/services/auth-service');
+      const qr = await authService.enrollTotpDuringLogin(result.enrollmentToken);
+      setTwoFactor({
+        mode: 'enroll',
+        enrollmentToken: result.enrollmentToken,
+        qr: { secret: qr.secret, qrCodeBase64: qr.qrCodeBase64 },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid email or password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTotpSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!twoFactor || totpCode.length !== 6) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token =
+        twoFactor.mode === 'verify' ? twoFactor.challengeToken : twoFactor.enrollmentToken;
+      await completeTotpLogin(token, totpCode, twoFactor.mode);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid code');
     } finally {
       setLoading(false);
     }
@@ -174,7 +218,7 @@ export default function LoginPage() {
           )}
 
           {/* Social login buttons */}
-          <motion.div variants={fadeInUp} className="space-y-3">
+          <motion.div variants={fadeInUp} className={`space-y-3 ${twoFactor ? 'hidden' : ''}`}>
             <Button
               variant="outline"
               size="xl"
@@ -199,14 +243,101 @@ export default function LoginPage() {
           </motion.div>
 
           {/* Divider */}
-          <motion.div variants={fadeInUp} className="my-6 flex items-center gap-4">
+          <motion.div variants={fadeInUp} className={`my-6 flex items-center gap-4 ${twoFactor ? 'hidden' : ''}`}>
             <div className="h-px flex-1 bg-border" />
             <span className="text-sm text-muted-foreground">or</span>
             <div className="h-px flex-1 bg-border" />
           </motion.div>
 
+          {/* Two-factor challenge — only shown after password step if required */}
+          {twoFactor && (
+            <motion.form
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              onSubmit={handleTotpSubmit}
+              className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4"
+            >
+              <div>
+                <h3 className="text-base font-semibold text-foreground">
+                  {twoFactor.mode === 'verify' ? 'Enter your 6-digit code' : 'Set up 2FA to continue'}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {twoFactor.mode === 'verify'
+                    ? 'Open your authenticator app and enter the code shown for Fe3dr Admin.'
+                    : 'Your organization requires 2FA for admins. Scan this QR with Google Authenticator (or similar), then enter the generated code.'}
+                </p>
+              </div>
+
+              {twoFactor.mode === 'enroll' && twoFactor.qr && (
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <img
+                    src={`data:image/png;base64,${twoFactor.qr.qrCodeBase64}`}
+                    alt="TOTP QR code"
+                    className="mx-auto h-40 w-40 rounded border border-border bg-white p-1"
+                  />
+                  <p className="mt-2 break-all text-center text-xs text-muted-foreground">
+                    or enter this key:&nbsp;
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
+                      {twoFactor.qr.secret}
+                    </code>
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <input
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-center text-xl tracking-[0.5em] shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  fullWidth
+                  onClick={() => {
+                    setTwoFactor(null);
+                    setTotpCode('');
+                    setError('');
+                  }}
+                  className="rounded-xl"
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="lg"
+                  fullWidth
+                  disabled={totpCode.length !== 6 || loading}
+                  className="rounded-xl"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify & sign in'
+                  )}
+                </Button>
+              </div>
+            </motion.form>
+          )}
+
           {/* Email login */}
-          <motion.div variants={fadeInUp}>
+          <motion.div variants={fadeInUp} className={twoFactor ? 'hidden' : ''}>
             <AnimatePresence mode="wait">
               {!showEmailForm ? (
                 <motion.div key="email-btn" exit={{ opacity: 0, height: 0 }}>
