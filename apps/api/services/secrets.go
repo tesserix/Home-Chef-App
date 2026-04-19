@@ -35,26 +35,31 @@ func CloseSecretManager() {
 	}
 }
 
+// ProductPrefix is the product slug stamped on every GCP Secret Manager name
+// this service writes. Multiple products (homechef, marketplace, fanzone, …)
+// share project tesseracthub-480811, so a prefix prevents collisions.
+const ProductPrefix = "homechef"
+
 // vendorSecretID builds the secret ID for a vendor (chef) payment field.
-// Format: prod-vendor-payment-<vendorId>-<field>
+// Format: <env>-homechef-vendor-payment-<vendorId>-<field>
 func vendorSecretID(vendorID, field string) string {
 	return paymentSecretID("vendor", vendorID, field)
 }
 
-// DriverSecretID builds the secret ID for a driver payment field.
-// Format: prod-driver-payment-<driverId>-<field>
+// driverSecretID builds the secret ID for a driver payment field.
+// Format: <env>-homechef-driver-payment-<driverId>-<field>
 func driverSecretID(driverID, field string) string {
 	return paymentSecretID("driver", driverID, field)
 }
 
 // paymentSecretID builds the full secret ID.
-// Format: <env>-<role>-payment-<entityId>-<field>
+// Format: <env>-<product>-<role>-payment-<entityId>-<field>
 func paymentSecretID(role, entityID, field string) string {
 	env := "prod"
 	if config.IsDevelopment() {
 		env = "dev"
 	}
-	return fmt.Sprintf("%s-%s-payment-%s-%s", env, role, entityID, field)
+	return fmt.Sprintf("%s-%s-%s-payment-%s-%s", env, ProductPrefix, role, entityID, field)
 }
 
 // StoreVendorSecret creates or updates a secret for a vendor's payment field.

@@ -17,13 +17,16 @@ const BFF_URL = (() => {
   return '/bff';
 })();
 
+// WebSockets go to same-origin /ws/notifications, which the Istio
+// VirtualService forwards directly to homechef-api with a 3600s upgrade
+// timeout. /bff/ can't proxy WS upgrades (Node/Express limitation).
 function getWSUrl(accessToken: string | null): string {
-  const base = BFF_URL.replace(/^http/, 'ws');
-  // Browsers can't set Authorization headers on WebSocket handshakes, so for
-  // JWT (email/password) sessions we pass the token via query param. The
-  // backend only honors ?token= on Upgrade: websocket requests.
+  const origin =
+    typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? window.location.origin.replace(/^http/, 'ws')
+      : 'ws://localhost:8080';
   const qs = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
-  return `${base}/api/v1/notifications/ws${qs}`;
+  return `${origin}/ws/notifications${qs}`;
 }
 
 async function readAccessToken(): Promise<string | null> {

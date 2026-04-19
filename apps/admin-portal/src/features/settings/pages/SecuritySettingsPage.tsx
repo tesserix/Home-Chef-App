@@ -368,7 +368,7 @@ function TwoFactorSection() {
   const [disabling, setDisabling] = useState(false);
 
   const startEnroll = useMutation({
-    mutationFn: () => apiClient.post<EnrollPayload>('/security/2fa/enroll'),
+    mutationFn: () => apiClient.post<EnrollPayload>('/security/totp/enroll'),
     onSuccess: (payload) => setEnroll(payload),
     onError: (err) => {
       const e = err as Partial<ApiError>;
@@ -376,7 +376,7 @@ function TwoFactorSection() {
     },
   });
   const confirmEnroll = useMutation({
-    mutationFn: () => apiClient.post('/security/2fa/confirm', { code }),
+    mutationFn: () => apiClient.post('/security/totp/confirm', { code }),
     onSuccess: () => {
       setEnroll(null);
       setCode('');
@@ -390,7 +390,7 @@ function TwoFactorSection() {
   });
   const disable = useMutation({
     mutationFn: () =>
-      apiClient.post('/security/2fa/disable', { password: disablePwd, code: disableCode }),
+      apiClient.post('/security/totp/disable', { password: disablePwd, code: disableCode }),
     onSuccess: () => {
       setDisabling(false);
       setDisablePwd('');

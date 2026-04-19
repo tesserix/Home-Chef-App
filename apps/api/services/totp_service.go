@@ -32,7 +32,9 @@ func totpSecretName(userID uuid.UUID) string {
 	if config.IsDevelopment() {
 		env = "dev"
 	}
-	return fmt.Sprintf("%s-totp-user-%s", env, userID.String())
+	// Product-scoped so it can't collide with another app storing TOTP
+	// secrets in the same GCP project.
+	return fmt.Sprintf("%s-%s-totp-user-%s", env, ProductPrefix, userID.String())
 }
 
 // TOTPEnrollment is what EnrollTOTP returns so the admin can finish setup.

@@ -25,13 +25,14 @@ const razorpayBaseURL = "https://api.razorpay.com/v1"
 // (e.g. someone bumping the secret version via gcloud).
 const razorpayCacheTTL = 5 * time.Minute
 
-// Razorpay credentials live in three GCP Secret Manager secrets. These names
-// are the source of truth for both reads (GetRazorpay) and writes (admin
-// UpdatePaymentGatewayKeys handler).
+// Razorpay credentials live in three GCP Secret Manager secrets. Names are
+// product-scoped ("homechef-") so they don't collide with other products
+// sharing project tesseracthub-480811. These are the source of truth for
+// both reads (GetRazorpay) and writes (admin UpdatePaymentGatewayKeys).
 const (
-	secretRazorpayKeyID         = "prod-razorpay-key-id"
-	secretRazorpayKeySecret     = "prod-razorpay-key-secret"
-	secretRazorpayWebhookSecret = "prod-razorpay-webhook-secret"
+	secretRazorpayKeyID         = "prod-homechef-razorpay-key-id"
+	secretRazorpayKeySecret     = "prod-homechef-razorpay-key-secret"
+	secretRazorpayWebhookSecret = "prod-homechef-razorpay-webhook-secret"
 )
 
 // RazorpayClient handles all Razorpay API interactions.

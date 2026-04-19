@@ -130,7 +130,7 @@ export const authService = {
 
   /** Complete 2FA login by submitting the 6-digit TOTP code. */
   async verifyTotp(challengeToken: string, code: string) {
-    const res = await fetch('/api/v1/auth/2fa/verify', {
+    const res = await fetch('/api/v1/auth/totp/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ challengeToken, code }),
@@ -146,7 +146,7 @@ export const authService = {
 
   /** Begin TOTP enrollment during a forced-enrollment login flow. */
   async enrollTotpDuringLogin(enrollmentToken: string) {
-    const res = await fetch('/api/v1/auth/2fa/enroll-start', {
+    const res = await fetch('/api/v1/auth/totp/enroll-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enrollmentToken }),
@@ -158,7 +158,7 @@ export const authService = {
 
   /** Complete forced enrollment; returns real session tokens. */
   async confirmTotpDuringLogin(enrollmentToken: string, code: string) {
-    const res = await fetch('/api/v1/auth/2fa/enroll-verify', {
+    const res = await fetch('/api/v1/auth/totp/enroll-verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enrollmentToken, code }),

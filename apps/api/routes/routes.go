@@ -85,6 +85,18 @@ func SetupRouter() *gin.Engine {
 	// Provider webhooks (public, verified by webhook secret)
 	r.POST("/webhooks/delivery/:provider", providerHandler.HandleWebhook)
 
+	// WebSocket endpoints live at top-level /ws/* so the per-portal Istio
+	// VirtualServices (fe3dr.com, vendors.fe3dr.com, admin.fe3dr.com, …)
+	// can route /ws/ directly to the API at the 3600s upgrade timeout,
+	// bypassing the auth-bff which can't proxy WS upgrades. Auth on these
+	// endpoints uses the same middleware; JWT comes in via ?token=.
+	wsGroup := r.Group("/ws")
+	wsGroup.Use(middleware.AuthMiddleware())
+	{
+		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
+		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
+	}
+
 	// API v1 routes
 	v1 := r.Group("/api/v1")
 	{
@@ -125,19 +137,22 @@ func SetupRouter() *gin.Engine {
 			// Password policy (public — clients use it to render live rules)
 			auth.GET("/password-policy", securityHandler.GetPasswordPolicy)
 
-			// 2FA — login-flow continuation & forced enrollment
-			auth.POST("/2fa/verify", securityHandler.VerifyTOTP)
-			auth.POST("/2fa/enroll-start", securityHandler.ForcedEnrollTOTPStart)
-			auth.POST("/2fa/enroll-verify", securityHandler.ForcedEnrollTOTPVerify)
+			// 2FA (TOTP) login-flow continuation & forced enrollment.
+			// Path segment is "totp" rather than "2fa" because the auth-bff
+			// in front of our API reserves /*/2fa/* for its own (Keycloak-
+			// backed) TOTP handling — anything under /2fa/ never reaches us.
+			auth.POST("/totp/verify", securityHandler.VerifyTOTP)
+			auth.POST("/totp/enroll-start", securityHandler.ForcedEnrollTOTPStart)
+			auth.POST("/totp/enroll-verify", securityHandler.ForcedEnrollTOTPVerify)
 		}
 
-		// 2FA — management endpoints for already-authenticated users
+		// Authenticated-user security endpoints: own-sessions + TOTP setup.
 		security := v1.Group("/security")
 		security.Use(middleware.AuthMiddleware())
 		{
-			security.POST("/2fa/enroll", securityHandler.StartTOTPEnrollment)
-			security.POST("/2fa/confirm", securityHandler.VerifyTOTPEnrollment)
-			security.POST("/2fa/disable", securityHandler.DisableTOTP)
+			security.POST("/totp/enroll", securityHandler.StartTOTPEnrollment)
+			security.POST("/totp/confirm", securityHandler.VerifyTOTPEnrollment)
+			security.POST("/totp/disable", securityHandler.DisableTOTP)
 
 			security.GET("/sessions", securityHandler.ListMySessions)
 			security.DELETE("/sessions/:sessionId", securityHandler.RevokeMySession)
