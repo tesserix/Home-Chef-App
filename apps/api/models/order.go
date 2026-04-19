@@ -90,9 +90,15 @@ type Order struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// Relationships
-	Customer Customer    `gorm:"foreignKey:CustomerID;references:ID" json:"customer,omitempty"`
-	Chef     ChefProfile `gorm:"foreignKey:ChefID" json:"chef,omitempty"`
+	// Customer/Chef are loadable for handlers that need to render names
+	// or look up profile fields, but NEVER serialized as raw User/ChefProfile
+	// structs. Inlining them previously leaked the customer's
+	// EmailVerified/PhoneVerified/TOTPEnabled/AuthProvider/LastLoginAt to
+	// any chef who fetched the order, and the chef's profile to the
+	// customer. Handlers must add explicit name/email fields they want to
+	// expose (the admin orders endpoint already does this via customerName).
+	Customer Customer    `gorm:"foreignKey:CustomerID;references:ID" json:"-"`
+	Chef     ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
 	Items    []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
 	Delivery *Delivery   `gorm:"foreignKey:OrderID" json:"delivery,omitempty"`
 	Review   *Review     `gorm:"foreignKey:OrderID" json:"review,omitempty"`

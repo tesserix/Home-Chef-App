@@ -159,13 +159,16 @@ func (h *SupportHandler) GetTicket(c *gin.Context) {
 	var ticket models.SupportTicket
 	if err := database.DB.Preload("Messages", "is_internal = ?", false).
 		Preload("Messages.Sender").
+		Preload("Reporter").
 		Where("id = ? AND reporter_id = ?", ticketID, userID).
 		First(&ticket).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Ticket not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, ticket)
+	// includeInternal=false because this is the reporter's view; admin
+	// notes never reach the customer.
+	c.JSON(http.StatusOK, ticket.ToResponse(false))
 }
 
 // AddMessage adds a message to a ticket.
@@ -303,8 +306,12 @@ func (h *SupportHandler) AdminGetTickets(c *gin.Context) {
 		return
 	}
 
+	out := make([]models.SupportTicketResponse, 0, len(tickets))
+	for i := range tickets {
+		out = append(out, tickets[i].ToResponse(true))
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"data": tickets,
+		"data": out,
 		"pagination": gin.H{
 			"page":       page,
 			"limit":      limit,
@@ -329,7 +336,8 @@ func (h *SupportHandler) AdminGetTicket(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, ticket)
+	// Admin view — internal notes included.
+	c.JSON(http.StatusOK, ticket.ToResponse(true))
 }
 
 // AdminAssignTicket assigns a ticket to an admin staff member.

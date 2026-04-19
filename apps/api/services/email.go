@@ -190,6 +190,23 @@ func (s *EmailService) SendEmailVerification(to, firstName, verifyURL string) er
 	return s.send(to, subject, html)
 }
 
+// SendAccountReminderEmail tells an existing user that someone (possibly
+// them) tried to register with their email. The message is intentionally
+// neutral so the recipient learns about it without confirming to a
+// third party that the account exists.
+func (s *EmailService) SendAccountReminderEmail(to, firstName string) error {
+	loginURL := "https://fe3dr.com/login"
+	resetURL := "https://fe3dr.com/forgot-password"
+	subject := "You already have a Fe3dr HomeChef account"
+	html := fmt.Sprintf(`<p>Hi %s,</p>
+<p>Someone (possibly you) just tried to create a Fe3dr HomeChef account with this email,
+but you already have one. You can <a href="%s">sign in here</a>.</p>
+<p>If you've forgotten your password, <a href="%s">reset it here</a>.</p>
+<p>If this wasn't you, you can safely ignore this email — no changes were made.</p>
+<p>— Fe3dr HomeChef</p>`, firstName, loginURL, resetURL)
+	return s.send(to, subject, html)
+}
+
 // SendStaffInvitation sends a branded staff invitation email
 func (s *EmailService) SendStaffInvitation(to, inviterName, role, acceptURL string) error {
 	subject, html := StaffInvitationHTML(inviterName, role, acceptURL)

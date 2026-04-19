@@ -49,7 +49,16 @@ type AuthResponse struct {
 	RefreshToken string              `json:"refreshToken"`
 }
 
-// Register creates a new user account
+// Register creates a new user account.
+//
+// To prevent email enumeration we return the same generic 202 response
+// regardless of whether the email is new or already registered. New
+// accounts get a verification email; existing accounts get a "you already
+// have an account, sign in here" reminder. Tokens are NOT issued inline —
+// the user must verify their email and then log in. This costs one extra
+// step on first login but removes the classic 409 vs 201 oracle that lets
+// anonymous attackers harvest valid platform emails for credential
+// stuffing or targeted phishing.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,29 +66,40 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Check if email already exists
-	var existingUser models.User
-	if err := database.DB.Where("email = ?", strings.ToLower(req.Email)).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
-		return
-	}
-
-	// Enforce the currently configured platform password policy.
+	// Validate the password against the platform policy first so any
+	// signal we expose is independent of whether the email exists.
 	if err := services.ValidatePasswordAgainstPolicy(req.Password); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Hash password
+	genericResp := gin.H{
+		"message": "If your email is new, we've sent a verification link. If you already have an account, check your inbox for a sign-in reminder.",
+	}
+
+	emailLower := strings.ToLower(req.Email)
+	var existing models.User
+	emailExists := database.DB.Where("email = ?", emailLower).First(&existing).Error == nil
+
+	if emailExists {
+		// Don't recreate the row, don't change the password, don't update
+		// any field. Just send a "you already have an account" email
+		// asynchronously and return the same shape as a fresh signup.
+		go func() {
+			services.GetEmailService().SendAccountReminderEmail(existing.Email, existing.FirstName)
+		}()
+		c.JSON(http.StatusAccepted, genericResp)
+		return
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
 		return
 	}
 
-	// Create user
 	user := models.User{
-		Email:        strings.ToLower(req.Email),
+		Email:        emailLower,
 		Password:     string(hashedPassword),
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
@@ -88,18 +108,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		AuthProvider: models.ProviderEmail,
 		IsActive:     true,
 	}
-
 	if err := database.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 
-	// Send welcome email + verification email asynchronously
+	// Send welcome + verification emails asynchronously.
 	go func() {
 		emailSvc := services.GetEmailService()
 		emailSvc.SendWelcomeEmail(user.Email, user.FirstName)
 
-		// Generate email verification token (24h expiry)
 		verifyToken := make([]byte, 32)
 		if _, err := rand.Read(verifyToken); err == nil {
 			tokenHex := hex.EncodeToString(verifyToken)
@@ -116,18 +134,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		}
 	}()
 
-	// Generate tokens
-	accessToken, refreshToken, err := middleware.GenerateTokensWithContext(&user, c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, AuthResponse{
-		User:         user.ToResponse(),
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	})
+	c.JSON(http.StatusAccepted, genericResp)
 }
 
 // Login authenticates a user and returns tokens

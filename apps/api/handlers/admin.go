@@ -555,7 +555,10 @@ func (h *AdminHandler) GetAllOrders(c *gin.Context) {
 	})
 }
 
-// GetOrderDetails returns a single order with all details
+// GetOrderDetails returns a single order with all details. Customer and
+// Chef are NOT serialized inline (they're json:"-" on the Order model so
+// admin views can't accidentally leak the customer's 2FA state or auth
+// provider); a hand-picked subset is added next to the order body.
 func (h *AdminHandler) GetOrderDetails(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -569,7 +572,24 @@ func (h *AdminHandler) GetOrderDetails(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, order)
+	customer := gin.H{
+		"id":        order.Customer.ID,
+		"name":      strings.TrimSpace(order.Customer.FirstName + " " + order.Customer.LastName),
+		"email":     order.Customer.Email,
+		"phone":     order.Customer.Phone,
+		"createdAt": order.Customer.CreatedAt,
+	}
+	chef := gin.H{
+		"id":           order.Chef.ID,
+		"businessName": order.Chef.BusinessName,
+		"city":         order.Chef.City,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"order":    order,
+		"customer": customer,
+		"chef":     chef,
+	})
 }
 
 // GetAnalytics returns platform analytics

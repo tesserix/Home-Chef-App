@@ -226,7 +226,11 @@ func (s *StaffMember) ToResponse() StaffMemberResponse {
 	return resp
 }
 
-func (i *StaffInvitation) ToResponse(baseURL string) StaffInvitationResponse {
+// ToResponse builds the public DTO. The accept URL contains a live token
+// and must NOT appear in list responses where any staff reader could
+// harvest it; pass includeURL=true only on the immediate-after-create
+// response so the inviter can copy the link once.
+func (i *StaffInvitation) ToResponse(baseURL string, includeURL bool) StaffInvitationResponse {
 	resp := StaffInvitationResponse{
 		ID:         i.ID,
 		Email:      i.Email,
@@ -239,7 +243,7 @@ func (i *StaffInvitation) ToResponse(baseURL string) StaffInvitationResponse {
 		AcceptedAt: i.AcceptedAt,
 		CreatedAt:  i.CreatedAt,
 	}
-	if i.Status == InvitationPending {
+	if includeURL && i.Status == InvitationPending {
 		resp.InviteURL = baseURL + "/invite/accept?token=" + i.Token
 	}
 	if i.InvitedBy.ID != uuid.Nil {

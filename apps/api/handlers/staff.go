@@ -339,7 +339,7 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 		}
 	}()
 
-	c.JSON(http.StatusCreated, invitation.ToResponse(baseURL))
+	c.JSON(http.StatusCreated, invitation.ToResponse(baseURL, true))
 }
 
 // ListInvitations returns all staff invitations
@@ -378,7 +378,7 @@ func (h *StaffHandler) ListInvitations(c *gin.Context) {
 
 	responses := make([]models.StaffInvitationResponse, len(invitations))
 	for i, inv := range invitations {
-		responses[i] = inv.ToResponse(baseURL)
+		responses[i] = inv.ToResponse(baseURL, false)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -443,7 +443,7 @@ func (h *StaffHandler) ResendInvitation(c *gin.Context) {
 		baseURL = "https://admin.fe3dr.com"
 	}
 
-	c.JSON(http.StatusOK, invitation.ToResponse(baseURL))
+	c.JSON(http.StatusOK, invitation.ToResponse(baseURL, true))
 }
 
 // AcceptInvitation accepts an invitation (public endpoint, called after login)
