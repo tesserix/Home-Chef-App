@@ -97,12 +97,13 @@ export default function CheckoutPage() {
     setIsProcessing(true);
 
     try {
-      // Step 1: Create order
+      // Step 1: Create order. paymentMethodId is omitted — it's a UUID
+      // reference to a saved card in the payment_methods table, not a
+      // gateway name. The actual Razorpay handoff happens in step 2.
       const order = await apiClient.post<Order>('/orders', {
         items: cart.items,
         chefId: cart.chefId,
         deliveryAddressId: selectedAddress,
-        paymentMethodId: 'razorpay',
         tip,
         specialInstructions: specialInstructions || undefined,
         scheduledFor: scheduledTime !== 'asap' ? scheduledTime : undefined,
