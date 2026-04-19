@@ -55,8 +55,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkOnboarding = async () => {
       try {
+        // Attach the API-issued JWT (email/password login) the same way
+        // api-client does. Without this header, the BFF returns 401 for users
+        // who logged in with email/password (no Keycloak cookie session),
+        // which used to cascade into AuthProvider routing them back to
+        // /onboarding forever.
+        const { accessToken } = useAuthStore.getState();
+        const headers: Record<string, string> = {};
+        if (accessToken) headers['X-Auth-Token'] = accessToken;
+
         const res = await fetch(`${BFF_URL}/api/v1/chef/onboarding/status`, {
           credentials: 'include',
+          headers,
         });
         if (!res.ok) {
           setNeedsOnboarding(true);
