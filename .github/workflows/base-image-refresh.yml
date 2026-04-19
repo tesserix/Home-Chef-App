@@ -1,0 +1,48 @@
+name: Base Image Refresh
+
+# Fired by tesserix/base-docker-images when a weekly rebuild publishes
+# new tesserix base images (repository_dispatch event
+# `tesserix-base-images-updated`). Rebuilds every HomeChef image against
+# the refreshed bases so CVE fixes at the base layer propagate here
+# without any per-service PRs.
+#
+# Manual trigger (workflow_dispatch) is kept for operators who want to
+# force a rebuild outside the weekly cadence.
+
+on:
+  repository_dispatch:
+    types: [tesserix-base-images-updated]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  rebuild:
+    name: Rebuild HomeChef on new base images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow:
+          - homechef-api-build.yml
+          - homechef-web-build.yml
+          - homechef-admin-portal-build.yml
+          - homechef-vendor-portal-build.yml
+          - homechef-delivery-portal-build.yml
+    steps:
+      - name: Log trigger context
+        run: |
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Dispatching: ${{ matrix.workflow }}"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Client payload: ${{ toJson(github.event.client_payload) }}"
+          fi
+
+      - name: Dispatch ${{ matrix.workflow }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run ${{ matrix.workflow }} --repo ${{ github.repository }} --ref main

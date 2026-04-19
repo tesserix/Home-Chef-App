@@ -1,42 +1,26 @@
-# Build stage
-FROM golang:1.26.1-alpine AS builder
+# HomeChef API Dockerfile.
+# Builds on tesserix company-owned base images — non-root uid 10001,
+# tini PID 1, ca-certs + tzdata + wget/curl, and weekly upstream CVE
+# patches are all baked in the base.
 
+# ─── builder ────────────────────────────────────────────────────────────
+FROM ghcr.io/tesserix/base-go-builder:latest AS builder
+USER 0:0
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
-
-# Copy go mod file first
+# Copy go.mod first, plus go.sum if it exists. Generated when missing
+# by `go mod tidy` below.
 COPY go.mod ./
-
-# Copy go.sum if it exists, otherwise generate it
 COPY go.su[m] ./
-
-# Download dependencies and generate go.sum if missing
 RUN go mod download || go mod tidy
 
-# Copy source code
 COPY . .
+RUN go mod tidy \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/main .
 
-# Ensure dependencies are resolved
-RUN go mod tidy
-
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
-
-# Final stage
-FROM alpine:latest
-
-WORKDIR /app
-
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates tzdata
-
-# Copy binary from builder
-COPY --from=builder /app/main .
-
-# Expose port
+# ─── runtime ────────────────────────────────────────────────────────────
+FROM ghcr.io/tesserix/base-alpine-runtime:latest AS runtime
+COPY --from=builder --chown=10001:10001 /out/main /usr/local/bin/main
 EXPOSE 8080
-
-# Run the application
-CMD ["./main"]
+# base-alpine-runtime's ENTRYPOINT is already `tini --`.
+CMD ["/usr/local/bin/main"]

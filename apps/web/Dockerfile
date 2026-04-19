@@ -1,78 +1,58 @@
-# Build stage
+# HomeChef web SPA Dockerfile.
+# Build stage uses tesserix base-node-builder-22 (corepack + libc6-compat
+# pre-baked), runtime uses tesserix base-nginx-spa (nginx:1.29-alpine,
+# non-root uid 10001, envsubst templating, /health endpoint ready).
+#
 # NOTE: Build from monorepo root with: docker build -f apps/web/Dockerfile .
-FROM node:22-alpine AS builder
 
+# ─── builder ───────────────────────────────────────────────────────────
+FROM ghcr.io/tesserix/base-node-builder-22:latest AS builder
+USER 0:0
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@9 --activate
-
-# Copy monorepo root files needed for pnpm workspace
+# Monorepo root files required for pnpm workspace resolution.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-
-# Copy root .npmrc (pnpm reads from workspace root for registry config)
 COPY .npmrc ./
-
-# Copy web-specific .npmrc if it exists
 COPY apps/web/.npmrc* ./apps/web/
-
-# Copy web package.json
 COPY apps/web/package.json ./apps/web/
 
-# Install dependencies for web workspace only (with GitHub Packages auth)
+# BuildKit secret so the token never lands in a layer.
 RUN --mount=type=secret,id=npm_token \
     NPM_TOKEN=$(cat /run/secrets/npm_token) && \
     echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
     pnpm install --frozen-lockfile --filter @homechef/web... && \
     sed -i '/_authToken/d' .npmrc
 
-# Copy web source code
 COPY apps/web ./apps/web
-
 WORKDIR /app/apps/web
 
-# Build arguments
 ARG VITE_API_URL
 # VITE_BFF_URL is intentionally unset by default — when empty, the web app
 # falls back to same-origin /bff which is the correct production behaviour
 # (Istio rewrites /bff/* on fe3dr.com to the homechef-auth-bff service).
-# Setting it to https://identity.fe3dr.com (the Keycloak host) caused
-# "Invalid parameter: redirect_uri" because the BFF then derives its
-# OIDC redirect_uri from identity.fe3dr.com instead of fe3dr.com.
 ARG VITE_BFF_URL=
 ARG GIT_COMMIT
 ARG GIT_BRANCH
 ARG BUILD_DATE
 ARG VERSION
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_BFF_URL=$VITE_BFF_URL \
+    VITE_GIT_COMMIT=$GIT_COMMIT \
+    VITE_BUILD_DATE=$BUILD_DATE \
+    VITE_VERSION=$VERSION
 
-# Set environment variables for build
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_BFF_URL=$VITE_BFF_URL
-ENV VITE_GIT_COMMIT=$GIT_COMMIT
-ENV VITE_BUILD_DATE=$BUILD_DATE
-ENV VITE_VERSION=$VERSION
-
-# Build the application
 RUN pnpm build
 
-# Production stage
-FROM nginx:alpine
+# ─── runtime ───────────────────────────────────────────────────────────
+# base-nginx-spa: non-root uid 10001, envsubst on /etc/nginx/templates,
+# listens on 8080 by default. We keep the 80 port + API_URL templating.
+FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
 
-# Copy nginx config as template (envsubst resolves ${API_URL} at runtime)
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
-
-# Default API_URL if not set at runtime
 ENV API_URL=http://localhost:8080
 
-# Copy built assets from builder
-COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+COPY --from=builder --chown=10001:10001 /app/apps/web/dist /usr/share/nginx/html
 
-# Expose port
 EXPOSE 80
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
