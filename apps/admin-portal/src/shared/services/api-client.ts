@@ -22,9 +22,10 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  private async getCsrfToken(): Promise<string | null> {
+  private async getAuthState(): Promise<{ csrfToken: string | null; accessToken: string | null }> {
     const { useAuthStore } = await import('@/app/store/auth-store');
-    return useAuthStore.getState().csrfToken;
+    const state = useAuthStore.getState();
+    return { csrfToken: state.csrfToken, accessToken: state.accessToken };
   }
 
   private buildUrl(endpoint: string, params?: RequestOptions['params']): string {
@@ -49,12 +50,17 @@ class ApiClient {
     const { params, ...fetchOptions } = options;
     const url = this.buildUrl(endpoint, params);
 
-    const csrfToken = await this.getCsrfToken();
+    const { csrfToken, accessToken } = await this.getAuthState();
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
+
+    // Add Bearer token for API-issued JWT auth (email/password login)
+    if (accessToken) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+    }
 
     if (csrfToken && method !== 'GET') {
       (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;

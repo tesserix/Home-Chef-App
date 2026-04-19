@@ -79,45 +79,57 @@ type Claims struct {
 }
 
 // AuthMiddleware validates JWT tokens and sets user context.
-// Supports two authentication methods:
+// Supports three authentication methods:
 //  1. Authorization: Bearer <JWT> — traditional JWT from the app's own auth
-//  2. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
+//  2. ?token=<JWT> query param — only honored on WebSocket upgrade requests,
+//     because browsers cannot set custom headers on the WS handshake
+//  3. x-jwt-claim-sub header — trusted user ID from BFF proxy or Istio mesh
 //     (only accepted for internal mesh requests where the BFF already validated the session)
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 
-		// Try JWT-based auth first
+		tokenString := ""
 		if authHeader != "" {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) == 2 && parts[0] == "Bearer" {
-				tokenString := parts[1]
-				claims := &Claims{}
-				token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-					return []byte(config.AppConfig.JWTSecret), nil
-				})
+				tokenString = parts[1]
+			}
+		}
+		// WebSocket handshakes can't carry an Authorization header, so allow
+		// the JWT to ride in as ?token=... — but ONLY for WS upgrade requests
+		// to avoid tokens leaking into access logs / referer on normal traffic.
+		if tokenString == "" && strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
+			tokenString = c.Query("token")
+		}
 
-				if err == nil && token.Valid {
-					var user models.User
-					if err := database.DB.First(&user, "id = ?", claims.UserID).Error; err != nil {
-						c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
-						c.Abort()
-						return
-					}
-					if !user.IsActive {
-						c.JSON(http.StatusForbidden, gin.H{"error": "Account is suspended"})
-						c.Abort()
-						return
-					}
-					c.Set("userID", claims.UserID)
-					c.Set("userEmail", claims.Email)
-					c.Set("userRole", claims.Role)
-					c.Set("user", &user)
-					c.Next()
+		// Try JWT-based auth first
+		if tokenString != "" {
+			claims := &Claims{}
+			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				return []byte(config.AppConfig.JWTSecret), nil
+			})
+
+			if err == nil && token.Valid {
+				var user models.User
+				if err := database.DB.First(&user, "id = ?", claims.UserID).Error; err != nil {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+					c.Abort()
 					return
 				}
-				// JWT parsing failed — fall through to x-jwt-claim-sub
+				if !user.IsActive {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Account is suspended"})
+					c.Abort()
+					return
+				}
+				c.Set("userID", claims.UserID)
+				c.Set("userEmail", claims.Email)
+				c.Set("userRole", claims.Role)
+				c.Set("user", &user)
+				c.Next()
+				return
 			}
+			// JWT parsing failed — fall through to x-jwt-claim-sub
 		}
 
 		// Fallback: trust x-jwt-claim-sub from BFF proxy / Istio mesh

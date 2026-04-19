@@ -17,9 +17,18 @@ const BFF_URL = (() => {
   return '/bff';
 })();
 
-function getWSUrl(): string {
+function getWSUrl(accessToken: string | null): string {
   const base = BFF_URL.replace(/^http/, 'ws');
-  return `${base}/api/v1/notifications/ws`;
+  // Browsers can't set Authorization headers on WebSocket handshakes, so for
+  // JWT (email/password) sessions we pass the token via query param. The
+  // backend only honors ?token= on Upgrade: websocket requests.
+  const qs = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
+  return `${base}/api/v1/notifications/ws${qs}`;
+}
+
+async function readAccessToken(): Promise<string | null> {
+  const { useAuthStore } = await import('@/app/store/auth-store');
+  return useAuthStore.getState().accessToken;
 }
 
 /**
@@ -36,8 +45,12 @@ export function useNotificationsWS(enabled = true) {
 
   const pollUnreadCount = useCallback(async () => {
     try {
+      const accessToken = await readAccessToken();
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
       const res = await fetch(`${BFF_URL}/api/v1/notifications/unread-count`, {
         credentials: 'include',
+        headers,
       });
       if (res.ok) {
         const data = await res.json();
@@ -48,11 +61,12 @@ export function useNotificationsWS(enabled = true) {
     }
   }, []);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (!enabled || wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      const ws = new WebSocket(getWSUrl());
+      const accessToken = await readAccessToken();
+      const ws = new WebSocket(getWSUrl(accessToken));
       wsRef.current = ws;
 
       ws.onopen = () => {
