@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,38 +31,37 @@ const addressSchema = z.object({
 
 type AddressFormData = z.infer<typeof addressSchema>;
 
-const SAVED_ADDRESSES: Address[] = [
-  {
-    id: '1',
-    userId: '1',
-    label: 'Home',
-    line1: '123 Main Street',
-    line2: 'Apt 4B',
-    city: 'San Francisco',
-    state: 'CA',
-    postalCode: '94102',
-    country: 'USA',
-    isDefault: true,
-  },
-  {
-    id: '2',
-    userId: '1',
-    label: 'Work',
-    line1: '456 Market Street',
-    city: 'San Francisco',
-    state: 'CA',
-    postalCode: '94105',
-    country: 'USA',
-    isDefault: false,
-  },
-];
+// Saved addresses come from /api/v1/addresses (see useQuery below). The old
+// hardcoded list shipped mock ids "1" and "2" which the backend rejected at
+// order creation with "invalid UUID length" because deliveryAddressId is a
+// UUID column. Fetching the real records means the selected id is a valid
+// UUID that the API can actually look up.
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const cart = useCartStore();
   const fp = useFormatPrice();
-  const [selectedAddress, setSelectedAddress] = useState<string>(SAVED_ADDRESSES[0]?.id || '');
+  const queryClient = useQueryClient();
+  const { data: savedAddresses = [] } = useQuery({
+    queryKey: ['addresses'],
+    queryFn: () => apiClient.get<Address[]>('/addresses'),
+  });
+
+  const [selectedAddress, setSelectedAddress] = useState<string>('');
+  // Default to the user's default address (or the first one) as soon as
+  // the list loads. Resets if the previously-selected id disappears.
+  useEffect(() => {
+    if (!savedAddresses.length) {
+      if (selectedAddress) setSelectedAddress('');
+      return;
+    }
+    const exists = savedAddresses.some((a) => a.id === selectedAddress);
+    if (!exists) {
+      const preferred = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
+      if (preferred) setSelectedAddress(preferred.id);
+    }
+  }, [savedAddresses, selectedAddress]);
   const [showNewAddress, setShowNewAddress] = useState(false);
   const [scheduledTime, setScheduledTime] = useState<string>('asap');
   const [tip, setTip] = useState<number>(0);
@@ -162,20 +162,22 @@ export default function CheckoutPage() {
     }
   };
 
-  const onAddressSubmit = (data: AddressFormData) => {
-    // In a real app, this would save to the API
-    const newAddress: Address = {
-      id: `new_${Date.now()}`,
-      userId: user?.id || '',
-      ...data,
-      country: 'USA',
-      isDefault: false,
-    };
-    SAVED_ADDRESSES.push(newAddress);
-    setSelectedAddress(newAddress.id);
-    setShowNewAddress(false);
-    reset();
-    toast.success('Address saved');
+  const onAddressSubmit = async (data: AddressFormData) => {
+    try {
+      const created = await apiClient.post<Address>('/addresses', {
+        ...data,
+        country: 'IN',
+        isDefault: false,
+      });
+      // Refresh the list + select the brand-new one.
+      await queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      setSelectedAddress(created.id);
+      setShowNewAddress(false);
+      reset();
+      toast.success('Address saved');
+    } catch {
+      toast.error('Failed to save address');
+    }
   };
 
   if (cart.items.length === 0) {
@@ -275,9 +277,13 @@ export default function CheckoutPage() {
                     Save Address
                   </button>
                 </form>
+              ) : savedAddresses.length === 0 ? (
+                <div className="mt-4 rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+                  You don't have any saved addresses yet. Add one to continue.
+                </div>
               ) : (
                 <div className="mt-4 space-y-3">
-                  {SAVED_ADDRESSES.map((address) => (
+                  {savedAddresses.map((address) => (
                     <label
                       key={address.id}
                       className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
