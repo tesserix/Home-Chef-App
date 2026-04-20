@@ -118,6 +118,15 @@ type DeliveryPartner struct {
 	// Payment gateway linked accounts
 	StripeAccountID    string `gorm:"" json:"-"`
 	RazorpayAccountID  string `gorm:"" json:"-"` // Razorpay Route linked account ID
+	// PaymentProvider controls how earnings are paid out. "razorpay" (India)
+	// or "stripe" (international). Defaults to razorpay so existing driver
+	// rows behave identically after the column is added.
+	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
+	// onboarding and currency selection. Unused for Razorpay drivers.
+	PayoutCountry        string `gorm:"type:varchar(2);default:'IN'" json:"payoutCountry"`
+	StripeChargesEnabled bool   `gorm:"default:false" json:"stripeChargesEnabled"`
+	StripePayoutsEnabled bool   `gorm:"default:false" json:"stripePayoutsEnabled"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`

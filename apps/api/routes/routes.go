@@ -131,6 +131,11 @@ func SetupRouter() *gin.Engine {
 			currencies.GET("/detect", currencyHandler.DetectCurrency)
 		}
 
+		// Tax rate lookup (public — used by checkout to preview tax line
+		// before the order is created)
+		taxHandler := handlers.NewTaxHandler()
+		v1.GET("/tax-rates/lookup", taxHandler.GetPublicTaxRate)
+
 		// Auth routes (public)
 		auth := v1.Group("/auth")
 		{
@@ -426,6 +431,14 @@ func SetupRouter() *gin.Engine {
 			delivery.GET("/earnings", deliveryHandler.GetEarnings)
 			delivery.POST("/documents", deliveryHandler.UploadPartnerDocument)
 			delivery.GET("/documents", deliveryHandler.GetPartnerDocuments)
+
+			// Stripe Connect onboarding for international drivers. Same
+			// handler type as the chef version — different endpoints.
+			driverStripeHandler := handlers.NewStripeConnectHandler()
+			delivery.POST("/stripe/connect", driverStripeHandler.CreateDriverStripeAccount)
+			delivery.GET("/stripe/status", driverStripeHandler.GetDriverStripeStatus)
+			delivery.POST("/stripe/onboarding-link", driverStripeHandler.RefreshDriverOnboardingLink)
+			delivery.PUT("/payment-provider", driverStripeHandler.SetDriverPaymentProvider)
 		}
 
 		// Chef promotion routes (featured ads)
@@ -548,6 +561,12 @@ func SetupRouter() *gin.Engine {
 			// Payment gateway — Stripe (international)
 			admin.GET("/payment-gateway/stripe/status", adminHandler.GetStripeGatewayStatus)
 			admin.PUT("/payment-gateway/stripe/keys", adminHandler.UpdateStripeGatewayKeys)
+
+			// Tax rule CRUD — per-country, optional per-region rules used
+			// by the order pipeline and rendered on the invoice.
+			admin.GET("/tax-rates", taxHandler.AdminListTaxRates)
+			admin.POST("/tax-rates", taxHandler.AdminUpsertTaxRate)
+			admin.DELETE("/tax-rates/:id", taxHandler.AdminDeleteTaxRate)
 
 			// Security policy + API keys
 			admin.GET("/security/policy", securityHandler.AdminGetSecurityPolicy)

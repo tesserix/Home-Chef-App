@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -657,6 +658,56 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 					log.Printf("Failed to generate order invoice for order %s: %v", delivery.OrderID, err)
 				}
 			}
+		}()
+
+		// Settle the driver's share. Razorpay orders already split on-hold
+		// transfers at charge time (see payment handler), so Razorpay's
+		// normal reconciliation flow handles it. Stripe orders need a
+		// follow-up Transfer from the platform's balance to the driver's
+		// Connect account — this is where it fires.
+		go func() {
+			var order models.Order
+			if err := database.DB.First(&order, delivery.OrderID).Error; err != nil {
+				return
+			}
+			if strings.ToLower(order.PaymentProvider) != "stripe" {
+				return
+			}
+			if partner.StripeAccountID == "" || !partner.StripePayoutsEnabled {
+				log.Printf("driver payout skipped for order %s: driver Stripe not ready", order.OrderNumber)
+				return
+			}
+			driverAmount := delivery.DeliveryFee + delivery.Tip
+			if driverAmount <= 0 {
+				return
+			}
+			st := services.GetStripe()
+			if st == nil {
+				log.Printf("driver payout skipped for order %s: stripe client unavailable", order.OrderNumber)
+				return
+			}
+			currency := strings.ToLower(order.Currency)
+			if currency == "" {
+				currency = "inr"
+			}
+			tr, err := st.CreateTransfer(&services.StripeTransferRequest{
+				Amount:        services.ToMinor(driverAmount, currency),
+				Currency:      currency,
+				Destination:   partner.StripeAccountID,
+				TransferGroup: "order_" + order.ID.String(),
+				Description:   "Driver payout for order " + order.OrderNumber,
+				Metadata: map[string]string{
+					"order_id":    order.ID.String(),
+					"order_num":   order.OrderNumber,
+					"delivery_id": delivery.ID.String(),
+					"driver_id":   partner.ID.String(),
+				},
+			})
+			if err != nil {
+				log.Printf("Stripe driver transfer failed for order %s: %v", order.OrderNumber, err)
+				return
+			}
+			log.Printf("Stripe driver transfer %s created for order %s (%.2f %s)", tr.ID, order.OrderNumber, driverAmount, strings.ToUpper(currency))
 		}()
 
 	case models.DeliveryCancelled:

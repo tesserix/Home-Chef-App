@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -132,6 +133,8 @@ type ChefProfileResponse struct {
 	KitchenPhotos   []string               `json:"kitchenPhotos"`
 	City            string                 `json:"city"`
 	State           string                 `json:"state"`
+	Country         string                 `json:"country"` // chef's PayoutCountry (ISO alpha-2)
+	Currency        string                 `json:"currency"` // ISO-4217, derived from country
 	Latitude        float64                `json:"latitude"`
 	Longitude       float64                `json:"longitude"`
 	OperatingHours  map[string]interface{} `json:"operatingHours,omitempty"`
@@ -167,6 +170,15 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		kitchenPhotos = c.KitchenPhotos
 	}
 
+	country := c.PayoutCountry
+	if country == "" {
+		country = "IN"
+	}
+	// currencyForCountryLocal keeps this model file free of service-layer
+	// imports (avoids a circular dep). The full map lives in
+	// services.CurrencyForCountry and should stay in sync — do NOT diverge.
+	currency := strings.ToUpper(currencyForCountryLocal(country))
+
 	return ChefProfileResponse{
 		ID:              c.ID,
 		UserID:          c.UserID,
@@ -191,9 +203,58 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		KitchenPhotos:   kitchenPhotos,
 		City:            c.City,
 		State:           c.State,
+		Country:         country,
+		Currency:        currency,
 		Latitude:        c.Latitude,
 		Longitude:       c.Longitude,
 		CreatedAt:       c.CreatedAt,
+	}
+}
+
+// currencyForCountryLocal mirrors services.CurrencyForCountry. It exists
+// here only so the model's ToResponse can derive a currency without
+// importing the services package (which would create a cycle —
+// services imports models).
+func currencyForCountryLocal(country string) string {
+	switch strings.ToUpper(country) {
+	case "US":
+		return "usd"
+	case "GB":
+		return "gbp"
+	case "CA":
+		return "cad"
+	case "AU":
+		return "aud"
+	case "NZ":
+		return "nzd"
+	case "SG":
+		return "sgd"
+	case "HK":
+		return "hkd"
+	case "AE":
+		return "aed"
+	case "JP":
+		return "jpy"
+	case "KR":
+		return "krw"
+	case "MY":
+		return "myr"
+	case "TH":
+		return "thb"
+	case "CH":
+		return "chf"
+	case "SE":
+		return "sek"
+	case "NO":
+		return "nok"
+	case "DK":
+		return "dkk"
+	case "DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "IE", "FI", "GR", "LU", "SK", "SI", "EE", "LV", "LT", "CY", "MT":
+		return "eur"
+	case "IN", "":
+		return "inr"
+	default:
+		return "inr"
 	}
 }
 

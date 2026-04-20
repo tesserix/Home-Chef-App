@@ -301,6 +301,57 @@ func (c *StripeClient) FetchPaymentIntent(id string) (*StripePaymentIntent, erro
 	return &result, nil
 }
 
+// --- Transfers (for driver payouts once delivery is confirmed) ---
+
+// StripeTransferRequest moves money from the platform's Stripe balance
+// into a connected account. Used for driver payouts because we can't
+// split a single PaymentIntent across two destinations — the chef gets
+// the PaymentIntent's transfer_data target, and we settle the driver's
+// portion with a follow-up Transfer when delivery is confirmed.
+type StripeTransferRequest struct {
+	Amount        int
+	Currency      string
+	Destination   string // driver's acct_... Connect ID
+	TransferGroup string // order number or id so related txns group in dashboard
+	Description   string
+	Metadata      map[string]string
+}
+
+type StripeTransfer struct {
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Amount      int    `json:"amount"`
+	Currency    string `json:"currency"`
+	Destination string `json:"destination"`
+	Created     int64  `json:"created"`
+}
+
+func (c *StripeClient) CreateTransfer(req *StripeTransferRequest) (*StripeTransfer, error) {
+	form := url.Values{}
+	form.Set("amount", strconv.Itoa(req.Amount))
+	form.Set("currency", strings.ToLower(req.Currency))
+	form.Set("destination", req.Destination)
+	if req.TransferGroup != "" {
+		form.Set("transfer_group", req.TransferGroup)
+	}
+	if req.Description != "" {
+		form.Set("description", req.Description)
+	}
+	for k, v := range req.Metadata {
+		form.Set("metadata["+k+"]", v)
+	}
+
+	resp, err := c.doFormRequest("POST", "/transfers", form)
+	if err != nil {
+		return nil, err
+	}
+	var result StripeTransfer
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse transfer: %w", err)
+	}
+	return &result, nil
+}
+
 // --- Refunds ---
 
 type StripeRefundRequest struct {

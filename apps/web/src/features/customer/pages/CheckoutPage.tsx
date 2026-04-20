@@ -69,11 +69,39 @@ export default function CheckoutPage() {
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+  // The currency of the amounts on this page is the chef's settlement
+  // currency — that's what the backend will charge the customer in. Falls
+  // back to INR so pre-multi-gateway chef profiles keep rendering.
+  const orderCurrency = (cart.chef as { currency?: string } | null)?.currency || 'INR';
+
+  // Tax rate preview comes from the public /tax-rates/lookup endpoint and
+  // is driven by the delivery address the customer selects. The real tax
+  // applied at order creation is recomputed server-side — this is just to
+  // keep the displayed total honest between address pick and checkout.
+  const selectedAddressObj = savedAddresses.find((a) => a.id === selectedAddress);
+  const taxCountry = (selectedAddressObj as { country?: string } | undefined)?.country || 'IN';
+  const taxRegion = (selectedAddressObj as { state?: string } | undefined)?.state || '';
+  const { data: taxRule } = useQuery({
+    queryKey: ['tax-rate', taxCountry, taxRegion],
+    queryFn: () =>
+      apiClient.get<{ rate: number; taxName: string; inclusive: boolean }>(
+        `/tax-rates/lookup?country=${encodeURIComponent(taxCountry)}&region=${encodeURIComponent(taxRegion)}`
+      ),
+    enabled: Boolean(taxCountry),
+  });
+
   const subtotal = cart.getSubtotal();
   const deliveryFee = cart.chef?.deliveryFee || 0;
   const serviceFee = subtotal * 0.05;
-  const tax = subtotal * 0.0875; // 8.75% tax
-  const total = subtotal + deliveryFee + serviceFee + tax + tip;
+  const rate = taxRule?.rate ?? 0;
+  const isInclusive = taxRule?.inclusive ?? false;
+  const taxBase = subtotal + deliveryFee + serviceFee;
+  const tax = isInclusive
+    ? taxBase - taxBase / (1 + rate / 100)
+    : taxBase * (rate / 100);
+  const total = isInclusive
+    ? subtotal + deliveryFee + serviceFee + tip
+    : subtotal + deliveryFee + serviceFee + tax + tip;
 
   const {
     register,
@@ -552,7 +580,7 @@ export default function CheckoutPage() {
                     <span className="text-gray-600">
                       {item.quantity}x {item.name}
                     </span>
-                    <span className="text-gray-900">{fp(item.price * item.quantity)}</span>
+                    <span className="text-gray-900">{fp(item.price * item.quantity, { currency: orderCurrency })}</span>
                   </div>
                 ))}
               </div>
@@ -561,31 +589,34 @@ export default function CheckoutPage() {
               <div className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
-                  <span>{fp(subtotal)}</span>
+                  <span>{fp(subtotal, { currency: orderCurrency })}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery fee</span>
-                  <span>{fp(deliveryFee)}</span>
+                  <span>{fp(deliveryFee, { currency: orderCurrency })}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Service fee</span>
-                  <span>{fp(serviceFee)}</span>
+                  <span>{fp(serviceFee, { currency: orderCurrency })}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Tax</span>
-                  <span>{fp(tax)}</span>
+                  <span>
+                    {taxRule?.taxName || 'Tax'}
+                    {rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''}
+                  </span>
+                  <span>{fp(tax, { currency: orderCurrency })}</span>
                 </div>
                 {tip > 0 && (
                   <div className="flex justify-between text-gray-600">
                     <span>Tip</span>
-                    <span>{fp(tip)}</span>
+                    <span>{fp(tip, { currency: orderCurrency })}</span>
                   </div>
                 )}
               </div>
 
               <div className="mt-4 flex justify-between border-t pt-4 text-lg font-semibold">
                 <span>Total</span>
-                <span>{fp(total)}</span>
+                <span>{fp(total, { currency: orderCurrency })}</span>
               </div>
 
               <button
@@ -600,7 +631,7 @@ export default function CheckoutPage() {
                   </>
                 ) : (
                   <>
-                    Place Order - {fp(total)}
+                    Place Order - {fp(total, { currency: orderCurrency })}
                     <ChevronRight className="ml-2 h-5 w-5" />
                   </>
                 )}

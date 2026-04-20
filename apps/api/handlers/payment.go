@@ -17,43 +17,10 @@ import (
 	"github.com/homechef/api/services"
 )
 
-// currencyForStripeCountry maps a Connect account's ISO-3166 alpha-2 country
-// to the currency Stripe expects on charges for that account. Stripe rejects
-// PaymentIntents whose currency doesn't match the connected account's
-// settlement currency, so we pick it based on PayoutCountry.
-//
-// IMPORTANT: Only two-decimal currencies are returned here. ToCents assumes
-// 2 decimals (multiplies by 100); adding zero-decimal currencies (JPY, KRW,
-// VND) or three-decimal (KWD, BHD, OMR) would require a currency-aware
-// conversion helper first. Countries with non-two-decimal currencies fall
-// back to INR so they are rejected cleanly by Stripe ("cannot create INR
-// charge for US-based account") rather than silently overcharging by 100×.
-func currencyForStripeCountry(country string) string {
-	switch strings.ToUpper(country) {
-	case "US":
-		return "usd"
-	case "GB":
-		return "gbp"
-	case "CA":
-		return "cad"
-	case "AU":
-		return "aud"
-	case "NZ":
-		return "nzd"
-	case "SG":
-		return "sgd"
-	case "HK":
-		return "hkd"
-	case "AE":
-		return "aed"
-	case "DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "IE", "FI", "GR", "LU":
-		return "eur"
-	case "IN", "":
-		return "inr"
-	default:
-		return "inr"
-	}
-}
+// Currency resolution lives in services.CurrencyForCountry; services.ToMinor
+// handles the currency-aware major→minor unit conversion (2 decimals for
+// most, 0 for JPY/KRW/VND, 3 for KWD/BHD/OMR). Keeping those in one place
+// prevents the "÷100 vs ÷1000 vs ÷1" bug from drifting across handlers.
 
 type PaymentHandler struct{}
 
@@ -211,14 +178,21 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 		return
 	}
 
-	currency := currencyForStripeCountry(order.Chef.PayoutCountry)
-	totalMinor := services.ToCents(order.Total)
+	// Order.Currency was stamped at creation from the chef's PayoutCountry.
+	// Using that frozen value (instead of rederiving from chef) means a
+	// mid-flight chef profile edit doesn't change the currency of an
+	// already-placed order.
+	currency := strings.ToLower(order.Currency)
+	if currency == "" {
+		currency = services.CurrencyForCountry(order.Chef.PayoutCountry)
+	}
+	totalMinor := services.ToMinor(order.Total, currency)
 
 	// Chef receives: subtotal + tax + chefTip. Platform keeps the rest
 	// (deliveryFee + driverTip) as application_fee; driver gets paid out of
-	// platform balance via a follow-up Transfer.
+	// platform balance via a follow-up Transfer on delivery confirmation.
 	chefAmount := order.Subtotal + order.Tax + order.ChefTip
-	chefMinor := services.ToCents(chefAmount)
+	chefMinor := services.ToMinor(chefAmount, currency)
 	applicationFee := totalMinor - chefMinor
 	if applicationFee < 0 {
 		applicationFee = 0
@@ -389,12 +363,17 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 		"payment_method": "card",
 	})
 
+	eventCurrency := strings.ToLower(order.Currency)
+	if eventCurrency == "" {
+		eventCurrency = "inr"
+	}
 	if err := services.PublishEvent("orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
 		"order_id":     order.ID.String(),
 		"order_number": order.OrderNumber,
-		"amount":       services.FromCents(pi.Amount),
+		"amount":       services.FromMinor(pi.Amount, eventCurrency),
 		"method":       "card",
 		"provider":     "stripe",
+		"currency":     order.Currency,
 	}); err != nil {
 		log.Printf("Failed to publish order paid event: %v", err)
 	}
@@ -489,11 +468,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 			return
 		}
-		currency := currencyForStripeCountry(order.Chef.PayoutCountry)
-		_ = currency // cents conversion is currency-agnostic for 2-decimal; document if extending
+		refundCurrency := strings.ToLower(order.Currency)
+		if refundCurrency == "" {
+			refundCurrency = services.CurrencyForCountry(order.Chef.PayoutCountry)
+		}
 		r, err := st.CreateRefund(&services.StripeRefundRequest{
 			PaymentIntent:        order.StripePaymentIntentID,
-			Amount:               services.ToCents(refundAmount),
+			Amount:               services.ToMinor(refundAmount, refundCurrency),
 			Reason:               "requested_by_customer",
 			ReverseTransfer:      true, // pull money back from the chef's Connect account
 			RefundApplicationFee: true, // also refund our platform cut

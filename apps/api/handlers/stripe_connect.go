@@ -220,6 +220,225 @@ func (h *StripeConnectHandler) RefreshStripeOnboardingLink(c *gin.Context) {
 	})
 }
 
+// deliveryPortalBaseURL mirrors vendorPortalBaseURL for drivers.
+func deliveryPortalBaseURL() string {
+	if v := os.Getenv("DELIVERY_PORTAL_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://delivery.fe3dr.com"
+}
+
+// CreateDriverStripeAccount is the driver-facing mirror of
+// CreateStripeConnectAccount. Drivers onboard via Stripe Connect Express,
+// KYC is done on Stripe's hosted pages. Driver delivery earnings are paid
+// out of the platform balance via stripe Transfers once each order is
+// confirmed delivered (see HandleDriverPayoutOnDelivery below).
+//
+// POST /delivery/stripe/connect
+func (h *StripeConnectHandler) CreateDriverStripeAccount(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured by platform admin"})
+		return
+	}
+
+	var req struct {
+		Country string `json:"country"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	var driver models.DeliveryPartner
+	if err := database.DB.Preload("User").Where("user_id = ?", userID).First(&driver).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Driver profile not found"})
+		return
+	}
+
+	country := strings.ToUpper(req.Country)
+	if country == "" {
+		country = strings.ToUpper(driver.PayoutCountry)
+	}
+	if country == "" {
+		country = "US"
+	}
+
+	accountID := driver.StripeAccountID
+	if accountID == "" {
+		acct, err := st.CreateConnectAccount(&services.StripeConnectAccountRequest{
+			Type:    "express",
+			Country: country,
+			Email:   driver.User.Email,
+		})
+		if err != nil {
+			log.Printf("Failed to create Stripe Connect account for driver %s: %v", driver.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Connect account"})
+			return
+		}
+		accountID = acct.ID
+
+		database.DB.Model(&driver).Updates(map[string]interface{}{
+			"stripe_account_id": accountID,
+			"payout_country":    country,
+			"payment_provider":  "stripe",
+		})
+	}
+
+	link, err := st.CreateAccountLink(
+		accountID,
+		deliveryPortalBaseURL()+"/settings/stripe?refresh=1",
+		deliveryPortalBaseURL()+"/settings/stripe?done=1",
+	)
+	if err != nil {
+		log.Printf("Failed to create Stripe account link for driver %s: %v", driver.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate onboarding link"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"accountId":     accountID,
+		"onboardingUrl": link.URL,
+		"expiresAt":     link.ExpiresAt,
+		"country":       country,
+	})
+}
+
+// GetDriverStripeStatus — driver counterpart of GetStripeConnectStatus.
+// GET /delivery/stripe/status
+func (h *StripeConnectHandler) GetDriverStripeStatus(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	var driver models.DeliveryPartner
+	if err := database.DB.Where("user_id = ?", userID).First(&driver).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Driver profile not found"})
+		return
+	}
+
+	if driver.StripeAccountID == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"connected":        false,
+			"accountId":        "",
+			"chargesEnabled":   false,
+			"payoutsEnabled":   false,
+			"detailsSubmitted": false,
+			"country":          driver.PayoutCountry,
+			"paymentProvider":  driver.PaymentProvider,
+		})
+		return
+	}
+
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+		return
+	}
+
+	acct, err := st.FetchConnectAccount(driver.StripeAccountID)
+	if err != nil {
+		log.Printf("Failed to fetch Stripe account %s: %v", driver.StripeAccountID, err)
+		c.JSON(http.StatusOK, gin.H{
+			"connected":        true,
+			"accountId":        driver.StripeAccountID,
+			"chargesEnabled":   driver.StripeChargesEnabled,
+			"payoutsEnabled":   driver.StripePayoutsEnabled,
+			"detailsSubmitted": false,
+			"country":          driver.PayoutCountry,
+			"paymentProvider":  driver.PaymentProvider,
+			"warning":          "Stripe API unreachable — showing cached status",
+		})
+		return
+	}
+
+	database.DB.Model(&driver).Updates(map[string]interface{}{
+		"stripe_charges_enabled": acct.Charges,
+		"stripe_payouts_enabled": acct.Payouts,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"connected":        true,
+		"accountId":        acct.ID,
+		"chargesEnabled":   acct.Charges,
+		"payoutsEnabled":   acct.Payouts,
+		"detailsSubmitted": acct.Details,
+		"country":          acct.Country,
+		"paymentProvider":  driver.PaymentProvider,
+	})
+}
+
+// RefreshDriverOnboardingLink — driver counterpart of chef version.
+// POST /delivery/stripe/onboarding-link
+func (h *StripeConnectHandler) RefreshDriverOnboardingLink(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	var driver models.DeliveryPartner
+	if err := database.DB.Where("user_id = ?", userID).First(&driver).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Driver profile not found"})
+		return
+	}
+	if driver.StripeAccountID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe account — call /delivery/stripe/connect first"})
+		return
+	}
+
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+		return
+	}
+
+	link, err := st.CreateAccountLink(
+		driver.StripeAccountID,
+		deliveryPortalBaseURL()+"/settings/stripe?refresh=1",
+		deliveryPortalBaseURL()+"/settings/stripe?done=1",
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate onboarding link"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"onboardingUrl": link.URL,
+		"expiresAt":     link.ExpiresAt,
+	})
+}
+
+// SetDriverPaymentProvider — driver counterpart of SetPaymentProvider.
+// PUT /delivery/payment-provider
+func (h *StripeConnectHandler) SetDriverPaymentProvider(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	var req struct {
+		Provider string `json:"provider" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Provider = strings.ToLower(req.Provider)
+	if req.Provider != "razorpay" && req.Provider != "stripe" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider must be 'razorpay' or 'stripe'"})
+		return
+	}
+
+	var driver models.DeliveryPartner
+	if err := database.DB.Where("user_id = ?", userID).First(&driver).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Driver profile not found"})
+		return
+	}
+
+	if req.Provider == "stripe" && driver.StripeAccountID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Stripe onboarding before switching to Stripe"})
+		return
+	}
+	if req.Provider == "razorpay" && driver.RazorpayAccountID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Complete Razorpay payout setup before switching to Razorpay"})
+		return
+	}
+
+	database.DB.Model(&driver).Update("payment_provider", req.Provider)
+	c.JSON(http.StatusOK, gin.H{"paymentProvider": req.Provider})
+}
+
 // SetPaymentProvider lets a chef toggle which gateway their orders settle
 // through. Used when a chef switches regions or when the platform wants to
 // migrate a chef between providers. The chef must have completed onboarding

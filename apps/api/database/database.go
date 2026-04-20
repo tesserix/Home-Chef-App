@@ -147,6 +147,9 @@ func Migrate() error {
 		&models.Currency{},
 		&models.ExchangeRate{},
 
+		// Per-country tax rules
+		&models.TaxRate{},
+
 		// Approvals
 		&models.ApprovalRequest{},
 		&models.ApprovalRequestHistory{},

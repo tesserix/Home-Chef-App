@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,8 +60,12 @@ type CreateAddressRequest struct {
 	City       string  `json:"city" binding:"required"`
 	State      string  `json:"state" binding:"required"`
 	PostalCode string  `json:"postalCode" binding:"required"`
-	Latitude   float64 `json:"latitude"`
-	Longitude  float64 `json:"longitude"`
+	// ISO-3166 alpha-2. Optional on the wire — drives per-country tax
+	// lookup, so the frontend should pass it when known. Falls back to
+	// the saved address's country or India when absent.
+	Country   string  `json:"country"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 // CreateOrder creates a new order
@@ -134,7 +139,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	policy := services.GetPlatformPolicy()
 	deliveryFee := policy.BaseDeliveryFee
 	serviceFee := subtotal * (policy.ServiceFeePercent / 100.0)
-	tax := subtotal * (policy.TaxPercent / 100.0)
+
+	// Tax is resolved per customer country (and state/region when known)
+	// from the tax_rates table rather than the single global TaxPercent.
+	// GST for India, VAT for EU, HST for Ontario, etc. — all picked by
+	// the delivery address the customer chose.
 	tip := req.Tip
 	discount := 0.0
 
@@ -150,7 +159,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		appliedPromo = promo
 	}
 
-	total := subtotal + deliveryFee + serviceFee + tax + tip - discount
+	// Total is computed below, after tax is resolved from the delivery
+	// address. Until then we only have the pre-tax pieces.
 
 	// Get or create delivery address
 	var deliveryAddr CreateAddressRequest
@@ -167,6 +177,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			City:       addr.City,
 			State:      addr.State,
 			PostalCode: addr.PostalCode,
+			Country:    addr.Country,
 			Latitude:   addr.Latitude,
 			Longitude:  addr.Longitude,
 		}
@@ -175,6 +186,40 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery address required"})
 		return
+	}
+
+	// Country defaults to India if the address was created before the
+	// column was populated; tax resolver falls back to a zero-rate rule
+	// so the order still goes through.
+	deliveryCountry := deliveryAddr.Country
+	if deliveryCountry == "" {
+		deliveryCountry = "IN"
+	}
+
+	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
+	// Tax base: subtotal + deliveryFee + serviceFee, after promo discount.
+	// Tip is excluded (direct pass-through to chef/driver).
+	taxBase := subtotal + deliveryFee + serviceFee - discount
+	if taxBase < 0 {
+		taxBase = 0
+	}
+	var tax float64
+	if taxRule.Inclusive {
+		// Inclusive rate: the base already contains the tax; back it out
+		// for line-item display but don't add it to total.
+		tax = taxBase - (taxBase / (1 + taxRule.Rate/100.0))
+	} else {
+		tax = taxBase * (taxRule.Rate / 100.0)
+	}
+
+	// Order total. For inclusive-tax jurisdictions (EU VAT etc.) the tax
+	// line is informational — it's part of taxBase already, so we don't
+	// add it again or the customer would be charged twice.
+	var total float64
+	if taxRule.Inclusive {
+		total = subtotal + deliveryFee + serviceFee + tip - discount
+	} else {
+		total = subtotal + deliveryFee + serviceFee + tax + tip - discount
 	}
 
 	// If the admin has configured delivery zones, enforce coverage. When no
@@ -206,18 +251,26 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		orderProvider = "razorpay"
 	}
 
+	// Order currency derives from the chef's settlement country so Stripe
+	// charges and chef payouts settle in a consistent currency. Defaults
+	// to INR for legacy chefs with empty PayoutCountry.
+	orderCurrency := strings.ToUpper(services.CurrencyForCountry(chef.PayoutCountry))
+
 	// Create order
 	order := models.Order{
 		OrderNumber:               orderNumber,
 		CustomerID:                userID,
 		ChefID:                    chef.ID,
 		PaymentProvider:           orderProvider,
+		Currency:                  orderCurrency,
 		Status:                    models.OrderStatusPending,
 		PaymentStatus:             models.PaymentPending,
 		Subtotal:                  subtotal,
 		DeliveryFee:               deliveryFee,
 		ServiceFee:                serviceFee,
 		Tax:                       tax,
+		TaxRate:                   taxRule.Rate,
+		TaxName:                   taxRule.TaxName,
 		Tip:                       tip,
 		Discount:                  discount,
 		Total:                     total,
@@ -227,6 +280,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		DeliveryAddressCity:       deliveryAddr.City,
 		DeliveryAddressState:      deliveryAddr.State,
 		DeliveryAddressPostalCode: deliveryAddr.PostalCode,
+		DeliveryAddressCountry:    deliveryCountry,
 		DeliveryLatitude:          deliveryAddr.Latitude,
 		DeliveryLongitude:         deliveryAddr.Longitude,
 		DeliveryInstructions:      req.DeliveryInstructions,

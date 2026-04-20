@@ -147,15 +147,17 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		return &existing, nil
 	}
 
-	// Determine country code from chef address or default to "IN"
-	countryCode := "IN"
-	if order.Chef.State != "" {
-		// Try to look up country from address - for now use IN as default
-		// In production, you'd resolve this from the chef's registered country
-		var chefCountry models.PlatformSettings
-		if err := database.DB.Where("key = ?", fmt.Sprintf("chef.%s.country_code", order.Chef.ID.String())).
-			First(&chefCountry).Error; err == nil {
-			countryCode = chefCountry.Value
+	// Country drives the tax config. Tax is owed where the CUSTOMER
+	// takes delivery, not where the chef operates, so we read
+	// DeliveryAddressCountry which was stamped on the order at creation
+	// (from the customer's delivery address). Falls back to chef country
+	// then IN for orders created before the column was populated.
+	countryCode := order.DeliveryAddressCountry
+	if countryCode == "" {
+		if order.Chef.PayoutCountry != "" {
+			countryCode = order.Chef.PayoutCountry
+		} else {
+			countryCode = "IN"
 		}
 	}
 
@@ -224,12 +226,18 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		order.Chef.PostalCode,
 	}), ", ")
 
-	// Determine currency from plan settings or default
-	currency := "INR"
-	var currSetting models.PlatformSettings
-	if err := database.DB.Where("key = ?", fmt.Sprintf("currency.%s.default", countryCode)).
-		First(&currSetting).Error; err == nil {
-		currency = currSetting.Value
+	// Currency preference order: the order's stamped currency (set at
+	// creation from the chef's settlement country) → the platform_settings
+	// override for this country → INR default. Using the order's currency
+	// first keeps the invoice line items consistent with what was charged.
+	currency := order.Currency
+	if currency == "" {
+		currency = "INR"
+		var currSetting models.PlatformSettings
+		if err := database.DB.Where("key = ?", fmt.Sprintf("currency.%s.default", countryCode)).
+			First(&currSetting).Error; err == nil {
+			currency = currSetting.Value
+		}
 	}
 
 	// Determine company tax ID

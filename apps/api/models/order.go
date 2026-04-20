@@ -45,12 +45,21 @@ type Order struct {
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
 	ServiceFee  float64 `gorm:"default:0" json:"serviceFee"`
 	Tax         float64 `gorm:"default:0" json:"tax"`
-	Tip         float64 `gorm:"default:0" json:"tip"`         // Legacy: total tip (kept for backward compat)
-	ChefTip     float64 `gorm:"default:0" json:"chefTip"`     // Tip for the chef/kitchen
+	// TaxRate / TaxName freeze the rule applied when the order was placed so
+	// that later edits to TaxRate rows don't retroactively change historical
+	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
+	TaxRate float64 `gorm:"default:0" json:"taxRate"`
+	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	Tip     float64 `gorm:"default:0" json:"tip"`       // Legacy: total tip (kept for backward compat)
+	ChefTip float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
 	DriverTip   float64 `gorm:"default:0" json:"driverTip"`   // Tip for the delivery driver
 	Discount    float64 `gorm:"default:0" json:"discount"`
 	Total       float64 `gorm:"not null" json:"total"`
 	PromoCode   string  `gorm:"" json:"promoCode,omitempty"`
+	// Currency is the 3-letter ISO code the customer is charged in. Frozen
+	// at order creation from the chef's settlement currency so later edits
+	// on the chef profile don't invalidate an in-flight payment.
+	Currency string `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 
 	// Delivery Address
 	DeliveryAddressLine1      string  `gorm:"" json:"deliveryAddressLine1"`
@@ -58,6 +67,8 @@ type Order struct {
 	DeliveryAddressCity       string  `gorm:"" json:"deliveryAddressCity"`
 	DeliveryAddressState      string  `gorm:"" json:"deliveryAddressState"`
 	DeliveryAddressPostalCode string  `gorm:"" json:"deliveryAddressPostalCode"`
+	// ISO-3166 alpha-2 country used to pick the tax rule and for invoicing.
+	DeliveryAddressCountry string `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry"`
 	DeliveryLatitude          float64 `gorm:"" json:"deliveryLatitude"`
 	DeliveryLongitude         float64 `gorm:"" json:"deliveryLongitude"`
 	DeliveryInstructions      string  `gorm:"type:text" json:"deliveryInstructions"`
@@ -129,20 +140,24 @@ type OrderItem struct {
 
 // DTOs
 type OrderResponse struct {
-	ID              uuid.UUID              `json:"id"`
-	OrderNumber     string                 `json:"orderNumber"`
-	Status          OrderStatus            `json:"status"`
-	PaymentStatus   PaymentStatus          `json:"paymentStatus"`
-	Subtotal        float64                `json:"subtotal"`
-	DeliveryFee     float64                `json:"deliveryFee"`
-	ServiceFee      float64                `json:"serviceFee"`
-	Tax             float64                `json:"tax"`
-	Tip             float64                `json:"tip"`
-	Discount        float64                `json:"discount"`
-	Total           float64                `json:"total"`
-	Items           []OrderItemResponse    `json:"items"`
-	DeliveryAddress AddressResponse        `json:"deliveryAddress"`
-	CreatedAt       time.Time              `json:"createdAt"`
+	ID              uuid.UUID           `json:"id"`
+	OrderNumber     string              `json:"orderNumber"`
+	Status          OrderStatus         `json:"status"`
+	PaymentStatus   PaymentStatus       `json:"paymentStatus"`
+	PaymentProvider string              `json:"paymentProvider,omitempty"`
+	Currency        string              `json:"currency"`
+	Subtotal        float64             `json:"subtotal"`
+	DeliveryFee     float64             `json:"deliveryFee"`
+	ServiceFee      float64             `json:"serviceFee"`
+	Tax             float64             `json:"tax"`
+	TaxRate         float64             `json:"taxRate"`
+	TaxName         string              `json:"taxName,omitempty"`
+	Tip             float64             `json:"tip"`
+	Discount        float64             `json:"discount"`
+	Total           float64             `json:"total"`
+	Items           []OrderItemResponse `json:"items"`
+	DeliveryAddress AddressResponse     `json:"deliveryAddress"`
+	CreatedAt       time.Time           `json:"createdAt"`
 }
 
 type OrderItemResponse struct {
@@ -177,17 +192,25 @@ func (o *Order) ToResponse() OrderResponse {
 		}
 	}
 
+	currency := o.Currency
+	if currency == "" {
+		currency = "INR"
+	}
 	return OrderResponse{
-		ID:            o.ID,
-		OrderNumber:   o.OrderNumber,
-		Status:        o.Status,
-		PaymentStatus: o.PaymentStatus,
-		Subtotal:      o.Subtotal,
-		DeliveryFee:   o.DeliveryFee,
-		ServiceFee:    o.ServiceFee,
-		Tax:           o.Tax,
-		Tip:           o.Tip,
-		Discount:      o.Discount,
+		ID:              o.ID,
+		OrderNumber:     o.OrderNumber,
+		Status:          o.Status,
+		PaymentStatus:   o.PaymentStatus,
+		PaymentProvider: o.PaymentProvider,
+		Currency:        currency,
+		Subtotal:        o.Subtotal,
+		DeliveryFee:     o.DeliveryFee,
+		ServiceFee:      o.ServiceFee,
+		Tax:             o.Tax,
+		TaxRate:         o.TaxRate,
+		TaxName:         o.TaxName,
+		Tip:             o.Tip,
+		Discount:        o.Discount,
 		Total:         o.Total,
 		Items:         items,
 		DeliveryAddress: AddressResponse{

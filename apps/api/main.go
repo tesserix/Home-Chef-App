@@ -32,6 +32,11 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	// Seed baseline per-country tax rules so the invoicing pipeline has
+	// something to resolve on day one. Idempotent — existing admin edits
+	// via the /admin/tax-rates endpoint survive future restarts.
+	services.SeedTaxRates()
+
 	// Initialize GCS storage
 	if err := services.InitStorage(); err != nil {
 		log.Printf("Warning: Failed to initialize GCS storage: %v", err)
