@@ -17,6 +17,7 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { loadStripeJs } from '@/shared/utils/load-stripe';
 import type { Order, Address } from '@/shared/types';
 
 const addressSchema = z.object({
@@ -89,17 +90,11 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!window.Razorpay) {
-      toast.error('Payment gateway is loading. Please try again.');
-      return;
-    }
-
     setIsProcessing(true);
 
     try {
-      // Step 1: Create order. paymentMethodId is omitted — it's a UUID
-      // reference to a saved card in the payment_methods table, not a
-      // gateway name. The actual Razorpay handoff happens in step 2.
+      // Step 1: Create order. The backend decides which gateway to use
+      // based on the chef's PaymentProvider setting.
       const order = await apiClient.post<Order>('/orders', {
         items: cart.items,
         chefId: cart.chefId,
@@ -109,57 +104,129 @@ export default function CheckoutPage() {
         scheduledFor: scheduledTime !== 'asap' ? scheduledTime : undefined,
       });
 
-      // Step 2: Create Razorpay payment order
-      const paymentData = await apiClient.post<{
+      // Step 2: Ask the backend to prepare a payment. The response shape
+      // varies by provider — `provider: "razorpay"` returns a Razorpay
+      // order id + key id; `provider: "stripe"` returns a PaymentIntent
+      // clientSecret + publishable key.
+      type RazorpayPayment = {
+        provider: 'razorpay';
         razorpayOrderId: string;
         razorpayKeyId: string;
         amount: number;
         currency: string;
-      }>(`/payments/order/${order.id}/create`, {});
-
-      // Step 3: Open Razorpay checkout
-      const options: RazorpayOptions = {
-        key: paymentData.razorpayKeyId,
-        amount: paymentData.amount,
-        currency: paymentData.currency,
-        name: 'Fe3dr',
-        description: `Order from ${cart.chef?.businessName || 'Home Chef'}`,
-        order_id: paymentData.razorpayOrderId,
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-        },
-        theme: {
-          color: '#C2410C',
-        },
-        handler: async (response) => {
-          try {
-            // Step 4: Verify payment
-            await apiClient.post(`/payments/order/${order.id}/verify`, {
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpaySignature: response.razorpay_signature,
-            });
-            cart.clearCart();
-            toast.success('Payment successful!');
-            navigate(`/orders/${order.id}`);
-          } catch {
-            toast.error('Payment verification failed. Please contact support.');
-          }
-        },
-        modal: {
-          ondismiss: () => {
-            toast.error('Payment cancelled');
-          },
-        },
       };
+      type StripePayment = {
+        provider: 'stripe';
+        stripePaymentIntentId: string;
+        clientSecret: string;
+        publishableKey: string;
+        amount: number;
+        currency: string;
+      };
+      const paymentData = await apiClient.post<RazorpayPayment | StripePayment>(
+        `/payments/order/${order.id}/create`,
+        {}
+      );
 
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      if (paymentData.provider === 'stripe') {
+        await confirmStripePayment(order.id, paymentData);
+      } else {
+        await confirmRazorpayPayment(order, paymentData);
+      }
     } catch {
       toast.error('Failed to initiate payment. Please try again.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const confirmRazorpayPayment = async (
+    order: Order,
+    paymentData: {
+      razorpayOrderId: string;
+      razorpayKeyId: string;
+      amount: number;
+      currency: string;
+    }
+  ) => {
+    if (!window.Razorpay) {
+      toast.error('Payment gateway is loading. Please try again.');
+      return;
+    }
+    const options: RazorpayOptions = {
+      key: paymentData.razorpayKeyId,
+      amount: paymentData.amount,
+      currency: paymentData.currency,
+      name: 'Fe3dr',
+      description: `Order from ${cart.chef?.businessName || 'Home Chef'}`,
+      order_id: paymentData.razorpayOrderId,
+      prefill: {
+        name: user?.name || '',
+        email: user?.email || '',
+      },
+      theme: { color: '#C2410C' },
+      handler: async (response) => {
+        try {
+          await apiClient.post(`/payments/order/${order.id}/verify`, {
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpaySignature: response.razorpay_signature,
+          });
+          cart.clearCart();
+          toast.success('Payment successful!');
+          navigate(`/orders/${order.id}`);
+        } catch {
+          toast.error('Payment verification failed. Please contact support.');
+        }
+      },
+      modal: {
+        ondismiss: () => toast.error('Payment cancelled'),
+      },
+    };
+    new window.Razorpay(options).open();
+  };
+
+  // Launch the Stripe hosted-redirect flow. We use the Checkout redirect
+  // (simpler + no extra React integration needed) by loading Stripe.js on
+  // demand and calling stripe.confirmPayment with the client secret.
+  const confirmStripePayment = async (
+    orderId: string,
+    paymentData: {
+      stripePaymentIntentId: string;
+      clientSecret: string;
+      publishableKey: string;
+      amount: number;
+      currency: string;
+    }
+  ) => {
+    const stripe = await loadStripeJs(paymentData.publishableKey);
+    if (!stripe) {
+      toast.error('Stripe failed to load');
+      return;
+    }
+    // Customer confirms via Stripe-hosted form. `return_url` is where
+    // Stripe sends them after 3DS / wallet confirmation — we land back
+    // on the order page and VerifyPayment is triggered there too.
+    const returnUrl = `${window.location.origin}/orders/${orderId}?stripe_pi=${paymentData.stripePaymentIntentId}`;
+    const { error } = await stripe.confirmPayment({
+      clientSecret: paymentData.clientSecret,
+      confirmParams: { return_url: returnUrl },
+    });
+    if (error) {
+      toast.error(error.message || 'Payment failed');
+      return;
+    }
+    // If confirmPayment doesn't redirect (rare — happens for sync
+    // confirmations like some non-3DS card paths), verify inline.
+    try {
+      await apiClient.post(`/payments/order/${orderId}/verify`, {
+        stripePaymentIntentId: paymentData.stripePaymentIntentId,
+      });
+      cart.clearCart();
+      toast.success('Payment successful!');
+      navigate(`/orders/${orderId}`);
+    } catch {
+      toast.error('Payment verification failed. Please contact support.');
     }
   };
 

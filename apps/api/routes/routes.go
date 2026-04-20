@@ -84,6 +84,9 @@ func SetupRouter() *gin.Engine {
 	// Razorpay webhook (no auth — uses HMAC signature verification)
 	r.POST("/webhooks/razorpay", paymentHandler.RazorpayWebhook)
 
+	// Stripe webhook (no auth — verified via Stripe-Signature HMAC)
+	r.POST("/webhooks/stripe", paymentHandler.StripeWebhook)
+
 	// Provider webhooks (public, verified by webhook secret)
 	r.POST("/webhooks/delivery/:provider", providerHandler.HandleWebhook)
 
@@ -245,6 +248,13 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
+
+			// Stripe Connect onboarding (international chefs)
+			stripeConnectHandler := handlers.NewStripeConnectHandler()
+			chefDashboard.POST("/stripe/connect", stripeConnectHandler.CreateStripeConnectAccount)
+			chefDashboard.GET("/stripe/status", stripeConnectHandler.GetStripeConnectStatus)
+			chefDashboard.POST("/stripe/onboarding-link", stripeConnectHandler.RefreshStripeOnboardingLink)
+			chefDashboard.PUT("/payment-provider", stripeConnectHandler.SetPaymentProvider)
 		}
 
 		// Customer order routes
@@ -531,9 +541,13 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/staff/invitations/:id/revoke", middleware.RequireStaffPermission(models.SPManageStaff), staffHandler.RevokeInvitation)
 			admin.PUT("/staff/invitations/:id/resend", middleware.RequireStaffPermission(models.SPManageStaff), staffHandler.ResendInvitation)
 
-			// Payment gateway
+			// Payment gateway — Razorpay (India)
 			admin.GET("/payment-gateway/status", adminHandler.GetPaymentGatewayStatus)
 			admin.PUT("/payment-gateway/keys", adminHandler.UpdatePaymentGatewayKeys)
+
+			// Payment gateway — Stripe (international)
+			admin.GET("/payment-gateway/stripe/status", adminHandler.GetStripeGatewayStatus)
+			admin.PUT("/payment-gateway/stripe/keys", adminHandler.UpdateStripeGatewayKeys)
 
 			// Security policy + API keys
 			admin.GET("/security/policy", securityHandler.AdminGetSecurityPolicy)

@@ -770,6 +770,10 @@ func (h *ChefHandler) GetPayoutDetails(c *gin.Context) {
 		"upiId":             maskEmail(upiID),
 		"razorpayConnected": chef.RazorpayAccountID != "",
 		"razorpayAccountId": maskID(chef.RazorpayAccountID),
+		"stripeConnected":   chef.StripeAccountID != "",
+		"stripeAccountId":   maskID(chef.StripeAccountID),
+		"paymentProvider":   chef.PaymentProvider,
+		"payoutCountry":     chef.PayoutCountry,
 	})
 }
 

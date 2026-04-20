@@ -45,6 +45,18 @@ type ChefProfile struct {
 	// Payment gateway linked accounts
 	StripeAccountID    string `gorm:"" json:"-"`
 	RazorpayAccountID  string `gorm:"" json:"-"` // Razorpay Route linked account ID
+	// PaymentProvider picks which gateway a customer's order gets routed
+	// through. "razorpay" (India) or "stripe" (international). Defaults to
+	// razorpay so existing chefs keep working after the column is added.
+	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	// PayoutCountry is the ISO-3166 alpha-2 country for Stripe Connect
+	// onboarding (US, GB, AE, …). Unused for Razorpay chefs.
+	PayoutCountry string `gorm:"type:varchar(2);default:'IN'" json:"payoutCountry"`
+	// StripeChargesEnabled / StripePayoutsEnabled mirror the Connect
+	// account flags — we cache them here so the UI doesn't have to round-
+	// trip Stripe on every page view. Refreshed on webhook + on demand.
+	StripeChargesEnabled bool `gorm:"default:false" json:"stripeChargesEnabled"`
+	StripePayoutsEnabled bool `gorm:"default:false" json:"stripePayoutsEnabled"`
 
 	// Payout details
 	PayoutMethod      string `gorm:"default:''" json:"-"`

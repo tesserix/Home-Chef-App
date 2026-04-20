@@ -198,11 +198,20 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// Generate order number
 	orderNumber := generateOrderNumber()
 
+	// Inherit the chef's current gateway so VerifyPayment / refund later
+	// read the same provider this order was created against. Falls back to
+	// razorpay for older chefs without the column populated.
+	orderProvider := chef.PaymentProvider
+	if orderProvider == "" {
+		orderProvider = "razorpay"
+	}
+
 	// Create order
 	order := models.Order{
 		OrderNumber:               orderNumber,
 		CustomerID:                userID,
 		ChefID:                    chef.ID,
+		PaymentProvider:           orderProvider,
 		Status:                    models.OrderStatusPending,
 		PaymentStatus:             models.PaymentPending,
 		Subtotal:                  subtotal,

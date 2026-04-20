@@ -76,11 +76,16 @@ type Order struct {
 	// Special Instructions
 	SpecialInstructions string `gorm:"type:text" json:"specialInstructions"`
 
-	// Payment gateway
-	StripePaymentIntentID string `gorm:"" json:"-"`          // Legacy Stripe
+	// Payment gateway. PaymentProvider records which gateway handled this
+	// order so refunds, reconciliation, and webhooks read the correct
+	// provider-specific ID below. Inherited from ChefProfile.PaymentProvider
+	// at order creation time so late-switching a chef doesn't invalidate
+	// already-placed orders.
+	PaymentProvider       string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	StripePaymentIntentID string `gorm:"" json:"-"`          // Stripe PaymentIntent ID
 	RazorpayOrderID       string `gorm:"" json:"-"`          // Razorpay order ID
 	RazorpayPaymentID     string `gorm:"" json:"-"`          // Razorpay payment ID
-	RefundID              string `gorm:"" json:"-"`          // Razorpay refund ID (if refunded)
+	RefundID              string `gorm:"" json:"-"`          // Gateway refund ID (if refunded)
 	RefundedAt            *time.Time `gorm:"" json:"refundedAt,omitempty"`
 	RefundAmount          float64 `gorm:"default:0" json:"refundAmount"`
 	RefundReason          string  `gorm:"" json:"refundReason,omitempty"`

@@ -771,6 +771,127 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 	})
 }
 
+// GetStripeGatewayStatus reports whether Stripe is configured and reachable.
+// Mirrors GetPaymentGatewayStatus (the Razorpay one) so the admin UI can
+// render a parallel card for the Stripe provider.
+func (h *AdminHandler) GetStripeGatewayStatus(c *gin.Context) {
+	client := services.GetStripe()
+
+	webhookURL := "https://api.fe3dr.com/webhooks/stripe"
+
+	if client == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"configured":        false,
+			"mode":              "unknown",
+			"webhookUrl":        webhookURL,
+			"webhookSecretSet":  false,
+			"keyPrefix":         "",
+			"publishableKeySet": false,
+			"error":             "Stripe is not configured. Enter your keys to enable international payouts.",
+		})
+		return
+	}
+
+	secretKey := client.GetSecretKeyID()
+	mode := "unknown"
+	if strings.HasPrefix(secretKey, "sk_test_") {
+		mode = "test"
+	} else if strings.HasPrefix(secretKey, "sk_live_") {
+		mode = "live"
+	}
+
+	keyPrefix := secretKey
+	if len(secretKey) > 12 {
+		keyPrefix = secretKey[:12] + "..."
+	}
+
+	healthErr := ""
+	configured := true
+	if err := client.HealthCheck(); err != nil {
+		healthErr = err.Error()
+		configured = false
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"configured":        configured,
+		"mode":              mode,
+		"webhookUrl":        webhookURL,
+		"webhookSecretSet":  client.HasWebhookSecret(),
+		"keyPrefix":         keyPrefix,
+		"publishableKeySet": client.GetPublishableKey() != "",
+		"error":             healthErr,
+	})
+}
+
+// UpdateStripeGatewayKeys persists the Stripe credentials to GCP Secret
+// Manager, invalidates the cached client, and runs an immediate health
+// check so the admin sees pass/fail in one response. Same contract as
+// UpdatePaymentGatewayKeys (Razorpay).
+func (h *AdminHandler) UpdateStripeGatewayKeys(c *gin.Context) {
+	var req struct {
+		SecretKey      string `json:"secretKey"`
+		PublishableKey string `json:"publishableKey"`
+		WebhookSecret  string `json:"webhookSecret"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.SecretKey == "" && req.PublishableKey == "" && req.WebhookSecret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one field is required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// The secret key alone is enough to authenticate API calls, but the
+	// publishable key is what the frontend loads Elements with — callers
+	// that set one usually set the other, but we don't enforce it here.
+	secretMap := map[string]string{
+		"prod-homechef-stripe-secret-key":      req.SecretKey,
+		"prod-homechef-stripe-publishable-key": req.PublishableKey,
+		"prod-homechef-stripe-webhook-secret":  req.WebhookSecret,
+	}
+	for secretName, value := range secretMap {
+		if value == "" {
+			continue
+		}
+		if err := services.StorePlatformSecret(ctx, secretName, value); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to store %s: %v", secretName, err)})
+			return
+		}
+	}
+
+	services.InvalidateStripe()
+	services.LogAudit(c, "payment.keys.update", "payment_gateway", "stripe", nil, map[string]any{
+		"updatedFields": []string{
+			boolField("secretKey", req.SecretKey != ""),
+			boolField("publishableKey", req.PublishableKey != ""),
+			boolField("webhookSecret", req.WebhookSecret != ""),
+		},
+	})
+
+	client := services.GetStripe()
+	if client == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Saved to Secret Manager, but client failed to initialize"})
+		return
+	}
+	if err := client.HealthCheck(); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "Keys saved, but validation failed",
+			"testError": err.Error(),
+			"verified":  false,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Stripe gateway keys saved and verified",
+		"verified": true,
+	})
+}
+
 // UpdateSettings updates platform settings
 func (h *AdminHandler) UpdateSettings(c *gin.Context) {
 	var req struct {

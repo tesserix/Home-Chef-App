@@ -53,6 +53,11 @@ func main() {
 	// this is just a best-effort pre-fetch to log any config gap at startup.
 	services.InitRazorpay()
 
+	// Same for Stripe — second payment provider for markets where Razorpay
+	// isn't available. Both clients coexist; per-chef PaymentProvider
+	// decides which one handles a given order.
+	services.InitStripe()
+
 	// Initialize SendGrid email service
 	services.InitEmailService()
 

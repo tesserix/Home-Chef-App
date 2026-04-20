@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -41,6 +41,36 @@ export default function OrderDetailPage() {
   const queryClient = useQueryClient();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Stripe redirects here after Checkout confirmation with ?stripe_pi=...
+  // Turn that into a VerifyPayment call so the order flips to "paid" even
+  // when the browser skipped the inline verify step. Strips the query on
+  // completion so a refresh doesn't re-verify.
+  useEffect(() => {
+    const pi = searchParams.get('stripe_pi');
+    if (!id || !pi) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await apiClient.post(`/payments/order/${id}/verify`, { stripePaymentIntentId: pi });
+        if (cancelled) return;
+        toast.success('Payment confirmed');
+        queryClient.invalidateQueries({ queryKey: ['order', id] });
+      } catch {
+        if (!cancelled) toast.error('Payment verification failed — please contact support');
+      } finally {
+        if (!cancelled) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('stripe_pi');
+          setSearchParams(next, { replace: true });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, searchParams, queryClient, setSearchParams]);
 
   const { data: order, isLoading, error } = useQuery({
     queryKey: ['order', id],

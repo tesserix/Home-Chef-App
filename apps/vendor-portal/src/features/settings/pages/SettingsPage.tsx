@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Power, Lock, Trash2, Banknote, CheckCircle2, XCircle } from 'lucide-react';
+import { Bell, Power, Lock, Trash2, Banknote, CheckCircle2, XCircle, Globe, ExternalLink } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -29,6 +29,10 @@ interface PayoutData {
   upiId: string;
   razorpayConnected: boolean;
   razorpayAccountId: string;
+  stripeConnected?: boolean;
+  stripeAccountId?: string;
+  paymentProvider?: 'razorpay' | 'stripe';
+  payoutCountry?: string;
 }
 
 export default function SettingsPage() {
@@ -402,6 +406,11 @@ export default function SettingsPage() {
         )}
       </motion.div>
 
+      {/* Stripe Connect — international payouts. Lives alongside Razorpay
+          so chefs in any country can get paid. Payments to a Stripe-onboarded
+          chef use Stripe at checkout; Razorpay-onboarded chefs still use Razorpay. */}
+      <StripeConnectCard />
+
       {/* Change Password — only for email/password accounts, not social logins */}
       {(!localSettings.authProvider || localSettings.authProvider === 'email') ? (
         <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
@@ -534,5 +543,253 @@ function ToggleRow({
         />
       </button>
     </div>
+  );
+}
+
+
+interface StripeStatus {
+  connected: boolean;
+  accountId: string;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  country: string;
+  paymentProvider?: 'razorpay' | 'stripe';
+  warning?: string;
+}
+
+// ISO-3166 countries Stripe Connect supports for Express accounts — shortened
+// to the set our vendors actually operate in. Extend as needed.
+const SUPPORTED_STRIPE_COUNTRIES: { code: string; name: string }[] = [
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'IN', name: 'India' },
+];
+
+function StripeConnectCard() {
+  const queryClient = useQueryClient();
+  const [country, setCountry] = useState('US');
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['chef-stripe-status'],
+    queryFn: () => apiClient.get<StripeStatus>('/chef/stripe/status'),
+    // Poll once a minute while onboarding is in progress so the UI reflects
+    // completion without requiring a manual refresh.
+    refetchInterval: (q) => {
+      const d = q.state.data as StripeStatus | undefined;
+      if (d?.connected && !d.chargesEnabled) return 60_000;
+      return false;
+    },
+  });
+
+  // After Stripe redirects the chef back with ?done=1 or ?refresh=1, clear
+  // the query string and refetch status so the UI updates immediately.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('done') === '1' || params.get('refresh') === '1') {
+      refetch();
+      params.delete('done');
+      params.delete('refresh');
+      const next = params.toString();
+      const url = window.location.pathname + (next ? '?' + next : '');
+      window.history.replaceState(null, '', url);
+    }
+  }, [refetch]);
+
+  const connectMutation = useMutation({
+    mutationFn: (c: string) =>
+      apiClient.post<{ accountId: string; onboardingUrl: string; country: string }>(
+        '/chef/stripe/connect',
+        { country: c }
+      ),
+    onSuccess: (res) => {
+      window.location.href = res.onboardingUrl;
+    },
+    onError: () => toast.error('Failed to start Stripe onboarding'),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<{ onboardingUrl: string }>('/chef/stripe/onboarding-link', {}),
+    onSuccess: (res) => {
+      window.location.href = res.onboardingUrl;
+    },
+    onError: () => toast.error('Failed to resume onboarding'),
+  });
+
+  const switchProviderMutation = useMutation({
+    mutationFn: (provider: 'razorpay' | 'stripe') =>
+      apiClient.put<{ paymentProvider: string }>('/chef/payment-provider', { provider }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chef-stripe-status'] });
+      queryClient.invalidateQueries({ queryKey: ['chef-payout'] });
+      toast.success('Payment provider updated');
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to update provider';
+      toast.error(msg);
+    },
+  });
+
+  const ready = Boolean(data?.connected && data.chargesEnabled && data.payoutsEnabled);
+  const activeProvider = data?.paymentProvider ?? 'razorpay';
+
+  return (
+    <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Globe className="h-5 w-5 text-brand-500" />
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Stripe (International Payouts)</h2>
+            <p className="text-xs text-gray-500">
+              For chefs outside India, or as an alternative to Razorpay.
+            </p>
+          </div>
+        </div>
+        {data?.connected ? (
+          ready ? (
+            <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Connected
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+              <XCircle className="h-3.5 w-3.5" /> Action Required
+            </span>
+          )
+        ) : null}
+      </div>
+
+      {isLoading ? (
+        <div className="mt-4 flex items-center justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        </div>
+      ) : !data?.connected ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-gray-600">
+            Accept payments and receive payouts in your local currency. Stripe handles KYC and bank
+            verification on their hosted pages — just pick your country and follow the flow.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Country</label>
+            <select
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="mt-1 w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            >
+              {SUPPORTED_STRIPE_COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => connectMutation.mutate(country)}
+            isLoading={connectMutation.isPending}
+          >
+            Connect with Stripe
+            <ExternalLink className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-xs text-gray-500">Country</p>
+              <p className="font-medium text-gray-900">{data.country || '—'}</p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-xs text-gray-500">Charges</p>
+              <p className={`font-medium ${data.chargesEnabled ? 'text-green-600' : 'text-amber-600'}`}>
+                {data.chargesEnabled ? 'Enabled' : 'Pending'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-xs text-gray-500">Payouts</p>
+              <p className={`font-medium ${data.payoutsEnabled ? 'text-green-600' : 'text-amber-600'}`}>
+                {data.payoutsEnabled ? 'Enabled' : 'Pending'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <p className="text-xs text-gray-500">Details Submitted</p>
+              <p className={`font-medium ${data.detailsSubmitted ? 'text-green-600' : 'text-amber-600'}`}>
+                {data.detailsSubmitted ? 'Yes' : 'No'}
+              </p>
+            </div>
+          </div>
+
+          {data.warning && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              {data.warning}
+            </div>
+          )}
+
+          {!ready && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <span>
+                Stripe needs more information before you can accept payments. Resume onboarding to
+                finish.
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {!ready && (
+              <Button
+                size="sm"
+                onClick={() => resumeMutation.mutate()}
+                isLoading={resumeMutation.isPending}
+              >
+                Resume Onboarding
+                <ExternalLink className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            )}
+            {ready && activeProvider !== 'stripe' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => switchProviderMutation.mutate('stripe')}
+                isLoading={switchProviderMutation.isPending}
+              >
+                Make Stripe My Primary Gateway
+              </Button>
+            )}
+            {activeProvider === 'stripe' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => switchProviderMutation.mutate('razorpay')}
+                isLoading={switchProviderMutation.isPending}
+              >
+                Switch Back to Razorpay
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              Refresh Status
+            </Button>
+          </div>
+
+          <p className="text-xs text-gray-400">
+            Active gateway for your orders:{' '}
+            <span className="font-medium text-gray-600">
+              {activeProvider === 'stripe' ? 'Stripe' : 'Razorpay'}
+            </span>
+          </p>
+        </div>
+      )}
+    </motion.div>
   );
 }

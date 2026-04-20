@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,44 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// currencyForStripeCountry maps a Connect account's ISO-3166 alpha-2 country
+// to the currency Stripe expects on charges for that account. Stripe rejects
+// PaymentIntents whose currency doesn't match the connected account's
+// settlement currency, so we pick it based on PayoutCountry.
+//
+// IMPORTANT: Only two-decimal currencies are returned here. ToCents assumes
+// 2 decimals (multiplies by 100); adding zero-decimal currencies (JPY, KRW,
+// VND) or three-decimal (KWD, BHD, OMR) would require a currency-aware
+// conversion helper first. Countries with non-two-decimal currencies fall
+// back to INR so they are rejected cleanly by Stripe ("cannot create INR
+// charge for US-based account") rather than silently overcharging by 100×.
+func currencyForStripeCountry(country string) string {
+	switch strings.ToUpper(country) {
+	case "US":
+		return "usd"
+	case "GB":
+		return "gbp"
+	case "CA":
+		return "cad"
+	case "AU":
+		return "aud"
+	case "NZ":
+		return "nzd"
+	case "SG":
+		return "sgd"
+	case "HK":
+		return "hkd"
+	case "AE":
+		return "aed"
+	case "DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "IE", "FI", "GR", "LU":
+		return "eur"
+	case "IN", "":
+		return "inr"
+	default:
+		return "inr"
+	}
+}
 
 type PaymentHandler struct{}
 
@@ -39,14 +78,8 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		return
 	}
 
-	rz := services.GetRazorpay()
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
-	}
-
 	var order models.Order
-	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
+	if err := database.DB.Preload("Chef").Preload("Customer").Preload("Delivery.DeliveryPartner").
 		Where("id = ? AND customer_id = ?", orderID, userID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
@@ -54,6 +87,32 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 
 	if order.PaymentStatus == models.PaymentCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order already paid"})
+		return
+	}
+
+	// Pick gateway from chef's configured provider. Falls back to razorpay
+	// for older chef profiles that don't have the column populated yet.
+	provider := strings.ToLower(order.Chef.PaymentProvider)
+	if provider == "" {
+		provider = "razorpay"
+	}
+
+	switch provider {
+	case "stripe":
+		h.createStripePayment(c, &order, userID)
+	default:
+		h.createRazorpayPayment(c, &order, userID)
+	}
+}
+
+// createRazorpayPayment is the original INR + Razorpay Route flow. Unchanged
+// from the pre-multi-gateway implementation except that the order's
+// payment_provider column is now stamped so VerifyPayment / InitiateRefund
+// know which code path to run later.
+func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID) {
+	rz := services.GetRazorpay()
+	if rz == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
 	}
 
@@ -72,7 +131,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 				"purpose":      "food_payment",
 				"order_number": order.OrderNumber,
 			},
-			OnHold: true, // Hold until order is delivered/confirmed
+			OnHold: true,
 		})
 	}
 
@@ -88,12 +147,11 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 					"purpose":      "delivery_payment",
 					"order_number": order.OrderNumber,
 				},
-				OnHold: true, // Hold until delivery is confirmed
+				OnHold: true,
 			})
 		}
 	}
 
-	// Create Razorpay order
 	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
 		Amount:    totalPaise,
 		Currency:  "INR",
@@ -111,12 +169,15 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		return
 	}
 
-	// Save Razorpay order ID
-	database.DB.Model(&order).Update("razorpay_order_id", rzOrder.ID)
+	database.DB.Model(order).Updates(map[string]interface{}{
+		"razorpay_order_id": rzOrder.ID,
+		"payment_provider":  "razorpay",
+	})
 
 	c.JSON(http.StatusOK, gin.H{
+		"provider":        "razorpay",
 		"razorpayOrderId": rzOrder.ID,
-		"razorpayKeyId":   services.GetRazorpay().GetKeyID(),
+		"razorpayKeyId":   rz.GetKeyID(),
 		"amount":          totalPaise,
 		"currency":        "INR",
 		"orderNumber":     order.OrderNumber,
@@ -128,8 +189,86 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 	})
 }
 
-// VerifyPayment verifies a payment after Razorpay checkout on the client.
-// Called by the frontend after successful Razorpay checkout.
+// createStripePayment creates a PaymentIntent against the chef's Connect
+// account. Chef receives (subtotal + tax + chefTip) via
+// `transfer_data[destination]`; the platform retains (deliveryFee +
+// driverTip) as `application_fee_amount` and settles the driver separately.
+// Stripe rejects charges whose currency doesn't match the chef's Connect
+// country, so we derive currency from PayoutCountry rather than hardcoding.
+func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order, userID uuid.UUID) {
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+		return
+	}
+
+	if order.Chef.StripeAccountID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef has not completed Stripe onboarding"})
+		return
+	}
+	if !order.Chef.StripeChargesEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef's Stripe account is not ready to accept charges — onboarding may be incomplete"})
+		return
+	}
+
+	currency := currencyForStripeCountry(order.Chef.PayoutCountry)
+	totalMinor := services.ToCents(order.Total)
+
+	// Chef receives: subtotal + tax + chefTip. Platform keeps the rest
+	// (deliveryFee + driverTip) as application_fee; driver gets paid out of
+	// platform balance via a follow-up Transfer.
+	chefAmount := order.Subtotal + order.Tax + order.ChefTip
+	chefMinor := services.ToCents(chefAmount)
+	applicationFee := totalMinor - chefMinor
+	if applicationFee < 0 {
+		applicationFee = 0
+	}
+
+	pi, err := st.CreatePaymentIntent(&services.StripePaymentIntentRequest{
+		Amount:              totalMinor,
+		Currency:            currency,
+		ReceiptEmail:        order.Customer.Email,
+		DestinationAccount:  order.Chef.StripeAccountID,
+		ApplicationFeeCents: applicationFee,
+		Description:         fmt.Sprintf("HomeChef order %s", order.OrderNumber),
+		Metadata: map[string]string{
+			"order_id":     order.ID.String(),
+			"order_number": order.OrderNumber,
+			"customer_id":  userID.String(),
+			"chef_id":      order.ChefID.String(),
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to create Stripe PaymentIntent: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initiate payment"})
+		return
+	}
+
+	database.DB.Model(order).Updates(map[string]interface{}{
+		"stripe_payment_intent_id": pi.ID,
+		"payment_provider":         "stripe",
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"provider":              "stripe",
+		"stripePaymentIntentId": pi.ID,
+		"clientSecret":          pi.ClientSecret,
+		"publishableKey":        st.GetPublishableKey(),
+		"amount":                totalMinor,
+		"currency":              strings.ToUpper(currency),
+		"orderNumber":           order.OrderNumber,
+		"prefill": gin.H{
+			"name":  order.Customer.FirstName + " " + order.Customer.LastName,
+			"email": order.Customer.Email,
+			"phone": order.Customer.Phone,
+		},
+	})
+}
+
+// VerifyPayment verifies a payment after checkout on the client. The request
+// body differs by provider — Razorpay sends razorpayPaymentId/OrderId/Signature,
+// Stripe sends stripePaymentIntentId — so we look at the already-stamped
+// order.payment_provider first to pick the code path.
 // POST /payments/order/:orderId/verify
 func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	orderID, err := uuid.Parse(c.Param("orderId"))
@@ -139,9 +278,12 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	}
 
 	var req struct {
-		RazorpayPaymentID  string `json:"razorpayPaymentId" binding:"required"`
-		RazorpayOrderID    string `json:"razorpayOrderId" binding:"required"`
-		RazorpaySignature  string `json:"razorpaySignature" binding:"required"`
+		// Razorpay
+		RazorpayPaymentID string `json:"razorpayPaymentId"`
+		RazorpayOrderID   string `json:"razorpayOrderId"`
+		RazorpaySignature string `json:"razorpaySignature"`
+		// Stripe
+		StripePaymentIntentID string `json:"stripePaymentIntentId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -149,22 +291,43 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	}
 
 	var order models.Order
-	if err := database.DB.Where("id = ? AND razorpay_order_id = ?", orderID, req.RazorpayOrderID).
-		First(&order).Error; err != nil {
+	if err := database.DB.Where("id = ?", orderID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
 
-	// Verify payment with Razorpay
+	provider := strings.ToLower(order.PaymentProvider)
+	if provider == "" {
+		provider = "razorpay"
+	}
+
+	switch provider {
+	case "stripe":
+		h.verifyStripePayment(c, &order, req.StripePaymentIntentID)
+	default:
+		h.verifyRazorpayPayment(c, &order, req.RazorpayPaymentID, req.RazorpayOrderID)
+	}
+}
+
+func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID string) {
+	if paymentID == "" || rzOrderID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId and razorpayOrderId are required"})
+		return
+	}
+	if order.RazorpayOrderID != rzOrderID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
+		return
+	}
+
 	rz := services.GetRazorpay()
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
 	}
 
-	payment, err := rz.FetchPayment(req.RazorpayPaymentID)
+	payment, err := rz.FetchPayment(paymentID)
 	if err != nil {
-		log.Printf("Failed to fetch payment %s: %v", req.RazorpayPaymentID, err)
+		log.Printf("Failed to fetch Razorpay payment %s: %v", paymentID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
 		return
 	}
@@ -174,19 +337,64 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 		return
 	}
 
-	// Update order payment status
-	database.DB.Model(&order).Updates(map[string]interface{}{
-		"payment_status":     models.PaymentCompleted,
-		"payment_method":     payment.Method,
-		"razorpay_payment_id": req.RazorpayPaymentID,
+	database.DB.Model(order).Updates(map[string]interface{}{
+		"payment_status":      models.PaymentCompleted,
+		"payment_method":      payment.Method,
+		"razorpay_payment_id": paymentID,
 	})
 
-	// Publish event
 	if err := services.PublishEvent("orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
 		"order_id":     order.ID.String(),
 		"order_number": order.OrderNumber,
 		"amount":       services.FromPaise(payment.Amount),
 		"method":       payment.Method,
+		"provider":     "razorpay",
+	}); err != nil {
+		log.Printf("Failed to publish order paid event: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
+}
+
+func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order, piID string) {
+	if piID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stripePaymentIntentId is required"})
+		return
+	}
+	if order.StripePaymentIntentID != piID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PaymentIntent ID mismatch"})
+		return
+	}
+
+	st := services.GetStripe()
+	if st == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+		return
+	}
+
+	pi, err := st.FetchPaymentIntent(piID)
+	if err != nil {
+		log.Printf("Failed to fetch Stripe PaymentIntent %s: %v", piID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
+		return
+	}
+
+	if pi.Status != "succeeded" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Payment not succeeded, status: %s", pi.Status)})
+		return
+	}
+
+	database.DB.Model(order).Updates(map[string]interface{}{
+		"payment_status": models.PaymentCompleted,
+		"payment_method": "card",
+	})
+
+	if err := services.PublishEvent("orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
+		"order_id":     order.ID.String(),
+		"order_number": order.OrderNumber,
+		"amount":       services.FromCents(pi.Amount),
+		"method":       "card",
+		"provider":     "stripe",
 	}); err != nil {
 		log.Printf("Failed to publish order paid event: %v", err)
 	}
@@ -253,11 +461,6 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
-	if order.RazorpayPaymentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No payment found for this order"})
-		return
-	}
-
 	// Validate refund amount
 	refundAmount := req.Amount
 	if refundAmount == 0 {
@@ -268,58 +471,105 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
-	rz := services.GetRazorpay()
-	if rz == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
-		return
+	provider := strings.ToLower(order.PaymentProvider)
+	if provider == "" {
+		provider = "razorpay"
 	}
 
-	// Create Razorpay refund — this automatically reverses Route transfers
-	rzRefund, err := rz.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-		Amount: services.ToPaise(refundAmount),
-		Speed:  "normal",
-		Notes: map[string]string{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"reason":       req.Reason,
-			"initiated_by": initiatedBy,
-		},
-		Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
-	})
-	if err != nil {
-		log.Printf("Failed to create refund for order %s: %v", order.OrderNumber, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
-		return
+	var refundID, refundStatus string
+
+	switch provider {
+	case "stripe":
+		if order.StripePaymentIntentID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})
+			return
+		}
+		st := services.GetStripe()
+		if st == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
+			return
+		}
+		currency := currencyForStripeCountry(order.Chef.PayoutCountry)
+		_ = currency // cents conversion is currency-agnostic for 2-decimal; document if extending
+		r, err := st.CreateRefund(&services.StripeRefundRequest{
+			PaymentIntent:        order.StripePaymentIntentID,
+			Amount:               services.ToCents(refundAmount),
+			Reason:               "requested_by_customer",
+			ReverseTransfer:      true, // pull money back from the chef's Connect account
+			RefundApplicationFee: true, // also refund our platform cut
+			Metadata: map[string]string{
+				"order_id":     order.ID.String(),
+				"order_number": order.OrderNumber,
+				"reason":       req.Reason,
+				"initiated_by": initiatedBy,
+			},
+		})
+		if err != nil {
+			log.Printf("Failed to create Stripe refund for order %s: %v", order.OrderNumber, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+			return
+		}
+		refundID = r.ID
+		refundStatus = r.Status
+	default: // razorpay
+		if order.RazorpayPaymentID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No Razorpay payment found for this order"})
+			return
+		}
+		rz := services.GetRazorpay()
+		if rz == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+			return
+		}
+		r, err := rz.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
+			Amount: services.ToPaise(refundAmount),
+			Speed:  "normal",
+			Notes: map[string]string{
+				"order_id":     order.ID.String(),
+				"order_number": order.OrderNumber,
+				"reason":       req.Reason,
+				"initiated_by": initiatedBy,
+			},
+			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
+		})
+		if err != nil {
+			log.Printf("Failed to create Razorpay refund for order %s: %v", order.OrderNumber, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+			return
+		}
+		refundID = r.ID
+		refundStatus = r.Status
 	}
 
 	now := time.Now()
 	database.DB.Model(&order).Updates(map[string]interface{}{
-		"payment_status":    models.PaymentRefunded,
-		"status":            models.OrderStatusRefunded,
-		"refund_id":         rzRefund.ID,
-		"refund_amount":     refundAmount,
-		"refund_reason":     req.Reason,
+		"payment_status":      models.PaymentRefunded,
+		"status":              models.OrderStatusRefunded,
+		"refund_id":           refundID,
+		"refund_amount":       refundAmount,
+		"refund_reason":       req.Reason,
 		"refund_initiated_by": initiatedBy,
-		"refunded_at":       &now,
+		"refunded_at":         &now,
 	})
 
-	// Publish event
 	if err := services.PublishEvent("orders.refunded", "order.refunded", userID, map[string]interface{}{
 		"order_id":      order.ID.String(),
 		"order_number":  order.OrderNumber,
 		"refund_amount": refundAmount,
 		"reason":        req.Reason,
 		"initiated_by":  initiatedBy,
-		"refund_id":     rzRefund.ID,
+		"refund_id":     refundID,
+		"provider":      provider,
 	}); err != nil {
 		log.Printf("Failed to publish order refunded event: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Refund initiated",
-		"refundId":     rzRefund.ID,
+		"refundId":     refundID,
 		"refundAmount": refundAmount,
-		"status":       rzRefund.Status,
+		"status":       refundStatus,
+		"provider":     provider,
 	})
 }
 
@@ -487,5 +737,177 @@ func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) {
 	database.DB.Model(&models.Subscription{}).
 		Where("gateway_sub_id = ?", data.Subscription.Entity.ID).
 		Update("status", models.SubStatusSuspended)
+}
+
+// StripeWebhook handles Stripe webhook events.
+// POST /webhooks/stripe (no auth — verified via Stripe-Signature HMAC).
+//
+// Only the event types relevant to our order lifecycle are handled;
+// everything else is acknowledged with 200 so Stripe stops retrying.
+func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read body"})
+		return
+	}
+
+	signature := c.GetHeader("Stripe-Signature")
+	if !services.VerifyStripeWebhookSignature(body, signature) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+		return
+	}
+
+	var event struct {
+		ID   string          `json:"id"`
+		Type string          `json:"type"`
+		Data struct {
+			Object json.RawMessage `json:"object"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &event); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+		return
+	}
+
+	log.Printf("Stripe webhook received: %s (%s)", event.Type, event.ID)
+
+	switch event.Type {
+	case "payment_intent.succeeded":
+		h.handleStripePaymentSucceeded(event.Data.Object)
+	case "payment_intent.payment_failed":
+		h.handleStripePaymentFailed(event.Data.Object)
+	case "charge.refunded":
+		// Top-level object is a Charge with a nested refunds.data[]. Pick
+		// the most recent refund to stamp on the order.
+		h.handleStripeChargeRefunded(event.Data.Object)
+	case "refund.updated":
+		h.handleStripeRefund(event.Data.Object)
+	case "account.updated":
+		h.handleStripeAccountUpdated(event.Data.Object)
+	default:
+		log.Printf("Unhandled Stripe webhook event: %s", event.Type)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
+	var pi services.StripePaymentIntent
+	if err := json.Unmarshal(obj, &pi); err != nil {
+		log.Printf("Failed to parse stripe payment_intent: %v", err)
+		return
+	}
+	log.Printf("Stripe payment succeeded: %s (amount: %d %s)", pi.ID, pi.Amount, pi.Currency)
+
+	database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ?", pi.ID).
+		Updates(map[string]interface{}{
+			"payment_status": models.PaymentCompleted,
+			"payment_method": "card",
+		})
+}
+
+func (h *PaymentHandler) handleStripePaymentFailed(obj json.RawMessage) {
+	var pi services.StripePaymentIntent
+	if err := json.Unmarshal(obj, &pi); err != nil {
+		log.Printf("Failed to parse stripe payment_intent: %v", err)
+		return
+	}
+	log.Printf("Stripe payment failed: %s", pi.ID)
+
+	database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ?", pi.ID).
+		Update("payment_status", models.PaymentFailed)
+}
+
+// handleStripeAccountUpdated syncs the cached capability flags on the chef
+// profile whenever Stripe signals a Connect account change. Keeps the
+// CreateOrderPayment guard (StripeChargesEnabled) accurate without needing
+// a Stripe round-trip on every order.
+func (h *PaymentHandler) handleStripeAccountUpdated(obj json.RawMessage) {
+	var acct struct {
+		ID      string `json:"id"`
+		Charges bool   `json:"charges_enabled"`
+		Payouts bool   `json:"payouts_enabled"`
+		Country string `json:"country"`
+	}
+	if err := json.Unmarshal(obj, &acct); err != nil {
+		log.Printf("Failed to parse stripe account.updated: %v", err)
+		return
+	}
+	if acct.ID == "" {
+		return
+	}
+	log.Printf("Stripe account.updated: %s (charges=%v, payouts=%v)", acct.ID, acct.Charges, acct.Payouts)
+
+	database.DB.Model(&models.ChefProfile{}).
+		Where("stripe_account_id = ?", acct.ID).
+		Updates(map[string]interface{}{
+			"stripe_charges_enabled": acct.Charges,
+			"stripe_payouts_enabled": acct.Payouts,
+		})
+}
+
+// handleStripeRefund handles refund.updated where the top-level object IS a
+// Refund with payment_intent at the root.
+func (h *PaymentHandler) handleStripeRefund(obj json.RawMessage) {
+	var r struct {
+		ID            string `json:"id"`
+		PaymentIntent string `json:"payment_intent"`
+		Amount        int    `json:"amount"`
+		Status        string `json:"status"`
+	}
+	if err := json.Unmarshal(obj, &r); err != nil {
+		log.Printf("Failed to parse stripe refund: %v", err)
+		return
+	}
+	if r.PaymentIntent == "" {
+		return
+	}
+	log.Printf("Stripe refund.updated: %s (payment_intent: %s, status: %s)", r.ID, r.PaymentIntent, r.Status)
+
+	now := time.Now()
+	database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ?", r.PaymentIntent).
+		Updates(map[string]interface{}{
+			"refund_id":   r.ID,
+			"refunded_at": &now,
+		})
+}
+
+// handleStripeChargeRefunded handles charge.refunded where the top-level
+// object is a Charge; refunds live at charge.refunds.data[]. Picks the last
+// refund entry so we record the most recent ID/state.
+func (h *PaymentHandler) handleStripeChargeRefunded(obj json.RawMessage) {
+	var ch struct {
+		ID            string `json:"id"`
+		PaymentIntent string `json:"payment_intent"`
+		Refunded      bool   `json:"refunded"`
+		Refunds       struct {
+			Data []struct {
+				ID     string `json:"id"`
+				Amount int    `json:"amount"`
+				Status string `json:"status"`
+			} `json:"data"`
+		} `json:"refunds"`
+	}
+	if err := json.Unmarshal(obj, &ch); err != nil {
+		log.Printf("Failed to parse stripe charge.refunded: %v", err)
+		return
+	}
+	if ch.PaymentIntent == "" || len(ch.Refunds.Data) == 0 {
+		return
+	}
+	latest := ch.Refunds.Data[len(ch.Refunds.Data)-1]
+	log.Printf("Stripe charge.refunded: charge=%s pi=%s refund=%s status=%s",
+		ch.ID, ch.PaymentIntent, latest.ID, latest.Status)
+
+	now := time.Now()
+	database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ?", ch.PaymentIntent).
+		Updates(map[string]interface{}{
+			"refund_id":   latest.ID,
+			"refunded_at": &now,
+		})
 }
 
