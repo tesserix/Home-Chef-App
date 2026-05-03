@@ -30,6 +30,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Sourcemaps off in production — they leak unminified source + auth/payment
+    // logic to the browser. Keep on for dev so devtools mapping works locally.
+    sourcemap: process.env.NODE_ENV !== 'production',
   },
 });

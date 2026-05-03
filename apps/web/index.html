@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
 
+    <!--
+      Content Security Policy — narrowly scoped allowlist.
+      script-src includes Razorpay Checkout (the SDK is injected via <script src=...> below)
+      and self for our own modules. 'unsafe-inline' is required for the FOUC-blocker style block,
+      so it is restricted to style-src only. connect-src covers our API + WebSocket + identity BFF.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://storage.googleapis.com https://*.razorpay.com https:; connect-src 'self' https://api.fe3dr.com https://identity.fe3dr.com https://internal-identity.fe3dr.com wss://api.fe3dr.com wss://fe3dr.com https://lumberjack.razorpay.com https://*.razorpay.com; frame-src https://api.razorpay.com https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
     <!-- Mobile Optimization -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
     <meta name="mobile-web-app-capable" content="yes" />
