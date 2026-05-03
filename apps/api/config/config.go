@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -86,23 +87,43 @@ func Load() {
 	jwtExpiration, _ := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
 	refreshTokenDays, _ := strconv.Atoi(getEnv("REFRESH_TOKEN_DAYS", "30"))
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
+	env := getEnv("ENVIRONMENT", "development")
+	isProd := env == "production"
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		if isProd {
+			log.Fatal("JWT_SECRET is required in production")
+		}
+		log.Println("WARNING: JWT_SECRET not set — using ephemeral dev secret. DO NOT USE IN PROD.")
+		jwtSecret = "dev-only-do-not-use-in-prod-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	if isProd && len(jwtSecret) < 32 {
+		log.Fatal("JWT_SECRET must be at least 32 characters in production")
+	}
+
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbURL := os.Getenv("DATABASE_URL")
+	if isProd && dbPassword == "" && dbURL == "" {
+		log.Fatal("DB_PASSWORD or DATABASE_URL is required in production")
+	}
 
 	AppConfig = &Config{
 		// Server
 		Port:        getEnv("PORT", "8080"),
-		Environment: getEnv("ENVIRONMENT", "development"),
+		Environment: env,
 
 		// Database
-		DatabaseURL: getEnv("DATABASE_URL", ""),
+		DatabaseURL: dbURL,
 		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBPort:      getEnv("DB_PORT", "5432"),
 		DBUser:      getEnv("DB_USER", "postgres"),
-		DBPassword:  getEnv("DB_PASSWORD", ""),
+		DBPassword:  dbPassword,
 		DBName:      getEnv("DB_NAME", "homechef"),
 		DBSSLMode:   getEnv("DB_SSLMODE", "disable"),
 
 		// JWT
-		JWTSecret:          getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
+		JWTSecret:          jwtSecret,
 		JWTExpirationHours: jwtExpiration,
 		RefreshTokenDays:   refreshTokenDays,
 

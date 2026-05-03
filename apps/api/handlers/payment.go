@@ -245,6 +245,8 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 // order.payment_provider first to pick the code path.
 // POST /payments/order/:orderId/verify
 func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
 	orderID, err := uuid.Parse(c.Param("orderId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order ID"})
@@ -264,8 +266,11 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 		return
 	}
 
+	// Scope by customer_id so a user cannot verify another user's order
+	// (IDOR). Returning 404 (not 403) avoids leaking existence of other
+	// orders.
 	var order models.Order
-	if err := database.DB.Where("id = ?", orderID).First(&order).Error; err != nil {
+	if err := database.DB.Where("id = ? AND customer_id = ?", orderID, userID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}

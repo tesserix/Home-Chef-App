@@ -1,6 +1,9 @@
 package routes
 
 import (
+	"os"
+	"strings"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/homechef/api/config"
@@ -10,6 +13,45 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// allowedOrigins resolves the CORS allowlist. In production we ONLY trust the
+// CORS_ORIGINS env var (comma-separated, https only — matches what argocd
+// passes through to the helm chart). In dev we keep the localhost origins
+// so the SPAs can hit the API directly.
+func allowedOrigins() []string {
+	if env := os.Getenv("CORS_ORIGINS"); env != "" {
+		var out []string
+		for o := range strings.SplitSeq(env, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				out = append(out, o)
+			}
+		}
+		return out
+	}
+	if config.IsProduction() {
+		// Production fallback — explicit, fixed list. No localhost. No wildcards.
+		return []string{
+			"https://fe3dr.com",
+			"https://www.fe3dr.com",
+			"https://vendors.fe3dr.com",
+			"https://admin.fe3dr.com",
+			"https://auth.fe3dr.com",
+			"https://delivery.fe3dr.com",
+		}
+	}
+	// Dev / staging
+	return []string{
+		"http://localhost:5173",
+		"http://localhost:3000",
+		"https://fe3dr.com",
+		"https://www.fe3dr.com",
+		"https://vendors.fe3dr.com",
+		"https://admin.fe3dr.com",
+		"https://auth.fe3dr.com",
+		"https://delivery.fe3dr.com",
+	}
+}
+
 func SetupRouter() *gin.Engine {
 	// Set Gin mode
 	if config.IsProduction() {
@@ -18,25 +60,25 @@ func SetupRouter() *gin.Engine {
 
 	r := gin.Default()
 
+	// Trust only proxies on the loopback / private mesh addresses so c.ClientIP()
+	// can't be spoofed by an upstream client.
+	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
+
 	// Prometheus metrics middleware
 	r.Use(middleware.PrometheusMiddleware())
 
-	// CORS configuration
+	// Defense-in-depth security headers on every response.
+	r.Use(middleware.SecurityHeaders())
+
+	// CORS configuration — allowlist driven by env in prod; never wildcards
+	// because AllowCredentials=true requires a specific origin.
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = []string{
-		"http://localhost:5173",
-		"http://localhost:3000",
-		"https://homechef.app",
-		"https://fe3dr.com",
-		"https://www.fe3dr.com",
-		"https://vendors.fe3dr.com",
-		"https://admin.fe3dr.com",
-		"https://auth.fe3dr.com",
-		"https://delivery.fe3dr.com",
-	}
+	corsConfig.AllowOrigins = allowedOrigins()
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Request-ID", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Auth-Token", "X-Request-ID", "X-Razorpay-Signature", "Stripe-Signature", "x-jwt-claim-sub", "x-jwt-claim-tenant-id", "x-jwt-claim-tenant-slug", "x-jwt-claim-email", "x-jwt-claim-name", "x-jwt-claim-given-name", "x-jwt-claim-family-name"}
+	corsConfig.ExposeHeaders = []string{"X-Request-ID", "Retry-After"}
 	corsConfig.AllowCredentials = true
+	corsConfig.MaxAge = 600
 	r.Use(cors.New(corsConfig))
 
 	// Initialize handlers
@@ -81,14 +123,11 @@ func SetupRouter() *gin.Engine {
 	// Prometheus metrics endpoint
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Razorpay webhook (no auth — uses HMAC signature verification)
-	r.POST("/webhooks/razorpay", paymentHandler.RazorpayWebhook)
-
-	// Stripe webhook (no auth — verified via Stripe-Signature HMAC)
-	r.POST("/webhooks/stripe", paymentHandler.StripeWebhook)
-
-	// Provider webhooks (public, verified by webhook secret)
-	r.POST("/webhooks/delivery/:provider", providerHandler.HandleWebhook)
+	// Webhook endpoints — HMAC verified, but cap inbound rate as a DoS guard.
+	webhookLimit := middleware.RateLimit(20, 40) // 20 rps sustained, 40 burst per IP
+	r.POST("/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
+	r.POST("/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
+	r.POST("/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
 
 	// WebSocket endpoints live at top-level /ws/* so the per-portal Istio
 	// VirtualServices (fe3dr.com, vendors.fe3dr.com, admin.fe3dr.com, …)
@@ -136,8 +175,13 @@ func SetupRouter() *gin.Engine {
 		taxHandler := handlers.NewTaxHandler()
 		v1.GET("/tax-rates/lookup", taxHandler.GetPublicTaxRate)
 
-		// Auth routes (public)
+		// Auth routes (public) — aggressive per-IP rate limiting to throttle
+		// credential stuffing, password-reset abuse, and email enumeration.
+		// 5 rps sustained / 10 burst is far above legit traffic but pinches
+		// any automated abuse hard.
+		authLimit := middleware.RateLimit(5, 10)
 		auth := v1.Group("/auth")
+		auth.Use(authLimit)
 		{
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)

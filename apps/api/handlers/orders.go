@@ -21,11 +21,44 @@ import (
 )
 
 // wsUpgrader upgrades HTTP connections to WebSocket.
-// CheckOrigin allows all origins — mobile clients do not send an Origin header.
+//
+// Browsers always send Origin on WS upgrade; mobile/native clients omit it.
+// We accept the request when EITHER:
+//   - Origin is empty (native client), OR
+//   - Origin matches the API CORS allowlist (browser).
+// Anything else is rejected to prevent cross-site WS hijacking.
 var wsUpgrader = websocket.Upgrader{
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     allowedWSOrigin,
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+}
+
+func allowedWSOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // native / curl / non-browser
+	}
+	host := r.Host
+	// Same-origin (proxied via Cloudflare/Istio) is always fine.
+	if strings.EqualFold(origin, "https://"+host) || strings.EqualFold(origin, "http://"+host) {
+		return true
+	}
+	// Trusted production + dev origins. Keep in sync with routes.allowedOrigins().
+	for _, allowed := range []string{
+		"https://fe3dr.com",
+		"https://www.fe3dr.com",
+		"https://vendors.fe3dr.com",
+		"https://admin.fe3dr.com",
+		"https://auth.fe3dr.com",
+		"https://delivery.fe3dr.com",
+		"http://localhost:5173",
+		"http://localhost:3000",
+	} {
+		if strings.EqualFold(origin, allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 type OrderHandler struct{}

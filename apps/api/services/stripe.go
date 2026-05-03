@@ -405,10 +405,15 @@ func (c *StripeClient) CreateRefund(req *StripeRefundRequest) (*StripeRefund, er
 
 // --- Webhook verification ---
 
+// stripeWebhookTolerance bounds how far a webhook's timestamp may drift from
+// our wall clock. Stripe recommends 5 minutes; matches their official SDK.
+const stripeWebhookTolerance = 5 * time.Minute
+
 // VerifyStripeWebhookSignature validates the Stripe-Signature header against
 // the configured webhook secret. Stripe's format is
 // `t=<timestamp>,v1=<hex-sha256>` — we HMAC `<timestamp>.<payload>` with
-// the secret and compare in constant time.
+// the secret and compare in constant time. Also rejects events older than
+// stripeWebhookTolerance to prevent replay.
 func VerifyStripeWebhookSignature(payload []byte, sigHeader string) bool {
 	if stripeClient == nil || stripeClient.webhookSecret == "" {
 		log.Println("Warning: Stripe webhook secret not configured")
@@ -430,6 +435,17 @@ func VerifyStripeWebhookSignature(payload []byte, sigHeader string) bool {
 		}
 	}
 	if ts == "" || len(signatures) == 0 {
+		return false
+	}
+
+	// Replay protection — reject events whose timestamp is too far from now.
+	tsInt, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return false
+	}
+	eventTime := time.Unix(tsInt, 0)
+	if drift := time.Since(eventTime); drift > stripeWebhookTolerance || drift < -stripeWebhookTolerance {
+		log.Printf("Stripe webhook rejected: timestamp drift %v exceeds tolerance", drift)
 		return false
 	}
 
