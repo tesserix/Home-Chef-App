@@ -5,9 +5,10 @@
 
     <!--
       Content Security Policy — narrowly scoped allowlist.
-      script-src includes Razorpay Checkout (the SDK is injected via <script src=...> below)
-      and self for our own modules. 'unsafe-inline' is required for the FOUC-blocker style block,
-      so it is restricted to style-src only. connect-src covers our API + WebSocket + identity BFF.
+      script-src: self for our Vite bundles + Razorpay Checkout SDK.
+      style-src 'unsafe-inline' is required for runtime-injected styles
+      (Tailwind utility classes via JIT, Radix UI portal styles, etc.).
+      connect-src covers our API + WebSockets + identity BFF.
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://storage.googleapis.com https://*.razorpay.com https:; connect-src 'self' https://api.fe3dr.com https://identity.fe3dr.com https://internal-identity.fe3dr.com wss://api.fe3dr.com wss://fe3dr.com https://lumberjack.razorpay.com https://*.razorpay.com; frame-src https://api.razorpay.com https://*.razorpay.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
@@ -63,15 +64,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet" />
 
     <title>Fe3dr - Homemade Food Delivered</title>
-
-    <!-- Prevent FOUC -->
-    <style>
-      html { visibility: hidden; }
-      html.loaded { visibility: visible; }
-    </style>
-    <script>
-      document.documentElement.classList.add('loaded');
-    </script>
 
     <!-- Razorpay Checkout SDK -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
