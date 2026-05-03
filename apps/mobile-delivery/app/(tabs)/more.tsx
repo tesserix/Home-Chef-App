@@ -12,6 +12,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth-store';
+import { stopTracking } from '../../lib/background-location';
 
 interface NavItem {
   icon: React.ReactNode;
@@ -28,7 +29,15 @@ export default function MoreScreen() {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          // Stop background GPS before clearing auth so we don't keep
+          // posting location with a stale token (or worse, post under
+          // a freshly logged-in different driver's session).
+          try {
+            await stopTracking();
+          } catch {
+            // best-effort; proceed with logout regardless
+          }
           logout();
           router.replace('/(auth)/login');
         },
