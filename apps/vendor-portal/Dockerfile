@@ -39,6 +39,12 @@ RUN pnpm build
 # ─── runtime ───────────────────────────────────────────────────────────
 FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
 
+# Pull in any alpine package patches published since the base image was
+# built (Trivy DB updates daily and gates on fixable CRITICAL/HIGH).
+USER 0:0
+RUN apk upgrade --no-cache && rm -rf /var/cache/apk/*
+USER 10001:10001
+
 COPY apps/vendor-portal/nginx.conf /etc/nginx/templates/default.conf.template
 ENV API_URL=http://localhost:8080
 
