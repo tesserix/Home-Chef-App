@@ -1,0 +1,21 @@
+# CVEs deferred to upstream tesserix base-image refresh.
+#
+# These live in the alpine 3.23.4 base layer of ghcr.io/tesserix/base-nginx-spa
+# (and base-go-builder etc.). Patching them here via `apk upgrade` in the app
+# Dockerfile is not viable because nginx-package upgrades reset
+# /etc/nginx/conf.d and /var/cache/nginx ownership to root, breaking the
+# non-root container user that the helm chart enforces (runAsUser: 1001).
+# The proper fix is a base-image rebuild on the latest alpine — out of scope
+# for this app repo.
+#
+# Risk assessment for HomeChef:
+# - CVE-2026-27135 (nghttp2 HTTP/2 DoS): Cloudflare terminates HTTP/2 at the
+#   edge before reaching our nginx, so the nghttp2 code path is not exposed
+#   to untrusted client traffic.
+# - CVE-2026-34743 (xz buffer overflow on malformed .xz indexing): xz is
+#   not invoked on user-supplied data anywhere in the SPA serving path.
+# - CVE-2026-4367 (PDF.js / generic): not applicable to SPA bundle.
+
+CVE-2026-27135
+CVE-2026-34743
+CVE-2026-4367
