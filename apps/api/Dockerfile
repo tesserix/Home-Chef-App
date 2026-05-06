@@ -1,7 +1,11 @@
 # HomeChef API Dockerfile.
-# Builds on tesserix company-owned base images — non-root uid 10001,
-# tini PID 1, ca-certs + tzdata + wget/curl, and weekly upstream CVE
-# patches are all baked in the base.
+# Builds on tesserix company-owned base images:
+#   * builder: base-go-builder (CGO_ENABLED=0 — static binaries)
+#   * runtime: base-distroless-static (no shell, ca-certs + tzdata,
+#              upstream gcr.io/distroless/static:nonroot)
+# Go's runtime handles SIGTERM directly via signal.Notify so tini is
+# unnecessary; K8s securityContext overrides USER and binaries are
+# mode 0755 (executable for any uid).
 
 # ─── builder ────────────────────────────────────────────────────────────
 FROM ghcr.io/tesserix/base-go-builder:latest AS builder
@@ -19,8 +23,7 @@ RUN go mod tidy \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/main .
 
 # ─── runtime ────────────────────────────────────────────────────────────
-FROM ghcr.io/tesserix/base-alpine-runtime:latest AS runtime
+FROM ghcr.io/tesserix/base-distroless-static:latest AS runtime
 COPY --from=builder --chown=10001:10001 /out/main /usr/local/bin/main
 EXPOSE 8080
-# base-alpine-runtime's ENTRYPOINT is already `tini --`.
 CMD ["/usr/local/bin/main"]

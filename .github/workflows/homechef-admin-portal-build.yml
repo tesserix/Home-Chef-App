@@ -30,9 +30,6 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: tesserix/home-chef-app/homechef-admin-portal
-  GCP_PROJECT_ID: tesseracthub-480811
-  GKE_CLUSTER: tesseract-prod-in-gke
-  GKE_REGION: asia-south1
 
 jobs:
   build:
@@ -54,26 +51,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- GCP Authentication (WIF for GKE deploy) ---
-      - name: Authenticate to Google Cloud (WIF)
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        id: auth_wif
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: projects/849928263410/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-          service_account: github-actions@tesseracthub-480811.iam.gserviceaccount.com
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
       # --- Build and Push to GHCR ---
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Only emit `main-<sha7>` on main. No `:latest` — Kargo
+          # promotes the newest matching tag from the GAR mirror via
+          # the kargo-homechef Project's prod Stage.
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=homechef-admin-portal
@@ -100,21 +89,10 @@ jobs:
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
           cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
 
-      # --- Deploy to GKE (Knative) ---
-      - name: Get GKE credentials
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.auth_wif.outcome == 'success'
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ env.GKE_CLUSTER }}
-          location: ${{ env.GKE_REGION }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - name: Restart Knative service
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.auth_wif.outcome == 'success'
-        run: |
-          kubectl patch ksvc homechef-admin-portal -n homechef \
-            --type merge \
-            -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"client.knative.dev/updateTimestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}}}}"
+      # No GKE deploy step here. Cluster rollout is owned by Kargo:
+      # the kargo-homechef Project's prod Stage discovers the new
+      # main-<sha7> tag in the GAR mirror, emits a Freight, and writes
+      # the homechef-admin-portal Argo CD Application's helm.parameters.image.tag.
 
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
@@ -122,7 +100,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -148,19 +126,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            echo "✅ **Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-            if [[ "${{ steps.auth_wif.outcome }}" == "success" ]]; then
-              echo "✅ **GKE Knative:** Service restarted" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "⏭️ **GKE:** Skipped (auth not configured)" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "**Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Deploy:** Kargo (kargo-homechef:prod) auto-promotes within ~5 min" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
-            echo "🔨 **Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
+            echo "**Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
           fi
 
   test:
