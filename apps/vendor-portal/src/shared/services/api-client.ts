@@ -89,6 +89,10 @@ class ApiClient {
           message: response.statusText || 'An error occurred',
         },
       }));
+      // Surface the HTTP status so callers can branch on it (e.g. 409 conflict
+      // for already-submitted onboarding). The body shape varies between
+      // endpoints, so the status is the only reliable discriminator.
+      (error as ApiError & { httpStatus: number }).httpStatus = response.status;
       throw error;
     }
 

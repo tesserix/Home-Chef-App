@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,15 +25,30 @@ func NewUploadHandler() *UploadHandler {
 	return &UploadHandler{}
 }
 
+// chef_profiles.business_name carries a unique index, so the doc-upload
+// placeholder cannot reuse the empty string — two concurrent users would
+// otherwise collide on `''` and the second upload would fail. We embed the
+// userID so each placeholder is unique-per-user; updateOnboarding overwrites
+// it with the real kitchen name on submit.
+const draftBusinessNamePrefix = "__draft__"
+
+func draftBusinessName(userID uuid.UUID) string {
+	return draftBusinessNamePrefix + userID.String()
+}
+
+func isPlaceholderBusinessName(n string) bool {
+	return strings.HasPrefix(n, draftBusinessNamePrefix)
+}
+
 // getOrCreateChefProfile finds the chef profile for the user, creating a placeholder if needed.
 // During onboarding, documents may be uploaded before the full profile is submitted.
 func getOrCreateChefProfile(userID uuid.UUID) (*models.ChefProfile, error) {
 	var chef models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
-		// Auto-create a placeholder profile so documents can be uploaded during onboarding
 		chef = models.ChefProfile{
-			UserID:   userID,
-			IsActive: false,
+			UserID:       userID,
+			BusinessName: draftBusinessName(userID),
+			IsActive:     false,
 		}
 		if err := database.DB.Create(&chef).Error; err != nil {
 			return nil, fmt.Errorf("failed to create placeholder chef profile: %w", err)
@@ -364,7 +380,7 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 
 	// Determine onboarding step based on what data is filled
 	step := 0
-	if chef.BusinessName != "" {
+	if chef.BusinessName != "" && !isPlaceholderBusinessName(chef.BusinessName) {
 		step = 2 // Kitchen details done
 	}
 	if chef.PrepTime != "" || chef.ServiceRadius > 0 {
@@ -400,7 +416,7 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 	case chef.IsVerified:
 		completed = true
 		onboardingStatus = "verified"
-	case chef.BusinessName == "":
+	case chef.BusinessName == "" || isPlaceholderBusinessName(chef.BusinessName):
 		// Stub profile from document upload or partial wizard save.
 		onboardingStatus = "in_progress"
 	case hasApproval && (approvalStatus == "rejected" || approvalStatus == "info_requested"):
@@ -417,6 +433,13 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		onboardingStatus = "in_progress"
 	}
 
+	// Hide the per-user draft sentinel from the wire — the wizard's hydration
+	// path would otherwise pre-fill the kitchen-name input with `__draft__<uuid>`.
+	wireBusinessName := chef.BusinessName
+	if isPlaceholderBusinessName(wireBusinessName) {
+		wireBusinessName = ""
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":         onboardingStatus,
 		"completed":      completed,
@@ -425,7 +448,7 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		"approvalStatus": approvalStatus,
 		"adminNotes":     approvalNotes,
 		"profile": gin.H{
-			"businessName":  chef.BusinessName,
+			"businessName":  wireBusinessName,
 			"description":   chef.Description,
 			"cuisines":      chef.Cuisines,
 			"specialties":   chef.Specialties,
@@ -460,6 +483,30 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 	// via document upload, or by a prior partial-save from the wizard's Step 3 hand-off).
 	var existing models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&existing).Error; err == nil {
+		// Block re-submission for chefs whose application is already in flight or
+		// approved. Without this guard the wizard's per-step `ensureProfile()` POST
+		// silently rewrote the live profile (business name, cuisines, address,
+		// schedules) and bumped the user back to a fresh pending approval —
+		// effectively wiping their onboarded kitchen on every Step-2 → Step-3 nav.
+		if existing.IsVerified {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":  "Your kitchen is already verified. Use the dashboard to update kitchen details.",
+				"status": "verified",
+			})
+			return
+		}
+		var latest models.ApprovalRequest
+		if err := database.DB.Where("chef_id = ? AND type = ?", existing.ID, models.ApprovalKitchenOnboarding).
+			Order("created_at DESC").First(&latest).Error; err == nil {
+			switch latest.Status {
+			case models.ApprovalPending, models.ApprovalApproved:
+				c.JSON(http.StatusConflict, gin.H{
+					"error":  "Your kitchen application is already under review. Please wait for the admin's response before re-submitting.",
+					"status": string(latest.Status),
+				})
+				return
+			}
+		}
 		h.updateOnboarding(c, &existing)
 		return
 	}

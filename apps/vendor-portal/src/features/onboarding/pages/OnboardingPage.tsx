@@ -63,6 +63,11 @@ function validateStep(step: number, data: ReturnType<typeof useOnboardingStore.g
   return errors;
 }
 
+// Statuses that mean the kitchen is locked — re-submitting would silently
+// overwrite the live profile, so the wizard refuses to POST for these and
+// routes the user back to the dashboard.
+const LOCKED_STATUSES = new Set(['pending_review', 'submitted', 'verified']);
+
 export default function OnboardingPage() {
   const navigate = useNavigate();
   const { user, onboardingStatus, adminNotes } = useAuth();
@@ -79,6 +84,16 @@ export default function OnboardingPage() {
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
+  // If the user already has a submitted/approved/verified kitchen, the wizard
+  // should never let them re-submit — that path used to clobber the live
+  // profile. Send them back to the dashboard instead.
+  useEffect(() => {
+    if (LOCKED_STATUSES.has(onboardingStatus)) {
+      toast.info('Your kitchen is already submitted. Manage it from the dashboard.');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [onboardingStatus, navigate]);
+
   // Always pre-fill email/name from current logged-in user's session
   // This ensures a new user never sees a previous user's data
   useEffect(() => {
@@ -90,12 +105,22 @@ export default function OnboardingPage() {
     }
   }, [user?.email, user?.firstName, user?.lastName]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleLockedConflict = () => {
+    toast.error('Your kitchen is already under review or live. Returning to the dashboard.');
+    navigate('/dashboard', { replace: true });
+  };
+
   const ensureProfile = async (): Promise<boolean> => {
     setIsCreatingProfile(true);
     try {
       await apiClient.post('/chef/onboarding', data);
       return true;
-    } catch {
+    } catch (err: unknown) {
+      const httpStatus = (err as { httpStatus?: number })?.httpStatus;
+      if (httpStatus === 409) {
+        handleLockedConflict();
+        return false;
+      }
       toast.error('Failed to save your details. Please try again.');
       return false;
     } finally {
@@ -156,7 +181,12 @@ export default function OnboardingPage() {
       toast.success('Application submitted! We\'ll review and get back to you within 24-48 hours.');
       reset();
       navigate('/dashboard');
-    } catch {
+    } catch (err: unknown) {
+      const httpStatus = (err as { httpStatus?: number })?.httpStatus;
+      if (httpStatus === 409) {
+        handleLockedConflict();
+        return;
+      }
       toast.error('Failed to submit application. Please try again.');
     } finally {
       setIsSubmitting(false);
