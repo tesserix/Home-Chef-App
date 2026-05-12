@@ -70,6 +70,14 @@ export function AdminLayout() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Skip link — first focusable, visible only when focused */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
+
       {/* Sidebar - Desktop */}
       <aside className="hidden w-64 flex-shrink-0 bg-sidebar lg:block">
         <div className="flex h-full flex-col">
@@ -113,10 +121,14 @@ export function AdminLayout() {
           {/* User section */}
           <div className="border-t border-sidebar-border p-4">
             <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              aria-label="Account menu"
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-sidebar-accent"
+              className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-primary/20">
+              <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-primary/20">
                 <Shield className="h-5 w-5 text-sidebar-primary" />
               </div>
               <div className="flex-1 text-left">
@@ -127,7 +139,7 @@ export function AdminLayout() {
                   {isSuperAdmin ? 'Super Admin' : 'Admin'}
                 </p>
               </div>
-              <ChevronDown className="h-4 w-4 text-sidebar-foreground/60" />
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
 
             {userMenuOpen && (
@@ -172,7 +184,12 @@ export function AdminLayout() {
                   </div>
                   <span className="text-lg font-medium text-sidebar-foreground">Fe3dr</span>
                 </Link>
-                <button onClick={() => setSidebarOpen(false)}>
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded-lg p-1 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
                   <X className="h-6 w-6 text-sidebar-foreground/60" />
                 </button>
               </div>
@@ -211,8 +228,11 @@ export function AdminLayout() {
         {/* Top bar */}
         <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:px-8">
           <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 hover:bg-secondary lg:hidden"
+            className="rounded-lg p-2 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -224,10 +244,14 @@ export function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <Link to="/approvals" className="relative rounded-lg p-2 hover:bg-secondary">
-              <Bell className="h-5 w-5 text-muted-foreground" />
+            <Link
+              to="/approvals"
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+              className="relative rounded-lg p-2 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Bell aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
               {unreadCount > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                <span aria-hidden="true" className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
