@@ -9,7 +9,7 @@ import {
   Clock,
   ChevronRight,
   Check,
-  Loader2,
+
   Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { loadStripeJs } from '@/shared/utils/load-stripe';
+import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
 
 const addressSchema = z.object({
@@ -404,9 +405,9 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   </div>
-                  <button type="submit" className="btn-primary">
+                  <Button type="submit" variant="primary">
                     Save Address
-                  </button>
+                  </Button>
                 </form>
               ) : savedAddresses.length === 0 ? (
                 <div className="mt-4 rounded-lg border border-dashed border-mist-strong p-6 text-center text-sm text-ink-soft">
@@ -654,23 +655,18 @@ export default function CheckoutPage() {
                 <span>{fp(total, { currency: orderCurrency })}</span>
               </div>
 
-              <button
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                isLoading={isProcessing}
                 onClick={handlePlaceOrder}
                 disabled={isProcessing || !selectedAddress}
-                className="btn-primary mt-6 w-full py-4 disabled:opacity-50"
+                rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
+                className="mt-6"
               >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Placing Order...
-                  </>
-                ) : (
-                  <>
-                    Place Order - {fp(total, { currency: orderCurrency })}
-                    <ChevronRight className="ml-2 h-5 w-5" />
-                  </>
-                )}
-              </button>
+                {isProcessing ? 'Placing Order...' : `Place Order - ${fp(total, { currency: orderCurrency })}`}
+              </Button>
 
               <p className="mt-4 text-center text-xs text-ink-muted">
                 By placing this order, you agree to our Terms of Service

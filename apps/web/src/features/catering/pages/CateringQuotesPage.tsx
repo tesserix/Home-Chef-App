@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { CateringRequest, CateringQuote, PaginatedResponse } from '@/shared/types';
 
 const STATUS_CONFIG = {
@@ -87,10 +88,9 @@ export default function CateringQuotesPage() {
             <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">My Catering Requests</h1>
             <p className="mt-1 text-ink-soft">Manage your catering requests and quotes</p>
           </div>
-          <Link to="/catering" className="btn-primary">
-            <Plus className="h-4 w-4" />
-            New Request
-          </Link>
+          <Button asChild variant="primary" leftIcon={<Plus aria-hidden="true" className="h-4 w-4" />}>
+            <Link to="/catering">New Request</Link>
+          </Button>
         </div>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
@@ -108,9 +108,9 @@ export default function CateringQuotesPage() {
                   <p className="mt-2 text-sm text-ink-soft">
                     Create a catering request to receive quotes from our chefs
                   </p>
-                  <Link to="/catering" className="btn-primary mt-4 inline-flex">
-                    Create Request
-                  </Link>
+                  <Button asChild variant="primary" className="mt-4">
+                    <Link to="/catering">Create Request</Link>
+                  </Button>
                 </div>
               ) : (
                 <div className="divide-y">
@@ -405,20 +405,17 @@ function QuoteCard({
         {/* Actions */}
         {quote.status === 'pending' && (
           <div className="mt-6 flex gap-3">
-            <button
-              onClick={onAccept}
+            <Button
+              variant="primary"
+              fullWidth
+              isLoading={isAccepting}
               disabled={isAccepting}
-              className="btn-primary flex-1"
+              onClick={onAccept}
+              leftIcon={!isAccepting ? <Check aria-hidden="true" className="h-5 w-5" /> : undefined}
+              className="flex-1"
             >
-              {isAccepting ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <Check className="h-5 w-5" />
-                  Accept Quote
-                </>
-              )}
-            </button>
+              {isAccepting ? 'Accepting…' : 'Accept Quote'}
+            </Button>
             <button
               onClick={onDecline}
               className="btn-outline flex-1"

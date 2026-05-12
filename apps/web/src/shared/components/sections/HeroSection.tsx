@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Search, MapPin, ChefHat, Clock, Star } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { HERO_IMAGES } from '@/shared/constants/images';
+import { Button } from '@/shared/components/ui';
 
 interface HeroSectionProps {
   variant?: 'home' | 'chefs' | 'catering' | 'feed';
@@ -82,12 +83,12 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
           {variant === 'home' && <SearchBar />}
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <Link to={content.ctaLink} className="btn-primary">
-              {content.cta}
-            </Link>
-            <Link to="/how-it-works" className="btn-outline">
-              How It Works
-            </Link>
+            <Button asChild variant="primary" size="lg">
+              <Link to={content.ctaLink}>{content.cta}</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link to="/how-it-works">How It Works</Link>
+            </Button>
           </div>
 
           {variant === 'home' && <Stats />}
@@ -108,10 +109,9 @@ function SearchBar() {
           className="flex-1 bg-transparent text-ink placeholder:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40 focus-visible:ring-offset-2 rounded"
         />
       </div>
-      <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
-        <Search className="h-5 w-5" />
+      <Button variant="primary" leftIcon={<Search aria-hidden="true" className="h-5 w-5" />}>
         Find Chefs
-      </button>
+      </Button>
     </div>
   );
 }

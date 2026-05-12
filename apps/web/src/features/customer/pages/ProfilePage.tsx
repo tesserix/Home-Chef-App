@@ -341,9 +341,9 @@ function ProfileTab() {
 
         {isEditing && (
           <div className="flex gap-3 pt-4">
-            <button type="submit" className="btn-primary">
+            <Button type="submit" variant="primary">
               Save Changes
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => {

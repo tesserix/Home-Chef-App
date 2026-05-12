@@ -21,6 +21,7 @@ import { useCartStore } from '@/app/store/cart-store';
 import { MobileBottomNav, MobileBottomNavSpacer } from '@/shared/components/navigation';
 import { Logo } from '@/shared/components/brand';
 import { CurrencySelector } from '@/shared/components/CurrencySelector';
+import { Button } from '@/shared/components/ui';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 
 export function MainLayout() {
@@ -122,22 +123,24 @@ export function MainLayout() {
               <ThemeToggleCompact />
 
               {/* Search button */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => navigate('/chefs')}
                 aria-label="Search chefs"
-                className="btn-ghost hidden p-2 md:flex"
+                className="hidden md:flex"
               >
-                <Search className="h-5 w-5" />
-              </button>
+                <Search aria-hidden="true" className="h-5 w-5" />
+              </Button>
 
               {/* Cart */}
-              <Link
-                to="/cart"
-                aria-label={cartItemCount > 0 ? `Cart, ${cartItemCount} items` : 'Cart'}
-                className="btn-ghost relative p-2"
-              >
-                <ShoppingCart className="h-5 w-5" />
-                <AnimatePresence>
+              <Button asChild variant="ghost" size="icon" className="relative">
+                <Link
+                  to="/cart"
+                  aria-label={cartItemCount > 0 ? `Cart, ${cartItemCount} items` : 'Cart'}
+                >
+                  <ShoppingCart aria-hidden="true" className="h-5 w-5" />
+                  <AnimatePresence>
                   {cartItemCount > 0 && (
                     <motion.span
                       key={cartItemCount}
@@ -149,9 +152,10 @@ export function MainLayout() {
                     >
                       {cartItemCount}
                     </motion.span>
-                  )}
-                </AnimatePresence>
-              </Link>
+                    )}
+                  </AnimatePresence>
+                </Link>
+              </Button>
 
               {/* User menu */}
               {isAuthenticated ? (
@@ -262,29 +266,31 @@ export function MainLayout() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Link to="/login" className="btn-ghost">
-                    Login
-                  </Link>
-                  <Link to="/register" className="btn-primary">
-                    Sign Up
-                  </Link>
+                  <Button asChild variant="ghost">
+                    <Link to="/login">Login</Link>
+                  </Button>
+                  <Button asChild variant="primary">
+                    <Link to="/register">Sign Up</Link>
+                  </Button>
                 </div>
               )}
 
               {/* Mobile menu button */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={mobileMenuOpen}
                 aria-controls="mobile-menu"
-                className="btn-ghost p-2 md:hidden"
+                className="md:hidden"
               >
                 {mobileMenuOpen ? (
                   <X aria-hidden="true" className="h-5 w-5" />
                 ) : (
                   <Menu aria-hidden="true" className="h-5 w-5" />
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </nav>

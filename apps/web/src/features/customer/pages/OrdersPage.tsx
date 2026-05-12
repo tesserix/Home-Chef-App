@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 import type { Order, PaginatedResponse, OrderStatus } from '@/shared/types';
 
 // Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
@@ -123,9 +124,9 @@ export default function OrdersPage() {
                   ? "You haven't placed any orders yet."
                   : `No ${filter} orders found.`}
               </p>
-              <Link to="/chefs" className="btn-primary mt-6 inline-flex">
-                Browse Chefs
-              </Link>
+              <Button asChild variant="primary" className="mt-6">
+                <Link to="/chefs">Browse Chefs</Link>
+              </Button>
             </div>
           ) : (
             filteredOrders.map((order) => <OrderCard key={order.id} order={order} />)

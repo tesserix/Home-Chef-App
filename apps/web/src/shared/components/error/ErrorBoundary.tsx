@@ -15,6 +15,7 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Button } from '@/shared/components/ui';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -82,16 +83,12 @@ function DefaultErrorFallback({ error, onRetry }: DefaultErrorFallbackProps) {
           </details>
         )}
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <button type="button" onClick={onRetry} className="btn-primary">
+          <Button type="button" variant="primary" onClick={onRetry}>
             Try again
-          </button>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="btn-secondary"
-          >
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => window.location.reload()}>
             Refresh page
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -11,13 +11,14 @@ import {
   Users,
   UtensilsCrossed,
   DollarSign,
-  Loader2,
+
   ChefHat,
   ArrowRight,
   Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { CateringRequest, CateringServiceType } from '@/shared/types';
 
 const cateringSchema = z.object({
@@ -287,10 +288,14 @@ export default function CateringRequestPage() {
               </div>
 
               <div className="mt-8 flex justify-end">
-                <button type="button" onClick={nextStep} className="btn-primary">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={nextStep}
+                  rightIcon={<ArrowRight aria-hidden="true" className="h-5 w-5" />}
+                >
                   Continue
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -395,10 +400,14 @@ export default function CateringRequestPage() {
                 <button type="button" onClick={() => setStep(1)} className="btn-outline">
                   Back
                 </button>
-                <button type="button" onClick={nextStep} className="btn-primary">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={nextStep}
+                  rightIcon={<ArrowRight aria-hidden="true" className="h-5 w-5" />}
+                >
                   Continue
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -478,23 +487,15 @@ export default function CateringRequestPage() {
                 <button type="button" onClick={() => setStep(2)} className="btn-outline">
                   Back
                 </button>
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  isLoading={createRequestMutation.isPending}
                   disabled={createRequestMutation.isPending}
-                  className="btn-primary"
+                  leftIcon={!createRequestMutation.isPending ? <ChefHat aria-hidden="true" className="h-5 w-5" /> : undefined}
                 >
-                  {createRequestMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <ChefHat className="mr-2 h-5 w-5" />
-                      Submit Request
-                    </>
-                  )}
-                </button>
+                  {createRequestMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                </Button>
               </div>
             </div>
           )}

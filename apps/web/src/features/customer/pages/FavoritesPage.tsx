@@ -39,9 +39,9 @@ export default function FavoritesPage() {
         <p className="mt-2 text-ink-soft text-center">
           Save your favorite home chefs to quickly find them later
         </p>
-        <Link to="/login" className="btn-primary mt-6">
-          Log In
-        </Link>
+        <Button asChild variant="primary" className="mt-6">
+          <Link to="/login">Log In</Link>
+        </Button>
       </div>
     );
   }

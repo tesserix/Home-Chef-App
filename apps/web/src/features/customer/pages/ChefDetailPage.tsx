@@ -22,6 +22,7 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
 
 export default function ChefDetailPage() {
@@ -85,9 +86,9 @@ export default function ChefDetailPage() {
       <div className="flex min-h-screen flex-col items-center justify-center">
         <AlertCircle className="h-16 w-16 text-ink-muted" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Chef not found</h2>
-        <Link to="/chefs" className="btn-primary mt-4">
-          Browse Chefs
-        </Link>
+        <Button asChild variant="primary" className="mt-4">
+          <Link to="/chefs">Browse Chefs</Link>
+        </Button>
       </div>
     );
   }
@@ -298,21 +299,20 @@ export default function ChefDetailPage() {
       {/* Floating Cart Button */}
       {cartItemCount > 0 && (
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto z-40">
-          <Link
-            to="/cart"
-            className="btn-primary flex items-center justify-between gap-4 py-4 px-6 shadow-3 md:justify-center"
-          >
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="h-5 w-5" />
-              <span>View Cart</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-bone/20 px-2 py-0.5 text-sm">
-                {cartItemCount} items
-              </span>
-              <span className="font-semibold">{fp(cart.getSubtotal())}</span>
-            </div>
-          </Link>
+          <Button asChild variant="primary" size="lg" className="w-full justify-between gap-4 shadow-3 md:justify-center">
+            <Link to="/cart" aria-label={`View cart, ${cartItemCount} items, ${fp(cart.getSubtotal())}`}>
+              <div className="flex items-center gap-3">
+                <ShoppingCart aria-hidden="true" className="h-5 w-5" />
+                <span>View Cart</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-bone/20 px-2 py-0.5 text-sm">
+                  {cartItemCount} items
+                </span>
+                <span className="font-semibold">{fp(cart.getSubtotal())}</span>
+              </div>
+            </Link>
+          </Button>
         </div>
       )}
     </div>
@@ -431,9 +431,9 @@ function MenuItemCard({
                   </button>
                 </div>
 
-                <button onClick={handleAddToCart} className="btn-primary py-2 px-4">
+                <Button variant="primary" size="sm" onClick={handleAddToCart}>
                   {cartItem ? 'Add More' : 'Add'}
-                </button>
+                </Button>
               </div>
             ) : (
               <span className="text-sm text-ink-muted">Unavailable</span>

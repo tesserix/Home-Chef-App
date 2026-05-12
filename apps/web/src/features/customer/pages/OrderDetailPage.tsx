@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 import type { Order, OrderStatus } from '@/shared/types';
 
 // Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
@@ -120,9 +121,9 @@ export default function OrderDetailPage() {
       <div className="flex min-h-screen flex-col items-center justify-center">
         <AlertCircle className="h-16 w-16 text-ink-muted" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Order not found</h2>
-        <Link to="/orders" className="btn-primary mt-4">
-          View All Orders
-        </Link>
+        <Button asChild variant="primary" className="mt-4">
+          <Link to="/orders">View All Orders</Link>
+        </Button>
       </div>
     );
   }
@@ -325,10 +326,9 @@ export default function OrderDetailPage() {
         {/* Actions */}
         <div className="mt-6 flex flex-wrap gap-4">
           {order.status === 'delivered' && (
-            <Link to={`/orders/${order.id}/review`} className="btn-primary">
-              <Star className="h-4 w-4" />
-              Leave a Review
-            </Link>
+            <Button asChild variant="primary" leftIcon={<Star aria-hidden="true" className="h-4 w-4" />}>
+              <Link to={`/orders/${order.id}/review`}>Leave a Review</Link>
+            </Button>
           )}
 
           {isActive && (

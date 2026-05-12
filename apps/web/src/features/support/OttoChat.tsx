@@ -108,7 +108,7 @@ export function OttoChat() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Open support chat"
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-lg"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full text-2xl text-white shadow-3"
         style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' }}
       >
         💬
@@ -118,7 +118,7 @@ export function OttoChat() {
 
   return (
     <div
-      className="fixed bottom-6 right-6 z-50 flex flex-col overflow-hidden rounded-xl shadow-2xl"
+      className="fixed bottom-6 right-6 z-50 flex flex-col overflow-hidden rounded-xl shadow-3"
       style={{
         width: 360,
         height: 520,
