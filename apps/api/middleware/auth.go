@@ -3,6 +3,7 @@ package middleware
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -190,6 +191,11 @@ func AuthMiddleware() gin.HandlerFunc {
 		if tokenString != "" {
 			claims := &Claims{}
 			token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+				// Reject `alg: none` and asymmetric-algorithm confusion attacks:
+				// our tokens are signed HS256, so anything else is hostile.
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
 				return []byte(config.AppConfig.JWTSecret), nil
 			})
 

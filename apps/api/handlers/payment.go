@@ -620,14 +620,23 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	payment := data.Payment.Entity
 	log.Printf("Payment captured: %s (order: %s, amount: %d)", payment.ID, payment.OrderID, payment.Amount)
 
-	// Update order
-	database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ?", payment.OrderID).
+	// Idempotent update: only flip orders that are not already marked
+	// completed. Razorpay retries webhooks; without this guard repeated
+	// deliveries would re-emit downstream effects.
+	res := database.DB.Model(&models.Order{}).
+		Where("razorpay_order_id = ? AND payment_status <> ?", payment.OrderID, models.PaymentCompleted).
 		Updates(map[string]interface{}{
 			"payment_status":      models.PaymentCompleted,
 			"payment_method":      payment.Method,
 			"razorpay_payment_id": payment.ID,
 		})
+	if res.Error != nil {
+		log.Printf("Failed to apply payment.captured for order %s: %v", payment.OrderID, res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
+	}
 }
 
 func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
@@ -644,8 +653,14 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
 	payment := data.Payment.Entity
 	log.Printf("Payment failed: %s (order: %s)", payment.ID, payment.OrderID)
 
+	// Idempotent: only transition from a non-terminal state. Avoids
+	// overwriting a completed payment if events arrive out-of-order.
 	database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ?", payment.OrderID).
+		Where("razorpay_order_id = ? AND payment_status NOT IN ?", payment.OrderID, []models.PaymentStatus{
+			models.PaymentCompleted,
+			models.PaymentFailed,
+			models.PaymentRefunded,
+		}).
 		Update("payment_status", models.PaymentFailed)
 }
 
@@ -663,10 +678,12 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) {
 	refund := data.Refund.Entity
 	log.Printf("Refund processed: %s (payment: %s, amount: %d)", refund.ID, refund.PaymentID, refund.Amount)
 
-	// Update refund status
+	// Idempotent: skip if we already stamped this refund_id on the order
+	// (Razorpay retries refund.processed; without this we'd re-write the
+	// refunded_at timestamp on every redelivery).
 	now := time.Now()
 	database.DB.Model(&models.Order{}).
-		Where("razorpay_payment_id = ?", refund.PaymentID).
+		Where("razorpay_payment_id = ? AND (refund_id IS NULL OR refund_id <> ?)", refund.PaymentID, refund.ID).
 		Updates(map[string]interface{}{
 			"refund_id":   refund.ID,
 			"refunded_at": &now,

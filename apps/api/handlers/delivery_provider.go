@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"regexp"
@@ -45,10 +44,14 @@ func (h *DeliveryProviderHandler) ListProviders(c *gin.Context) {
 		db = db.Where("is_active = ?", active == "true")
 	}
 	if country := c.Query("country"); country != "" {
-		db = db.Where("supported_countries @> ?", fmt.Sprintf(`["%s"]`, country))
+		// json.Marshal escapes embedded quotes/backslashes so a value like
+		// `IN","x":"y` can't break out of the JSON literal.
+		b, _ := json.Marshal([]string{country})
+		db = db.Where("supported_countries @> ?", string(b))
 	}
 	if city := c.Query("city"); city != "" {
-		db = db.Where("supported_cities @> ?", fmt.Sprintf(`["%s"]`, city))
+		b, _ := json.Marshal([]string{city})
+		db = db.Where("supported_cities @> ?", string(b))
 	}
 
 	var total int64

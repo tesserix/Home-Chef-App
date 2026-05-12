@@ -50,14 +50,17 @@ func (s *ProviderService) FindAvailableProvider(city string, distance float64, c
 	var providers []models.DeliveryProvider
 	db := database.DB.Where("is_enabled = ? AND is_active = ?", true, true)
 
-	// Filter by supported country
+	// Filter by supported country. json.Marshal escapes embedded quotes so
+	// untrusted values can't break out of the JSON literal passed to @>.
 	if countryCode != "" {
-		db = db.Where("supported_countries @> ?", fmt.Sprintf(`["%s"]`, countryCode))
+		b, _ := json.Marshal([]string{countryCode})
+		db = db.Where("supported_countries @> ?", string(b))
 	}
 
 	// Filter by supported city
 	if city != "" {
-		db = db.Where("supported_cities @> ?", fmt.Sprintf(`["%s"]`, city))
+		b, _ := json.Marshal([]string{city})
+		db = db.Where("supported_cities @> ?", string(b))
 	}
 
 	// Filter by max distance

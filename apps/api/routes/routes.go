@@ -523,9 +523,13 @@ func SetupRouter() *gin.Engine {
 			driverSubscription.GET("/earnings", subscriptionHandler.GetEarningsSummary)
 		}
 
-		// Payment routes (authenticated)
+		// Payment routes (authenticated). Rate-limited per-user to defend
+		// against credential-theft abuse: stolen tokens shouldn't be able to
+		// fire bulk refund/verify floods even though Razorpay itself is
+		// idempotent.
+		paymentLimit := middleware.RateLimitByUser(2, 5) // 2 rps sustained, 5 burst per user
 		orderPayments := v1.Group("/payments")
-		orderPayments.Use(middleware.AuthMiddleware())
+		orderPayments.Use(middleware.AuthMiddleware(), paymentLimit)
 		{
 			orderPayments.POST("/order/:orderId/create", paymentHandler.CreateOrderPayment)
 			orderPayments.POST("/order/:orderId/verify", paymentHandler.VerifyPayment)

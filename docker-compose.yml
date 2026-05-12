@@ -68,7 +68,9 @@ services:
       - DATABASE_URL=postgres://homechef:homechef_secret@postgres:5432/homechef?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      # JWT_SECRET must be a 32+ char random string in any non-local context.
+      # The fallback below is for offline localhost dev only — never deployed.
+      - JWT_SECRET=${JWT_SECRET:-local-dev-only-do-not-use-anywhere-else-9f3c}
       - JWT_EXPIRY=24h
       - REFRESH_TOKEN_EXPIRY=168h
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
