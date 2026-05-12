@@ -120,7 +120,7 @@ export function LogoText({
   return (
     <span
       className={cn(
-        'font-display font-display text-2xl font-semibold tracking-tight',
+        'font-display text-2xl font-semibold tracking-tight',
         isLight ? 'text-paper' : 'text-ink',
         className
       )}

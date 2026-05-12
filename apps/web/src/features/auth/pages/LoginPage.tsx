@@ -51,10 +51,10 @@ export default function LoginPage() {
         <div className="mx-auto w-full max-w-sm lg:w-96">
           {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb shadow-md group-hover:shadow-lg transition-shadow">
-              <ChefHat className="h-5 w-5 text-paper" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb shadow-1 group-hover:shadow-2 transition-shadow">
+              <ChefHat aria-hidden="true" className="h-5 w-5 text-paper" />
             </div>
-            <span className="font-display font-display text-2xl font-semibold text-ink">Fe3dr</span>
+            <span className="font-display text-2xl font-semibold text-ink">Fe3dr</span>
           </Link>
 
           <motion.div
@@ -159,7 +159,11 @@ export default function LoginPage() {
                   className="space-y-4"
                 >
                   {error && (
-                    <div className="rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika">
+                    <div
+                      id="login-form-error"
+                      role="alert"
+                      className="rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika"
+                    >
                       {error}
                     </div>
                   )}
@@ -175,7 +179,9 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
+                      aria-invalid={!!error || undefined}
+                      aria-describedby={error ? 'login-form-error' : undefined}
+                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
                       placeholder="you@example.com"
                     />
                   </div>
@@ -200,15 +206,19 @@ export default function LoginPage() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="block w-full rounded-lg border border-mist-strong px-3 py-2.5 pr-10 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
+                        aria-invalid={!!error || undefined}
+                        aria-describedby={error ? 'login-form-error' : undefined}
+                        className="block w-full rounded-lg border border-mist-strong px-3 py-2.5 pr-10 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
                         placeholder="Enter your password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-muted hover:text-ink-soft"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-muted hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30 rounded-r-lg"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
@@ -248,8 +258,12 @@ export default function LoginPage() {
           className="absolute inset-0 h-full w-full object-cover"
           src="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1200&h=900&fit=crop"
           alt="Delicious homemade food"
+          width={1200}
+          height={900}
+          loading="lazy"
+          decoding="async"
         />
-        <div className="absolute inset-0 bg-herb/30 to-spice-500/20" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 scrim-bottom p-12">
           <motion.blockquote
             initial={{ opacity: 0, y: 20 }}

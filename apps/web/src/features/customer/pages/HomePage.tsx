@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/shared/utils/cn';
 import { apiClient } from '@/shared/services/api-client';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -66,13 +67,12 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-cream-50">
+    <div className="min-h-screen bg-paper">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-herb via-white to-golden-50 py-20 lg:py-32">
-        {/* Decorative background elements */}
-        <div className="absolute inset-0 overflow-hidden">
+      <section className="relative overflow-hidden bg-bone py-20 lg:py-32">
+        {/* Decorative background element — single tinted wash, not a multi-stop gradient */}
+        <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
           <div className="absolute -left-32 -top-32 h-64 w-64 rounded-full bg-herb-tint/50 blur-3xl" />
-          <div className="absolute -right-32 top-1/2 h-96 w-96 rounded-full bg-paper/50 blur-3xl" />
         </div>
 
         <div className="container-app relative">
@@ -107,7 +107,7 @@ export default function HomePage() {
 
             {/* Search Bar */}
             <motion.div variants={fadeInUp} className="mt-10">
-              <Card variant="elevated" padding="sm" className="shadow-soft-xl">
+              <Card variant="elevated" padding="sm" className="shadow-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center p-2">
                   <div className="relative flex-1">
                     <Input
@@ -214,8 +214,8 @@ export default function HomePage() {
                         {index + 1}
                       </span>
                     </div>
-                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-herb shadow-soft-md">
-                      <step.icon className="h-10 w-10 text-herb" />
+                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-herb shadow-2">
+                      <step.icon aria-hidden="true" className="h-10 w-10 text-paper" />
                     </div>
                     <h3 className="mt-6 text-xl font-semibold text-ink">{step.title}</h3>
                     <p className="mt-3 text-ink-soft">{step.description}</p>
@@ -257,16 +257,20 @@ export default function HomePage() {
                 <motion.div key={cuisine.name} variants={scaleIn}>
                   <Link
                     to={`/chefs?cuisine=${cuisine.name}`}
-                    className="group relative block overflow-hidden rounded-2xl shadow-card hover:shadow-2 transition-all duration-300"
+                    className="group relative block overflow-hidden rounded-2xl shadow-1 hover:shadow-2 transition-all duration-300"
                   >
                     <div className="aspect-[4/3]">
                       <img
                         src={cuisine.image}
                         alt={cuisine.name}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
+                        width={300}
+                        height={200}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
                       />
                     </div>
-                    <div className="absolute inset-0 scrim-bottom" />
+                    <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
                     <div className="absolute bottom-0 left-0 right-0 p-4">
                       <h3 className="font-semibold text-paper">{cuisine.name}</h3>
                     </div>
@@ -290,7 +294,7 @@ export default function HomePage() {
             <motion.div variants={fadeInUp} className="flex items-center justify-between">
               <div>
                 <Badge variant="premium" className="mb-3">
-                  <Star className="h-3 w-3 mr-1 fill-golden-500" />
+                  <Star aria-hidden="true" className="h-3 w-3 mr-1 fill-amber text-amber" />
                   Top Rated
                 </Badge>
                 <h2 className="font-display text-display-md text-ink">Featured Chefs</h2>
@@ -381,42 +385,51 @@ export default function HomePage() {
               variants={staggerContainer}
               className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-4"
             >
-              {[
+              {([
                 {
                   icon: ChefHat,
                   title: 'Verified Chefs',
                   description: 'All our home chefs are verified for food safety and quality',
-                  color: 'brand',
+                  tone: 'herb',
                 },
                 {
                   icon: Heart,
                   title: 'Made with Love',
                   description: 'Every meal is prepared fresh with authentic family recipes',
-                  color: 'spice',
+                  tone: 'paprika',
                 },
                 {
                   icon: Shield,
                   title: 'Secure Payments',
                   description: 'Safe and secure payment processing for every order',
-                  color: 'fresh',
+                  tone: 'herb',
                 },
                 {
                   icon: Truck,
                   title: 'Fast Delivery',
                   description: 'Reliable delivery to your doorstep within 30-45 minutes',
-                  color: 'golden',
+                  tone: 'amber',
                 },
-              ].map((feature) => (
-                <motion.div key={feature.title} variants={scaleIn}>
-                  <Card variant="default" padding="lg" hover="lift" className="text-center h-full">
-                    <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-${feature.color}-100`}>
-                      <feature.icon className={`h-8 w-8 text-${feature.color}-600`} />
-                    </div>
-                    <h3 className="mt-5 text-lg font-semibold text-ink">{feature.title}</h3>
-                    <p className="mt-2 text-sm text-ink-soft">{feature.description}</p>
-                  </Card>
-                </motion.div>
-              ))}
+              ] as const).map((feature) => {
+                // Static class pairs — Tailwind JIT cannot scan template literals,
+                // so every combination must appear verbatim somewhere in the source.
+                const tone = {
+                  herb: 'bg-herb-tint text-herb',
+                  paprika: 'bg-paprika-tint text-paprika',
+                  amber: 'bg-amber-tint text-amber',
+                }[feature.tone];
+                return (
+                  <motion.div key={feature.title} variants={scaleIn}>
+                    <Card variant="default" padding="lg" hover="lift" className="text-center h-full">
+                      <div className={cn('mx-auto flex h-16 w-16 items-center justify-center rounded-2xl', tone)}>
+                        <feature.icon aria-hidden="true" className="h-8 w-8" />
+                      </div>
+                      <h3 className="mt-5 text-lg font-semibold text-ink">{feature.title}</h3>
+                      <p className="mt-2 text-sm text-ink-soft">{feature.description}</p>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           </motion.div>
         </div>
@@ -451,13 +464,17 @@ export default function HomePage() {
                     </Button>
                   </div>
                 </div>
-                <div className="hidden md:block md:w-2/5 relative">
+                <div className="hidden md:block md:w-2/5 relative aspect-[6/5]">
                   <img
                     src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=600&h=500&fit=crop"
                     alt="Home chef cooking"
-                    className="h-full w-full object-cover"
+                    width={600}
+                    height={500}
+                    loading="lazy"
+                    decoding="async"
+                    className="absolute inset-0 h-full w-full object-cover"
                   />
-                  <div className="absolute inset-0 scrim-bottom" />
+                  <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
                 </div>
               </div>
             </Card>
@@ -506,10 +523,12 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
         <div className="relative h-32 overflow-hidden">
           <img
             src={chef.bannerImage || chef.profileImage}
-            alt={chef.businessName}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
           />
-          <div className="absolute inset-0 scrim-bottom" />
+          <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
 
           {chef.verified && (
             <Badge variant="success" size="sm" className="absolute top-3 left-3">
@@ -519,10 +538,14 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
 
           {/* Favorite button */}
           <button
+            type="button"
             onClick={handleFavorite}
-            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-sm backdrop-blur-sm transition-all hover:bg-bone hover:shadow-md"
+            aria-label={favorited ? `Remove ${chef.businessName} from favorites` : `Save ${chef.businessName} to favorites`}
+            aria-pressed={favorited}
+            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-1 backdrop-blur-sm transition-all hover:bg-bone hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
           >
             <Heart
+              aria-hidden="true"
               className={`h-4 w-4 transition-colors ${
                 favorited ? 'fill-paprika text-paprika' : 'text-ink-soft'
               }`}

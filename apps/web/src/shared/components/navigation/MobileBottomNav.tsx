@@ -67,7 +67,7 @@ export function MobileBottomNav() {
                       className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-herb px-1 text-[10px] font-medium tabular-nums text-paper"
                       aria-label={`${item.badge} items in cart`}
                     >
-                      {item.badge > 9 ? '9+' : item.badge}
+                      {item.badge > 99 ? '99+' : item.badge}
                     </motion.span>
                   ) : null}
                 </AnimatePresence>

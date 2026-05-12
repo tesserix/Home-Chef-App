@@ -13,7 +13,7 @@ import {
   Package,
   Utensils,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { ThemeToggleCompact } from '@/shared/theme';
@@ -32,6 +32,37 @@ export function MainLayout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const isMobile = useIsMobile();
   const isOnline = useOnlineStatus();
+  const userMenuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close menus on Escape and route change. Returning focus to the trigger
+  // keeps screen-reader and keyboard users oriented after a menu closes.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setUserMenuOpen(false);
+        userMenuButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileMenuOpen]);
+
+  // Close both menus on route change so navigating via the menu doesn't
+  // leave it dangling open over the new page.
+  useEffect(() => {
+    setUserMenuOpen(false);
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
@@ -126,87 +157,108 @@ export function MainLayout() {
               {isAuthenticated ? (
                 <div className="relative">
                   <button
+                    ref={userMenuButtonRef}
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-mist"
+                    aria-haspopup="menu"
+                    aria-expanded={userMenuOpen}
+                    aria-controls="user-menu"
+                    aria-label={`Account menu for ${user?.firstName ?? 'user'}`}
+                    className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
                   >
                     {user?.avatar ? (
                       <img
                         src={user.avatar}
-                        alt={user.firstName}
+                        alt=""
                         className="h-8 w-8 rounded-full object-cover"
                         draggable={false}
                         onContextMenu={(e) => e.preventDefault()}
                       />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint text-herb">
+                      <div aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint text-herb">
                         <User className="h-4 w-4" />
                       </div>
                     )}
                   </button>
 
                   {/* Dropdown */}
-                  {userMenuOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setUserMenuOpen(false)}
-                      />
-                      <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-mist bg-bone py-2 shadow-lg">
-                        <div className="border-b border-mist px-4 py-2">
-                          <p className="font-medium text-ink">
-                            {user?.firstName} {user?.lastName}
-                          </p>
-                          <p className="text-sm text-ink-muted">{user?.email}</p>
-                        </div>
-                        <div className="py-1">
-                          <Link
-                            to="/profile"
-                            onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper"
-                          >
-                            <User className="h-4 w-4" />
-                            Profile
-                          </Link>
-                          <Link
-                            to="/favorites"
-                            onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper"
-                          >
-                            <Heart className="h-4 w-4" />
-                            Favorites
-                          </Link>
-                          <Link
-                            to="/orders"
-                            onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper"
-                          >
-                            <Package className="h-4 w-4" />
-                            My Orders
-                          </Link>
-                          <Link
-                            to="/profile?tab=security"
-                            onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper"
-                          >
-                            <Settings className="h-4 w-4" />
-                            Settings
-                          </Link>
-                        </div>
-                        <div className="border-t border-mist py-1">
-                          <button
-                            onClick={() => {
-                              setUserMenuOpen(false);
-                              logout();
-                            }}
-                            className="flex w-full items-center gap-3 px-4 py-2 text-sm text-paprika hover:bg-paprika-tint"
-                          >
-                            <LogOut className="h-4 w-4" />
-                            Logout
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <AnimatePresence>
+                    {userMenuOpen && (
+                      <>
+                        <div
+                          aria-hidden="true"
+                          className="fixed inset-0 z-40"
+                          onClick={() => setUserMenuOpen(false)}
+                        />
+                        <motion.div
+                          id="user-menu"
+                          role="menu"
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                          className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-mist bg-bone py-2 shadow-3"
+                        >
+                          <div className="border-b border-mist px-4 py-2">
+                            <p className="font-medium text-ink truncate" title={`${user?.firstName ?? ''} ${user?.lastName ?? ''}`}>
+                              {user?.firstName} {user?.lastName}
+                            </p>
+                            <p className="text-sm text-ink-muted truncate" title={user?.email}>{user?.email}</p>
+                          </div>
+                          <div className="py-1">
+                            <Link
+                              to="/profile"
+                              role="menuitem"
+                              onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper focus-visible:outline-none focus-visible:bg-paper"
+                            >
+                              <User aria-hidden="true" className="h-4 w-4" />
+                              Profile
+                            </Link>
+                            <Link
+                              to="/favorites"
+                              role="menuitem"
+                              onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper focus-visible:outline-none focus-visible:bg-paper"
+                            >
+                              <Heart aria-hidden="true" className="h-4 w-4" />
+                              Favorites
+                            </Link>
+                            <Link
+                              to="/orders"
+                              role="menuitem"
+                              onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper focus-visible:outline-none focus-visible:bg-paper"
+                            >
+                              <Package aria-hidden="true" className="h-4 w-4" />
+                              My Orders
+                            </Link>
+                            <Link
+                              to="/profile?tab=security"
+                              role="menuitem"
+                              onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper focus-visible:outline-none focus-visible:bg-paper"
+                            >
+                              <Settings aria-hidden="true" className="h-4 w-4" />
+                              Settings
+                            </Link>
+                          </div>
+                          <div className="border-t border-mist py-1">
+                            <button
+                              role="menuitem"
+                              onClick={() => {
+                                setUserMenuOpen(false);
+                                logout();
+                              }}
+                              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-paprika hover:bg-paprika-tint focus-visible:outline-none focus-visible:bg-paprika-tint"
+                            >
+                              <LogOut aria-hidden="true" className="h-4 w-4" />
+                              Logout
+                            </button>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -222,12 +274,15 @@ export function MainLayout() {
               {/* Mobile menu button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-menu"
                 className="btn-ghost p-2 md:hidden"
               >
                 {mobileMenuOpen ? (
-                  <X className="h-5 w-5" />
+                  <X aria-hidden="true" className="h-5 w-5" />
                 ) : (
-                  <Menu className="h-5 w-5" />
+                  <Menu aria-hidden="true" className="h-5 w-5" />
                 )}
               </button>
             </div>
@@ -235,32 +290,42 @@ export function MainLayout() {
         </nav>
 
         {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="border-t border-mist bg-bone md:hidden">
-            <div className="container-app py-4">
-              <div className="flex flex-col gap-1">
-                {navigation.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium ${
-                        isActive(item.href)
-                          ? 'bg-herb-tint text-herb'
-                          : 'text-ink-soft hover:bg-paper'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {item.name}
-                    </Link>
-                  );
-                })}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              id="mobile-menu"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden border-t border-mist bg-bone md:hidden"
+            >
+              <div className="container-app py-4">
+                <div className="flex flex-col gap-1">
+                  {navigation.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        aria-current={isActive(item.href) ? 'page' : undefined}
+                        className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium ${
+                          isActive(item.href)
+                            ? 'bg-herb-tint text-herb'
+                            : 'text-ink-soft hover:bg-paper'
+                        }`}
+                      >
+                        <Icon aria-hidden="true" className="h-5 w-5" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Main content */}
