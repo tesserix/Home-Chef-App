@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 // ---------- Types ----------
 
@@ -149,12 +150,9 @@ export default function StaffDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">Staff member not found</p>
-        <button
-          onClick={() => navigate('/staff')}
-          className="mt-4 text-sm text-primary hover:underline"
-        >
+        <Button variant="link" size="sm" className="mt-4" onClick={() => navigate('/staff')}>
           Back to Staff
-        </button>
+        </Button>
       </div>
     );
   }
@@ -173,12 +171,15 @@ export default function StaffDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to staff"
           onClick={() => navigate('/staff')}
-          className="rounded-lg p-2 hover:bg-secondary transition-colors"
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-        </button>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
           <h1 className="font-display text-2xl font-semibold text-foreground">
             {staff.firstName} {staff.lastName}
@@ -187,21 +188,23 @@ export default function StaffDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {staff.isActive ? (
-            <button
+            <Button
+              variant="outline"
+              leftIcon={<UserX className="h-4 w-4" />}
               onClick={() => setConfirmAction('deactivate')}
-              className="inline-flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive"
             >
-              <UserX className="h-4 w-4" />
               Deactivate
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="outline"
+              leftIcon={<UserCheck className="h-4 w-4" />}
               onClick={() => setConfirmAction('reactivate')}
-              className="inline-flex items-center gap-2 rounded-lg border border-success/30 px-4 py-2 text-sm font-medium text-success hover:bg-success/10 transition-colors"
+              className="border-success/30 text-success hover:bg-success/10 hover:border-success/40 hover:text-success"
             >
-              <UserCheck className="h-4 w-4" />
               Reactivate
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -215,28 +218,21 @@ export default function StaffDetailPage() {
               : 'Are you sure you want to reactivate this staff member? They will regain access based on their role.'}
           </p>
           <div className="flex items-center gap-3 mt-3">
-            <button
+            <Button
+              variant={confirmAction === 'deactivate' ? 'destructive' : 'success'}
+              isLoading={deactivateMutation.isPending || reactivateMutation.isPending}
+              disabled={deactivateMutation.isPending || reactivateMutation.isPending}
               onClick={() =>
                 confirmAction === 'deactivate'
                   ? deactivateMutation.mutate()
                   : reactivateMutation.mutate()
               }
-              disabled={deactivateMutation.isPending || reactivateMutation.isPending}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground transition-colors disabled:opacity-50 ${
-                confirmAction === 'deactivate' ? 'bg-destructive hover:bg-destructive/90' : 'bg-success hover:bg-success/90'
-              }`}
             >
-              {(deactivateMutation.isPending || reactivateMutation.isPending) && (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              )}
               Confirm {confirmAction === 'deactivate' ? 'Deactivation' : 'Reactivation'}
-            </button>
-            <button
-              onClick={() => setConfirmAction(null)}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors"
-            >
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -314,21 +310,26 @@ export default function StaffDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">Role & Permissions</h2>
               <div className="relative">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
+                  rightIcon={<ChevronDown className="h-4 w-4" />}
+                  aria-haspopup="menu"
+                  aria-expanded={showRoleDropdown}
                   onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-secondary transition-colors"
                 >
                   Change Role
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+                </Button>
                 {showRoleDropdown && (
-                  <div className="absolute right-0 top-full mt-1 z-10 w-64 rounded-lg border border-border bg-card shadow-2">
+                  <div role="menu" className="absolute right-0 top-full mt-1 z-10 w-64 rounded-lg border border-border bg-card shadow-2">
                     {Object.entries(STAFF_ROLES).map(([key, val]) => (
                       <button
                         key={key}
+                        type="button"
+                        role="menuitem"
                         onClick={() => updateRoleMutation.mutate(key)}
                         disabled={key === staff.role || updateRoleMutation.isPending}
-                        className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-secondary/50 focus-visible:bg-secondary/50 focus-visible:outline-none ${
                           key === staff.role ? 'bg-primary/5 cursor-default' : ''
                         }`}
                       >

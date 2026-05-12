@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 interface PlatformPolicy {
   serviceFeePercent: number;
@@ -338,8 +339,12 @@ function OperatingHoursSection() {
               {DAY_LABELS.map((label, i) => (
                 <button
                   key={i}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={days.has(i)}
+                  aria-label={`Toggle ${label}`}
                   onClick={() => toggleDay(i)}
-                  className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                  className={`rounded-md border px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     days.has(i)
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-bone text-foreground hover:bg-secondary'
@@ -472,28 +477,31 @@ function ServiceAreasSection() {
             />
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => setCreating(false)}
-              className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary"
-            >
+            <Button variant="outline" size="sm" fullWidth onClick={() => setCreating(false)}>
               Cancel
-            </button>
-            <button
-              onClick={() => create.mutate(form)}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              fullWidth
+              isLoading={create.isPending}
               disabled={!form.name || !form.city || create.isPending}
-              className="flex-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={() => create.mutate(form)}
             >
               {create.isPending ? 'Creating...' : 'Create zone'}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<Plus className="h-4 w-4" />}
           onClick={() => setCreating(true)}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+          className="mt-4 border-dashed text-muted-foreground hover:border-primary hover:text-primary hover:bg-transparent"
         >
-          <Plus className="h-4 w-4" /> New zone
-        </button>
+          New zone
+        </Button>
       )}
 
       <div className="mt-4 space-y-2">
@@ -517,13 +525,16 @@ function ServiceAreasSection() {
                   {!z.isActive && ' · inactive'}
                 </p>
               </div>
-              <button
-                onClick={() => remove.mutate(z.id)}
-                className="shrink-0 text-paprika hover:text-paprika"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 title="Delete"
+                aria-label="Delete zone"
+                onClick={() => remove.mutate(z.id)}
+                className="shrink-0 text-paprika hover:bg-paprika/10 hover:text-paprika"
               >
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ))
         )}
@@ -639,20 +650,23 @@ function SaveRow({
 }) {
   return (
     <div className="flex justify-end gap-2 pt-2">
-      <button
-        onClick={onCancel}
+      <Button
+        variant="outline"
+        size="sm"
         disabled={!dirty || saving}
-        className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary disabled:opacity-50"
+        onClick={onCancel}
       >
         Cancel
-      </button>
-      <button
-        onClick={onSave}
+      </Button>
+      <Button
+        variant="primary"
+        size="sm"
+        isLoading={saving}
         disabled={!dirty || saving}
-        className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        onClick={onSave}
       >
         {saving ? 'Saving...' : 'Save'}
-      </button>
+      </Button>
     </div>
   );
 }

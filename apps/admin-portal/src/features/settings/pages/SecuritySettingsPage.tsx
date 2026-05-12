@@ -16,6 +16,7 @@ import {
   Trash2,
   RefreshCw,
 } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 interface SecurityPolicy {
   passwordMinLength: number;
@@ -162,20 +163,23 @@ function PasswordPolicySection() {
             onChange={(v) => setDraft((d) => ({ ...d, passwordRequireSpecial: v }))}
           />
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              onClick={() => setDraft({})}
+            <Button
+              variant="outline"
+              size="sm"
               disabled={Object.keys(draft).length === 0 || save.isPending}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary disabled:opacity-50"
+              onClick={() => setDraft({})}
             >
               Cancel
-            </button>
-            <button
-              onClick={() => save.mutate(draft)}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={save.isPending}
               disabled={Object.keys(draft).length === 0 || save.isPending}
-              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={() => save.mutate(draft)}
             >
               {save.isPending ? 'Saving...' : 'Save'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -274,18 +278,20 @@ function SessionPolicySection() {
             max={365}
           />
           <div className="flex justify-end gap-2 pt-1">
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={savePolicy.isPending}
+              disabled={!hasPolicyChanges || savePolicy.isPending}
               onClick={() =>
                 savePolicy.mutate({
                   ...(accessTtl !== null ? { sessionAccessTtlHours: accessTtl } : {}),
                   ...(refreshTtl !== null ? { sessionRefreshTtlDays: refreshTtl } : {}),
                 })
               }
-              disabled={!hasPolicyChanges || savePolicy.isPending}
-              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {savePolicy.isPending ? 'Saving...' : 'Save policy'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -293,13 +299,16 @@ function SessionPolicySection() {
       <div className="mt-6 border-t border-border pt-4">
         <div className="mb-2 flex items-center justify-between">
           <h4 className="text-sm font-medium text-foreground">Your active sessions</h4>
-          <button
-            onClick={() => refetch()}
-            className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Refresh sessions"
             title="Refresh"
+            onClick={() => refetch()}
+            className="text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
         {loadingSessions ? (
           <p className="py-4 text-sm text-muted-foreground">Loading...</p>
@@ -320,25 +329,32 @@ function SessionPolicySection() {
                     {s.ipAddress || '—'} · issued {new Date(s.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <button
-                  onClick={() => revokeOne.mutate(s.id)}
-                  disabled={revokeOne.isPending}
-                  className="shrink-0 text-paprika hover:text-paprika"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Revoke session"
                   title="Revoke"
+                  disabled={revokeOne.isPending}
+                  onClick={() => revokeOne.mutate(s.id)}
+                  className="shrink-0 text-paprika hover:bg-paprika/10 hover:text-paprika"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         )}
-        <button
-          onClick={() => revokeAll.mutate()}
+        <Button
+          variant="outline"
+          size="sm"
+          fullWidth
+          isLoading={revokeAll.isPending}
           disabled={revokeAll.isPending}
-          className="mt-3 w-full rounded-lg border border-paprika/30 px-3 py-1.5 text-xs font-medium text-paprika hover:bg-paprika-tint disabled:opacity-50"
+          onClick={() => revokeAll.mutate()}
+          className="mt-3 border-paprika/30 text-paprika hover:bg-paprika-tint hover:border-paprika/40 hover:text-paprika"
         >
           Sign out everywhere
-        </button>
+        </Button>
       </div>
     </Card>
   );
@@ -436,20 +452,24 @@ function TwoFactorSection() {
             </p>
           </div>
           {me?.totpEnabled ? (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setDisabling(true)}
-              className="rounded-lg border border-paprika/30 px-3 py-1.5 text-xs font-medium text-paprika hover:bg-paprika-tint"
+              className="border-paprika/30 text-paprika hover:bg-paprika-tint hover:border-paprika/40 hover:text-paprika"
             >
               Disable
-            </button>
+            </Button>
           ) : (
-            <button
-              onClick={() => startEnroll.mutate()}
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={startEnroll.isPending}
               disabled={startEnroll.isPending}
-              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={() => startEnroll.mutate()}
             >
               {startEnroll.isPending ? 'Starting...' : 'Enable'}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -472,19 +492,19 @@ function TwoFactorSection() {
                 className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-center text-lg tracking-widest focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setEnroll(null)}
-                  className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary"
-                >
+                <Button variant="outline" size="sm" fullWidth onClick={() => setEnroll(null)}>
                   Cancel
-                </button>
-                <button
-                  onClick={() => confirmEnroll.mutate()}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  fullWidth
+                  isLoading={confirmEnroll.isPending}
                   disabled={code.length !== 6 || confirmEnroll.isPending}
-                  className="flex-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  onClick={() => confirmEnroll.mutate()}
                 >
                   {confirmEnroll.isPending ? 'Verifying...' : 'Verify & enable'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -511,19 +531,19 @@ function TwoFactorSection() {
                 className="w-full rounded-lg border border-border bg-bone px-3 py-2 text-center tracking-widest focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setDisabling(false)}
-                  className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary"
-                >
+                <Button variant="outline" size="sm" fullWidth onClick={() => setDisabling(false)}>
                   Cancel
-                </button>
-                <button
-                  onClick={() => disable.mutate()}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  fullWidth
+                  isLoading={disable.isPending}
                   disabled={!disablePwd || disableCode.length !== 6 || disable.isPending}
-                  className="flex-1 rounded-lg bg-paprika px-3 py-1.5 text-sm font-medium text-paper hover:bg-paprika disabled:opacity-50"
+                  onClick={() => disable.mutate()}
                 >
                   {disable.isPending ? 'Disabling...' : 'Disable 2FA'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -588,14 +608,19 @@ function TwoFactorExemptList() {
         <p className="mt-1 text-xs text-herb">{saveFeedback}</p>
       )}
       <div className="mt-2 flex justify-end gap-2">
-        <button
-          onClick={() => setDraft(null)}
+        <Button
+          variant="outline"
+          size="xs"
           disabled={draft === null || save.isPending}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground hover:bg-secondary disabled:opacity-50"
+          onClick={() => setDraft(null)}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="primary"
+          size="xs"
+          isLoading={save.isPending}
+          disabled={draft === null || save.isPending}
           onClick={() =>
             save.mutate(
               (draft ?? '')
@@ -604,11 +629,9 @@ function TwoFactorExemptList() {
                 .filter(Boolean),
             )
           }
-          disabled={draft === null || save.isPending}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {save.isPending ? 'Saving...' : 'Save list'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -703,19 +726,23 @@ function ApiKeysSection() {
           </p>
           <div className="mt-2 flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-bone px-2 py-1 text-xs">{revealed}</code>
-            <button
+            <Button
+              variant="primary"
+              size="xs"
+              aria-label="Copy full key"
               onClick={copyFullKey}
-              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
             >
               {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            </button>
+            </Button>
           </div>
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            className="mt-2 text-amber"
             onClick={() => setRevealed(null)}
-            className="mt-2 text-xs text-amber hover:underline"
           >
             I've saved it
-          </button>
+          </Button>
         </div>
       )}
 
@@ -736,8 +763,12 @@ function ApiKeysSection() {
               {['read', 'write', 'admin'].map((s) => (
                 <button
                   key={s}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={scopes.includes(s)}
+                  aria-label={`Toggle ${s} scope`}
                   onClick={() => toggleScope(s)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs ${
+                  className={`rounded-lg border px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     scopes.includes(s)
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-bone text-foreground hover:bg-secondary'
@@ -756,28 +787,31 @@ function ApiKeysSection() {
             max={3650}
           />
           <div className="flex gap-2">
-            <button
-              onClick={() => setCreating(false)}
-              className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:bg-secondary"
-            >
+            <Button variant="outline" size="sm" fullWidth onClick={() => setCreating(false)}>
               Cancel
-            </button>
-            <button
-              onClick={() => create.mutate()}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              fullWidth
+              isLoading={create.isPending}
               disabled={!name.trim() || scopes.length === 0 || create.isPending}
-              className="flex-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              onClick={() => create.mutate()}
             >
               {create.isPending ? 'Creating...' : 'Create key'}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<Plus className="h-4 w-4" />}
           onClick={() => setCreating(true)}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+          className="mt-4 border-dashed text-muted-foreground hover:border-primary hover:text-primary hover:bg-transparent"
         >
-          <Plus className="h-4 w-4" /> New API key
-        </button>
+          New API key
+        </Button>
       )}
 
       <div className="mt-4 space-y-2">
@@ -802,13 +836,16 @@ function ApiKeysSection() {
                 </p>
               </div>
               {!k.revokedAt && (
-                <button
-                  onClick={() => revoke.mutate(k.id)}
-                  className="shrink-0 text-paprika hover:text-paprika"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Revoke API key"
                   title="Revoke"
+                  onClick={() => revoke.mutate(k.id)}
+                  className="shrink-0 text-paprika hover:bg-paprika/10 hover:text-paprika"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               )}
             </div>
           ))
@@ -891,8 +928,11 @@ function Toggle({
       <span className="text-foreground">{label}</span>
       <button
         type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
         onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 rounded-full transition-colors ${
+        className={`relative h-5 w-9 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
           value ? 'bg-primary' : 'bg-border'
         }`}
       >

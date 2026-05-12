@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 interface Props {
   children: ReactNode;
@@ -75,13 +76,14 @@ export class ErrorBoundary extends Component<Props, State> {
               {this.state.error.message}
             </pre>
           )}
-          <button
+          <Button
+            variant="primary"
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            className="mt-6"
             onClick={this.handleRetry}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            <RefreshCw className="h-4 w-4" />
             Try Again
-          </button>
+          </Button>
         </div>
       );
     }

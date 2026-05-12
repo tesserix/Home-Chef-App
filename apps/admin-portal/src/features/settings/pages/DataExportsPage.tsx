@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Database, Download, FileClock, Loader2, Users as UsersIcon, ShoppingCart, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Database, Download, FileClock, Users as UsersIcon, ShoppingCart, BarChart3 } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 // Mirrors the admin api-client URL building so downloads hit the same base.
 const BFF_URL = (() => {
@@ -207,23 +208,17 @@ function ExportCard({
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
-      <button
-        onClick={onDownload}
+      <Button
+        variant="primary"
+        fullWidth
+        isLoading={loading}
         disabled={loading}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        leftIcon={!loading ? <Download className="h-4 w-4" /> : undefined}
+        className="mt-4"
+        onClick={onDownload}
       >
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Preparing...
-          </>
-        ) : (
-          <>
-            <Download className="h-4 w-4" />
-            Download CSV
-          </>
-        )}
-      </button>
+        {loading ? 'Preparing...' : 'Download CSV'}
+      </Button>
     </div>
   );
 }

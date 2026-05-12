@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import type { ApiError } from '@/shared/types';
 import { Settings, Shield, Bell, Globe, Database, CreditCard, RefreshCw, Copy, CheckCircle2, Pencil, Save, X, ChevronRight } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 interface PaymentGatewayStatus {
   configured: boolean;
@@ -163,16 +164,19 @@ function PaymentGatewayCard() {
           <p className="text-sm text-muted-foreground">Razorpay integration status</p>
         </div>
         {!editing && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Edit keys"
+            title="Edit keys"
             onClick={() => {
               setSaveFeedback(null);
               setEditing(true);
             }}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title="Edit keys"
+            className="text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <Pencil className="h-4 w-4" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -186,9 +190,11 @@ function PaymentGatewayCard() {
         >
           <span>{saveFeedback.message}</span>
           <button
-            onClick={() => setSaveFeedback(null)}
-            className="shrink-0 opacity-60 hover:opacity-100"
+            type="button"
+            aria-label="Dismiss"
             title="Dismiss"
+            onClick={() => setSaveFeedback(null)}
+            className="shrink-0 rounded opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -232,28 +238,29 @@ function PaymentGatewayCard() {
               Keys are stored securely in GCP Secret Manager. Leave a field empty to keep its current value.
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="primary"
+                isLoading={saveMutation.isPending}
+                disabled={saveMutation.isPending || (!keyForm.keyId && !keyForm.keySecret && !keyForm.webhookSecret)}
+                leftIcon={!saveMutation.isPending ? <Save className="h-3.5 w-3.5" /> : undefined}
                 onClick={() => {
                   setSaveFeedback(null);
                   saveMutation.mutate(keyForm);
                 }}
-                disabled={saveMutation.isPending || (!keyForm.keyId && !keyForm.keySecret && !keyForm.webhookSecret)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                <Save className="h-3.5 w-3.5" />
                 {saveMutation.isPending ? 'Saving...' : 'Save Keys'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                leftIcon={<X className="h-3.5 w-3.5" />}
                 onClick={() => {
                   setEditing(false);
                   setKeyForm({ keyId: '', keySecret: '', webhookSecret: '' });
                   setSaveFeedback(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
               >
-                <X className="h-3.5 w-3.5" />
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : isLoading ? (
@@ -295,17 +302,20 @@ function PaymentGatewayCard() {
                 <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground max-w-[180px]">
                   {data.webhookUrl}
                 </code>
-                <button
-                  onClick={copyWebhookUrl}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy webhook URL"
                   title="Copy webhook URL"
+                  onClick={copyWebhookUrl}
+                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {copied ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-herb" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -331,14 +341,17 @@ function PaymentGatewayCard() {
             )}
 
             {/* Test Connection */}
-            <button
-              onClick={() => refetch()}
+            <Button
+              variant="outline"
+              fullWidth
+              isLoading={isFetching}
               disabled={isFetching}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+              leftIcon={!isFetching ? <RefreshCw className="h-4 w-4" /> : undefined}
+              className="mt-2"
+              onClick={() => refetch()}
             >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               {isFetching ? 'Testing...' : 'Test Connection'}
-            </button>
+            </Button>
 
             {/* Test Cards Reference */}
             {data.mode === 'test' && (
@@ -438,16 +451,19 @@ function StripeGatewayCard() {
           <p className="text-sm text-muted-foreground">International payouts (markets where Razorpay is unavailable)</p>
         </div>
         {!editing && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Edit keys"
+            title="Edit keys"
             onClick={() => {
               setSaveFeedback(null);
               setEditing(true);
             }}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title="Edit keys"
+            className="text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <Pencil className="h-4 w-4" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -461,9 +477,11 @@ function StripeGatewayCard() {
         >
           <span>{saveFeedback.message}</span>
           <button
-            onClick={() => setSaveFeedback(null)}
-            className="shrink-0 opacity-60 hover:opacity-100"
+            type="button"
+            aria-label="Dismiss"
             title="Dismiss"
+            onClick={() => setSaveFeedback(null)}
+            className="shrink-0 rounded opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -507,28 +525,29 @@ function StripeGatewayCard() {
               Keys are stored in GCP Secret Manager. Leave a field empty to keep its current value.
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="primary"
+                isLoading={saveMutation.isPending}
+                disabled={saveMutation.isPending || (!keyForm.secretKey && !keyForm.publishableKey && !keyForm.webhookSecret)}
+                leftIcon={!saveMutation.isPending ? <Save className="h-3.5 w-3.5" /> : undefined}
                 onClick={() => {
                   setSaveFeedback(null);
                   saveMutation.mutate(keyForm);
                 }}
-                disabled={saveMutation.isPending || (!keyForm.secretKey && !keyForm.publishableKey && !keyForm.webhookSecret)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                <Save className="h-3.5 w-3.5" />
                 {saveMutation.isPending ? 'Saving...' : 'Save Keys'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                leftIcon={<X className="h-3.5 w-3.5" />}
                 onClick={() => {
                   setEditing(false);
                   setKeyForm({ secretKey: '', publishableKey: '', webhookSecret: '' });
                   setSaveFeedback(null);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
               >
-                <X className="h-3.5 w-3.5" />
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : isLoading ? (
@@ -576,17 +595,20 @@ function StripeGatewayCard() {
                 <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground max-w-[180px]">
                   {data.webhookUrl}
                 </code>
-                <button
-                  onClick={copyWebhookUrl}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy webhook URL"
                   title="Copy webhook URL"
+                  onClick={copyWebhookUrl}
+                  className="shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {copied ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-herb" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -607,14 +629,17 @@ function StripeGatewayCard() {
               </div>
             )}
 
-            <button
-              onClick={() => refetch()}
+            <Button
+              variant="outline"
+              fullWidth
+              isLoading={isFetching}
               disabled={isFetching}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+              leftIcon={!isFetching ? <RefreshCw className="h-4 w-4" /> : undefined}
+              className="mt-2"
+              onClick={() => refetch()}
             >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               {isFetching ? 'Testing...' : 'Test Connection'}
-            </button>
+            </Button>
 
             {data.mode === 'test' && (
               <div className="mt-3 rounded-lg border border-dashed border-border px-4 py-3">

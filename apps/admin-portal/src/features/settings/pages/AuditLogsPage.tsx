@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import { ArrowLeft, FileClock } from 'lucide-react';
+import { Button } from '@/shared/components/ui/Button';
 
 interface AuditUser {
   firstName?: string;
@@ -226,20 +227,22 @@ export default function AuditLogsPage() {
             Page {data.page} of {totalPages} · {data.total} total
           </span>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            <Button
+              variant="outline"
+              size="sm"
               disabled={page <= 1}
-              className="rounded-lg border border-border px-3 py-1.5 hover:bg-secondary disabled:opacity-50"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={page >= totalPages}
-              className="rounded-lg border border-border px-3 py-1.5 hover:bg-secondary disabled:opacity-50"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}

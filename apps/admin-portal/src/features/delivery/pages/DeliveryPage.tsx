@@ -12,6 +12,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 interface DeliveryStats {
   totalPartners: number;
@@ -121,13 +122,13 @@ export default function DeliveryPage() {
           <h1 className="page-title">Delivery Management</h1>
           <p className="page-description">Track deliveries, partners, and payouts</p>
         </div>
-        <button
+        <Button
+          variant="outline"
+          leftIcon={<Settings2 className="h-4 w-4" />}
           onClick={() => navigate('/delivery/providers')}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
         >
-          <Settings2 className="h-4 w-4" />
           Manage Providers
-        </button>
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -292,23 +293,25 @@ export default function DeliveryPage() {
         {/* Pagination */}
         {pagination && pagination.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            <Button
+              variant="outline"
+              size="xs"
               disabled={!pagination.hasPrev}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Previous
-            </button>
+            </Button>
             <span className="text-xs text-muted-foreground">
               Page {page} of {pagination.totalPages}
             </span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
+            <Button
+              variant="outline"
+              size="xs"
               disabled={!pagination.hasNext}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+              onClick={() => setPage((p) => p + 1)}
             >
               Next
-            </button>
+            </Button>
           </div>
         )}
       </div>
