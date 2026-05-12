@@ -288,11 +288,17 @@ export function StepPersonalInfo({ errors }: Props) {
 
             {/* Postcode / PIN Code */}
             <div className="w-full">
-              <label className="mb-1.5 block text-sm font-medium text-foreground">PIN Code <span className="text-destructive">*</span></label>
+              <label htmlFor="onboarding-postcode" className="mb-1.5 block text-sm font-medium text-foreground">
+                PIN Code <span aria-hidden="true" className="text-muted-foreground">*</span>
+              </label>
               <input
+                id="onboarding-postcode"
                 type="text"
                 inputMode="numeric"
+                autoComplete="postal-code"
                 maxLength={10}
+                required
+                aria-required="true"
                 placeholder="Enter PIN code"
                 value={data.kitchenAddress.postalCode}
                 onChange={(e) => updateAddress({ postalCode: e.target.value.replace(/[^0-9]/g, '') })}
