@@ -246,15 +246,15 @@ export default function DeliveryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
-                        <div className="flex items-start gap-1.5">
-                          <MapPin className="h-3 w-3 text-herb mt-0.5 shrink-0" />
-                          <p className="text-xs text-foreground truncate max-w-[180px]">
+                        <div className="flex max-w-xs items-start gap-1.5">
+                          <MapPin aria-hidden="true" className="h-3 w-3 text-herb mt-0.5 shrink-0" />
+                          <p className="min-w-0 truncate text-xs text-foreground">
                             {d.pickup?.address || d.pickup?.city || '-'}
                           </p>
                         </div>
-                        <div className="flex items-start gap-1.5">
-                          <MapPin className="h-3 w-3 text-paprika mt-0.5 shrink-0" />
-                          <p className="text-xs text-foreground truncate max-w-[180px]">
+                        <div className="flex max-w-xs items-start gap-1.5">
+                          <MapPin aria-hidden="true" className="h-3 w-3 text-paprika mt-0.5 shrink-0" />
+                          <p className="min-w-0 truncate text-xs text-foreground">
                             {d.dropoff?.address || d.dropoff?.city || '-'}
                           </p>
                         </div>

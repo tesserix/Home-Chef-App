@@ -299,10 +299,10 @@ function PaymentGatewayCard() {
             </div>
 
             {/* Webhook URL */}
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
               <span className="shrink-0 text-foreground">Webhook URL</span>
-              <div className="flex items-center gap-1">
-                <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground max-w-[180px]">
+              <div className="flex min-w-0 items-center gap-1">
+                <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   {data.webhookUrl}
                 </code>
                 <Button
@@ -595,10 +595,10 @@ function StripeGatewayCard() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
               <span className="shrink-0 text-foreground">Webhook URL</span>
-              <div className="flex items-center gap-1">
-                <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground max-w-[180px]">
+              <div className="flex min-w-0 items-center gap-1">
+                <code className="truncate rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   {data.webhookUrl}
                 </code>
                 <Button
