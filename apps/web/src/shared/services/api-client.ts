@@ -21,6 +21,33 @@ interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
+/**
+ * Custom event dispatched when the API returns 401 on a non-auth endpoint.
+ * AuthProvider listens for this and runs clearAuth + redirect-to-login,
+ * giving the app a single recovery path for expired sessions.
+ */
+export const AUTH_EXPIRED_EVENT = 'auth:expired';
+
+/** Endpoints that legitimately return 401 during login/session checks — never bubble. */
+const AUTH_EXPIRY_BYPASS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/me',
+  '/auth/session',
+  '/auth/logout',
+];
+
+function isAuthBypass(endpoint: string): boolean {
+  return AUTH_EXPIRY_BYPASS.some((p) => endpoint.startsWith(p));
+}
+
+function dispatchAuthExpired(endpoint: string): void {
+  if (typeof window === 'undefined') return;
+  if (isAuthBypass(endpoint)) return;
+  window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: { endpoint } }));
+}
+
 class ApiClient {
   private baseUrl: string;
   private bffProxyBase: string;
@@ -113,6 +140,9 @@ class ApiClient {
           message: response.statusText || 'An error occurred',
         },
       }));
+      if (response.status === 401) {
+        dispatchAuthExpired(endpoint);
+      }
       // Attach HTTP status so callers can differentiate 401/403/409 etc.
       throw Object.assign(body, { status: response.status });
     }
@@ -187,6 +217,9 @@ class ApiClient {
         success: false,
         error: { code: 'UNKNOWN_ERROR', message: response.statusText || 'An error occurred' },
       }));
+      if (response.status === 401) {
+        dispatchAuthExpired(endpoint);
+      }
       throw Object.assign(body, { status: response.status });
     }
 

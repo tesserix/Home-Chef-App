@@ -407,8 +407,13 @@ function ChefCardItem({ chef }: { chef: Chef }) {
         <div className="relative h-32 overflow-hidden">
           <img
             src={chef.bannerImage || chef.profileImage}
-            alt={chef.businessName}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
+            alt=""
+            width={400}
+            height={128}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
           {chef.verified && (
             <Badge variant="success" size="sm" className="absolute top-2 left-2">

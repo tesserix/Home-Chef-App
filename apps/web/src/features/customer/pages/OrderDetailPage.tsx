@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
 import type { Order, OrderStatus } from '@/shared/types';
 
@@ -162,7 +163,7 @@ export default function OrderDetailPage() {
               </div>
               <p className="mt-1 text-sm text-ink-muted">
                 Placed on{' '}
-                {new Date(order.createdAt).toLocaleDateString('en-US', {
+                {formatDateTime(order.createdAt, {
                   weekday: 'long',
                   month: 'long',
                   day: 'numeric',
@@ -189,10 +190,7 @@ export default function OrderDetailPage() {
                   <span>
                     Estimated delivery:{' '}
                     <span className="font-medium">
-                      {new Date(order.estimatedDeliveryAt).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
+                      {formatTime(order.estimatedDeliveryAt)}
                     </span>
                   </span>
                 </div>

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
 import type { Order, PaginatedResponse, OrderStatus } from '@/shared/types';
 
@@ -160,7 +161,7 @@ function OrderCard({ order }: { order: Order }) {
               </span>
             </div>
             <p className="mt-1 text-sm text-ink-muted">
-              {new Date(order.createdAt).toLocaleDateString('en-US', {
+              {formatDateTime(order.createdAt, {
                 weekday: 'short',
                 month: 'short',
                 day: 'numeric',
@@ -186,8 +187,13 @@ function OrderCard({ order }: { order: Order }) {
               {item.imageUrl ? (
                 <img
                   src={item.imageUrl}
-                  alt={item.name}
+                  alt=""
+                  width={48}
+                  height={48}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
@@ -223,10 +229,7 @@ function OrderCard({ order }: { order: Order }) {
                 <Clock className="h-4 w-4" />
                 <span>
                   Est. delivery:{' '}
-                  {new Date(order.estimatedDeliveryAt).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
+                  {formatTime(order.estimatedDeliveryAt)}
                 </span>
               </>
             )}

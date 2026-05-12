@@ -101,8 +101,13 @@ export default function FavoritesPage() {
                       <div className="relative h-28 overflow-hidden">
                         <img
                           src={fav.chef.bannerImage || fav.chef.profileImage}
-                          alt={fav.chef.businessName}
+                          alt=""
+                          width={400}
+                          height={112}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                         <div className="absolute -bottom-6 left-4">
                           <Avatar

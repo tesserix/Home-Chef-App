@@ -9,7 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 import { useFavoritesStore } from '../store/favorites-store';
 import { useCurrencyStore } from '../store/currency-store';
-import { apiClient } from '@/shared/services/api-client';
+import { apiClient, AUTH_EXPIRED_EVENT } from '@/shared/services/api-client';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 import type { OnboardingStatus, CustomerProfile } from '@/shared/types';
 
@@ -55,6 +55,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Global 401 recovery. apiClient dispatches `auth:expired` on a 401 from
+  // any non-auth endpoint; we clear local auth state and bounce to /login
+  // with a flag so the page can show "Your session has expired."
+  // The endpoint detail is used to avoid bouncing on /auth/* endpoints
+  // (login attempts naturally 401 on bad credentials — that's a user error,
+  // not session expiry).
+  useEffect(() => {
+    const handler = () => {
+      if (!useAuthStore.getState().isAuthenticated) return;
+      clearAuth();
+      // Preserve the page user was on so they return after re-auth.
+      const returnTo = encodeURIComponent(location.pathname + location.search);
+      navigate(`/login?error=session_expired&returnTo=${returnTo}`);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handler);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handler);
+  }, [clearAuth, navigate, location.pathname, location.search]);
 
   // Load favorite chef IDs once authenticated
   useEffect(() => {

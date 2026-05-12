@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { formatDate } from '@/shared/utils/format-date';
 import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
 import type { CateringRequest, CateringQuote, PaginatedResponse } from '@/shared/types';
@@ -131,11 +132,7 @@ export default function CateringQuotesPage() {
                             <div className="flex items-center gap-2">
                               <Calendar className="h-4 w-4 text-ink-muted" />
                               <span className="font-medium text-ink">
-                                {new Date(request.eventDate).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                })}
+                                {formatDate(request.eventDate)}
                               </span>
                             </div>
                             <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
@@ -196,7 +193,7 @@ export default function CateringQuotesPage() {
                         <div>
                           <p className="text-sm text-ink-muted">Event Date</p>
                           <p className="font-medium text-ink">
-                            {new Date(activeRequest.eventDate).toLocaleDateString('en-US', {
+                            {formatDate(activeRequest.eventDate, {
                               weekday: 'long',
                               month: 'long',
                               day: 'numeric',
@@ -399,7 +396,7 @@ function QuoteCard({
 
         {/* Valid Until */}
         <p className="mt-4 text-sm text-ink-muted">
-          Valid until {new Date(quote.validUntil).toLocaleDateString()}
+          Valid until {formatDate(quote.validUntil)}
         </p>
 
         {/* Actions */}

@@ -22,6 +22,7 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { formatDate } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
 import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
 
@@ -489,7 +490,7 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
                   ))}
                 </div>
                 <span className="text-sm text-ink-muted">
-                  {new Date(review.createdAt).toLocaleDateString()}
+                  {formatDate(review.createdAt)}
                 </span>
               </div>
               {review.title && (
