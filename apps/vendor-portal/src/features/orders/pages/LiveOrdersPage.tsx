@@ -117,18 +117,27 @@ export default function LiveOrdersPage() {
       </motion.div>
 
       {/* Tabs */}
-      <motion.div variants={fadeInUp} className="flex gap-1 rounded-lg bg-secondary p-1">
+      <motion.div
+        variants={fadeInUp}
+        role="tablist"
+        aria-label="Filter orders by status"
+        className="flex gap-1 rounded-lg bg-secondary p-1"
+      >
         {tabs.map((tab) => {
           const count = tab.key === 'all'
             ? orders.length
             : orders.filter((o) => o.status === tab.key).length;
+          const isActive = activeTab === tab.key;
 
           return (
             <button
               key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ${
-                activeTab === tab.key
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                isActive
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
@@ -136,8 +145,9 @@ export default function LiveOrdersPage() {
               {tab.label}
               {count > 0 && (
                 <span
+                  aria-hidden="true"
                   className={`ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-                    activeTab === tab.key
+                    isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground'
                   }`}
@@ -145,6 +155,7 @@ export default function LiveOrdersPage() {
                   {count}
                 </span>
               )}
+              {count > 0 && <span className="sr-only">, {count} {count === 1 ? 'order' : 'orders'}</span>}
             </button>
           );
         })}
