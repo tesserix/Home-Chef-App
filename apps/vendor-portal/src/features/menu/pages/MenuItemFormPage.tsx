@@ -155,7 +155,7 @@ function AllergenTagInput({
           onKeyDown={handleKeyDown}
           onBlur={() => { if (input.trim()) addTag(input); }}
           placeholder={value.length === 0 ? 'Type an allergen and press Enter' : ''}
-          className="min-w-[120px] flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
         />
       </div>
       <p className="mt-1 text-xs text-muted-foreground">

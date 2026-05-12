@@ -679,10 +679,10 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
               <p className="text-xs text-ink-muted">{docDef.description}</p>
 
               {existingDoc && (
-                <div className="mt-1 flex items-center gap-2">
-                  <p className="text-xs text-ink-muted truncate max-w-[200px]">{existingDoc.fileName}</p>
-                  <span className="text-xs text-ink-muted">|</span>
-                  <p className="text-xs text-ink-muted">{formatBytes(existingDoc.fileSize)}</p>
+                <div className="mt-1 flex min-w-0 items-center gap-2">
+                  <p className="min-w-0 max-w-xs truncate text-xs text-ink-muted">{existingDoc.fileName}</p>
+                  <span aria-hidden="true" className="text-xs text-ink-muted">|</span>
+                  <p className="shrink-0 text-xs text-ink-muted">{formatBytes(existingDoc.fileSize)}</p>
                   {statusBadge(existingDoc.status)}
                 </div>
               )}
