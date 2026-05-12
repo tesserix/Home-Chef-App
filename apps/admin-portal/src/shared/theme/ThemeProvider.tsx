@@ -59,7 +59,9 @@ function applyResolvedTheme(resolved: ResolvedTheme): void {
   const root = document.documentElement;
   if (resolved === 'dark') {
     root.classList.add('dark');
+    root.classList.remove('light');
   } else {
+    root.classList.add('light');
     root.classList.remove('dark');
   }
   root.dataset.theme = resolved;
@@ -123,4 +125,4 @@ export function useTheme(): ThemeContextValue {
  * @example
  *   <script>{NO_FLASH_SCRIPT}</script>
  */
-export const NO_FLASH_SCRIPT = `(function(){try{var t=localStorage.getItem('${STORAGE_KEY}');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();`;
+export const NO_FLASH_SCRIPT = `(function(){try{var t=localStorage.getItem('${STORAGE_KEY}');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);r.dataset.theme=d?'dark':'light';}catch(e){}})();`;

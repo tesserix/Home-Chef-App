@@ -39,7 +39,7 @@
 
     <!-- No-flash theme bootstrap. Reads localStorage('hc-theme') + prefers-color-scheme
          and sets the `dark` class on <html> before React mounts. -->
-    <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+    <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);r.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
     <title>Fe3dr Admin</title>
   </head>
   <body>
