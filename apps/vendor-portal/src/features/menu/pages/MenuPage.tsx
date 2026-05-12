@@ -180,17 +180,19 @@ export default function MenuPage() {
       >
         <div className="flex-1">
           <Input
+            type="search"
+            aria-label="Search menu items"
             placeholder="Search menu items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            leftIcon={<Search className="h-4 w-4" />}
+            leftIcon={<Search aria-hidden="true" className="h-4 w-4" />}
           />
         </div>
         <div className="w-full sm:w-56">
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
             <SelectTrigger>
               <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Filter aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                 <SelectValue placeholder="All Categories" />
               </div>
             </SelectTrigger>

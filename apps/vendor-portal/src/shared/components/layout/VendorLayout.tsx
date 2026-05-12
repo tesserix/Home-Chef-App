@@ -105,11 +105,15 @@ export function VendorLayout() {
           {/* User section */}
           <div className="border-t border-border p-4">
             <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              aria-label={userMenuOpen ? 'Close user menu' : 'Open user menu'}
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-secondary"
+              className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <User className="h-5 w-5 text-primary" />
+                <User aria-hidden="true" className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-foreground truncate">
@@ -117,27 +121,30 @@ export function VendorLayout() {
                 </p>
                 <p className="text-xs text-muted-foreground">Vendor</p>
               </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
             </button>
 
             {userMenuOpen && (
-              <div className="mt-2 space-y-1">
+              <div role="menu" className="mt-2 space-y-1">
                 <Link
                   to="/settings"
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  role="menuitem"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings aria-hidden="true" className="h-4 w-4" />
                   Settings
                 </Link>
                 <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-muted-foreground">
-                  <span>Theme</span>
+                  <span id="vendor-theme-label">Theme</span>
                   <ThemeToggle size="sm" />
                 </div>
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={logout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut aria-hidden="true" className="h-4 w-4" />
                   Logout
                 </button>
               </div>
@@ -153,7 +160,11 @@ export function VendorLayout() {
             className="fixed inset-0 z-40 bg-foreground/50 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card lg:hidden">
+          <aside
+            id="vendor-mobile-sidebar"
+            aria-label="Main navigation"
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-card lg:hidden"
+          >
             <div className="flex h-full flex-col">
               <div className="flex h-16 items-center justify-between border-b border-border px-4">
                 <Link to="/dashboard" className="logo">
@@ -162,8 +173,13 @@ export function VendorLayout() {
                   </div>
                   <span className="logo-text">Fe3dr</span>
                 </Link>
-                <button onClick={() => setSidebarOpen(false)}>
-                  <X className="h-6 w-6 text-muted-foreground" />
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded-lg p-1 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <X aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
                 </button>
               </div>
               <nav className="flex-1 space-y-1 p-4">
@@ -196,16 +212,24 @@ export function VendorLayout() {
         {/* Top bar */}
         <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:px-8">
           <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
+            aria-controls="vendor-mobile-sidebar"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 hover:bg-secondary lg:hidden"
+            className="rounded-lg p-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
           >
-            <Menu className="h-5 w-5" />
+            <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
 
           {/* Notifications */}
-          <Link to="/admin-requests" className="relative ml-auto rounded-lg p-2 hover:bg-secondary">
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            {unreadCount > 0 && <span className="notification-dot" />}
+          <Link
+            to="/admin-requests"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            className="relative ml-auto rounded-lg p-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <Bell aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
+            {unreadCount > 0 && <span aria-hidden="true" className="notification-dot" />}
           </Link>
         </header>
 
