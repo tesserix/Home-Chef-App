@@ -119,6 +119,8 @@ export default function LoginPage() {
         <img
           src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=1200&h=900&fit=crop&q=80"
           alt="Overhead view of home-cooked Indian food spread on a wooden table"
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 scrim-bottom" />
@@ -273,6 +275,8 @@ export default function LoginPage() {
                   <img
                     src={`data:image/png;base64,${twoFactor.qr.qrCodeBase64}`}
                     alt="TOTP QR code"
+                    loading="lazy"
+                    decoding="async"
                     className="mx-auto h-40 w-40 rounded border border-border bg-bone p-1"
                   />
                   <p className="mt-2 break-all text-center text-xs text-muted-foreground">

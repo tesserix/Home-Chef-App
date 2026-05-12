@@ -482,6 +482,8 @@ function TwoFactorSection() {
             <img
               src={`data:image/png;base64,${enroll.qrCodeBase64}`}
               alt="TOTP QR code"
+              loading="lazy"
+              decoding="async"
               className="mx-auto my-3 h-48 w-48 rounded border border-border bg-bone p-2"
             />
             <div className="space-y-2">

@@ -235,6 +235,8 @@ export default function ProvidersPage() {
                             <img
                               src={provider.logoUrl}
                               alt={provider.name}
+                              loading="lazy"
+                              decoding="async"
                               className="h-8 w-8 rounded object-contain"
                             />
                           ) : (

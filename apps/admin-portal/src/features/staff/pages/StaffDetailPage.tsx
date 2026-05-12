@@ -250,6 +250,8 @@ export default function StaffDetailPage() {
                   <img
                     src={staff.avatar}
                     alt={staff.firstName}
+                    loading="lazy"
+                    decoding="async"
                     className="h-20 w-20 rounded-full object-cover"
                   />
                 ) : (
