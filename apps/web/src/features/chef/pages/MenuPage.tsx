@@ -450,7 +450,7 @@ function MenuItemForm({
           <textarea
             {...register('description')}
             rows={3}
-            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20 transition-all"
+            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/20 transition-all"
           />
         </div>
 
@@ -475,7 +475,7 @@ function MenuItemForm({
           <label className="mb-1.5 block text-sm font-medium text-ink-soft">Category</label>
           <select
             {...register('categoryId')}
-            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20 transition-all"
+            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/20 transition-all"
           >
             <option value="">No category</option>
             {categories.map((cat) => (
@@ -548,7 +548,7 @@ function MenuItemForm({
           <input
             type="checkbox"
             {...register('isAvailable')}
-            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
           />
           <span className="text-sm text-ink-soft">Available for order</span>
         </label>
@@ -556,7 +556,7 @@ function MenuItemForm({
           <input
             type="checkbox"
             {...register('isFeatured')}
-            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
           />
           <span className="text-sm text-ink-soft">Featured item</span>
         </label>

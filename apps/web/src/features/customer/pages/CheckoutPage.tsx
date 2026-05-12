@@ -290,7 +290,7 @@ export default function CheckoutPage() {
           {/* Main Form */}
           <div className="flex-1 space-y-6">
             {/* Delivery Address */}
-            <section className="rounded-xl bg-bone p-6 shadow-sm">
+            <section className="rounded-xl bg-bone p-6 shadow-1">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
                   <MapPin className="h-5 w-5 text-herb" />
@@ -308,63 +308,98 @@ export default function CheckoutPage() {
                 <form onSubmit={handleSubmit(onAddressSubmit)} className="mt-4 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-medium text-ink-soft">
+                      <label htmlFor="addr-label" className="block text-sm font-medium text-ink-soft">
                         Label
                       </label>
                       <input
+                        id="addr-label"
                         {...register('label')}
+                        aria-invalid={!!errors.label || undefined}
+                        aria-describedby={errors.label ? 'addr-label-err' : undefined}
                         placeholder="Home, Work, etc."
                         className="input-base mt-1"
                       />
                       {errors.label && (
-                        <p className="mt-1 text-xs text-paprika">{errors.label.message}</p>
+                        <p id="addr-label-err" role="alert" className="mt-1 text-xs text-paprika">
+                          {errors.label.message}
+                        </p>
                       )}
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-ink-soft">
+                      <label htmlFor="addr-line1" className="block text-sm font-medium text-ink-soft">
                         Street Address
                       </label>
                       <input
+                        id="addr-line1"
                         {...register('line1')}
+                        aria-invalid={!!errors.line1 || undefined}
+                        aria-describedby={errors.line1 ? 'addr-line1-err' : undefined}
                         placeholder="123 Main Street"
                         className="input-base mt-1"
                       />
                       {errors.line1 && (
-                        <p className="mt-1 text-xs text-paprika">{errors.line1.message}</p>
+                        <p id="addr-line1-err" role="alert" className="mt-1 text-xs text-paprika">
+                          {errors.line1.message}
+                        </p>
                       )}
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-ink-soft">
+                      <label htmlFor="addr-line2" className="block text-sm font-medium text-ink-soft">
                         Apartment, suite, etc. (optional)
                       </label>
                       <input
+                        id="addr-line2"
                         {...register('line2')}
                         placeholder="Apt 4B"
                         className="input-base mt-1"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-ink-soft">City</label>
-                      <input {...register('city')} className="input-base mt-1" />
+                      <label htmlFor="addr-city" className="block text-sm font-medium text-ink-soft">City</label>
+                      <input
+                        id="addr-city"
+                        {...register('city')}
+                        aria-invalid={!!errors.city || undefined}
+                        aria-describedby={errors.city ? 'addr-city-err' : undefined}
+                        className="input-base mt-1"
+                      />
                       {errors.city && (
-                        <p className="mt-1 text-xs text-paprika">{errors.city.message}</p>
+                        <p id="addr-city-err" role="alert" className="mt-1 text-xs text-paprika">
+                          {errors.city.message}
+                        </p>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-ink-soft">State</label>
-                        <input {...register('state')} className="input-base mt-1" />
+                        <label htmlFor="addr-state" className="block text-sm font-medium text-ink-soft">State</label>
+                        <input
+                          id="addr-state"
+                          {...register('state')}
+                          aria-invalid={!!errors.state || undefined}
+                          aria-describedby={errors.state ? 'addr-state-err' : undefined}
+                          className="input-base mt-1"
+                        />
                         {errors.state && (
-                          <p className="mt-1 text-xs text-paprika">{errors.state.message}</p>
+                          <p id="addr-state-err" role="alert" className="mt-1 text-xs text-paprika">
+                            {errors.state.message}
+                          </p>
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-ink-soft">
+                        <label htmlFor="addr-postal" className="block text-sm font-medium text-ink-soft">
                           Postal Code
                         </label>
-                        <input {...register('postalCode')} className="input-base mt-1" />
+                        <input
+                          id="addr-postal"
+                          {...register('postalCode')}
+                          aria-invalid={!!errors.postalCode || undefined}
+                          aria-describedby={errors.postalCode ? 'addr-postal-err' : undefined}
+                          className="input-base mt-1"
+                        />
                         {errors.postalCode && (
-                          <p className="mt-1 text-xs text-paprika">{errors.postalCode.message}</p>
+                          <p id="addr-postal-err" role="alert" className="mt-1 text-xs text-paprika">
+                            {errors.postalCode.message}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -394,7 +429,7 @@ export default function CheckoutPage() {
                         value={address.id}
                         checked={selectedAddress === address.id}
                         onChange={(e) => setSelectedAddress(e.target.value)}
-                        className="mt-1 h-4 w-4 text-herb focus:ring-herb"
+                        className="mt-1 h-4 w-4 text-herb focus-visible:ring-herb"
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
@@ -423,7 +458,7 @@ export default function CheckoutPage() {
             </section>
 
             {/* Delivery Time */}
-            <section className="rounded-xl bg-bone p-6 shadow-sm">
+            <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
                 <Clock className="h-5 w-5 text-herb" />
                 Delivery Time
@@ -443,7 +478,7 @@ export default function CheckoutPage() {
                     value="asap"
                     checked={scheduledTime === 'asap'}
                     onChange={(e) => setScheduledTime(e.target.value)}
-                    className="h-4 w-4 text-herb focus:ring-herb"
+                    className="h-4 w-4 text-herb focus-visible:ring-herb"
                   />
                   <div>
                     <span className="font-medium text-ink">As soon as possible</span>
@@ -463,7 +498,7 @@ export default function CheckoutPage() {
                     value="scheduled"
                     checked={scheduledTime !== 'asap'}
                     onChange={() => setScheduledTime('12:00')}
-                    className="h-4 w-4 text-herb focus:ring-herb"
+                    className="h-4 w-4 text-herb focus-visible:ring-herb"
                   />
                   <div className="flex-1">
                     <span className="font-medium text-ink">Schedule for later</span>
@@ -489,7 +524,7 @@ export default function CheckoutPage() {
             </section>
 
             {/* Payment */}
-            <section className="rounded-xl bg-bone p-6 shadow-sm">
+            <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
                 <Shield className="h-5 w-5 text-herb" />
                 Payment
@@ -510,7 +545,7 @@ export default function CheckoutPage() {
             </section>
 
             {/* Tip */}
-            <section className="rounded-xl bg-bone p-6 shadow-sm">
+            <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="text-lg font-semibold text-ink">Add a tip</h2>
               <p className="mt-1 text-sm text-ink-muted">
                 100% of your tip goes to the home chef
@@ -542,7 +577,7 @@ export default function CheckoutPage() {
             </section>
 
             {/* Special Instructions */}
-            <section className="rounded-xl bg-bone p-6 shadow-sm">
+            <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="text-lg font-semibold text-ink">Special Instructions</h2>
               <textarea
                 value={specialInstructions}
@@ -556,7 +591,7 @@ export default function CheckoutPage() {
 
           {/* Order Summary */}
           <div className="lg:w-80">
-            <div className="rounded-xl bg-bone p-6 shadow-sm lg:sticky lg:top-24">
+            <div className="rounded-xl bg-bone p-6 shadow-1 lg:sticky lg:top-24">
               <h3 className="text-lg font-semibold text-ink">Order Summary</h3>
 
               {/* Chef */}

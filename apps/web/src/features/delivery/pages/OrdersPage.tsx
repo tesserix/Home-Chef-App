@@ -254,7 +254,7 @@ function OrderDetailModal({
   const fp = useFormatPrice();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-bone shadow-xl">
+      <div className="w-full max-w-md rounded-xl bg-bone shadow-3">
         <div className="p-6">
           <div className="flex items-start justify-between">
             <div>

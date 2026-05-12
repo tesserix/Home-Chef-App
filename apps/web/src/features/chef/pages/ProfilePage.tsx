@@ -180,7 +180,7 @@ export default function ChefProfilePage() {
 
       <form className="space-y-6">
         {/* Profile Images */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Profile Images</h2>
 
           <div className="mt-6 grid gap-6 md:grid-cols-2">
@@ -206,7 +206,7 @@ export default function ChefProfilePage() {
                 {isEditing && (
                   <button
                     type="button"
-                    className="absolute bottom-0 right-0 rounded-full bg-herb p-2 text-paper shadow-lg hover:bg-herb"
+                    className="absolute bottom-0 right-0 rounded-full bg-herb p-2 text-paper shadow-3 hover:bg-herb"
                   >
                     <Camera className="h-4 w-4" />
                   </button>
@@ -236,7 +236,7 @@ export default function ChefProfilePage() {
                 {isEditing && (
                   <button
                     type="button"
-                    className="absolute bottom-2 right-2 rounded-full bg-herb p-2 text-paper shadow-lg hover:bg-herb"
+                    className="absolute bottom-2 right-2 rounded-full bg-herb p-2 text-paper shadow-3 hover:bg-herb"
                   >
                     <Camera className="h-4 w-4" />
                   </button>
@@ -247,7 +247,7 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Basic Info */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Basic Information</h2>
 
           <div className="mt-6 space-y-4">
@@ -280,7 +280,7 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Cuisines */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Cuisines</h2>
           <p className="mt-1 text-sm text-ink-muted">Select the cuisines you specialize in</p>
 
@@ -308,7 +308,7 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Specialties */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Specialties</h2>
           <p className="mt-1 text-sm text-ink-muted">Add your signature dishes or specialties</p>
 
@@ -351,7 +351,7 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Business Settings */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Business Settings</h2>
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
@@ -436,7 +436,7 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Stats */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Your Stats</h2>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">

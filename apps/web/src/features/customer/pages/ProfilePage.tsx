@@ -70,7 +70,7 @@ export default function ProfilePage() {
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Sidebar */}
           <div className="lg:w-64">
-            <div className="rounded-xl bg-bone p-4 shadow-sm">
+            <div className="rounded-xl bg-bone p-4 shadow-1">
               {/* User Info */}
               <div className="flex items-center gap-3 border-b pb-4">
                 <div className="relative">
@@ -226,7 +226,7 @@ function ProfileTab() {
   };
 
   return (
-    <div className="rounded-xl bg-bone p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-1">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Personal Information</h2>
         {!isEditing && (
@@ -258,7 +258,7 @@ function ProfileTab() {
               </span>
             )}
           </div>
-          <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-bone p-1.5 shadow-md hover:bg-paper">
+          <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-bone p-1.5 shadow-2 hover:bg-paper">
             {isUploading ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-mist-strong border-t-transparent" />
             ) : (
@@ -453,7 +453,7 @@ function PreferencesTab() {
       </div>
 
       {/* Dietary */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h3 className="font-medium text-ink mb-3">Dietary Preferences</h3>
         <div className="flex flex-wrap gap-2">
           {dietary.map((opt) => {
@@ -475,7 +475,7 @@ function PreferencesTab() {
       </div>
 
       {/* Allergies */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h3 className="font-medium text-ink mb-3">Food Allergies</h3>
         <div className="flex flex-wrap gap-2">
           {allergy.map((opt) => {
@@ -497,7 +497,7 @@ function PreferencesTab() {
       </div>
 
       {/* Cuisines */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h3 className="font-medium text-ink mb-3">Favourite Cuisines</h3>
         <div className="flex flex-wrap gap-2">
           {cuisine.map((opt) => {
@@ -519,7 +519,7 @@ function PreferencesTab() {
       </div>
 
       {/* Spice */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h3 className="font-medium text-ink mb-3">Spice Tolerance</h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {spiceLevel.map((level) => {
@@ -549,7 +549,7 @@ function PreferencesTab() {
       </div>
 
       {/* Household */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h3 className="font-medium text-ink mb-3">Household Size</h3>
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
           {householdSize.map((size) => {
@@ -607,7 +607,7 @@ interface LocationOption {
 
 const ADDRESS_LABELS = ['Home', 'Work', 'Other'];
 
-const selectClass = 'w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-herb-tint focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-herb/20 focus-visible:border-herb disabled:opacity-50';
+const selectClass = 'w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-1 hover:border-herb-tint focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-herb/20 focus-visible:border-herb disabled:opacity-50';
 
 function AddressesTab() {
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -742,7 +742,7 @@ function AddressesTab() {
   };
 
   return (
-    <div className="rounded-xl bg-bone p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-1">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Saved Addresses</h2>
         {formMode === 'hidden' && (
@@ -856,7 +856,7 @@ function AddressesTab() {
                   type="checkbox"
                   checked={formData.isDefault}
                   onChange={(e) => updateField('isDefault', e.target.checked)}
-                  className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+                  className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
                 />
                 <span className="text-ink-soft">Set as default address</span>
               </label>
@@ -947,7 +947,7 @@ function PaymentsTab() {
   ];
 
   return (
-    <div className="rounded-xl bg-bone p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-1">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Payment Methods</h2>
         <button className="btn-outline">
@@ -1011,7 +1011,7 @@ function NotificationsTab() {
   };
 
   return (
-    <div className="rounded-xl bg-bone p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-1">
       <h2 className="text-lg font-semibold text-ink">Notification Preferences</h2>
 
       <div className="mt-6 space-y-6">
@@ -1029,7 +1029,7 @@ function NotificationsTab() {
                   type="checkbox"
                   checked={settings[item.key as keyof typeof settings]}
                   onChange={() => toggleSetting(item.key as keyof typeof settings)}
-                  className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+                  className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
                 />
                 <div>
                   <p className="font-medium text-ink">{item.label}</p>
@@ -1246,7 +1246,7 @@ function TwoFactorSection() {
 
   if (state === 'loading') {
     return (
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-mist-strong border-t-brand-600" />
           <span className="text-sm text-ink-muted">Loading 2FA status...</span>
@@ -1257,7 +1257,7 @@ function TwoFactorSection() {
 
   if (state === 'disabled') {
     return (
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
         <div className="mt-4 flex items-start gap-3">
           <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" />
@@ -1276,7 +1276,7 @@ function TwoFactorSection() {
 
   if (state === 'setup') {
     return (
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Set Up Two-Factor Authentication</h2>
         <p className="mt-1 text-sm text-ink-muted">
           Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)
@@ -1341,7 +1341,7 @@ function TwoFactorSection() {
 
   if (state === 'show-recovery-codes') {
     return (
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Save Your Backup Codes</h2>
 
         <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber/30 bg-amber-tint p-4">
@@ -1378,7 +1378,7 @@ function TwoFactorSection() {
             type="checkbox"
             checked={codesSaved}
             onChange={(e) => setCodesSaved(e.target.checked)}
-            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
           />
           <span className="text-sm text-ink-soft">I have saved these backup codes</span>
         </label>
@@ -1400,7 +1400,7 @@ function TwoFactorSection() {
 
   if (state === 'enabled') {
     return (
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
           <Badge variant="success">
@@ -1451,7 +1451,7 @@ function TwoFactorSection() {
   // disabling or regenerating — both need TOTP code confirmation
   const isDisabling = state === 'disabling';
   return (
-    <div className="rounded-xl bg-bone p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-1">
       <h2 className="text-lg font-semibold text-ink">
         {isDisabling ? 'Disable Two-Factor Authentication' : 'Regenerate Backup Codes'}
       </h2>
@@ -1541,7 +1541,7 @@ function SecurityTab() {
   return (
     <div className="space-y-6">
       {/* Password Section */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Password</h2>
         <p className="mt-1 text-sm text-ink-muted">
           Change your password to keep your account secure
@@ -1632,7 +1632,7 @@ function SecurityTab() {
       <TwoFactorSection />
 
       {/* Connected Accounts Section */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Connected Accounts</h2>
         <p className="mt-1 text-sm text-ink-muted">
           Manage your connected social accounts

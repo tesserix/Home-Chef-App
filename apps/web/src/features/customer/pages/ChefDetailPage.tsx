@@ -112,13 +112,13 @@ export default function ChefDetailPage() {
 
       {/* Chef Info */}
       <div className="container-app relative -mt-20">
-        <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+        <div className="rounded-xl bg-bone p-6 shadow-1 md:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start">
             {/* Profile Image */}
             <img
               src={chef.profileImage}
               alt={chef.businessName}
-              className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-lg md:h-32 md:w-32"
+              className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-3 md:h-32 md:w-32"
             />
 
             {/* Info */}
@@ -215,7 +215,7 @@ export default function ChefDetailPage() {
         <div className="flex flex-col lg:flex-row lg:gap-8">
           {/* Categories Sidebar */}
           <div className="mb-6 lg:mb-0 lg:w-64 lg:flex-shrink-0">
-            <div className="rounded-xl bg-bone p-4 shadow-sm lg:sticky lg:top-24">
+            <div className="rounded-xl bg-bone p-4 shadow-1 lg:sticky lg:top-24">
               <h3 className="font-semibold text-ink mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-1">
                 <button
@@ -270,7 +270,7 @@ export default function ChefDetailPage() {
             ) : (
               <div className="space-y-4">
                 {filteredItems.length === 0 ? (
-                  <div className="rounded-xl bg-bone p-8 text-center shadow-sm">
+                  <div className="rounded-xl bg-bone p-8 text-center shadow-1">
                     <p className="text-ink-muted">No items in this category</p>
                   </div>
                 ) : (
@@ -300,7 +300,7 @@ export default function ChefDetailPage() {
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto z-40">
           <Link
             to="/cart"
-            className="btn-primary flex items-center justify-between gap-4 py-4 px-6 shadow-lg md:justify-center"
+            className="btn-primary flex items-center justify-between gap-4 py-4 px-6 shadow-3 md:justify-center"
           >
             <div className="flex items-center gap-3">
               <ShoppingCart className="h-5 w-5" />
@@ -448,7 +448,7 @@ function MenuItemCard({
 function ReviewsList({ reviews }: { reviews: Review[] }) {
   if (reviews.length === 0) {
     return (
-      <div className="rounded-xl bg-bone p-8 text-center shadow-sm">
+      <div className="rounded-xl bg-bone p-8 text-center shadow-1">
         <p className="text-ink-muted">No reviews yet</p>
       </div>
     );

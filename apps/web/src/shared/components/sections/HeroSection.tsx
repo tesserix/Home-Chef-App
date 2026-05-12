@@ -100,12 +100,12 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
 function SearchBar() {
   return (
     <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-      <div className="flex flex-1 items-center gap-3 rounded-xl border border-mist bg-bone px-4 py-3 shadow-sm focus-within:border-herb focus-within:ring-2 focus-within:ring-herb/20">
+      <div className="flex flex-1 items-center gap-3 rounded-xl border border-mist bg-bone px-4 py-3 shadow-1 focus-within:border-herb focus-within:ring-2 focus-within:ring-herb/20">
         <MapPin className="h-5 w-5 text-ink-muted" />
         <input
           type="text"
           placeholder="Enter your delivery address"
-          className="flex-1 bg-transparent text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-herb/40 focus:ring-offset-2 rounded"
+          className="flex-1 bg-transparent text-ink placeholder:text-ink-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40 focus-visible:ring-offset-2 rounded"
         />
       </div>
       <button className="btn-primary flex items-center gap-2 whitespace-nowrap">

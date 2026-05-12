@@ -45,7 +45,7 @@ export function Logo({
       {/* Logo Icon - Chef Hat with Bowl */}
       <div
         className={cn(
-          'flex items-center justify-center rounded-xl bg-herb shadow-md',
+          'flex items-center justify-center rounded-xl bg-herb shadow-2',
           sizes.icon
         )}
       >

@@ -14,6 +14,7 @@ import {
 import { useCartStore } from '@/app/store/cart-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-paper py-12">
         <div className="container-app max-w-2xl text-center">
-          <div className="rounded-xl bg-bone p-12 shadow-sm">
+          <div className="rounded-xl bg-bone p-12 shadow-1">
             <div className="mx-auto h-24 w-24 rounded-full bg-mist flex items-center justify-center">
               <ShoppingCart className="h-12 w-12 text-ink-muted" />
             </div>
@@ -60,9 +61,9 @@ export default function CartPage() {
               Looks like you haven't added any items yet. Browse our home chefs
               and discover delicious homemade food!
             </p>
-            <Link to="/chefs" className="btn-primary mt-8 inline-flex">
-              Browse Chefs
-            </Link>
+            <Button asChild variant="primary" size="lg" className="mt-8">
+              <Link to="/chefs">Browse Chefs</Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -81,7 +82,7 @@ export default function CartPage() {
             {cart.chef && (
               <Link
                 to={`/chefs/${cart.chef.id}`}
-                className="mb-6 flex items-center gap-4 rounded-xl bg-bone p-4 shadow-sm hover:shadow-md transition-shadow"
+                className="mb-6 flex items-center gap-4 rounded-xl bg-bone p-4 shadow-1 hover:shadow-2 transition-shadow"
               >
                 {cart.chef.profileImage && (
                   <img
@@ -101,7 +102,7 @@ export default function CartPage() {
             )}
 
             {/* Items */}
-            <div className="rounded-xl bg-bone shadow-sm divide-y">
+            <div className="rounded-xl bg-bone shadow-1 divide-y">
               {cart.items.map((item) => (
                 <div key={item.id} className="flex gap-4 p-4">
                   {item.imageUrl && (
@@ -170,7 +171,7 @@ export default function CartPage() {
 
           {/* Order Summary */}
           <div className="lg:w-96">
-            <div className="rounded-xl bg-bone p-6 shadow-sm lg:sticky lg:top-24">
+            <div className="rounded-xl bg-bone p-6 shadow-1 lg:sticky lg:top-24">
               <h3 className="text-lg font-semibold text-ink">Order Summary</h3>
 
               {/* Promo Code */}
@@ -241,14 +242,17 @@ export default function CartPage() {
               )}
 
               {/* Checkout Button */}
-              <button
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
                 onClick={handleCheckout}
                 disabled={belowMinimum}
-                className="btn-primary mt-6 w-full py-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                rightIcon={<ArrowRight aria-hidden="true" className="h-5 w-5" />}
+                className="mt-6"
               >
                 {!isAuthenticated ? 'Sign in to Checkout' : 'Proceed to Checkout'}
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
+              </Button>
 
               {/* Delivery Info */}
               <div className="mt-6 space-y-3 border-t pt-6">

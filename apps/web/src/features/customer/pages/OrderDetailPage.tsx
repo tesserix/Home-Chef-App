@@ -145,7 +145,7 @@ export default function OrderDetailPage() {
         </Link>
 
         {/* Header */}
-        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Order Items */}
-        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Order Items</h2>
 
           <div className="mt-4 divide-y">
@@ -243,7 +243,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Delivery Address */}
-        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
             <MapPin className="h-5 w-5 text-herb" />
             Delivery Address
@@ -267,7 +267,7 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Payment Summary */}
-        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Payment Summary</h2>
 
           <div className="mt-4 space-y-3">
@@ -316,7 +316,7 @@ export default function OrderDetailPage() {
 
         {/* Special Instructions */}
         {order.specialInstructions && (
-          <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+          <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
             <h2 className="text-lg font-semibold text-ink">Special Instructions</h2>
             <p className="mt-2 text-ink-soft">{order.specialInstructions}</p>
           </div>

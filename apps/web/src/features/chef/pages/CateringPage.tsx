@@ -147,7 +147,7 @@ function RequestsList({
 
   if (requests.length === 0) {
     return (
-      <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+      <div className="rounded-xl bg-bone p-12 text-center shadow-1">
         <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
         <h3 className="mt-4 font-medium text-ink">No open requests</h3>
         <p className="mt-2 text-ink-soft">
@@ -160,7 +160,7 @@ function RequestsList({
   return (
     <div className="space-y-4">
       {requests.map((request) => (
-        <div key={request.id} className="rounded-xl bg-bone p-6 shadow-sm">
+        <div key={request.id} className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -245,7 +245,7 @@ function QuotesList({ quotes }: { quotes: CateringQuote[] }) {
 
   if (quotes.length === 0) {
     return (
-      <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+      <div className="rounded-xl bg-bone p-12 text-center shadow-1">
         <Send className="mx-auto h-12 w-12 text-ink-muted" />
         <h3 className="mt-4 font-medium text-ink">No pending quotes</h3>
         <p className="mt-2 text-ink-soft">
@@ -258,7 +258,7 @@ function QuotesList({ quotes }: { quotes: CateringQuote[] }) {
   return (
     <div className="space-y-4">
       {quotes.map((quote) => (
-        <div key={quote.id} className="rounded-xl bg-bone p-6 shadow-sm">
+        <div key={quote.id} className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-start justify-between">
             <div>
               <p className="font-semibold text-ink">
@@ -308,7 +308,7 @@ function BookedEventsList({ events }: { events: CateringQuote[] }) {
 
   if (events.length === 0) {
     return (
-      <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+      <div className="rounded-xl bg-bone p-12 text-center shadow-1">
         <CheckCircle className="mx-auto h-12 w-12 text-ink-muted" />
         <h3 className="mt-4 font-medium text-ink">No booked events</h3>
         <p className="mt-2 text-ink-soft">
@@ -321,7 +321,7 @@ function BookedEventsList({ events }: { events: CateringQuote[] }) {
   return (
     <div className="space-y-4">
       {events.map((event) => (
-        <div key={event.id} className="rounded-xl bg-bone p-6 shadow-sm ring-2 ring-herb/30">
+        <div key={event.id} className="rounded-xl bg-bone p-6 shadow-1 ring-2 ring-herb/30">
           <div className="flex items-center gap-2 text-herb mb-4">
             <CheckCircle className="h-5 w-5" />
             <span className="font-medium">Confirmed Booking</span>
@@ -412,7 +412,7 @@ function QuoteFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 p-4 pt-10">
-      <div className="w-full max-w-2xl rounded-xl bg-bone shadow-xl">
+      <div className="w-full max-w-2xl rounded-xl bg-bone shadow-3">
         <div className="border-b p-6">
           <h2 className="text-xl font-semibold text-ink">Submit Quote</h2>
           <p className="mt-1 text-sm text-ink-muted">

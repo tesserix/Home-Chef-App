@@ -236,7 +236,7 @@ export default function BrowseChefsPage() {
                         onChange={(e) =>
                           updateFilters({ isOpen: e.target.checked ? true : undefined })
                         }
-                        className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
+                        className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
                       />
                       <span className="text-ink-soft">Open Now</span>
                     </label>
@@ -417,7 +417,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
           )}
           <button
             onClick={handleFavorite}
-            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-sm backdrop-blur-sm transition-all hover:bg-bone hover:shadow-md"
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-1 backdrop-blur-sm transition-all hover:bg-bone hover:shadow-2"
           >
             <Heart
               className={`h-4 w-4 transition-colors ${

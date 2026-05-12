@@ -204,7 +204,7 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 pt-10">
-      <div className="w-full max-w-2xl rounded-xl bg-ink shadow-xl">
+      <div className="w-full max-w-2xl rounded-xl bg-ink shadow-3">
         <div className="border-b border-ink-soft p-6">
           <div className="flex items-start justify-between">
             <div>

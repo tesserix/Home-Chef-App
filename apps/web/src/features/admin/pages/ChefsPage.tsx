@@ -229,7 +229,7 @@ function ChefDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/70 p-4 pt-10">
-      <div className="w-full max-w-2xl rounded-xl bg-ink shadow-xl">
+      <div className="w-full max-w-2xl rounded-xl bg-ink shadow-3">
         {/* Banner */}
         <div className="relative h-32">
           <img

@@ -87,7 +87,7 @@ export function StepAddress() {
             onChange={(e) => {
               updateData({ addressCountry: e.target.value, addressState: '', addressCity: '', addressPostalCode: '' });
             }}
-            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring"
+            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-1 hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring"
           >
             <option value="">Select country</option>
             {countries.map((c) => (
@@ -105,7 +105,7 @@ export function StepAddress() {
               updateData({ addressState: e.target.value, addressCity: '', addressPostalCode: '' });
             }}
             disabled={states.length === 0}
-            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring disabled:opacity-50"
+            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-1 hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring disabled:opacity-50"
           >
             <option value="">Select state</option>
             {states.map((s) => (
@@ -123,7 +123,7 @@ export function StepAddress() {
               updateData({ addressCity: e.target.value, addressPostalCode: '' });
             }}
             disabled={cities.length === 0}
-            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring disabled:opacity-50"
+            className="w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-1 hover:border-primary/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/20 focus-visible:border-ring disabled:opacity-50"
           >
             <option value="">Select city</option>
             {cities.map((city) => (

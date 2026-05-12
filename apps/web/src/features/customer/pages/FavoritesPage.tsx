@@ -110,7 +110,7 @@ export default function FavoritesPage() {
                             alt={fav.chef.businessName}
                             size="lg"
                             shape="square"
-                            className="border-3 border-bone shadow-md rounded-lg"
+                            className="border-3 border-bone shadow-2 rounded-lg"
                           />
                         </div>
                       </div>

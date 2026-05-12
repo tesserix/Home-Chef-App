@@ -113,7 +113,7 @@ export default function OrdersPage() {
         {/* Orders List */}
         <div className="mt-8 space-y-4">
           {filteredOrders.length === 0 ? (
-            <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+            <div className="rounded-xl bg-bone p-12 text-center shadow-1">
               <div className="mx-auto h-16 w-16 rounded-full bg-mist flex items-center justify-center">
                 <Package className="h-8 w-8 text-ink-muted" />
               </div>
@@ -145,7 +145,7 @@ function OrderCard({ order }: { order: Order }) {
   return (
     <Link
       to={`/orders/${order.id}`}
-      className="block rounded-xl bg-bone shadow-sm hover:shadow-md transition-shadow"
+      className="block rounded-xl bg-bone shadow-1 hover:shadow-2 transition-shadow"
     >
       <div className="p-4 sm:p-6">
         {/* Header */}

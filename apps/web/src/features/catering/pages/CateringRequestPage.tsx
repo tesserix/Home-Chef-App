@@ -205,7 +205,7 @@ export default function CateringRequestPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8">
           {/* Step 1: Event Details */}
           {step === 1 && (
-            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+            <div className="rounded-xl bg-bone p-6 shadow-1 md:p-8">
               <h2 className="text-xl font-semibold text-ink">Event Details</h2>
               <p className="mt-1 text-ink-soft">Tell us about your event</p>
 
@@ -297,7 +297,7 @@ export default function CateringRequestPage() {
 
           {/* Step 2: Preferences */}
           {step === 2 && (
-            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+            <div className="rounded-xl bg-bone p-6 shadow-1 md:p-8">
               <h2 className="text-xl font-semibold text-ink">Food Preferences</h2>
               <p className="mt-1 text-ink-soft">Select your cuisine and dietary preferences</p>
 
@@ -367,7 +367,7 @@ export default function CateringRequestPage() {
                           type="radio"
                           {...register('serviceType')}
                           value={type.value}
-                          className="mt-1 h-4 w-4 text-herb focus:ring-herb"
+                          className="mt-1 h-4 w-4 text-herb focus-visible:ring-herb"
                         />
                         <div>
                           <span className="font-medium text-ink">{type.label}</span>
@@ -405,7 +405,7 @@ export default function CateringRequestPage() {
 
           {/* Step 3: Location */}
           {step === 3 && (
-            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+            <div className="rounded-xl bg-bone p-6 shadow-1 md:p-8">
               <h2 className="text-xl font-semibold text-ink">Event Location</h2>
               <p className="mt-1 text-ink-soft">Where should we deliver the catering?</p>
 

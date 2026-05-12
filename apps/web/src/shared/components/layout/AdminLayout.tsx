@@ -143,7 +143,7 @@ export function AdminLayout() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-16 items-center justify-between border-b border-mist bg-bone px-4 shadow-sm lg:px-8">
+        <header className="flex h-16 items-center justify-between border-b border-mist bg-bone px-4 shadow-1 lg:px-8">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}

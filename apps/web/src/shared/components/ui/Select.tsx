@@ -165,7 +165,7 @@ const SelectItem = forwardRef<
       'relative flex w-full cursor-pointer select-none items-center',
       'rounded-lg py-2 pl-3 pr-8 text-sm',
       'outline-none',
-      'focus:bg-secondary',
+      'focus-visible:bg-secondary',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       'data-[highlighted]:bg-secondary',
       className

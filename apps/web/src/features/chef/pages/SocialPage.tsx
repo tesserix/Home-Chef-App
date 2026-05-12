@@ -77,7 +77,7 @@ export default function ChefSocialPage() {
           <Loader2 className="h-8 w-8 animate-spin text-herb" />
         </div>
       ) : (posts?.data ?? []).length === 0 ? (
-        <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+        <div className="rounded-xl bg-bone p-12 text-center shadow-1">
           <ImageIcon className="mx-auto h-12 w-12 text-ink-muted" />
           <h3 className="mt-4 font-medium text-ink">No posts yet</h3>
           <p className="mt-2 text-ink-soft">
@@ -127,7 +127,7 @@ function PostCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-1 overflow-hidden">
       {/* Image */}
       {post.images.length > 0 && (
         <div className="aspect-square relative">
@@ -265,7 +265,7 @@ function CreatePostModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 p-4 pt-20">
-      <div className="w-full max-w-lg rounded-xl bg-bone shadow-xl">
+      <div className="w-full max-w-lg rounded-xl bg-bone shadow-3">
         <div className="flex items-center justify-between border-b p-4">
           <h2 className="text-lg font-semibold text-ink">
             {post ? 'Edit Post' : 'Create Post'}

@@ -84,7 +84,7 @@ export default function AdminUsersPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full rounded-lg bg-ink border-ink-soft pl-10 pr-4 py-2.5 text-paper placeholder:text-ink-muted focus:border-herb focus:ring-herb"
+            className="w-full rounded-lg bg-ink border-ink-soft pl-10 pr-4 py-2.5 text-paper placeholder:text-ink-muted focus-visible:border-herb focus-visible:ring-herb"
           />
         </div>
         <div className="flex gap-3">
@@ -287,7 +287,7 @@ function UserDetailModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4">
-      <div className="w-full max-w-md rounded-xl bg-ink shadow-xl">
+      <div className="w-full max-w-md rounded-xl bg-ink shadow-3">
         <div className="p-6">
           <div className="flex items-start gap-4">
             <div className="h-16 w-16 rounded-full bg-ink-soft flex items-center justify-center">

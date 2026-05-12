@@ -131,7 +131,7 @@ export default function SocialFeedPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-herb" />
               </div>
             ) : posts.length === 0 ? (
-              <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+              <div className="rounded-xl bg-bone p-12 text-center shadow-1">
                 <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
                 <h3 className="mt-4 text-lg font-semibold text-ink">No posts yet</h3>
                 <p className="mt-2 text-ink-soft">
@@ -155,7 +155,7 @@ export default function SocialFeedPage() {
           {/* Sidebar */}
           <div className="lg:w-80">
             {/* Trending Chefs */}
-            <div className="rounded-xl bg-bone p-6 shadow-sm">
+            <div className="rounded-xl bg-bone p-6 shadow-1">
               <h3 className="font-semibold text-ink">Trending Chefs</h3>
               <div className="mt-4 space-y-4">
                 {[
@@ -184,7 +184,7 @@ export default function SocialFeedPage() {
             </div>
 
             {/* Popular Tags */}
-            <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+            <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
               <h3 className="font-semibold text-ink">Popular This Week</h3>
               <div className="mt-4 space-y-2">
                 {[
@@ -225,7 +225,7 @@ function PostCard({
   const [imageIndex, setImageIndex] = useState(0);
 
   return (
-    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-1 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         <Link to={`/chefs/${post.chefId}`} className="flex items-center gap-3">

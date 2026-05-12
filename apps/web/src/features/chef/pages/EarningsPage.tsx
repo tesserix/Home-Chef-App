@@ -92,7 +92,7 @@ export default function ChefEarningsPage() {
           </button>
         </div>
 
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">Pending</span>
             <Calendar className="h-5 w-5 text-ink-muted" />
@@ -103,7 +103,7 @@ export default function ChefEarningsPage() {
           <p className="mt-1 text-sm text-ink-muted">From recent orders</p>
         </div>
 
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">This Month</span>
             {(earnings?.monthlyChange || 0) >= 0 ? (
@@ -127,7 +127,7 @@ export default function ChefEarningsPage() {
           </p>
         </div>
 
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">Total Earned</span>
             <DollarSign className="h-5 w-5 text-ink-muted" />
@@ -142,7 +142,7 @@ export default function ChefEarningsPage() {
       {/* Stats */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Chart Placeholder */}
-        <div className="lg:col-span-2 rounded-xl bg-bone p-6 shadow-sm">
+        <div className="lg:col-span-2 rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Earnings Overview</h2>
           <div className="mt-6 h-64 flex items-center justify-center border-2 border-dashed border-mist rounded-lg">
             <div className="text-center text-ink-muted">
@@ -173,7 +173,7 @@ export default function ChefEarningsPage() {
         </div>
 
         {/* Top Items */}
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <h2 className="text-lg font-semibold text-ink">Top Selling Items</h2>
           <div className="mt-4 space-y-4">
             {earnings?.topItems?.map((item, index) => (
@@ -197,30 +197,30 @@ export default function ChefEarningsPage() {
 
       {/* Stats Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <p className="text-sm text-ink-muted">Total Orders</p>
           <p className="mt-2 font-display text-2xl font-semibold text-ink">{earnings?.ordersCount || 0}</p>
         </div>
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <p className="text-sm text-ink-muted">Average Order Value</p>
           <p className="mt-2 font-display text-2xl font-semibold text-ink">
             {fp(earnings?.avgOrderValue || 0)}
           </p>
         </div>
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <p className="text-sm text-ink-muted">Last Month</p>
           <p className="mt-2 font-display text-2xl font-semibold text-ink">
             {fp(earnings?.lastMonth || 0)}
           </p>
         </div>
-        <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-1">
           <p className="text-sm text-ink-muted">Platform Fee</p>
           <p className="mt-2 font-display text-2xl font-semibold text-ink">15%</p>
         </div>
       </div>
 
       {/* Recent Payouts */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-ink">Recent Payouts</h2>
           <button className="text-sm text-herb hover:text-herb">View all</button>
@@ -283,7 +283,7 @@ export default function ChefEarningsPage() {
       </div>
 
       {/* Payment Settings */}
-      <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Payment Settings</h2>
         <div className="mt-4 flex items-center justify-between rounded-lg border p-4">
           <div className="flex items-center gap-4">

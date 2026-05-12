@@ -96,7 +96,7 @@ export default function CateringQuotesPage() {
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Requests List */}
           <div className="lg:w-96">
-            <div className="rounded-xl bg-bone shadow-sm">
+            <div className="rounded-xl bg-bone shadow-1">
               <div className="border-b p-4">
                 <h2 className="font-semibold text-ink">Your Requests</h2>
               </div>
@@ -169,7 +169,7 @@ export default function CateringQuotesPage() {
           {/* Request Details & Quotes */}
           <div className="flex-1">
             {!selectedRequest ? (
-              <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+              <div className="rounded-xl bg-bone p-12 text-center shadow-1">
                 <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
                 <h3 className="mt-4 font-medium text-ink">Select a request</h3>
                 <p className="mt-2 text-sm text-ink-soft">
@@ -180,7 +180,7 @@ export default function CateringQuotesPage() {
               <>
                 {/* Request Details */}
                 {activeRequest && (
-                  <div className="rounded-xl bg-bone p-6 shadow-sm">
+                  <div className="rounded-xl bg-bone p-6 shadow-1">
                     <div className="flex items-start justify-between">
                       <h2 className="text-lg font-semibold text-ink">Request Details</h2>
                       <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_CONFIG[activeRequest.status].color}`}>
@@ -275,7 +275,7 @@ export default function CateringQuotesPage() {
                       <Loader2 className="h-8 w-8 animate-spin text-herb" />
                     </div>
                   ) : (quotes?.data ?? []).length === 0 ? (
-                    <div className="mt-4 rounded-xl bg-bone p-8 text-center shadow-sm">
+                    <div className="mt-4 rounded-xl bg-bone p-8 text-center shadow-1">
                       <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
                       <h3 className="mt-4 font-medium text-ink">No quotes yet</h3>
                       <p className="mt-2 text-sm text-ink-soft">
@@ -320,7 +320,7 @@ function QuoteCard({
   const fp = useFormatPrice();
 
   return (
-    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-1 overflow-hidden">
       <div className="p-6">
         <div className="flex items-start gap-4">
           {/* Chef Info */}
