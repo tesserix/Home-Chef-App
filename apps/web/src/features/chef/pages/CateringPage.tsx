@@ -166,7 +166,7 @@ function RequestsList({
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-herb" />
                 <span className="font-semibold text-ink">
-                  {new Date(request.eventDate).toLocaleDateString('en-US', {
+                  {new Date(request.eventDate).toLocaleDateString(undefined, {
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric',

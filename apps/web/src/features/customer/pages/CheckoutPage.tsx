@@ -18,6 +18,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { loadStripeJs } from '@/shared/utils/load-stripe';
+import { resolveCssVarColor } from '@/shared/utils/css-color';
 import { Button } from '@/shared/components/ui';
 import type { Order, Address } from '@/shared/types';
 
@@ -193,7 +194,10 @@ export default function CheckoutPage() {
         name: user?.name || '',
         email: user?.email || '',
       },
-      theme: { color: '#3e6b3c' },
+      // Resolve --herb at runtime so a theme change ripples to Razorpay's
+      // hosted checkout. Falls back to a static herb-equivalent hex if the
+      // CSS var is unavailable (SSR / older browsers without oklch).
+      theme: { color: resolveCssVarColor('--herb', '#3e6b3c') },
       handler: async (response) => {
         try {
           await apiClient.post(`/payments/order/${order.id}/verify`, {

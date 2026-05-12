@@ -146,9 +146,7 @@ export default {
         smooth: 'cubic-bezier(0.22, 1, 0.36, 1)',
         // ease-in-out — for state changes
         ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
-        // Legacy aliases (no bounce, no overshoot — these now resolve to smooth)
         premium: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        'bounce-out': 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
       transitionDuration: {
         150: '150ms',
@@ -165,8 +163,6 @@ export default {
         'slide-in-left': 'slide-in-left 250ms cubic-bezier(0.22, 1, 0.36, 1)',
         'scale-in': 'scale-in 150ms cubic-bezier(0.22, 1, 0.36, 1)',
         shimmer: 'shimmer 2s linear infinite',
-        // Legacy aliases — bounce-in is now a plain fade-in-up (no overshoot)
-        'bounce-in': 'fade-in-up 400ms cubic-bezier(0.22, 1, 0.36, 1)',
         'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
       },
       keyframes: {

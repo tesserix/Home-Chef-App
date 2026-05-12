@@ -195,13 +195,13 @@ export default function CartPage() {
                     className="input-base flex-1"
                     disabled={promoApplied}
                   />
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={handleApplyPromo}
                     disabled={promoApplied || !promoCode}
-                    className="btn-outline"
                   >
                     {promoApplied ? 'Applied' : 'Apply'}
-                  </button>
+                  </Button>
                 </div>
                 {promoApplied && (
                   <p className="mt-2 text-sm text-herb">

@@ -331,27 +331,26 @@ export default function OrderDetailPage() {
 
           {isActive && (
             <>
-              <button className="btn-outline">
-                <MessageCircle className="h-4 w-4" />
+              <Button variant="outline" leftIcon={<MessageCircle aria-hidden="true" className="h-4 w-4" />}>
                 Contact Support
-              </button>
+              </Button>
 
               {canCancel && (
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => setShowCancelModal(true)}
-                  className="btn-outline border-paprika/30 text-paprika hover:bg-paprika-tint"
+                  leftIcon={<XCircle aria-hidden="true" className="h-4 w-4" />}
+                  className="border-paprika/30 text-paprika hover:bg-paprika-tint"
                 >
-                  <XCircle className="h-4 w-4" />
                   Cancel Order
-                </button>
+                </Button>
               )}
             </>
           )}
 
-          <Link to="/chefs" className="btn-outline">
-            <RefreshCw className="h-4 w-4" />
-            Reorder
-          </Link>
+          <Button asChild variant="outline" leftIcon={<RefreshCw aria-hidden="true" className="h-4 w-4" />}>
+            <Link to="/chefs">Reorder</Link>
+          </Button>
         </div>
 
         {/* Cancel Modal */}
@@ -377,23 +376,17 @@ export default function OrderDetailPage() {
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <button
-                  onClick={() => setShowCancelModal(false)}
-                  className="btn-outline"
-                >
+                <Button variant="outline" onClick={() => setShowCancelModal(false)}>
                   Keep Order
-                </button>
-                <button
-                  onClick={() => cancelMutation.mutate()}
+                </Button>
+                <Button
+                  variant="destructive"
+                  isLoading={cancelMutation.isPending}
                   disabled={cancelMutation.isPending}
-                  className="btn-base bg-paprika text-paper hover:bg-paprika"
+                  onClick={() => cancelMutation.mutate()}
                 >
-                  {cancelMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Cancel Order'
-                  )}
-                </button>
+                  {cancelMutation.isPending ? 'Cancelling…' : 'Cancel Order'}
+                </Button>
               </div>
             </div>
           </div>

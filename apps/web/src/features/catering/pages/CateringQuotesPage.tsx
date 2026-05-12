@@ -413,16 +413,18 @@ function QuoteCard({
             >
               {isAccepting ? 'Accepting…' : 'Accept Quote'}
             </Button>
-            <button
+            <Button
+              variant="outline"
+              fullWidth
               onClick={onDecline}
-              className="btn-outline flex-1"
+              leftIcon={<X aria-hidden="true" className="h-5 w-5" />}
+              className="flex-1"
             >
-              <X className="h-5 w-5" />
               Decline
-            </button>
-            <button className="btn-outline">
-              <MessageCircle className="h-5 w-5" />
-            </button>
+            </Button>
+            <Button variant="outline" size="icon" aria-label="Message chef">
+              <MessageCircle aria-hidden="true" className="h-5 w-5" />
+            </Button>
           </div>
         )}
 

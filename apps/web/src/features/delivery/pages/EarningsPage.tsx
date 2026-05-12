@@ -254,7 +254,7 @@ export default function DeliveryEarningsPage() {
                     </div>
                   </div>
                   <span className="mt-2 text-xs text-ink-muted text-center">
-                    {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                    {new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}
                   </span>
                 </div>
               );

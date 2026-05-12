@@ -323,7 +323,7 @@ function PendingOrderCard({ order }: { order: Order }) {
       <div className="text-right">
         <OrderStatusBadge status={order.status} />
         <p className="mt-1 text-xs text-ink-muted">
-          {new Date(order.createdAt).toLocaleTimeString('en-US', {
+          {new Date(order.createdAt).toLocaleTimeString(undefined, {
             hour: 'numeric',
             minute: '2-digit',
           })}

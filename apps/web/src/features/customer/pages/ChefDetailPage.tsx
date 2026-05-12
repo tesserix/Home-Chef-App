@@ -152,12 +152,18 @@ export default function ChefDetailPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <button onClick={handleFavorite} className="btn-outline p-2">
-                    <Heart className={`h-5 w-5 transition-colors ${favorited ? 'fill-paprika text-paprika' : ''}`} />
-                  </button>
-                  <button className="btn-outline p-2">
-                    <Share2 className="h-5 w-5" />
-                  </button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleFavorite}
+                    aria-label={favorited ? `Remove ${chef.businessName} from favorites` : `Save ${chef.businessName} to favorites`}
+                    aria-pressed={favorited}
+                  >
+                    <Heart aria-hidden="true" className={`h-5 w-5 transition-colors ${favorited ? 'fill-paprika text-paprika' : ''}`} />
+                  </Button>
+                  <Button variant="outline" size="icon" aria-label="Share chef">
+                    <Share2 aria-hidden="true" className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
 

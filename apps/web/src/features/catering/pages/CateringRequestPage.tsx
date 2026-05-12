@@ -397,9 +397,9 @@ export default function CateringRequestPage() {
               </div>
 
               <div className="mt-8 flex justify-between">
-                <button type="button" onClick={() => setStep(1)} className="btn-outline">
+                <Button type="button" variant="outline" onClick={() => setStep(1)}>
                   Back
-                </button>
+                </Button>
                 <Button
                   type="button"
                   variant="primary"
@@ -484,9 +484,9 @@ export default function CateringRequestPage() {
               </div>
 
               <div className="mt-8 flex justify-between">
-                <button type="button" onClick={() => setStep(2)} className="btn-outline">
+                <Button type="button" variant="outline" onClick={() => setStep(2)}>
                   Back
-                </button>
+                </Button>
                 <Button
                   type="submit"
                   variant="primary"

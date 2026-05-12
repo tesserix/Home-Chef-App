@@ -165,7 +165,7 @@ export default function ChefEarningsPage() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-ink-muted">
-                  {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                  {new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}
                 </p>
               </div>
             ))}
@@ -240,7 +240,7 @@ export default function ChefEarningsPage() {
               {earnings?.recentPayouts?.map((payout) => (
                 <tr key={payout.id} className="text-sm">
                   <td className="py-4 text-ink-soft">
-                    {new Date(payout.date).toLocaleDateString('en-US', {
+                    {new Date(payout.date).toLocaleDateString(undefined, {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',

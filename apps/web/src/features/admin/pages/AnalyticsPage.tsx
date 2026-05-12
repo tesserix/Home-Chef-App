@@ -125,7 +125,7 @@ export default function AdminAnalyticsPage() {
                     title={fp(day.revenue)}
                   />
                   <span className="mt-2 text-xs text-ink-muted rotate-45">
-                    {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(day.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               );

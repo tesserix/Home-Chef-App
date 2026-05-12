@@ -173,7 +173,7 @@ function PostCard({
 
         {/* Date */}
         <p className="mt-2 text-xs text-ink-muted">
-          {new Date(post.createdAt).toLocaleDateString('en-US', {
+          {new Date(post.createdAt).toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
             hour: 'numeric',

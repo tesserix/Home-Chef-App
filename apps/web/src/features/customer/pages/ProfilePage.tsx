@@ -370,8 +370,9 @@ function ProfileTab() {
             <Button type="submit" variant="primary">
               Save Changes
             </Button>
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 if (profile) {
                   setValue('firstName', profile.firstName);
@@ -384,10 +385,9 @@ function ProfileTab() {
                 }
                 setIsEditing(false);
               }}
-              className="btn-outline"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         )}
       </form>
@@ -976,10 +976,9 @@ function PaymentsTab() {
     <div className="rounded-xl bg-bone p-6 shadow-1">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Payment Methods</h2>
-        <button className="btn-outline">
-          <Plus className="h-4 w-4" />
+        <Button variant="outline" leftIcon={<Plus aria-hidden="true" className="h-4 w-4" />}>
           Add New
-        </button>
+        </Button>
       </div>
 
       <div className="mt-6 space-y-4">
