@@ -88,7 +88,11 @@ Div.displayName = 'M.Div';
 
 const Section = forwardRef<HTMLElement, MDivProps>(({ preset, ...rest }, ref) => (
   <motion.section
-    ref={ref as React.Ref<HTMLElement>}
+    // Cast through unknown: framer-motion's Ref type and React's
+    // Ref<HTMLElement> diverge under the React 18/19 type duplication
+    // in the current dependency graph. The runtime behaviour is correct;
+    // only the type checker is confused.
+    ref={ref as unknown as React.Ref<HTMLElement>}
     {...(applyPreset(preset, rest) as HTMLMotionProps<'section'>)}
   />
 ));
