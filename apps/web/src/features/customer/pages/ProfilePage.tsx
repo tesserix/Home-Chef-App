@@ -283,58 +283,84 @@ function ProfileTab() {
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-ink-soft">First name</label>
+            <label htmlFor="profile-first-name" className="block text-sm font-medium text-ink-soft">
+              First name
+            </label>
             <input
+              id="profile-first-name"
               {...register('firstName')}
               disabled={!isEditing}
+              aria-invalid={!!errors.firstName || undefined}
+              aria-describedby={errors.firstName ? 'profile-first-name-err' : undefined}
+              autoComplete="given-name"
               className="input-base mt-1 disabled:bg-paper"
             />
             {errors.firstName && (
-              <p className="mt-1 text-xs text-paprika">{errors.firstName.message}</p>
+              <p id="profile-first-name-err" role="alert" className="mt-1 text-xs text-paprika">
+                {errors.firstName.message}
+              </p>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-ink-soft">Last name</label>
+            <label htmlFor="profile-last-name" className="block text-sm font-medium text-ink-soft">
+              Last name
+            </label>
             <input
+              id="profile-last-name"
               {...register('lastName')}
               disabled={!isEditing}
+              aria-invalid={!!errors.lastName || undefined}
+              aria-describedby={errors.lastName ? 'profile-last-name-err' : undefined}
+              autoComplete="family-name"
               className="input-base mt-1 disabled:bg-paper"
             />
             {errors.lastName && (
-              <p className="mt-1 text-xs text-paprika">{errors.lastName.message}</p>
+              <p id="profile-last-name-err" role="alert" className="mt-1 text-xs text-paprika">
+                {errors.lastName.message}
+              </p>
             )}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-ink-soft">Email</label>
+          <label htmlFor="profile-email" className="block text-sm font-medium text-ink-soft">Email</label>
           <input
+            id="profile-email"
             {...register('email')}
             type="email"
             disabled={!isEditing}
+            aria-invalid={!!errors.email || undefined}
+            aria-describedby={errors.email ? 'profile-email-err' : undefined}
+            autoComplete="email"
             className="input-base mt-1 disabled:bg-paper"
           />
           {errors.email && (
-            <p className="mt-1 text-xs text-paprika">{errors.email.message}</p>
+            <p id="profile-email-err" role="alert" className="mt-1 text-xs text-paprika">
+              {errors.email.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-ink-soft">Phone</label>
+          <label htmlFor="profile-phone" className="block text-sm font-medium text-ink-soft">Phone</label>
           <input
+            id="profile-phone"
             {...register('phone')}
             type="tel"
             disabled={!isEditing}
+            autoComplete="tel"
             className="input-base mt-1 disabled:bg-paper"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-ink-soft">Date of birth</label>
+          <label htmlFor="profile-dob" className="block text-sm font-medium text-ink-soft">Date of birth</label>
           <input
+            id="profile-dob"
             {...register('dateOfBirth')}
             type="date"
             disabled={!isEditing}
+            autoComplete="bday"
             className="input-base mt-1 disabled:bg-paper"
           />
         </div>

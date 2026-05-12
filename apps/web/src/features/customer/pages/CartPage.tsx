@@ -87,8 +87,13 @@ export default function CartPage() {
                 {cart.chef.profileImage && (
                   <img
                     src={cart.chef.profileImage}
-                    alt={cart.chef.businessName}
-                    className="h-14 w-14 rounded-xl object-cover"
+                    alt=""
+                    width={56}
+                    height={56}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-14 w-14 rounded-xl object-cover shrink-0"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 )}
                 <div className="flex-1 min-w-0">
@@ -108,8 +113,13 @@ export default function CartPage() {
                   {item.imageUrl && (
                     <img
                       src={item.imageUrl}
-                      alt={item.name}
-                      className="h-20 w-20 rounded-lg object-cover"
+                      alt=""
+                      width={80}
+                      height={80}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-20 w-20 rounded-lg object-cover shrink-0"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   )}
                   <div className="flex-1 min-w-0">

@@ -534,7 +534,11 @@ export default function CheckoutPage() {
                 <img
                   src="https://razorpay.com/assets/razorpay-glyph.svg"
                   alt="Razorpay"
-                  className="h-6 w-6"
+                  width={24}
+                  height={24}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-6 w-6 shrink-0"
                 />
                 <div>
                   <p className="text-sm font-medium text-ink">Powered by Razorpay</p>
@@ -601,8 +605,13 @@ export default function CheckoutPage() {
                   {cart.chef.profileImage && (
                     <img
                       src={cart.chef.profileImage}
-                      alt={cart.chef.businessName}
-                      className="h-10 w-10 rounded-lg object-cover"
+                      alt=""
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-10 w-10 rounded-lg object-cover shrink-0"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   )}
                   <span className="font-medium text-ink">{cart.chef.businessName}</span>

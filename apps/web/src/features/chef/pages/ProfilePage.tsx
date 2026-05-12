@@ -252,28 +252,38 @@ export default function ChefProfilePage() {
 
           <div className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-ink-soft">Business Name</label>
+              <label htmlFor="chef-business-name" className="block text-sm font-medium text-ink-soft">Business Name</label>
               <input
+                id="chef-business-name"
                 {...register('businessName')}
                 disabled={!isEditing}
+                aria-invalid={!!errors.businessName || undefined}
+                aria-describedby={errors.businessName ? 'chef-business-name-err' : undefined}
                 className="input-base mt-1 disabled:bg-paper"
               />
               {errors.businessName && (
-                <p className="mt-1 text-xs text-paprika">{errors.businessName.message}</p>
+                <p id="chef-business-name-err" role="alert" className="mt-1 text-xs text-paprika">
+                  {errors.businessName.message}
+                </p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink-soft">Description</label>
+              <label htmlFor="chef-description" className="block text-sm font-medium text-ink-soft">Description</label>
               <textarea
+                id="chef-description"
                 {...register('description')}
                 disabled={!isEditing}
                 rows={4}
+                aria-invalid={!!errors.description || undefined}
+                aria-describedby={errors.description ? 'chef-description-err' : undefined}
                 className="input-base mt-1 disabled:bg-paper"
                 placeholder="Tell customers about your kitchen, cooking style, and what makes your food special..."
               />
               {errors.description && (
-                <p className="mt-1 text-xs text-paprika">{errors.description.message}</p>
+                <p id="chef-description-err" role="alert" className="mt-1 text-xs text-paprika">
+                  {errors.description.message}
+                </p>
               )}
             </div>
           </div>
@@ -334,11 +344,18 @@ export default function ChefProfilePage() {
 
           {isEditing && (
             <div className="mt-4 flex gap-2">
+              <label htmlFor="chef-new-specialty" className="sr-only">Add a specialty</label>
               <input
+                id="chef-new-specialty"
                 type="text"
                 value={newSpecialty}
                 onChange={(e) => setNewSpecialty(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSpecialty())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSpecialty();
+                  }
+                }}
                 placeholder="Add a specialty..."
                 className="input-base flex-1"
               />
@@ -356,11 +373,12 @@ export default function ChefProfilePage() {
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-ink-soft">
-                <Clock className="mr-1 inline h-4 w-4" />
+              <label htmlFor="chef-prep-time" className="block text-sm font-medium text-ink-soft">
+                <Clock aria-hidden="true" className="mr-1 inline h-4 w-4" />
                 Average Prep Time
               </label>
               <select
+                id="chef-prep-time"
                 {...register('prepTime')}
                 disabled={!isEditing}
                 className="input-base mt-1 disabled:bg-paper"
@@ -373,12 +391,15 @@ export default function ChefProfilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink-soft">
-                <MapPin className="mr-1 inline h-4 w-4" />
+              <label htmlFor="chef-service-radius" className="block text-sm font-medium text-ink-soft">
+                <MapPin aria-hidden="true" className="mr-1 inline h-4 w-4" />
                 Delivery Radius (km)
               </label>
               <input
+                id="chef-service-radius"
                 type="number"
+                inputMode="numeric"
+                min={0}
                 {...register('serviceRadius', { valueAsNumber: true })}
                 disabled={!isEditing}
                 className="input-base mt-1 disabled:bg-paper"
@@ -386,14 +407,18 @@ export default function ChefProfilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink-soft">
-                <DollarSign className="mr-1 inline h-4 w-4" />
+              <label htmlFor="chef-min-order" className="block text-sm font-medium text-ink-soft">
+                <DollarSign aria-hidden="true" className="mr-1 inline h-4 w-4" />
                 Minimum Order
               </label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
+                <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
                 <input
+                  id="chef-min-order"
                   type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={0.01}
                   {...register('minimumOrder', { valueAsNumber: true })}
                   disabled={!isEditing}
                   className="input-base pl-7 disabled:bg-paper"
@@ -402,14 +427,18 @@ export default function ChefProfilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink-soft">
-                <DollarSign className="mr-1 inline h-4 w-4" />
+              <label htmlFor="chef-delivery-fee" className="block text-sm font-medium text-ink-soft">
+                <DollarSign aria-hidden="true" className="mr-1 inline h-4 w-4" />
                 Delivery Fee
               </label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
+                <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
                 <input
+                  id="chef-delivery-fee"
                   type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={0.01}
                   {...register('deliveryFee', { valueAsNumber: true })}
                   disabled={!isEditing}
                   className="input-base pl-7 disabled:bg-paper"

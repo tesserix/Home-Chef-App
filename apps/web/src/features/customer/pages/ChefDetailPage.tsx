@@ -105,10 +105,14 @@ export default function ChefDetailPage() {
       <div className="relative h-64 md:h-80">
         <img
           src={chef.bannerImage || chef.profileImage}
-          alt={chef.businessName}
+          alt=""
+          width={1600}
+          height={640}
+          loading="eager"
+          decoding="async"
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 scrim-bottom" />
+        <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
       </div>
 
       {/* Chef Info */}
@@ -118,8 +122,13 @@ export default function ChefDetailPage() {
             {/* Profile Image */}
             <img
               src={chef.profileImage}
-              alt={chef.businessName}
-              className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-3 md:h-32 md:w-32"
+              alt=""
+              width={128}
+              height={128}
+              loading="lazy"
+              decoding="async"
+              className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-3 md:h-32 md:w-32 shrink-0"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
 
             {/* Info */}
@@ -363,8 +372,13 @@ function MenuItemCard({
           <div className="relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-lg">
             <img
               src={item.imageUrl}
-              alt={item.name}
+              alt=""
+              width={112}
+              height={112}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
             {item.isFeatured && (
               <div className="absolute top-1 left-1 rounded bg-herb px-1.5 py-0.5 text-xs font-medium text-paper">
