@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
 import { AppRoutes } from './routes';
 import { AuthProvider } from './providers/AuthProvider';
+import { OttoChat } from '@/features/support/OttoChat';
 import { SkipLink } from '@/shared/components/a11y/SkipLink';
 import { ThemeProvider, ThemedToaster } from '@/shared/theme';
 import { ErrorBoundary } from '@/shared/components/error/ErrorBoundary';
@@ -28,6 +29,7 @@ export function App() {
               <AuthProvider>
                 <SkipLink />
                 <AppRoutes />
+                <OttoChat />
                 <ThemedToaster
                   position="bottom-right"
                   expand={false}

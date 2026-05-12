@@ -49,7 +49,13 @@ RUN pnpm build
 FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
 
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
-ENV API_URL=http://localhost:8080
+# OTTO_URL: shared Otto in support-platform (cross-namespace svc DNS).
+# OTTO_INTERNAL_AUTH: empty by default; populated from K8s Secret at deploy
+# time via the homechef-web Helm chart. envsubst on /etc/nginx/templates
+# substitutes both at container start.
+ENV API_URL=http://localhost:8080 \
+    OTTO_URL=http://support-platform-otto.support-platform.svc.cluster.local:8089 \
+    OTTO_INTERNAL_AUTH=
 
 COPY --from=builder --chown=10001:10001 /app/apps/web/dist /usr/share/nginx/html
 
