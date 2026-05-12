@@ -322,7 +322,7 @@ export default function StaffDetailPage() {
                   <ChevronDown className="h-4 w-4" />
                 </button>
                 {showRoleDropdown && (
-                  <div className="absolute right-0 top-full mt-1 z-10 w-64 rounded-lg border border-border bg-card shadow-lg">
+                  <div className="absolute right-0 top-full mt-1 z-10 w-64 rounded-lg border border-border bg-card shadow-2">
                     {Object.entries(STAFF_ROLES).map(([key, val]) => (
                       <button
                         key={key}

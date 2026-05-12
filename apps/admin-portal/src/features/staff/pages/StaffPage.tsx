@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 // ---------- Types ----------
 
@@ -124,13 +125,13 @@ export default function StaffPage() {
             Manage staff members and invitations
           </p>
         </div>
-        <button
+        <Button
+          variant="primary"
+          leftIcon={<UserPlus className="h-4 w-4" />}
           onClick={() => setShowInviteDialog(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          <UserPlus className="h-4 w-4" />
           Invite Staff
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -299,13 +300,16 @@ function StaffMembersView() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end">
-                        <button
-                          onClick={() => navigate(`/staff/${member.id}`)}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="View staff member details"
                           title="View Details"
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                          onClick={() => navigate(`/staff/${member.id}`)}
+                          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
                         >
                           <Eye className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -329,20 +333,22 @@ function StaffMembersView() {
               Page {pagination.page} of {pagination.totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasPrev}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasNext}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => p + 1)}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -469,24 +475,30 @@ function InvitationsView() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
                         {(inv.status === 'pending' || inv.status === 'expired') && (
-                          <button
-                            onClick={() => resendMutation.mutate(inv.id)}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             disabled={resendMutation.isPending}
                             title="Resend Invitation"
-                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-info/10 hover:text-info transition-colors"
+                            aria-label="Resend invitation"
+                            onClick={() => resendMutation.mutate(inv.id)}
+                            className="text-muted-foreground hover:bg-info/10 hover:text-info"
                           >
                             <Send className="h-4 w-4" />
-                          </button>
+                          </Button>
                         )}
                         {inv.status === 'pending' && (
-                          <button
-                            onClick={() => revokeMutation.mutate(inv.id)}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             disabled={revokeMutation.isPending}
                             title="Revoke Invitation"
-                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                            aria-label="Revoke invitation"
+                            onClick={() => revokeMutation.mutate(inv.id)}
+                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Ban className="h-4 w-4" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </td>
@@ -511,20 +523,22 @@ function InvitationsView() {
               Page {pagination.page} of {pagination.totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasPrev}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasNext}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => p + 1)}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -590,15 +604,18 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
+      <div className="relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-3 mx-4">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Invite Staff Member</h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close dialog"
             onClick={onClose}
-            className="rounded-lg p-1.5 hover:bg-secondary transition-colors"
+            className="text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
-            <X className="h-5 w-5 text-muted-foreground" />
-          </button>
+            <X className="h-5 w-5" />
+          </Button>
         </div>
 
         {inviteUrl ? (
@@ -616,20 +633,17 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
                 value={inviteUrl}
                 className="h-10 flex-1 rounded-lg border border-input bg-muted/50 px-3 text-sm text-foreground font-mono"
               />
-              <button
+              <Button
+                variant="outline"
+                leftIcon={copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
                 onClick={handleCopy}
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium hover:bg-secondary transition-colors"
               >
-                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
                 {copied ? 'Copied' : 'Copy'}
-              </button>
+              </Button>
             </div>
-            <button
-              onClick={onClose}
-              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
+            <Button variant="primary" fullWidth onClick={onClose}>
               Done
-            </button>
+            </Button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -713,25 +727,18 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
-              >
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
+                variant="primary"
+                isLoading={inviteMutation.isPending}
                 disabled={inviteMutation.isPending || !email || !role}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                leftIcon={!inviteMutation.isPending ? <Send className="h-4 w-4" /> : undefined}
               >
-                {inviteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
                 Send Invitation
-              </button>
+              </Button>
             </div>
           </form>
         )}

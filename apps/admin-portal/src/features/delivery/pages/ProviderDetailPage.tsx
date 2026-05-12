@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 // ---------- Types ----------
 
@@ -159,12 +160,9 @@ export default function ProviderDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">Provider not found</p>
-        <button
-          onClick={() => navigate('/delivery/providers')}
-          className="mt-4 text-sm text-primary hover:underline"
-        >
+        <Button variant="link" size="sm" className="mt-4" onClick={() => navigate('/delivery/providers')}>
           Back to Providers
-        </button>
+        </Button>
       </div>
     );
   }
@@ -180,12 +178,15 @@ export default function ProviderDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to providers"
           onClick={() => navigate('/delivery/providers')}
-          className="rounded-lg p-2 hover:bg-secondary transition-colors"
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-        </button>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="font-display text-2xl font-semibold text-foreground">{provider.name}</h1>
@@ -196,29 +197,27 @@ export default function ProviderDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => testMutation.mutate()}
+          <Button
+            variant="outline"
+            isLoading={testMutation.isPending}
             disabled={testMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors disabled:opacity-50"
+            leftIcon={!testMutation.isPending ? <Zap className="h-4 w-4" /> : undefined}
+            onClick={() => testMutation.mutate()}
           >
-            {testMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Zap className="h-4 w-4" />
-            )}
             Test Connection
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            leftIcon={<Power className="h-4 w-4" />}
             onClick={() => setConfirmAction('toggle')}
-            className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+            className={
               provider.isEnabled
-                ? 'border-warning/30 text-warning hover:bg-warning/10'
-                : 'border-success/30 text-success hover:bg-success/10'
-            }`}
+                ? 'border-warning/30 text-warning hover:bg-warning/10 hover:border-warning/40 hover:text-warning'
+                : 'border-success/30 text-success hover:bg-success/10 hover:border-success/40 hover:text-success'
+            }
           >
-            <Power className="h-4 w-4" />
             {provider.isEnabled ? 'Disable' : 'Enable'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -531,20 +530,23 @@ export default function ProviderDetailPage() {
           <div className="rounded-xl border border-border bg-card p-6 shadow-card">
             <h2 className="text-lg font-semibold text-foreground mb-4">Actions</h2>
             <div className="space-y-3">
-              <button
+              <Button
+                variant="outline"
+                fullWidth
+                leftIcon={<Pencil className="h-4 w-4" />}
                 onClick={() => navigate(`/delivery/providers/${id}/edit`)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
               >
-                <Pencil className="h-4 w-4" />
                 Edit Provider
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth
+                leftIcon={<Trash2 className="h-4 w-4" />}
                 onClick={() => setConfirmAction('delete')}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/30 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4" />
                 Delete Provider
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -554,7 +556,7 @@ export default function ProviderDetailPage() {
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmAction(null)} />
-          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
+          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-3 mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {confirmAction === 'delete' ? 'Delete Provider' : provider.isEnabled ? 'Disable Provider' : 'Enable Provider'}
             </h3>
@@ -566,13 +568,13 @@ export default function ProviderDetailPage() {
                 : 'Are you sure you want to enable this provider? It will start receiving delivery assignments.'}
             </p>
             <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
-              >
+              <Button variant="outline" onClick={() => setConfirmAction(null)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={confirmAction === 'delete' ? 'destructive' : 'primary'}
+                isLoading={deleteMutation.isPending || toggleMutation.isPending}
+                disabled={deleteMutation.isPending || toggleMutation.isPending}
                 onClick={() => {
                   if (confirmAction === 'delete') {
                     deleteMutation.mutate();
@@ -580,18 +582,9 @@ export default function ProviderDetailPage() {
                     toggleMutation.mutate();
                   }
                 }}
-                disabled={deleteMutation.isPending || toggleMutation.isPending}
-                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  confirmAction === 'delete'
-                    ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90'
-                }`}
               >
-                {(deleteMutation.isPending || toggleMutation.isPending) && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
                 {confirmAction === 'delete' ? 'Delete' : provider.isEnabled ? 'Disable' : 'Enable'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

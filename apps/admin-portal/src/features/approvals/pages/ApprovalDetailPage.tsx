@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 interface ApprovalRequest {
   id: string;
@@ -178,9 +179,9 @@ export default function ApprovalDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">Approval request not found</p>
-        <button onClick={() => navigate('/approvals')} className="mt-4 text-sm text-primary hover:underline">
+        <Button variant="link" size="sm" className="mt-4" onClick={() => navigate('/approvals')}>
           Back to Reviews
-        </button>
+        </Button>
       </div>
     );
   }
@@ -194,10 +195,15 @@ export default function ApprovalDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/approvals')}
-          className="rounded-lg p-2 hover:bg-secondary transition-colors">
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-        </button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to approvals"
+          onClick={() => navigate('/approvals')}
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display text-2xl font-semibold text-foreground">{approval.title}</h1>
@@ -216,27 +222,33 @@ export default function ApprovalDetailPage() {
         </div>
         {isPending && (
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="outline"
+              leftIcon={<CheckCircle className="h-4 w-4" />}
+              disabled={isMutating}
               onClick={() => approveMutation.mutate()}
-              disabled={isMutating}
-              className="inline-flex items-center gap-2 rounded-lg border border-success/30 px-4 py-2 text-sm font-medium text-success hover:bg-success/10 transition-colors disabled:opacity-50"
+              className="border-success/30 text-success hover:bg-success/10 hover:border-success/40 hover:text-success"
             >
-              <CheckCircle className="h-4 w-4" />Approve
-            </button>
-            <button
+              Approve
+            </Button>
+            <Button
+              variant="outline"
+              leftIcon={<XCircle className="h-4 w-4" />}
+              disabled={isMutating}
               onClick={() => rejectMutation.mutate()}
-              disabled={isMutating}
-              className="inline-flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive"
             >
-              <XCircle className="h-4 w-4" />Reject
-            </button>
-            <button
+              Reject
+            </Button>
+            <Button
+              variant="outline"
+              leftIcon={<AlertCircle className="h-4 w-4" />}
+              disabled={isMutating}
               onClick={() => requestInfoMutation.mutate()}
-              disabled={isMutating}
-              className="inline-flex items-center gap-2 rounded-lg border border-warning/30 px-4 py-2 text-sm font-medium text-warning hover:bg-warning/10 transition-colors disabled:opacity-50"
+              className="border-warning/30 text-warning hover:bg-warning/10 hover:border-warning/40 hover:text-warning"
             >
-              <AlertCircle className="h-4 w-4" />Request Info
-            </button>
+              Request Info
+            </Button>
           </div>
         )}
       </div>

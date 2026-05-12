@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 // ---------- Types ----------
 
@@ -164,13 +165,13 @@ export default function ProvidersPage() {
             {pagination ? `${pagination.total} provider${pagination.total !== 1 ? 's' : ''}` : 'Manage delivery provider integrations'}
           </p>
         </div>
-        <button
+        <Button
+          variant="primary"
+          leftIcon={<Plus className="h-4 w-4" />}
           onClick={() => navigate('/delivery/providers/new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          <Plus className="h-4 w-4" />
           Add Provider
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -285,36 +286,42 @@ export default function ProvidersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => navigate(`/delivery/providers/${provider.id}`)}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           title="View Details"
                           aria-label={`View ${provider.name} details`}
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb"
+                          onClick={() => navigate(`/delivery/providers/${provider.id}`)}
+                          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
                         >
                           <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleToggle(provider)}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           disabled={toggleMutation.isPending}
                           title={provider.isEnabled ? 'Disable' : 'Enable'}
                           aria-label={`${provider.isEnabled ? 'Disable' : 'Enable'} ${provider.name}`}
-                          className={`rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb ${
+                          onClick={() => handleToggle(provider)}
+                          className={
                             provider.isEnabled
                               ? 'text-muted-foreground hover:bg-warning/10 hover:text-warning'
                               : 'text-muted-foreground hover:bg-success/10 hover:text-success'
-                          }`}
+                          }
                         >
                           <Power className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(provider.id)}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           disabled={deleteMutation.isPending}
                           title="Delete"
                           aria-label={`Delete ${provider.name}`}
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika"
+                          onClick={() => handleDelete(provider.id)}
+                          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -338,20 +345,22 @@ export default function ProvidersPage() {
               Page {pagination.page} of {pagination.totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasPrev}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={!pagination.hasNext}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setPage((p) => p + 1)}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -361,26 +370,23 @@ export default function ProvidersPage() {
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmDeleteId(null)} />
-          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
+          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-3 mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">Delete Provider</h3>
             <p className="text-sm text-muted-foreground mb-6">
               Are you sure you want to delete this delivery provider? This action cannot be undone.
             </p>
             <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
-              >
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
+              </Button>
+              <Button
+                variant="destructive"
+                isLoading={deleteMutation.isPending}
                 disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                onClick={confirmDelete}
               >
-                {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -390,26 +396,23 @@ export default function ProvidersPage() {
       {confirmToggleId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmToggleId(null)} />
-          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
+          <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-3 mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">Disable Provider</h3>
             <p className="text-sm text-muted-foreground mb-6">
               Are you sure you want to disable this delivery provider? No new deliveries will be assigned to it.
             </p>
             <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setConfirmToggleId(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
-              >
+              <Button variant="outline" onClick={() => setConfirmToggleId(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={confirmToggle}
+              </Button>
+              <Button
+                isLoading={toggleMutation.isPending}
                 disabled={toggleMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-warning px-4 py-2.5 text-sm font-medium text-warning-foreground hover:bg-warning/90 transition-colors disabled:opacity-50"
+                onClick={confirmToggle}
+                className="bg-warning text-warning-foreground hover:bg-warning/90"
               >
-                {toggleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Disable
-              </button>
+              </Button>
             </div>
           </div>
         </div>

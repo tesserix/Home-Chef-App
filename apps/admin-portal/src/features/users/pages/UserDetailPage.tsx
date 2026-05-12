@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 interface UserDetail {
   id: string;
@@ -82,9 +83,9 @@ export default function UserDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">User not found</p>
-        <button onClick={() => navigate('/users')} className="mt-4 text-sm text-primary hover:underline">
+        <Button variant="link" size="sm" className="mt-4" onClick={() => navigate('/users')}>
           Back to Users
-        </button>
+        </Button>
       </div>
     );
   }
@@ -93,25 +94,38 @@ export default function UserDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/users')}
-          className="rounded-lg p-2 hover:bg-secondary transition-colors">
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-        </button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to users"
+          onClick={() => navigate('/users')}
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
           <h1 className="font-display text-2xl font-semibold text-foreground">{user.firstName} {user.lastName}</h1>
           <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
         <div className="flex items-center gap-2">
           {user.isActive ? (
-            <button onClick={() => suspendMutation.mutate()}
-              className="inline-flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
-              <UserX className="h-4 w-4" />Suspend
-            </button>
+            <Button
+              variant="outline"
+              leftIcon={<UserX className="h-4 w-4" />}
+              onClick={() => suspendMutation.mutate()}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive"
+            >
+              Suspend
+            </Button>
           ) : (
-            <button onClick={() => activateMutation.mutate()}
-              className="inline-flex items-center gap-2 rounded-lg border border-success/30 px-4 py-2 text-sm font-medium text-success hover:bg-success/10 transition-colors">
-              <UserCheck className="h-4 w-4" />Activate
-            </button>
+            <Button
+              variant="outline"
+              leftIcon={<UserCheck className="h-4 w-4" />}
+              onClick={() => activateMutation.mutate()}
+              className="border-success/30 text-success hover:bg-success/10 hover:border-success/40 hover:text-success"
+            >
+              Activate
+            </Button>
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 interface ApprovalRequest {
   id: string;
@@ -282,10 +283,16 @@ export default function ApprovalsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => navigate(`/approvals/${approval.id}`)} title="View Details"
-                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="View approval details"
+                            title="View Details"
+                            onClick={() => navigate(`/approvals/${approval.id}`)}
+                            className="text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          >
                             <Eye className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -306,10 +313,22 @@ export default function ApprovalsPage() {
               Page {pagination.page} of {pagination.totalPages}
             </p>
             <div className="flex items-center gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={!pagination.hasPrev}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-              <button onClick={() => setPage(p => p + 1)} disabled={!pagination.hasNext}
-                className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!pagination.hasPrev}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!pagination.hasNext}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next
+              </Button>
             </div>
           </div>
         )}

@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  Loader2,
   Plus,
   Trash2,
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 // ---------- Types ----------
 
@@ -216,12 +216,15 @@ export default function ProviderCreatePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to providers"
           onClick={() => navigate('/delivery/providers')}
-          className="rounded-lg p-2 hover:bg-secondary transition-colors"
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-        </button>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Add Delivery Provider</h1>
           <p className="text-sm text-muted-foreground">Configure a new delivery provider integration</p>
@@ -337,14 +340,15 @@ export default function ProviderCreatePage() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">Status Mapping</h2>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
               onClick={addStatusMapping}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-secondary transition-colors"
             >
-              <Plus className="h-3.5 w-3.5" />
               Add Mapping
-            </button>
+            </Button>
           </div>
           {statusMappings.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -373,13 +377,16 @@ export default function ProviderCreatePage() {
                       </option>
                     ))}
                   </select>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Remove status mapping"
                     onClick={() => removeStatusMapping(index)}
-                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                    className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -404,13 +411,9 @@ export default function ProviderCreatePage() {
                   placeholder="Type country and press Enter"
                   className="h-10 flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <button
-                  type="button"
-                  onClick={addCountry}
-                  className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-secondary transition-colors"
-                >
+                <Button type="button" variant="outline" onClick={addCountry}>
                   Add
-                </button>
+                </Button>
               </div>
               {countries.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -420,7 +423,12 @@ export default function ProviderCreatePage() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs font-medium text-foreground"
                     >
                       {c}
-                      <button type="button" onClick={() => removeCountry(c)} className="hover:text-destructive">
+                      <button
+                        type="button"
+                        onClick={() => removeCountry(c)}
+                        aria-label={`Remove ${c}`}
+                        className="rounded hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </span>
@@ -443,13 +451,9 @@ export default function ProviderCreatePage() {
                   placeholder="Type city and press Enter"
                   className="h-10 flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <button
-                  type="button"
-                  onClick={addCity}
-                  className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-secondary transition-colors"
-                >
+                <Button type="button" variant="outline" onClick={addCity}>
                   Add
-                </button>
+                </Button>
               </div>
               {cities.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -459,7 +463,12 @@ export default function ProviderCreatePage() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs font-medium text-foreground"
                     >
                       {c}
-                      <button type="button" onClick={() => removeCity(c)} className="hover:text-destructive">
+                      <button
+                        type="button"
+                        onClick={() => removeCity(c)}
+                        aria-label={`Remove ${c}`}
+                        className="rounded hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
                         <Trash2 className="h-3 w-3" />
                       </button>
                     </span>
@@ -622,25 +631,18 @@ export default function ProviderCreatePage() {
 
         {/* Submit */}
         <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/delivery/providers')}
-            className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary transition-colors"
-          >
+          <Button type="button" variant="outline" onClick={() => navigate('/delivery/providers')}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
+            isLoading={createMutation.isPending}
             disabled={createMutation.isPending || !name || !code || !apiBaseUrl}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            leftIcon={!createMutation.isPending ? <Save className="h-4 w-4" /> : undefined}
           >
-            {createMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
             Create Provider
-          </button>
+          </Button>
         </div>
       </form>
     </div>

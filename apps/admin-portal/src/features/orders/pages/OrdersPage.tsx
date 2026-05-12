@@ -8,6 +8,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 import type { OrderStatus } from '@/shared/types';
 
 interface Order {
@@ -138,9 +139,14 @@ export default function OrdersPage() {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="rounded-lg p-2 hover:bg-secondary transition-colors">
-                        <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Actions for order ${order.orderNumber}`}
+                        className="text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}

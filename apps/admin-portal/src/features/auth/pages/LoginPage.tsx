@@ -131,7 +131,7 @@ export default function LoginPage() {
             transition={{ delay: 0.3, duration: 0.6 }}
           >
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bone/20 backdrop-blur-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bone/20">
                 <Shield className="h-5 w-5 text-paper" />
               </div>
               <span className="text-xl font-semibold text-paper font-display">Fe3dr</span>
@@ -147,7 +147,7 @@ export default function LoginPage() {
             <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3">
               {FEATURES.map((feature) => (
                 <div key={feature} className="flex items-center gap-2.5">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bone/20">
                     <Check className="h-3 w-3 text-paper" />
                   </div>
                   <span className="text-sm text-paper/90">{feature}</span>

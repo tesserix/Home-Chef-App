@@ -103,7 +103,12 @@ export default function NotificationSettingsPage() {
           }`}
         >
           <span>{feedback.message}</span>
-          <button onClick={() => setFeedback(null)} className="shrink-0 opacity-60 hover:opacity-100">
+          <button
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => setFeedback(null)}
+            className="shrink-0 rounded opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -186,8 +191,11 @@ function Toggle({
 }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={value}
       onClick={() => onChange(!value)}
-      className={`relative inline-block h-5 w-9 rounded-full transition-colors ${
+      className={`relative inline-block h-5 w-9 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         value ? 'bg-primary' : 'bg-border'
       }`}
     >

@@ -20,6 +20,7 @@ import {
   Circle,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui/Button';
 
 interface Chef {
   id: string;
@@ -177,22 +178,40 @@ export default function ChefsPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   {!chef.verified && (
-                    <button onClick={() => verifyMutation.mutate(chef.id)} title="Verify Kitchen"
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-success/10 hover:text-success transition-colors">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Verify kitchen"
+                      title="Verify Kitchen"
+                      onClick={() => verifyMutation.mutate(chef.id)}
+                      className="text-muted-foreground hover:bg-success/10 hover:text-success"
+                    >
                       <CheckCircle className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
                   {!chef.verified && (
-                    <button onClick={() => rejectMutation.mutate(chef.id)} title="Reject Application"
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Reject application"
+                      title="Reject Application"
+                      onClick={() => rejectMutation.mutate(chef.id)}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
                       <XCircle className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
                   {chef.isActive && chef.verified && (
-                    <button onClick={() => suspendMutation.mutate(chef.id)} title="Suspend Kitchen"
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-warning/10 hover:text-warning transition-colors">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Suspend kitchen"
+                      title="Suspend Kitchen"
+                      onClick={() => suspendMutation.mutate(chef.id)}
+                      className="text-muted-foreground hover:bg-warning/10 hover:text-warning"
+                    >
                       <XCircle className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -259,20 +278,22 @@ export default function ChefsPage() {
             Page {pagination.page} of {pagination.totalPages} ({pagination.total} kitchens)
           </p>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!pagination.hasPrev}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
             >
               Previous
-            </button>
-            <button
-              onClick={() => setPage(p => p + 1)}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!pagination.hasNext}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setPage(p => p + 1)}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}
