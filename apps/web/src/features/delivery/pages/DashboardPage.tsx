@@ -9,12 +9,13 @@ import {
   Phone,
   CheckCircle,
   Play,
-  Loader2,
+
   Bike,
   AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { Order } from '@/shared/types';
 
 interface DeliveryStats {
@@ -219,57 +220,53 @@ export default function DeliveryDashboardPage() {
           {/* Action Buttons */}
           <div className="mt-6 flex gap-3">
             {currentDelivery.status === 'ready' && (
-              <button
+              <Button
+                variant="primary"
+                fullWidth
+                isLoading={updateStatusMutation.isPending}
+                disabled={updateStatusMutation.isPending}
                 onClick={() =>
                   updateStatusMutation.mutate({ orderId: currentDelivery.id, status: 'picked_up' })
                 }
-                disabled={updateStatusMutation.isPending}
-                className="flex-1 btn-primary"
+                leftIcon={!updateStatusMutation.isPending ? <Package aria-hidden="true" className="h-4 w-4" /> : undefined}
+                className="flex-1"
               >
-                {updateStatusMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Package className="h-4 w-4" />
-                )}
                 Mark as Picked Up
-              </button>
+              </Button>
             )}
             {currentDelivery.status === 'picked_up' && (
-              <button
+              <Button
+                variant="primary"
+                fullWidth
+                isLoading={updateStatusMutation.isPending}
+                disabled={updateStatusMutation.isPending}
                 onClick={() =>
                   updateStatusMutation.mutate({ orderId: currentDelivery.id, status: 'delivering' })
                 }
-                disabled={updateStatusMutation.isPending}
-                className="flex-1 btn-primary"
+                leftIcon={!updateStatusMutation.isPending ? <Bike aria-hidden="true" className="h-4 w-4" /> : undefined}
+                className="flex-1"
               >
-                {updateStatusMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Bike className="h-4 w-4" />
-                )}
                 Start Delivery
-              </button>
+              </Button>
             )}
             {currentDelivery.status === 'delivering' && (
-              <button
+              <Button
+                variant="success"
+                fullWidth
+                isLoading={updateStatusMutation.isPending}
+                disabled={updateStatusMutation.isPending}
                 onClick={() =>
                   updateStatusMutation.mutate({ orderId: currentDelivery.id, status: 'delivered' })
                 }
-                disabled={updateStatusMutation.isPending}
-                className="flex-1 btn-primary bg-herb hover:bg-herb"
+                leftIcon={!updateStatusMutation.isPending ? <CheckCircle aria-hidden="true" className="h-4 w-4" /> : undefined}
+                className="flex-1"
               >
-                {updateStatusMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-4 w-4" />
-                )}
                 Complete Delivery
-              </button>
+              </Button>
             )}
-            <button className="btn-outline flex items-center gap-2">
-              <Phone className="h-4 w-4" />
+            <Button variant="outline" leftIcon={<Phone aria-hidden="true" className="h-4 w-4" />}>
               Contact
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -326,18 +323,17 @@ export default function DeliveryDashboardPage() {
                       <p className="text-xl font-semibold text-herb">
                         {fp(delivery.estimatedPayout)}
                       </p>
-                      <button
-                        onClick={() => acceptMutation.mutate(delivery.id)}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        isLoading={acceptMutation.isPending}
                         disabled={acceptMutation.isPending}
-                        className="mt-2 btn-primary py-2 px-4"
+                        onClick={() => acceptMutation.mutate(delivery.id)}
+                        leftIcon={!acceptMutation.isPending ? <Play aria-hidden="true" className="h-4 w-4" /> : undefined}
+                        className="mt-2"
                       >
-                        {acceptMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
                         Accept
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -363,9 +359,9 @@ export default function DeliveryDashboardPage() {
           <p className="mt-2 text-ink-muted">
             Go online to start receiving delivery requests
           </p>
-          <button onClick={toggleOnline} className="mt-4 btn-primary">
+          <Button variant="primary" onClick={toggleOnline} className="mt-4">
             Go Online
-          </button>
+          </Button>
         </div>
       )}
 
