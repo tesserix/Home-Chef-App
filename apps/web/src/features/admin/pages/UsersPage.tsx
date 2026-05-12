@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { User as UserType, PaginatedResponse } from '@/shared/types';
 
 const ROLE_FILTER = [
@@ -183,12 +184,15 @@ export default function AdminUsersPage() {
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Actions for ${user.firstName} ${user.lastName}`}
                         onClick={() => setSelectedUser(user)}
-                        className="p-2 text-ink-muted hover:text-paper"
+                        className="text-ink-muted hover:bg-ink-soft/50 hover:text-paper"
                       >
                         <MoreHorizontal className="h-5 w-5" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -205,20 +209,26 @@ export default function AdminUsersPage() {
               {data.pagination.total}
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setPage(page - 1)}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Previous page"
                 disabled={!data.pagination.hasPrev}
-                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
+                onClick={() => setPage(page - 1)}
+                className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
                 <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Next page"
                 disabled={!data.pagination.hasNext}
-                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
+                onClick={() => setPage(page + 1)}
+                className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
                 <ChevronRight className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -330,32 +340,30 @@ function UserDetailModal({
         </div>
 
         <div className="flex gap-3 border-t border-ink-soft p-4">
-          <button onClick={onClose} className="flex-1 btn-outline border-ink-soft text-paper">
-            Close
-          </button>
-          <button
-            onClick={onSuspend}
-            disabled={isUpdating}
-            className={`flex-1 ${
-              user.isActive
-                ? 'btn-base bg-paprika text-paper hover:bg-paprika'
-                : 'btn-base bg-herb text-paper hover:bg-herb'
-            }`}
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={onClose}
+            className="border-ink-soft text-paper hover:bg-ink-soft/30 hover:text-paper hover:border-ink-soft"
           >
-            {isUpdating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : user.isActive ? (
-              <>
-                <Ban className="h-4 w-4" />
-                Suspend User
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4" />
-                Activate User
-              </>
-            )}
-          </button>
+            Close
+          </Button>
+          <Button
+            variant={user.isActive ? 'destructive' : 'success'}
+            fullWidth
+            isLoading={isUpdating}
+            disabled={isUpdating}
+            leftIcon={
+              !isUpdating
+                ? user.isActive
+                  ? <Ban className="h-4 w-4" />
+                  : <CheckCircle className="h-4 w-4" />
+                : undefined
+            }
+            onClick={onSuspend}
+          >
+            {user.isActive ? 'Suspend User' : 'Activate User'}
+          </Button>
         </div>
       </div>
     </div>

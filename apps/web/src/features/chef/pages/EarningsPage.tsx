@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 
 interface EarningsData {
   balance: number;
@@ -72,10 +73,9 @@ export default function ChefEarningsPage() {
               </option>
             ))}
           </select>
-          <button className="btn-outline">
-            <Download className="h-4 w-4" />
+          <Button variant="outline" leftIcon={<Download className="h-4 w-4" />}>
             Export
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -87,9 +87,13 @@ export default function ChefEarningsPage() {
             <DollarSign className="h-5 w-5 text-herb-tint" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums">{fp(earnings?.balance || 0)}</p>
-          <button className="mt-4 rounded-lg bg-bone/20 px-4 py-2 text-sm font-medium hover:bg-bone/30 transition-colors">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-4 bg-bone/20 text-paper hover:bg-bone/30 hover:text-paper"
+          >
             Withdraw Funds
-          </button>
+          </Button>
         </div>
 
         <div className="rounded-xl bg-bone p-6 shadow-1">
@@ -223,7 +227,7 @@ export default function ChefEarningsPage() {
       <div className="rounded-xl bg-bone p-6 shadow-1">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-ink">Recent Payouts</h2>
-          <button className="text-sm text-herb hover:text-herb">View all</button>
+          <Button variant="link" size="sm">View all</Button>
         </div>
 
         <div className="mt-4 overflow-x-auto">
@@ -295,7 +299,7 @@ export default function ChefEarningsPage() {
               <p className="text-sm text-ink-muted">Default payout method</p>
             </div>
           </div>
-          <button className="btn-outline">Edit</button>
+          <Button variant="outline" size="sm">Edit</Button>
         </div>
       </div>
     </div>

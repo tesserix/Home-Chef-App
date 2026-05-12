@@ -15,6 +15,7 @@ import {
   PiggyBank,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 
 interface EarningsData {
   currentBalance: number;
@@ -96,10 +97,9 @@ export default function DeliveryEarningsPage() {
               </option>
             ))}
           </select>
-          <button className="btn-outline flex items-center gap-2 text-sm">
-            <Download className="h-4 w-4" />
+          <Button variant="outline" size="sm" leftIcon={<Download className="h-4 w-4" />}>
             Export
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -114,9 +114,14 @@ export default function DeliveryEarningsPage() {
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums">{fp(data?.currentBalance || 0)}</p>
           <p className="mt-1 text-herb-soft">Available Balance</p>
-          <button className="mt-4 w-full rounded-lg bg-bone/20 py-2 text-sm font-medium hover:bg-bone/30 transition-colors">
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            className="mt-4 bg-bone/20 text-paper hover:bg-bone/30 hover:text-paper"
+          >
             Cash Out
-          </button>
+          </Button>
         </div>
 
         <div className="rounded-xl bg-bone border border-mist p-6">

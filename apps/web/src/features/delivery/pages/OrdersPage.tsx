@@ -15,6 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 
 interface DeliveryOrder {
   id: string;
@@ -359,9 +360,9 @@ function OrderDetailModal({
         </div>
 
         <div className="border-t border-mist p-4">
-          <button onClick={onClose} className="w-full btn-outline">
+          <Button variant="outline" fullWidth onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

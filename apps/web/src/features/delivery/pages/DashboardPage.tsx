@@ -180,10 +180,14 @@ export default function DeliveryDashboardPage() {
               <div className="pl-8">
                 <p className="font-medium text-ink">Chef's Kitchen</p>
                 <p className="text-ink-soft">{currentDelivery.deliveryAddress.line1}</p>
-                <button className="mt-2 text-sm text-herb font-medium flex items-center gap-1">
-                  <Navigation className="h-4 w-4" />
+                <Button
+                  variant="link"
+                  size="sm"
+                  leftIcon={<Navigation className="h-4 w-4" />}
+                  className="mt-2"
+                >
                   Navigate
-                </button>
+                </Button>
               </div>
             </div>
 

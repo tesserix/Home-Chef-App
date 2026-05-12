@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { Button } from '@/shared/components/ui';
 import { apiClient } from '@/shared/services/api-client';
 import type { CateringRequest, CateringQuote, PaginatedResponse } from '@/shared/types';
 
@@ -226,13 +227,13 @@ function RequestsList({
           )}
 
           <div className="mt-6 flex gap-3">
-            <button
+            <Button
+              variant="primary"
+              leftIcon={<Send className="h-4 w-4" />}
               onClick={() => onSelectRequest(request)}
-              className="btn-primary"
             >
-              <Send className="h-4 w-4" />
               Submit Quote
-            </button>
+            </Button>
           </div>
         </div>
       ))}
@@ -467,24 +468,29 @@ function QuoteFormModal({
                     </div>
                   </div>
                   {menuItems.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove menu item"
                       onClick={() => removeMenuItem(index)}
-                      className="p-2 text-paprika hover:bg-paprika-tint rounded"
+                      className="text-paprika hover:bg-paprika-tint hover:text-paprika"
                     >
                       <XCircle className="h-5 w-5" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
             </div>
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={addMenuItem}
-              className="mt-3 text-sm text-herb hover:text-herb"
+              className="mt-3"
             >
               + Add another item
-            </button>
+            </Button>
           </div>
 
           {/* Summary */}
@@ -531,23 +537,18 @@ function QuoteFormModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <button type="button" onClick={onClose} className="btn-outline">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              isLoading={isSubmitting}
               disabled={isSubmitting || menuItems.every((i) => !i.name)}
-              className="btn-primary"
+              leftIcon={!isSubmitting ? <Send className="h-4 w-4" /> : undefined}
             >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Submit Quote
-                </>
-              )}
-            </button>
+              Submit Quote
+            </Button>
           </div>
         </form>
       </div>

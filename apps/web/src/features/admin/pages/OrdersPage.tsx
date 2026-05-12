@@ -11,6 +11,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { Order, OrderStatus, PaginatedResponse } from '@/shared/types';
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string }> = {
@@ -149,12 +150,15 @@ export default function AdminOrdersPage() {
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`View order ${order.orderNumber}`}
                           onClick={() => setSelectedOrder(order)}
-                          className="p-2 text-ink-muted hover:text-paper"
+                          className="text-ink-muted hover:bg-ink-soft/50 hover:text-paper"
                         >
                           <Eye className="h-5 w-5" />
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -171,20 +175,26 @@ export default function AdminOrdersPage() {
               Page {page} of {data.pagination.totalPages}
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setPage(page - 1)}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Previous page"
                 disabled={!data.pagination.hasPrev}
-                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
+                onClick={() => setPage(page - 1)}
+                className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
                 <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setPage(page + 1)}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Next page"
                 disabled={!data.pagination.hasNext}
-                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
+                onClick={() => setPage(page + 1)}
+                className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
                 <ChevronRight className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -286,9 +296,14 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
         </div>
 
         <div className="border-t border-ink-soft p-4">
-          <button onClick={onClose} className="w-full btn-outline border-ink-soft text-paper">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={onClose}
+            className="border-ink-soft text-paper hover:bg-ink-soft/30 hover:text-paper hover:border-ink-soft"
+          >
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

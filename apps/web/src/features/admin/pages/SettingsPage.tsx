@@ -6,10 +6,10 @@ import {
   Percent,
   Shield,
   Save,
-  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 
 interface PlatformSettings {
   platformFee: number;
@@ -60,18 +60,15 @@ export default function AdminSettingsPage() {
           <h1 className="font-display text-2xl font-semibold text-paper">Platform Settings</h1>
           <p className="mt-1 text-ink-muted">Configure platform-wide settings</p>
         </div>
-        <button
-          onClick={handleSave}
+        <Button
+          variant="primary"
+          isLoading={saveMutation.isPending}
           disabled={saveMutation.isPending}
-          className="btn-primary"
+          leftIcon={!saveMutation.isPending ? <Save className="h-4 w-4" /> : undefined}
+          onClick={handleSave}
         >
-          {saveMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
           Save Changes
-        </button>
+        </Button>
       </div>
 
       {/* Fees & Pricing */}
@@ -263,12 +260,8 @@ export default function AdminSettingsPage() {
         </p>
 
         <div className="mt-4 flex gap-3">
-          <button className="btn-base bg-paprika text-paper hover:bg-paprika">
-            Clear All Cache
-          </button>
-          <button className="btn-base bg-paprika text-paper hover:bg-paprika">
-            Rebuild Search Index
-          </button>
+          <Button variant="destructive">Clear All Cache</Button>
+          <Button variant="destructive">Rebuild Search Index</Button>
         </div>
       </div>
     </div>
@@ -286,8 +279,11 @@ function Toggle({
 }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
       onClick={() => onChange(!enabled)}
-      className={`relative h-6 w-11 rounded-full transition-colors ${
+      className={`relative h-6 w-11 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         enabled
           ? danger
             ? 'bg-paprika'

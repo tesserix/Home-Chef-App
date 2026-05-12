@@ -11,6 +11,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 
 interface AnalyticsData {
   overview: {
@@ -74,10 +75,13 @@ export default function AdminAnalyticsPage() {
               </option>
             ))}
           </select>
-          <button className="btn-outline border-ink-soft text-paper">
-            <Download className="h-4 w-4" />
+          <Button
+            variant="outline"
+            leftIcon={<Download className="h-4 w-4" />}
+            className="border-ink-soft text-paper hover:bg-ink-soft/30 hover:text-paper hover:border-ink-soft"
+          >
             Export
-          </button>
+          </Button>
         </div>
       </div>
 

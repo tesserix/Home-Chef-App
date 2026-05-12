@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { Chef, PaginatedResponse } from '@/shared/types';
 
 const STATUS_TABS = [
@@ -198,13 +199,16 @@ function ChefCard({ chef, onSelect }: { chef: Chef; onSelect: () => void }) {
           <div>{chef.totalOrders} orders</div>
         </div>
 
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          fullWidth
+          leftIcon={<Eye className="h-4 w-4" />}
           onClick={onSelect}
-          className="mt-4 w-full rounded-lg bg-ink-soft py-2 text-sm font-medium text-paper hover:bg-ink-soft"
+          className="mt-4 bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
         >
-          <Eye className="mr-1 inline h-4 w-4" />
           View Details
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -323,46 +327,59 @@ function ChefDetailModal({
 
         {/* Actions */}
         <div className="flex gap-3 border-t border-ink-soft p-4">
-          <button onClick={onClose} className="flex-1 btn-outline border-ink-soft text-paper">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={onClose}
+            className="border-ink-soft text-paper hover:bg-ink-soft/30 hover:text-paper hover:border-ink-soft"
+          >
             Close
-          </button>
+          </Button>
           {isPending ? (
             <>
-              <button
+              <Button
+                variant="destructive"
+                fullWidth
+                isLoading={isUpdating}
+                disabled={isUpdating}
+                leftIcon={!isUpdating ? <XCircle className="h-4 w-4" /> : undefined}
                 onClick={onReject}
-                disabled={isUpdating}
-                className="flex-1 btn-base bg-paprika text-paper hover:bg-paprika"
               >
-                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                 Reject
-              </button>
-              <button
-                onClick={onVerify}
+              </Button>
+              <Button
+                variant="success"
+                fullWidth
+                isLoading={isUpdating}
                 disabled={isUpdating}
-                className="flex-1 btn-base bg-herb text-paper hover:bg-herb"
+                leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4" /> : undefined}
+                onClick={onVerify}
               >
-                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 Verify
-              </button>
+              </Button>
             </>
           ) : chef.verified ? (
-            <button
+            <Button
+              variant="destructive"
+              fullWidth
+              isLoading={isUpdating}
+              disabled={isUpdating}
+              leftIcon={!isUpdating ? <Ban className="h-4 w-4" /> : undefined}
               onClick={onSuspend}
-              disabled={isUpdating}
-              className="flex-1 btn-base bg-paprika text-paper hover:bg-paprika"
             >
-              {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
               Suspend Chef
-            </button>
+            </Button>
           ) : (
-            <button
-              onClick={onVerify}
+            <Button
+              variant="success"
+              fullWidth
+              isLoading={isUpdating}
               disabled={isUpdating}
-              className="flex-1 btn-base bg-herb text-paper hover:bg-herb"
+              leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4" /> : undefined}
+              onClick={onVerify}
             >
-              {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               Reactivate
-            </button>
+            </Button>
           )}
         </div>
       </div>

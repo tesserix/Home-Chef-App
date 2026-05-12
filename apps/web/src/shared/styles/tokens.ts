@@ -37,21 +37,6 @@ export const colors = {
   sidebarPrimary: 'var(--sidebar-primary)', // #3e6b3c
   sidebarAccent: 'var(--sidebar-accent)', // #292524
   sidebarBorder: 'var(--sidebar-border)', // #44403C
-
-  // Brand scale - terracotta shades for direct access
-  brand: {
-    50: '#dde9d8',
-    100: '#ffedd5',
-    200: '#fed7aa',
-    300: '#fdba74',
-    400: '#558257',
-    500: '#3e6b3c',
-    600: '#3e6b3c',
-    700: '#9a3412',
-    800: '#7c2d12',
-    900: '#6c2710',
-    950: '#431407',
-  },
 } as const;
 
 // Typography scale

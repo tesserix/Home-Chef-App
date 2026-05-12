@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { SocialPost, MenuItem, PaginatedResponse } from '@/shared/types';
 
 export default function ChefSocialPage() {
@@ -52,10 +53,13 @@ export default function ChefSocialPage() {
             Share your culinary creations with customers
           </p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="btn-primary">
-          <Plus className="h-5 w-5" />
+        <Button
+          variant="primary"
+          leftIcon={<Plus className="h-5 w-5" />}
+          onClick={() => setShowCreateModal(true)}
+        >
           Create Post
-        </button>
+        </Button>
       </div>
 
       {/* Content Moderation Notice */}
@@ -83,9 +87,13 @@ export default function ChefSocialPage() {
           <p className="mt-2 text-ink-soft">
             Share photos of your dishes to attract more customers
           </p>
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary mt-4">
+          <Button
+            variant="primary"
+            className="mt-4"
+            onClick={() => setShowCreateModal(true)}
+          >
             Create Your First Post
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -183,20 +191,26 @@ function PostCard({
 
         {/* Actions */}
         <div className="mt-4 flex gap-2 border-t pt-4">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            leftIcon={<Edit2 className="h-4 w-4" />}
             onClick={onEdit}
-            className="flex-1 rounded-lg bg-mist py-2 text-sm font-medium text-ink-soft hover:bg-mist"
+            className="flex-1 bg-mist text-ink-soft hover:bg-mist/80 hover:text-ink-soft"
           >
-            <Edit2 className="mr-1 inline h-4 w-4" />
             Edit
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            leftIcon={<Trash2 className="h-4 w-4" />}
             onClick={onDelete}
-            className="flex-1 rounded-lg bg-paprika-tint py-2 text-sm font-medium text-paprika hover:bg-paprika"
+            className="flex-1 bg-paprika-tint text-paprika hover:bg-paprika-tint/80 hover:text-paprika"
           >
-            <Trash2 className="mr-1 inline h-4 w-4" />
             Delete
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -300,7 +314,8 @@ function CreatePostModal({
               {images.length < 5 && (
                 <button
                   type="button"
-                  className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-mist-strong hover:border-herb"
+                  aria-label="Upload photo"
+                  className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-mist-strong transition-colors hover:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <Upload className="h-6 w-6 text-ink-muted" />
                 </button>
@@ -336,7 +351,12 @@ function CreatePostModal({
                   className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
                 >
                   {tag}
-                  <button type="button" onClick={() => setHashtags(hashtags.filter((t) => t !== tag))}>
+                  <button
+                    type="button"
+                    onClick={() => setHashtags(hashtags.filter((t) => t !== tag))}
+                    aria-label={`Remove hashtag ${tag}`}
+                    className="rounded hover:text-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
                     <X className="h-3 w-3" />
                   </button>
                 </span>
@@ -351,9 +371,9 @@ function CreatePostModal({
                 placeholder="#homemade"
                 className="input-base flex-1"
               />
-              <button type="button" onClick={addHashtag} className="btn-outline">
+              <Button type="button" variant="outline" onClick={addHashtag}>
                 Add
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -376,22 +396,17 @@ function CreatePostModal({
 
           {/* Submit */}
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <button type="button" onClick={onClose} className="btn-outline">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              isLoading={createMutation.isPending}
               disabled={createMutation.isPending}
-              className="btn-primary"
             >
-              {createMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : post ? (
-                'Update Post'
-              ) : (
-                'Publish Post'
-              )}
-            </button>
+              {post ? 'Update Post' : 'Publish Post'}
+            </Button>
           </div>
         </form>
       </div>

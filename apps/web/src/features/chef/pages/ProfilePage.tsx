@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { Button } from '@/shared/components/ui';
 import type { Chef } from '@/shared/types';
 
 const profileSchema = z.object({
@@ -123,34 +124,29 @@ export default function ChefProfilePage() {
           <p className="mt-1 text-ink-soft">Manage your public profile and settings</p>
         </div>
         {!isEditing ? (
-          <button onClick={() => setIsEditing(true)} className="btn-primary">
+          <Button variant="primary" onClick={() => setIsEditing(true)}>
             Edit Profile
-          </button>
+          </Button>
         ) : (
           <div className="flex gap-3">
-            <button
+            <Button
+              variant="outline"
               onClick={() => {
                 reset();
                 setIsEditing(false);
               }}
-              className="btn-outline"
             >
               Cancel
-            </button>
-            <button
-              onClick={handleSubmit((data) => updateMutation.mutate(data))}
+            </Button>
+            <Button
+              variant="primary"
+              isLoading={updateMutation.isPending}
               disabled={updateMutation.isPending}
-              className="btn-primary"
+              leftIcon={!updateMutation.isPending ? <Save className="h-4 w-4" /> : undefined}
+              onClick={handleSubmit((data) => updateMutation.mutate(data))}
             >
-              {updateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </button>
+              Save Changes
+            </Button>
           </div>
         )}
       </div>
@@ -204,12 +200,15 @@ export default function ChefProfilePage() {
                   )}
                 </div>
                 {isEditing && (
-                  <button
+                  <Button
                     type="button"
-                    className="absolute bottom-0 right-0 rounded-full bg-herb p-2 text-paper shadow-3 hover:bg-herb"
+                    variant="primary"
+                    size="icon-sm"
+                    aria-label="Change profile photo"
+                    className="absolute bottom-0 right-0 rounded-full shadow-3"
                   >
                     <Camera className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -234,12 +233,15 @@ export default function ChefProfilePage() {
                   )}
                 </div>
                 {isEditing && (
-                  <button
+                  <Button
                     type="button"
-                    className="absolute bottom-2 right-2 rounded-full bg-herb p-2 text-paper shadow-3 hover:bg-herb"
+                    variant="primary"
+                    size="icon-sm"
+                    aria-label="Change banner image"
+                    className="absolute bottom-2 right-2 rounded-full shadow-3"
                   >
                     <Camera className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -333,7 +335,8 @@ export default function ChefProfilePage() {
                   <button
                     type="button"
                     onClick={() => removeSpecialty(specialty)}
-                    className="hover:text-herb"
+                    aria-label={`Remove ${specialty}`}
+                    className="hover:text-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -359,10 +362,14 @@ export default function ChefProfilePage() {
                 placeholder="Add a specialty..."
                 className="input-base flex-1"
               />
-              <button type="button" onClick={addSpecialty} className="btn-outline">
-                <Plus className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="outline"
+                leftIcon={<Plus className="h-4 w-4" />}
+                onClick={addSpecialty}
+              >
                 Add
-              </button>
+              </Button>
             </div>
           )}
         </div>
