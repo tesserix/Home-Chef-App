@@ -268,18 +268,18 @@ export default function ProfilePage() {
                 className="h-full w-full object-cover"
               />
             )}
-            <button
+            <Button
               type="button"
-              onClick={() => bannerInputRef.current?.click()}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Change banner image"
+              isLoading={bannerMutation.isPending}
               disabled={bannerMutation.isPending}
-              className="absolute bottom-3 right-3 rounded-full bg-ink/40 p-2 text-paper backdrop-blur-sm transition-colors hover:bg-ink/60 disabled:opacity-50"
+              onClick={() => bannerInputRef.current?.click()}
+              className="absolute bottom-3 right-3 rounded-full bg-ink/40 text-paper hover:bg-ink/60 hover:text-paper"
             >
-              {bannerMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Camera className="h-4 w-4" />
-              )}
-            </button>
+              <Camera className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Profile Info */}
@@ -295,18 +295,18 @@ export default function ProfilePage() {
                   ring="brand"
                   className="border-4 border-bone"
                 />
-                <button
+                <Button
                   type="button"
-                  onClick={() => avatarInputRef.current?.click()}
+                  variant="primary"
+                  size="icon-sm"
+                  aria-label="Change profile photo"
+                  isLoading={avatarMutation.isPending}
                   disabled={avatarMutation.isPending}
-                  className="absolute bottom-0 right-0 rounded-full bg-herb p-1.5 text-paper shadow-lg transition-colors hover:bg-herb disabled:opacity-50"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 rounded-full bg-herb shadow-2 hover:bg-herb-soft"
                 >
-                  {avatarMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Camera className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                  <Camera className="h-3.5 w-3.5" />
+                </Button>
               </div>
 
               {/* Name & Stats */}
@@ -344,8 +344,11 @@ export default function ProfilePage() {
                 </span>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={acceptingOrders}
+                  aria-label="Accepting orders"
                   onClick={toggleAcceptingOrders}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     acceptingOrders ? 'bg-herb' : 'bg-mist-strong'
                   }`}
                 >

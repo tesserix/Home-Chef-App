@@ -100,7 +100,7 @@ export default function RegisterPage() {
             <div className="mt-8 space-y-4">
               {BENEFITS.map((item) => (
                 <div key={item.title} className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bone/20">
                     <Check className="h-3.5 w-3.5 text-paper" />
                   </div>
                   <div>

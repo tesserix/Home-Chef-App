@@ -369,14 +369,17 @@ function MenuItemCard({
         {/* Select checkbox */}
         <button
           type="button"
+          role="checkbox"
+          aria-checked={isSelected}
+          aria-label={isSelected ? 'Deselect item' : 'Select item'}
           onClick={(e) => {
             e.stopPropagation();
             onToggleSelect();
           }}
-          className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors ${
+          className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             isSelected
               ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-bone/80 bg-bone/60 backdrop-blur-sm hover:bg-bone/80'
+              : 'border-bone/80 bg-bone/60 hover:bg-bone/80'
           }`}
         >
           {isSelected && (
