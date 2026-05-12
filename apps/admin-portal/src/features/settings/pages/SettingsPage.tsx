@@ -205,8 +205,9 @@ function PaymentGatewayCard() {
         {editing ? (
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Razorpay Key ID</label>
+              <label htmlFor="razorpay-key-id" className="block text-xs font-medium text-muted-foreground mb-1">Razorpay Key ID</label>
               <input
+                id="razorpay-key-id"
                 type="text"
                 value={keyForm.keyId}
                 onChange={(e) => setKeyForm({ ...keyForm, keyId: e.target.value })}
@@ -215,8 +216,9 @@ function PaymentGatewayCard() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Razorpay Key Secret</label>
+              <label htmlFor="razorpay-key-secret" className="block text-xs font-medium text-muted-foreground mb-1">Razorpay Key Secret</label>
               <input
+                id="razorpay-key-secret"
                 type="password"
                 value={keyForm.keySecret}
                 onChange={(e) => setKeyForm({ ...keyForm, keySecret: e.target.value })}
@@ -225,8 +227,9 @@ function PaymentGatewayCard() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Webhook Secret</label>
+              <label htmlFor="razorpay-webhook-secret" className="block text-xs font-medium text-muted-foreground mb-1">Webhook Secret</label>
               <input
+                id="razorpay-webhook-secret"
                 type="password"
                 value={keyForm.webhookSecret}
                 onChange={(e) => setKeyForm({ ...keyForm, webhookSecret: e.target.value })}
@@ -492,8 +495,9 @@ function StripeGatewayCard() {
         {editing ? (
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Stripe Secret Key</label>
+              <label htmlFor="stripe-secret-key" className="block text-xs font-medium text-muted-foreground mb-1">Stripe Secret Key</label>
               <input
+                id="stripe-secret-key"
                 type="password"
                 value={keyForm.secretKey}
                 onChange={(e) => setKeyForm({ ...keyForm, secretKey: e.target.value })}
@@ -502,8 +506,9 @@ function StripeGatewayCard() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Stripe Publishable Key</label>
+              <label htmlFor="stripe-publishable-key" className="block text-xs font-medium text-muted-foreground mb-1">Stripe Publishable Key</label>
               <input
+                id="stripe-publishable-key"
                 type="text"
                 value={keyForm.publishableKey}
                 onChange={(e) => setKeyForm({ ...keyForm, publishableKey: e.target.value })}
@@ -512,8 +517,9 @@ function StripeGatewayCard() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Webhook Signing Secret</label>
+              <label htmlFor="stripe-webhook-secret" className="block text-xs font-medium text-muted-foreground mb-1">Webhook Signing Secret</label>
               <input
+                id="stripe-webhook-secret"
                 type="password"
                 value={keyForm.webhookSecret}
                 onChange={(e) => setKeyForm({ ...keyForm, webhookSecret: e.target.value })}

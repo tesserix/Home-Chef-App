@@ -237,12 +237,14 @@ export default function ProviderCreatePage() {
           <h2 className="text-lg font-semibold text-foreground mb-4">Basic Info</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Name <span className="text-destructive">*</span>
+              <label htmlFor="provider-name" className="block text-sm font-medium text-foreground mb-1.5">
+                Name <span aria-hidden="true" className="text-destructive">*</span>
               </label>
               <input
+                id="provider-name"
                 type="text"
                 required
+                aria-required="true"
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="e.g. Dunzo"
@@ -250,22 +252,26 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Code <span className="text-destructive">*</span>
+              <label htmlFor="provider-code" className="block text-sm font-medium text-foreground mb-1.5">
+                Code <span aria-hidden="true" className="text-destructive">*</span>
               </label>
               <input
+                id="provider-code"
                 type="text"
                 required
+                aria-required="true"
+                aria-describedby="provider-code-hint"
                 value={code}
                 onChange={(e) => handleCodeChange(e.target.value)}
                 placeholder="e.g. dunzo"
                 className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground font-mono placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="text-xs text-muted-foreground mt-1">Auto-generated from name. Edit to customize.</p>
+              <p id="provider-code-hint" className="text-xs text-muted-foreground mt-1">Auto-generated from name. Edit to customize.</p>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Description</label>
+              <label htmlFor="provider-description" className="block text-sm font-medium text-foreground mb-1.5">Description</label>
               <textarea
+                id="provider-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description of this delivery provider..."
@@ -274,8 +280,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Logo URL</label>
+              <label htmlFor="provider-logo-url" className="block text-sm font-medium text-foreground mb-1.5">Logo URL</label>
               <input
+                id="provider-logo-url"
                 type="url"
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
@@ -291,12 +298,14 @@ export default function ProviderCreatePage() {
           <h2 className="text-lg font-semibold text-foreground mb-4">API Configuration</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                API Base URL <span className="text-destructive">*</span>
+              <label htmlFor="provider-api-base-url" className="block text-sm font-medium text-foreground mb-1.5">
+                API Base URL <span aria-hidden="true" className="text-destructive">*</span>
               </label>
               <input
+                id="provider-api-base-url"
                 type="url"
                 required
+                aria-required="true"
                 value={apiBaseUrl}
                 onChange={(e) => setApiBaseUrl(e.target.value)}
                 placeholder="https://api.provider.com/v1"
@@ -304,8 +313,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">API Key</label>
+              <label htmlFor="provider-api-key" className="block text-sm font-medium text-foreground mb-1.5">API Key</label>
               <input
+                id="provider-api-key"
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
@@ -314,8 +324,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">API Secret</label>
+              <label htmlFor="provider-api-secret" className="block text-sm font-medium text-foreground mb-1.5">API Secret</label>
               <input
+                id="provider-api-secret"
                 type="password"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
@@ -324,8 +335,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Webhook Secret</label>
+              <label htmlFor="provider-webhook-secret" className="block text-sm font-medium text-foreground mb-1.5">Webhook Secret</label>
               <input
+                id="provider-webhook-secret"
                 type="password"
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
@@ -360,13 +372,15 @@ export default function ProviderCreatePage() {
                 <div key={index} className="flex items-center gap-3">
                   <input
                     type="text"
+                    aria-label={`Mapping ${index + 1}: provider status`}
                     value={mapping.providerStatus}
                     onChange={(e) => updateStatusMapping(index, 'providerStatus', e.target.value)}
                     placeholder="Provider status"
                     className="h-10 flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground font-mono placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <span className="text-sm text-muted-foreground shrink-0">maps to</span>
+                  <span aria-hidden="true" className="text-sm text-muted-foreground shrink-0">maps to</span>
                   <select
+                    aria-label={`Mapping ${index + 1}: Fe3dr status`}
                     value={mapping.fe3drStatus}
                     onChange={(e) => updateStatusMapping(index, 'fe3drStatus', e.target.value)}
                     className="h-10 flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -399,9 +413,10 @@ export default function ProviderCreatePage() {
           <div className="space-y-4">
             {/* Countries */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Supported Countries</label>
+              <label htmlFor="provider-country-input" className="block text-sm font-medium text-foreground mb-1.5">Supported Countries</label>
               <div className="flex items-center gap-2 mb-2">
                 <input
+                  id="provider-country-input"
                   type="text"
                   value={countriesInput}
                   onChange={(e) => setCountriesInput(e.target.value)}
@@ -439,9 +454,10 @@ export default function ProviderCreatePage() {
 
             {/* Cities */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Supported Cities</label>
+              <label htmlFor="provider-city-input" className="block text-sm font-medium text-foreground mb-1.5">Supported Cities</label>
               <div className="flex items-center gap-2 mb-2">
                 <input
+                  id="provider-city-input"
                   type="text"
                   value={citiesInput}
                   onChange={(e) => setCitiesInput(e.target.value)}
@@ -479,8 +495,9 @@ export default function ProviderCreatePage() {
 
             {/* Max Distance */}
             <div className="max-w-xs">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Max Distance (km)</label>
+              <label htmlFor="provider-max-distance" className="block text-sm font-medium text-foreground mb-1.5">Max Distance (km)</label>
               <input
+                id="provider-max-distance"
                 type="number"
                 value={maxDistance}
                 onChange={(e) => setMaxDistance(Number(e.target.value))}
@@ -496,8 +513,9 @@ export default function ProviderCreatePage() {
           <h2 className="text-lg font-semibold text-foreground mb-4">Pricing</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Pricing Model</label>
+              <label htmlFor="provider-pricing-model" className="block text-sm font-medium text-foreground mb-1.5">Pricing Model</label>
               <select
+                id="provider-pricing-model"
                 value={pricingModel}
                 onChange={(e) => setPricingModel(e.target.value)}
                 className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -508,8 +526,9 @@ export default function ProviderCreatePage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Currency</label>
+              <label htmlFor="provider-currency" className="block text-sm font-medium text-foreground mb-1.5">Currency</label>
               <select
+                id="provider-currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -520,8 +539,9 @@ export default function ProviderCreatePage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Base Cost</label>
+              <label htmlFor="provider-base-cost" className="block text-sm font-medium text-foreground mb-1.5">Base Cost</label>
               <input
+                id="provider-base-cost"
                 type="number"
                 value={baseCost}
                 onChange={(e) => setBaseCost(Number(e.target.value))}
@@ -531,8 +551,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Per KM Cost</label>
+              <label htmlFor="provider-per-km-cost" className="block text-sm font-medium text-foreground mb-1.5">Per KM Cost</label>
               <input
+                id="provider-per-km-cost"
                 type="number"
                 value={perKmCost}
                 onChange={(e) => setPerKmCost(Number(e.target.value))}
@@ -549,8 +570,9 @@ export default function ProviderCreatePage() {
           <h2 className="text-lg font-semibold text-foreground mb-4">Rate Limits</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Max Concurrent Deliveries</label>
+              <label htmlFor="provider-max-concurrent" className="block text-sm font-medium text-foreground mb-1.5">Max Concurrent Deliveries</label>
               <input
+                id="provider-max-concurrent"
                 type="number"
                 value={maxConcurrentDeliveries}
                 onChange={(e) => setMaxConcurrentDeliveries(Number(e.target.value))}
@@ -559,19 +581,22 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Daily Limit</label>
+              <label htmlFor="provider-daily-limit" className="block text-sm font-medium text-foreground mb-1.5">Daily Limit</label>
               <input
+                id="provider-daily-limit"
                 type="number"
                 value={dailyLimit}
                 onChange={(e) => setDailyLimit(Number(e.target.value))}
                 min={0}
+                aria-describedby="provider-daily-limit-hint"
                 className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="text-xs text-muted-foreground mt-1">0 = unlimited</p>
+              <p id="provider-daily-limit-hint" className="text-xs text-muted-foreground mt-1">0 = unlimited</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Avg Pickup Time (min)</label>
+              <label htmlFor="provider-avg-pickup-time" className="block text-sm font-medium text-foreground mb-1.5">Avg Pickup Time (min)</label>
               <input
+                id="provider-avg-pickup-time"
                 type="number"
                 value={avgPickupTime}
                 onChange={(e) => setAvgPickupTime(Number(e.target.value))}
@@ -587,8 +612,9 @@ export default function ProviderCreatePage() {
           <h2 className="text-lg font-semibold text-foreground mb-4">Contact</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Contact Name</label>
+              <label htmlFor="provider-contact-name" className="block text-sm font-medium text-foreground mb-1.5">Contact Name</label>
               <input
+                id="provider-contact-name"
                 type="text"
                 value={contactName}
                 onChange={(e) => setContactName(e.target.value)}
@@ -597,8 +623,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Contact Email</label>
+              <label htmlFor="provider-contact-email" className="block text-sm font-medium text-foreground mb-1.5">Contact Email</label>
               <input
+                id="provider-contact-email"
                 type="email"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
@@ -607,8 +634,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Contact Phone</label>
+              <label htmlFor="provider-contact-phone" className="block text-sm font-medium text-foreground mb-1.5">Contact Phone</label>
               <input
+                id="provider-contact-phone"
                 type="tel"
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
@@ -617,8 +645,9 @@ export default function ProviderCreatePage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Notes</label>
+              <label htmlFor="provider-notes" className="block text-sm font-medium text-foreground mb-1.5">Notes</label>
               <textarea
+                id="provider-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Any additional notes about this provider..."

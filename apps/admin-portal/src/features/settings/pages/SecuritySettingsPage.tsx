@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
@@ -485,7 +485,11 @@ function TwoFactorSection() {
               className="mx-auto my-3 h-48 w-48 rounded border border-border bg-bone p-2"
             />
             <div className="space-y-2">
+              <label htmlFor="totp-enroll-code" className="sr-only">6-digit verification code</label>
               <input
+                id="totp-enroll-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="6-digit code"
@@ -517,14 +521,21 @@ function TwoFactorSection() {
               Requires your password and a current 6-digit code.
             </p>
             <div className="mt-2 space-y-2">
+              <label htmlFor="totp-disable-password" className="sr-only">Password</label>
               <input
+                id="totp-disable-password"
                 type="password"
+                autoComplete="current-password"
                 value={disablePwd}
                 onChange={(e) => setDisablePwd(e.target.value)}
                 placeholder="Password"
                 className="w-full rounded-lg border border-border bg-bone px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
+              <label htmlFor="totp-disable-code" className="sr-only">6-digit verification code</label>
               <input
+                id="totp-disable-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
                 value={disableCode}
                 onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="6-digit code"
@@ -592,12 +603,14 @@ function TwoFactorExemptList() {
 
   return (
     <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3">
-      <p className="text-sm text-foreground">2FA exempt emails</p>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <label htmlFor="tfa-exempt-emails" className="text-sm text-foreground">2FA exempt emails</label>
+      <p id="tfa-exempt-emails-hint" className="mt-1 text-xs text-muted-foreground">
         One per line. Useful for service accounts (E2E tests, automation)
         that can't scan a QR. Leave empty to enforce 2FA on every admin.
       </p>
       <textarea
+        id="tfa-exempt-emails"
+        aria-describedby="tfa-exempt-emails-hint"
         value={current}
         onChange={(e) => setDraft(e.target.value)}
         rows={3}
@@ -749,8 +762,9 @@ function ApiKeysSection() {
       {creating ? (
         <div className="mt-4 space-y-3 rounded-lg border border-border bg-secondary/20 p-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
+            <label htmlFor="api-key-name" className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
             <input
+              id="api-key-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Partner integration"
@@ -899,10 +913,12 @@ function NumberField({
   min: number;
   max: number;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
+        id={id}
         type="number"
         value={value}
         min={min}

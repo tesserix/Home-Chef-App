@@ -197,9 +197,11 @@ function StaffMembersView() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="staff-search" className="sr-only">Search staff</label>
+          <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            type="text"
+            id="staff-search"
+            type="search"
             placeholder="Search staff by name or email..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -207,8 +209,10 @@ function StaffMembersView() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Filter aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <label htmlFor="staff-role-filter" className="sr-only">Filter by role</label>
           <select
+            id="staff-role-filter"
             value={roleFilter}
             onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
             className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -400,8 +404,10 @@ function InvitationsView() {
     <>
       {/* Filters */}
       <div className="flex items-center gap-2">
-        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Filter aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        <label htmlFor="invitations-status-filter" className="sr-only">Filter by status</label>
         <select
+          id="invitations-status-filter"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -627,7 +633,9 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <label htmlFor="staff-invite-url" className="sr-only">Invitation link</label>
               <input
+                id="staff-invite-url"
                 type="text"
                 readOnly
                 value={inviteUrl}
@@ -648,12 +656,14 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Email <span className="text-destructive">*</span>
+              <label htmlFor="invite-email" className="block text-sm font-medium text-foreground mb-1.5">
+                Email <span aria-hidden="true" className="text-destructive">*</span>
               </label>
               <input
+                id="invite-email"
                 type="email"
                 required
+                aria-required="true"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="colleague@company.com"
@@ -662,11 +672,13 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Role <span className="text-destructive">*</span>
+              <label htmlFor="invite-role" className="block text-sm font-medium text-foreground mb-1.5">
+                Role <span aria-hidden="true" className="text-destructive">*</span>
               </label>
               <select
+                id="invite-role"
                 required
+                aria-required="true"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -688,10 +700,11 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
+                <label htmlFor="invite-department" className="block text-sm font-medium text-foreground mb-1.5">
                   Department
                 </label>
                 <input
+                  id="invite-department"
                   type="text"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
@@ -700,10 +713,11 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
+                <label htmlFor="invite-title" className="block text-sm font-medium text-foreground mb-1.5">
                   Title
                 </label>
                 <input
+                  id="invite-title"
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -714,10 +728,11 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="invite-message" className="block text-sm font-medium text-foreground mb-1.5">
                 Personal Message
               </label>
               <textarea
+                id="invite-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Optional message to include in the invitation email..."

@@ -61,9 +61,11 @@ export default function OrdersPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="orders-search" className="sr-only">Search orders</label>
+          <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            type="text"
+            id="orders-search"
+            type="search"
             placeholder="Search by order number..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -72,8 +74,10 @@ export default function OrdersPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Filter aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <label htmlFor="orders-status-filter" className="sr-only">Filter by status</label>
           <select
+            id="orders-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"

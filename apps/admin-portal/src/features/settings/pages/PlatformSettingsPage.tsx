@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
@@ -589,10 +589,12 @@ function NumberField({
   max?: number;
   step?: number;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
+        id={id}
         type="number"
         value={value}
         min={min}
