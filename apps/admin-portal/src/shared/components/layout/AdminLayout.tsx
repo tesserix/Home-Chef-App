@@ -156,10 +156,11 @@ export function AdminLayout() {
                   <ThemeToggle size="sm" />
                 </div>
                 <button
+                  type="button"
                   onClick={logout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-paprika hover:bg-paprika/10"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-paprika transition-colors hover:bg-paprika/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut aria-hidden="true" className="h-4 w-4" />
                   Logout
                 </button>
               </div>
