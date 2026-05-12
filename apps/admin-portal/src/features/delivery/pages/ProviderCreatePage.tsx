@@ -238,7 +238,7 @@ export default function ProviderCreatePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="provider-name" className="block text-sm font-medium text-foreground mb-1.5">
-                Name <span aria-hidden="true" className="text-destructive">*</span>
+                Name <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 id="provider-name"
@@ -253,7 +253,7 @@ export default function ProviderCreatePage() {
             </div>
             <div>
               <label htmlFor="provider-code" className="block text-sm font-medium text-foreground mb-1.5">
-                Code <span aria-hidden="true" className="text-destructive">*</span>
+                Code <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 id="provider-code"
@@ -299,7 +299,7 @@ export default function ProviderCreatePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label htmlFor="provider-api-base-url" className="block text-sm font-medium text-foreground mb-1.5">
-                API Base URL <span aria-hidden="true" className="text-destructive">*</span>
+                API Base URL <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 id="provider-api-base-url"

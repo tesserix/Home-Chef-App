@@ -657,7 +657,7 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="invite-email" className="block text-sm font-medium text-foreground mb-1.5">
-                Email <span aria-hidden="true" className="text-destructive">*</span>
+                Email <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 id="invite-email"
@@ -673,7 +673,7 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
 
             <div>
               <label htmlFor="invite-role" className="block text-sm font-medium text-foreground mb-1.5">
-                Role <span aria-hidden="true" className="text-destructive">*</span>
+                Role <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <select
                 id="invite-role"
