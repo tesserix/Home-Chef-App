@@ -75,6 +75,8 @@ export default function LoginPage() {
           src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=1200&h=900&fit=crop&q=80"
           alt="Home chef preparing food in kitchen"
           className="absolute inset-0 h-full w-full object-cover"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="absolute inset-0 scrim-bottom" />
 

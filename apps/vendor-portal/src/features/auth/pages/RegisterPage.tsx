@@ -80,6 +80,8 @@ export default function RegisterPage() {
           src="https://images.unsplash.com/photo-1606491956689-2ea866880049?w=1200&h=900&fit=crop&q=80"
           alt="Indian woman cooking in home kitchen"
           className="absolute inset-0 h-full w-full object-cover"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="absolute inset-0 scrim-bottom" />
 

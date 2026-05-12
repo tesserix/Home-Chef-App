@@ -738,6 +738,8 @@ export default function MenuItemFormPage() {
                     src={img.url}
                     alt="Menu item"
                     className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {img.isPrimary && (
                     <span className="absolute left-1 top-1 rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
@@ -761,6 +763,8 @@ export default function MenuItemFormPage() {
                     src={URL.createObjectURL(file)}
                     alt={file.name}
                     className="h-full w-full object-cover opacity-70"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <span className="absolute left-1 top-1 rounded bg-amber/90 px-1.5 py-0.5 text-[10px] font-medium text-paper">
                     Pending

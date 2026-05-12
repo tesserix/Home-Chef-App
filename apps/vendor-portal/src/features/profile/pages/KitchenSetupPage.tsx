@@ -417,6 +417,8 @@ export default function KitchenSetupPage() {
                     src={url}
                     alt={`Kitchen photo ${index + 1}`}
                     className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <button
                     type="button"
