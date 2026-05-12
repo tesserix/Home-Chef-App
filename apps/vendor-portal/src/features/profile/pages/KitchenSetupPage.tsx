@@ -274,7 +274,7 @@ export default function KitchenSetupPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-herb border-t-transparent" />
       </div>
     );
   }
@@ -300,13 +300,13 @@ export default function KitchenSetupPage() {
         <div className="flex items-center gap-3">
           <Link
             to="/profile"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-mist text-ink-muted transition-colors hover:bg-paper hover:text-ink-soft"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Kitchen Setup</h1>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <h1 className="font-display text-2xl font-semibold text-ink">Kitchen Setup</h1>
+            <p className="mt-0.5 text-sm text-ink-muted">
               Operating hours, photos, and payout details
             </p>
           </div>
@@ -325,10 +325,10 @@ export default function KitchenSetupPage() {
       <motion.div variants={fadeInUp}>
         <Card>
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-900">Operating Hours</h3>
+            <Clock className="h-5 w-5 text-ink-muted" />
+            <h3 className="text-lg font-semibold text-ink">Operating Hours</h3>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-ink-muted">
             Set the days and hours your kitchen is open for orders
           </p>
 
@@ -338,8 +338,8 @@ export default function KitchenSetupPage() {
                 key={key}
                 className={`flex flex-wrap items-center gap-4 rounded-lg border p-3 transition-colors ${
                   enabledDays[key]
-                    ? 'border-gray-200 bg-white'
-                    : 'border-gray-100 bg-gray-50'
+                    ? 'border-mist bg-bone'
+                    : 'border-mist bg-paper'
                 }`}
               >
                 {/* Day Toggle */}
@@ -348,18 +348,18 @@ export default function KitchenSetupPage() {
                     type="button"
                     onClick={() => toggleDay(key)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      enabledDays[key] ? 'bg-brand-500' : 'bg-gray-300'
+                      enabledDays[key] ? 'bg-herb' : 'bg-mist-strong'
                     }`}
                   >
                     <span
-                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-bone shadow-sm transition-transform ${
                         enabledDays[key] ? 'translate-x-[18px]' : 'translate-x-[3px]'
                       }`}
                     />
                   </button>
                   <span
                     className={`text-sm font-medium ${
-                      enabledDays[key] ? 'text-gray-900' : 'text-gray-400'
+                      enabledDays[key] ? 'text-ink' : 'text-ink-muted'
                     }`}
                   >
                     {label}
@@ -372,17 +372,17 @@ export default function KitchenSetupPage() {
                     <input
                       type="time"
                       {...register(`operatingHours.${key}.open`)}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                      className="rounded-lg border border-mist bg-bone px-3 py-1.5 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                     />
-                    <span className="text-sm text-gray-400">to</span>
+                    <span className="text-sm text-ink-muted">to</span>
                     <input
                       type="time"
                       {...register(`operatingHours.${key}.close`)}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                      className="rounded-lg border border-mist bg-bone px-3 py-1.5 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                     />
                   </div>
                 ) : (
-                  <span className="text-sm text-gray-400">Closed</span>
+                  <span className="text-sm text-ink-muted">Closed</span>
                 )}
               </div>
             ))}
@@ -396,10 +396,10 @@ export default function KitchenSetupPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5 text-gray-400" />
-                <h3 className="text-lg font-semibold text-gray-900">Kitchen Photos</h3>
+                <ImageIcon className="h-5 w-5 text-ink-muted" />
+                <h3 className="text-lg font-semibold text-ink">Kitchen Photos</h3>
               </div>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-ink-muted">
                 Add photos of your kitchen to build trust with customers ({kitchenPhotos.length}/{MAX_KITCHEN_PHOTOS})
               </p>
             </div>
@@ -411,7 +411,7 @@ export default function KitchenSetupPage() {
               {kitchenPhotos.map((url, index) => (
                 <div
                   key={url}
-                  className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-mist bg-paper"
                 >
                   <img
                     src={url}
@@ -422,7 +422,7 @@ export default function KitchenSetupPage() {
                     type="button"
                     onClick={() => deletePhotoMutation.mutate(url)}
                     disabled={deletePhotoMutation.isPending}
-                    className="absolute right-2 top-2 rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/70 disabled:opacity-50"
+                    className="absolute right-2 top-2 rounded-full bg-ink/50 p-1.5 text-paper opacity-0 transition-opacity group-hover:opacity-100 hover:bg-ink/70 disabled:opacity-50"
                   >
                     {deletePhotoMutation.isPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -439,7 +439,7 @@ export default function KitchenSetupPage() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadPhotoMutation.isPending}
-                  className="flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-500 disabled:opacity-50"
+                  className="flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-mist-strong bg-paper text-ink-muted transition-colors hover:border-herb hover:bg-herb-tint hover:text-herb disabled:opacity-50"
                 >
                   {uploadPhotoMutation.isPending ? (
                     <Loader2 className="h-8 w-8 animate-spin" />
@@ -463,22 +463,22 @@ export default function KitchenSetupPage() {
               onClick={() => fileInputRef.current?.click()}
               className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed py-12 text-center transition-colors ${
                 isDragging
-                  ? 'border-brand-500 bg-brand-50'
-                  : 'border-gray-300 hover:border-brand-400 hover:bg-brand-50/50'
+                  ? 'border-herb bg-herb-tint'
+                  : 'border-mist-strong hover:border-herb hover:bg-herb-tint/50'
               }`}
             >
               {uploadPhotoMutation.isPending ? (
                 <>
-                  <Loader2 className="h-10 w-10 animate-spin text-brand-500" />
-                  <p className="mt-3 text-sm font-medium text-gray-600">Uploading...</p>
+                  <Loader2 className="h-10 w-10 animate-spin text-herb" />
+                  <p className="mt-3 text-sm font-medium text-ink-soft">Uploading...</p>
                 </>
               ) : (
                 <>
-                  <Upload className="h-10 w-10 text-gray-300" />
-                  <p className="mt-3 text-sm font-medium text-gray-600">
+                  <Upload className="h-10 w-10 text-ink-muted" />
+                  <p className="mt-3 text-sm font-medium text-ink-soft">
                     {isDragging ? 'Drop your photo here' : 'Click or drag photos here'}
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-ink-muted">
                     JPEG, PNG, or WebP. Max 5 MB each. Up to {MAX_KITCHEN_PHOTOS} photos.
                   </p>
                 </>
@@ -492,15 +492,15 @@ export default function KitchenSetupPage() {
       <motion.div variants={fadeInUp}>
         <Card>
           <div className="flex items-center gap-2">
-            <Landmark className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-900">Payout Details</h3>
+            <Landmark className="h-5 w-5 text-ink-muted" />
+            <h3 className="text-lg font-semibold text-ink">Payout Details</h3>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-ink-muted">
             Bank account details for receiving your earnings
           </p>
 
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm text-amber-700">
+          <div className="mt-6 rounded-lg border border-amber/30 bg-amber-tint p-3">
+            <p className="text-sm text-amber">
               <CreditCard className="mr-1.5 inline h-4 w-4" />
               Payout integration coming soon. These details are saved locally for now.
             </p>
@@ -533,7 +533,7 @@ export default function KitchenSetupPage() {
       <motion.div variants={fadeInUp} className="flex justify-start">
         <Link
           to="/profile"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-herb transition-colors hover:text-herb"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Profile

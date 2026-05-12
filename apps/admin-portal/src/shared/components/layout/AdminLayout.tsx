@@ -23,6 +23,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 import { apiClient } from '@/shared/services/api-client';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
+import { ThemeToggle } from '@/shared/theme';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 
 const navigation = [
@@ -78,7 +79,7 @@ export function AdminLayout() {
               <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <span className="text-lg font-bold text-sidebar-foreground">Fe3dr</span>
+              <span className="text-lg font-medium text-sidebar-foreground">Fe3dr</span>
               <p className="text-xs text-sidebar-foreground/60">Admin Portal</p>
             </div>
           </div>
@@ -100,7 +101,7 @@ export function AdminLayout() {
                   <Icon className="h-5 w-5" />
                   {item.name}
                   {item.name === 'Reviews' && pendingCount > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-destructive-foreground">
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-destructive-foreground">
                       {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
                   )}
@@ -138,9 +139,13 @@ export function AdminLayout() {
                   <Settings className="h-4 w-4" />
                   Settings
                 </Link>
+                <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70">
+                  <span>Theme</span>
+                  <ThemeToggle size="sm" />
+                </div>
                 <button
                   onClick={logout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-paprika hover:bg-paprika/10"
                 >
                   <LogOut className="h-4 w-4" />
                   Logout
@@ -165,7 +170,7 @@ export function AdminLayout() {
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-primary">
                     <Shield className="h-5 w-5 text-primary-foreground" />
                   </div>
-                  <span className="text-lg font-bold text-sidebar-foreground">Fe3dr</span>
+                  <span className="text-lg font-medium text-sidebar-foreground">Fe3dr</span>
                 </Link>
                 <button onClick={() => setSidebarOpen(false)}>
                   <X className="h-6 w-6 text-sidebar-foreground/60" />
@@ -188,7 +193,7 @@ export function AdminLayout() {
                       <Icon className="h-5 w-5" />
                       {item.name}
                       {item.name === 'Reviews' && pendingCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-destructive-foreground">
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-destructive-foreground">
                           {pendingCount > 99 ? '99+' : pendingCount}
                         </span>
                       )}
@@ -222,7 +227,7 @@ export function AdminLayout() {
             <Link to="/approvals" className="relative rounded-lg p-2 hover:bg-secondary">
               <Bell className="h-5 w-5 text-muted-foreground" />
               {unreadCount > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -239,7 +244,7 @@ export function AdminLayout() {
         </header>
 
         {/* Page content */}
-        <main className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile ? 'pb-20' : ''}`}>
+        <main id="main" className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile ? 'pb-20' : ''}`}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

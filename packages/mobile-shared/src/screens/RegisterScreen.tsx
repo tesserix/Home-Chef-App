@@ -48,15 +48,15 @@ export function RegisterScreen({
   };
 
   return (
-    <View className="flex-1 bg-white px-6 pt-16">
+    <View className="flex-1 bg-bone px-6 pt-16">
       <H1 className="mb-2">{title}</H1>
-      <Text size="base" color="#718096" className="mb-8">
+      <Text size="base" color="#7a7a76" className="mb-8">
         Fill in your details to get started
       </Text>
 
       {error ? (
-        <View className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-          <Text size="sm" color="#b91c1c">{error}</Text>
+        <View className="bg-paprika-tint border border-paprika/30 rounded-lg p-3 mb-4">
+          <Text size="sm" color="#c95b3e">{error}</Text>
         </View>
       ) : null}
 

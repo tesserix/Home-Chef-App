@@ -22,10 +22,11 @@
     <meta name="apple-mobile-web-app-title" content="Fe3dr" />
     <meta name="application-name" content="Fe3dr" />
 
-    <!-- Theme & Colors -->
-    <meta name="theme-color" content="#C2410C" />
-    <meta name="msapplication-TileColor" content="#C2410C" />
-    <meta name="msapplication-navbutton-color" content="#C2410C" />
+    <!-- Theme & Colors (Paper / Ink / Herb) -->
+    <meta name="theme-color" content="#fafaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1a18" media="(prefers-color-scheme: dark)" />
+    <meta name="msapplication-TileColor" content="#1a1a18" />
+    <meta name="msapplication-navbutton-color" content="#1a1a18" />
 
     <!-- SEO & Social -->
     <meta name="description" content="Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep" />
@@ -54,16 +55,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#C2410C" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#1a1a18" />
 
     <!-- Preconnect to improve performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet" />
+    <!-- Fonts: Geist (display) + Inter (UI/body) -->
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
     <title>Fe3dr - Homemade Food Delivered</title>
+
+    <!-- No-flash theme bootstrap. Reads localStorage('hc-theme') + prefers-color-scheme
+         and sets the `dark` class on <html> before React mounts. -->
+    <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
 
     <!-- Razorpay Checkout SDK -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>

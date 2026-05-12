@@ -53,7 +53,7 @@ export default function AvailableDeliveriesPage() {
             <div key={d.orderId} className="rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-semibold text-foreground">#{d.orderNumber}</span>
-                <span className="text-sm font-bold text-primary">${d.estimatedPayout.toFixed(2)}</span>
+                <span className="text-sm font-medium text-primary">${d.estimatedPayout.toFixed(2)}</span>
               </div>
 
               <div className="space-y-2 mb-4">

@@ -116,36 +116,36 @@ export default function PayoutScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
+    <SafeAreaView className="flex-1 bg-bone" edges={['bottom']}>
       <ScrollView className="flex-1 px-6" keyboardShouldPersistTaps="handled">
         {/* Progress bar */}
-        <View className="mt-4 mb-6 h-1 bg-gray-200 rounded-full">
-          <View className="h-1 bg-orange-500 rounded-full" style={{ width: '66.67%' }} />
+        <View className="mt-4 mb-6 h-1 bg-mist rounded-full">
+          <View className="h-1 bg-herb rounded-full" style={{ width: '66.67%' }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-2">Payout Details</Text>
-        <Text className="text-gray-500 mb-6">
+        <Text className="font-display text-2xl font-semibold text-ink mb-2">Payout Details</Text>
+        <Text className="text-ink-muted mb-6">
           Choose how you would like to receive your earnings
         </Text>
 
         {/* Method selector */}
-        <View className="flex-row mb-6 border border-gray-200 rounded-xl overflow-hidden">
+        <View className="flex-row mb-6 border border-mist rounded-xl overflow-hidden">
           <TouchableOpacity
             onPress={() => onSelectMethod('bank')}
-            className={`flex-1 py-3 items-center ${selectedMethod === 'bank' ? 'bg-orange-500' : 'bg-white'}`}
+            className={`flex-1 py-3 items-center ${selectedMethod === 'bank' ? 'bg-herb' : 'bg-bone'}`}
           >
             <Text
-              className={`font-semibold ${selectedMethod === 'bank' ? 'text-white' : 'text-gray-700'}`}
+              className={`font-semibold ${selectedMethod === 'bank' ? 'text-paper' : 'text-ink-soft'}`}
             >
               Bank Account
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => onSelectMethod('upi')}
-            className={`flex-1 py-3 items-center ${selectedMethod === 'upi' ? 'bg-orange-500' : 'bg-white'}`}
+            className={`flex-1 py-3 items-center ${selectedMethod === 'upi' ? 'bg-herb' : 'bg-bone'}`}
           >
             <Text
-              className={`font-semibold ${selectedMethod === 'upi' ? 'text-white' : 'text-gray-700'}`}
+              className={`font-semibold ${selectedMethod === 'upi' ? 'text-paper' : 'text-ink-soft'}`}
             >
               UPI
             </Text>
@@ -163,15 +163,15 @@ export default function PayoutScreen() {
           <>
             {/* Account Number */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">
-                Account Number <Text className="text-red-500">*</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">
+                Account Number <Text className="text-paprika">*</Text>
               </Text>
               <Controller
                 control={control}
                 name="bankAccountNumber"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.bankAccountNumber ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
                     placeholder="Enter account number"
                     keyboardType="numeric"
                     secureTextEntry
@@ -182,7 +182,7 @@ export default function PayoutScreen() {
                 )}
               />
               {errors.bankAccountNumber && (
-                <Text className="text-red-500 text-sm mt-1">
+                <Text className="text-paprika text-sm mt-1">
                   {errors.bankAccountNumber.message}
                 </Text>
               )}
@@ -190,15 +190,15 @@ export default function PayoutScreen() {
 
             {/* Confirm Account Number */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">
-                Confirm Account Number <Text className="text-red-500">*</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">
+                Confirm Account Number <Text className="text-paprika">*</Text>
               </Text>
               <Controller
                 control={control}
                 name="confirmAccountNumber"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.confirmAccountNumber ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`border rounded-lg px-4 py-3 text-ink ${errors.confirmAccountNumber ? 'border-paprika' : 'border-mist-strong'}`}
                     placeholder="Re-enter account number"
                     keyboardType="numeric"
                     onBlur={onBlur}
@@ -208,7 +208,7 @@ export default function PayoutScreen() {
                 )}
               />
               {errors.confirmAccountNumber && (
-                <Text className="text-red-500 text-sm mt-1">
+                <Text className="text-paprika text-sm mt-1">
                   {errors.confirmAccountNumber.message}
                 </Text>
               )}
@@ -216,15 +216,15 @@ export default function PayoutScreen() {
 
             {/* IFSC */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">
-                IFSC Code <Text className="text-red-500">*</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">
+                IFSC Code <Text className="text-paprika">*</Text>
               </Text>
               <Controller
                 control={control}
                 name="bankIFSC"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.bankIFSC ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankIFSC ? 'border-paprika' : 'border-mist-strong'}`}
                     placeholder="e.g. HDFC0001234"
                     autoCapitalize="characters"
                     onBlur={onBlur}
@@ -234,21 +234,21 @@ export default function PayoutScreen() {
                 )}
               />
               {errors.bankIFSC && (
-                <Text className="text-red-500 text-sm mt-1">{errors.bankIFSC.message}</Text>
+                <Text className="text-paprika text-sm mt-1">{errors.bankIFSC.message}</Text>
               )}
             </View>
 
             {/* Bank Name */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">
-                Bank Name <Text className="text-red-500">*</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">
+                Bank Name <Text className="text-paprika">*</Text>
               </Text>
               <Controller
                 control={control}
                 name="bankName"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.bankName ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`border rounded-lg px-4 py-3 text-ink ${errors.bankName ? 'border-paprika' : 'border-mist-strong'}`}
                     placeholder="e.g. HDFC Bank"
                     onBlur={onBlur}
                     onChangeText={onChange}
@@ -257,21 +257,21 @@ export default function PayoutScreen() {
                 )}
               />
               {errors.bankName && (
-                <Text className="text-red-500 text-sm mt-1">{errors.bankName.message}</Text>
+                <Text className="text-paprika text-sm mt-1">{errors.bankName.message}</Text>
               )}
             </View>
           </>
         ) : (
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">
-              UPI ID <Text className="text-red-500">*</Text>
+            <Text className="text-sm font-medium text-ink-soft mb-1">
+              UPI ID <Text className="text-paprika">*</Text>
             </Text>
             <Controller
               control={control}
               name="upiId"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.upiId ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`border rounded-lg px-4 py-3 text-ink ${errors.upiId ? 'border-paprika' : 'border-mist-strong'}`}
                   placeholder="e.g. yourname@upi"
                   autoCapitalize="none"
                   keyboardType="email-address"
@@ -282,30 +282,30 @@ export default function PayoutScreen() {
               )}
             />
             {errors.upiId && (
-              <Text className="text-red-500 text-sm mt-1">{errors.upiId.message}</Text>
+              <Text className="text-paprika text-sm mt-1">{errors.upiId.message}</Text>
             )}
           </View>
         )}
 
         {/* Security note */}
-        <View className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 mb-8">
-          <Text className="text-orange-800 text-sm">
+        <View className="bg-herb-tint border border-herb-tint rounded-lg px-4 py-3 mb-8">
+          <Text className="text-herb text-sm">
             Your payout details are encrypted and never stored on this device. They are used solely for processing your earnings.
           </Text>
         </View>
       </ScrollView>
 
       {/* Next Button */}
-      <View className="px-6 py-4 border-t border-gray-100">
+      <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting}
-          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-herb-soft' : 'bg-herb'}`}
         >
           {isSubmitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-base">Next</Text>
+            <Text className="text-paper font-semibold text-base">Next</Text>
           )}
         </TouchableOpacity>
       </View>

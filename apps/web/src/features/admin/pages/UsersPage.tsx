@@ -68,8 +68,8 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Users</h1>
-          <p className="mt-1 text-gray-400">
+          <h1 className="font-display text-2xl font-semibold text-paper">Users</h1>
+          <p className="mt-1 text-ink-muted">
             {data?.pagination.total || 0} total users
           </p>
         </div>
@@ -78,20 +78,20 @@ export default function AdminUsersPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full rounded-lg bg-gray-800 border-gray-700 pl-10 pr-4 py-2.5 text-white placeholder:text-gray-500 focus:border-brand-500 focus:ring-brand-500"
+            className="w-full rounded-lg bg-ink border-ink-soft pl-10 pr-4 py-2.5 text-paper placeholder:text-ink-muted focus:border-herb focus:ring-herb"
           />
         </div>
         <div className="flex gap-3">
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="rounded-lg bg-gray-800 border-gray-700 text-white"
+            className="rounded-lg bg-ink border-ink-soft text-paper"
           >
             {ROLE_FILTER.map((option) => (
               <option key={option.value} value={option.value}>
@@ -102,7 +102,7 @@ export default function AdminUsersPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg bg-gray-800 border-gray-700 text-white"
+            className="rounded-lg bg-ink border-ink-soft text-paper"
           >
             {STATUS_FILTER.map((option) => (
               <option key={option.value} value={option.value}>
@@ -114,62 +114,62 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Users Table */}
-      <div className="rounded-xl bg-gray-800 overflow-hidden">
+      <div className="rounded-xl bg-ink overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-herb" />
           </div>
         ) : users.length === 0 ? (
           <div className="p-12 text-center">
-            <User className="mx-auto h-12 w-12 text-gray-600" />
-            <h3 className="mt-4 font-medium text-white">No users found</h3>
-            <p className="mt-2 text-gray-400">Try adjusting your filters</p>
+            <User className="mx-auto h-12 w-12 text-ink-soft" />
+            <h3 className="mt-4 font-medium text-paper">No users found</h3>
+            <p className="mt-2 text-ink-muted">Try adjusting your filters</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-700/50">
+              <thead className="bg-ink-soft/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ink-muted uppercase">
                     User
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ink-muted uppercase">
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ink-muted uppercase">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-ink-muted uppercase">
                     Joined
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-ink-muted uppercase">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
                 {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-700/50">
+                  <tr key={user.id} className="hover:bg-ink-soft/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center">
+                        <div className="h-10 w-10 rounded-full bg-ink-soft flex items-center justify-center">
                           {user.avatar ? (
                             <img
                               src={user.avatar}
                               alt=""
-                              className="h-full w-full rounded-full object-cover"
+                              className="h-full w-full rounded-full object-cover" loading="lazy" decoding="async"
                             />
                           ) : (
-                            <span className="text-lg font-medium text-gray-400">
+                            <span className="text-lg font-medium text-ink-muted">
                               {user.firstName?.charAt(0)}
                             </span>
                           )}
                         </div>
                         <div>
-                          <p className="font-medium text-white">
+                          <p className="font-medium text-paper">
                             {user.firstName} {user.lastName}
                           </p>
-                          <p className="text-sm text-gray-400">{user.email}</p>
+                          <p className="text-sm text-ink-muted">{user.email}</p>
                         </div>
                       </div>
                     </td>
@@ -179,13 +179,13 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4">
                       <StatusBadge status={user.isActive ? 'active' : 'suspended'} />
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-400">
+                    <td className="px-6 py-4 text-sm text-ink-muted">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => setSelectedUser(user)}
-                        className="p-2 text-gray-400 hover:text-white"
+                        className="p-2 text-ink-muted hover:text-paper"
                       >
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
@@ -199,8 +199,8 @@ export default function AdminUsersPage() {
 
         {/* Pagination */}
         {data && data.pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-700 px-6 py-4">
-            <p className="text-sm text-gray-400">
+          <div className="flex items-center justify-between border-t border-ink-soft px-6 py-4">
+            <p className="text-sm text-ink-muted">
               Showing {(page - 1) * 20 + 1} to {Math.min(page * 20, data.pagination.total)} of{' '}
               {data.pagination.total}
             </p>
@@ -208,14 +208,14 @@ export default function AdminUsersPage() {
               <button
                 onClick={() => setPage(page - 1)}
                 disabled={!data.pagination.hasPrev}
-                className="p-2 rounded-lg bg-gray-700 text-white disabled:opacity-50"
+                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 onClick={() => setPage(page + 1)}
                 disabled={!data.pagination.hasNext}
-                className="p-2 rounded-lg bg-gray-700 text-white disabled:opacity-50"
+                className="p-2 rounded-lg bg-ink-soft text-paper disabled:opacity-50"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -244,14 +244,14 @@ export default function AdminUsersPage() {
 
 function RoleBadge({ role }: { role: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    customer: { label: 'Customer', className: 'bg-blue-500/20 text-blue-400' },
-    chef: { label: 'Chef', className: 'bg-purple-500/20 text-purple-400' },
-    delivery: { label: 'Delivery', className: 'bg-cyan-500/20 text-cyan-400' },
-    admin: { label: 'Admin', className: 'bg-orange-500/20 text-orange-400' },
-    super_admin: { label: 'Super Admin', className: 'bg-red-500/20 text-red-400' },
+    customer: { label: 'Customer', className: 'bg-info/20 text-info' },
+    chef: { label: 'Chef', className: 'bg-info/20 text-info' },
+    delivery: { label: 'Delivery', className: 'bg-info/20 text-info' },
+    admin: { label: 'Admin', className: 'bg-herb/20 text-herb' },
+    super_admin: { label: 'Super Admin', className: 'bg-paprika/20 text-paprika' },
   };
 
-  const { label, className } = config[role] || { label: role, className: 'bg-gray-500/20 text-gray-400' };
+  const { label, className } = config[role] || { label: role, className: 'bg-ink-muted/20 text-ink-muted' };
 
   return (
     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
@@ -262,12 +262,12 @@ function RoleBadge({ role }: { role: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   return status === 'active' ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2.5 py-0.5 text-xs font-medium text-green-400">
+    <span className="inline-flex items-center gap-1 rounded-full bg-herb/20 px-2.5 py-0.5 text-xs font-medium text-herb">
       <CheckCircle className="h-3 w-3" />
       Active
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2.5 py-0.5 text-xs font-medium text-red-400">
+    <span className="inline-flex items-center gap-1 rounded-full bg-paprika/20 px-2.5 py-0.5 text-xs font-medium text-paprika">
       <Ban className="h-3 w-3" />
       Suspended
     </span>
@@ -286,22 +286,22 @@ function UserDetailModal({
   isUpdating: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-xl bg-gray-800 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4">
+      <div className="w-full max-w-md rounded-xl bg-ink shadow-xl">
         <div className="p-6">
           <div className="flex items-start gap-4">
-            <div className="h-16 w-16 rounded-full bg-gray-700 flex items-center justify-center">
+            <div className="h-16 w-16 rounded-full bg-ink-soft flex items-center justify-center">
               {user.avatar ? (
-                <img src={user.avatar} alt="" className="h-full w-full rounded-full object-cover" />
+                <img src={user.avatar} alt="" className="h-full w-full rounded-full object-cover" loading="lazy" decoding="async" />
               ) : (
-                <span className="text-2xl font-medium text-gray-400">
+                <span className="text-2xl font-medium text-ink-muted">
                   {user.firstName?.charAt(0)}
                   {user.lastName?.charAt(0)}
                 </span>
               )}
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-paper">
                 {user.firstName} {user.lastName}
               </h2>
               <div className="mt-1 flex items-center gap-2">
@@ -312,25 +312,25 @@ function UserDetailModal({
           </div>
 
           <div className="mt-6 space-y-3">
-            <div className="flex items-center gap-3 text-gray-300">
-              <Mail className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-3 text-ink-muted">
+              <Mail className="h-4 w-4 text-ink-muted" />
               {user.email}
             </div>
             {user.phone && (
-              <div className="flex items-center gap-3 text-gray-300">
-                <Phone className="h-4 w-4 text-gray-500" />
+              <div className="flex items-center gap-3 text-ink-muted">
+                <Phone className="h-4 w-4 text-ink-muted" />
                 {user.phone}
               </div>
             )}
-            <div className="flex items-center gap-3 text-gray-300">
-              <Calendar className="h-4 w-4 text-gray-500" />
+            <div className="flex items-center gap-3 text-ink-muted">
+              <Calendar className="h-4 w-4 text-ink-muted" />
               Joined {new Date(user.createdAt).toLocaleDateString()}
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 border-t border-gray-700 p-4">
-          <button onClick={onClose} className="flex-1 btn-outline border-gray-600 text-white">
+        <div className="flex gap-3 border-t border-ink-soft p-4">
+          <button onClick={onClose} className="flex-1 btn-outline border-ink-soft text-paper">
             Close
           </button>
           <button
@@ -338,8 +338,8 @@ function UserDetailModal({
             disabled={isUpdating}
             className={`flex-1 ${
               user.isActive
-                ? 'btn-base bg-red-600 text-white hover:bg-red-700'
-                : 'btn-base bg-green-600 text-white hover:bg-green-700'
+                ? 'btn-base bg-paprika text-paper hover:bg-paprika'
+                : 'btn-base bg-herb text-paper hover:bg-herb'
             }`}
           >
             {isUpdating ? (

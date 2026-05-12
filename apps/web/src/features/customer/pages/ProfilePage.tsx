@@ -63,18 +63,18 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app max-w-5xl">
-        <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Account Settings</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">Account Settings</h1>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Sidebar */}
           <div className="lg:w-64">
-            <div className="rounded-xl bg-white p-4 shadow-sm">
+            <div className="rounded-xl bg-bone p-4 shadow-sm">
               {/* User Info */}
               <div className="flex items-center gap-3 border-b pb-4">
                 <div className="relative">
-                  <div className="h-12 w-12 rounded-full bg-brand-100 flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full bg-herb-tint flex items-center justify-center">
                     {user?.avatar ? (
                       <img
                         src={user.avatar}
@@ -82,7 +82,7 @@ export default function ProfilePage() {
                         className="h-full w-full rounded-full object-cover"
                       />
                     ) : (
-                      <span className="text-lg font-semibold text-brand-600">
+                      <span className="text-lg font-semibold text-herb">
                         {user?.firstName?.charAt(0)}
                         {user?.lastName?.charAt(0)}
                       </span>
@@ -90,10 +90,10 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
+                  <p className="font-medium text-ink truncate">
                     {user?.firstName} {user?.lastName}
                   </p>
-                  <p className="text-sm text-gray-500 truncate">{user?.email}</p>
+                  <p className="text-sm text-ink-muted truncate">{user?.email}</p>
                 </div>
               </div>
 
@@ -105,8 +105,8 @@ export default function ProfilePage() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                       activeTab === tab.id
-                        ? 'bg-brand-50 text-brand-600'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-herb-tint text-herb'
+                        : 'text-ink-soft hover:bg-mist'
                     }`}
                   >
                     <tab.icon className="h-5 w-5" />
@@ -119,7 +119,7 @@ export default function ProfilePage() {
               <div className="mt-4 pt-4 border-t">
                 <button
                   onClick={logout}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-red-600 hover:bg-red-50 transition-colors"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-paprika hover:bg-paprika-tint transition-colors"
                 >
                   <LogOut className="h-5 w-5" />
                   <span className="font-medium">Log Out</span>
@@ -226,13 +226,13 @@ function ProfileTab() {
   };
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
+        <h2 className="text-lg font-semibold text-ink">Personal Information</h2>
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="text-sm text-brand-600 hover:text-brand-700"
+            className="text-sm text-herb hover:text-herb"
           >
             Edit
           </button>
@@ -242,7 +242,7 @@ function ProfileTab() {
       {/* Avatar */}
       <div className="mt-6 flex items-center gap-4">
         <div className="relative">
-          <div className="h-20 w-20 rounded-full bg-brand-100 flex items-center justify-center overflow-hidden">
+          <div className="h-20 w-20 rounded-full bg-herb-tint flex items-center justify-center overflow-hidden">
             {avatarUrl ? (
               <img
                 src={avatarUrl}
@@ -252,17 +252,17 @@ function ProfileTab() {
                 onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
-              <span className="text-2xl font-semibold text-brand-600">
+              <span className="text-2xl font-semibold text-herb">
                 {user?.firstName?.charAt(0)}
                 {user?.lastName?.charAt(0)}
               </span>
             )}
           </div>
-          <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-white p-1.5 shadow-md hover:bg-gray-50">
+          <label className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-bone p-1.5 shadow-md hover:bg-paper">
             {isUploading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-mist-strong border-t-transparent" />
             ) : (
-              <Camera className="h-4 w-4 text-gray-600" />
+              <Camera className="h-4 w-4 text-ink-soft" />
             )}
             <input
               type="file"
@@ -274,8 +274,8 @@ function ProfileTab() {
           </label>
         </div>
         <div>
-          <p className="font-medium text-gray-900">Profile Photo</p>
-          <p className="text-sm text-gray-500">JPG, PNG or WebP. Max size 5MB.</p>
+          <p className="font-medium text-ink">Profile Photo</p>
+          <p className="text-sm text-ink-muted">JPG, PNG or WebP. Max size 5MB.</p>
         </div>
       </div>
 
@@ -283,59 +283,59 @@ function ProfileTab() {
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700">First name</label>
+            <label className="block text-sm font-medium text-ink-soft">First name</label>
             <input
               {...register('firstName')}
               disabled={!isEditing}
-              className="input-base mt-1 disabled:bg-gray-50"
+              className="input-base mt-1 disabled:bg-paper"
             />
             {errors.firstName && (
-              <p className="mt-1 text-xs text-red-600">{errors.firstName.message}</p>
+              <p className="mt-1 text-xs text-paprika">{errors.firstName.message}</p>
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Last name</label>
+            <label className="block text-sm font-medium text-ink-soft">Last name</label>
             <input
               {...register('lastName')}
               disabled={!isEditing}
-              className="input-base mt-1 disabled:bg-gray-50"
+              className="input-base mt-1 disabled:bg-paper"
             />
             {errors.lastName && (
-              <p className="mt-1 text-xs text-red-600">{errors.lastName.message}</p>
+              <p className="mt-1 text-xs text-paprika">{errors.lastName.message}</p>
             )}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
+          <label className="block text-sm font-medium text-ink-soft">Email</label>
           <input
             {...register('email')}
             type="email"
             disabled={!isEditing}
-            className="input-base mt-1 disabled:bg-gray-50"
+            className="input-base mt-1 disabled:bg-paper"
           />
           {errors.email && (
-            <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+            <p className="mt-1 text-xs text-paprika">{errors.email.message}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Phone</label>
+          <label className="block text-sm font-medium text-ink-soft">Phone</label>
           <input
             {...register('phone')}
             type="tel"
             disabled={!isEditing}
-            className="input-base mt-1 disabled:bg-gray-50"
+            className="input-base mt-1 disabled:bg-paper"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Date of birth</label>
+          <label className="block text-sm font-medium text-ink-soft">Date of birth</label>
           <input
             {...register('dateOfBirth')}
             type="date"
             disabled={!isEditing}
-            className="input-base mt-1 disabled:bg-gray-50"
+            className="input-base mt-1 disabled:bg-paper"
           />
         </div>
 
@@ -439,7 +439,7 @@ function PreferencesTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Food Preferences</h2>
+        <h2 className="text-lg font-semibold text-ink">Food Preferences</h2>
         {!isEditing ? (
           <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
             Edit
@@ -453,8 +453,8 @@ function PreferencesTab() {
       </div>
 
       {/* Dietary */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="font-medium text-gray-900 mb-3">Dietary Preferences</h3>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h3 className="font-medium text-ink mb-3">Dietary Preferences</h3>
         <div className="flex flex-wrap gap-2">
           {dietary.map((opt) => {
             const selected = dietaryPref.includes(opt.value);
@@ -475,8 +475,8 @@ function PreferencesTab() {
       </div>
 
       {/* Allergies */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="font-medium text-gray-900 mb-3">Food Allergies</h3>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h3 className="font-medium text-ink mb-3">Food Allergies</h3>
         <div className="flex flex-wrap gap-2">
           {allergy.map((opt) => {
             const selected = allergies.includes(opt.value);
@@ -497,8 +497,8 @@ function PreferencesTab() {
       </div>
 
       {/* Cuisines */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="font-medium text-gray-900 mb-3">Favourite Cuisines</h3>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h3 className="font-medium text-ink mb-3">Favourite Cuisines</h3>
         <div className="flex flex-wrap gap-2">
           {cuisine.map((opt) => {
             const selected = cuisinePref.includes(opt.value);
@@ -519,8 +519,8 @@ function PreferencesTab() {
       </div>
 
       {/* Spice */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="font-medium text-gray-900 mb-3">Spice Tolerance</h3>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h3 className="font-medium text-ink mb-3">Spice Tolerance</h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {spiceLevel.map((level) => {
             const selected = spice === level.value;
@@ -549,8 +549,8 @@ function PreferencesTab() {
       </div>
 
       {/* Household */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="font-medium text-gray-900 mb-3">Household Size</h3>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h3 className="font-medium text-ink mb-3">Household Size</h3>
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
           {householdSize.map((size) => {
             const selected = household === size.value;
@@ -607,7 +607,7 @@ interface LocationOption {
 
 const ADDRESS_LABELS = ['Home', 'Work', 'Other'];
 
-const selectClass = 'w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-brand-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 focus-visible:border-brand-500 disabled:opacity-50';
+const selectClass = 'w-full h-10 px-4 text-sm rounded-lg border-2 border-input bg-background shadow-sm hover:border-herb-tint focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-herb/20 focus-visible:border-herb disabled:opacity-50';
 
 function AddressesTab() {
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -742,9 +742,9 @@ function AddressesTab() {
   };
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Saved Addresses</h2>
+        <h2 className="text-lg font-semibold text-ink">Saved Addresses</h2>
         {formMode === 'hidden' && (
           <Button variant="outline" size="sm" onClick={openAdd}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -755,14 +755,14 @@ function AddressesTab() {
 
       {/* Address Form */}
       {formMode !== 'hidden' && (
-        <div className="mt-6 rounded-lg border border-brand-200 bg-brand-50/30 p-4">
-          <h3 className="mb-4 font-medium text-gray-900">
+        <div className="mt-6 rounded-lg border border-herb-tint bg-herb-tint/30 p-4">
+          <h3 className="mb-4 font-medium text-ink">
             {formMode === 'add' ? 'Add New Address' : 'Edit Address'}
           </h3>
           <div className="space-y-4">
             {/* Address Label toggle buttons */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">Address type *</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">Address type *</label>
               <div className="flex gap-2">
                 {ADDRESS_LABELS.map((label) => (
                   <button
@@ -772,8 +772,8 @@ function AddressesTab() {
                     className={cn(
                       'rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all',
                       formData.label === label
-                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                        : 'border-gray-200 hover:border-brand-300 text-gray-600'
+                        ? 'border-herb bg-herb-tint text-herb'
+                        : 'border-mist hover:border-herb-tint text-ink-soft'
                     )}
                   >
                     {label}
@@ -784,7 +784,7 @@ function AddressesTab() {
 
             {/* Country dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">Country *</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">Country *</label>
               <select
                 value={formData.country}
                 onChange={(e) => updateField('country', e.target.value)}
@@ -799,7 +799,7 @@ function AddressesTab() {
 
             {/* State dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">State *</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">State *</label>
               <select
                 value={formData.state}
                 onChange={(e) => updateField('state', e.target.value)}
@@ -815,7 +815,7 @@ function AddressesTab() {
 
             {/* City dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">City *</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">City *</label>
               <select
                 value={formData.city}
                 onChange={(e) => updateField('city', e.target.value)}
@@ -856,9 +856,9 @@ function AddressesTab() {
                   type="checkbox"
                   checked={formData.isDefault}
                   onChange={(e) => updateField('isDefault', e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
                 />
-                <span className="text-gray-700">Set as default address</span>
+                <span className="text-ink-soft">Set as default address</span>
               </label>
             </div>
           </div>
@@ -875,12 +875,12 @@ function AddressesTab() {
 
       {loading ? (
         <div className="mt-6 flex justify-center py-8">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-brand-600" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-mist-strong border-t-brand-600" />
         </div>
       ) : addresses.length === 0 && formMode === 'hidden' ? (
         <div className="mt-6 text-center py-8">
-          <MapPin className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-2 text-sm text-gray-500">No saved addresses yet</p>
+          <MapPin className="mx-auto h-10 w-10 text-ink-muted" />
+          <p className="mt-2 text-sm text-ink-muted">No saved addresses yet</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={openAdd}>
             <Plus className="mr-1.5 h-4 w-4" />
             Add your first address
@@ -893,40 +893,40 @@ function AddressesTab() {
               key={address.id}
               className={cn(
                 'flex items-start justify-between rounded-lg border p-4',
-                editingId === address.id && formMode === 'edit' && 'border-brand-300 bg-brand-50/20'
+                editingId === address.id && formMode === 'edit' && 'border-herb-tint bg-herb-tint/20'
               )}
             >
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">{address.label}</span>
+                  <span className="font-medium text-ink">{address.label}</span>
                   {address.isDefault && (
                     <Badge variant="brand" size="sm">Default</Badge>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-ink-soft">
                   {address.line1}
                   {address.line2 && `, ${address.line2}`}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-ink-soft">
                   {address.city}, {address.state} {address.postalCode}
                 </p>
               </div>
               <div className="flex gap-1">
                 <button
-                  className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  className="rounded-md p-2 text-ink-muted hover:bg-mist hover:text-ink-soft"
                   onClick={() => openEdit(address)}
                   title="Edit address"
                 >
                   <Edit2 className="h-4 w-4" />
                 </button>
                 <button
-                  className="rounded-md p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-md p-2 text-ink-muted hover:bg-paprika-tint hover:text-paprika"
                   onClick={() => handleDelete(address.id)}
                   disabled={deletingId === address.id}
                   title="Delete address"
                 >
                   {deletingId === address.id ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-red-600" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-mist-strong border-t-red-600" />
                   ) : (
                     <Trash2 className="h-4 w-4" />
                   )}
@@ -947,9 +947,9 @@ function PaymentsTab() {
   ];
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
+    <div className="rounded-xl bg-bone p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Payment Methods</h2>
+        <h2 className="text-lg font-semibold text-ink">Payment Methods</h2>
         <button className="btn-outline">
           <Plus className="h-4 w-4" />
           Add New
@@ -963,28 +963,28 @@ function PaymentsTab() {
             className="flex items-center justify-between rounded-lg border p-4"
           >
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-16 items-center justify-center rounded bg-gray-100">
-                <CreditCard className="h-6 w-6 text-gray-400" />
+              <div className="flex h-12 w-16 items-center justify-center rounded bg-mist">
+                <CreditCard className="h-6 w-6 text-ink-muted" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900 capitalize">
+                  <span className="font-medium text-ink capitalize">
                     {method.type} •••• {method.last4}
                   </span>
                   {method.isDefault && (
-                    <span className="rounded bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
+                    <span className="rounded bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
                       Default
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500">Expires {method.expiry}</p>
+                <p className="text-sm text-ink-muted">Expires {method.expiry}</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="p-2 text-gray-400 hover:text-gray-600">
+              <button className="p-2 text-ink-muted hover:text-ink-soft">
                 <Edit2 className="h-4 w-4" />
               </button>
-              <button className="p-2 text-gray-400 hover:text-red-600">
+              <button className="p-2 text-ink-muted hover:text-paprika">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -1011,12 +1011,12 @@ function NotificationsTab() {
   };
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">Notification Preferences</h2>
+    <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-ink">Notification Preferences</h2>
 
       <div className="mt-6 space-y-6">
         <div>
-          <h3 className="font-medium text-gray-900">What to notify about</h3>
+          <h3 className="font-medium text-ink">What to notify about</h3>
           <div className="mt-4 space-y-4">
             {[
               { key: 'orderUpdates', label: 'Order updates', desc: 'Get notified about order status changes' },
@@ -1029,11 +1029,11 @@ function NotificationsTab() {
                   type="checkbox"
                   checked={settings[item.key as keyof typeof settings]}
                   onChange={() => toggleSetting(item.key as keyof typeof settings)}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  className="mt-1 h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
                 />
                 <div>
-                  <p className="font-medium text-gray-900">{item.label}</p>
-                  <p className="text-sm text-gray-500">{item.desc}</p>
+                  <p className="font-medium text-ink">{item.label}</p>
+                  <p className="text-sm text-ink-muted">{item.desc}</p>
                 </div>
               </label>
             ))}
@@ -1041,7 +1041,7 @@ function NotificationsTab() {
         </div>
 
         <div className="border-t pt-6">
-          <h3 className="font-medium text-gray-900">How to notify</h3>
+          <h3 className="font-medium text-ink">How to notify</h3>
           <div className="mt-4 space-y-4">
             {[
               { key: 'email', label: 'Email notifications' },
@@ -1049,15 +1049,15 @@ function NotificationsTab() {
               { key: 'sms', label: 'SMS notifications' },
             ].map((item) => (
               <label key={item.key} className="flex items-center justify-between">
-                <span className="text-gray-700">{item.label}</span>
+                <span className="text-ink-soft">{item.label}</span>
                 <button
                   onClick={() => toggleSetting(item.key as keyof typeof settings)}
                   className={`relative h-6 w-11 rounded-full transition-colors ${
-                    settings[item.key as keyof typeof settings] ? 'bg-brand-500' : 'bg-gray-300'
+                    settings[item.key as keyof typeof settings] ? 'bg-herb' : 'bg-mist-strong'
                   }`}
                 >
                   <span
-                    className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-bone shadow transition-transform ${
                       settings[item.key as keyof typeof settings] ? 'translate-x-5' : ''
                     }`}
                   />
@@ -1246,10 +1246,10 @@ function TwoFactorSection() {
 
   if (state === 'loading') {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-brand-600" />
-          <span className="text-sm text-gray-500">Loading 2FA status...</span>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-mist-strong border-t-brand-600" />
+          <span className="text-sm text-ink-muted">Loading 2FA status...</span>
         </div>
       </div>
     );
@@ -1257,12 +1257,12 @@ function TwoFactorSection() {
 
   if (state === 'disabled') {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
         <div className="mt-4 flex items-start gap-3">
-          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-gray-400" />
+          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" />
           <div>
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-ink-soft">
               Add an extra layer of security to your account by requiring a verification code from your authenticator app when signing in.
             </p>
           </div>
@@ -1276,21 +1276,21 @@ function TwoFactorSection() {
 
   if (state === 'setup') {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Set Up Two-Factor Authentication</h2>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Set Up Two-Factor Authentication</h2>
+        <p className="mt-1 text-sm text-ink-muted">
           Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)
         </p>
 
         <div className="mt-6 flex flex-col items-center gap-4">
-          <div className="rounded-lg border bg-white p-4">
+          <div className="rounded-lg border bg-bone p-4">
             <QRCodeSVG value={totpUri} size={200} level="M" />
           </div>
 
           <div className="w-full max-w-sm">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Manual entry key</p>
-            <div className="mt-1 flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2">
-              <code className="flex-1 text-sm font-mono text-gray-800 break-all select-all">
+            <p className="text-xs font-medium text-ink-muted uppercase tracking-wide">Manual entry key</p>
+            <div className="mt-1 flex items-center gap-2 rounded-lg border bg-paper px-3 py-2">
+              <code className="flex-1 text-sm font-mono text-ink break-all select-all">
                 {manualKey}
               </code>
               <button
@@ -1299,7 +1299,7 @@ function TwoFactorSection() {
                   navigator.clipboard.writeText(manualKey);
                   toast.success('Key copied');
                 }}
-                className="shrink-0 text-gray-400 hover:text-gray-600"
+                className="shrink-0 text-ink-muted hover:text-ink-soft"
               >
                 <Copy className="h-4 w-4" />
               </button>
@@ -1341,12 +1341,12 @@ function TwoFactorSection() {
 
   if (state === 'show-recovery-codes') {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Save Your Backup Codes</h2>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Save Your Backup Codes</h2>
 
-        <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <p className="text-sm text-amber-800">
+        <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber/30 bg-amber-tint p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
+          <p className="text-sm text-amber">
             Save these codes in a safe place. They won't be shown again. Each code can only be used once to sign in if you lose access to your authenticator app.
           </p>
         </div>
@@ -1355,7 +1355,7 @@ function TwoFactorSection() {
           {backupCodes.map((bc, i) => (
             <div
               key={i}
-              className="rounded-lg border bg-gray-50 px-3 py-2 text-center font-mono text-sm text-gray-800 select-all"
+              className="rounded-lg border bg-paper px-3 py-2 text-center font-mono text-sm text-ink select-all"
             >
               {bc}
             </div>
@@ -1378,9 +1378,9 @@ function TwoFactorSection() {
             type="checkbox"
             checked={codesSaved}
             onChange={(e) => setCodesSaved(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
           />
-          <span className="text-sm text-gray-700">I have saved these backup codes</span>
+          <span className="text-sm text-ink-soft">I have saved these backup codes</span>
         </label>
 
         <Button
@@ -1400,25 +1400,25 @@ function TwoFactorSection() {
 
   if (state === 'enabled') {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
+          <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
           <Badge variant="success">
             <ShieldCheck className="mr-1 h-3.5 w-3.5" />
             Enabled
           </Badge>
         </div>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-ink-muted">
           Your account is protected with two-factor authentication.
         </p>
 
         {backupCodesRemaining > 0 && (
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-ink-soft">
             <span className="font-medium">{backupCodesRemaining}</span> backup code{backupCodesRemaining !== 1 ? 's' : ''} remaining
           </p>
         )}
         {backupCodesRemaining === 0 && (
-          <div className="mt-2 flex items-start gap-2 text-sm text-amber-700">
+          <div className="mt-2 flex items-start gap-2 text-sm text-amber">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>No backup codes remaining. Regenerate them now.</span>
           </div>
@@ -1451,11 +1451,11 @@ function TwoFactorSection() {
   // disabling or regenerating — both need TOTP code confirmation
   const isDisabling = state === 'disabling';
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">
+    <div className="rounded-xl bg-bone p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-ink">
         {isDisabling ? 'Disable Two-Factor Authentication' : 'Regenerate Backup Codes'}
       </h2>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-ink-muted">
         Enter a code from your authenticator app to confirm.
       </p>
 
@@ -1541,20 +1541,20 @@ function SecurityTab() {
   return (
     <div className="space-y-6">
       {/* Password Section */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Password</h2>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Password</h2>
+        <p className="mt-1 text-sm text-ink-muted">
           Change your password to keep your account secure
         </p>
 
         {isSocialLogin ? (
-          <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber/30 bg-amber-tint p-4">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
             <div>
-              <p className="text-sm font-medium text-amber-800">
+              <p className="text-sm font-medium text-amber">
                 Password change is not available
               </p>
-              <p className="mt-1 text-sm text-amber-700">
+              <p className="mt-1 text-sm text-amber">
                 Your account uses {authProvider.charAt(0).toUpperCase() + authProvider.slice(1)} sign-in.
                 Password management is handled by your {authProvider.charAt(0).toUpperCase() + authProvider.slice(1)} account.
               </p>
@@ -1632,9 +1632,9 @@ function SecurityTab() {
       <TwoFactorSection />
 
       {/* Connected Accounts Section */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Connected Accounts</h2>
-        <p className="mt-1 text-sm text-gray-500">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Connected Accounts</h2>
+        <p className="mt-1 text-sm text-ink-muted">
           Manage your connected social accounts
         </p>
 
@@ -1646,11 +1646,11 @@ function SecurityTab() {
           ].map((account) => (
             <div
               key={account.name}
-              className="flex items-center justify-between rounded-lg border border-gray-200 p-3"
+              className="flex items-center justify-between rounded-lg border border-mist p-3"
             >
-              <span className="font-medium text-gray-900">{account.name}</span>
+              <span className="font-medium text-ink">{account.name}</span>
               {authProvider === account.provider ? (
-                <span className="flex items-center gap-1 text-sm text-green-600">
+                <span className="flex items-center gap-1 text-sm text-herb">
                   <Check className="h-4 w-4" />
                   Connected
                 </span>
@@ -1665,9 +1665,9 @@ function SecurityTab() {
       </div>
 
       {/* Delete Account Section */}
-      <div className="rounded-xl bg-red-50 p-6">
-        <h2 className="text-lg font-semibold text-red-800">Delete Account</h2>
-        <p className="mt-1 text-sm text-red-600">
+      <div className="rounded-xl bg-paprika-tint p-6">
+        <h2 className="text-lg font-semibold text-paprika">Delete Account</h2>
+        <p className="mt-1 text-sm text-paprika">
           Once you delete your account, there is no going back. Please be certain.
         </p>
         <Button variant="destructive" className="mt-4">

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MapPin, Clock, Heart, Award } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { cn } from '@/shared/utils/cn';
+import { hashStringToIndex } from '@/shared/utils/hash';
 import { CHEF_PLACEHOLDERS, FOOD_PLACEHOLDERS } from '@/shared/constants/images';
 import { Card, Badge, Avatar, RatingBadge, Button } from '@/shared/components/ui';
 
@@ -22,6 +22,16 @@ interface ChefCardProps {
   className?: string;
 }
 
+const MAX_CUISINES_VISIBLE = 3;
+
+function resolveCoverFallback(id: string): string {
+  return FOOD_PLACEHOLDERS[hashStringToIndex(id, FOOD_PLACEHOLDERS.length)]!;
+}
+
+function resolveAvatarFallback(id: string): string {
+  return CHEF_PLACEHOLDERS[hashStringToIndex(id, CHEF_PLACEHOLDERS.length)]!;
+}
+
 export function ChefCard({
   id,
   name,
@@ -38,8 +48,12 @@ export function ChefCard({
   onFavorite,
   className,
 }: ChefCardProps) {
-  const avatarUrl = avatar || CHEF_PLACEHOLDERS[parseInt(id) % CHEF_PLACEHOLDERS.length];
-  const coverUrl = coverImage || FOOD_PLACEHOLDERS[parseInt(id) % FOOD_PLACEHOLDERS.length];
+  const coverUrl = coverImage || resolveCoverFallback(id);
+  const avatarUrl = avatar || resolveAvatarFallback(id);
+  const coverFallback = resolveCoverFallback(id);
+
+  const visibleCuisines = cuisines?.slice(0, MAX_CUISINES_VISIBLE) ?? [];
+  const overflowCount = (cuisines?.length ?? 0) - visibleCuisines.length;
 
   return (
     <Card
@@ -50,37 +64,46 @@ export function ChefCard({
     >
       {/* Cover Image */}
       <div className="relative h-32 overflow-hidden">
-        <motion.img
+        <img
           src={coverUrl}
-          alt={`${name}'s kitchen`}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+          alt=""
           loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
+          onError={(e) => {
+            const img = e.currentTarget;
+            if (img.src !== coverFallback) img.src = coverFallback;
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        <div className="absolute inset-0 scrim-bottom" />
 
         {/* Favorite button */}
         {onFavorite && (
-          <motion.button
+          <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onFavorite();
             }}
-            whileTap={{ scale: 0.9 }}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-soft-md backdrop-blur-sm transition-all hover:bg-white hover:shadow-elevated"
+            aria-label={isFavorite ? `Remove ${name} from favorites` : `Save ${name} to favorites`}
+            aria-pressed={isFavorite}
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-bone/90 shadow-soft-md backdrop-blur-sm transition-all hover:bg-bone hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 active:scale-95"
           >
             <Heart
+              aria-hidden="true"
               className={cn(
                 'h-4 w-4 transition-colors',
-                isFavorite ? 'fill-spice-500 text-spice-500' : 'text-gray-600'
+                isFavorite ? 'fill-spice-500 text-herb' : 'text-ink-soft'
               )}
             />
-          </motion.button>
+          </button>
         )}
 
         {/* Verified badge */}
         {isVerified && (
           <Badge variant="success" size="sm" className="absolute left-3 top-3">
-            <Award className="h-3 w-3 mr-1" />
+            <Award aria-hidden="true" className="h-3 w-3 mr-1" />
             Verified
           </Badge>
         )}
@@ -92,31 +115,45 @@ export function ChefCard({
             alt={name}
             size="xl"
             ring="default"
-            className="border-4 border-white shadow-elevated"
+            className="border-4 border-bone shadow-elevated"
           />
         </div>
       </div>
 
       {/* Info */}
-      <div className="p-4 pt-12 text-center">
+      <div className="min-w-0 p-4 pt-12 text-center">
         <Link to={`/chefs/${id}`}>
-          <h3 className="font-semibold text-gray-900 text-lg group-hover:text-brand-600 transition-colors">
+          <h3
+            title={name}
+            className="truncate font-semibold text-ink text-lg group-hover:text-herb transition-colors"
+          >
             {name}
           </h3>
         </Link>
 
         {specialty && (
-          <p className="mt-1 text-sm text-brand-600">{specialty}</p>
+          <p title={specialty} className="mt-1 truncate text-sm text-herb">
+            {specialty}
+          </p>
         )}
 
         {/* Cuisines */}
-        {cuisines && cuisines.length > 0 && (
+        {visibleCuisines.length > 0 && (
           <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-            {cuisines.slice(0, 3).map((cuisine, index) => (
-              <Badge key={index} variant="default" size="sm">
+            {visibleCuisines.map((cuisine) => (
+              <Badge key={cuisine} variant="default" size="sm">
                 {cuisine}
               </Badge>
             ))}
+            {overflowCount > 0 && (
+              <Badge
+                variant="default"
+                size="sm"
+                aria-label={`${overflowCount} more cuisines`}
+              >
+                +{overflowCount}
+              </Badge>
+            )}
           </div>
         )}
 
@@ -128,28 +165,23 @@ export function ChefCard({
         )}
 
         {/* Meta */}
-        <div className="mt-3 flex items-center justify-center gap-4 text-sm text-gray-500">
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-ink-muted">
           {deliveryTime && (
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              <span>{deliveryTime}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <Clock aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="truncate">{deliveryTime}</span>
             </div>
           )}
           {distance && (
-            <div className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              <span>{distance}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <MapPin aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="truncate">{distance}</span>
             </div>
           )}
         </div>
 
         {/* CTA */}
-        <Button
-          asChild
-          variant="primary"
-          fullWidth
-          className="mt-4"
-        >
+        <Button asChild variant="primary" fullWidth className="mt-4">
           <Link to={`/chefs/${id}`}>View Menu</Link>
         </Button>
       </div>
@@ -170,7 +202,7 @@ export function ChefCardHorizontal({
   ChefCardProps,
   'id' | 'name' | 'avatar' | 'specialty' | 'rating' | 'deliveryTime' | 'isVerified'
 >) {
-  const avatarUrl = avatar || CHEF_PLACEHOLDERS[parseInt(id) % CHEF_PLACEHOLDERS.length];
+  const avatarUrl = avatar || resolveAvatarFallback(id);
 
   return (
     <Link to={`/chefs/${id}`}>
@@ -178,24 +210,30 @@ export function ChefCardHorizontal({
         <div className="relative shrink-0">
           <Avatar src={avatarUrl} alt={name} size="lg" />
           {isVerified && (
-            <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-fresh-500 text-white ring-2 ring-white">
-              <Award className="h-3 w-3" />
+            <div
+              aria-label="Verified chef"
+              title="Verified chef"
+              className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-fresh-500 text-paper ring-2 ring-white"
+            >
+              <Award aria-hidden="true" className="h-3 w-3" />
             </div>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 truncate">{name}</h4>
+          <h4 title={name} className="font-semibold text-ink truncate">
+            {name}
+          </h4>
           {specialty && (
-            <p className="text-sm text-brand-600 truncate">{specialty}</p>
+            <p title={specialty} className="text-sm text-herb truncate">
+              {specialty}
+            </p>
           )}
-          <div className="mt-1 flex items-center gap-3 text-sm text-gray-500">
-            {rating !== undefined && (
-              <RatingBadge value={rating} size="sm" />
-            )}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
+            {rating !== undefined && <RatingBadge value={rating} size="sm" />}
             {deliveryTime && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{deliveryTime}</span>
+              <div className="flex items-center gap-1 min-w-0">
+                <Clock aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span className="truncate">{deliveryTime}</span>
               </div>
             )}
           </div>
@@ -204,4 +242,3 @@ export function ChefCardHorizontal({
     </Link>
   );
 }
-

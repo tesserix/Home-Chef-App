@@ -88,28 +88,28 @@ export default function SettingsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load settings</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load settings</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#374151" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
+        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+          <ChevronLeft size={24} color="#4a4a47" />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-gray-900">Settings</Text>
+        <Text className="text-lg font-semibold text-ink">Settings</Text>
       </View>
 
       <ScrollView
@@ -118,95 +118,95 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Notification Preferences */}
-        <View className="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden">
-          <View className="px-4 py-3 border-b border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700">Notification Preferences</Text>
+        <View className="bg-bone rounded-2xl shadow-sm mb-4 overflow-hidden">
+          <View className="px-4 py-3 border-b border-mist">
+            <Text className="text-sm font-semibold text-ink-soft">Notification Preferences</Text>
           </View>
 
-          <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-100">
+          <View className="flex-row items-center justify-between px-4 py-4 border-b border-mist">
             <View className="flex-1 mr-4">
-              <Text className="text-base text-gray-900">New Order Notifications</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">
+              <Text className="text-base text-ink">New Order Notifications</Text>
+              <Text className="text-xs text-ink-muted mt-0.5">
                 Get notified when a new order arrives
               </Text>
             </View>
             <Switch
               value={notificationPrefs.newOrderNotifications}
               onValueChange={(v) => handleNotificationToggle('newOrderNotifications', v)}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
-              thumbColor={notificationPrefs.newOrderNotifications ? '#EA580C' : '#9CA3AF'}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              thumbColor={notificationPrefs.newOrderNotifications ? '#3e6b3c' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
 
-          <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-100">
+          <View className="flex-row items-center justify-between px-4 py-4 border-b border-mist">
             <View className="flex-1 mr-4">
-              <Text className="text-base text-gray-900">Payout Notifications</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">
+              <Text className="text-base text-ink">Payout Notifications</Text>
+              <Text className="text-xs text-ink-muted mt-0.5">
                 Get notified when payouts are processed
               </Text>
             </View>
             <Switch
               value={notificationPrefs.payoutNotifications}
               onValueChange={(v) => handleNotificationToggle('payoutNotifications', v)}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
-              thumbColor={notificationPrefs.payoutNotifications ? '#EA580C' : '#9CA3AF'}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              thumbColor={notificationPrefs.payoutNotifications ? '#3e6b3c' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
 
           <View className="flex-row items-center justify-between px-4 py-4">
             <View className="flex-1 mr-4">
-              <Text className="text-base text-gray-900">Review Notifications</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">
+              <Text className="text-base text-ink">Review Notifications</Text>
+              <Text className="text-xs text-ink-muted mt-0.5">
                 Get notified when customers leave reviews
               </Text>
             </View>
             <Switch
               value={notificationPrefs.reviewNotifications}
               onValueChange={(v) => handleNotificationToggle('reviewNotifications', v)}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
-              thumbColor={notificationPrefs.reviewNotifications ? '#EA580C' : '#9CA3AF'}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              thumbColor={notificationPrefs.reviewNotifications ? '#3e6b3c' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
         </View>
 
         {/* Availability */}
-        <View className="bg-white rounded-2xl shadow-sm mb-4 overflow-hidden">
-          <View className="px-4 py-3 border-b border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700">Availability</Text>
+        <View className="bg-bone rounded-2xl shadow-sm mb-4 overflow-hidden">
+          <View className="px-4 py-3 border-b border-mist">
+            <Text className="text-sm font-semibold text-ink-soft">Availability</Text>
           </View>
           <View className="flex-row items-center justify-between px-4 py-4">
             <View className="flex-1 mr-4">
-              <Text className="text-base text-gray-900">Accepting Orders</Text>
-              <Text className="text-xs text-gray-400 mt-0.5">
+              <Text className="text-base text-ink">Accepting Orders</Text>
+              <Text className="text-xs text-ink-muted mt-0.5">
                 Toggle to start or pause accepting orders
               </Text>
             </View>
             <Switch
               value={acceptingOrders}
               onValueChange={handleAcceptingOrdersToggle}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
-              thumbColor={acceptingOrders ? '#EA580C' : '#9CA3AF'}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              thumbColor={acceptingOrders ? '#3e6b3c' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
         </View>
 
         {/* Account */}
-        <View className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <View className="px-4 py-3 border-b border-gray-100">
-            <Text className="text-sm font-semibold text-gray-700">Account</Text>
+        <View className="bg-bone rounded-2xl shadow-sm overflow-hidden">
+          <View className="px-4 py-3 border-b border-mist">
+            <Text className="text-sm font-semibold text-ink-soft">Account</Text>
           </View>
 
           <TouchableOpacity
-            className="flex-row items-center justify-between px-4 py-4 border-b border-gray-100"
+            className="flex-row items-center justify-between px-4 py-4 border-b border-mist"
             activeOpacity={0.7}
             onPress={() => router.push('/(auth)/forgot-password' as never)}
           >
-            <Text className="text-base text-gray-900">Change Password</Text>
-            <Text className="text-gray-400 text-lg">›</Text>
+            <Text className="text-base text-ink">Change Password</Text>
+            <Text className="text-ink-muted text-lg">›</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -214,7 +214,7 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
             onPress={handleDeleteAccount}
           >
-            <Text className="text-base text-red-500">Delete Account</Text>
+            <Text className="text-base text-paprika">Delete Account</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

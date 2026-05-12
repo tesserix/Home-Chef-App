@@ -60,8 +60,8 @@ export default function PendingScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#F97316" />
+      <SafeAreaView className="flex-1 bg-bone items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
@@ -70,11 +70,11 @@ export default function PendingScreen() {
   const rejectionReason = status?.profile?.rejectionReason;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-bone">
       {/* Logout button */}
       <View className="flex-row justify-end px-6 pt-4">
         <TouchableOpacity onPress={handleLogout}>
-          <Text className="text-gray-500 font-medium">Logout</Text>
+          <Text className="text-ink-muted font-medium">Logout</Text>
         </TouchableOpacity>
       </View>
 
@@ -82,46 +82,46 @@ export default function PendingScreen() {
         {isRejected ? (
           <>
             {/* Rejected state */}
-            <View className="w-20 h-20 bg-red-100 rounded-full items-center justify-center mb-6">
+            <View className="w-20 h-20 bg-paprika-tint rounded-full items-center justify-center mb-6">
               <Text className="text-4xl">✗</Text>
             </View>
-            <Text className="text-2xl font-bold text-gray-900 text-center mb-3">
+            <Text className="font-display text-2xl font-semibold text-ink text-center mb-3">
               Application Not Approved
             </Text>
-            <Text className="text-gray-500 text-center mb-4">
+            <Text className="text-ink-muted text-center mb-4">
               Unfortunately your application was not approved at this time.
             </Text>
             {rejectionReason ? (
-              <View className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 w-full mb-6">
-                <Text className="text-red-700 text-sm font-medium mb-1">Reason:</Text>
-                <Text className="text-red-600 text-sm">{rejectionReason}</Text>
+              <View className="bg-paprika-tint border border-paprika/30 rounded-xl px-4 py-3 w-full mb-6">
+                <Text className="text-paprika text-sm font-medium mb-1">Reason:</Text>
+                <Text className="text-paprika text-sm">{rejectionReason}</Text>
               </View>
             ) : null}
             <TouchableOpacity
               onPress={handleReapply}
-              className="w-full bg-orange-500 py-4 rounded-xl items-center"
+              className="w-full bg-herb py-4 rounded-xl items-center"
             >
-              <Text className="text-white font-semibold text-base">Reapply</Text>
+              <Text className="text-paper font-semibold text-base">Reapply</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             {/* Pending review state */}
-            <View className="w-20 h-20 bg-orange-100 rounded-full items-center justify-center mb-6">
-              <ActivityIndicator size="large" color="#F97316" />
+            <View className="w-20 h-20 bg-herb-tint rounded-full items-center justify-center mb-6">
+              <ActivityIndicator size="large" color="#3e6b3c" />
             </View>
-            <Text className="text-2xl font-bold text-gray-900 text-center mb-3">
+            <Text className="font-display text-2xl font-semibold text-ink text-center mb-3">
               Application Under Review
             </Text>
-            <Text className="text-gray-500 text-center mb-4">
+            <Text className="text-ink-muted text-center mb-4">
               Your application has been submitted and is being reviewed by our team.
             </Text>
-            <View className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 w-full mb-4">
-              <Text className="text-orange-800 text-sm text-center">
+            <View className="bg-herb-tint border border-herb-tint rounded-xl px-4 py-3 w-full mb-4">
+              <Text className="text-herb text-sm text-center">
                 Estimated review time: 24–48 hours
               </Text>
             </View>
-            <Text className="text-gray-400 text-sm text-center">
+            <Text className="text-ink-muted text-sm text-center">
               We'll notify you once your application is approved. This page checks for updates automatically every 30 seconds.
             </Text>
           </>

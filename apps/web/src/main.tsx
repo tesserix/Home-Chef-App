@@ -13,12 +13,11 @@ if (!rootElement) {
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/',
-      });
-      console.log('SW registered:', registration.scope);
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     } catch (error) {
-      console.error('SW registration failed:', error);
+      // SW registration failure is non-fatal; degrade silently to no-offline mode.
+      // Surface to error monitoring if you wire one up.
+      void error;
     }
   });
 }

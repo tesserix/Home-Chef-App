@@ -4,17 +4,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Navigation,
   Package,
-  DollarSign,
-  Star,
-  TrendingUp,
-  Truck,
-  Power,
-  Wifi,
-  AlertCircle,
-  CheckCircle2,
-  Users,
-  ShieldCheck,
-  Clock,
   ArrowRight,
 } from 'lucide-react';
 import type { DashboardStats } from '@/shared/types';
@@ -45,7 +34,12 @@ interface OnboardingStatusResponse {
   status: string;
 }
 
-// Fleet manager / staff dashboard
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    .format(amount);
+
+// ---------- Fleet staff dashboard ----------
+
 function StaffDashboard({ staffProfile }: { staffProfile: StaffProfile }) {
   const { data: overview, isLoading } = useQuery({
     queryKey: ['fleet-overview'],
@@ -60,125 +54,105 @@ function StaffDashboard({ staffProfile }: { staffProfile: StaffProfile }) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
-  const liveStats = [
-    { label: 'Online Partners', value: overview?.onlinePartners ?? 0, icon: Wifi, color: 'text-success', bg: 'bg-success/10' },
-    { label: 'Active Deliveries', value: overview?.activeDeliveries ?? 0, icon: Truck, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Unassigned Orders', value: overview?.unassignedOrders ?? 0, icon: AlertCircle, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: "Today's Completed", value: overview?.todayCompleted ?? 0, icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
-  ];
+  const pending = overview?.pendingVerification ?? 0;
+  const unassigned = overview?.unassignedOrders ?? 0;
+
+  // Pick the most urgent right-side CTA: unassigned orders > pending verifications
+  const urgent = unassigned > 0
+    ? { count: unassigned, label: `Unassigned ${unassigned === 1 ? 'order' : 'orders'}`, subtitle: 'Needs dispatcher attention', to: '/fleet' }
+    : pending > 0
+      ? { count: pending, label: `Pending ${pending === 1 ? 'verification' : 'verifications'}`, subtitle: 'Partners awaiting review', to: '/fleet/partners' }
+      : null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-description">Welcome back — {roleLabel}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-ink-soft">{roleLabel} · Welcome back.</p>
         </div>
         <Link
           to="/fleet"
-          className="flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
+          className="inline-flex items-center gap-2 rounded-md border border-mist bg-bone px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
         >
-          Fleet Overview
+          Fleet overview
           <ArrowRight className="h-4 w-4" />
         </Link>
-      </div>
+      </header>
 
-      {/* Live Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {liveStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.label} className="rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                <div className={`rounded-lg p-1.5 ${stat.bg}`}>
-                  <Icon className={`h-4 w-4 ${stat.color}`} />
-                </div>
-                <span className="text-xs font-medium">{stat.label}</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Partner Summary */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Partner Summary</h2>
-        <div className="grid grid-cols-3 gap-4 text-center">
-          {[
-            { label: 'Total Partners', value: overview?.totalPartners ?? 0, icon: Users },
-            { label: 'Verified', value: overview?.verifiedPartners ?? 0, icon: ShieldCheck },
-            { label: 'Pending Verification', value: overview?.pendingVerification ?? 0, icon: Clock },
-          ].map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <div key={stat.label}>
-                <div className="flex justify-center mb-2">
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Today's Earnings + Quick Links */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <DollarSign className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Today's Fleet Earnings</p>
-              <p className="text-2xl font-bold text-foreground">
-                ${(overview?.todayEarnings ?? 0).toFixed(2)}
-              </p>
-            </div>
-          </div>
+      {/* Lead block — Today's fleet earnings + urgent CTA */}
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
+        <div>
+          <p className="text-sm text-ink-soft">Today's fleet earnings</p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+            {formatCurrency(overview?.todayEarnings ?? 0)}
+          </p>
+          <p className="mt-2 text-sm text-ink-soft tabular-nums">
+            {overview?.todayCompleted ?? 0}{' '}
+            {overview?.todayCompleted === 1 ? 'delivery' : 'deliveries'} completed today
+          </p>
         </div>
 
-        <Link
-          to="/fleet/partners"
-          className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:bg-secondary"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Users className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Manage Partners</p>
-            <p className="text-sm text-muted-foreground">
-              View, verify, and manage delivery partners
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {(overview?.pendingVerification ?? 0) > 0 && (
-        <Link
-          to="/fleet/partners"
-          className="block rounded-xl border-2 border-warning bg-warning/5 p-5 transition-colors hover:bg-warning/10"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
-              <Clock className="h-6 w-6 text-warning" />
-            </div>
+        {urgent ? (
+          <Link
+            to={urgent.to}
+            aria-label={urgent.label}
+            className="group flex items-center justify-between gap-4 rounded-lg bg-amber px-5 py-4 text-foreground transition-colors hover:bg-amber/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+          >
             <div>
-              <p className="font-semibold text-foreground">Pending Verifications</p>
-              <p className="text-sm text-muted-foreground">
-                {overview?.pendingVerification} partners awaiting review
-              </p>
+              <p className="text-3xl font-semibold tabular-nums">{urgent.count}</p>
+              <p className="mt-0.5 text-sm">{urgent.label.charAt(0).toUpperCase() + urgent.label.slice(1).toLowerCase()}</p>
+              <p className="mt-0.5 text-xs text-ink-soft">{urgent.subtitle}</p>
             </div>
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
+        ) : (
+          <div className="rounded-lg border border-mist bg-bone px-5 py-4">
+            <p className="text-3xl font-semibold tabular-nums text-foreground">All clear</p>
+            <p className="mt-0.5 text-sm text-ink-soft">No unassigned orders or pending partners.</p>
           </div>
-        </Link>
-      )}
+        )}
+      </section>
+
+      {/* Stats strip */}
+      <section
+        aria-label="Fleet at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow
+          label="Online partners"
+          value={overview?.onlinePartners ?? 0}
+          subtitle={`${overview?.offlinePartners ?? 0} offline`}
+        />
+        <StatRow label="Active deliveries" value={overview?.activeDeliveries ?? 0} />
+        <StatRow
+          label="Verified partners"
+          value={overview?.verifiedPartners ?? 0}
+          subtitle={`of ${overview?.totalPartners ?? 0} total`}
+        />
+        <StatRow label="Completed today" value={overview?.todayCompleted ?? 0} />
+      </section>
+
+      {/* Shortcuts */}
+      <section aria-label="Shortcuts" className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Shortcuts</h2>
+        <nav className="divide-y divide-mist rounded-lg border border-mist bg-bone">
+          <QuickAction
+            to="/fleet/partners"
+            title="Manage partners"
+            subtitle="View, verify, and manage delivery partners"
+          />
+          <QuickAction to="/fleet" title="Fleet overview" subtitle="Real-time fleet state" />
+        </nav>
+      </section>
     </div>
   );
 }
 
-// Regular delivery partner dashboard
+// ---------- Delivery partner dashboard ----------
+
 function PartnerDashboard() {
   const queryClient = useQueryClient();
 
@@ -200,138 +174,172 @@ function PartnerDashboard() {
   if (isLoading) return <PageLoader />;
 
   const isOnline = stats?.partner?.isOnline ?? false;
+  const activeCount = stats?.active ?? 0;
+  const availableCount = stats?.availableOrders ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-description">Welcome back, partner</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-herb' : 'bg-ink-muted'}`}
+              aria-hidden
+            />
+            {isOnline ? 'Ready for deliveries' : 'Currently offline'}
+          </p>
         </div>
         <button
+          type="button"
           onClick={() => toggleOnline.mutate(!isOnline)}
           disabled={toggleOnline.isPending}
-          className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all ${
+          aria-pressed={isOnline}
+          aria-label={isOnline ? 'Go offline' : 'Go online'}
+          className={`inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 disabled:opacity-50 ${
             isOnline
-              ? 'bg-success text-success-foreground shadow-md'
-              : 'bg-muted text-muted-foreground'
+              ? 'bg-foreground text-background hover:bg-ink-soft'
+              : 'border border-mist bg-bone text-foreground hover:bg-mist'
           }`}
         >
-          <Power className="h-4 w-4" />
-          {isOnline ? 'Online' : 'Offline'}
+          {isOnline ? 'Go offline' : 'Go online'}
         </button>
-      </div>
+      </header>
 
-      {!isOnline && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-center">
-          <p className="text-sm font-medium text-warning">
-            You are currently offline. Go online to receive delivery requests.
+      {/* Lead block — Today's earnings + active delivery CTA if any */}
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
+        <div>
+          <p className="text-sm text-ink-soft">Today's earnings</p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+            {formatCurrency(stats?.today?.earnings ?? 0)}
+          </p>
+          <p className="mt-2 text-sm text-ink-soft tabular-nums">
+            From {stats?.today?.deliveries ?? 0}{' '}
+            {stats?.today?.deliveries === 1 ? 'delivery' : 'deliveries'} today
           </p>
         </div>
-      )}
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Truck className="h-4 w-4" />
-            <span className="text-xs font-medium">Today</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">{stats?.today?.deliveries ?? 0}</p>
-          <p className="text-xs text-muted-foreground">deliveries</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <DollarSign className="h-4 w-4" />
-            <span className="text-xs font-medium">Today's Earnings</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">
-            ${(stats?.today?.earnings ?? 0).toFixed(2)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <TrendingUp className="h-4 w-4" />
-            <span className="text-xs font-medium">This Week</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">
-            ${(stats?.week?.earnings ?? 0).toFixed(2)}
-          </p>
-          <p className="text-xs text-muted-foreground">{stats?.week?.deliveries ?? 0} deliveries</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Star className="h-4 w-4" />
-            <span className="text-xs font-medium">Rating</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">
-            {(stats?.partner?.rating ?? 0).toFixed(1)}
-          </p>
-          <p className="text-xs text-muted-foreground">{stats?.totalReviews ?? 0} reviews</p>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {(stats?.active ?? 0) > 0 && (
+        {activeCount > 0 ? (
           <Link
             to="/active"
-            className="flex items-center gap-4 rounded-xl border-2 border-primary bg-primary/5 p-5 transition-colors hover:bg-primary/10"
+            aria-label="Continue active delivery"
+            className="group flex items-center justify-between gap-4 rounded-lg bg-herb px-5 py-4 text-paper transition-colors hover:bg-herb-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Navigation className="h-6 w-6 text-primary" />
-            </div>
             <div>
-              <p className="font-semibold text-foreground">Active Delivery</p>
-              <p className="text-sm text-muted-foreground">You have an ongoing delivery</p>
+              <p className="text-3xl font-semibold tabular-nums">In progress</p>
+              <p className="mt-0.5 text-sm text-paper/80">Continue active delivery</p>
             </div>
+            <Navigation className="h-5 w-5 transition-transform group-hover:translate-x-0.5" aria-hidden />
           </Link>
+        ) : availableCount > 0 ? (
+          <Link
+            to="/available"
+            aria-label={`${availableCount} available orders`}
+            className="group flex items-center justify-between gap-4 rounded-lg border border-mist bg-bone px-5 py-4 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+          >
+            <div>
+              <p className="text-3xl font-semibold tabular-nums text-foreground">
+                {availableCount} {availableCount === 1 ? 'order' : 'orders'}
+              </p>
+              <p className="mt-0.5 text-sm text-ink-soft">Waiting nearby</p>
+            </div>
+            <Package className="h-5 w-5 text-herb transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
+        ) : (
+          <div className="rounded-lg border border-mist bg-bone px-5 py-4">
+            <p className="text-3xl font-semibold tabular-nums text-foreground">
+              {isOnline ? 'Standing by' : 'You\'re offline'}
+            </p>
+            <p className="mt-0.5 text-sm text-ink-soft">
+              {isOnline ? 'New deliveries will appear here.' : 'Go online to receive requests.'}
+            </p>
+          </div>
         )}
+      </section>
 
-        <Link
-          to="/available"
-          className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:bg-secondary"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-            <Package className="h-6 w-6 text-accent-foreground" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Available Orders</p>
-            <p className="text-sm text-muted-foreground">
-              {stats?.availableOrders ?? 0} orders waiting
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {/* Monthly Summary */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">This Month</h2>
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats?.month?.deliveries ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Deliveries</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">
-              ${(stats?.month?.earnings ?? 0).toFixed(2)}
-            </p>
-            <p className="text-xs text-muted-foreground">Earnings</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats?.totalDeliveries ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Total All Time</p>
-          </div>
-        </div>
-      </div>
+      {/* Stats strip */}
+      <section
+        aria-label="Performance at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow
+          label="This week"
+          value={formatCurrency(stats?.week?.earnings ?? 0)}
+          subtitle={`${stats?.week?.deliveries ?? 0} deliveries`}
+        />
+        <StatRow
+          label="This month"
+          value={formatCurrency(stats?.month?.earnings ?? 0)}
+          subtitle={`${stats?.month?.deliveries ?? 0} deliveries`}
+        />
+        <StatRow
+          label="Rating"
+          value={(stats?.partner?.rating ?? 0).toFixed(1)}
+          subtitle={stats?.totalReviews ? `${stats.totalReviews} reviews` : 'No reviews yet'}
+        />
+        <StatRow
+          label="All time"
+          value={stats?.totalDeliveries ?? 0}
+          subtitle="deliveries"
+        />
+      </section>
     </div>
   );
 }
 
+function StatRow({
+  label,
+  value,
+  subtitle,
+}: {
+  label: string;
+  value: string | number;
+  subtitle?: string;
+}) {
+  return (
+    <div className="px-4 py-4 sm:px-5">
+      <p className="text-sm text-ink-soft">{label}</p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+        {value}
+      </p>
+      {subtitle && <p className="mt-0.5 text-xs text-ink-soft tabular-nums">{subtitle}</p>}
+    </div>
+  );
+}
+
+function QuickAction({
+  to,
+  title,
+  subtitle,
+}: {
+  to: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-mist/60 first:rounded-t-lg last:rounded-b-lg"
+    >
+      <div className="min-w-0">
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="truncate text-sm text-ink-soft">{subtitle}</p>
+      </div>
+      <ArrowRight
+        className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-herb"
+        aria-hidden
+      />
+    </Link>
+  );
+}
+
+// ---------- Router shell ----------
+
 export default function DashboardPage() {
   const navigate = useNavigate();
 
-  // Check if user is a staff member (fleet_manager, delivery_ops, super_admin)
   const { data: staffProfile, isLoading: staffLoading } = useQuery({
     queryKey: ['delivery-staff-me'],
     queryFn: () => apiClient.get<StaffProfile>('/delivery/staff/me'),
@@ -341,7 +349,6 @@ export default function DashboardPage() {
 
   const isStaff = !!staffProfile?.id;
 
-  // Check onboarding status for non-staff users
   const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery({
     queryKey: ['onboarding-status'],
     queryFn: () => apiClient.get<OnboardingStatusResponse>('/driver/onboarding/status'),
@@ -350,7 +357,6 @@ export default function DashboardPage() {
     staleTime: 60 * 1000,
   });
 
-  // Redirect non-staff users based on onboarding status
   useEffect(() => {
     if (staffLoading || isStaff) return;
     if (onboardingLoading || !onboardingStatus) return;
@@ -362,20 +368,16 @@ export default function DashboardPage() {
     } else if (status === 'submitted' || status === 'in_review' || status === 'rejected') {
       navigate('/onboarding/status', { replace: true });
     }
-    // If approved, stay on dashboard
   }, [staffLoading, isStaff, onboardingLoading, onboardingStatus, navigate]);
 
-  // While checking staff status, show loader briefly
   if (staffLoading) return <PageLoader />;
 
   if (isStaff) {
     return <StaffDashboard staffProfile={staffProfile} />;
   }
 
-  // While checking onboarding status for non-staff, show loader
   if (onboardingLoading) return <PageLoader />;
 
-  // If status requires redirect, show loader while navigating
   if (onboardingStatus) {
     const status = onboardingStatus.status;
     if (status !== 'approved') {

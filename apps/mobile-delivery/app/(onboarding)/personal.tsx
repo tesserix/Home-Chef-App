@@ -79,27 +79,27 @@ export default function PersonalScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
+    <SafeAreaView className="flex-1 bg-bone" edges={['bottom']}>
       <ScrollView className="flex-1 px-6" keyboardShouldPersistTaps="handled">
         {/* Progress bar */}
-        <View className="mt-4 mb-6 h-1 bg-gray-200 rounded-full">
-          <View className="h-1 bg-orange-500 rounded-full" style={{ width: '16.67%' }} />
+        <View className="mt-4 mb-6 h-1 bg-mist rounded-full">
+          <View className="h-1 bg-herb rounded-full" style={{ width: '16.67%' }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-2">Personal Information</Text>
-        <Text className="text-gray-500 mb-6">Tell us about yourself to get started</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-2">Personal Information</Text>
+        <Text className="text-ink-muted mb-6">Tell us about yourself to get started</Text>
 
         {/* City */}
         <View className="mb-4">
-          <Text className="text-sm font-medium text-gray-700 mb-1">
-            City <Text className="text-red-500">*</Text>
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            City <Text className="text-paprika">*</Text>
           </Text>
           <Controller
             control={control}
             name="city"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.city ? 'border-red-500' : 'border-gray-300'}`}
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.city ? 'border-paprika' : 'border-mist-strong'}`}
                 placeholder="Enter your city"
                 onBlur={onBlur}
                 onChangeText={onChange}
@@ -108,14 +108,14 @@ export default function PersonalScreen() {
             )}
           />
           {errors.city && (
-            <Text className="text-red-500 text-sm mt-1">{errors.city.message}</Text>
+            <Text className="text-paprika text-sm mt-1">{errors.city.message}</Text>
           )}
         </View>
 
         {/* Vehicle Type */}
         <View className="mb-4">
-          <Text className="text-sm font-medium text-gray-700 mb-2">
-            Vehicle Type <Text className="text-red-500">*</Text>
+          <Text className="text-sm font-medium text-ink-soft mb-2">
+            Vehicle Type <Text className="text-paprika">*</Text>
           </Text>
           <Controller
             control={control}
@@ -128,13 +128,13 @@ export default function PersonalScreen() {
                     onPress={() => onChange(type.value)}
                     className={`px-4 py-2 rounded-full border ${
                       value === type.value
-                        ? 'bg-orange-500 border-orange-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-herb border-herb'
+                        : 'bg-bone border-mist-strong'
                     }`}
                   >
                     <Text
                       className={`font-medium ${
-                        value === type.value ? 'text-white' : 'text-gray-700'
+                        value === type.value ? 'text-paper' : 'text-ink-soft'
                       }`}
                     >
                       {type.label}
@@ -145,21 +145,21 @@ export default function PersonalScreen() {
             )}
           />
           {errors.vehicleType && (
-            <Text className="text-red-500 text-sm mt-1">{errors.vehicleType.message}</Text>
+            <Text className="text-paprika text-sm mt-1">{errors.vehicleType.message}</Text>
           )}
         </View>
 
         {/* Emergency Contact Name */}
         <View className="mb-4">
-          <Text className="text-sm font-medium text-gray-700 mb-1">
-            Emergency Contact Name <Text className="text-red-500">*</Text>
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Emergency Contact Name <Text className="text-paprika">*</Text>
           </Text>
           <Controller
             control={control}
             name="emergencyContact"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.emergencyContact ? 'border-red-500' : 'border-gray-300'}`}
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.emergencyContact ? 'border-paprika' : 'border-mist-strong'}`}
                 placeholder="Full name of emergency contact"
                 onBlur={onBlur}
                 onChangeText={onChange}
@@ -168,21 +168,21 @@ export default function PersonalScreen() {
             )}
           />
           {errors.emergencyContact && (
-            <Text className="text-red-500 text-sm mt-1">{errors.emergencyContact.message}</Text>
+            <Text className="text-paprika text-sm mt-1">{errors.emergencyContact.message}</Text>
           )}
         </View>
 
         {/* Emergency Phone */}
         <View className="mb-4">
-          <Text className="text-sm font-medium text-gray-700 mb-1">
-            Emergency Contact Phone <Text className="text-red-500">*</Text>
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Emergency Contact Phone <Text className="text-paprika">*</Text>
           </Text>
           <Controller
             control={control}
             name="emergencyPhone"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                className={`border rounded-lg px-4 py-3 text-gray-900 ${errors.emergencyPhone ? 'border-red-500' : 'border-gray-300'}`}
+                className={`border rounded-lg px-4 py-3 text-ink ${errors.emergencyPhone ? 'border-paprika' : 'border-mist-strong'}`}
                 placeholder="10-digit mobile number"
                 keyboardType="phone-pad"
                 maxLength={10}
@@ -193,21 +193,21 @@ export default function PersonalScreen() {
             )}
           />
           {errors.emergencyPhone && (
-            <Text className="text-red-500 text-sm mt-1">{errors.emergencyPhone.message}</Text>
+            <Text className="text-paprika text-sm mt-1">{errors.emergencyPhone.message}</Text>
           )}
         </View>
 
         {/* Date of Birth (optional) */}
         <View className="mb-8">
-          <Text className="text-sm font-medium text-gray-700 mb-1">
-            Date of Birth <Text className="text-gray-400">(optional)</Text>
+          <Text className="text-sm font-medium text-ink-soft mb-1">
+            Date of Birth <Text className="text-ink-muted">(optional)</Text>
           </Text>
           <Controller
             control={control}
             name="dateOfBirth"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-gray-900"
+                className="border border-mist-strong rounded-lg px-4 py-3 text-ink"
                 placeholder="MM/DD/YYYY"
                 onBlur={onBlur}
                 onChangeText={onChange}
@@ -219,16 +219,16 @@ export default function PersonalScreen() {
       </ScrollView>
 
       {/* Next Button */}
-      <View className="px-6 py-4 border-t border-gray-100">
+      <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting}
-          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-herb-soft' : 'bg-herb'}`}
         >
           {isSubmitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-base">Next</Text>
+            <Text className="text-paper font-semibold text-base">Next</Text>
           )}
         </TouchableOpacity>
       </View>

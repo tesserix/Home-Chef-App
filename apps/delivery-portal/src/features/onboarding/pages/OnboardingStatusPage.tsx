@@ -64,7 +64,7 @@ export default function OnboardingStatusPage() {
             <Truck className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-foreground">Application Status</h1>
+            <h1 className="text-lg font-medium text-foreground">Application Status</h1>
             <p className="text-xs text-muted-foreground">Delivery Partner Onboarding</p>
           </div>
         </div>
@@ -81,8 +81,8 @@ export default function OnboardingStatusPage() {
                 <XCircle className="h-10 w-10 text-destructive" />
               </div>
             ) : isInReview ? (
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50">
-                <RefreshCw className="h-10 w-10 text-amber-600 animate-spin" style={{ animationDuration: '3s' }} />
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-tint">
+                <RefreshCw className="h-10 w-10 text-amber animate-spin" style={{ animationDuration: '3s' }} />
               </div>
             ) : (
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
@@ -92,7 +92,7 @@ export default function OnboardingStatusPage() {
           </div>
 
           {/* Status Title */}
-          <h2 className="text-xl font-bold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             {isRejected
               ? 'Application Needs Changes'
               : isInReview

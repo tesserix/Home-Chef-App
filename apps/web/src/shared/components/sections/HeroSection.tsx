@@ -64,7 +64,7 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
           alt=""
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-white/70" />
+        <div className="absolute inset-0 bg-paper/0" />
       </div>
 
       {/* Content */}
@@ -73,7 +73,7 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
           <h1 className="hero-title">
             {content.title}
             <br />
-            <span className="text-brand-600">{content.titleHighlight}</span>
+            <span className="text-herb">{content.titleHighlight}</span>
           </h1>
           <p className="hero-description">
             {content.description}
@@ -100,12 +100,12 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
 function SearchBar() {
   return (
     <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-      <div className="flex flex-1 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-        <MapPin className="h-5 w-5 text-gray-400" />
+      <div className="flex flex-1 items-center gap-3 rounded-xl border border-mist bg-bone px-4 py-3 shadow-sm focus-within:border-herb focus-within:ring-2 focus-within:ring-herb/20">
+        <MapPin className="h-5 w-5 text-ink-muted" />
         <input
           type="text"
           placeholder="Enter your delivery address"
-          className="flex-1 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
+          className="flex-1 bg-transparent text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-herb/40 focus:ring-offset-2 rounded"
         />
       </div>
       <button className="btn-primary flex items-center gap-2 whitespace-nowrap">
@@ -129,12 +129,12 @@ function Stats() {
         const Icon = stat.icon;
         return (
           <div key={index} className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100">
-              <Icon className="h-6 w-6 text-brand-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-herb-tint">
+              <Icon className="h-6 w-6 text-herb" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              <p className="text-sm text-gray-500">{stat.label}</p>
+              <p className="font-display text-2xl font-semibold text-ink">{stat.value}</p>
+              <p className="text-sm text-ink-muted">{stat.label}</p>
             </div>
           </div>
         );
@@ -171,10 +171,10 @@ export function PageHero({
           />
         </div>
       )}
-      <div className="container-app relative text-center text-white">
-        <h1 className="text-3xl font-bold md:text-4xl">{title}</h1>
+      <div className="container-app relative text-center text-paper">
+        <h2 className="font-display text-3xl font-semibold tabular-nums md:text-4xl">{title}</h2>
         {description && (
-          <p className="mx-auto mt-3 max-w-2xl text-lg text-white/80">
+          <p className="mx-auto mt-3 max-w-2xl text-lg text-paper/80">
             {description}
           </p>
         )}

@@ -206,7 +206,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
             </button>
           </div>
           {referralStatus === 'valid' && (
-            <p className="mt-1.5 flex items-center gap-1 text-sm text-green-600">
+            <p className="mt-1.5 flex items-center gap-1 text-sm text-herb">
               <CheckCircle className="h-4 w-4" />
               Referred by {referrerName}
             </p>

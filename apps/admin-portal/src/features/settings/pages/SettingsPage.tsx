@@ -152,8 +152,8 @@ function PaymentGatewayCard() {
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                   data.configured
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
+                    ? 'bg-herb-tint text-herb'
+                    : 'bg-paprika-tint text-paprika'
                 }`}
               >
                 {data.configured ? 'Connected' : 'Disconnected'}
@@ -180,8 +180,8 @@ function PaymentGatewayCard() {
         <div
           className={`mt-4 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
             saveFeedback.kind === 'success'
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-700'
+              ? 'border-herb/30 bg-herb-tint text-herb'
+              : 'border-paprika/30 bg-paprika-tint text-paprika'
           }`}
         >
           <span>{saveFeedback.message}</span>
@@ -261,7 +261,7 @@ function PaymentGatewayCard() {
             Loading...
           </div>
         ) : isError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-lg border border-paprika/30 bg-paprika-tint px-4 py-3 text-sm text-paprika">
             Failed to fetch payment gateway status
           </div>
         ) : data ? (
@@ -272,8 +272,8 @@ function PaymentGatewayCard() {
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                   data.mode === 'live'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-yellow-100 text-yellow-700'
+                    ? 'bg-herb-tint text-herb'
+                    : 'bg-amber-tint text-amber'
                 }`}
               >
                 {data.mode === 'live' ? 'Live Mode' : 'Test Mode'}
@@ -301,7 +301,7 @@ function PaymentGatewayCard() {
                   title="Copy webhook URL"
                 >
                   {copied ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-herb" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
@@ -313,11 +313,11 @@ function PaymentGatewayCard() {
             <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
               <span className="text-foreground">Webhook Secret</span>
               {data.webhookSecretSet ? (
-                <span className="flex items-center gap-1 text-xs text-green-600">
+                <span className="flex items-center gap-1 text-xs text-herb">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Configured
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-xs text-red-600">
+                <span className="flex items-center gap-1 text-xs text-paprika">
                   ✕ Not configured
                 </span>
               )}
@@ -325,7 +325,7 @@ function PaymentGatewayCard() {
 
             {/* Error */}
             {data.error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-lg border border-paprika/30 bg-paprika-tint px-4 py-3 text-sm text-paprika">
                 {data.error}
               </div>
             )}
@@ -428,7 +428,7 @@ function StripeGatewayCard() {
             {data && (
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  data.configured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  data.configured ? 'bg-herb-tint text-herb' : 'bg-paprika-tint text-paprika'
                 }`}
               >
                 {data.configured ? 'Connected' : 'Disconnected'}
@@ -455,8 +455,8 @@ function StripeGatewayCard() {
         <div
           className={`mt-4 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
             saveFeedback.kind === 'success'
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-700'
+              ? 'border-herb/30 bg-herb-tint text-herb'
+              : 'border-paprika/30 bg-paprika-tint text-paprika'
           }`}
         >
           <span>{saveFeedback.message}</span>
@@ -534,7 +534,7 @@ function StripeGatewayCard() {
         ) : isLoading ? (
           <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">Loading...</div>
         ) : isError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-lg border border-paprika/30 bg-paprika-tint px-4 py-3 text-sm text-paprika">
             Failed to fetch Stripe gateway status
           </div>
         ) : data ? (
@@ -544,8 +544,8 @@ function StripeGatewayCard() {
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                   data.mode === 'live'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-yellow-100 text-yellow-700'
+                    ? 'bg-herb-tint text-herb'
+                    : 'bg-amber-tint text-amber'
                 }`}
               >
                 {data.mode === 'live' ? 'Live Mode' : 'Test Mode'}
@@ -562,11 +562,11 @@ function StripeGatewayCard() {
             <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
               <span className="text-foreground">Publishable Key</span>
               {data.publishableKeySet ? (
-                <span className="flex items-center gap-1 text-xs text-green-600">
+                <span className="flex items-center gap-1 text-xs text-herb">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Configured
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-xs text-red-600">✕ Not configured</span>
+                <span className="flex items-center gap-1 text-xs text-paprika">✕ Not configured</span>
               )}
             </div>
 
@@ -582,7 +582,7 @@ function StripeGatewayCard() {
                   title="Copy webhook URL"
                 >
                   {copied ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-herb" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
@@ -593,16 +593,16 @@ function StripeGatewayCard() {
             <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
               <span className="text-foreground">Webhook Secret</span>
               {data.webhookSecretSet ? (
-                <span className="flex items-center gap-1 text-xs text-green-600">
+                <span className="flex items-center gap-1 text-xs text-herb">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Configured
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-xs text-red-600">✕ Not configured</span>
+                <span className="flex items-center gap-1 text-xs text-paprika">✕ Not configured</span>
               )}
             </div>
 
             {data.error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-lg border border-paprika/30 bg-paprika-tint px-4 py-3 text-sm text-paprika">
                 {data.error}
               </div>
             )}

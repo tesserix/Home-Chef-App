@@ -15,7 +15,7 @@ export function ChefCard({ chef }: ChefCardProps) {
 
   return (
     <Pressable
-      className="flex-1 bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm"
+      className="flex-1 bg-bone rounded-2xl overflow-hidden border border-mist shadow-sm"
       onPress={handlePress}
       accessibilityLabel={`View ${chef.name}`}
       accessibilityRole="button"
@@ -29,38 +29,38 @@ export function ChefCard({ chef }: ChefCardProps) {
           transition={200}
         />
         <View
-          className={`absolute top-2 right-2 px-2 py-0.5 rounded-full ${chef.isOpen ? 'bg-green-500' : 'bg-gray-400'}`}
+          className={`absolute top-2 right-2 px-2 py-0.5 rounded-full ${chef.isOpen ? 'bg-herb' : 'bg-ink-muted'}`}
         >
-          <Text className="text-white text-xs font-semibold">
+          <Text className="text-paper text-xs font-semibold">
             {chef.isOpen ? 'Open' : 'Closed'}
           </Text>
         </View>
       </View>
 
       <View className="p-3 gap-1">
-        <Text className="text-base font-bold text-gray-900" numberOfLines={1}>
+        <Text className="text-base font-medium text-ink" numberOfLines={1}>
           {chef.name}
         </Text>
-        <Text className="text-xs text-gray-500" numberOfLines={1}>
+        <Text className="text-xs text-ink-muted" numberOfLines={1}>
           {chef.cuisine}
         </Text>
 
         <View className="flex-row items-center gap-1 mt-1">
-          <Star size={12} color="#F59E0B" fill="#F59E0B" />
-          <Text className="text-xs font-semibold text-gray-700">
+          <Star size={12} color="#d1a64a" fill="#d1a64a" />
+          <Text className="text-xs font-semibold text-ink-soft">
             {chef.rating.toFixed(1)}
           </Text>
-          <Text className="text-xs text-gray-400">
+          <Text className="text-xs text-ink-muted">
             ({chef.reviewCount})
           </Text>
         </View>
 
         <View className="flex-row items-center justify-between mt-1">
           {chef.deliveryTime != null && (
-            <Text className="text-xs text-gray-500">{chef.deliveryTime}</Text>
+            <Text className="text-xs text-ink-muted">{chef.deliveryTime}</Text>
           )}
           {chef.minimumOrder != null && (
-            <Text className="text-xs text-gray-400">Min ₹{chef.minimumOrder}</Text>
+            <Text className="text-xs text-ink-muted">Min ₹{chef.minimumOrder}</Text>
           )}
         </View>
       </View>

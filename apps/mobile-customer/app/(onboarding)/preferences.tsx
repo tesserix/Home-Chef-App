@@ -121,7 +121,7 @@ export default function PreferencesScreen() {
         activeOpacity={0.8}
       >
         {isSubmitting ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color="#fafaf7" />
         ) : (
           <Text style={styles.buttonText}>Finish Setup</Text>
         )}
@@ -131,22 +131,22 @@ export default function PreferencesScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1, backgroundColor: '#fafaf7' },
   container: { padding: 24, paddingTop: 60 },
-  stepLabel: { fontSize: 13, color: '#6B7280', marginBottom: 8 },
+  stepLabel: { fontSize: 13, color: '#7a7a76', marginBottom: 8 },
   progressBar: {
     height: 4,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#e6e5e0',
     borderRadius: 2,
     marginBottom: 32,
   },
   progressFill: {
     height: 4,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#3e6b3c',
     borderRadius: 2,
   },
-  title: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#6B7280', marginBottom: 32 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a18', marginBottom: 8 },
+  subtitle: { fontSize: 15, color: '#7a7a76', marginBottom: 32 },
   chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -158,22 +158,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: '#d4d3ce',
+    backgroundColor: '#fafaf7',
   },
   chipActive: {
     backgroundColor: '#FFF3EE',
-    borderColor: '#FF6B35',
+    borderColor: '#3e6b3c',
   },
-  chipText: { fontSize: 14, color: '#374151' },
-  chipTextActive: { color: '#FF6B35', fontWeight: '600' },
+  chipText: { fontSize: 14, color: '#4a4a47' },
+  chipTextActive: { color: '#3e6b3c', fontWeight: '600' },
   button: {
     height: 52,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#3e6b3c',
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  buttonText: { fontSize: 16, fontWeight: '600', color: '#fafaf7' },
 });

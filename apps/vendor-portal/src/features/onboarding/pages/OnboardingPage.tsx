@@ -202,7 +202,7 @@ export default function OnboardingPage() {
         <div className="mx-auto flex h-16 max-w-4xl items-center gap-3 px-4">
           <ChefHat className="h-7 w-7 text-primary" />
           <div>
-            <h1 className="text-lg font-bold text-foreground">Set Up Your Kitchen</h1>
+            <h1 className="text-lg font-medium text-foreground">Set Up Your Kitchen</h1>
             <p className="text-xs text-muted-foreground">
               {showReview
                 ? 'Review your application'

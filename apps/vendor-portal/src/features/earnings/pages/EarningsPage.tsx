@@ -127,8 +127,8 @@ export default function EarningsPage() {
     return (
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Earnings</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="font-display text-2xl font-semibold text-ink">Earnings</h1>
+          <p className="mt-1 text-sm text-ink-muted">
             Track your revenue and payouts
           </p>
         </div>
@@ -141,11 +141,11 @@ export default function EarningsPage() {
     return (
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <DollarSign className="mb-4 h-12 w-12 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-900">
+          <DollarSign className="mb-4 h-12 w-12 text-ink-muted" />
+          <h3 className="text-lg font-semibold text-ink">
             Unable to load earnings
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-ink-muted">
             Please try again later.
           </p>
         </div>
@@ -170,30 +170,30 @@ export default function EarningsPage() {
       label: 'Available Balance',
       value: data.totalBalance,
       icon: DollarSign,
-      iconBg: 'bg-brand-50',
-      iconColor: 'text-brand-600',
+      iconBg: 'bg-herb-tint',
+      iconColor: 'text-herb',
     },
     {
       label: 'Pending Payout',
       value: data.pendingPayout,
       icon: Clock,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
+      iconBg: 'bg-amber-tint',
+      iconColor: 'text-amber',
     },
     {
       label: 'This Month',
       value: data.thisMonthEarnings,
       icon: TrendingUp,
-      iconBg: 'bg-emerald-50',
-      iconColor: 'text-emerald-600',
+      iconBg: 'bg-herb-tint',
+      iconColor: 'text-herb',
       change: monthOverMonthChange,
     },
     {
       label: 'Lifetime Earnings',
       value: data.lifetimeEarnings,
       icon: Award,
-      iconBg: 'bg-purple-50',
-      iconColor: 'text-purple-600',
+      iconBg: 'bg-info/10',
+      iconColor: 'text-info',
     },
   ];
 
@@ -207,8 +207,8 @@ export default function EarningsPage() {
         className="space-y-6"
       >
         <motion.div variants={fadeInUp}>
-          <h1 className="text-2xl font-bold text-gray-900">Earnings</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="font-display text-2xl font-semibold text-ink">Earnings</h1>
+          <p className="mt-1 text-sm text-ink-muted">
             Track your revenue and payouts
           </p>
         </motion.div>
@@ -225,18 +225,18 @@ export default function EarningsPage() {
                     <card.icon className={`h-6 w-6 ${card.iconColor}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500">
+                    <p className="text-xs font-medium text-ink-muted">
                       {card.label}
                     </p>
-                    <p className="text-xl font-bold text-gray-900">
+                    <p className="text-xl font-semibold text-ink">
                       {formatCurrency(card.value)}
                     </p>
                     {card.change !== undefined && card.change !== 0 && (
                       <p
                         className={`mt-0.5 text-xs font-medium ${
                           card.change > 0
-                            ? 'text-emerald-600'
-                            : 'text-red-600'
+                            ? 'text-herb'
+                            : 'text-paprika'
                         }`}
                       >
                         {card.change > 0 ? '+' : ''}
@@ -254,10 +254,10 @@ export default function EarningsPage() {
         <motion.div variants={fadeInUp}>
           <Card>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-semibold text-ink">
                 Daily Earnings
               </h2>
-              <p className="text-sm text-gray-500">Last 14 days</p>
+              <p className="text-sm text-ink-muted">Last 14 days</p>
             </div>
             <div className="flex items-end gap-1.5 overflow-x-auto pb-2">
               {dailyEarnings.map((day) => {
@@ -271,23 +271,23 @@ export default function EarningsPage() {
                     className="group flex min-w-[2.5rem] flex-1 flex-col items-center gap-1"
                   >
                     {/* Tooltip */}
-                    <div className="invisible text-xs font-medium text-gray-700 group-hover:visible">
+                    <div className="invisible text-xs font-medium text-ink-soft group-hover:visible">
                       {formatCurrency(day.amount)}
                     </div>
                     {/* Bar */}
                     <div className="relative w-full" style={{ height: '160px' }}>
                       <div
-                        className="absolute bottom-0 w-full rounded-t-md bg-brand-500 transition-all duration-300 group-hover:bg-brand-600"
+                        className="absolute bottom-0 w-full rounded-t-md bg-herb transition-all duration-300 group-hover:bg-herb"
                         style={{
                           height: `${Math.max(heightPercent, 2)}%`,
                         }}
                       />
                     </div>
                     {/* Date label */}
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-ink-muted">
                       {format(new Date(day.date), 'dd')}
                     </p>
-                    <p className="text-[9px] text-gray-400">
+                    <p className="text-[9px] text-ink-muted">
                       {format(new Date(day.date), 'MMM')}
                     </p>
                   </div>
@@ -303,34 +303,34 @@ export default function EarningsPage() {
           <motion.div variants={fadeInUp}>
             <Card>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-ink">
                   Top Selling Items
                 </h2>
-                <ShoppingBag className="h-5 w-5 text-gray-400" />
+                <ShoppingBag className="h-5 w-5 text-ink-muted" />
               </div>
               {(data.topItems ?? []).length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">
+                <p className="py-8 text-center text-sm text-ink-muted">
                   No sales data yet
                 </p>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-mist">
                   {(data.topItems ?? []).map((item, index) => (
                     <div
                       key={item.name}
                       className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
                     >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-xs font-bold text-gray-500">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-mist text-xs font-medium text-ink-muted">
                         {index + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900">
+                        <p className="truncate text-sm font-medium text-ink">
                           {item.name}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-ink-muted">
                           {item.orders} orders
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className="text-sm font-semibold text-ink">
                         {formatCurrency(item.revenue)}
                       </p>
                     </div>
@@ -344,7 +344,7 @@ export default function EarningsPage() {
           <motion.div variants={fadeInUp}>
             <Card>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-ink">
                   Recent Payouts
                 </h2>
                 <Link to="/earnings/payouts">
@@ -355,11 +355,11 @@ export default function EarningsPage() {
                 </Link>
               </div>
               {(data.recentPayouts ?? []).length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">
+                <p className="py-8 text-center text-sm text-ink-muted">
                   No payouts yet
                 </p>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-mist">
                   {(data.recentPayouts ?? []).map((payout) => (
                     <div
                       key={payout.id}
@@ -367,7 +367,7 @@ export default function EarningsPage() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-ink">
                             {formatCurrency(payout.amount)}
                           </p>
                           <Badge
@@ -377,22 +377,22 @@ export default function EarningsPage() {
                             {payout.status}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-ink-muted">
                           {format(new Date(payout.date), 'dd MMM yyyy')} via{' '}
                           {payout.method}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-gray-300" />
+                      <ChevronRight className="h-4 w-4 text-ink-muted" />
                     </div>
                   ))}
                 </div>
               )}
 
               {(data.recentPayouts ?? []).length > 0 && (
-                <div className="mt-4 border-t border-gray-100 pt-4">
+                <div className="mt-4 border-t border-mist pt-4">
                   <Link
                     to="/earnings/payouts"
-                    className="flex items-center justify-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+                    className="flex items-center justify-center gap-1 text-sm font-medium text-herb hover:text-herb"
                   >
                     View full payout history
                     <ArrowRight className="h-4 w-4" />

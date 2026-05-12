@@ -173,7 +173,7 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
                 </button>
               </div>
               {form.hasDeliveryBoxSpace === 'no' && (
-                <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">
+                <p className="mt-2 rounded-lg bg-amber-tint p-3 text-xs text-amber">
                   You can still proceed, but you'll need to attach a carrier or use a delivery backpack before starting deliveries.
                 </p>
               )}

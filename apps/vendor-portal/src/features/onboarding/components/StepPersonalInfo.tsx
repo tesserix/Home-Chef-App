@@ -129,15 +129,15 @@ export function StepPersonalInfo({ errors }: Props) {
         <div className="mt-6 flex items-center gap-5">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-border bg-secondary">
             {data.profileImage ? (
-              <img src={data.profileImage} alt="Profile" className="h-full w-full object-cover" />
+              <img src={data.profileImage} alt="Profile" className="h-full w-full object-cover" loading="lazy" decoding="async" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <Camera className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
             {isUploadingAvatar && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
-                <Loader2 className="h-5 w-5 animate-spin text-white" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-ink/40">
+                <Loader2 className="h-5 w-5 animate-spin text-paper" />
               </div>
             )}
           </div>

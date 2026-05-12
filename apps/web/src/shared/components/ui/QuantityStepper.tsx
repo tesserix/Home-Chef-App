@@ -29,7 +29,7 @@ const stepperButtonVariants = cva(
   [
     'flex items-center justify-center',
     'transition-all duration-200',
-    'focus:outline-none focus:ring-2 focus:ring-ring/50',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
     'disabled:opacity-40 disabled:cursor-not-allowed',
   ],
   {
@@ -61,6 +61,8 @@ export interface QuantityStepperProps
   max?: number;
   step?: number;
   disabled?: boolean;
+  /** Describes what the stepper controls. Required for screen-reader users. */
+  'aria-label'?: string;
 }
 
 const QuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
@@ -75,6 +77,7 @@ const QuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
       max = 99,
       step = 1,
       disabled = false,
+      'aria-label': ariaLabel = 'Quantity',
       ...props
     },
     ref
@@ -89,15 +92,19 @@ const QuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
       onChange(newValue);
     };
 
+    // min-w lets the display grow past 999 without clipping while still
+    // anchoring the layout at the configured size for the common case.
     const displaySizes = {
-      sm: 'w-7 text-sm',
-      md: 'w-9 text-base',
-      lg: 'w-11 text-lg',
+      sm: 'min-w-[1.75rem] px-1 text-sm',
+      md: 'min-w-[2.25rem] px-1.5 text-base',
+      lg: 'min-w-[2.75rem] px-2 text-lg',
     };
 
     return (
       <div
         ref={ref}
+        role="group"
+        aria-label={ariaLabel}
         className={cn(quantityStepperVariants({ variant, size }), className)}
         {...props}
       >
@@ -106,11 +113,13 @@ const QuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
           onClick={handleDecrement}
           disabled={disabled || value <= min}
           className={cn(stepperButtonVariants({ variant, size }))}
-          aria-label="Decrease quantity"
+          aria-label={`Decrease ${ariaLabel.toLowerCase()}`}
         >
-          <Minus />
+          <Minus aria-hidden="true" />
         </button>
         <span
+          aria-live="polite"
+          aria-atomic="true"
           className={cn(
             'font-medium text-center tabular-nums text-foreground',
             displaySizes[size || 'md']
@@ -123,9 +132,9 @@ const QuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
           onClick={handleIncrement}
           disabled={disabled || value >= max}
           className={cn(stepperButtonVariants({ variant, size }))}
-          aria-label="Increase quantity"
+          aria-label={`Increase ${ariaLabel.toLowerCase()}`}
         >
-          <Plus />
+          <Plus aria-hidden="true" />
         </button>
       </div>
     );
@@ -136,28 +145,50 @@ QuantityStepper.displayName = 'QuantityStepper';
 
 // Compact version
 const CompactQuantityStepper = forwardRef<HTMLDivElement, QuantityStepperProps>(
-  ({ className, value, onChange, min = 0, max = 99, disabled = false, ...props }, ref) => (
-    <div ref={ref} className={cn('inline-flex items-center gap-2', className)} {...props}>
+  (
+    {
+      className,
+      value,
+      onChange,
+      min = 0,
+      max = 99,
+      disabled = false,
+      'aria-label': ariaLabel = 'Quantity',
+      ...props
+    },
+    ref
+  ) => (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={ariaLabel}
+      className={cn('inline-flex items-center gap-2', className)}
+      {...props}
+    >
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={disabled || value <= min}
-        className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        aria-label="Decrease quantity"
+        className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`Decrease ${ariaLabel.toLowerCase()}`}
       >
-        <Minus className="h-4 w-4" />
+        <Minus aria-hidden="true" className="h-4 w-4" />
       </button>
-      <span className="w-8 text-center font-medium text-foreground tabular-nums">
+      <span
+        aria-live="polite"
+        aria-atomic="true"
+        className="min-w-[2rem] px-1 text-center font-medium text-foreground tabular-nums"
+      >
         {value}
       </span>
       <button
         type="button"
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={disabled || value >= max}
-        className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        aria-label="Increase quantity"
+        className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`Increase ${ariaLabel.toLowerCase()}`}
       >
-        <Plus className="h-4 w-4" />
+        <Plus aria-hidden="true" className="h-4 w-4" />
       </button>
     </div>
   )

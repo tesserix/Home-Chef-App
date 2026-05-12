@@ -127,17 +127,17 @@ export default function NewMenuItemScreen() {
   const isSubmitting = createMutation.isPending || uploadMutation.isPending;
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
         {/* Header */}
-        <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-            <ChevronLeft size={24} color="#374151" />
+        <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
+          <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+            <ChevronLeft size={24} color="#4a4a47" />
           </TouchableOpacity>
-          <Text className="text-lg font-semibold text-gray-900">Add Menu Item</Text>
+          <Text className="text-lg font-semibold text-ink">Add Menu Item</Text>
         </View>
 
         <ScrollView
@@ -147,8 +147,8 @@ export default function NewMenuItemScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Photo section */}
-          <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-            <Text className="text-base font-semibold text-gray-700 mb-3">Food Photo</Text>
+          <View className="bg-bone rounded-2xl p-4 mb-4 shadow-sm">
+            <Text className="text-base font-semibold text-ink-soft mb-3">Food Photo</Text>
             {photoUri ? (
               <View className="rounded-xl overflow-hidden mb-3">
                 <Image
@@ -158,38 +158,38 @@ export default function NewMenuItemScreen() {
                 />
               </View>
             ) : (
-              <View className="w-full h-36 bg-gray-100 rounded-xl items-center justify-center mb-3 border-2 border-dashed border-gray-300">
-                <ImageIcon size={32} color="#9CA3AF" />
-                <Text className="text-gray-400 text-sm mt-2">No photo selected</Text>
+              <View className="w-full h-36 bg-mist rounded-xl items-center justify-center mb-3 border-2 border-dashed border-mist-strong">
+                <ImageIcon size={32} color="#7a7a76" />
+                <Text className="text-ink-muted text-sm mt-2">No photo selected</Text>
               </View>
             )}
             <View className="flex-row gap-3">
               <TouchableOpacity
                 onPress={handleTakePhoto}
-                className="flex-1 flex-row items-center justify-center gap-2 border border-orange-500 rounded-xl py-3"
+                className="flex-1 flex-row items-center justify-center gap-2 border border-herb rounded-xl py-3"
                 activeOpacity={0.7}
               >
-                <Camera size={18} color="#EA580C" />
-                <Text className="text-orange-600 font-medium text-sm">Take Photo</Text>
+                <Camera size={18} color="#3e6b3c" />
+                <Text className="text-herb font-medium text-sm">Take Photo</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleChooseFromGallery}
-                className="flex-1 flex-row items-center justify-center gap-2 border border-gray-300 rounded-xl py-3"
+                className="flex-1 flex-row items-center justify-center gap-2 border border-mist-strong rounded-xl py-3"
                 activeOpacity={0.7}
               >
-                <ImageIcon size={18} color="#6B7280" />
-                <Text className="text-gray-600 font-medium text-sm">Gallery</Text>
+                <ImageIcon size={18} color="#7a7a76" />
+                <Text className="text-ink-soft font-medium text-sm">Gallery</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Item details */}
-          <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-            <Text className="text-base font-semibold text-gray-700 mb-4">Item Details</Text>
+          <View className="bg-bone rounded-2xl p-4 mb-4 shadow-sm">
+            <Text className="text-base font-semibold text-ink-soft mb-4">Item Details</Text>
 
             {/* Name */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-600 mb-1">Item Name *</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">Item Name *</Text>
               <Controller
                 control={control}
                 name="name"
@@ -199,19 +199,19 @@ export default function NewMenuItemScreen() {
                     onChangeText={onChange}
                     onBlur={onBlur}
                     placeholder="e.g. Butter Chicken"
-                    placeholderTextColor="#9CA3AF"
-                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
+                    placeholderTextColor="#7a7a76"
+                    className={`border rounded-xl px-4 py-3 text-base text-ink ${errors.name ? 'border-paprika' : 'border-mist'}`}
                   />
                 )}
               />
               {errors.name && (
-                <Text className="text-red-500 text-xs mt-1">{errors.name.message}</Text>
+                <Text className="text-paprika text-xs mt-1">{errors.name.message}</Text>
               )}
             </View>
 
             {/* Description */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-600 mb-1">Description *</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">Description *</Text>
               <Controller
                 control={control}
                 name="description"
@@ -221,22 +221,22 @@ export default function NewMenuItemScreen() {
                     onChangeText={onChange}
                     onBlur={onBlur}
                     placeholder="Describe your dish (at least 20 characters)"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#7a7a76"
                     multiline
                     numberOfLines={3}
                     textAlignVertical="top"
-                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 min-h-[80px] ${errors.description ? 'border-red-400' : 'border-gray-200'}`}
+                    className={`border rounded-xl px-4 py-3 text-base text-ink min-h-[80px] ${errors.description ? 'border-paprika' : 'border-mist'}`}
                   />
                 )}
               />
               {errors.description && (
-                <Text className="text-red-500 text-xs mt-1">{errors.description.message}</Text>
+                <Text className="text-paprika text-xs mt-1">{errors.description.message}</Text>
               )}
             </View>
 
             {/* Price */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-600 mb-1">Price (₹) *</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-1">Price (₹) *</Text>
               <Controller
                 control={control}
                 name="price"
@@ -246,20 +246,20 @@ export default function NewMenuItemScreen() {
                     onChangeText={onChange}
                     onBlur={onBlur}
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor="#7a7a76"
                     keyboardType="decimal-pad"
-                    className={`border rounded-xl px-4 py-3 text-base text-gray-900 ${errors.price ? 'border-red-400' : 'border-gray-200'}`}
+                    className={`border rounded-xl px-4 py-3 text-base text-ink ${errors.price ? 'border-paprika' : 'border-mist'}`}
                   />
                 )}
               />
               {errors.price && (
-                <Text className="text-red-500 text-xs mt-1">{errors.price.message}</Text>
+                <Text className="text-paprika text-xs mt-1">{errors.price.message}</Text>
               )}
             </View>
 
             {/* Category */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-600 mb-2">Category *</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-2">Category *</Text>
               <Controller
                 control={control}
                 name="category"
@@ -272,14 +272,14 @@ export default function NewMenuItemScreen() {
                           onPress={() => onChange(cat)}
                           className={`px-4 py-2 rounded-full border ${
                             selectedCategory === cat
-                              ? 'bg-orange-500 border-orange-500'
-                              : 'bg-white border-gray-200'
+                              ? 'bg-herb border-herb'
+                              : 'bg-bone border-mist'
                           }`}
                           activeOpacity={0.7}
                         >
                           <Text
                             className={`text-sm font-medium ${
-                              selectedCategory === cat ? 'text-white' : 'text-gray-600'
+                              selectedCategory === cat ? 'text-paper' : 'text-ink-soft'
                             }`}
                           >
                             {cat}
@@ -291,13 +291,13 @@ export default function NewMenuItemScreen() {
                 )}
               />
               {errors.category && (
-                <Text className="text-red-500 text-xs mt-1">{errors.category.message}</Text>
+                <Text className="text-paprika text-xs mt-1">{errors.category.message}</Text>
               )}
             </View>
 
             {/* Veg / Non-Veg */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-600 mb-2">Type</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-2">Type</Text>
               <Controller
                 control={control}
                 name="isVeg"
@@ -306,12 +306,12 @@ export default function NewMenuItemScreen() {
                     <TouchableOpacity
                       onPress={() => onChange(true)}
                       className={`flex-1 py-3 rounded-xl border items-center ${
-                        value ? 'bg-green-500 border-green-500' : 'bg-white border-gray-200'
+                        value ? 'bg-herb border-herb' : 'bg-bone border-mist'
                       }`}
                       activeOpacity={0.7}
                     >
                       <Text
-                        className={`font-medium text-sm ${value ? 'text-white' : 'text-gray-600'}`}
+                        className={`font-medium text-sm ${value ? 'text-paper' : 'text-ink-soft'}`}
                       >
                         Veg
                       </Text>
@@ -319,12 +319,12 @@ export default function NewMenuItemScreen() {
                     <TouchableOpacity
                       onPress={() => onChange(false)}
                       className={`flex-1 py-3 rounded-xl border items-center ${
-                        !value ? 'bg-red-500 border-red-500' : 'bg-white border-gray-200'
+                        !value ? 'bg-paprika border-paprika' : 'bg-bone border-mist'
                       }`}
                       activeOpacity={0.7}
                     >
                       <Text
-                        className={`font-medium text-sm ${!value ? 'text-white' : 'text-gray-600'}`}
+                        className={`font-medium text-sm ${!value ? 'text-paper' : 'text-ink-soft'}`}
                       >
                         Non-Veg
                       </Text>
@@ -336,7 +336,7 @@ export default function NewMenuItemScreen() {
 
             {/* Preparation Time */}
             <View>
-              <Text className="text-sm font-medium text-gray-600 mb-2">Preparation Time</Text>
+              <Text className="text-sm font-medium text-ink-soft mb-2">Preparation Time</Text>
               <Controller
                 control={control}
                 name="preparationTime"
@@ -349,14 +349,14 @@ export default function NewMenuItemScreen() {
                           onPress={() => onChange(mins)}
                           className={`px-4 py-2 rounded-full border ${
                             value === mins
-                              ? 'bg-orange-500 border-orange-500'
-                              : 'bg-white border-gray-200'
+                              ? 'bg-herb border-herb'
+                              : 'bg-bone border-mist'
                           }`}
                           activeOpacity={0.7}
                         >
                           <Text
                             className={`text-sm font-medium ${
-                              value === mins ? 'text-white' : 'text-gray-600'
+                              value === mins ? 'text-paper' : 'text-ink-soft'
                             }`}
                           >
                             {mins} min
@@ -374,13 +374,13 @@ export default function NewMenuItemScreen() {
           <TouchableOpacity
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting}
-            className={`py-4 rounded-2xl items-center ${isSubmitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+            className={`py-4 rounded-2xl items-center ${isSubmitting ? 'bg-herb-soft' : 'bg-herb'}`}
             activeOpacity={0.85}
           >
             {isSubmitting ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-semibold text-base">Add Item</Text>
+              <Text className="text-paper font-semibold text-base">Add Item</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

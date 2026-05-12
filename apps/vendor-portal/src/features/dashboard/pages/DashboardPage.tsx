@@ -4,10 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/services/api-client';
 import { Link } from 'react-router-dom';
 import {
-  IndianRupee,
-  ShoppingBag,
-  Clock,
-  Star,
   Plus,
   ClipboardList,
   UserCog,
@@ -17,8 +13,6 @@ import {
   X,
   UtensilsCrossed,
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react';
 import { Badge, OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -83,59 +77,23 @@ function timeAgo(dateStr: string) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatsCard({
-  title,
+function StatRow({
+  label,
   value,
-  icon: Icon,
-  trend,
-  trendLabel,
-  iconBg,
-  iconColor,
+  subtitle,
 }: {
-  title: string;
-  value: string;
-  icon: React.ElementType;
-  trend?: number;
-  trendLabel?: string;
-  iconBg: string;
-  iconColor: string;
+  label: string;
+  value: string | number;
+  subtitle?: string;
 }) {
-  const isPositive = trend !== undefined && trend >= 0;
-
   return (
-    <motion.div
-      variants={fadeInUp}
-      className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-    >
-      <div className="flex items-start justify-between">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${iconBg}`}>
-          <Icon className={`h-5 w-5 ${iconColor}`} />
-        </div>
-        {trend !== undefined && (
-          <span
-            className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-              isPositive
-                ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
-            }`}
-          >
-            {isPositive ? (
-              <ArrowUpRight className="h-3 w-3" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3" />
-            )}
-            {Math.abs(trend)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-4 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-sm text-gray-500">
-        {title}
-        {trendLabel && (
-          <span className="ml-1 text-xs text-gray-400">{trendLabel}</span>
-        )}
+    <div className="px-4 py-4 sm:px-5">
+      <p className="text-sm text-ink-soft">{label}</p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+        {value}
       </p>
-    </motion.div>
+      {subtitle && <p className="mt-0.5 text-xs text-ink-soft tabular-nums">{subtitle}</p>}
+    </div>
   );
 }
 
@@ -151,17 +109,17 @@ function WeeklyRevenueChart({
   return (
     <motion.div
       variants={fadeInUp}
-      className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
+      className="rounded-xl border border-mist bg-bone p-6 shadow-sm"
     >
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">
+          <h3 className="text-base font-semibold text-ink">
             Weekly Revenue
           </h3>
-          <p className="text-sm text-gray-500">Last 7 days performance</p>
+          <p className="text-sm text-ink-muted">Last 7 days performance</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50">
-          <TrendingUp className="h-4 w-4 text-brand-600" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-herb-tint">
+          <TrendingUp className="h-4 w-4 text-herb" />
         </div>
       </div>
 
@@ -174,7 +132,7 @@ function WeeklyRevenueChart({
             <div key={i} className="group flex flex-1 flex-col items-center gap-2">
               {/* Tooltip */}
               <div className="relative">
-                <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-ink px-2 py-1 text-xs text-paper opacity-0 transition-opacity group-hover:opacity-100">
                   {formatCurrency(value)}
                 </span>
               </div>
@@ -186,15 +144,15 @@ function WeeklyRevenueChart({
                   transition={{ duration: 0.6, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
                   className={`absolute bottom-0 w-full rounded-t-md transition-colors ${
                     isToday
-                      ? 'bg-brand-500'
-                      : 'bg-brand-100 group-hover:bg-brand-200'
+                      ? 'bg-herb'
+                      : 'bg-herb-tint group-hover:bg-herb-tint'
                   }`}
                 />
               </div>
               {/* Label */}
               <span
                 className={`text-xs ${
-                  isToday ? 'font-semibold text-brand-600' : 'text-gray-400'
+                  isToday ? 'font-semibold text-herb' : 'text-ink-muted'
                 }`}
               >
                 {labels[i]}
@@ -204,16 +162,16 @@ function WeeklyRevenueChart({
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
-        <p className="text-sm text-gray-500">
+      <div className="mt-4 flex items-center justify-between border-t border-mist pt-4">
+        <p className="text-sm text-ink-muted">
           Total:{' '}
-          <span className="font-semibold text-gray-900">
+          <span className="font-semibold text-ink">
             {formatCurrency(data.reduce((s, v) => s + v, 0))}
           </span>
         </p>
         <Link
           to="/earnings"
-          className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+          className="inline-flex items-center gap-1 text-sm font-medium text-herb hover:text-herb"
         >
           View details
           <ChevronRight className="h-4 w-4" />
@@ -235,37 +193,37 @@ function PendingOrderCard({
   return (
     <motion.div
       variants={fadeInUp}
-      className="rounded-xl border border-amber-100 bg-amber-50/50 p-4"
+      className="rounded-xl border border-amber/20 bg-amber-tint/50 p-4"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-ink">
               #{order.orderNumber}
             </span>
             <Badge variant="warning" size="sm">
               New
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-gray-600">{order.customerName}</p>
+          <p className="mt-1 text-sm text-ink-soft">{order.customerName}</p>
           <div className="mt-2 space-y-0.5">
             {(order.items ?? []).slice(0, 3).map((item, i) => (
-              <p key={i} className="text-xs text-gray-500">
+              <p key={i} className="text-xs text-ink-muted">
                 {item.quantity}x {item.name}
               </p>
             ))}
             {(order.items ?? []).length > 3 && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-ink-muted">
                 +{(order.items ?? []).length - 3} more items
               </p>
             )}
           </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-bold text-gray-900">
+          <p className="text-sm font-medium text-ink">
             {formatCurrency(order.total)}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="mt-0.5 text-xs text-ink-muted">
             {timeAgo(order.createdAt)}
           </p>
         </div>
@@ -299,18 +257,18 @@ function RecentOrdersTable({ orders }: { orders: Order[] }) {
   return (
     <motion.div
       variants={fadeInUp}
-      className="rounded-xl border border-gray-100 bg-white shadow-sm"
+      className="rounded-xl border border-mist bg-bone shadow-sm"
     >
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-mist px-6 py-4">
         <div>
-          <h3 className="text-base font-semibold text-gray-900">
+          <h3 className="text-base font-semibold text-ink">
             Recent Orders
           </h3>
-          <p className="text-sm text-gray-500">Your latest order activity</p>
+          <p className="text-sm text-ink-muted">Your latest order activity</p>
         </div>
         <Link
           to="/orders"
-          className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+          className="inline-flex items-center gap-1 text-sm font-medium text-herb hover:text-herb"
         >
           View all
           <ChevronRight className="h-4 w-4" />
@@ -321,23 +279,23 @@ function RecentOrdersTable({ orders }: { orders: Order[] }) {
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-100 text-left">
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+            <tr className="border-b border-mist text-left">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Order
               </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Customer
               </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Items
               </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Amount
               </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Status
               </th>
-              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-6 py-3 text-xs font-medium uppercase tracking-wider text-ink-muted">
                 Time
               </th>
             </tr>
@@ -346,24 +304,24 @@ function RecentOrdersTable({ orders }: { orders: Order[] }) {
             {orders.map((order) => (
               <tr
                 key={order.id}
-                className="transition-colors hover:bg-gray-50/50"
+                className="transition-colors hover:bg-paper/50"
               >
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-ink">
                   #{order.orderNumber}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-soft">
                   {order.customerName}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
+                <td className="px-6 py-4 text-sm text-ink-muted">
                   {(order.items ?? []).length} item{(order.items ?? []).length !== 1 && 's'}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-ink">
                   {formatCurrency(order.total)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   <OrderStatusBadge status={order.status} size="sm" />
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-400">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-muted">
                   {timeAgo(order.createdAt)}
                 </td>
               </tr>
@@ -378,21 +336,21 @@ function RecentOrdersTable({ orders }: { orders: Order[] }) {
           <div key={order.id} className="flex items-center justify-between px-4 py-3">
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-900">
+                <span className="text-sm font-medium text-ink">
                   #{order.orderNumber}
                 </span>
                 <OrderStatusBadge status={order.status} size="sm" />
               </div>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-xs text-ink-muted">
                 {order.customerName} &middot; {(order.items ?? []).length} item
                 {(order.items ?? []).length !== 1 && 's'}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-ink">
                 {formatCurrency(order.total)}
               </p>
-              <p className="text-xs text-gray-400">{timeAgo(order.createdAt)}</p>
+              <p className="text-xs text-ink-muted">{timeAgo(order.createdAt)}</p>
             </div>
           </div>
         ))}
@@ -400,8 +358,8 @@ function RecentOrdersTable({ orders }: { orders: Order[] }) {
 
       {orders.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <UtensilsCrossed className="h-10 w-10 text-gray-300" />
-          <p className="mt-3 text-sm text-gray-500">No recent orders</p>
+          <UtensilsCrossed className="h-10 w-10 text-ink-muted" />
+          <p className="mt-3 text-sm text-ink-muted">No recent orders</p>
         </div>
       )}
     </motion.div>
@@ -415,38 +373,38 @@ function QuickActions() {
       description: 'Create a new dish listing',
       href: '/menu/new',
       icon: Plus,
-      iconBg: 'bg-brand-50',
-      iconColor: 'text-brand-600',
+      iconBg: 'bg-herb-tint',
+      iconColor: 'text-herb',
     },
     {
       label: 'View Orders',
       description: 'Manage live orders',
       href: '/orders',
       icon: ClipboardList,
-      iconBg: 'bg-blue-50',
-      iconColor: 'text-blue-600',
+      iconBg: 'bg-info/10',
+      iconColor: 'text-info',
     },
     {
       label: 'Update Profile',
       description: 'Edit kitchen details',
       href: '/profile',
       icon: UserCog,
-      iconBg: 'bg-purple-50',
-      iconColor: 'text-purple-600',
+      iconBg: 'bg-info/10',
+      iconColor: 'text-info',
     },
     {
       label: 'View Earnings',
       description: 'Track your revenue',
       href: '/earnings',
       icon: Wallet,
-      iconBg: 'bg-green-50',
-      iconColor: 'text-green-600',
+      iconBg: 'bg-herb-tint',
+      iconColor: 'text-herb',
     },
   ];
 
   return (
     <motion.div variants={fadeInUp}>
-      <h3 className="mb-3 text-base font-semibold text-gray-900">
+      <h3 className="mb-3 text-base font-semibold text-ink">
         Quick Actions
       </h3>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -456,17 +414,17 @@ function QuickActions() {
             <Link
               key={action.href}
               to={action.href}
-              className="group rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-brand-200 hover:shadow-md"
+              className="group rounded-xl border border-mist bg-bone p-4 shadow-sm transition-all hover:border-herb-tint hover:shadow-md"
             >
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-lg ${action.iconBg} transition-transform group-hover:scale-110`}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg ${action.iconBg} transition-transform group-hover:opacity-95 `}
               >
                 <Icon className={`h-5 w-5 ${action.iconColor}`} />
               </div>
-              <p className="mt-3 text-sm font-semibold text-gray-900">
+              <p className="mt-3 text-sm font-semibold text-ink">
                 {action.label}
               </p>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-xs text-ink-muted">
                 {action.description}
               </p>
             </Link>
@@ -505,14 +463,12 @@ export default function DashboardPage() {
   const recentOrders = orders?.slice(0, 8) ?? [];
 
   // Action handlers (would call mutation in production)
-  const handleAcceptOrder = (orderId: string) => {
+  const handleAcceptOrder = (_orderId: string) => {
     // TODO: useMutation to PATCH /chef/orders/:id/accept
-    console.log('Accept order', orderId);
   };
 
-  const handleRejectOrder = (orderId: string) => {
+  const handleRejectOrder = (_orderId: string) => {
     // TODO: useMutation to PATCH /chef/orders/:id/reject
-    console.log('Reject order', orderId);
   };
 
   // Loading skeleton
@@ -521,8 +477,8 @@ export default function DashboardPage() {
       <div className="space-y-6">
         {/* Page header skeleton */}
         <div>
-          <div className="h-7 w-48 animate-pulse rounded-lg bg-gray-200" />
-          <div className="mt-2 h-4 w-72 animate-pulse rounded bg-gray-100" />
+          <div className="h-7 w-48 animate-pulse rounded-lg bg-mist" />
+          <div className="mt-2 h-4 w-72 animate-pulse rounded bg-mist" />
         </div>
 
         {/* Stats skeleton */}
@@ -530,108 +486,102 @@ export default function DashboardPage() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-32 animate-pulse rounded-xl border border-gray-100 bg-white"
+              className="h-32 animate-pulse rounded-xl border border-mist bg-bone"
             />
           ))}
         </div>
 
         {/* Chart skeleton */}
-        <div className="h-64 animate-pulse rounded-xl border border-gray-100 bg-white" />
+        <div className="h-64 animate-pulse rounded-xl border border-mist bg-bone" />
 
         {/* Table skeleton */}
-        <div className="h-80 animate-pulse rounded-xl border border-gray-100 bg-white" />
+        <div className="h-80 animate-pulse rounded-xl border border-mist bg-bone" />
       </div>
     );
   }
+
+  const pendingCount = pendingOrders.length;
 
   return (
     <motion.div
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
-      className="space-y-6"
+      className="space-y-8"
     >
       {/* Page header */}
-      <motion.div variants={fadeInUp} className="page-header">
+      <motion.header variants={fadeInUp} className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Dashboard
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Welcome back! Here's how your kitchen is performing today.
-          </p>
+          <p className="mt-1 text-sm text-ink-soft">Here's your kitchen today.</p>
         </div>
 
         <Link to="/menu/new">
           <Button size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-            Add Item
+            Add item
           </Button>
         </Link>
-      </motion.div>
+      </motion.header>
 
-      {/* Pending orders alert */}
-      {pendingOrders.length > 0 && (
-        <motion.div
-          variants={fadeInUp}
-          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
-        >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100">
-            <Clock className="h-4 w-4 text-amber-600" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">
-              {pendingOrders.length} order{pendingOrders.length !== 1 && 's'}{' '}
-              waiting for your response
-            </p>
-            <p className="text-xs text-amber-600">
-              Accept or reject before they expire
-            </p>
-          </div>
+      {/* Lead block — Revenue + pending orders CTA */}
+      <motion.section
+        variants={fadeInUp}
+        className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end"
+      >
+        <div>
+          <p className="text-sm text-ink-soft">Today's revenue</p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+            {formatCurrency(stats?.todayRevenue ?? 0)}
+          </p>
+          <p className="mt-2 text-sm text-ink-soft tabular-nums">
+            From {stats?.todayOrders ?? 0}{' '}
+            {stats?.todayOrders === 1 ? 'order' : 'orders'} today
+          </p>
+        </div>
+
+        {pendingCount > 0 ? (
           <Link
             to="/orders"
-            className="text-sm font-medium text-amber-700 hover:text-amber-800"
+            aria-label={`${pendingCount} pending orders waiting`}
+            className="group flex items-center justify-between gap-4 rounded-lg bg-herb px-5 py-4 text-paper transition-colors hover:bg-herb-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
           >
-            View all
+            <div>
+              <p className="text-3xl font-semibold tabular-nums">
+                {pendingCount} {pendingCount === 1 ? 'order' : 'orders'}
+              </p>
+              <p className="mt-0.5 text-sm text-paper/80">Waiting for you to accept</p>
+            </div>
+            <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" aria-hidden />
           </Link>
-        </motion.div>
-      )}
+        ) : (
+          <div className="rounded-lg border border-mist bg-bone px-5 py-4">
+            <p className="text-3xl font-semibold tabular-nums text-foreground">All caught up</p>
+            <p className="mt-0.5 text-sm text-ink-soft">New orders will appear here.</p>
+          </div>
+        )}
+      </motion.section>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatsCard
-          title="Today's Revenue"
-          value={formatCurrency(stats?.todayRevenue ?? 0)}
-          icon={IndianRupee}
-          trend={12}
-          trendLabel="vs yesterday"
-          iconBg="bg-green-50"
-          iconColor="text-green-600"
+      {/* Stats — hairline-divided */}
+      <motion.section
+        variants={fadeInUp}
+        aria-label="Today at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow label="Today's orders" value={stats?.todayOrders ?? 0} />
+        <StatRow
+          label="Rating"
+          value={(stats?.rating ?? 0).toFixed(1)}
+          subtitle={stats?.totalReviews ? `${stats.totalReviews} reviews` : 'No reviews yet'}
         />
-        <StatsCard
-          title="Today's Orders"
-          value={String(stats?.todayOrders ?? 0)}
-          icon={ShoppingBag}
-          trend={8}
-          trendLabel="vs yesterday"
-          iconBg="bg-blue-50"
-          iconColor="text-blue-600"
+        <StatRow
+          label="This week"
+          value={stats?.weekOrders ?? 0}
+          subtitle={formatCurrency(stats?.weekRevenue ?? 0)}
         />
-        <StatsCard
-          title="Pending Orders"
-          value={String(stats?.pendingOrders ?? 0)}
-          icon={Clock}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-600"
-        />
-        <StatsCard
-          title="Average Rating"
-          value={`${(stats?.rating ?? 0).toFixed(1)} / 5`}
-          icon={Star}
-          trend={2}
-          iconBg="bg-brand-50"
-          iconColor="text-brand-600"
-        />
-      </div>
+        <StatRow label="All-time orders" value={stats?.totalOrders ?? 0} />
+      </motion.section>
 
       {/* Weekly revenue chart + pending orders */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -645,7 +595,7 @@ export default function DashboardPage() {
         {/* Pending orders sidebar */}
         <motion.div variants={fadeInUp} className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-gray-900">
+            <h3 className="text-base font-semibold text-ink">
               Pending Orders
             </h3>
             {pendingOrders.length > 0 && (
@@ -668,19 +618,19 @@ export default function DashboardPage() {
               {pendingOrders.length > 3 && (
                 <Link
                   to="/orders"
-                  className="block rounded-lg border border-dashed border-gray-200 py-3 text-center text-sm font-medium text-brand-600 transition-colors hover:border-brand-300 hover:bg-brand-50/50"
+                  className="block rounded-lg border border-dashed border-mist py-3 text-center text-sm font-medium text-herb transition-colors hover:border-herb-tint hover:bg-herb-tint/50"
                 >
                   View {pendingOrders.length - 3} more pending orders
                 </Link>
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center">
-              <Check className="h-10 w-10 text-green-300" />
-              <p className="mt-3 text-sm font-medium text-gray-600">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-mist py-10 text-center">
+              <Check className="h-10 w-10 text-herb-soft" />
+              <p className="mt-3 text-sm font-medium text-ink-soft">
                 All caught up!
               </p>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-ink-muted">
                 No pending orders right now
               </p>
             </div>

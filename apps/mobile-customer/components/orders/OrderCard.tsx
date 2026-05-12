@@ -25,11 +25,11 @@ function getStatusStyle(status: Order['status']): StatusColor {
     case 'picked_up':
       return { bg: '#DCFCE7', text: '#166534', label: 'Picked Up' };
     case 'delivered':
-      return { bg: '#F0FDF4', text: '#15803D', label: 'Delivered' };
+      return { bg: '#F0FDF4', text: '#3e6b3c', label: 'Delivered' };
     case 'cancelled':
-      return { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' };
+      return { bg: '#f3dcd2', text: '#991B1B', label: 'Cancelled' };
     default:
-      return { bg: '#F3F4F6', text: '#374151', label: status };
+      return { bg: '#e6e5e0', text: '#4a4a47', label: status };
   }
 }
 
@@ -84,12 +84,12 @@ export function OrderCard({ order }: OrderCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 6,
-    shadowColor: '#000000',
+    shadowColor: '#1a1a18',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -106,13 +106,13 @@ const styles = StyleSheet.create({
   },
   orderNumber: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
     marginBottom: 2,
   },
   chefName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#1a1a18',
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#e6e5e0',
     marginVertical: 12,
   },
   footer: {
@@ -135,11 +135,11 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   amount: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
 });

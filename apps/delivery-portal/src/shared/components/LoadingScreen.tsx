@@ -6,29 +6,51 @@ interface LoadingScreenProps {
 
 export function LoadingScreen({ message = 'Loading...' }: LoadingScreenProps) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bone"
+    >
       <div className="flex flex-col items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500">
-            <span className="text-2xl font-bold text-white">D</span>
+        <div className="flex items-center gap-2" aria-hidden="true">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-herb">
+            <span className="font-display text-2xl font-semibold text-paper">D</span>
           </div>
-          <span className="text-2xl font-bold text-gray-900">Fe3dr</span>
+          <span className="font-display text-2xl font-semibold text-ink">Fe3dr</span>
         </div>
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-        <p className="text-sm text-gray-500">{message}</p>
+        <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-herb" />
+        <p className="text-sm text-ink-muted">{message}</p>
       </div>
+      <span className="sr-only">{message}</span>
     </div>
   );
 }
 
-export function LoadingSpinner({ className = '' }: { className?: string }) {
-  return <Loader2 className={`h-5 w-5 animate-spin text-brand-500 ${className}`} />;
+export function LoadingSpinner({
+  className = '',
+  label,
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <>
+      <Loader2 aria-hidden="true" className={`h-5 w-5 animate-spin text-herb ${className}`} />
+      {label ? <span className="sr-only">{label}</span> : null}
+    </>
+  );
 }
 
-export function PageLoader() {
+export function PageLoader({ label = 'Loading...' }: { label?: string } = {}) {
   return (
-    <div className="flex h-[50vh] items-center justify-center">
-      <LoadingSpinner className="h-8 w-8" />
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="flex h-[50vh] items-center justify-center"
+    >
+      <LoadingSpinner className="h-8 w-8" label={label} />
     </div>
   );
 }

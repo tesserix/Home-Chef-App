@@ -86,7 +86,7 @@ export default function OrderHistoryPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Order History</h1>
+            <h1 className="font-display text-2xl font-semibold text-foreground">Order History</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {orders.length} order{orders.length !== 1 ? 's' : ''} found
             </p>
@@ -123,15 +123,15 @@ export default function OrderHistoryPage() {
       <motion.div variants={fadeInUp} className="grid grid-cols-3 gap-4">
         <Card padding="sm" className="text-center">
           <p className="text-xs font-medium text-muted-foreground">Delivered</p>
-          <p className="mt-1 text-xl font-bold text-success">{deliveredCount}</p>
+          <p className="mt-1 text-xl font-semibold text-success">{deliveredCount}</p>
         </Card>
         <Card padding="sm" className="text-center">
           <p className="text-xs font-medium text-muted-foreground">Cancelled</p>
-          <p className="mt-1 text-xl font-bold text-destructive">{cancelledCount}</p>
+          <p className="mt-1 text-xl font-semibold text-destructive">{cancelledCount}</p>
         </Card>
         <Card padding="sm" className="text-center">
           <p className="text-xs font-medium text-muted-foreground">Revenue</p>
-          <p className="mt-1 text-xl font-bold text-foreground">
+          <p className="mt-1 text-xl font-semibold text-foreground">
             ${totalRevenue.toFixed(2)}
           </p>
         </Card>
@@ -186,7 +186,7 @@ export default function OrderHistoryPage() {
                       {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
                     </p>
                   </div>
-                  <span className="text-base font-bold text-foreground">
+                  <span className="text-base font-medium text-foreground">
                     ${(order.total ?? 0).toFixed(2)}
                   </span>
                 </div>

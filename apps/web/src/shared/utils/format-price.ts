@@ -1,10 +1,9 @@
 import { useCurrencyStore } from '@/app/store/currency-store';
 
 // Symbol + decimal metadata for the currencies Stripe Connect supports.
-// The user's preferred-currency store supplies these for display-conversion
-// mode, but for "render this amount exactly in this currency" mode we need
-// a lookup that doesn't depend on the store (since the store's current
-// currency may differ from the order's).
+// Used as a fallback when Intl can't render the currency (older browsers, exotic codes)
+// and as the source of decimal counts for the legacy FX path that already has a
+// symbol from the store.
 const CURRENCY_META: Record<string, { symbol: string; decimals: number }> = {
   INR: { symbol: '₹', decimals: 2 },
   USD: { symbol: '$', decimals: 2 },
@@ -26,15 +25,49 @@ const CURRENCY_META: Record<string, { symbol: string; decimals: number }> = {
   THB: { symbol: '฿', decimals: 2 },
 };
 
+// Em-dash for NaN/Infinity. Never render "NaN" or "Infinity" to a user.
+const UNFORMATTABLE = '—';
+
+/**
+ * Locale-aware number formatter for the legacy store-driven path. Returns the
+ * digits + separators only — caller prefixes the store's symbol so user-chosen
+ * symbol overrides (e.g. "Rs." instead of "₹") survive.
+ */
+function formatNumberWithGrouping(amount: number, decimals: number): string {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(amount);
+}
+
 /**
  * Format an amount that's already in a specific ISO-4217 currency — no
  * FX conversion applied. Use when rendering values taken directly from
  * an order, chef, or invoice whose currency is carried alongside the
- * numbers. The old INR→user-currency conversion path lives below.
+ * numbers. Delegates to Intl.NumberFormat so:
+ *   - thousands/decimal separators follow the browser locale
+ *   - currency symbol position is locale-correct
+ *   - JPY/KRW zero-decimal currencies render integer
+ *   - negative values format properly ("-$1,234.56" not "$-1234.56")
  */
 export function formatAmount(amount: number, currency: string): string {
-  const meta = CURRENCY_META[currency.toUpperCase()] ?? { symbol: currency + ' ', decimals: 2 };
-  return `${meta.symbol}${amount.toFixed(meta.decimals)}`;
+  if (!Number.isFinite(amount)) return UNFORMATTABLE;
+
+  const code = currency.toUpperCase();
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+      currencyDisplay: 'narrowSymbol',
+    }).format(amount);
+  } catch {
+    // Unknown currency code: fall back to local symbol table, then ISO prefix.
+    const meta = CURRENCY_META[code];
+    if (meta) {
+      return `${meta.symbol}${formatNumberWithGrouping(amount, meta.decimals)}`;
+    }
+    return `${code} ${formatNumberWithGrouping(amount, 2)}`;
+  }
 }
 
 /**
@@ -42,21 +75,29 @@ export function formatAmount(amount: number, currency: string): string {
  * to the user's preferred currency using the current exchange rate. Kept
  * for menu cards and other places where the amount's source currency
  * isn't explicit on the data.
+ *
+ * Symbol comes from the store (so a user-customized glyph wins over the
+ * locale default); grouping/decimals go through Intl so 1,234,567.89
+ * renders correctly even though we prefix the symbol ourselves.
  */
 export function formatPrice(inrAmount: number): string {
+  if (!Number.isFinite(inrAmount)) return UNFORMATTABLE;
+
   const { code, symbol, decimals, rates } = useCurrencyStore.getState();
 
   if (code === 'INR') {
-    return `${symbol}${inrAmount.toFixed(decimals)}`;
+    return `${symbol}${formatNumberWithGrouping(inrAmount, decimals)}`;
   }
 
   const rate = rates[code];
   if (!rate || rate <= 0) {
-    return `₹${inrAmount.toFixed(2)}`;
+    // FX missing — render the source amount as INR so the user still sees
+    // a real number rather than a broken "0.00".
+    return `₹${formatNumberWithGrouping(inrAmount, 2)}`;
   }
 
   const converted = inrAmount * rate;
-  return `${symbol}${converted.toFixed(decimals)}`;
+  return `${symbol}${formatNumberWithGrouping(converted, decimals)}`;
 }
 
 /**
@@ -75,22 +116,20 @@ export function useFormatPrice(): (
   const rates = useCurrencyStore((s) => s.rates);
 
   return (amount: number, opts?: { currency?: string }): string => {
-    // Explicit source currency: the amount already is in that currency,
-    // just format. Never FX-convert — caller is telling us "this is the
-    // real charge amount".
+    if (!Number.isFinite(amount)) return UNFORMATTABLE;
+
     if (opts?.currency) {
       return formatAmount(amount, opts.currency);
     }
 
-    // Legacy path: assume INR, convert to user preference via FX.
     if (code === 'INR') {
-      return `${symbol}${amount.toFixed(decimals)}`;
+      return `${symbol}${formatNumberWithGrouping(amount, decimals)}`;
     }
     const rate = rates[code];
     if (!rate || rate <= 0) {
-      return `₹${amount.toFixed(2)}`;
+      return `₹${formatNumberWithGrouping(amount, 2)}`;
     }
     const converted = amount * rate;
-    return `${symbol}${converted.toFixed(decimals)}`;
+    return `${symbol}${formatNumberWithGrouping(converted, decimals)}`;
   };
 }

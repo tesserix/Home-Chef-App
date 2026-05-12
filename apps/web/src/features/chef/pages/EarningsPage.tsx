@@ -47,7 +47,7 @@ export default function ChefEarningsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -57,8 +57,8 @@ export default function ChefEarningsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Earnings</h1>
-          <p className="mt-1 text-gray-600">Track your income and payouts</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Earnings</h1>
+          <p className="mt-1 text-ink-soft">Track your income and payouts</p>
         </div>
         <div className="flex gap-3">
           <select
@@ -81,42 +81,42 @@ export default function ChefEarningsPage() {
 
       {/* Balance Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-6 text-white">
+        <div className="rounded-xl bg-herb p-6 text-paper">
           <div className="flex items-center justify-between">
-            <span className="text-brand-100">Available Balance</span>
-            <DollarSign className="h-5 w-5 text-brand-200" />
+            <span className="text-herb-tint">Available Balance</span>
+            <DollarSign className="h-5 w-5 text-herb-tint" />
           </div>
-          <p className="mt-4 text-3xl font-bold">{fp(earnings?.balance || 0)}</p>
-          <button className="mt-4 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium hover:bg-white/30 transition-colors">
+          <p className="mt-4 font-display text-3xl font-semibold tabular-nums">{fp(earnings?.balance || 0)}</p>
+          <button className="mt-4 rounded-lg bg-bone/20 px-4 py-2 text-sm font-medium hover:bg-bone/30 transition-colors">
             Withdraw Funds
           </button>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">Pending</span>
-            <Calendar className="h-5 w-5 text-gray-400" />
+            <span className="text-ink-muted">Pending</span>
+            <Calendar className="h-5 w-5 text-ink-muted" />
           </div>
-          <p className="mt-4 text-3xl font-bold text-gray-900">
+          <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
             {fp(earnings?.pendingBalance || 0)}
           </p>
-          <p className="mt-1 text-sm text-gray-500">From recent orders</p>
+          <p className="mt-1 text-sm text-ink-muted">From recent orders</p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">This Month</span>
+            <span className="text-ink-muted">This Month</span>
             {(earnings?.monthlyChange || 0) >= 0 ? (
-              <TrendingUp className="h-5 w-5 text-green-500" />
+              <TrendingUp className="h-5 w-5 text-herb" />
             ) : (
-              <TrendingDown className="h-5 w-5 text-red-500" />
+              <TrendingDown className="h-5 w-5 text-paprika" />
             )}
           </div>
-          <p className="mt-4 text-3xl font-bold text-gray-900">
+          <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
             {fp(earnings?.thisMonth || 0)}
           </p>
           <p className={`mt-1 flex items-center gap-1 text-sm ${
-            (earnings?.monthlyChange || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+            (earnings?.monthlyChange || 0) >= 0 ? 'text-herb' : 'text-paprika'
           }`}>
             {(earnings?.monthlyChange || 0) >= 0 ? (
               <ArrowUpRight className="h-4 w-4" />
@@ -127,25 +127,25 @@ export default function ChefEarningsPage() {
           </p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm">
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-gray-500">Total Earned</span>
-            <DollarSign className="h-5 w-5 text-gray-400" />
+            <span className="text-ink-muted">Total Earned</span>
+            <DollarSign className="h-5 w-5 text-ink-muted" />
           </div>
-          <p className="mt-4 text-3xl font-bold text-gray-900">
+          <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
             {fp(earnings?.totalEarnings || 0)}
           </p>
-          <p className="mt-1 text-sm text-gray-500">All time</p>
+          <p className="mt-1 text-sm text-ink-muted">All time</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Chart Placeholder */}
-        <div className="lg:col-span-2 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Earnings Overview</h2>
-          <div className="mt-6 h-64 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg">
-            <div className="text-center text-gray-400">
+        <div className="lg:col-span-2 rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Earnings Overview</h2>
+          <div className="mt-6 h-64 flex items-center justify-center border-2 border-dashed border-mist rounded-lg">
+            <div className="text-center text-ink-muted">
               <TrendingUp className="mx-auto h-12 w-12" />
               <p className="mt-2">Chart visualization</p>
               <p className="text-sm">Would display earnings over time</p>
@@ -158,13 +158,13 @@ export default function ChefEarningsPage() {
               <div key={i} className="text-center">
                 <div className="h-24 flex flex-col justify-end">
                   <div
-                    className="bg-brand-500 rounded-t"
+                    className="bg-herb rounded-t"
                     style={{
                       height: `${Math.max(10, (day.amount / (earnings.thisMonth / 7)) * 80)}%`,
                     }}
                   />
                 </div>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-ink-muted">
                   {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
                 </p>
               </div>
@@ -173,23 +173,23 @@ export default function ChefEarningsPage() {
         </div>
 
         {/* Top Items */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Top Selling Items</h2>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Top Selling Items</h2>
           <div className="mt-4 space-y-4">
             {earnings?.topItems?.map((item, index) => (
               <div key={item.name} className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-medium text-brand-600">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint text-sm font-medium text-herb">
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{item.name}</p>
-                  <p className="text-sm text-gray-500">{item.count} orders</p>
+                  <p className="font-medium text-ink truncate">{item.name}</p>
+                  <p className="text-sm text-ink-muted">{item.count} orders</p>
                 </div>
-                <p className="font-semibold text-gray-900">{fp(item.revenue)}</p>
+                <p className="font-semibold text-ink">{fp(item.revenue)}</p>
               </div>
             ))}
             {(!earnings?.topItems || earnings.topItems.length === 0) && (
-              <p className="text-center text-gray-500 py-4">No data available</p>
+              <p className="text-center text-ink-muted py-4">No data available</p>
             )}
           </div>
         </div>
@@ -197,39 +197,39 @@ export default function ChefEarningsPage() {
 
       {/* Stats Row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Total Orders</p>
-          <p className="mt-2 text-2xl font-bold text-gray-900">{earnings?.ordersCount || 0}</p>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <p className="text-sm text-ink-muted">Total Orders</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-ink">{earnings?.ordersCount || 0}</p>
         </div>
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Average Order Value</p>
-          <p className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <p className="text-sm text-ink-muted">Average Order Value</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-ink">
             {fp(earnings?.avgOrderValue || 0)}
           </p>
         </div>
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Last Month</p>
-          <p className="mt-2 text-2xl font-bold text-gray-900">
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <p className="text-sm text-ink-muted">Last Month</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-ink">
             {fp(earnings?.lastMonth || 0)}
           </p>
         </div>
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Platform Fee</p>
-          <p className="mt-2 text-2xl font-bold text-gray-900">15%</p>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <p className="text-sm text-ink-muted">Platform Fee</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-ink">15%</p>
         </div>
       </div>
 
       {/* Recent Payouts */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Payouts</h2>
-          <button className="text-sm text-brand-600 hover:text-brand-700">View all</button>
+          <h2 className="text-lg font-semibold text-ink">Recent Payouts</h2>
+          <button className="text-sm text-herb hover:text-herb">View all</button>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b text-left text-sm text-gray-500">
+              <tr className="border-b text-left text-sm text-ink-muted">
                 <th className="pb-3 font-medium">Date</th>
                 <th className="pb-3 font-medium">Amount</th>
                 <th className="pb-3 font-medium">Method</th>
@@ -239,17 +239,17 @@ export default function ChefEarningsPage() {
             <tbody className="divide-y">
               {earnings?.recentPayouts?.map((payout) => (
                 <tr key={payout.id} className="text-sm">
-                  <td className="py-4 text-gray-600">
+                  <td className="py-4 text-ink-soft">
                     {new Date(payout.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
                     })}
                   </td>
-                  <td className="py-4 font-semibold text-gray-900">
+                  <td className="py-4 font-semibold text-ink">
                     {fp(payout.amount)}
                   </td>
-                  <td className="py-4 text-gray-600">
+                  <td className="py-4 text-ink-soft">
                     <span className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
                       Bank Transfer
@@ -259,10 +259,10 @@ export default function ChefEarningsPage() {
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         payout.status === 'completed'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-herb-tint text-herb'
                           : payout.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-amber-tint text-amber'
+                          : 'bg-mist text-ink'
                       }`}
                     >
                       {payout.status}
@@ -272,7 +272,7 @@ export default function ChefEarningsPage() {
               ))}
               {(!earnings?.recentPayouts || earnings.recentPayouts.length === 0) && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-gray-500">
+                  <td colSpan={4} className="py-8 text-center text-ink-muted">
                     No payouts yet
                   </td>
                 </tr>
@@ -283,16 +283,16 @@ export default function ChefEarningsPage() {
       </div>
 
       {/* Payment Settings */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Payment Settings</h2>
+      <div className="rounded-xl bg-bone p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-ink">Payment Settings</h2>
         <div className="mt-4 flex items-center justify-between rounded-lg border p-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
-              <CreditCard className="h-6 w-6 text-gray-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-mist">
+              <CreditCard className="h-6 w-6 text-ink-soft" />
             </div>
             <div>
-              <p className="font-medium text-gray-900">Bank Account ••••4242</p>
-              <p className="text-sm text-gray-500">Default payout method</p>
+              <p className="font-medium text-ink">Bank Account ••••4242</p>
+              <p className="text-sm text-ink-muted">Default payout method</p>
             </div>
           </div>
           <button className="btn-outline">Edit</button>

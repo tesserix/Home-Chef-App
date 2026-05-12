@@ -36,15 +36,15 @@ function StatusBadge({ status }: { status: string }) {
   const isDelivered = status === 'delivered';
   const isCancelled = status === 'cancelled';
   const bgColor = isDelivered
-    ? 'bg-green-100'
+    ? 'bg-herb-tint'
     : isCancelled
-    ? 'bg-red-100'
-    : 'bg-yellow-100';
+    ? 'bg-paprika-tint'
+    : 'bg-amber-tint';
   const textColor = isDelivered
-    ? 'text-green-700'
+    ? 'text-herb'
     : isCancelled
-    ? 'text-red-700'
-    : 'text-yellow-700';
+    ? 'text-paprika'
+    : 'text-amber';
   const label = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
   return (
     <View className={`px-2 py-0.5 rounded-full ${bgColor}`}>
@@ -69,30 +69,30 @@ function HistoryCard({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="bg-white rounded-2xl p-4 mb-3 shadow-sm"
+      className="bg-bone rounded-2xl p-4 mb-3 shadow-sm"
       activeOpacity={0.75}
     >
       <View className="flex-row items-center justify-between mb-2">
         <StatusBadge status={item.status} />
-        <Text className="text-xs text-gray-400">{date}</Text>
+        <Text className="text-xs text-ink-muted">{date}</Text>
       </View>
 
       <View className="flex-row items-center mb-1">
-        <View className="w-2 h-2 rounded-full bg-orange-400 mr-2" />
-        <Text className="flex-1 text-sm text-gray-700" numberOfLines={1}>
+        <View className="w-2 h-2 rounded-full bg-herb-soft mr-2" />
+        <Text className="flex-1 text-sm text-ink-soft" numberOfLines={1}>
           {item.pickupAddress}
         </Text>
       </View>
       <View className="flex-row items-center mb-3">
-        <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
-        <Text className="flex-1 text-sm text-gray-700" numberOfLines={1}>
+        <View className="w-2 h-2 rounded-full bg-herb mr-2" />
+        <Text className="flex-1 text-sm text-ink-soft" numberOfLines={1}>
           {item.dropoffAddress}
         </Text>
       </View>
 
-      <View className="flex-row justify-between border-t border-gray-100 pt-2">
-        <Text className="text-sm text-gray-500">{item.distance.toFixed(1)} km</Text>
-        <Text className="text-sm font-semibold text-orange-500">
+      <View className="flex-row justify-between border-t border-mist pt-2">
+        <Text className="text-sm text-ink-muted">{item.distance.toFixed(1)} km</Text>
+        <Text className="text-sm font-semibold text-herb">
           &#8377;{item.payout.toFixed(2)}
         </Text>
       </View>
@@ -102,7 +102,7 @@ function HistoryCard({
 
 function SkeletonCard() {
   return (
-    <View className="bg-gray-200 rounded-2xl p-4 mb-3 h-28 animate-pulse" />
+    <View className="bg-mist rounded-2xl p-4 mb-3 h-28 animate-pulse" />
   );
 }
 
@@ -146,9 +146,9 @@ export default function DriverHistoryScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView className="flex-1 bg-paper">
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Delivery History</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">Delivery History</Text>
         </View>
         <View className="px-4 mt-2">
           {[1, 2, 3].map((i) => (
@@ -161,24 +161,24 @@ export default function DriverHistoryScreen() {
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">
           Failed to load delivery history
         </Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <View className="px-4 pt-4 pb-2">
-        <Text className="text-2xl font-bold text-gray-900">Delivery History</Text>
+        <Text className="font-display text-2xl font-semibold text-ink">Delivery History</Text>
       </View>
 
       <FlatList<DeliveryHistoryItem>
@@ -189,7 +189,7 @@ export default function DriverHistoryScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#FF6B35"
+            tintColor="#3e6b3c"
           />
         }
         onEndReached={handleEndReached}
@@ -197,7 +197,7 @@ export default function DriverHistoryScreen() {
         ListEmptyComponent={
           <View className="items-center justify-center py-16">
             <Text className="text-4xl mb-4">&#128230;</Text>
-            <Text className="text-base text-gray-500 text-center">
+            <Text className="text-base text-ink-muted text-center">
               No deliveries yet.{'\n'}Your completed deliveries will appear here.
             </Text>
           </View>
@@ -205,7 +205,7 @@ export default function DriverHistoryScreen() {
         ListFooterComponent={
           isFetchingNextPage ? (
             <View className="py-4 items-center">
-              <ActivityIndicator size="small" color="#FF6B35" />
+              <ActivityIndicator size="small" color="#3e6b3c" />
             </View>
           ) : null
         }

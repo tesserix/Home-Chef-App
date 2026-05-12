@@ -22,9 +22,9 @@ export default function PaymentResult() {
   }, []);
 
   return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <ActivityIndicator size="large" color="#F97316" />
-      <Text className="text-gray-500 mt-3 text-sm">Confirming payment...</Text>
+    <View className="flex-1 items-center justify-center bg-bone">
+      <ActivityIndicator size="large" color="#3e6b3c" />
+      <Text className="text-ink-muted mt-3 text-sm">Confirming payment...</Text>
     </View>
   );
 }

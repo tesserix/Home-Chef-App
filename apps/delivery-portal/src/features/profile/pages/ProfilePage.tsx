@@ -70,18 +70,18 @@ export default function ProfilePage() {
         </h3>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-2xl font-bold text-foreground">{profile?.totalDeliveries ?? 0}</p>
+            <p className="font-display text-2xl font-semibold text-foreground">{profile?.totalDeliveries ?? 0}</p>
             <p className="text-xs text-muted-foreground">Deliveries</p>
           </div>
           <div>
             <div className="flex items-center justify-center gap-1">
               <Star className="h-4 w-4 text-warning fill-warning" />
-              <p className="text-2xl font-bold text-foreground">{(profile?.rating ?? 0).toFixed(1)}</p>
+              <p className="font-display text-2xl font-semibold text-foreground">{(profile?.rating ?? 0).toFixed(1)}</p>
             </div>
             <p className="text-xs text-muted-foreground">Rating</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-foreground">{profile?.totalReviews ?? 0}</p>
+            <p className="font-display text-2xl font-semibold text-foreground">{profile?.totalReviews ?? 0}</p>
             <p className="text-xs text-muted-foreground">Reviews</p>
           </div>
         </div>

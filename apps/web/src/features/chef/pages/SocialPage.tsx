@@ -47,8 +47,8 @@ export default function ChefSocialPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Social Feed</h1>
-          <p className="mt-1 text-gray-600">
+          <h1 className="font-display text-2xl font-semibold text-ink">Social Feed</h1>
+          <p className="mt-1 text-ink-soft">
             Share your culinary creations with customers
           </p>
         </div>
@@ -59,9 +59,9 @@ export default function ChefSocialPage() {
       </div>
 
       {/* Content Moderation Notice */}
-      <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-4">
-        <AlertCircle className="h-5 w-5 flex-shrink-0 text-blue-600" />
-        <div className="text-sm text-blue-800">
+      <div className="flex items-start gap-3 rounded-xl bg-info/10 p-4">
+        <AlertCircle className="h-5 w-5 flex-shrink-0 text-info" />
+        <div className="text-sm text-info">
           <p className="font-medium">Content Guidelines</p>
           <p className="mt-1">
             To maintain platform safety, posts are automatically scanned for personal contact
@@ -74,13 +74,13 @@ export default function ChefSocialPage() {
       {/* Posts Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb" />
         </div>
       ) : (posts?.data ?? []).length === 0 ? (
-        <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-          <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 font-medium text-gray-900">No posts yet</h3>
-          <p className="mt-2 text-gray-600">
+        <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+          <ImageIcon className="mx-auto h-12 w-12 text-ink-muted" />
+          <h3 className="mt-4 font-medium text-ink">No posts yet</h3>
+          <p className="mt-2 text-ink-soft">
             Share photos of your dishes to attract more customers
           </p>
           <button onClick={() => setShowCreateModal(true)} className="btn-primary mt-4">
@@ -127,17 +127,17 @@ function PostCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
       {/* Image */}
       {post.images.length > 0 && (
         <div className="aspect-square relative">
           <img
             src={post.images[0]}
             alt="Post"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover" loading="lazy" decoding="async"
           />
           {post.images.length > 1 && (
-            <div className="absolute bottom-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
+            <div className="absolute bottom-2 right-2 rounded-full bg-ink/50 px-2 py-0.5 text-xs text-paper">
               +{post.images.length - 1} more
             </div>
           )}
@@ -146,13 +146,13 @@ function PostCard({
 
       <div className="p-4">
         {/* Content */}
-        <p className="text-gray-900 line-clamp-3">{post.content}</p>
+        <p className="text-ink line-clamp-3">{post.content}</p>
 
         {/* Hashtags */}
         {post.hashtags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {post.hashtags.map((tag) => (
-              <span key={tag} className="text-sm text-brand-600">
+              <span key={tag} className="text-sm text-herb">
                 {tag}
               </span>
             ))}
@@ -160,7 +160,7 @@ function PostCard({
         )}
 
         {/* Stats */}
-        <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
+        <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
           <span className="flex items-center gap-1">
             <Heart className="h-4 w-4" />
             {post.likesCount}
@@ -172,7 +172,7 @@ function PostCard({
         </div>
 
         {/* Date */}
-        <p className="mt-2 text-xs text-gray-400">
+        <p className="mt-2 text-xs text-ink-muted">
           {new Date(post.createdAt).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
@@ -185,14 +185,14 @@ function PostCard({
         <div className="mt-4 flex gap-2 border-t pt-4">
           <button
             onClick={onEdit}
-            className="flex-1 rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+            className="flex-1 rounded-lg bg-mist py-2 text-sm font-medium text-ink-soft hover:bg-mist"
           >
             <Edit2 className="mr-1 inline h-4 w-4" />
             Edit
           </button>
           <button
             onClick={onDelete}
-            className="flex-1 rounded-lg bg-red-100 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
+            className="flex-1 rounded-lg bg-paprika-tint py-2 text-sm font-medium text-paprika hover:bg-paprika"
           >
             <Trash2 className="mr-1 inline h-4 w-4" />
             Delete
@@ -264,13 +264,17 @@ function CreatePostModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-20">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 p-4 pt-20">
+      <div className="w-full max-w-lg rounded-xl bg-bone shadow-xl">
         <div className="flex items-center justify-between border-b p-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-ink">
             {post ? 'Edit Post' : 'Create Post'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-full p-1 text-ink-muted hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb"
+          >
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -278,15 +282,16 @@ function CreatePostModal({
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
           {/* Image Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Photos</label>
+            <label className="block text-sm font-medium text-ink-soft mb-2">Photos</label>
             <div className="flex gap-2 flex-wrap">
               {images.map((img, i) => (
                 <div key={i} className="relative h-20 w-20">
-                  <img src={img} alt="" className="h-full w-full rounded-lg object-cover" />
+                  <img src={img} alt={`Upload preview ${i + 1}`} loading="lazy" decoding="async" className="h-full w-full rounded-lg object-cover" />
                   <button
                     type="button"
                     onClick={() => setImages(images.filter((_, idx) => idx !== i))}
-                    className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                    aria-label={`Remove image ${i + 1}`}
+                    className="absolute -right-1 -top-1 rounded-full bg-paprika p-0.5 text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika focus-visible:ring-offset-1"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -295,18 +300,18 @@ function CreatePostModal({
               {images.length < 5 && (
                 <button
                   type="button"
-                  className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 hover:border-brand-500"
+                  className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-mist-strong hover:border-herb"
                 >
-                  <Upload className="h-6 w-6 text-gray-400" />
+                  <Upload className="h-6 w-6 text-ink-muted" />
                 </button>
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500">Add up to 5 photos</p>
+            <p className="mt-1 text-xs text-ink-muted">Add up to 5 photos</p>
           </div>
 
           {/* Content */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Caption</label>
+            <label className="block text-sm font-medium text-ink-soft mb-2">Caption</label>
             <textarea
               {...register('content', { required: 'Caption is required' })}
               rows={4}
@@ -314,13 +319,13 @@ function CreatePostModal({
               className="input-base"
             />
             {errors.content && (
-              <p className="mt-1 text-xs text-red-600">{errors.content.message}</p>
+              <p className="mt-1 text-xs text-paprika">{errors.content.message}</p>
             )}
           </div>
 
           {/* Hashtags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-ink-soft mb-2">
               <Hash className="mr-1 inline h-4 w-4" />
               Hashtags
             </label>
@@ -328,7 +333,7 @@ function CreatePostModal({
               {hashtags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-sm text-brand-700"
+                  className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
                 >
                   {tag}
                   <button type="button" onClick={() => setHashtags(hashtags.filter((t) => t !== tag))}>
@@ -354,7 +359,7 @@ function CreatePostModal({
 
           {/* Tag Menu Items */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-ink-soft mb-2">
               Tag Menu Items (Optional)
             </label>
             <select {...register('taggedMenuItems')} multiple className="input-base h-24">
@@ -364,7 +369,7 @@ function CreatePostModal({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-ink-muted">
               Hold Ctrl/Cmd to select multiple items
             </p>
           </div>

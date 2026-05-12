@@ -33,10 +33,10 @@ export default function FavoritesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
-        <Heart className="h-16 w-16 text-gray-300" />
-        <h2 className="mt-4 text-xl font-semibold text-gray-900">Log in to see your favorites</h2>
-        <p className="mt-2 text-gray-600 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-paper px-4">
+        <Heart className="h-16 w-16 text-ink-muted" />
+        <h2 className="mt-4 text-xl font-semibold text-ink">Log in to see your favorites</h2>
+        <p className="mt-2 text-ink-soft text-center">
           Save your favorite home chefs to quickly find them later
         </p>
         <Link to="/login" className="btn-primary mt-6">
@@ -47,7 +47,7 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -55,16 +55,16 @@ export default function FavoritesPage() {
           className="mb-8"
         >
           <div className="flex items-center gap-3">
-            <Heart className="h-6 w-6 text-red-500 fill-red-500" />
-            <h1 className="font-display text-display-sm text-gray-900">My Favorite Chefs</h1>
+            <Heart className="h-6 w-6 text-paprika fill-paprika" />
+            <h1 className="font-display text-display-sm text-ink">My Favorite Chefs</h1>
           </div>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-ink-soft">
             {count} of {MAX_FAVORITES} slots used
           </p>
           {/* Progress bar */}
-          <div className="mt-3 h-2 w-48 rounded-full bg-gray-200">
+          <div className="mt-3 h-2 w-48 rounded-full bg-mist">
             <div
-              className="h-full rounded-full bg-red-400 transition-all"
+              className="h-full rounded-full bg-paprika transition-all"
               style={{ width: `${(count / MAX_FAVORITES) * 100}%` }}
             />
           </div>
@@ -72,13 +72,13 @@ export default function FavoritesPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-herb" />
           </div>
         ) : favorites.length === 0 ? (
           <Card variant="filled" padding="lg" className="text-center">
-            <Heart className="mx-auto h-12 w-12 text-gray-300" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">No favorites yet</h3>
-            <p className="mt-2 text-gray-600">
+            <Heart className="mx-auto h-12 w-12 text-ink-muted" />
+            <h3 className="mt-4 text-lg font-semibold text-ink">No favorites yet</h3>
+            <p className="mt-2 text-ink-soft">
               Browse chefs and tap the heart icon to save up to {MAX_FAVORITES}
             </p>
             <Button asChild variant="primary" className="mt-6">
@@ -110,7 +110,7 @@ export default function FavoritesPage() {
                             alt={fav.chef.businessName}
                             size="lg"
                             shape="square"
-                            className="border-3 border-white shadow-md rounded-lg"
+                            className="border-3 border-bone shadow-md rounded-lg"
                           />
                         </div>
                       </div>
@@ -118,17 +118,17 @@ export default function FavoritesPage() {
                       <div className="p-4 pt-8">
                         <div className="flex items-start justify-between">
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-gray-900 truncate">
+                            <h3 className="font-semibold text-ink truncate">
                               {fav.chef.businessName}
                             </h3>
-                            <p className="mt-1 text-sm text-gray-500 truncate">
+                            <p className="mt-1 text-sm text-ink-muted truncate">
                               {fav.chef.cuisines?.slice(0, 2).join(' • ')}
                             </p>
                           </div>
                           <RatingBadge value={fav.chef.rating} className="ml-2" />
                         </div>
 
-                        <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
+                        <div className="mt-3 flex items-center gap-4 text-sm text-ink-muted">
                           <div className="flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5" />
                             {fav.chef.prepTime}
@@ -149,7 +149,7 @@ export default function FavoritesPage() {
                     <div className="border-t px-4 py-2">
                       <button
                         onClick={() => handleRemove(fav.chef.id, fav.chef.businessName)}
-                        className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors"
+                        className="flex items-center gap-1.5 text-sm text-paprika hover:text-paprika transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Remove

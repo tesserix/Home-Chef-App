@@ -53,7 +53,7 @@ export default function ReviewsPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-herb border-t-transparent" />
       </div>
     );
   }
@@ -69,44 +69,44 @@ export default function ReviewsPage() {
       {/* Rating Summary */}
       <motion.div variants={fadeInUp} className="grid gap-6 lg:grid-cols-3">
         {/* Overall Rating */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="rounded-xl border border-mist bg-bone p-6">
           <div className="flex items-center gap-4">
-            <div className="text-4xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
+            <div className="font-display text-4xl font-semibold tabular-nums text-ink">{avgRating.toFixed(1)}</div>
             <div>
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((s) => (
                   <Star
                     key={s}
-                    className={`h-5 w-5 ${s <= Math.round(avgRating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                    className={`h-5 w-5 ${s <= Math.round(avgRating) ? 'fill-amber text-amber' : 'text-ink-muted'}`}
                   />
                 ))}
               </div>
-              <p className="mt-1 text-sm text-gray-500">{reviews.length} reviews</p>
+              <p className="mt-1 text-sm text-ink-muted">{reviews.length} reviews</p>
             </div>
           </div>
         </div>
 
         {/* Rating Distribution */}
-        <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 text-sm font-medium text-gray-700">Rating Distribution</h3>
+        <div className="col-span-2 rounded-xl border border-mist bg-bone p-6">
+          <h3 className="mb-4 text-sm font-medium text-ink-soft">Rating Distribution</h3>
           <div className="space-y-2">
             {ratingDistribution.map((item) => (
               <button
                 key={item.stars}
                 onClick={() => setFilterStars(filterStars === item.stars ? null : item.stars)}
-                className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-gray-50 ${filterStars === item.stars ? 'bg-brand-50' : ''}`}
+                className={`flex w-full items-center gap-3 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-paper ${filterStars === item.stars ? 'bg-herb-tint' : ''}`}
               >
-                <span className="w-8 text-right font-medium text-gray-700">{item.stars}</span>
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <span className="w-8 text-right font-medium text-ink-soft">{item.stars}</span>
+                <Star className="h-4 w-4 fill-amber text-amber" />
                 <div className="flex-1">
-                  <div className="h-2 rounded-full bg-gray-100">
+                  <div className="h-2 rounded-full bg-mist">
                     <div
-                      className="h-2 rounded-full bg-yellow-400 transition-all"
+                      className="h-2 rounded-full bg-amber transition-all"
                       style={{ width: `${item.percentage}%` }}
                     />
                   </div>
                 </div>
-                <span className="w-8 text-right text-gray-500">{item.count}</span>
+                <span className="w-8 text-right text-ink-muted">{item.count}</span>
               </button>
             ))}
           </div>
@@ -116,11 +116,11 @@ export default function ReviewsPage() {
       {/* Filter Bar */}
       {filterStars && (
         <motion.div variants={fadeInUp} className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <span className="text-sm text-gray-600">Showing {filterStars}-star reviews</span>
+          <Filter className="h-4 w-4 text-ink-muted" />
+          <span className="text-sm text-ink-soft">Showing {filterStars}-star reviews</span>
           <button
             onClick={() => setFilterStars(null)}
-            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="text-sm font-medium text-herb hover:text-herb"
           >
             Clear filter
           </button>
@@ -130,13 +130,13 @@ export default function ReviewsPage() {
       {/* Reviews List */}
       <motion.div variants={fadeInUp} className="space-y-4">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 py-16">
-            <MessageSquare className="h-12 w-12 text-gray-300" />
-            <p className="mt-4 font-medium text-gray-500">No reviews yet</p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-mist-strong py-16">
+            <MessageSquare className="h-12 w-12 text-ink-muted" />
+            <p className="mt-4 font-medium text-ink-muted">No reviews yet</p>
           </div>
         ) : (
           filtered.map((review) => (
-            <div key={review.id} className="rounded-xl border border-gray-200 bg-white p-6">
+            <div key={review.id} className="rounded-xl border border-mist bg-bone p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -144,15 +144,15 @@ export default function ReviewsPage() {
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Star
                           key={s}
-                          className={`h-4 w-4 ${s <= review.overallRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                          className={`h-4 w-4 ${s <= review.overallRating ? 'fill-amber text-amber' : 'text-ink-muted'}`}
                         />
                       ))}
                     </div>
                     {review.title && (
-                      <span className="font-medium text-gray-900">{review.title}</span>
+                      <span className="font-medium text-ink">{review.title}</span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-ink-muted">
                     {review.customerName && <>{review.customerName} &middot; </>}
                     Order #{review.orderId.slice(-4)} &middot;{' '}
                     {format(new Date(review.createdAt), 'MMM d, yyyy')}
@@ -164,29 +164,29 @@ export default function ReviewsPage() {
               </div>
 
               {review.comment && (
-                <p className="mt-3 text-sm text-gray-700">{review.comment}</p>
+                <p className="mt-3 text-sm text-ink-soft">{review.comment}</p>
               )}
 
               {/* Sub-ratings */}
               <div className="mt-3 flex flex-wrap gap-3">
                 {review.foodRating > 0 && (
-                  <span className="text-xs text-gray-500">Food: {review.foodRating}/5</span>
+                  <span className="text-xs text-ink-muted">Food: {review.foodRating}/5</span>
                 )}
                 {review.valueRating && review.valueRating > 0 && (
-                  <span className="text-xs text-gray-500">Value: {review.valueRating}/5</span>
+                  <span className="text-xs text-ink-muted">Value: {review.valueRating}/5</span>
                 )}
                 {review.deliveryRating && review.deliveryRating > 0 && (
-                  <span className="text-xs text-gray-500">Delivery: {review.deliveryRating}/5</span>
+                  <span className="text-xs text-ink-muted">Delivery: {review.deliveryRating}/5</span>
                 )}
               </div>
 
               {/* Chef Response */}
               {review.chefResponse && (
-                <div className="mt-4 rounded-lg bg-gray-50 p-4">
-                  <p className="text-xs font-medium text-gray-500">Your reply</p>
-                  <p className="mt-1 text-sm text-gray-700">{review.chefResponse}</p>
+                <div className="mt-4 rounded-lg bg-paper p-4">
+                  <p className="text-xs font-medium text-ink-muted">Your reply</p>
+                  <p className="mt-1 text-sm text-ink-soft">{review.chefResponse}</p>
                   {review.chefRespondedAt && (
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-ink-muted">
                       {format(new Date(review.chefRespondedAt), 'MMM d, yyyy')}
                     </p>
                   )}
@@ -202,7 +202,7 @@ export default function ReviewsPage() {
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
                         placeholder="Write your reply..."
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                        className="w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                         rows={3}
                       />
                       <div className="flex gap-2">
@@ -231,7 +231,7 @@ export default function ReviewsPage() {
                   ) : (
                     <button
                       onClick={() => setReplyingTo(review.id)}
-                      className="mt-3 flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700"
+                      className="mt-3 flex items-center gap-1.5 text-sm font-medium text-herb hover:text-herb"
                     >
                       <MessageSquare className="h-4 w-4" />
                       Reply

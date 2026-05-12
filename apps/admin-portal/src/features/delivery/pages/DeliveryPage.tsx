@@ -47,17 +47,18 @@ interface DeliveryRecord {
   cancelReason?: string;
 }
 
+// Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-amber-50 text-amber-700',
-  assigned: 'bg-blue-50 text-blue-700',
-  at_pickup: 'bg-indigo-50 text-indigo-700',
-  picked_up: 'bg-purple-50 text-purple-700',
-  in_transit: 'bg-cyan-50 text-cyan-700',
-  at_dropoff: 'bg-teal-50 text-teal-700',
-  delivered: 'bg-green-50 text-green-700',
-  failed: 'bg-red-50 text-red-700',
-  returned: 'bg-orange-50 text-orange-700',
-  cancelled: 'bg-gray-100 text-gray-600',
+  pending: 'bg-amber-tint text-amber',
+  assigned: 'bg-info/10 text-info',
+  at_pickup: 'bg-info/10 text-info',
+  picked_up: 'bg-info/10 text-info',
+  in_transit: 'bg-info/10 text-info',
+  at_dropoff: 'bg-herb-tint text-herb',
+  delivered: 'bg-herb-tint text-herb',
+  failed: 'bg-paprika-tint text-paprika',
+  returned: 'bg-mist text-ink-soft',
+  cancelled: 'bg-mist text-ink-soft',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -137,34 +138,34 @@ export default function DeliveryPage() {
               <Users className="h-5 w-5 text-primary" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">{stats?.totalPartners ?? 0}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{stats?.totalPartners ?? 0}</p>
           <p className="text-xs text-muted-foreground">{stats?.onlinePartners ?? 0} online now</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-card">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
-              <Truck className="h-5 w-5 text-amber-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-tint">
+              <Truck className="h-5 w-5 text-amber" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">{stats?.activeDeliveries ?? 0}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{stats?.activeDeliveries ?? 0}</p>
           <p className="text-xs text-muted-foreground">Active deliveries</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-card">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
-              <Package className="h-5 w-5 text-green-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+              <Package className="h-5 w-5 text-herb" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">{stats?.todayDeliveries ?? 0}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{stats?.todayDeliveries ?? 0}</p>
           <p className="text-xs text-muted-foreground">Delivered today</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-card">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
-              <IndianRupee className="h-5 w-5 text-emerald-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+              <IndianRupee className="h-5 w-5 text-herb" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.todayEarnings ?? 0)}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{formatCurrency(stats?.todayEarnings ?? 0)}</p>
           <p className="text-xs text-muted-foreground">Today's payouts</p>
         </div>
       </div>
@@ -245,13 +246,13 @@ export default function DeliveryPage() {
                     <td className="px-4 py-3">
                       <div className="space-y-1">
                         <div className="flex items-start gap-1.5">
-                          <MapPin className="h-3 w-3 text-green-500 mt-0.5 shrink-0" />
+                          <MapPin className="h-3 w-3 text-herb mt-0.5 shrink-0" />
                           <p className="text-xs text-foreground truncate max-w-[180px]">
                             {d.pickup?.address || d.pickup?.city || '-'}
                           </p>
                         </div>
                         <div className="flex items-start gap-1.5">
-                          <MapPin className="h-3 w-3 text-red-500 mt-0.5 shrink-0" />
+                          <MapPin className="h-3 w-3 text-paprika mt-0.5 shrink-0" />
                           <p className="text-xs text-foreground truncate max-w-[180px]">
                             {d.dropoff?.address || d.dropoff?.city || '-'}
                           </p>

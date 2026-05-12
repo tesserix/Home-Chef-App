@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Clock, Plus, Heart, Flame } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { cn } from '@/shared/utils/cn';
+import { hashStringToIndex } from '@/shared/utils/hash';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { FOOD_PLACEHOLDERS } from '@/shared/constants/images';
 import { Card, Badge, RatingBadge, Button } from '@/shared/components/ui';
@@ -27,6 +27,10 @@ interface FoodCardProps {
   className?: string;
 }
 
+function resolveFoodFallback(id: string): string {
+  return FOOD_PLACEHOLDERS[hashStringToIndex(id, FOOD_PLACEHOLDERS.length)]!;
+}
+
 export function FoodCard({
   id,
   name,
@@ -47,8 +51,10 @@ export function FoodCard({
   isFavorite = false,
   className,
 }: FoodCardProps) {
-  const imageUrl = image || FOOD_PLACEHOLDERS[parseInt(id) % FOOD_PLACEHOLDERS.length];
+  const fallbackUrl = resolveFoodFallback(id);
+  const imageUrl = image || fallbackUrl;
   const fp = useFormatPrice();
+  const showStrikethrough = originalPrice !== undefined && originalPrice > price;
 
   return (
     <Card
@@ -59,18 +65,23 @@ export function FoodCard({
     >
       {/* Image */}
       <Link to={`/menu/${id}`} className="relative block aspect-square overflow-hidden">
-        <motion.img
+        <img
           src={imageUrl}
           alt={name}
           loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+          decoding="async"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
+          onError={(e) => {
+            const img = e.currentTarget;
+            if (img.src !== fallbackUrl) img.src = fallbackUrl;
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 scrim-bottom opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
         {/* Badges */}
         <div className="absolute left-3 top-3 flex flex-col gap-2">
-          {discount && (
-            <Badge variant="error" size="sm">
+          {discount !== undefined && discount > 0 && (
+            <Badge variant="error" size="sm" aria-label={`${discount} percent off`}>
               -{discount}%
             </Badge>
           )}
@@ -83,41 +94,51 @@ export function FoodCard({
 
         {/* Favorite button */}
         {onFavorite && (
-          <motion.button
+          <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onFavorite();
             }}
-            whileTap={{ scale: 0.9 }}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-soft-md backdrop-blur-sm transition-all hover:bg-white hover:shadow-elevated"
+            aria-label={isFavorite ? `Remove ${name} from favorites` : `Save ${name} to favorites`}
+            aria-pressed={isFavorite}
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-bone/90 shadow-soft-md backdrop-blur-sm transition-all hover:bg-bone hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 active:scale-95"
           >
             <Heart
+              aria-hidden="true"
               className={cn(
                 'h-4 w-4 transition-colors',
-                isFavorite ? 'fill-spice-500 text-spice-500' : 'text-gray-600'
+                isFavorite ? 'fill-spice-500 text-herb' : 'text-ink-soft'
               )}
             />
-          </motion.button>
+          </button>
         )}
       </Link>
 
       {/* Content */}
       <div className="p-4">
         <Link to={`/menu/${id}`}>
-          <h3 className="font-semibold text-gray-900 line-clamp-1 group-hover:text-brand-600 transition-colors">
+          <h3
+            title={name}
+            className="font-semibold text-ink line-clamp-1 group-hover:text-herb transition-colors"
+          >
             {name}
           </h3>
         </Link>
 
         {description && (
-          <p className="mt-1 text-sm text-gray-500 line-clamp-2">{description}</p>
+          <p title={description} className="mt-1 text-sm text-ink-muted line-clamp-2">
+            {description}
+          </p>
         )}
 
         {/* Chef link */}
         {chefName && chefId && (
           <Link
             to={`/chefs/${chefId}`}
-            className="mt-2 inline-block text-sm text-brand-600 hover:underline"
+            title={chefName}
+            className="mt-2 inline-block max-w-full truncate text-sm text-herb hover:underline align-bottom"
           >
             by {chefName}
           </Link>
@@ -129,19 +150,24 @@ export function FoodCard({
             <RatingBadge value={rating} showCount={!!reviewCount} count={reviewCount} size="sm" />
           )}
           {prepTime && (
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <Clock className="h-4 w-4" />
-              <span>{prepTime}</span>
+            <div className="flex items-center gap-1 text-sm text-ink-muted min-w-0">
+              <Clock aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="truncate">{prepTime}</span>
             </div>
           )}
           {spicyLevel && (
-            <div className="flex items-center gap-0.5">
+            <div
+              role="img"
+              aria-label={`Spicy level ${spicyLevel} of 3`}
+              className="flex items-center gap-0.5"
+            >
               {[1, 2, 3].map((level) => (
                 <Flame
                   key={level}
+                  aria-hidden="true"
                   className={cn(
                     'h-4 w-4',
-                    level <= spicyLevel ? 'text-spice-500' : 'text-gray-200'
+                    level <= spicyLevel ? 'text-herb' : 'text-mist-strong'
                   )}
                 />
               ))}
@@ -150,14 +176,17 @@ export function FoodCard({
         </div>
 
         {/* Footer */}
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold text-brand-600">
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-xl font-semibold text-herb tabular-nums truncate">
               {fp(price)}
             </span>
-            {originalPrice && originalPrice > price && (
-              <span className="text-sm text-gray-400 line-through">
-                {fp(originalPrice)}
+            {showStrikethrough && (
+              <span
+                aria-label={`Original price ${fp(originalPrice!)}`}
+                className="text-sm text-ink-muted line-through tabular-nums truncate"
+              >
+                {fp(originalPrice!)}
               </span>
             )}
           </div>
@@ -167,9 +196,10 @@ export function FoodCard({
               variant="primary"
               size="icon"
               onClick={onAddToCart}
-              className="rounded-xl"
+              aria-label={`Add ${name} to cart`}
+              className="rounded-xl shrink-0"
             >
-              <Plus className="h-5 w-5" />
+              <Plus aria-hidden="true" className="h-5 w-5" />
             </Button>
           )}
         </div>
@@ -187,7 +217,8 @@ export function FoodCardCompact({
   chefName,
   onAddToCart,
 }: Pick<FoodCardProps, 'id' | 'name' | 'price' | 'image' | 'chefName' | 'onAddToCart'>) {
-  const imageUrl = image || FOOD_PLACEHOLDERS[parseInt(id) % FOOD_PLACEHOLDERS.length];
+  const fallbackUrl = resolveFoodFallback(id);
+  const imageUrl = image || fallbackUrl;
   const fp = useFormatPrice();
 
   return (
@@ -195,24 +226,34 @@ export function FoodCardCompact({
       <img
         src={imageUrl}
         alt={name}
-        className="h-20 w-20 rounded-xl object-cover"
         loading="lazy"
+        decoding="async"
+        className="h-20 w-20 rounded-xl object-cover shrink-0"
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (img.src !== fallbackUrl) img.src = fallbackUrl;
+        }}
       />
       <div className="flex-1 min-w-0">
-        <h4 className="font-medium text-gray-900 truncate">{name}</h4>
+        <h4 title={name} className="font-medium text-ink truncate">
+          {name}
+        </h4>
         {chefName && (
-          <p className="text-sm text-gray-500">by {chefName}</p>
+          <p title={chefName} className="text-sm text-ink-muted truncate">
+            by {chefName}
+          </p>
         )}
-        <p className="mt-1 font-bold text-brand-600">{fp(price)}</p>
+        <p className="mt-1 font-semibold text-herb tabular-nums">{fp(price)}</p>
       </div>
       {onAddToCart && (
         <Button
           variant="secondary"
           size="icon"
           onClick={onAddToCart}
+          aria-label={`Add ${name} to cart`}
           className="shrink-0"
         >
-          <Plus className="h-5 w-5" />
+          <Plus aria-hidden="true" className="h-5 w-5" />
         </Button>
       )}
     </Card>

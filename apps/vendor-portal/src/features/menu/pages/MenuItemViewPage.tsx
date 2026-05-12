@@ -58,7 +58,7 @@ export default function MenuItemViewPage() {
             <ArrowLeft className="h-5 w-5 text-muted-foreground" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{menuItem.name}</h1>
+            <h1 className="font-display text-2xl font-semibold text-foreground">{menuItem.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               {menuItem.isApproved ? (
                 <Badge variant="success" size="sm"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>
@@ -90,7 +90,7 @@ export default function MenuItemViewPage() {
               <div className="grid grid-cols-2 gap-1">
                 {menuItem.images.map((img, idx) => (
                   <div key={img.id} className={`overflow-hidden ${idx === 0 ? 'col-span-2 aspect-video' : 'aspect-square'}`}>
-                    <img src={img.url} alt={menuItem.name} className="h-full w-full object-cover" />
+                    <img src={img.url} alt={menuItem.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                   </div>
                 ))}
               </div>
@@ -98,7 +98,7 @@ export default function MenuItemViewPage() {
           ) : menuItem.imageUrl ? (
             <Card padding="none">
               <div className="aspect-video overflow-hidden">
-                <img src={menuItem.imageUrl} alt={menuItem.name} className="h-full w-full object-cover" />
+                <img src={menuItem.imageUrl} alt={menuItem.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
               </div>
             </Card>
           ) : null}
@@ -147,7 +147,7 @@ export default function MenuItemViewPage() {
           <Card>
             <h2 className="text-lg font-semibold text-foreground mb-3">Pricing</h2>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-primary">₹{menuItem.price.toFixed(2)}</span>
+              <span className="font-display text-3xl font-semibold tabular-nums text-primary">₹{menuItem.price.toFixed(2)}</span>
               {(menuItem.comparePrice ?? 0) > 0 && (menuItem.comparePrice ?? 0) > menuItem.price && (
                 <span className="text-lg text-muted-foreground line-through">₹{(menuItem.comparePrice ?? 0).toFixed(2)}</span>
               )}

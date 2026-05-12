@@ -126,7 +126,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       </SafeAreaView>
     );
@@ -217,7 +217,7 @@ export default function ProfileScreen() {
               disabled={updateProfile.isPending}
             >
               {updateProfile.isPending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color="#fafaf7" />
               ) : (
                 <Text style={styles.saveButtonText}>Save Changes</Text>
               )}
@@ -295,7 +295,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -309,15 +309,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 24,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#e6e5e0',
   },
   avatar: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -325,14 +325,14 @@ const styles = StyleSheet.create({
   avatarInitials: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#fafaf7',
   },
   emailDisplay: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     marginTop: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -340,43 +340,43 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
     marginBottom: 16,
   },
   label: {
     fontSize: 13,
-    color: '#374151',
+    color: '#4a4a47',
     fontWeight: '500',
     marginBottom: 6,
     marginTop: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#d4d3ce',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#111827',
-    backgroundColor: '#FAFAFA',
+    color: '#1a1a18',
+    backgroundColor: '#fafaf7',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: '#c95b3e',
   },
   errorText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: '#c95b3e',
     marginTop: 4,
   },
   saveButton: {
     marginTop: 16,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -391,19 +391,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: '#d4d3ce',
+    backgroundColor: '#fafaf7',
   },
   chipSelected: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#F97316',
+    backgroundColor: '#dde9d8',
+    borderColor: '#3e6b3c',
   },
   chipText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   chipTextSelected: {
-    color: '#F97316',
+    color: '#3e6b3c',
     fontWeight: '600',
   },
   moreRow: {
@@ -418,16 +418,16 @@ const styles = StyleSheet.create({
   moreRowLabel: {
     flex: 1,
     fontSize: 15,
-    color: '#374151',
+    color: '#4a4a47',
     fontWeight: '500',
   },
   moreRowArrow: {
     fontSize: 20,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#e6e5e0',
   },
   logoutButton: {
     margin: 16,
@@ -435,12 +435,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#EF4444',
+    borderColor: '#c95b3e',
     alignItems: 'center',
   },
   logoutText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#EF4444',
+    color: '#c95b3e',
   },
 });

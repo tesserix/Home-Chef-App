@@ -75,7 +75,7 @@ export default function ChefDetailPage() {
   if (chefLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -83,8 +83,8 @@ export default function ChefDetailPage() {
   if (!chef) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <AlertCircle className="h-16 w-16 text-gray-400" />
-        <h2 className="mt-4 text-xl font-semibold text-gray-900">Chef not found</h2>
+        <AlertCircle className="h-16 w-16 text-ink-muted" />
+        <h2 className="mt-4 text-xl font-semibold text-ink">Chef not found</h2>
         <Link to="/chefs" className="btn-primary mt-4">
           Browse Chefs
         </Link>
@@ -99,7 +99,7 @@ export default function ChefDetailPage() {
     : menuItems;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-paper">
       {/* Hero Banner */}
       <div className="relative h-64 md:h-80">
         <img
@@ -107,18 +107,18 @@ export default function ChefDetailPage() {
           alt={chef.businessName}
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute inset-0 scrim-bottom" />
       </div>
 
       {/* Chef Info */}
       <div className="container-app relative -mt-20">
-        <div className="rounded-xl bg-white p-6 shadow-sm md:p-8">
+        <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start">
             {/* Profile Image */}
             <img
               src={chef.profileImage}
               alt={chef.businessName}
-              className="h-24 w-24 rounded-xl border-4 border-white object-cover shadow-lg md:h-32 md:w-32"
+              className="h-24 w-24 rounded-xl border-4 border-bone object-cover shadow-lg md:h-32 md:w-32"
             />
 
             {/* Info */}
@@ -126,23 +126,23 @@ export default function ChefDetailPage() {
               <div className="flex flex-wrap items-start gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+                    <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">
                       {chef.businessName}
                     </h1>
                     {chef.verified && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
                         <Check className="h-3 w-3" />
                         Verified
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-gray-600">{chef.cuisines.join(' • ')}</p>
+                  <p className="mt-1 text-ink-soft">{chef.cuisines.join(' • ')}</p>
                 </div>
 
                 {/* Actions */}
                 <div className="flex gap-2">
                   <button onClick={handleFavorite} className="btn-outline p-2">
-                    <Heart className={`h-5 w-5 transition-colors ${favorited ? 'fill-red-500 text-red-500' : ''}`} />
+                    <Heart className={`h-5 w-5 transition-colors ${favorited ? 'fill-paprika text-paprika' : ''}`} />
                   </button>
                   <button className="btn-outline p-2">
                     <Share2 className="h-5 w-5" />
@@ -150,58 +150,58 @@ export default function ChefDetailPage() {
                 </div>
               </div>
 
-              <p className="mt-4 text-gray-600">{chef.description}</p>
+              <p className="mt-4 text-ink-soft">{chef.description}</p>
 
               {/* Stats */}
               <div className="mt-6 flex flex-wrap gap-6">
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 rounded-lg bg-green-50 px-2 py-1">
-                    <Star className="h-4 w-4 fill-green-500 text-green-500" />
-                    <span className="font-semibold text-green-700">{chef.rating}</span>
+                  <div className="flex items-center gap-1 rounded-lg bg-herb-tint px-2 py-1">
+                    <Star className="h-4 w-4 fill-herb text-herb" />
+                    <span className="font-semibold text-herb">{chef.rating}</span>
                   </div>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-ink-muted">
                     ({chef.totalReviews} reviews)
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-ink-soft">
                   <Clock className="h-4 w-4" />
                   {chef.prepTime} prep time
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-ink-soft">
                   <MapPin className="h-4 w-4" />
                   {chef.serviceRadius} km delivery radius
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-ink-soft">
                   <ChefHat className="h-4 w-4" />
                   {chef.totalOrders}+ orders
                 </div>
               </div>
 
               {/* Status & Fees */}
-              <div className="mt-6 flex flex-wrap items-center gap-4 rounded-lg bg-gray-50 p-4">
+              <div className="mt-6 flex flex-wrap items-center gap-4 rounded-lg bg-paper p-4">
                 <div>
                   {chef.acceptingOrders ? (
-                    <span className="inline-flex items-center gap-1 text-green-600">
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                    <span className="inline-flex items-center gap-1 text-herb">
+                      <span className="h-2 w-2 rounded-full bg-herb" />
                       Open for orders
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-gray-500">
-                      <span className="h-2 w-2 rounded-full bg-gray-400" />
+                    <span className="inline-flex items-center gap-1 text-ink-muted">
+                      <span className="h-2 w-2 rounded-full bg-ink-muted" />
                       Currently closed
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-ink-soft">
                   Min. order: <span className="font-medium">{fp(chef.minimumOrder)}</span>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-ink-soft">
                   Delivery: <span className="font-medium">{fp(chef.deliveryFee)}</span>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-ink-soft">
                   Price range: <span className="font-medium">{chef.priceRange}</span>
                 </div>
               </div>
@@ -215,15 +215,15 @@ export default function ChefDetailPage() {
         <div className="flex flex-col lg:flex-row lg:gap-8">
           {/* Categories Sidebar */}
           <div className="mb-6 lg:mb-0 lg:w-64 lg:flex-shrink-0">
-            <div className="rounded-xl bg-white p-4 shadow-sm lg:sticky lg:top-24">
-              <h3 className="font-semibold text-gray-900 mb-3">Categories</h3>
+            <div className="rounded-xl bg-bone p-4 shadow-sm lg:sticky lg:top-24">
+              <h3 className="font-semibold text-ink mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-1">
                 <button
                   onClick={() => setSelectedCategory(null)}
                   className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                     selectedCategory === null
-                      ? 'bg-brand-100 text-brand-700 font-medium'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'bg-herb-tint text-herb font-medium'
+                      : 'text-ink-soft hover:bg-mist'
                   }`}
                 >
                   All Items ({menuItems.length})
@@ -236,8 +236,8 @@ export default function ChefDetailPage() {
                       onClick={() => setSelectedCategory(category.id)}
                       className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                         selectedCategory === category.id
-                          ? 'bg-brand-100 text-brand-700 font-medium'
-                          : 'text-gray-600 hover:bg-gray-100'
+                          ? 'bg-herb-tint text-herb font-medium'
+                          : 'text-ink-soft hover:bg-mist'
                       }`}
                     >
                       {category.name} ({count})
@@ -250,7 +250,7 @@ export default function ChefDetailPage() {
               <div className="mt-6 pt-4 border-t">
                 <button
                   onClick={() => setShowReviews(!showReviews)}
-                  className="flex items-center justify-between w-full text-left text-sm text-gray-600 hover:text-gray-900"
+                  className="flex items-center justify-between w-full text-left text-sm text-ink-soft hover:text-ink"
                 >
                   <span>Reviews ({chef.totalReviews})</span>
                   <ChevronRight className={`h-4 w-4 transition-transform ${showReviews ? 'rotate-90' : ''}`} />
@@ -263,15 +263,15 @@ export default function ChefDetailPage() {
           <div className="flex-1">
             {menuLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-herb" />
               </div>
             ) : showReviews ? (
               <ReviewsList reviews={reviews?.data || []} />
             ) : (
               <div className="space-y-4">
                 {filteredItems.length === 0 ? (
-                  <div className="rounded-xl bg-white p-8 text-center shadow-sm">
-                    <p className="text-gray-500">No items in this category</p>
+                  <div className="rounded-xl bg-bone p-8 text-center shadow-sm">
+                    <p className="text-ink-muted">No items in this category</p>
                   </div>
                 ) : (
                   filteredItems.map((item) => (
@@ -307,7 +307,7 @@ export default function ChefDetailPage() {
               <span>View Cart</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-sm">
+              <span className="rounded-full bg-bone/20 px-2 py-0.5 text-sm">
                 {cartItemCount} items
               </span>
               <span className="font-semibold">{fp(cart.getSubtotal())}</span>
@@ -367,7 +367,7 @@ function MenuItemCard({
               className="h-full w-full object-cover"
             />
             {item.isFeatured && (
-              <div className="absolute top-1 left-1 rounded bg-brand-500 px-1.5 py-0.5 text-xs font-medium text-white">
+              <div className="absolute top-1 left-1 rounded bg-herb px-1.5 py-0.5 text-xs font-medium text-paper">
                 Popular
               </div>
             )}
@@ -378,8 +378,8 @@ function MenuItemCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h3 className="font-semibold text-gray-900">{item.name}</h3>
-              <p className="mt-1 text-sm text-gray-500 line-clamp-2">
+              <h3 className="font-semibold text-ink">{item.name}</h3>
+              <p className="mt-1 text-sm text-ink-muted line-clamp-2">
                 {item.description}
               </p>
             </div>
@@ -391,7 +391,7 @@ function MenuItemCard({
               {item.dietaryTags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700"
+                  className="rounded bg-herb-tint px-2 py-0.5 text-xs text-herb"
                 >
                   {tag}
                 </span>
@@ -402,11 +402,11 @@ function MenuItemCard({
           {/* Price and Actions */}
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold text-gray-900">
+              <span className="text-lg font-semibold text-ink">
                 {fp(item.price)}
               </span>
               {item.comparePrice && (
-                <span className="text-sm text-gray-400 line-through">
+                <span className="text-sm text-ink-muted line-through">
                   {fp(item.comparePrice)}
                 </span>
               )}
@@ -418,14 +418,14 @@ function MenuItemCard({
                 <div className="flex items-center rounded-lg border">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="p-2 hover:bg-gray-100"
+                    className="p-2 hover:bg-mist"
                   >
                     <Minus className="h-4 w-4" />
                   </button>
                   <span className="w-8 text-center">{quantity}</span>
                   <button
                     onClick={() => setQuantity(quantity + 1)}
-                    className="p-2 hover:bg-gray-100"
+                    className="p-2 hover:bg-mist"
                   >
                     <Plus className="h-4 w-4" />
                   </button>
@@ -436,7 +436,7 @@ function MenuItemCard({
                 </button>
               </div>
             ) : (
-              <span className="text-sm text-gray-400">Unavailable</span>
+              <span className="text-sm text-ink-muted">Unavailable</span>
             )}
           </div>
         </div>
@@ -448,15 +448,15 @@ function MenuItemCard({
 function ReviewsList({ reviews }: { reviews: Review[] }) {
   if (reviews.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-8 text-center shadow-sm">
-        <p className="text-gray-500">No reviews yet</p>
+      <div className="rounded-xl bg-bone p-8 text-center shadow-sm">
+        <p className="text-ink-muted">No reviews yet</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xl font-semibold text-gray-900">Customer Reviews</h3>
+      <h3 className="text-xl font-semibold text-ink">Customer Reviews</h3>
       {reviews.map((review) => (
         <div key={review.id} className="card p-4">
           <div className="flex items-start gap-4">
@@ -468,26 +468,26 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
                       key={i}
                       className={`h-4 w-4 ${
                         i < review.overallRating
-                          ? 'fill-yellow-400 text-yellow-400'
-                          : 'text-gray-300'
+                          ? 'fill-amber text-amber'
+                          : 'text-ink-muted'
                       }`}
                     />
                   ))}
                 </div>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-ink-muted">
                   {new Date(review.createdAt).toLocaleDateString()}
                 </span>
               </div>
               {review.title && (
-                <h4 className="mt-2 font-medium text-gray-900">{review.title}</h4>
+                <h4 className="mt-2 font-medium text-ink">{review.title}</h4>
               )}
               {review.comment && (
-                <p className="mt-2 text-gray-600">{review.comment}</p>
+                <p className="mt-2 text-ink-soft">{review.comment}</p>
               )}
               {review.chefResponse && (
-                <div className="mt-3 rounded-lg bg-gray-50 p-3">
-                  <p className="text-sm font-medium text-gray-700">Chef's Response:</p>
-                  <p className="mt-1 text-sm text-gray-600">{review.chefResponse}</p>
+                <div className="mt-3 rounded-lg bg-paper p-3">
+                  <p className="text-sm font-medium text-ink-soft">Chef's Response:</p>
+                  <p className="mt-1 text-sm text-ink-soft">{review.chefResponse}</p>
                 </div>
               )}
             </div>

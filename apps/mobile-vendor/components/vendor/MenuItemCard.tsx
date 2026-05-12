@@ -21,9 +21,9 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
   }
 
   return (
-    <View className="bg-white rounded-2xl shadow-sm p-3 mb-2 flex-row">
+    <View className="bg-bone rounded-2xl shadow-sm p-3 mb-2 flex-row">
       {/* Item image */}
-      <View className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 mr-3 flex-shrink-0">
+      <View className="w-20 h-20 rounded-xl overflow-hidden bg-mist mr-3 flex-shrink-0">
         {item.images[0]?.url ? (
           <Image
             source={{ uri: item.images[0].url }}
@@ -31,29 +31,29 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
             contentFit="cover"
           />
         ) : (
-          <View className="w-20 h-20 bg-gray-200 rounded-xl" />
+          <View className="w-20 h-20 bg-mist rounded-xl" />
         )}
       </View>
 
       {/* Item details */}
       <View className="flex-1">
         <View className="flex-row items-start justify-between mb-1">
-          <Text className="text-base font-semibold text-gray-900 flex-1 mr-2" numberOfLines={1}>
+          <Text className="text-base font-semibold text-ink flex-1 mr-2" numberOfLines={1}>
             {item.name}
           </Text>
           {/* Veg / non-veg indicator */}
           <View
-            className={`w-4 h-4 rounded-full border-2 ${item.isVeg ? 'bg-green-500 border-green-600' : 'bg-red-500 border-red-600'}`}
+            className={`w-4 h-4 rounded-full border-2 ${item.isVeg ? 'bg-herb border-herb' : 'bg-paprika border-paprika'}`}
           />
         </View>
 
-        <Text className="text-orange-600 font-semibold text-sm mb-1">
+        <Text className="text-herb font-semibold text-sm mb-1">
           ₹{item.price.toFixed(2)}
         </Text>
 
         {/* Category badge */}
-        <View className="self-start bg-orange-50 px-2 py-0.5 rounded-full mb-2">
-          <Text className="text-xs text-orange-600">{item.category}</Text>
+        <View className="self-start bg-herb-tint px-2 py-0.5 rounded-full mb-2">
+          <Text className="text-xs text-herb">{item.category}</Text>
         </View>
 
         {/* Bottom row: availability toggle + action buttons */}
@@ -64,11 +64,11 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
               onValueChange={(value) =>
                 toggleMutation.mutate({ itemId: item.id, isAvailable: value })
               }
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
-              thumbColor={item.isAvailable ? '#EA580C' : '#9CA3AF'}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              thumbColor={item.isAvailable ? '#3e6b3c' : '#7a7a76'}
               disabled={toggleMutation.isPending}
             />
-            <Text className="text-xs text-gray-500">
+            <Text className="text-xs text-ink-muted">
               {item.isAvailable ? 'Available' : 'Unavailable'}
             </Text>
           </View>
@@ -76,17 +76,17 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
           <View className="flex-row gap-2">
             <TouchableOpacity
               onPress={onEdit}
-              className="p-2 rounded-lg bg-blue-50"
+              className="p-2 rounded-lg bg-info/10"
               activeOpacity={0.7}
             >
-              <Edit2 size={16} color="#3B82F6" />
+              <Edit2 size={16} color="#4a73a3" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDelete}
-              className="p-2 rounded-lg bg-red-50"
+              className="p-2 rounded-lg bg-paprika-tint"
               activeOpacity={0.7}
             >
-              <Trash2 size={16} color="#EF4444" />
+              <Trash2 size={16} color="#c95b3e" />
             </TouchableOpacity>
           </View>
         </View>

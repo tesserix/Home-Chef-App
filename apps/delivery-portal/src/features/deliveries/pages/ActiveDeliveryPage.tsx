@@ -124,15 +124,15 @@ export default function ActiveDeliveryPage() {
       {/* Distance & Time */}
       <div className="flex gap-4">
         <div className="flex-1 rounded-xl border border-border bg-card p-4 text-center">
-          <p className="text-lg font-bold text-foreground">{delivery.distance?.toFixed(1)} km</p>
+          <p className="text-lg font-medium text-foreground">{delivery.distance?.toFixed(1)} km</p>
           <p className="text-xs text-muted-foreground">Distance</p>
         </div>
         <div className="flex-1 rounded-xl border border-border bg-card p-4 text-center">
-          <p className="text-lg font-bold text-foreground">{delivery.estimatedDuration} min</p>
+          <p className="text-lg font-medium text-foreground">{delivery.estimatedDuration} min</p>
           <p className="text-xs text-muted-foreground">Est. Time</p>
         </div>
         <div className="flex-1 rounded-xl border border-border bg-card p-4 text-center">
-          <p className="text-lg font-bold text-foreground">${delivery.totalPayout.toFixed(2)}</p>
+          <p className="text-lg font-medium text-foreground">${delivery.totalPayout.toFixed(2)}</p>
           <p className="text-xs text-muted-foreground">Payout</p>
         </div>
       </div>

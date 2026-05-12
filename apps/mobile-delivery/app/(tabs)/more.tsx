@@ -47,42 +47,42 @@ export default function MoreScreen() {
 
   const navItems: NavItem[] = [
     {
-      icon: <User2 size={20} color="#6B7280" />,
+      icon: <User2 size={20} color="#7a7a76" />,
       label: 'Profile',
       onPress: () => router.push('/driver-profile'),
     },
     {
-      icon: <DollarSign size={20} color="#6B7280" />,
+      icon: <DollarSign size={20} color="#7a7a76" />,
       label: 'Earnings',
       onPress: () => router.push('/driver-earnings'),
     },
     {
-      icon: <Clock size={20} color="#6B7280" />,
+      icon: <Clock size={20} color="#7a7a76" />,
       label: 'History',
       onPress: () => router.push('/driver-history'),
     },
     {
-      icon: <Users2 size={20} color="#6B7280" />,
+      icon: <Users2 size={20} color="#7a7a76" />,
       label: 'Fleet',
       onPress: () => router.push('/fleet'),
     },
     {
-      icon: <UserCog size={20} color="#6B7280" />,
+      icon: <UserCog size={20} color="#7a7a76" />,
       label: 'Staff',
       onPress: () => router.push('/staff'),
     },
     {
-      icon: <Settings size={20} color="#6B7280" />,
+      icon: <Settings size={20} color="#7a7a76" />,
       label: 'Settings',
       onPress: () => router.push('/driver-settings'),
     },
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-bone">
       <ScrollView className="flex-1">
         <View className="px-6 pt-6 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">More</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">More</Text>
         </View>
 
         <View className="mt-4">
@@ -91,26 +91,26 @@ export default function MoreScreen() {
               key={item.label}
               onPress={item.onPress}
               className={`flex-row items-center px-6 py-4 ${
-                index < navItems.length - 1 ? 'border-b border-gray-100' : ''
+                index < navItems.length - 1 ? 'border-b border-mist' : ''
               }`}
             >
               <View className="w-8 items-center">{item.icon}</View>
-              <Text className="flex-1 ml-3 text-base text-gray-800">{item.label}</Text>
-              <ChevronRight size={18} color="#9CA3AF" />
+              <Text className="flex-1 ml-3 text-base text-ink">{item.label}</Text>
+              <ChevronRight size={18} color="#7a7a76" />
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Logout */}
-        <View className="mt-4 border-t border-gray-100">
+        <View className="mt-4 border-t border-mist">
           <TouchableOpacity
             onPress={handleLogout}
             className="flex-row items-center px-6 py-4"
           >
             <View className="w-8 items-center">
-              <LogOut size={20} color="#EF4444" />
+              <LogOut size={20} color="#c95b3e" />
             </View>
-            <Text className="flex-1 ml-3 text-base text-red-500">Logout</Text>
+            <Text className="flex-1 ml-3 text-base text-paprika">Logout</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

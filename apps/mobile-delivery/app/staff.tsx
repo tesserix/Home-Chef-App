@@ -72,15 +72,15 @@ function StaffCard({ member }: { member: StaffMember }) {
     year: 'numeric',
   });
   return (
-    <View className="bg-white rounded-2xl p-4 mb-3 shadow-sm">
+    <View className="bg-bone rounded-2xl p-4 mb-3 shadow-sm">
       <View className="flex-row items-center justify-between mb-1">
-        <Text className="text-base font-semibold text-gray-900">{member.name}</Text>
-        <View className="bg-orange-100 px-2 py-0.5 rounded-full">
-          <Text className="text-xs font-medium text-orange-700">{member.role}</Text>
+        <Text className="text-base font-semibold text-ink">{member.name}</Text>
+        <View className="bg-herb-tint px-2 py-0.5 rounded-full">
+          <Text className="text-xs font-medium text-herb">{member.role}</Text>
         </View>
       </View>
-      <Text className="text-sm text-gray-500 mb-0.5">{member.email}</Text>
-      <Text className="text-xs text-gray-400">Joined {joined}</Text>
+      <Text className="text-sm text-ink-muted mb-0.5">{member.email}</Text>
+      <Text className="text-xs text-ink-muted">Joined {joined}</Text>
     </View>
   );
 }
@@ -128,17 +128,17 @@ function InviteModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
-      <View className="flex-1 justify-end bg-black/50">
-        <View className="bg-white rounded-t-3xl px-6 pt-6 pb-8">
+      <View className="flex-1 justify-end bg-ink/50">
+        <View className="bg-bone rounded-t-3xl px-6 pt-6 pb-8">
           <View className="flex-row items-center justify-between mb-6">
-            <Text className="text-xl font-bold text-gray-900">Invite Staff Member</Text>
+            <Text className="text-xl font-semibold text-ink">Invite Staff Member</Text>
             <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-              <X size={22} color="#6B7280" />
+              <X size={22} color="#7a7a76" />
             </TouchableOpacity>
           </View>
 
           <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Email</Text>
+            <Text className="text-sm font-medium text-ink-soft mb-1">Email</Text>
             <Controller
               control={control}
               name="email"
@@ -149,18 +149,18 @@ function InviteModal({
                   placeholder="colleague@example.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900"
-                  placeholderTextColor="#9CA3AF"
+                  className="border border-mist-strong rounded-xl px-4 py-3 text-base text-ink"
+                  placeholderTextColor="#7a7a76"
                 />
               )}
             />
             {errors.email && (
-              <Text className="text-xs text-red-500 mt-1">{errors.email.message}</Text>
+              <Text className="text-xs text-paprika mt-1">{errors.email.message}</Text>
             )}
           </View>
 
           <View className="mb-6">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Role</Text>
+            <Text className="text-sm font-medium text-ink-soft mb-1">Role</Text>
             <Controller
               control={control}
               name="role"
@@ -170,13 +170,13 @@ function InviteModal({
                   onChangeText={onChange}
                   placeholder="e.g. manager, coordinator"
                   autoCapitalize="none"
-                  className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900"
-                  placeholderTextColor="#9CA3AF"
+                  className="border border-mist-strong rounded-xl px-4 py-3 text-base text-ink"
+                  placeholderTextColor="#7a7a76"
                 />
               )}
             />
             {errors.role && (
-              <Text className="text-xs text-red-500 mt-1">{errors.role.message}</Text>
+              <Text className="text-xs text-paprika mt-1">{errors.role.message}</Text>
             )}
           </View>
 
@@ -184,14 +184,14 @@ function InviteModal({
             onPress={handleSubmit(handleInvite)}
             disabled={inviteMutation.isPending}
             className={`py-4 rounded-2xl items-center ${
-              inviteMutation.isPending ? 'bg-orange-300' : 'bg-orange-500'
+              inviteMutation.isPending ? 'bg-herb-soft' : 'bg-herb'
             }`}
             activeOpacity={0.8}
           >
             {inviteMutation.isPending ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-semibold text-base">Send Invitation</Text>
+              <Text className="text-paper font-semibold text-base">Send Invitation</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -212,18 +212,18 @@ export default function StaffScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load staff list</Text>
-        <TouchableOpacity onPress={() => refetch()} className="bg-orange-500 px-6 py-3 rounded-xl">
-          <Text className="text-white font-semibold">Retry</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load staff list</Text>
+        <TouchableOpacity onPress={() => refetch()} className="bg-herb px-6 py-3 rounded-xl">
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -232,10 +232,10 @@ export default function StaffScreen() {
   // 403 returned null — show non-error lock screen
   if (staff === null) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-8">
-        <Lock size={48} color="#9CA3AF" />
-        <Text className="text-xl font-bold text-gray-900 mt-4 mb-2">Staff Management</Text>
-        <Text className="text-sm text-gray-500 text-center leading-5">
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-8">
+        <Lock size={48} color="#7a7a76" />
+        <Text className="text-xl font-semibold text-ink mt-4 mb-2">Staff Management</Text>
+        <Text className="text-sm text-ink-muted text-center leading-5">
           Staff management requires manager permissions. Contact your administrator to request
           access.
         </Text>
@@ -245,30 +245,30 @@ export default function StaffScreen() {
 
   return (
     <>
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView className="flex-1 bg-paper">
         <FlatList<StaffMember>
           data={staff}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
           }
           ListHeaderComponent={
             <View className="flex-row items-center justify-between pt-4 pb-2">
-              <Text className="text-2xl font-bold text-gray-900">Staff</Text>
+              <Text className="font-display text-2xl font-semibold text-ink">Staff</Text>
               <TouchableOpacity
                 onPress={() => setShowInviteModal(true)}
-                className="flex-row items-center bg-orange-500 px-3 py-2 rounded-xl"
+                className="flex-row items-center bg-herb px-3 py-2 rounded-xl"
                 activeOpacity={0.8}
               >
                 <UserPlus size={16} color="white" />
-                <Text className="text-white font-semibold text-sm ml-1">Invite</Text>
+                <Text className="text-paper font-semibold text-sm ml-1">Invite</Text>
               </TouchableOpacity>
             </View>
           }
           ListEmptyComponent={
             <View className="items-center justify-center py-12">
-              <Text className="text-base text-gray-400">No staff members yet.</Text>
+              <Text className="text-base text-ink-muted">No staff members yet.</Text>
             </View>
           }
           renderItem={({ item }) => <StaffCard member={item} />}

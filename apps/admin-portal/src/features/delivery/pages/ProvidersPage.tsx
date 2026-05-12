@@ -288,7 +288,8 @@ export default function ProvidersPage() {
                         <button
                           onClick={() => navigate(`/delivery/providers/${provider.id}`)}
                           title="View Details"
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                          aria-label={`View ${provider.name} details`}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -296,7 +297,8 @@ export default function ProvidersPage() {
                           onClick={() => handleToggle(provider)}
                           disabled={toggleMutation.isPending}
                           title={provider.isEnabled ? 'Disable' : 'Enable'}
-                          className={`rounded-lg p-1.5 transition-colors ${
+                          aria-label={`${provider.isEnabled ? 'Disable' : 'Enable'} ${provider.name}`}
+                          className={`rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb ${
                             provider.isEnabled
                               ? 'text-muted-foreground hover:bg-warning/10 hover:text-warning'
                               : 'text-muted-foreground hover:bg-success/10 hover:text-success'
@@ -308,7 +310,8 @@ export default function ProvidersPage() {
                           onClick={() => handleDelete(provider.id)}
                           disabled={deleteMutation.isPending}
                           title="Delete"
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                          aria-label={`Delete ${provider.name}`}
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -357,7 +360,7 @@ export default function ProvidersPage() {
       {/* Delete Confirmation Dialog */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmDeleteId(null)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmDeleteId(null)} />
           <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">Delete Provider</h3>
             <p className="text-sm text-muted-foreground mb-6">
@@ -386,7 +389,7 @@ export default function ProvidersPage() {
       {/* Toggle Disable Confirmation Dialog */}
       {confirmToggleId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmToggleId(null)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmToggleId(null)} />
           <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">Disable Provider</h3>
             <p className="text-sm text-muted-foreground mb-6">

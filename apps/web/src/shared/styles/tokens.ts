@@ -6,47 +6,47 @@
 // Semantic colors (matching CSS variables)
 export const colors = {
   background: 'var(--background)',       // #FFFAF5
-  foreground: 'var(--foreground)',       // #1C1917
-  card: 'var(--card)',                   // #FFFFFF
-  cardForeground: 'var(--card-foreground)', // #1C1917
-  popover: 'var(--popover)',             // #FFFFFF
-  popoverForeground: 'var(--popover-foreground)', // #1C1917
-  primary: 'var(--primary)',             // #C2410C
-  primaryForeground: 'var(--primary-foreground)', // #FFFFFF
+  foreground: 'var(--foreground)',       // #1a1a18
+  card: 'var(--card)',                   // #fafaf7
+  cardForeground: 'var(--card-foreground)', // #1a1a18
+  popover: 'var(--popover)',             // #fafaf7
+  popoverForeground: 'var(--popover-foreground)', // #1a1a18
+  primary: 'var(--primary)',             // #3e6b3c
+  primaryForeground: 'var(--primary-foreground)', // #fafaf7
   secondary: 'var(--secondary)',         // #F5F0EB
   secondaryForeground: 'var(--secondary-foreground)', // #44403C
   muted: 'var(--muted)',                 // #FAF5F0
-  mutedForeground: 'var(--muted-foreground)', // #78716C
-  accent: 'var(--accent)',               // #FEF3C7
+  mutedForeground: 'var(--muted-foreground)', // #7a7a76
+  accent: 'var(--accent)',               // #f0e3c0
   accentForeground: 'var(--accent-foreground)', // #92400E
-  destructive: 'var(--destructive)',     // #DC2626
-  destructiveForeground: 'var(--destructive-foreground)', // #FFFFFF
+  destructive: 'var(--destructive)',     // #c95b3e
+  destructiveForeground: 'var(--destructive-foreground)', // #fafaf7
   border: 'var(--border)',               // #E7E0D9
   input: 'var(--input)',                 // #E7E0D9
-  ring: 'var(--ring)',                   // #C2410C
+  ring: 'var(--ring)',                   // #3e6b3c
   success: 'var(--success)',             // #059669
-  successForeground: 'var(--success-foreground)', // #FFFFFF
-  warning: 'var(--warning)',             // #D97706
-  warningForeground: 'var(--warning-foreground)', // #1C1917
-  error: 'var(--error)',                 // #DC2626
-  errorForeground: 'var(--error-foreground)', // #FFFFFF
-  info: 'var(--info)',                   // #2563EB
-  infoForeground: 'var(--info-foreground)', // #FFFFFF
-  sidebar: 'var(--sidebar)',             // #1C1917
+  successForeground: 'var(--success-foreground)', // #fafaf7
+  warning: 'var(--warning)',             // #d1a64a
+  warningForeground: 'var(--warning-foreground)', // #1a1a18
+  error: 'var(--error)',                 // #c95b3e
+  errorForeground: 'var(--error-foreground)', // #fafaf7
+  info: 'var(--info)',                   // #4a73a3
+  infoForeground: 'var(--info-foreground)', // #fafaf7
+  sidebar: 'var(--sidebar)',             // #1a1a18
   sidebarForeground: 'var(--sidebar-foreground)', // #F5F0EB
-  sidebarPrimary: 'var(--sidebar-primary)', // #C2410C
+  sidebarPrimary: 'var(--sidebar-primary)', // #3e6b3c
   sidebarAccent: 'var(--sidebar-accent)', // #292524
   sidebarBorder: 'var(--sidebar-border)', // #44403C
 
   // Brand scale - terracotta shades for direct access
   brand: {
-    50: '#fff7ed',
+    50: '#dde9d8',
     100: '#ffedd5',
     200: '#fed7aa',
     300: '#fdba74',
-    400: '#fb923c',
-    500: '#ea580c',
-    600: '#c2410c',
+    400: '#558257',
+    500: '#3e6b3c',
+    600: '#3e6b3c',
     700: '#9a3412',
     800: '#7c2d12',
     900: '#6c2710',
@@ -57,9 +57,8 @@ export const colors = {
 // Typography scale
 export const typography = {
   fontFamily: {
-    sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-    display: ['Playfair Display', 'Georgia', 'serif'],
-    accent: ['Caveat', 'cursive'],
+    sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+    display: ['Geist', 'Geist Variable', 'Inter', 'system-ui', 'sans-serif'],
   },
   fontSize: {
     xs: '0.75rem',
@@ -140,14 +139,16 @@ export const shadows = {
   modal: '0 24px 48px -12px rgb(0 0 0 / 0.2), 0 12px 24px -8px rgb(0 0 0 / 0.1)',
 } as const;
 
-// Animation timing functions
+// Animation timing functions — no bounce, no overshoot
 export const easing = {
-  premium: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  bounce: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-  smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  smooth: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  state: 'cubic-bezier(0.4, 0, 0.2, 1)',
   linear: 'linear',
-  in: 'cubic-bezier(0.4, 0, 1, 1)',
-  out: 'cubic-bezier(0, 0, 0.2, 1)',
+  // Legacy aliases — all now resolve to smooth (no overshoot)
+  premium: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  bounce: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  in: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  out: 'cubic-bezier(0.22, 1, 0.36, 1)',
   inOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 

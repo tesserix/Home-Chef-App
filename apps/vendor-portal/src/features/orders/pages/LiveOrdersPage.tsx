@@ -94,7 +94,7 @@ export default function LiveOrdersPage() {
       {/* Header */}
       <motion.div variants={fadeInUp} className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Live Orders</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">Live Orders</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {orders.length} active order{orders.length !== 1 ? 's' : ''}
             {pendingCount > 0 && (
@@ -235,7 +235,7 @@ export default function LiveOrdersPage() {
                     <span className="text-sm font-medium text-muted-foreground">
                       {(order.items ?? []).length} item{(order.items ?? []).length !== 1 ? 's' : ''} total
                     </span>
-                    <span className="text-lg font-bold text-foreground">
+                    <span className="text-lg font-medium text-foreground">
                       ${(order.total ?? 0).toFixed(2)}
                     </span>
                   </div>

@@ -87,43 +87,43 @@ export default function AvailableScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView className="flex-1 bg-paper">
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Available</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">Available</Text>
         </View>
         <View className="px-4 pt-2">
-          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
-          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
-          <View className="h-28 bg-gray-200 rounded-2xl mb-3" />
+          <View className="h-28 bg-mist rounded-2xl mb-3" />
+          <View className="h-28 bg-mist rounded-2xl mb-3" />
+          <View className="h-28 bg-mist rounded-2xl mb-3" />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
       <View className="px-4 pt-4 pb-2">
-        <Text className="text-2xl font-bold text-gray-900">Available</Text>
+        <Text className="font-display text-2xl font-semibold text-ink">Available</Text>
       </View>
 
       {/* Offline banner */}
       {!isOnline && (
-        <View className="mx-4 mb-4 bg-gray-200 rounded-2xl px-4 py-4 items-center">
-          <Text className="text-lg font-semibold text-gray-600 mb-1">You&apos;re Offline</Text>
-          <Text className="text-sm text-gray-500 mb-4 text-center">
+        <View className="mx-4 mb-4 bg-mist rounded-2xl px-4 py-4 items-center">
+          <Text className="text-lg font-semibold text-ink-soft mb-1">You&apos;re Offline</Text>
+          <Text className="text-sm text-ink-muted mb-4 text-center">
             Go online to see available deliveries near you
           </Text>
           <TouchableOpacity
             onPress={handleGoOnline}
             disabled={toggleOnlineMutation.isPending}
-            className={`px-8 py-3 rounded-xl ${toggleOnlineMutation.isPending ? 'bg-orange-300' : 'bg-orange-500'}`}
+            className={`px-8 py-3 rounded-xl ${toggleOnlineMutation.isPending ? 'bg-herb-soft' : 'bg-herb'}`}
             activeOpacity={0.8}
           >
             {toggleOnlineMutation.isPending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Text className="text-white font-semibold text-base">
+              <Text className="text-paper font-semibold text-base">
                 Go Online to Accept Deliveries
               </Text>
             )}
@@ -141,13 +141,13 @@ export default function AvailableScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor="#FF6B35"
+              tintColor="#3e6b3c"
             />
           }
           ListEmptyComponent={
             <View className="items-center justify-center py-16">
               <Text className="text-4xl mb-4">&#128690;</Text>
-              <Text className="text-base text-gray-500 text-center">
+              <Text className="text-base text-ink-muted text-center">
                 No deliveries available nearby.{'\n'}Pull to refresh.
               </Text>
             </View>

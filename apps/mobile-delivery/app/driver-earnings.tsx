@@ -46,16 +46,16 @@ function WeekBar({ week, amount, maxAmount }: { week: string; amount: number; ma
   const barHeight = maxAmount > 0 ? Math.max((amount / maxAmount) * 80, 4) : 4;
   return (
     <View className="flex-1 items-center">
-      <Text className="text-xs text-orange-500 mb-1 font-medium">
+      <Text className="text-xs text-herb mb-1 font-medium">
         {amount > 0 ? `\u20B9${Math.round(amount)}` : ''}
       </Text>
       <View className="w-full items-center justify-end" style={{ height: 80 }}>
         <View
-          className="w-5 bg-orange-400 rounded-t"
+          className="w-5 bg-herb-soft rounded-t"
           style={{ height: barHeight }}
         />
       </View>
-      <Text className="text-xs text-gray-400 mt-1" numberOfLines={1}>
+      <Text className="text-xs text-ink-muted mt-1" numberOfLines={1}>
         {week.slice(5)}
       </Text>
     </View>
@@ -72,50 +72,50 @@ export default function DriverEarningsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load earnings</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load earnings</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <ScrollView
         className="flex-1"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
         contentContainerStyle={{ paddingBottom: 32 }}
       >
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Earnings</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">Earnings</Text>
         </View>
 
         {/* Period selector */}
-        <View className="mx-4 mb-4 flex-row bg-gray-200 rounded-xl p-1">
+        <View className="mx-4 mb-4 flex-row bg-mist rounded-xl p-1">
           {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
             <TouchableOpacity
               key={p}
               onPress={() => setPeriod(p)}
-              className={`flex-1 py-2 rounded-lg items-center ${period === p ? 'bg-white shadow-sm' : ''}`}
+              className={`flex-1 py-2 rounded-lg items-center ${period === p ? 'bg-bone shadow-sm' : ''}`}
               activeOpacity={0.7}
             >
               <Text
-                className={`text-sm font-medium ${period === p ? 'text-gray-900' : 'text-gray-500'}`}
+                className={`text-sm font-medium ${period === p ? 'text-ink' : 'text-ink-muted'}`}
               >
                 {PERIOD_LABELS[p]}
               </Text>
@@ -124,24 +124,24 @@ export default function DriverEarningsScreen() {
         </View>
 
         {/* Period amount */}
-        <View className="mx-4 bg-white rounded-2xl p-6 shadow-sm mb-4 items-center">
-          <Text className="text-sm text-gray-500 mb-1">{PERIOD_LABELS[period]} Earnings</Text>
-          <Text className="text-5xl font-bold text-orange-500">
+        <View className="mx-4 bg-bone rounded-2xl p-6 shadow-sm mb-4 items-center">
+          <Text className="text-sm text-ink-muted mb-1">{PERIOD_LABELS[period]} Earnings</Text>
+          <Text className="font-display text-5xl font-semibold tabular-nums text-herb">
             &#8377;{periodAmount.toFixed(2)}
           </Text>
         </View>
 
         {/* Summary cards */}
         <View className="mx-4 flex-row gap-3 mb-4">
-          <View className="flex-1 bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-xs text-gray-500 mb-1">Total Earned</Text>
-            <Text className="text-xl font-bold text-gray-900">
+          <View className="flex-1 bg-bone rounded-2xl p-4 shadow-sm">
+            <Text className="text-xs text-ink-muted mb-1">Total Earned</Text>
+            <Text className="text-xl font-semibold text-ink">
               &#8377;{(earnings?.total ?? 0).toFixed(0)}
             </Text>
           </View>
-          <View className="flex-1 bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-xs text-gray-500 mb-1">Pending Payout</Text>
-            <Text className="text-xl font-bold text-yellow-500">
+          <View className="flex-1 bg-bone rounded-2xl p-4 shadow-sm">
+            <Text className="text-xs text-ink-muted mb-1">Pending Payout</Text>
+            <Text className="text-xl font-semibold text-amber">
               &#8377;{(earnings?.pending ?? 0).toFixed(0)}
             </Text>
           </View>
@@ -149,13 +149,13 @@ export default function DriverEarningsScreen() {
 
         {/* Last payout */}
         {earnings?.lastPayout && (
-          <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm mb-4">
-            <Text className="text-sm text-gray-500 mb-1">Last Payout</Text>
+          <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm mb-4">
+            <Text className="text-sm text-ink-muted mb-1">Last Payout</Text>
             <View className="flex-row justify-between items-center">
-              <Text className="text-base font-semibold text-gray-900">
+              <Text className="text-base font-semibold text-ink">
                 &#8377;{earnings.lastPayout.amount.toFixed(2)}
               </Text>
-              <Text className="text-sm text-gray-400">
+              <Text className="text-sm text-ink-muted">
                 {new Date(earnings.lastPayout.date).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',
@@ -168,8 +168,8 @@ export default function DriverEarningsScreen() {
 
         {/* Weekly history bar chart */}
         {history.length > 0 && (
-          <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-sm font-semibold text-gray-700 mb-4">Weekly History</Text>
+          <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm">
+            <Text className="text-sm font-semibold text-ink-soft mb-4">Weekly History</Text>
             <View className="flex-row gap-1 items-end">
               {history.slice(-8).map((h) => (
                 <WeekBar

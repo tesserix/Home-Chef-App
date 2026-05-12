@@ -109,7 +109,7 @@ export default function ChefProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -119,8 +119,8 @@ export default function ChefProfilePage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kitchen Profile</h1>
-          <p className="mt-1 text-gray-600">Manage your public profile and settings</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Kitchen Profile</h1>
+          <p className="mt-1 text-ink-soft">Manage your public profile and settings</p>
         </div>
         {!isEditing ? (
           <button onClick={() => setIsEditing(true)} className="btn-primary">
@@ -156,20 +156,20 @@ export default function ChefProfilePage() {
       </div>
 
       {/* Verification Status */}
-      <div className={`rounded-xl p-4 ${profile?.verified ? 'bg-green-50' : 'bg-yellow-50'}`}>
+      <div className={`rounded-xl p-4 ${profile?.verified ? 'bg-herb-tint' : 'bg-amber-tint'}`}>
         <div className="flex items-center gap-3">
-          <div className={`rounded-full p-2 ${profile?.verified ? 'bg-green-100' : 'bg-yellow-100'}`}>
+          <div className={`rounded-full p-2 ${profile?.verified ? 'bg-herb-tint' : 'bg-amber-tint'}`}>
             {profile?.verified ? (
-              <Shield className="h-5 w-5 text-green-600" />
+              <Shield className="h-5 w-5 text-herb" />
             ) : (
-              <Shield className="h-5 w-5 text-yellow-600" />
+              <Shield className="h-5 w-5 text-amber" />
             )}
           </div>
           <div>
-            <p className={`font-medium ${profile?.verified ? 'text-green-900' : 'text-yellow-900'}`}>
+            <p className={`font-medium ${profile?.verified ? 'text-herb' : 'text-amber'}`}>
               {profile?.verified ? 'Verified Chef' : 'Verification Pending'}
             </p>
-            <p className={`text-sm ${profile?.verified ? 'text-green-700' : 'text-yellow-700'}`}>
+            <p className={`text-sm ${profile?.verified ? 'text-herb' : 'text-amber'}`}>
               {profile?.verified
                 ? 'Your kitchen has been verified and approved'
                 : 'Complete your profile to get verified'}
@@ -180,17 +180,17 @@ export default function ChefProfilePage() {
 
       <form className="space-y-6">
         {/* Profile Images */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Profile Images</h2>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Profile Images</h2>
 
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             {/* Profile Picture */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink-soft mb-2">
                 Profile Picture
               </label>
               <div className="relative inline-block">
-                <div className="h-32 w-32 rounded-xl bg-gray-100 overflow-hidden">
+                <div className="h-32 w-32 rounded-xl bg-mist overflow-hidden">
                   {profile?.profileImage ? (
                     <img
                       src={profile.profileImage}
@@ -199,14 +199,14 @@ export default function ChefProfilePage() {
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <ChefHat className="h-12 w-12 text-gray-300" />
+                      <ChefHat className="h-12 w-12 text-ink-muted" />
                     </div>
                   )}
                 </div>
                 {isEditing && (
                   <button
                     type="button"
-                    className="absolute bottom-0 right-0 rounded-full bg-brand-500 p-2 text-white shadow-lg hover:bg-brand-600"
+                    className="absolute bottom-0 right-0 rounded-full bg-herb p-2 text-paper shadow-lg hover:bg-herb"
                   >
                     <Camera className="h-4 w-4" />
                   </button>
@@ -216,11 +216,11 @@ export default function ChefProfilePage() {
 
             {/* Banner Image */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink-soft mb-2">
                 Banner Image
               </label>
               <div className="relative">
-                <div className="h-32 w-full rounded-xl bg-gray-100 overflow-hidden">
+                <div className="h-32 w-full rounded-xl bg-mist overflow-hidden">
                   {profile?.bannerImage ? (
                     <img
                       src={profile.bannerImage}
@@ -229,14 +229,14 @@ export default function ChefProfilePage() {
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <Camera className="h-12 w-12 text-gray-300" />
+                      <Camera className="h-12 w-12 text-ink-muted" />
                     </div>
                   )}
                 </div>
                 {isEditing && (
                   <button
                     type="button"
-                    className="absolute bottom-2 right-2 rounded-full bg-brand-500 p-2 text-white shadow-lg hover:bg-brand-600"
+                    className="absolute bottom-2 right-2 rounded-full bg-herb p-2 text-paper shadow-lg hover:bg-herb"
                   >
                     <Camera className="h-4 w-4" />
                   </button>
@@ -247,42 +247,42 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Basic Info */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Basic Information</h2>
 
           <div className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Business Name</label>
+              <label className="block text-sm font-medium text-ink-soft">Business Name</label>
               <input
                 {...register('businessName')}
                 disabled={!isEditing}
-                className="input-base mt-1 disabled:bg-gray-50"
+                className="input-base mt-1 disabled:bg-paper"
               />
               {errors.businessName && (
-                <p className="mt-1 text-xs text-red-600">{errors.businessName.message}</p>
+                <p className="mt-1 text-xs text-paprika">{errors.businessName.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-ink-soft">Description</label>
               <textarea
                 {...register('description')}
                 disabled={!isEditing}
                 rows={4}
-                className="input-base mt-1 disabled:bg-gray-50"
+                className="input-base mt-1 disabled:bg-paper"
                 placeholder="Tell customers about your kitchen, cooking style, and what makes your food special..."
               />
               {errors.description && (
-                <p className="mt-1 text-xs text-red-600">{errors.description.message}</p>
+                <p className="mt-1 text-xs text-paprika">{errors.description.message}</p>
               )}
             </div>
           </div>
         </div>
 
         {/* Cuisines */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Cuisines</h2>
-          <p className="mt-1 text-sm text-gray-500">Select the cuisines you specialize in</p>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Cuisines</h2>
+          <p className="mt-1 text-sm text-ink-muted">Select the cuisines you specialize in</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {CUISINES.map((cuisine) => (
@@ -293,8 +293,8 @@ export default function ChefProfilePage() {
                 disabled={!isEditing}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   cuisines.includes(cuisine)
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-herb text-paper'
+                    : 'bg-mist text-ink-soft'
                 } ${isEditing ? 'hover:opacity-80' : ''}`}
               >
                 {cuisines.includes(cuisine) && <Check className="mr-1 inline h-4 w-4" />}
@@ -303,27 +303,27 @@ export default function ChefProfilePage() {
             ))}
           </div>
           {errors.cuisines && (
-            <p className="mt-2 text-xs text-red-600">{errors.cuisines.message}</p>
+            <p className="mt-2 text-xs text-paprika">{errors.cuisines.message}</p>
           )}
         </div>
 
         {/* Specialties */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Specialties</h2>
-          <p className="mt-1 text-sm text-gray-500">Add your signature dishes or specialties</p>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Specialties</h2>
+          <p className="mt-1 text-sm text-ink-muted">Add your signature dishes or specialties</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {specialties.map((specialty) => (
               <span
                 key={specialty}
-                className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-sm text-brand-700"
+                className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
               >
                 {specialty}
                 {isEditing && (
                   <button
                     type="button"
                     onClick={() => removeSpecialty(specialty)}
-                    className="hover:text-brand-900"
+                    className="hover:text-herb"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -351,19 +351,19 @@ export default function ChefProfilePage() {
         </div>
 
         {/* Business Settings */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Business Settings</h2>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Business Settings</h2>
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 <Clock className="mr-1 inline h-4 w-4" />
                 Average Prep Time
               </label>
               <select
                 {...register('prepTime')}
                 disabled={!isEditing}
-                className="input-base mt-1 disabled:bg-gray-50"
+                className="input-base mt-1 disabled:bg-paper"
               >
                 <option value="15-30 min">15-30 minutes</option>
                 <option value="30-45 min">30-45 minutes</option>
@@ -373,7 +373,7 @@ export default function ChefProfilePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 <MapPin className="mr-1 inline h-4 w-4" />
                 Delivery Radius (km)
               </label>
@@ -381,47 +381,47 @@ export default function ChefProfilePage() {
                 type="number"
                 {...register('serviceRadius', { valueAsNumber: true })}
                 disabled={!isEditing}
-                className="input-base mt-1 disabled:bg-gray-50"
+                className="input-base mt-1 disabled:bg-paper"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 <DollarSign className="mr-1 inline h-4 w-4" />
                 Minimum Order
               </label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
                 <input
                   type="number"
                   {...register('minimumOrder', { valueAsNumber: true })}
                   disabled={!isEditing}
-                  className="input-base pl-7 disabled:bg-gray-50"
+                  className="input-base pl-7 disabled:bg-paper"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 <DollarSign className="mr-1 inline h-4 w-4" />
                 Delivery Fee
               </label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
                 <input
                   type="number"
                   {...register('deliveryFee', { valueAsNumber: true })}
                   disabled={!isEditing}
-                  className="input-base pl-7 disabled:bg-gray-50"
+                  className="input-base pl-7 disabled:bg-paper"
                 />
               </div>
             </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-between rounded-lg bg-gray-50 p-4">
+          <div className="mt-6 flex items-center justify-between rounded-lg bg-paper p-4">
             <div>
-              <p className="font-medium text-gray-900">Accepting Orders</p>
-              <p className="text-sm text-gray-500">Toggle to pause or resume taking orders</p>
+              <p className="font-medium text-ink">Accepting Orders</p>
+              <p className="text-sm text-ink-muted">Toggle to pause or resume taking orders</p>
             </div>
             <label className="relative inline-flex cursor-pointer items-center">
               <input
@@ -430,30 +430,30 @@ export default function ChefProfilePage() {
                 disabled={!isEditing}
                 className="peer sr-only"
               />
-              <div className="h-6 w-11 rounded-full bg-gray-300 peer-checked:bg-brand-500 peer-disabled:opacity-50 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-5" />
+              <div className="h-6 w-11 rounded-full bg-mist-strong peer-checked:bg-herb peer-disabled:opacity-50 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-bone after:transition-all peer-checked:after:translate-x-5" />
             </label>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Your Stats</h2>
+        <div className="rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Your Stats</h2>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="text-center">
-              <div className="flex items-center justify-center gap-1 text-3xl font-bold text-gray-900">
-                <Star className="h-6 w-6 fill-yellow-400 text-yellow-400" />
+              <div className="flex items-center justify-center gap-1 font-display text-3xl font-semibold tabular-nums text-ink">
+                <Star className="h-6 w-6 fill-amber text-amber" />
                 {profile?.rating || 0}
               </div>
-              <p className="mt-1 text-sm text-gray-500">Rating</p>
+              <p className="mt-1 text-sm text-ink-muted">Rating</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">{profile?.totalReviews || 0}</p>
-              <p className="mt-1 text-sm text-gray-500">Reviews</p>
+              <p className="font-display text-3xl font-semibold tabular-nums text-ink">{profile?.totalReviews || 0}</p>
+              <p className="mt-1 text-sm text-ink-muted">Reviews</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">{profile?.totalOrders || 0}</p>
-              <p className="mt-1 text-sm text-gray-500">Total Orders</p>
+              <p className="font-display text-3xl font-semibold tabular-nums text-ink">{profile?.totalOrders || 0}</p>
+              <p className="mt-1 text-sm text-ink-muted">Total Orders</p>
             </div>
           </div>
         </div>

@@ -4,12 +4,12 @@ import {
   Users,
   ChefHat,
   ShoppingBag,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   Clock,
   Loader2,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowRight,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 
@@ -48,263 +48,218 @@ export default function DashboardPage() {
   if (statsLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
 
+  const revenueChange = stats?.revenueChange;
+  const positive = revenueChange !== undefined && revenueChange >= 0;
+  const pendingChefs = stats?.pendingVerifications ?? 0;
+
+  const formatINR = (amount: number) =>
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-description">Platform overview and analytics</p>
-      </div>
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-ink-soft">Platform overview and analytics.</p>
+      </header>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Users"
-          value={stats?.totalUsers?.toLocaleString() || '0'}
-          subtext={`+${stats?.newUsersToday || 0} today`}
-          icon={Users}
-          color="info"
-        />
-        <StatCard
-          title="Active Chefs"
-          value={stats?.totalChefs?.toLocaleString() || '0'}
-          subtext={`${stats?.pendingVerifications || 0} pending`}
-          icon={ChefHat}
-          color="primary"
-          alert={stats?.pendingVerifications ? stats.pendingVerifications > 0 : false}
-        />
-        <StatCard
-          title="Total Orders"
-          value={stats?.totalOrders?.toLocaleString() || '0'}
-          subtext={`${stats?.ordersToday || 0} today`}
-          change={stats?.ordersChange}
-          icon={ShoppingBag}
-          color="success"
-        />
-        <StatCard
-          title="Revenue"
-          value={`₹${(stats?.revenue || 0).toLocaleString()}`}
-          subtext={`₹${(stats?.revenueToday || 0).toLocaleString()} today`}
-          change={stats?.revenueChange}
-          icon={DollarSign}
-          color="warning"
-        />
-      </div>
-
-      {/* Alerts */}
-      {stats?.pendingVerifications && stats.pendingVerifications > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4">
-          <AlertTriangle className="h-5 w-5 text-warning" />
-          <div className="flex-1">
-            <p className="font-medium text-foreground">
-              {stats.pendingVerifications} chef verification{stats.pendingVerifications > 1 ? 's' : ''} pending
+      {/* Lead block — Revenue today + pending verifications CTA */}
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
+        <div>
+          <p className="text-sm text-ink-soft">Today's revenue</p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+            {formatINR(stats?.revenueToday || 0)}
+          </p>
+          {revenueChange !== undefined && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm">
+              {positive ? (
+                <ArrowUpRight className="h-4 w-4 text-herb" aria-hidden />
+              ) : (
+                <ArrowDownRight className="h-4 w-4 text-paprika" aria-hidden />
+              )}
+              <span className={`font-medium tabular-nums ${positive ? 'text-herb' : 'text-paprika'}`}>
+                {positive ? '+' : ''}
+                {revenueChange}%
+              </span>
+              <span className="text-ink-soft">vs. yesterday</span>
             </p>
-            <p className="text-sm text-muted-foreground">Review pending chef applications</p>
-          </div>
+          )}
+        </div>
+
+        {pendingChefs > 0 ? (
           <Link
             to="/chefs?status=pending"
-            className="inline-flex items-center rounded-lg bg-warning px-3 py-1.5 text-sm font-medium text-warning-foreground hover:bg-warning/90 transition-colors"
+            aria-label={`${pendingChefs} chef verifications pending`}
+            className="group flex items-center justify-between gap-4 rounded-lg bg-amber px-5 py-4 text-foreground transition-colors hover:bg-amber/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
-            Review Now
+            <div>
+              <p className="text-3xl font-semibold tabular-nums">
+                {pendingChefs} chef{pendingChefs !== 1 ? 's' : ''}
+              </p>
+              <p className="mt-0.5 text-sm">Pending verification</p>
+            </div>
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" aria-hidden />
           </Link>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Quick Actions */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-          <h2 className="text-lg font-semibold text-foreground">Quick Actions</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <QuickAction
-              href="/users"
-              icon={Users}
-              title="Manage Users"
-              description="View all users"
-              color="info"
-            />
-            <QuickAction
-              href="/chefs"
-              icon={ChefHat}
-              title="Chef Verification"
-              description="Review applications"
-              color="primary"
-            />
-            <QuickAction
-              href="/orders"
-              icon={ShoppingBag}
-              title="Order Management"
-              description="Track all orders"
-              color="success"
-            />
-            <QuickAction
-              href="/analytics"
-              icon={TrendingUp}
-              title="Analytics"
-              description="View reports"
-              color="warning"
-            />
+        ) : (
+          <div className="rounded-lg border border-mist bg-bone px-5 py-4">
+            <p className="text-3xl font-semibold tabular-nums text-foreground">All clear</p>
+            <p className="mt-0.5 text-sm text-ink-soft">No pending chef applications.</p>
           </div>
-        </div>
+        )}
+      </section>
 
-        {/* Recent Activity */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Recent Activity</h2>
-            <Link to="/analytics" className="text-sm text-primary hover:text-primary/80 transition-colors">
+      {/* Status strip */}
+      <section
+        aria-label="Platform at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow
+          label="Total users"
+          value={stats?.totalUsers?.toLocaleString() ?? '0'}
+          subtitle={`+${stats?.newUsersToday ?? 0} today`}
+        />
+        <StatRow
+          label="Active chefs"
+          value={stats?.totalChefs?.toLocaleString() ?? '0'}
+        />
+        <StatRow
+          label="Orders today"
+          value={stats?.ordersToday?.toLocaleString() ?? '0'}
+          subtitle={
+            stats?.ordersChange !== undefined
+              ? `${stats.ordersChange >= 0 ? '+' : ''}${stats.ordersChange}% vs. last week`
+              : undefined
+          }
+        />
+        <StatRow
+          label="Total revenue"
+          value={formatINR(stats?.revenue || 0)}
+          subtitle={`${stats?.totalOrders?.toLocaleString() ?? '0'} all-time`}
+        />
+      </section>
+
+      {/* Work area */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <section aria-label="Recent activity" className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold text-foreground">Recent activity</h2>
+            <Link to="/analytics" className="text-sm font-medium text-herb hover:underline">
               View all
             </Link>
           </div>
 
-          <div className="mt-4 space-y-3">
-            {activities?.slice(0, 5).map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3 rounded-lg bg-secondary/50 p-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+          {(!activities || activities.length === 0) ? (
+            <div className="rounded-lg border border-mist bg-bone py-12 text-center">
+              <Clock className="mx-auto h-10 w-10 text-ink-muted" aria-hidden />
+              <p className="mt-3 font-medium text-foreground">No recent activity</p>
+              <p className="mt-1 text-sm text-ink-soft">Platform events will appear here.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-mist rounded-lg border border-mist bg-bone">
+              {activities.slice(0, 8).map((activity) => (
+                <div key={activity.id} className="flex items-start gap-3 px-4 py-3">
                   <ActivityIcon type={activity.type} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{activity.title}</p>
+                    <p className="truncate text-sm text-ink-soft">{activity.description}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-ink-muted tabular-nums">
+                    {formatTimeAgo(activity.timestamp)}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">{activity.title}</p>
-                  <p className="text-sm text-muted-foreground truncate">{activity.description}</p>
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatTimeAgo(activity.timestamp)}
-                </span>
-              </div>
-            ))}
-            {(!activities || activities.length === 0) && (
-              <p className="text-center text-muted-foreground py-4">No recent activity</p>
-            )}
-          </div>
-        </div>
-      </div>
+              ))}
+            </div>
+          )}
+        </section>
 
-      {/* Charts Placeholder */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-          <h2 className="text-lg font-semibold text-foreground">Orders Overview</h2>
-          <div className="mt-6 h-64 flex items-center justify-center border border-dashed border-border rounded-lg">
-            <div className="text-center text-muted-foreground">
-              <TrendingUp className="mx-auto h-12 w-12" />
-              <p className="mt-2">Orders chart coming soon</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-          <h2 className="text-lg font-semibold text-foreground">Revenue Overview</h2>
-          <div className="mt-6 h-64 flex items-center justify-center border border-dashed border-border rounded-lg">
-            <div className="text-center text-muted-foreground">
-              <DollarSign className="mx-auto h-12 w-12" />
-              <p className="mt-2">Revenue chart coming soon</p>
-            </div>
-          </div>
-        </div>
+        <aside aria-label="Shortcuts" className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">Shortcuts</h2>
+          <nav className="divide-y divide-mist rounded-lg border border-mist bg-bone">
+            <QuickAction to="/users" title="Manage users" subtitle="View all users" />
+            <QuickAction to="/chefs" title="Chef verification" subtitle="Review applications" />
+            <QuickAction to="/orders" title="Order management" subtitle="Track all orders" />
+            <QuickAction to="/analytics" title="Analytics" subtitle="View reports" />
+          </nav>
+        </aside>
       </div>
     </div>
   );
 }
 
-function StatCard({
+function StatRow({
+  label,
   value,
-  subtext,
-  change,
-  icon: Icon,
-  color,
-  alert,
+  subtitle,
 }: {
-  title?: string;
-  value: string;
-  subtext: string;
-  change?: number;
-  icon: typeof Users;
-  color: 'info' | 'primary' | 'success' | 'warning';
-  alert?: boolean;
+  label: string;
+  value: string | number;
+  subtitle?: string;
 }) {
-  const colorClasses = {
-    info: 'bg-info/10 text-info',
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-  };
-
   return (
-    <div className={`rounded-xl border border-border bg-card p-6 shadow-card ${alert ? 'ring-2 ring-warning' : ''}`}>
-      <div className="flex items-center justify-between">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${colorClasses[color]}`}>
-          <Icon className="h-6 w-6" />
-        </div>
-        {change !== undefined && (
-          <span className={`flex items-center gap-1 text-sm ${change >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-            {Math.abs(change)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-4 text-3xl font-bold text-foreground">{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{subtext}</p>
+    <div className="px-4 py-4 sm:px-5">
+      <p className="text-sm text-ink-soft">{label}</p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+        {value}
+      </p>
+      {subtitle && <p className="mt-0.5 text-xs text-ink-soft tabular-nums">{subtitle}</p>}
     </div>
   );
 }
 
 function QuickAction({
-  href,
-  icon: Icon,
+  to,
   title,
-  description,
-  color,
+  subtitle,
 }: {
-  href: string;
-  icon: typeof Users;
+  to: string;
   title: string;
-  description: string;
-  color: 'info' | 'primary' | 'success' | 'warning';
+  subtitle: string;
 }) {
-  const colorClasses = {
-    info: 'bg-info/10 text-info',
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-  };
-
   return (
     <Link
-      to={href}
-      className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-4 hover:bg-secondary/60 transition-colors"
+      to={to}
+      className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-mist/60 first:rounded-t-lg last:rounded-b-lg"
     >
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${colorClasses[color]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
+      <div className="min-w-0">
         <p className="font-medium text-foreground">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="truncate text-sm text-ink-soft">{subtitle}</p>
       </div>
+      <ArrowRight
+        className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-herb"
+        aria-hidden
+      />
     </Link>
   );
 }
 
 function ActivityIcon({ type }: { type: string }) {
-  switch (type) {
-    case 'order':
-      return <ShoppingBag className="h-4 w-4 text-success" />;
-    case 'user':
-      return <Users className="h-4 w-4 text-info" />;
-    case 'chef':
-      return <ChefHat className="h-4 w-4 text-primary" />;
-    case 'report':
-      return <AlertTriangle className="h-4 w-4 text-warning" />;
-    default:
-      return <Clock className="h-4 w-4 text-muted-foreground" />;
-  }
+  const Icon =
+    type === 'order'
+      ? ShoppingBag
+      : type === 'user'
+        ? Users
+        : type === 'chef'
+          ? ChefHat
+          : type === 'report'
+            ? AlertTriangle
+            : Clock;
+  return <Icon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />;
 }
 
 function formatTimeAgo(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;

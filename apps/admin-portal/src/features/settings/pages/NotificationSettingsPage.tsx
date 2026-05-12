@@ -98,8 +98,8 @@ export default function NotificationSettingsPage() {
         <div
           className={`flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
             feedback.kind === 'success'
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-700'
+              ? 'border-herb/30 bg-herb-tint text-herb'
+              : 'border-paprika/30 bg-paprika-tint text-paprika'
           }`}
         >
           <span>{feedback.message}</span>
@@ -192,7 +192,7 @@ function Toggle({
       }`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-bone shadow-sm transition-transform ${
           value ? 'translate-x-4' : 'translate-x-0.5'
         }`}
       />

@@ -364,3 +364,52 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+## Design Context
+
+> Full source of truth: `.impeccable.md` at repo root. This summary is loaded automatically; read the full file before any design work.
+
+### Users
+Three audiences on their own apps, one brand: **customers** (hungry, distracted, want appetite + speed), **home chefs / vendors** (kitchen-hands, time-pressured, want efficiency), **drivers** (in motion, glanceable only). Plus internal **admins** (desktop ops). Job: connect hungry person → home cook → driver, with all three trusting each other through the app.
+
+### Brand Personality
+**Confident · Appetizing · Quietly modern.** Confident not loud (no urgency tricks). Appetizing not artisanal (photography and space do the work, not terracotta-and-cream kitsch). Quietly modern not trendy (restrained type, one accent, ages well). Emotional goals: hunger, trust, calm. Explicitly NOT chasing FOMO, gamification, or aggressive consumer hype.
+
+### Aesthetic Direction — Refined consumer (Stripe Atlas / Cash App / Apple Food)
+- **Light-first, dark supported.** Both modes must work; driver/vendor often dark in low light.
+- **Palette: Paper · Ink · Herb.**
+  - **Paper** `oklch(0.985 0.003 80)` — warm off-white page background (never `#fff`)
+  - **Ink** `oklch(0.18 0.01 80)` — near-black warm-tinted (never `#000`)
+  - **Herb** `oklch(0.48 0.13 145)` — deep green, **the single brand accent.** Primary CTA, focus, success, selected. Reads "fresh food" without the red-saturated competitor look.
+  - **Bone / Mist** — elevated surfaces and hairlines.
+  - **Functional only:** `Paprika` (destructive), `Amber` (warning). Never decorative.
+- **Anti-references — explicitly avoid:** the legacy terracotta/cream/amber/Playfair artisanal system, red-saturated delivery-app look (Swiggy/Zomato/DoorDash), AI slop palette (cyan-on-dark, purple-blue gradients), glassmorphism, 2018 indie ecommerce, hero metric layouts, generic SaaS dashboards.
+
+### Typography
+- **Display: Geist Sans** (geometric, variable, 600/700 weight only) — headlines and marketing moments.
+- **Body / UI: Inter Variable** — body 400, emphasis 500, headings 600.
+- **Numerals:** Tabular figures for every price, ID, ETA, or aligned stat.
+- **Scale:** Fluid `clamp()`, 1.2 ratio mobile / 1.25 desktop. Largest type ~2.5rem mobile / ~3rem desktop. **No display-2xl 4.5rem.**
+- **Forbidden:** Playfair Display, Caveat, gradient text, ALL CAPS body.
+
+### Spatial & Motion
+- **Radius:** 8px default, 16px sheets/modals. No 24px+ super-rounded pills.
+- **Hairlines, not bordered cards.** Three-step shadow scale, elevation only.
+- **Spacing:** 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96. Fluid `clamp()` between viewports.
+- **Touch targets:** 44px customer/vendor, 48px driver.
+- **Motion easing:** `cubic-bezier(0.22, 1, 0.36, 1)` for entrances. **No bounce, no elastic, no overshoot** — the existing `bounce-in` keyframe must go.
+- **Animate:** `opacity` and `transform` only. Never `width/height/top/left/padding`.
+- **Durations:** 150ms / 250ms / 400ms; driver app halves all.
+- `prefers-reduced-motion` honored everywhere.
+
+### Accessibility
+WCAG 2.1 AA baseline. AAA for body text where practical. Skip link first on web. Semantic landmarks always. Visible 2px herb focus ring with 2px offset (never `outline: none`). Driver app: 7:1 contrast floor, all type ≥16px. Form errors via `aria-describedby` / `aria-invalid`.
+
+### Design Principles
+1. **Photo-forward, chrome-light.** Food and faces carry the brand. UI chrome shrinks.
+2. **One accent, used sparingly.** Herb is for primary action, focus, success — nothing decorative. More than one herb element per screen competing for the eye = one is wrong.
+3. **Confidence through restraint.** No bounce, no glass, no gradient text, no decorative shadows, no hero metrics. If it feels loud, it's wrong.
+4. **Per-role density, shared language.** Customer breathes, vendor packs, driver strips down. Tokens shared, layouts adapt.
+5. **Trust the system.** Use the tokens, `@tesserix/web` primitives, Geist + Inter, the easing curve. Don't invent per-feature colors/radii/motion.
+
+The legacy terracotta-cream-amber system in `apps/web/src/styles/globals.css` is being migrated. New screens follow this file; old screens are work-in-progress.

@@ -78,12 +78,16 @@ function FeedbackBanner({
     <div
       className={`mt-4 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
         value.kind === 'success'
-          ? 'border-green-200 bg-green-50 text-green-700'
-          : 'border-red-200 bg-red-50 text-red-700'
+          ? 'border-herb/30 bg-herb-tint text-herb'
+          : 'border-paprika/30 bg-paprika-tint text-paprika'
       }`}
     >
       <span>{value.message}</span>
-      <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100">
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb rounded p-0.5"
+      >
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -319,7 +323,7 @@ function SessionPolicySection() {
                 <button
                   onClick={() => revokeOne.mutate(s.id)}
                   disabled={revokeOne.isPending}
-                  className="shrink-0 text-red-600 hover:text-red-700"
+                  className="shrink-0 text-paprika hover:text-paprika"
                   title="Revoke"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -331,7 +335,7 @@ function SessionPolicySection() {
         <button
           onClick={() => revokeAll.mutate()}
           disabled={revokeAll.isPending}
-          className="mt-3 w-full rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          className="mt-3 w-full rounded-lg border border-paprika/30 px-3 py-1.5 text-xs font-medium text-paprika hover:bg-paprika-tint disabled:opacity-50"
         >
           Sign out everywhere
         </button>
@@ -434,7 +438,7 @@ function TwoFactorSection() {
           {me?.totpEnabled ? (
             <button
               onClick={() => setDisabling(true)}
-              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+              className="rounded-lg border border-paprika/30 px-3 py-1.5 text-xs font-medium text-paprika hover:bg-paprika-tint"
             >
               Disable
             </button>
@@ -458,14 +462,14 @@ function TwoFactorSection() {
             <img
               src={`data:image/png;base64,${enroll.qrCodeBase64}`}
               alt="TOTP QR code"
-              className="mx-auto my-3 h-48 w-48 rounded border border-border bg-white p-2"
+              className="mx-auto my-3 h-48 w-48 rounded border border-border bg-bone p-2"
             />
             <div className="space-y-2">
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="6-digit code"
-                className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-center text-lg tracking-widest focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-center text-lg tracking-widest focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
               <div className="flex gap-2">
                 <button
@@ -487,7 +491,7 @@ function TwoFactorSection() {
         )}
 
         {disabling && (
-          <div className="rounded-lg border border-red-200 bg-red-50/50 p-4">
+          <div className="rounded-lg border border-paprika/30 bg-paprika-tint/50 p-4">
             <p className="text-sm font-medium text-foreground">Disable 2FA</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Requires your password and a current 6-digit code.
@@ -498,13 +502,13 @@ function TwoFactorSection() {
                 value={disablePwd}
                 onChange={(e) => setDisablePwd(e.target.value)}
                 placeholder="Password"
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-bone px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
               <input
                 value={disableCode}
                 onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="6-digit code"
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-center tracking-widest focus:border-primary focus:outline-none"
+                className="w-full rounded-lg border border-border bg-bone px-3 py-2 text-center tracking-widest focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
               />
               <div className="flex gap-2">
                 <button
@@ -516,7 +520,7 @@ function TwoFactorSection() {
                 <button
                   onClick={() => disable.mutate()}
                   disabled={!disablePwd || disableCode.length !== 6 || disable.isPending}
-                  className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  className="flex-1 rounded-lg bg-paprika px-3 py-1.5 text-sm font-medium text-paper hover:bg-paprika disabled:opacity-50"
                 >
                   {disable.isPending ? 'Disabling...' : 'Disable 2FA'}
                 </button>
@@ -578,10 +582,10 @@ function TwoFactorExemptList() {
         onChange={(e) => setDraft(e.target.value)}
         rows={3}
         placeholder="service@fe3dr.com"
-        className="mt-2 w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-xs focus:border-primary focus:outline-none"
+        className="mt-2 w-full rounded-lg border border-border bg-bone px-3 py-2 font-mono text-xs focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
       />
       {saveFeedback && (
-        <p className="mt-1 text-xs text-green-700">{saveFeedback}</p>
+        <p className="mt-1 text-xs text-herb">{saveFeedback}</p>
       )}
       <div className="mt-2 flex justify-end gap-2">
         <button
@@ -693,12 +697,12 @@ function ApiKeysSection() {
       <FeedbackBanner value={feedback.state} onDismiss={() => feedback.setState(null)} />
 
       {revealed && (
-        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="text-xs font-medium text-amber-800">
+        <div className="mt-4 rounded-lg border border-amber/30 bg-amber-tint p-3">
+          <p className="text-xs font-medium text-amber">
             Copy this key now — you won't see it again
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs">{revealed}</code>
+            <code className="flex-1 truncate rounded bg-bone px-2 py-1 text-xs">{revealed}</code>
             <button
               onClick={copyFullKey}
               className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
@@ -708,7 +712,7 @@ function ApiKeysSection() {
           </div>
           <button
             onClick={() => setRevealed(null)}
-            className="mt-2 text-xs text-amber-800 hover:underline"
+            className="mt-2 text-xs text-amber hover:underline"
           >
             I've saved it
           </button>
@@ -723,7 +727,7 @@ function ApiKeysSection() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Partner integration"
-              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-bone px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
             />
           </div>
           <div>
@@ -736,7 +740,7 @@ function ApiKeysSection() {
                   className={`rounded-lg border px-3 py-1.5 text-xs ${
                     scopes.includes(s)
                       ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-white text-foreground hover:bg-secondary'
+                      : 'border-border bg-bone text-foreground hover:bg-secondary'
                   }`}
                 >
                   {s}
@@ -800,7 +804,7 @@ function ApiKeysSection() {
               {!k.revokedAt && (
                 <button
                   onClick={() => revoke.mutate(k.id)}
-                  className="shrink-0 text-red-600 hover:text-red-700"
+                  className="shrink-0 text-paprika hover:text-paprika"
                   title="Revoke"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -867,7 +871,7 @@ function NumberField({
         min={min}
         max={max}
         onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value) || min)))}
-        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
       />
     </div>
   );
@@ -893,7 +897,7 @@ function Toggle({
         }`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-bone shadow-sm transition-transform ${
             value ? 'translate-x-4' : 'translate-x-0.5'
           }`}
         />

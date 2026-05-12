@@ -68,16 +68,16 @@ export default function RegisterPage() {
           src="https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?w=1200&h=900&fit=crop"
           alt="Home chef preparing food"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-600/40 to-spice-600/30" />
+        <div className="absolute inset-0 bg-herb/40 to-spice-600/30" />
         <div className="absolute inset-0 flex items-center justify-center p-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="max-w-lg text-center text-white"
+            className="max-w-lg text-center text-paper"
           >
-            <h2 className="font-display text-display-sm font-bold">Join Fe3dr Today</h2>
-            <p className="mt-4 text-lg text-white/90">
+            <h2 className="font-display font-display text-display-sm font-semibold">Join Fe3dr Today</h2>
+            <p className="mt-4 text-lg text-paper/90">
               Get access to hundreds of home chefs serving authentic, homemade food in your area.
             </p>
             <div className="mt-8 space-y-3">
@@ -89,10 +89,10 @@ export default function RegisterPage() {
                   transition={{ delay: 0.5 + index * 0.1 }}
                   className="flex items-center gap-3 justify-center"
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
                     <Check className="h-4 w-4" />
                   </div>
-                  <span className="text-white/95">{benefit}</span>
+                  <span className="text-paper/95">{benefit}</span>
                 </motion.div>
               ))}
             </div>
@@ -111,10 +111,10 @@ export default function RegisterPage() {
         <div className="mx-auto w-full max-w-sm lg:w-96">
           {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 shadow-md group-hover:shadow-lg transition-shadow">
-              <ChefHat className="h-5 w-5 text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb shadow-md group-hover:shadow-lg transition-shadow">
+              <ChefHat className="h-5 w-5 text-paper" />
             </div>
-            <span className="font-display text-2xl font-bold text-gray-900">Fe3dr</span>
+            <span className="font-display font-display text-2xl font-semibold text-ink">Fe3dr</span>
           </Link>
 
           <motion.div
@@ -123,10 +123,10 @@ export default function RegisterPage() {
             transition={{ delay: 0.2 }}
             className="mt-8"
           >
-            <h2 className="font-display text-display-xs text-gray-900">Create your account</h2>
-            <p className="mt-2 text-gray-600">
+            <h2 className="font-display text-display-xs text-ink">Create your account</h2>
+            <p className="mt-2 text-ink-soft">
               Already have an account?{' '}
-              <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500 transition-colors">
+              <Link to="/login" className="font-medium text-herb hover:text-herb transition-colors">
                 Sign in
               </Link>
             </p>
@@ -160,7 +160,7 @@ export default function RegisterPage() {
               onClick={() => login('facebook')}
               className="w-full justify-center gap-3 py-3"
             >
-              <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5 text-info" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
               </svg>
               Sign up with Facebook
@@ -168,10 +168,10 @@ export default function RegisterPage() {
 
             <div className="relative mt-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
+                <div className="w-full border-t border-mist" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-3 text-gray-500">Or</span>
+                <span className="bg-bone px-3 text-ink-muted">Or</span>
               </div>
             </div>
 
@@ -197,14 +197,14 @@ export default function RegisterPage() {
                   className="space-y-4"
                 >
                   {error && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    <div className="rounded-lg border border-paprika/30 bg-paprika-tint p-3 text-sm text-paprika">
                       {error}
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="reg-first" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="reg-first" className="block text-sm font-medium text-ink-soft">
                         First name
                       </label>
                       <input
@@ -214,11 +214,11 @@ export default function RegisterPage() {
                         required
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
                       />
                     </div>
                     <div>
-                      <label htmlFor="reg-last" className="block text-sm font-medium text-gray-700">
+                      <label htmlFor="reg-last" className="block text-sm font-medium text-ink-soft">
                         Last name
                       </label>
                       <input
@@ -228,13 +228,13 @@ export default function RegisterPage() {
                         required
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="reg-email" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="reg-email" className="block text-sm font-medium text-ink-soft">
                       Email
                     </label>
                     <input
@@ -244,13 +244,13 @@ export default function RegisterPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
                       placeholder="you@example.com"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="reg-password" className="block text-sm font-medium text-ink-soft">
                       Password
                     </label>
                     <div className="relative mt-1">
@@ -262,13 +262,13 @@ export default function RegisterPage() {
                         minLength={8}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        className="block w-full rounded-lg border border-mist-strong px-3 py-2.5 pr-10 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
                         placeholder="Min. 8 characters"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-muted hover:text-ink-soft"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -276,7 +276,7 @@ export default function RegisterPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="reg-confirm" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="reg-confirm" className="block text-sm font-medium text-ink-soft">
                       Confirm password
                     </label>
                     <input
@@ -286,7 +286,7 @@ export default function RegisterPage() {
                       required
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-sm placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-1 focus:ring-herb"
                       placeholder="Re-enter password"
                     />
                   </div>
@@ -311,13 +311,13 @@ export default function RegisterPage() {
               )}
             </AnimatePresence>
 
-            <p className="mt-4 text-center text-xs text-gray-500">
+            <p className="mt-4 text-center text-xs text-ink-muted">
               By signing up, you agree to our{' '}
-              <Link to="/terms" className="text-brand-600 hover:text-brand-500 transition-colors">
+              <Link to="/terms" className="text-herb hover:text-herb transition-colors">
                 Terms of Service
               </Link>{' '}
               and{' '}
-              <Link to="/privacy" className="text-brand-600 hover:text-brand-500 transition-colors">
+              <Link to="/privacy" className="text-herb hover:text-herb transition-colors">
                 Privacy Policy
               </Link>
             </p>

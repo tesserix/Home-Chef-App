@@ -54,7 +54,7 @@ export default function LoginPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
             <Truck className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="mt-6 text-3xl font-bold text-foreground">Fe3dr Delivery</h1>
+          <h1 className="mt-6 font-display text-3xl font-semibold tabular-nums text-foreground">Fe3dr Delivery</h1>
           <p className="mt-2 text-muted-foreground">
             {mode === 'choose' && 'Sign in to get started'}
             {mode === 'staff' && 'Staff & fleet manager login'}

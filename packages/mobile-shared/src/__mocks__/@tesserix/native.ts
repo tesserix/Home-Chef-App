@@ -1,16 +1,30 @@
-// Mock for @tesserix/native used in vitest
-// Provides the same shape that tokens.ts expects AND stub React components for tests
+// Mock for @tesserix/native used in vitest.
+// Mirrors the Paper · Ink · Herb design system. Source of truth: /.impeccable.md.
 
 export const colors = {
-  primary: '#FF6B35',
-  secondary: '#2D3748',
+  paper: '#fafaf7',
+  bone: '#f3f2ee',
+  mist: '#e6e5e0',
+  mistStrong: '#d4d3ce',
+  ink: '#1a1a18',
+  inkSoft: '#4a4a47',
+  inkMuted: '#7a7a76',
+  herb: '#3e6b3c',
+  herbSoft: '#558257',
+  herbTint: '#dde9d8',
+  paprika: '#c95b3e',
+  amber: '#d1a64a',
+  info: '#4a73a3',
+  // Semantic aliases for legacy @tesserix/native consumers
+  primary: '#1a1a18',          // ink (Cash App / Stripe pattern)
+  secondary: '#3e6b3c',        // herb
   background: {
-    primary: '#FFFFFF',
-    secondary: '#F7FAFC',
+    primary: '#fafaf7',         // paper
+    secondary: '#f3f2ee',       // bone
   },
   text: {
-    primary: '#1A202C',
-    secondary: '#718096',
+    primary: '#1a1a18',         // ink
+    secondary: '#4a4a47',       // ink-soft
   },
 };
 
@@ -23,12 +37,16 @@ export const spacing = {
   5: 20,
   6: 24,
   8: 32,
+  10: 40,
+  12: 48,
+  16: 64,
 };
 
 export const typography = {
   fonts: {
-    body: 'System',
-    heading: 'System',
+    body: 'Inter',
+    heading: 'Inter',
+    display: 'Geist',
   },
   fontSizes: {
     xs: 12,
@@ -36,11 +54,12 @@ export const typography = {
     md: 16,
     lg: 18,
     xl: 20,
+    '2xl': 24,
+    '3xl': 30,
   },
 };
 
-// Stub components — only used in tests that import @tesserix/native directly
-// Screen rendering tests live in each app's jest-expo test suite
+// Stub components for tests
 export const Button = () => null;
 export const Input = () => null;
 export const Text = () => null;

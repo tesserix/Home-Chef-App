@@ -246,20 +246,20 @@ export default function CheckoutScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-gray-50"
+      className="flex-1 bg-paper"
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
-      <View className="flex-row items-center bg-white border-b border-gray-100 px-4 pt-14 pb-4 gap-3">
+      <View className="flex-row items-center bg-bone border-b border-mist px-4 pt-14 pb-4 gap-3">
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
           className="p-1"
         >
-          <ChevronLeft size={24} color="#374151" />
+          <ChevronLeft size={24} color="#4a4a47" />
         </Pressable>
-        <Text className="text-xl font-bold text-gray-900 flex-1">Checkout</Text>
+        <Text className="text-xl font-semibold text-ink flex-1">Checkout</Text>
       </View>
 
       <ScrollView
@@ -268,15 +268,15 @@ export default function CheckoutScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Delivery Address ── */}
-        <View className="mx-4 mt-4 bg-white rounded-2xl overflow-hidden">
+        <View className="mx-4 mt-4 bg-bone rounded-2xl overflow-hidden">
           <View className="flex-row items-center px-4 pt-4 pb-2 gap-2">
-            <MapPin size={18} color="#F97316" />
-            <Text className="text-base font-semibold text-gray-900">Delivery Address</Text>
+            <MapPin size={18} color="#3e6b3c" />
+            <Text className="text-base font-semibold text-ink">Delivery Address</Text>
           </View>
 
           {addressLoading ? (
             <View className="px-4 pb-4">
-              <ActivityIndicator size="small" color="#F97316" />
+              <ActivityIndicator size="small" color="#3e6b3c" />
             </View>
           ) : (
             <>
@@ -286,8 +286,8 @@ export default function CheckoutScreen() {
                   onPress={() => addr.id && setSelectedAddressId(addr.id)}
                   className={`mx-4 mb-2 p-3 rounded-xl border ${
                     selectedAddressId === addr.id
-                      ? 'border-orange-400 bg-orange-50'
-                      : 'border-gray-200 bg-gray-50'
+                      ? 'border-herb bg-herb-tint'
+                      : 'border-mist bg-paper'
                   }`}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selectedAddressId === addr.id }}
@@ -297,14 +297,14 @@ export default function CheckoutScreen() {
                     <View
                       className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
                         selectedAddressId === addr.id
-                          ? 'border-orange-500 bg-orange-500'
-                          : 'border-gray-400 bg-white'
+                          ? 'border-herb bg-herb'
+                          : 'border-mist-strong bg-bone'
                       }`}
                     />
                     <View className="flex-1">
-                      <Text className="text-sm text-gray-800">{formatAddress(addr)}</Text>
+                      <Text className="text-sm text-ink">{formatAddress(addr)}</Text>
                       {addr.isDefault && (
-                        <Text className="text-xs text-orange-500 font-medium mt-0.5">Default</Text>
+                        <Text className="text-xs text-herb font-medium mt-0.5">Default</Text>
                       )}
                     </View>
                   </View>
@@ -318,8 +318,8 @@ export default function CheckoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Add new address"
               >
-                <Plus size={16} color="#F97316" />
-                <Text className="text-sm text-orange-500 font-medium">Add New Address</Text>
+                <Plus size={16} color="#3e6b3c" />
+                <Text className="text-sm text-herb font-medium">Add New Address</Text>
               </Pressable>
 
               {showAddressForm && (
@@ -333,12 +333,12 @@ export default function CheckoutScreen() {
                           value={value}
                           onChangeText={onChange}
                           placeholder="Address line 1 *"
-                          placeholderTextColor="#9CA3AF"
-                          className="bg-gray-100 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                          placeholderTextColor="#7a7a76"
+                          className="bg-mist rounded-xl px-3 py-2.5 text-sm text-ink"
                           accessibilityLabel="Address line 1"
                         />
                         {addrErrors.addressLine1 && (
-                          <Text className="text-xs text-red-500 mt-1">
+                          <Text className="text-xs text-paprika mt-1">
                             {addrErrors.addressLine1.message}
                           </Text>
                         )}
@@ -353,8 +353,8 @@ export default function CheckoutScreen() {
                         value={value}
                         onChangeText={onChange}
                         placeholder="Address line 2 (optional)"
-                        placeholderTextColor="#9CA3AF"
-                        className="bg-gray-100 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                        placeholderTextColor="#7a7a76"
+                        className="bg-mist rounded-xl px-3 py-2.5 text-sm text-ink"
                         accessibilityLabel="Address line 2"
                       />
                     )}
@@ -369,12 +369,12 @@ export default function CheckoutScreen() {
                             value={value}
                             onChangeText={onChange}
                             placeholder="City *"
-                            placeholderTextColor="#9CA3AF"
-                            className="bg-gray-100 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                            placeholderTextColor="#7a7a76"
+                            className="bg-mist rounded-xl px-3 py-2.5 text-sm text-ink"
                             accessibilityLabel="City"
                           />
                           {addrErrors.city && (
-                            <Text className="text-xs text-red-500 mt-1">
+                            <Text className="text-xs text-paprika mt-1">
                               {addrErrors.city.message}
                             </Text>
                           )}
@@ -390,12 +390,12 @@ export default function CheckoutScreen() {
                             value={value}
                             onChangeText={onChange}
                             placeholder="State *"
-                            placeholderTextColor="#9CA3AF"
-                            className="bg-gray-100 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                            placeholderTextColor="#7a7a76"
+                            className="bg-mist rounded-xl px-3 py-2.5 text-sm text-ink"
                             accessibilityLabel="State"
                           />
                           {addrErrors.state && (
-                            <Text className="text-xs text-red-500 mt-1">
+                            <Text className="text-xs text-paprika mt-1">
                               {addrErrors.state.message}
                             </Text>
                           )}
@@ -412,14 +412,14 @@ export default function CheckoutScreen() {
                           value={value}
                           onChangeText={onChange}
                           placeholder="Pincode *"
-                          placeholderTextColor="#9CA3AF"
+                          placeholderTextColor="#7a7a76"
                           keyboardType="numeric"
                           maxLength={6}
-                          className="bg-gray-100 rounded-xl px-3 py-2.5 text-sm text-gray-900"
+                          className="bg-mist rounded-xl px-3 py-2.5 text-sm text-ink"
                           accessibilityLabel="Pincode"
                         />
                         {addrErrors.pincode && (
-                          <Text className="text-xs text-red-500 mt-1">
+                          <Text className="text-xs text-paprika mt-1">
                             {addrErrors.pincode.message}
                           </Text>
                         )}
@@ -430,15 +430,15 @@ export default function CheckoutScreen() {
                     onPress={handleAddrSubmit(onSaveAddress)}
                     disabled={addrSubmitting}
                     className={`rounded-xl py-2.5 items-center ${
-                      addrSubmitting ? 'bg-orange-300' : 'bg-orange-500'
+                      addrSubmitting ? 'bg-herb-soft' : 'bg-herb'
                     }`}
                     accessibilityRole="button"
                     accessibilityLabel="Save address"
                   >
                     {addrSubmitting ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color="#fafaf7" />
                     ) : (
-                      <Text className="text-white font-semibold text-sm">Save Address</Text>
+                      <Text className="text-paper font-semibold text-sm">Save Address</Text>
                     )}
                   </Pressable>
                 </View>
@@ -448,57 +448,57 @@ export default function CheckoutScreen() {
         </View>
 
         {/* ── Order Summary ── */}
-        <View className="mx-4 mt-4 bg-white rounded-2xl overflow-hidden">
-          <Text className="text-base font-semibold text-gray-900 px-4 pt-4 pb-2">Order Summary</Text>
+        <View className="mx-4 mt-4 bg-bone rounded-2xl overflow-hidden">
+          <Text className="text-base font-semibold text-ink px-4 pt-4 pb-2">Order Summary</Text>
           <FlatList
             data={cartStore.items}
             keyExtractor={(item) => item.menuItemId}
             scrollEnabled={false}
             renderItem={({ item }) => (
               <View className="flex-row items-center px-4 py-2 gap-2">
-                <View className="w-6 h-6 rounded-full bg-orange-100 items-center justify-center">
-                  <Text className="text-xs font-bold text-orange-600">{item.quantity}</Text>
+                <View className="w-6 h-6 rounded-full bg-herb-tint items-center justify-center">
+                  <Text className="text-xs font-medium text-herb">{item.quantity}</Text>
                 </View>
-                <Text className="flex-1 text-sm text-gray-800">{item.name}</Text>
-                <Text className="text-sm font-medium text-gray-900">
+                <Text className="flex-1 text-sm text-ink">{item.name}</Text>
+                <Text className="text-sm font-medium text-ink">
                   ₹{(item.price * item.quantity).toFixed(2)}
                 </Text>
               </View>
             )}
             ListEmptyComponent={
               <View className="px-4 py-4">
-                <Text className="text-sm text-gray-400">Your cart is empty.</Text>
+                <Text className="text-sm text-ink-muted">Your cart is empty.</Text>
               </View>
             }
           />
-          <View className="border-t border-gray-100 mx-4 mt-2 pt-3 pb-4 gap-2">
+          <View className="border-t border-mist mx-4 mt-2 pt-3 pb-4 gap-2">
             <View className="flex-row justify-between">
-              <Text className="text-sm text-gray-500">Subtotal</Text>
-              <Text className="text-sm text-gray-800">₹{subtotal.toFixed(2)}</Text>
+              <Text className="text-sm text-ink-muted">Subtotal</Text>
+              <Text className="text-sm text-ink">₹{subtotal.toFixed(2)}</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-sm text-gray-500">Delivery fee</Text>
-              <Text className="text-sm text-green-600 font-medium">Free</Text>
+              <Text className="text-sm text-ink-muted">Delivery fee</Text>
+              <Text className="text-sm text-herb font-medium">Free</Text>
             </View>
-            <View className="flex-row justify-between pt-1 border-t border-gray-100">
-              <Text className="text-base font-bold text-gray-900">Total</Text>
-              <Text className="text-base font-bold text-gray-900">₹{total.toFixed(2)}</Text>
+            <View className="flex-row justify-between pt-1 border-t border-mist">
+              <Text className="text-base font-medium text-ink">Total</Text>
+              <Text className="text-base font-medium text-ink">₹{total.toFixed(2)}</Text>
             </View>
           </View>
         </View>
 
         {/* ── Note (optional) ── */}
-        <View className="mx-4 mt-4 bg-white rounded-2xl p-4">
-          <Text className="text-sm font-medium text-gray-700 mb-2">Note to chef (optional)</Text>
+        <View className="mx-4 mt-4 bg-bone rounded-2xl p-4">
+          <Text className="text-sm font-medium text-ink-soft mb-2">Note to chef (optional)</Text>
           <TextInput
             value={note}
             onChangeText={setNote}
             placeholder="Any special instructions..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor="#7a7a76"
             multiline
             numberOfLines={2}
             maxLength={200}
-            className="bg-gray-50 rounded-xl px-3 py-2.5 text-sm text-gray-900 min-h-[60px]"
+            className="bg-paper rounded-xl px-3 py-2.5 text-sm text-ink min-h-[60px]"
             accessibilityLabel="Note to chef"
             textAlignVertical="top"
           />
@@ -506,36 +506,36 @@ export default function CheckoutScreen() {
 
         {/* ── Error ── */}
         {error && (
-          <View className="mx-4 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <Text className="text-sm text-red-600">{error}</Text>
+          <View className="mx-4 mt-4 bg-paprika-tint border border-paprika/30 rounded-xl px-4 py-3">
+            <Text className="text-sm text-paprika">{error}</Text>
             <Pressable
               onPress={() => setError(null)}
               className="mt-1"
               accessibilityRole="button"
               accessibilityLabel="Dismiss error"
             >
-              <Text className="text-xs text-red-400 underline">Dismiss</Text>
+              <Text className="text-xs text-paprika underline">Dismiss</Text>
             </Pressable>
           </View>
         )}
       </ScrollView>
 
       {/* ── Place Order button (fixed bottom) ── */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 pt-3 pb-8">
+      <View className="absolute bottom-0 left-0 right-0 bg-bone border-t border-mist px-4 pt-3 pb-8">
         <Pressable
           onPress={handlePlaceOrder}
           disabled={!canPlaceOrder}
           className={`w-full rounded-2xl py-4 items-center justify-center flex-row gap-2 ${
-            canPlaceOrder ? 'bg-orange-500 active:bg-orange-600' : 'bg-gray-300'
+            canPlaceOrder ? 'bg-herb active:bg-herb' : 'bg-mist-strong'
           }`}
           accessibilityRole="button"
           accessibilityLabel="Place Order"
           accessibilityState={{ disabled: !canPlaceOrder }}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color="#fafaf7" />
           ) : (
-            <Text className={`text-base font-bold ${canPlaceOrder ? 'text-white' : 'text-gray-400'}`}>
+            <Text className={`text-base font-medium ${canPlaceOrder ? 'text-paper' : 'text-ink-muted'}`}>
               {isLoading ? 'Processing...' : `Place Order · ₹${total.toFixed(2)}`}
             </Text>
           )}

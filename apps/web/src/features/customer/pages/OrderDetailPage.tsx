@@ -23,16 +23,17 @@ import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import type { Order, OrderStatus } from '@/shared/types';
 
+// Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
-  pending: { label: 'Pending Confirmation', color: 'text-yellow-800', bgColor: 'bg-yellow-100', icon: Clock },
-  accepted: { label: 'Order Confirmed', color: 'text-blue-800', bgColor: 'bg-blue-100', icon: CheckCircle },
-  preparing: { label: 'Being Prepared', color: 'text-purple-800', bgColor: 'bg-purple-100', icon: ChefHat },
-  ready: { label: 'Ready for Pickup', color: 'text-indigo-800', bgColor: 'bg-indigo-100', icon: Package },
-  picked_up: { label: 'Picked Up', color: 'text-cyan-800', bgColor: 'bg-cyan-100', icon: Truck },
-  delivering: { label: 'On the Way', color: 'text-orange-800', bgColor: 'bg-orange-100', icon: Truck },
-  delivered: { label: 'Delivered', color: 'text-green-800', bgColor: 'bg-green-100', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'text-red-800', bgColor: 'bg-red-100', icon: XCircle },
-  refunded: { label: 'Refunded', color: 'text-gray-800', bgColor: 'bg-gray-100', icon: RotateCcw },
+  pending: { label: 'Pending Confirmation', color: 'text-amber', bgColor: 'bg-amber-tint', icon: Clock },
+  accepted: { label: 'Order Confirmed', color: 'text-info', bgColor: 'bg-info/10', icon: CheckCircle },
+  preparing: { label: 'Being Prepared', color: 'text-info', bgColor: 'bg-info/10', icon: ChefHat },
+  ready: { label: 'Ready for Pickup', color: 'text-herb', bgColor: 'bg-herb-tint', icon: Package },
+  picked_up: { label: 'Picked Up', color: 'text-info', bgColor: 'bg-info/10', icon: Truck },
+  delivering: { label: 'On the Way', color: 'text-info', bgColor: 'bg-info/10', icon: Truck },
+  delivered: { label: 'Delivered', color: 'text-herb', bgColor: 'bg-herb-tint', icon: CheckCircle },
+  cancelled: { label: 'Cancelled', color: 'text-paprika', bgColor: 'bg-paprika-tint', icon: XCircle },
+  refunded: { label: 'Refunded', color: 'text-ink-soft', bgColor: 'bg-mist', icon: RotateCcw },
 };
 
 export default function OrderDetailPage() {
@@ -109,7 +110,7 @@ export default function OrderDetailPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -117,8 +118,8 @@ export default function OrderDetailPage() {
   if (error || !order) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <AlertCircle className="h-16 w-16 text-gray-400" />
-        <h2 className="mt-4 text-xl font-semibold text-gray-900">Order not found</h2>
+        <AlertCircle className="h-16 w-16 text-ink-muted" />
+        <h2 className="mt-4 text-xl font-semibold text-ink">Order not found</h2>
         <Link to="/orders" className="btn-primary mt-4">
           View All Orders
         </Link>
@@ -132,33 +133,33 @@ export default function OrderDetailPage() {
   const canCancel = ['pending', 'accepted'].includes(order.status);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app max-w-3xl">
         {/* Back Button */}
         <Link
           to="/orders"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center gap-2 text-ink-soft hover:text-ink"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Orders
         </Link>
 
         {/* Header */}
-        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-gray-900">
+                <h1 className="text-xl font-semibold text-ink">
                   Order #{order.orderNumber}
                 </h1>
                 <button
                   onClick={handleCopyOrderNumber}
-                  className="p-1 text-gray-400 hover:text-gray-600"
+                  className="p-1 text-ink-muted hover:text-ink-soft"
                 >
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-ink-muted">
                 Placed on{' '}
                 {new Date(order.createdAt).toLocaleDateString('en-US', {
                   weekday: 'long',
@@ -182,7 +183,7 @@ export default function OrderDetailPage() {
             <div className="mt-6">
               <OrderProgress status={order.status} />
               {order.estimatedDeliveryAt && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
+                <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
                   <Clock className="h-4 w-4" />
                   <span>
                     Estimated delivery:{' '}
@@ -200,8 +201,8 @@ export default function OrderDetailPage() {
 
           {/* Cancelled Info */}
           {order.status === 'cancelled' && order.cancelReason && (
-            <div className="mt-4 rounded-lg bg-red-50 p-4">
-              <p className="text-sm text-red-800">
+            <div className="mt-4 rounded-lg bg-paprika-tint p-4">
+              <p className="text-sm text-paprika">
                 <span className="font-medium">Cancellation reason:</span> {order.cancelReason}
               </p>
             </div>
@@ -209,8 +210,8 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Order Items */}
-        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Order Items</h2>
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Order Items</h2>
 
           <div className="mt-4 divide-y">
             {order.items.map((item) => (
@@ -225,13 +226,13 @@ export default function OrderDetailPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                      <h4 className="font-medium text-ink">{item.name}</h4>
+                      <p className="text-sm text-ink-muted">Qty: {item.quantity}</p>
                       {item.notes && (
-                        <p className="mt-1 text-sm text-gray-500 italic">Note: {item.notes}</p>
+                        <p className="mt-1 text-sm text-ink-muted italic">Note: {item.notes}</p>
                       )}
                     </div>
-                    <span className="font-medium text-gray-900">
+                    <span className="font-medium text-ink">
                       {fp(item.subtotal)}
                     </span>
                   </div>
@@ -242,23 +243,23 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Delivery Address */}
-        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-            <MapPin className="h-5 w-5 text-brand-500" />
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+            <MapPin className="h-5 w-5 text-herb" />
             Delivery Address
           </h2>
           <div className="mt-4">
-            <p className="font-medium text-gray-900">{order.deliveryAddress.label}</p>
-            <p className="mt-1 text-gray-600">
+            <p className="font-medium text-ink">{order.deliveryAddress.label}</p>
+            <p className="mt-1 text-ink-soft">
               {order.deliveryAddress.line1}
               {order.deliveryAddress.line2 && `, ${order.deliveryAddress.line2}`}
             </p>
-            <p className="text-gray-600">
+            <p className="text-ink-soft">
               {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
               {order.deliveryAddress.postalCode}
             </p>
             {order.deliveryAddress.deliveryInstructions && (
-              <p className="mt-2 text-sm text-gray-500 italic">
+              <p className="mt-2 text-sm text-ink-muted italic">
                 {order.deliveryAddress.deliveryInstructions}
               </p>
             )}
@@ -266,34 +267,34 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Payment Summary */}
-        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Payment Summary</h2>
+        <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-ink">Payment Summary</h2>
 
           <div className="mt-4 space-y-3">
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-ink-soft">
               <span>Subtotal</span>
               <span>{fp(order.subtotal)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-ink-soft">
               <span>Delivery fee</span>
               <span>{fp(order.deliveryFee)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-ink-soft">
               <span>Service fee</span>
               <span>{fp(order.serviceFee)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-ink-soft">
               <span>Tax</span>
               <span>{fp(order.tax)}</span>
             </div>
             {order.discount > 0 && (
-              <div className="flex justify-between text-green-600">
+              <div className="flex justify-between text-herb">
                 <span>Discount</span>
                 <span>-{fp(order.discount)}</span>
               </div>
             )}
             {order.tip > 0 && (
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-ink-soft">
                 <span>Tip</span>
                 <span>{fp(order.tip)}</span>
               </div>
@@ -305,8 +306,8 @@ export default function OrderDetailPage() {
             <span>{fp(order.total)}</span>
           </div>
 
-          <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-            <CheckCircle className="h-4 w-4 text-green-500" />
+          <div className="mt-4 flex items-center gap-2 text-sm text-ink-muted">
+            <CheckCircle className="h-4 w-4 text-herb" />
             <span>
               Paid via {order.paymentMethod || 'Card'} • {order.paymentStatus}
             </span>
@@ -315,9 +316,9 @@ export default function OrderDetailPage() {
 
         {/* Special Instructions */}
         {order.specialInstructions && (
-          <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Special Instructions</h2>
-            <p className="mt-2 text-gray-600">{order.specialInstructions}</p>
+          <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-ink">Special Instructions</h2>
+            <p className="mt-2 text-ink-soft">{order.specialInstructions}</p>
           </div>
         )}
 
@@ -340,7 +341,7 @@ export default function OrderDetailPage() {
               {canCancel && (
                 <button
                   onClick={() => setShowCancelModal(true)}
-                  className="btn-outline border-red-300 text-red-600 hover:bg-red-50"
+                  className="btn-outline border-paprika/30 text-paprika hover:bg-paprika-tint"
                 >
                   <XCircle className="h-4 w-4" />
                   Cancel Order
@@ -357,15 +358,15 @@ export default function OrderDetailPage() {
 
         {/* Cancel Modal */}
         {showCancelModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-xl bg-white p-6">
-              <h3 className="text-lg font-semibold text-gray-900">Cancel Order</h3>
-              <p className="mt-2 text-gray-600">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
+            <div className="w-full max-w-md rounded-xl bg-bone p-6">
+              <h3 className="text-lg font-semibold text-ink">Cancel Order</h3>
+              <p className="mt-2 text-ink-soft">
                 Are you sure you want to cancel this order? This action cannot be undone.
               </p>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-ink-soft">
                   Reason for cancellation
                 </label>
                 <textarea
@@ -387,7 +388,7 @@ export default function OrderDetailPage() {
                 <button
                   onClick={() => cancelMutation.mutate()}
                   disabled={cancelMutation.isPending}
-                  className="btn-base bg-red-600 text-white hover:bg-red-700"
+                  className="btn-base bg-paprika text-paper hover:bg-paprika"
                 >
                   {cancelMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -419,9 +420,9 @@ function OrderProgress({ status }: { status: OrderStatus }) {
   return (
     <div className="relative">
       {/* Progress Line */}
-      <div className="absolute left-4 top-4 h-[calc(100%-32px)] w-0.5 bg-gray-200" />
+      <div className="absolute left-4 top-4 h-[calc(100%-32px)] w-0.5 bg-mist" />
       <div
-        className="absolute left-4 top-4 w-0.5 bg-brand-500 transition-all"
+        className="absolute left-4 top-4 w-0.5 bg-herb transition-all"
         style={{
           height: `${Math.min((currentIndex / (steps.length)) * 100, 100)}%`,
         }}
@@ -440,15 +441,15 @@ function OrderProgress({ status }: { status: OrderStatus }) {
               <div
                 className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full ${
                   isCompleted
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-gray-200 text-gray-400'
-                } ${isCurrent ? 'ring-4 ring-brand-100' : ''}`}
+                    ? 'bg-herb text-paper'
+                    : 'bg-mist text-ink-muted'
+                } ${isCurrent ? 'ring-4 ring-herb/30' : ''}`}
               >
                 <StepIcon className="h-4 w-4" />
               </div>
               <span
                 className={`font-medium ${
-                  isCompleted ? 'text-gray-900' : 'text-gray-400'
+                  isCompleted ? 'text-ink' : 'text-ink-muted'
                 }`}
               >
                 {step.label}

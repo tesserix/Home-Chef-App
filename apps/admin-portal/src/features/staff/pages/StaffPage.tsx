@@ -589,7 +589,7 @@ function InviteStaffDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-foreground/50" onClick={onClose} />
+      <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={onClose} />
       <div className="relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Invite Staff Member</h2>

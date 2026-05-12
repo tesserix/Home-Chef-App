@@ -81,7 +81,7 @@ export default function RegisterPage() {
           alt="Indian woman cooking in home kitchen"
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+        <div className="absolute inset-0 scrim-bottom" />
 
         {/* Content overlay */}
         <div className="relative flex h-full flex-col justify-end p-10 xl:p-14">
@@ -90,22 +90,22 @@ export default function RegisterPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.6 }}
           >
-            <h2 className="max-w-md text-3xl font-bold leading-tight text-white font-display xl:text-4xl">
+            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper font-display xl:text-4xl">
               Start selling from your kitchen
             </h2>
-            <p className="mt-3 max-w-md text-base text-white/80">
+            <p className="mt-3 max-w-md text-base text-paper/80">
               Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules.
             </p>
 
             <div className="mt-8 space-y-4">
               {BENEFITS.map((item) => (
                 <div key={item.title} className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                    <Check className="h-3.5 w-3.5 text-white" />
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
+                    <Check className="h-3.5 w-3.5 text-paper" />
                   </div>
                   <div>
-                    <p className="font-semibold text-white">{item.title}</p>
-                    <p className="text-sm text-white/70">{item.desc}</p>
+                    <p className="font-semibold text-paper">{item.title}</p>
+                    <p className="text-sm text-paper/70">{item.desc}</p>
                   </div>
                 </div>
               ))}
@@ -129,14 +129,14 @@ export default function RegisterPage() {
                 <ChefHat className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground font-display">Fe3dr</h1>
+                <h1 className="text-xl font-semibold text-foreground font-display">Fe3dr</h1>
                 <p className="text-xs text-muted-foreground">Vendor Portal</p>
               </div>
             </div>
           </motion.div>
 
           <motion.div variants={fadeInUp} className="mb-8">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground font-display sm:text-3xl">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground font-display sm:text-3xl">
               Register your kitchen
             </h2>
             <p className="mt-2 text-muted-foreground">

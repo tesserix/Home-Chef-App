@@ -46,24 +46,24 @@ function PayoutsLoadingSkeleton() {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <tr className="border-b border-mist">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Date
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Amount
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Method
               </th>
             </tr>
           </thead>
           <tbody>
             {Array.from({ length: 8 }).map((_, i) => (
-              <tr key={i} className="border-b border-gray-50">
+              <tr key={i} className="border-b border-mist">
                 <td className="px-4 py-3">
                   <Skeleton className="h-4 w-24" />
                 </td>
@@ -107,8 +107,8 @@ export default function PayoutsPage() {
               Back to Earnings
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Payout History</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="font-display text-2xl font-semibold text-ink">Payout History</h1>
+          <p className="mt-1 text-sm text-ink-muted">
             View all your past and pending payouts
           </p>
         </motion.div>
@@ -119,22 +119,22 @@ export default function PayoutsPage() {
             <PayoutsLoadingSkeleton />
           ) : isError || !payouts ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <DollarSign className="mb-4 h-12 w-12 text-gray-300" />
-              <h3 className="text-lg font-semibold text-gray-900">
+              <DollarSign className="mb-4 h-12 w-12 text-ink-muted" />
+              <h3 className="text-lg font-semibold text-ink">
                 Unable to load payouts
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-ink-muted">
                 Please try again later.
               </p>
             </div>
           ) : payouts.length === 0 ? (
             <Card>
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <CreditCard className="mb-4 h-12 w-12 text-gray-300" />
-                <h3 className="text-lg font-semibold text-gray-900">
+                <CreditCard className="mb-4 h-12 w-12 text-ink-muted" />
+                <h3 className="text-lg font-semibold text-ink">
                   No payouts yet
                 </h3>
-                <p className="mt-1 max-w-sm text-sm text-gray-500">
+                <p className="mt-1 max-w-sm text-sm text-ink-muted">
                   Your payout history will appear here once you receive your
                   first payout.
                 </p>
@@ -151,31 +151,31 @@ export default function PayoutsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50/50">
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <tr className="border-b border-mist bg-paper/50">
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                         Date
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                         Amount
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-muted">
                         Method
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-mist">
                     {payouts.map((payout) => (
                       <tr
                         key={payout.id}
-                        className="transition-colors hover:bg-gray-50/50"
+                        className="transition-colors hover:bg-paper/50"
                       >
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-soft">
                           {format(new Date(payout.date), 'dd MMM yyyy')}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-ink">
                           {formatCurrency(payout.amount)}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4">
@@ -186,7 +186,7 @@ export default function PayoutsPage() {
                             {payout.status}
                           </Badge>
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-ink-muted">
                           {payout.method}
                         </td>
                       </tr>

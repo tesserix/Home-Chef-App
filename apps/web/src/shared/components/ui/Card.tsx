@@ -3,16 +3,15 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@tesserix/web';
 
 const cardVariants = cva(
-  ['rounded-xl transition-all duration-200 ease-premium'],
+  ['rounded-lg transition-colors duration-150 ease-smooth'],
   {
     variants: {
       variant: {
-        default: 'border border-border bg-card text-card-foreground shadow-sm',
-        elevated: 'bg-card text-card-foreground shadow-elevated',
+        default: 'border border-border bg-card text-card-foreground',
+        elevated: 'bg-card text-card-foreground shadow-2',
         outlined: 'bg-card text-card-foreground border border-border',
         filled: 'bg-secondary text-secondary-foreground',
         ghost: 'bg-transparent',
-        premium: 'bg-card text-card-foreground shadow-soft-lg ring-1 ring-warning/20',
       },
       padding: {
         none: '',
@@ -22,8 +21,8 @@ const cardVariants = cva(
       },
       hover: {
         none: '',
-        lift: 'hover:shadow-card-hover hover:-translate-y-1 cursor-pointer',
-        border: 'hover:border-primary/30 cursor-pointer',
+        lift: 'cursor-pointer hover:border-ink-soft',
+        border: 'cursor-pointer hover:border-herb',
       },
     },
     defaultVariants: {
@@ -67,7 +66,7 @@ const CardTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn('text-2xl font-bold leading-tight tracking-tight', className)}
+    className={cn('font-display text-xl font-semibold leading-tight tracking-tight', className)}
     {...props}
   />
 ));

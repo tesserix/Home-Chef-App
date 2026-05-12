@@ -26,6 +26,7 @@ import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
 import { useNotificationsWS } from '@/shared/hooks/useNotificationsWS';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { DeliveryBottomNav } from '@/shared/components/navigation/DeliveryBottomNav';
+import { ThemeToggle } from '@/shared/theme';
 
 interface StaffProfile {
   id: string;
@@ -168,6 +169,10 @@ export function DeliveryLayout() {
                   <Settings className="h-4 w-4" />
                   Settings
                 </Link>
+                <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                  <span>Theme</span>
+                  <ThemeToggle size="sm" />
+                </div>
                 <button
                   onClick={logout}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
@@ -184,7 +189,7 @@ export function DeliveryLayout() {
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-foreground/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 z-40 bg-foreground/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
           <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-card lg:hidden">
             <div className="flex h-full flex-col">
               <div className="flex h-16 items-center justify-between border-b border-border px-4">
@@ -232,7 +237,7 @@ export function DeliveryLayout() {
               <Link to="/available" className="relative rounded-lg p-2 hover:bg-secondary">
                 <Bell className="h-5 w-5 text-muted-foreground" />
                 {unreadCount > 0 && (
-                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -241,7 +246,7 @@ export function DeliveryLayout() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile && !isStaff ? 'pb-20' : ''}`}>
+        <main id="main" className={`flex-1 overflow-y-auto p-4 lg:p-8 ${isMobile && !isStaff ? 'pb-20' : ''}`}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

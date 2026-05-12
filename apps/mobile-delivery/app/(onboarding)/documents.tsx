@@ -137,70 +137,70 @@ export default function DocumentsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
+    <SafeAreaView className="flex-1 bg-bone" edges={['bottom']}>
       <ScrollView className="flex-1 px-6" keyboardShouldPersistTaps="handled">
         {/* Progress bar */}
-        <View className="mt-4 mb-6 h-1 bg-gray-200 rounded-full">
-          <View className="h-1 bg-orange-500 rounded-full" style={{ width: '50%' }} />
+        <View className="mt-4 mb-6 h-1 bg-mist rounded-full">
+          <View className="h-1 bg-herb rounded-full" style={{ width: '50%' }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-2">Upload Documents</Text>
-        <Text className="text-gray-500 mb-6">
+        <Text className="font-display text-2xl font-semibold text-ink mb-2">Upload Documents</Text>
+        <Text className="text-ink-muted mb-6">
           Please upload clear photos or PDFs of your documents
         </Text>
 
         {slots.map((slot: DocumentSlot) => (
-          <View key={slot.type} className="mb-6 border border-gray-200 rounded-xl p-4">
-            <Text className="text-base font-semibold text-gray-800 mb-3">
+          <View key={slot.type} className="mb-6 border border-mist rounded-xl p-4">
+            <Text className="text-base font-semibold text-ink mb-3">
               {slot.label}
-              {slot.required && <Text className="text-red-500"> *</Text>}
+              {slot.required && <Text className="text-paprika"> *</Text>}
             </Text>
 
             {/* Preview or placeholder */}
             {slot.uri ? (
-              <View className="mb-3 rounded-lg overflow-hidden border border-gray-200">
+              <View className="mb-3 rounded-lg overflow-hidden border border-mist">
                 {slot.uri.endsWith('.pdf') ? (
-                  <View className="h-24 bg-gray-100 items-center justify-center">
-                    <Text className="text-gray-500 text-sm">PDF uploaded</Text>
+                  <View className="h-24 bg-mist items-center justify-center">
+                    <Text className="text-ink-muted text-sm">PDF uploaded</Text>
                   </View>
                 ) : (
                   <Image source={{ uri: slot.uri }} className="w-full h-32" resizeMode="cover" />
                 )}
               </View>
             ) : (
-              <View className="mb-3 h-24 bg-gray-50 rounded-lg border border-dashed border-gray-300 items-center justify-center">
-                <Text className="text-gray-400 text-sm">No document uploaded</Text>
+              <View className="mb-3 h-24 bg-paper rounded-lg border border-dashed border-mist-strong items-center justify-center">
+                <Text className="text-ink-muted text-sm">No document uploaded</Text>
               </View>
             )}
 
             {/* Upload buttons */}
             {uploading === slot.type ? (
               <View className="items-center py-2">
-                <ActivityIndicator color="#F97316" />
-                <Text className="text-gray-500 text-sm mt-1">Uploading...</Text>
+                <ActivityIndicator color="#3e6b3c" />
+                <Text className="text-ink-muted text-sm mt-1">Uploading...</Text>
               </View>
             ) : (
               <View className="flex-row gap-2">
                 <TouchableOpacity
                   onPress={() => handleCamera(slot.type)}
                   disabled={uploading !== null}
-                  className="flex-1 py-2 border border-orange-500 rounded-lg items-center"
+                  className="flex-1 py-2 border border-herb rounded-lg items-center"
                 >
-                  <Text className="text-orange-500 text-sm font-medium">Camera</Text>
+                  <Text className="text-herb text-sm font-medium">Camera</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handleGallery(slot.type)}
                   disabled={uploading !== null}
-                  className="flex-1 py-2 border border-orange-500 rounded-lg items-center"
+                  className="flex-1 py-2 border border-herb rounded-lg items-center"
                 >
-                  <Text className="text-orange-500 text-sm font-medium">Gallery</Text>
+                  <Text className="text-herb text-sm font-medium">Gallery</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => handlePdf(slot.type)}
                   disabled={uploading !== null}
-                  className="flex-1 py-2 border border-orange-500 rounded-lg items-center"
+                  className="flex-1 py-2 border border-herb rounded-lg items-center"
                 >
-                  <Text className="text-orange-500 text-sm font-medium">Upload PDF</Text>
+                  <Text className="text-herb text-sm font-medium">Upload PDF</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -211,13 +211,13 @@ export default function DocumentsScreen() {
       </ScrollView>
 
       {/* Next Button */}
-      <View className="px-6 py-4 border-t border-gray-100">
+      <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleNext}
           disabled={!canProceed || isNavigating}
-          className={`w-full py-4 rounded-xl items-center ${canProceed && !isNavigating ? 'bg-orange-500' : 'bg-gray-300'}`}
+          className={`w-full py-4 rounded-xl items-center ${canProceed && !isNavigating ? 'bg-herb' : 'bg-mist-strong'}`}
         >
-          <Text className="text-white font-semibold text-base">Next</Text>
+          <Text className="text-paper font-semibold text-base">Next</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

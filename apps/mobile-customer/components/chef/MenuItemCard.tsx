@@ -46,7 +46,7 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   };
 
   return (
-    <View className="flex-row items-center bg-white rounded-xl p-3 mb-2 border border-gray-100">
+    <View className="flex-row items-center bg-bone rounded-xl p-3 mb-2 border border-mist">
       {item.imageUrl ? (
         <Image
           source={{ uri: item.imageUrl }}
@@ -56,38 +56,38 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           transition={200}
         />
       ) : (
-        <View style={{ width: 80, height: 80, borderRadius: 10 }} className="bg-gray-100" />
+        <View style={{ width: 80, height: 80, borderRadius: 10 }} className="bg-mist" />
       )}
 
       <View className="flex-1 ml-3 gap-1">
-        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+        <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
           {item.name}
         </Text>
         {item.description ? (
-          <Text className="text-xs text-gray-500" numberOfLines={2}>
+          <Text className="text-xs text-ink-muted" numberOfLines={2}>
             {item.description}
           </Text>
         ) : null}
         {item.dietaryTags && item.dietaryTags.length > 0 ? (
           <View className="flex-row flex-wrap gap-1">
             {item.dietaryTags.map((tag) => (
-              <View key={tag} className="bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-                <Text className="text-xs text-green-700">{tag}</Text>
+              <View key={tag} className="bg-herb-tint border border-herb/30 rounded-full px-2 py-0.5">
+                <Text className="text-xs text-herb">{tag}</Text>
               </View>
             ))}
           </View>
         ) : null}
-        <Text className="text-sm font-bold text-gray-900">₹{item.price.toFixed(2)}</Text>
+        <Text className="text-sm font-medium text-ink">₹{item.price.toFixed(2)}</Text>
       </View>
 
       <Pressable
         onPress={handleAdd}
         disabled={!item.isAvailable}
-        className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${item.isAvailable ? 'bg-orange-500 active:bg-orange-600' : 'bg-gray-200'}`}
+        className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${item.isAvailable ? 'bg-herb active:bg-herb' : 'bg-mist'}`}
         accessibilityLabel={`Add ${item.name} to cart`}
         accessibilityRole="button"
       >
-        <Plus size={18} color={item.isAvailable ? '#fff' : '#9CA3AF'} />
+        <Plus size={18} color={item.isAvailable ? '#fafaf7' : '#7a7a76'} />
       </Pressable>
     </View>
   );

@@ -156,41 +156,41 @@ export default function ProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load profile</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load profile</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#374151" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
+        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+          <ChevronLeft size={24} color="#4a4a47" />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-gray-900">Profile</Text>
+        <Text className="text-lg font-semibold text-ink">Profile</Text>
       </View>
 
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -201,7 +201,7 @@ export default function ProfileScreen() {
             disabled={uploadProfileImageMutation.isPending}
             activeOpacity={0.8}
           >
-            <View className="w-24 h-24 rounded-full overflow-hidden bg-orange-100 items-center justify-center border-2 border-orange-300">
+            <View className="w-24 h-24 rounded-full overflow-hidden bg-herb-tint items-center justify-center border-2 border-herb-tint">
               {data?.profileImageUrl ? (
                 <Image
                   source={{ uri: data.profileImageUrl }}
@@ -209,10 +209,10 @@ export default function ProfileScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <User size={40} color="#FB923C" />
+                <User size={40} color="#558257" />
               )}
             </View>
-            <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-orange-500 items-center justify-center border-2 border-white">
+            <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-herb items-center justify-center border-2 border-bone">
               {uploadProfileImageMutation.isPending ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
@@ -223,35 +223,35 @@ export default function ProfileScreen() {
         </View>
 
         {/* Basic info */}
-        <View className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+        <View className="bg-bone rounded-2xl shadow-sm p-4 mb-4">
           <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-base font-semibold text-gray-700">Personal Info</Text>
+            <Text className="text-base font-semibold text-ink-soft">Personal Info</Text>
             {!isEditing && (
               <TouchableOpacity
                 onPress={() => setIsEditing(true)}
                 activeOpacity={0.7}
               >
-                <Text className="text-sm text-orange-500 font-medium">Edit</Text>
+                <Text className="text-sm text-herb font-medium">Edit</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Display Name</Text>
+            <Text className="text-xs text-ink-muted mb-1">Display Name</Text>
             {isEditing ? (
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
-                className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist rounded-xl px-4 py-3 text-base text-ink"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{data?.displayName ?? ''}</Text>
+              <Text className="text-base text-ink">{data?.displayName ?? ''}</Text>
             )}
           </View>
 
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Bio</Text>
+            <Text className="text-xs text-ink-muted mb-1">Bio</Text>
             {isEditing ? (
               <TextInput
                 value={bio}
@@ -259,26 +259,26 @@ export default function ProfileScreen() {
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
-                className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900 min-h-[80px]"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist rounded-xl px-4 py-3 text-base text-ink min-h-[80px]"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{data?.bio ?? ''}</Text>
+              <Text className="text-base text-ink">{data?.bio ?? ''}</Text>
             )}
           </View>
 
           <View>
-            <Text className="text-xs text-gray-400 mb-1">Phone</Text>
+            <Text className="text-xs text-ink-muted mb-1">Phone</Text>
             {isEditing ? (
               <TextInput
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-                className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist rounded-xl px-4 py-3 text-base text-ink"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{data?.phone ?? ''}</Text>
+              <Text className="text-base text-ink">{data?.phone ?? ''}</Text>
             )}
           </View>
 
@@ -286,23 +286,23 @@ export default function ProfileScreen() {
             <View className="flex-row gap-3 mt-4">
               <TouchableOpacity
                 onPress={() => setIsEditing(false)}
-                className="flex-1 py-3 rounded-xl items-center border border-gray-300"
+                className="flex-1 py-3 rounded-xl items-center border border-mist-strong"
                 activeOpacity={0.8}
               >
-                <Text className="text-gray-600 font-semibold">Cancel</Text>
+                <Text className="text-ink-soft font-semibold">Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSave}
                 disabled={updateMutation.isPending}
                 className={`flex-1 py-3 rounded-xl items-center ${
-                  updateMutation.isPending ? 'bg-orange-300' : 'bg-orange-500'
+                  updateMutation.isPending ? 'bg-herb-soft' : 'bg-herb'
                 }`}
                 activeOpacity={0.8}
               >
                 {updateMutation.isPending ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text className="text-white font-semibold">Save</Text>
+                  <Text className="text-paper font-semibold">Save</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -310,20 +310,20 @@ export default function ProfileScreen() {
         </View>
 
         {/* Kitchen info (read-only) */}
-        <View className="bg-white rounded-2xl shadow-sm p-4 mb-4">
-          <Text className="text-base font-semibold text-gray-700 mb-4">Kitchen Info</Text>
+        <View className="bg-bone rounded-2xl shadow-sm p-4 mb-4">
+          <Text className="text-base font-semibold text-ink-soft mb-4">Kitchen Info</Text>
 
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Kitchen Name</Text>
-            <Text className="text-base text-gray-900">{data?.kitchenName ?? '—'}</Text>
+            <Text className="text-xs text-ink-muted mb-1">Kitchen Name</Text>
+            <Text className="text-base text-ink">{data?.kitchenName ?? '—'}</Text>
           </View>
 
           <View>
-            <Text className="text-xs text-gray-400 mb-1">Cuisine Types</Text>
+            <Text className="text-xs text-ink-muted mb-1">Cuisine Types</Text>
             <View className="flex-row flex-wrap gap-2 mt-1">
               {data?.cuisineTypes?.map((cuisine) => (
-                <View key={cuisine} className="bg-orange-50 px-3 py-1 rounded-full">
-                  <Text className="text-xs text-orange-600">{cuisine}</Text>
+                <View key={cuisine} className="bg-herb-tint px-3 py-1 rounded-full">
+                  <Text className="text-xs text-herb">{cuisine}</Text>
                 </View>
               ))}
             </View>
@@ -331,8 +331,8 @@ export default function ProfileScreen() {
         </View>
 
         {/* Kitchen photos */}
-        <View className="bg-white rounded-2xl shadow-sm p-4">
-          <Text className="text-base font-semibold text-gray-700 mb-3">Kitchen Photos</Text>
+        <View className="bg-bone rounded-2xl shadow-sm p-4">
+          <Text className="text-base font-semibold text-ink-soft mb-3">Kitchen Photos</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row gap-3">
               {data?.kitchenPhotos?.slice(0, 5).map((photo) => (
@@ -347,13 +347,13 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                   onPress={handleAddKitchenPhoto}
                   disabled={uploadKitchenPhotoMutation.isPending}
-                  className="w-[90px] h-[90px] bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl items-center justify-center"
+                  className="w-[90px] h-[90px] bg-mist border-2 border-dashed border-mist-strong rounded-xl items-center justify-center"
                   activeOpacity={0.7}
                 >
                   {uploadKitchenPhotoMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#FF6B35" />
+                    <ActivityIndicator size="small" color="#3e6b3c" />
                   ) : (
-                    <Plus size={24} color="#9CA3AF" />
+                    <Plus size={24} color="#7a7a76" />
                   )}
                 </TouchableOpacity>
               )}

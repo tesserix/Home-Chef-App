@@ -76,11 +76,11 @@ export function StepReview({ onEdit }: { onEdit: (step: number) => void }) {
     <div className="space-y-6">
       {/* Warnings */}
       {missingDocs.length > 0 && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <div className="flex items-start gap-3 rounded-xl border border-amber/30 bg-amber-tint p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
           <div>
-            <p className="text-sm font-medium text-amber-900">Missing required documents</p>
-            <p className="mt-1 text-xs text-amber-700">
+            <p className="text-sm font-medium text-amber">Missing required documents</p>
+            <p className="mt-1 text-xs text-amber">
               Please go back to Step 4 and upload: {missingDocs.map((d) => d.replace(/_/g, ' ')).join(', ')}
             </p>
           </div>
@@ -88,11 +88,11 @@ export function StepReview({ onEdit }: { onEdit: (step: number) => void }) {
       )}
 
       {!(data.acceptedTerms && data.acceptedHygienePolicy && data.acceptedCancellationPolicy) && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <div className="flex items-start gap-3 rounded-xl border border-amber/30 bg-amber-tint p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
           <div>
-            <p className="text-sm font-medium text-amber-900">Policies not accepted</p>
-            <p className="mt-1 text-xs text-amber-700">
+            <p className="text-sm font-medium text-amber">Policies not accepted</p>
+            <p className="mt-1 text-xs text-amber">
               Please go back to Step 5 and accept all required policies.
             </p>
           </div>
@@ -202,7 +202,7 @@ export function StepReview({ onEdit }: { onEdit: (step: number) => void }) {
           ) : (
             data.documents.map((doc) => (
               <div key={doc.type} className="flex items-center gap-3 rounded-lg bg-secondary/50 p-2.5">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className="h-4 w-4 text-herb" />
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     {doc.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
@@ -242,9 +242,9 @@ export function StepReview({ onEdit }: { onEdit: (step: number) => void }) {
           ].map((p) => (
             <div key={p.label} className="flex items-center gap-2">
               {p.accepted ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className="h-4 w-4 text-herb" />
               ) : (
-                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <AlertCircle className="h-4 w-4 text-amber" />
               )}
               <span className="text-sm text-foreground">{p.label}</span>
             </div>

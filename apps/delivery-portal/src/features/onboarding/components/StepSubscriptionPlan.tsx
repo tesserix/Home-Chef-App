@@ -223,7 +223,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-lg font-bold text-foreground">
+                <p className="text-lg font-medium text-foreground">
                   {formatCurrency(plan.amount, plan.currency)}
                 </p>
                 {plan.savingsPercent && plan.savingsPercent > 0 && (

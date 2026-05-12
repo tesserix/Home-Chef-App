@@ -23,17 +23,17 @@ const buttonVariants = cva(
         default: [
           'bg-primary text-primary-foreground',
           'hover:bg-primary/90',
-          'shadow-md hover:shadow-lg',
+          'shadow-1 hover:shadow-2',
         ],
         primary: [
           'bg-primary text-primary-foreground',
           'hover:bg-primary/90',
-          'shadow-md hover:shadow-lg',
+          'shadow-1 hover:shadow-2',
         ],
         destructive: [
           'bg-destructive text-destructive-foreground',
           'hover:bg-destructive/90',
-          'shadow-md hover:shadow-lg',
+          'shadow-1 hover:shadow-2',
         ],
         outline: [
           'border-2 border-border bg-transparent text-foreground',
@@ -55,12 +55,12 @@ const buttonVariants = cva(
         danger: [
           'bg-destructive text-destructive-foreground',
           'hover:bg-destructive/90',
-          'shadow-md hover:shadow-lg',
+          'shadow-1 hover:shadow-2',
         ],
         success: [
           'bg-success text-success-foreground',
           'hover:bg-success/90',
-          'shadow-md hover:shadow-lg',
+          'shadow-1 hover:shadow-2',
         ],
         'brand-outline': [
           'border-2 border-primary bg-transparent text-primary',
@@ -202,14 +202,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{children}</span>
+            <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+            <span className="opacity-70">{children}</span>
+            <span className="sr-only">Loading</span>
           </>
         ) : (
           <>
-            {leftIcon && <span className="shrink-0">{leftIcon}</span>}
+            {leftIcon && <span aria-hidden="true" className="shrink-0">{leftIcon}</span>}
             {children}
-            {rightIcon && <span className="shrink-0">{rightIcon}</span>}
+            {rightIcon && <span aria-hidden="true" className="shrink-0">{rightIcon}</span>}
           </>
         )}
       </Comp>

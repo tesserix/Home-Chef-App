@@ -159,7 +159,7 @@ export default function ChefsPage() {
                 <div className="flex items-center gap-4">
                   <div className="relative flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
                     {chef.profileImage ? (
-                      <img src={chef.profileImage} alt={chef.businessName} className="h-14 w-14 rounded-xl object-cover" />
+                      <img src={chef.profileImage} alt={chef.businessName} className="h-14 w-14 rounded-xl object-cover" loading="lazy" decoding="async" />
                     ) : (
                       <ChefHat className="h-7 w-7 text-primary" />
                     )}

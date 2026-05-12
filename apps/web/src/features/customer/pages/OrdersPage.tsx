@@ -17,16 +17,17 @@ import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import type { Order, PaginatedResponse, OrderStatus } from '@/shared/types';
 
+// Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: typeof Clock }> = {
-  pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-  accepted: { label: 'Accepted', color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
-  preparing: { label: 'Preparing', color: 'bg-purple-100 text-purple-800', icon: ChefHat },
-  ready: { label: 'Ready', color: 'bg-indigo-100 text-indigo-800', icon: Package },
-  picked_up: { label: 'Picked Up', color: 'bg-cyan-100 text-cyan-800', icon: Truck },
-  delivering: { label: 'On the Way', color: 'bg-orange-100 text-orange-800', icon: Truck },
-  delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: XCircle },
-  refunded: { label: 'Refunded', color: 'bg-gray-100 text-gray-800', icon: RotateCcw },
+  pending: { label: 'Pending', color: 'bg-amber-tint text-amber', icon: Clock },
+  accepted: { label: 'Accepted', color: 'bg-info/10 text-info', icon: CheckCircle },
+  preparing: { label: 'Preparing', color: 'bg-info/10 text-info', icon: ChefHat },
+  ready: { label: 'Ready', color: 'bg-herb-tint text-herb', icon: Package },
+  picked_up: { label: 'Picked Up', color: 'bg-info/10 text-info', icon: Truck },
+  delivering: { label: 'On the Way', color: 'bg-info/10 text-info', icon: Truck },
+  delivered: { label: 'Delivered', color: 'bg-herb-tint text-herb', icon: CheckCircle },
+  cancelled: { label: 'Cancelled', color: 'bg-paprika-tint text-paprika', icon: XCircle },
+  refunded: { label: 'Refunded', color: 'bg-mist text-ink-soft', icon: RotateCcw },
 };
 
 const FILTER_OPTIONS = [
@@ -69,15 +70,15 @@ export default function OrdersPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app max-w-4xl">
-        <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">My Orders</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">My Orders</h1>
 
         {/* Filters */}
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -88,8 +89,8 @@ export default function OrdersPage() {
                 onClick={() => setFilter(option.value)}
                 className={`rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                   filter === option.value
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                    ? 'bg-herb text-paper'
+                    : 'bg-bone text-ink-soft hover:bg-mist'
                 }`}
               >
                 {option.label}
@@ -98,7 +99,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
             <input
               type="text"
               value={searchQuery}
@@ -112,12 +113,12 @@ export default function OrdersPage() {
         {/* Orders List */}
         <div className="mt-8 space-y-4">
           {filteredOrders.length === 0 ? (
-            <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-              <div className="mx-auto h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
-                <Package className="h-8 w-8 text-gray-400" />
+            <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+              <div className="mx-auto h-16 w-16 rounded-full bg-mist flex items-center justify-center">
+                <Package className="h-8 w-8 text-ink-muted" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-gray-900">No orders found</h3>
-              <p className="mt-2 text-gray-600">
+              <h3 className="mt-4 text-lg font-semibold text-ink">No orders found</h3>
+              <p className="mt-2 text-ink-soft">
                 {filter === 'all'
                   ? "You haven't placed any orders yet."
                   : `No ${filter} orders found.`}
@@ -144,20 +145,20 @@ function OrderCard({ order }: { order: Order }) {
   return (
     <Link
       to={`/orders/${order.id}`}
-      className="block rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow"
+      className="block rounded-xl bg-bone shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="p-4 sm:p-6">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <span className="font-semibold text-gray-900">Order #{order.orderNumber}</span>
+              <span className="font-semibold text-ink">Order #{order.orderNumber}</span>
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${status.color}`}>
                 <StatusIcon className="h-3 w-3" />
                 {status.label}
               </span>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-ink-muted">
               {new Date(order.createdAt).toLocaleDateString('en-US', {
                 weekday: 'short',
                 month: 'short',
@@ -169,8 +170,8 @@ function OrderCard({ order }: { order: Order }) {
           </div>
 
           <div className="text-right">
-            <p className="font-semibold text-gray-900">{fp(order.total)}</p>
-            <p className="text-sm text-gray-500">{order.items.length} item(s)</p>
+            <p className="font-semibold text-ink">{fp(order.total)}</p>
+            <p className="text-sm text-ink-muted">{order.items.length} item(s)</p>
           </div>
         </div>
 
@@ -179,7 +180,7 @@ function OrderCard({ order }: { order: Order }) {
           {order.items.slice(0, 3).map((item, index) => (
             <div
               key={item.id}
-              className="relative h-12 w-12 rounded-lg bg-gray-100 overflow-hidden"
+              className="relative h-12 w-12 rounded-lg bg-mist overflow-hidden"
             >
               {item.imageUrl ? (
                 <img
@@ -188,19 +189,19 @@ function OrderCard({ order }: { order: Order }) {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                <div className="flex h-full w-full items-center justify-center text-xs text-ink-muted">
                   {item.name.charAt(0)}
                 </div>
               )}
               {index === 2 && order.items.length > 3 && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white">
+                <div className="absolute inset-0 flex items-center justify-center bg-ink/50 text-xs font-medium text-paper">
                   +{order.items.length - 3}
                 </div>
               )}
             </div>
           ))}
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-600 truncate">
+            <p className="text-sm text-ink-soft truncate">
               {order.items.map((item) => item.name).join(', ')}
             </p>
           </div>
@@ -215,7 +216,7 @@ function OrderCard({ order }: { order: Order }) {
 
         {/* Footer */}
         <div className="mt-4 flex items-center justify-between pt-4 border-t">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-ink-soft">
             {order.estimatedDeliveryAt && isActive && (
               <>
                 <Clock className="h-4 w-4" />
@@ -229,7 +230,7 @@ function OrderCard({ order }: { order: Order }) {
               </>
             )}
           </div>
-          <div className="flex items-center gap-1 text-brand-600">
+          <div className="flex items-center gap-1 text-herb">
             <span className="text-sm font-medium">View Details</span>
             <ChevronRight className="h-4 w-4" />
           </div>
@@ -263,17 +264,17 @@ function OrderProgress({ status }: { status: OrderStatus }) {
             <div className="flex flex-col items-center flex-1">
               <div
                 className={`h-2 w-2 rounded-full ${
-                  isCompleted ? 'bg-brand-500' : 'bg-gray-300'
-                } ${isCurrent ? 'ring-4 ring-brand-100' : ''}`}
+                  isCompleted ? 'bg-herb' : 'bg-mist-strong'
+                } ${isCurrent ? 'ring-4 ring-herb/30' : ''}`}
               />
-              <span className={`mt-1 text-xs ${isCompleted ? 'text-brand-600' : 'text-gray-400'}`}>
+              <span className={`mt-1 text-xs ${isCompleted ? 'text-herb' : 'text-ink-muted'}`}>
                 {step.label}
               </span>
             </div>
             {index < steps.length - 1 && (
               <div
                 className={`h-0.5 flex-1 ${
-                  currentIndex > stepIndex ? 'bg-brand-500' : 'bg-gray-300'
+                  currentIndex > stepIndex ? 'bg-herb' : 'bg-mist-strong'
                 }`}
               />
             )}

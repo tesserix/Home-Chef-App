@@ -88,8 +88,8 @@ function PostCard({ post }: { post: SocialPost }) {
         >
           <Heart
             size={18}
-            color={optimisticLiked ? '#EF4444' : '#9CA3AF'}
-            fill={optimisticLiked ? '#EF4444' : 'transparent'}
+            color={optimisticLiked ? '#c95b3e' : '#7a7a76'}
+            fill={optimisticLiked ? '#c95b3e' : 'transparent'}
           />
           <Text
             style={[
@@ -148,7 +148,7 @@ export default function SocialScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       </SafeAreaView>
     );
@@ -168,7 +168,7 @@ export default function SocialScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor="#F97316"
+            tintColor="#3e6b3c"
           />
         }
         onEndReached={handleLoadMore}
@@ -177,7 +177,7 @@ export default function SocialScreen() {
           isLoadingMore ? (
             <ActivityIndicator
               size="small"
-              color="#F97316"
+              color="#3e6b3c"
               style={styles.footerLoader}
             />
           ) : null
@@ -202,7 +202,7 @@ export default function SocialScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   listContent: {
     paddingBottom: 24,
@@ -238,12 +238,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#7a7a76',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -252,12 +252,12 @@ const styles = StyleSheet.create({
   },
   // Post card
   postCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     marginHorizontal: 16,
     marginVertical: 6,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000000',
+    shadowColor: '#1a1a18',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -273,14 +273,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     alignItems: 'center',
     justifyContent: 'center',
   },
   authorInitial: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#fafaf7',
   },
   authorInfo: {
     flex: 1,
@@ -288,15 +288,15 @@ const styles = StyleSheet.create({
   authorName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#1a1a18',
   },
   postDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   postContent: {
     fontSize: 14,
-    color: '#374151',
+    color: '#4a4a47',
     lineHeight: 22,
     marginBottom: 12,
   },
@@ -308,14 +308,14 @@ const styles = StyleSheet.create({
   },
   hashtags: {
     fontSize: 13,
-    color: '#F97316',
+    color: '#3e6b3c',
     marginBottom: 10,
   },
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#e6e5e0',
     paddingTop: 10,
     marginTop: 4,
   },
@@ -328,10 +328,10 @@ const styles = StyleSheet.create({
   },
   likeCount: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#7a7a76',
     fontWeight: '500',
   },
   likeCountActive: {
-    color: '#EF4444',
+    color: '#c95b3e',
   },
 });

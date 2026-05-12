@@ -24,7 +24,7 @@ function useUpdateSettings() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 mb-1 mt-6">
+    <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wider px-4 mb-1 mt-6">
       {title}
     </Text>
   );
@@ -40,10 +40,10 @@ function SettingRow({
   right: React.ReactNode;
 }) {
   return (
-    <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100">
+    <View className="flex-row items-center px-4 py-3 bg-bone border-b border-mist">
       <View className="flex-1 mr-3">
-        <Text className="text-base text-gray-900">{label}</Text>
-        {description && <Text className="text-xs text-gray-400 mt-0.5">{description}</Text>}
+        <Text className="text-base text-ink">{label}</Text>
+        {description && <Text className="text-xs text-ink-muted mt-0.5">{description}</Text>}
       </View>
       {right}
     </View>
@@ -64,14 +64,14 @@ function ActionRow({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-row items-center px-4 py-3 bg-white border-b border-gray-100"
+      className="flex-row items-center px-4 py-3 bg-bone border-b border-mist"
       activeOpacity={0.7}
     >
       <View className="flex-1">
-        <Text className={`text-base ${destructive ? 'text-red-500' : 'text-gray-900'}`}>
+        <Text className={`text-base ${destructive ? 'text-paprika' : 'text-ink'}`}>
           {label}
         </Text>
-        {description && <Text className="text-xs text-gray-400 mt-0.5">{description}</Text>}
+        {description && <Text className="text-xs text-ink-muted mt-0.5">{description}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -122,10 +122,10 @@ export default function DriverSettingsScreen() {
     (Constants.expoConfig?.version as string | undefined) ?? '1.0.0';
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Settings</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">Settings</Text>
         </View>
 
         {/* Notifications */}
@@ -137,7 +137,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={newDelivery}
               onValueChange={handleToggleNewDelivery}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
               thumbColor="white"
             />
           }
@@ -149,7 +149,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={earningsPayout}
               onValueChange={handleToggleEarningsPayout}
-              trackColor={{ false: '#D1D5DB', true: '#FB923C' }}
+              trackColor={{ false: '#d4d3ce', true: '#558257' }}
               thumbColor="white"
             />
           }
@@ -164,7 +164,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={defaultOnline}
               onValueChange={handleToggleDefaultOnline}
-              trackColor={{ false: '#D1D5DB', true: '#22C55E' }}
+              trackColor={{ false: '#d4d3ce', true: '#3e6b3c' }}
               thumbColor="white"
             />
           }
@@ -185,9 +185,9 @@ export default function DriverSettingsScreen() {
           destructive
           onPress={handleDeleteAccount}
         />
-        <View className="flex-row items-center px-4 py-3 bg-white">
-          <Text className="flex-1 text-base text-gray-400">App Version</Text>
-          <Text className="text-sm text-gray-400">{appVersion}</Text>
+        <View className="flex-row items-center px-4 py-3 bg-bone">
+          <Text className="flex-1 text-base text-ink-muted">App Version</Text>
+          <Text className="text-sm text-ink-muted">{appVersion}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -68,11 +68,11 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-cream-50">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-white to-golden-50 py-20 lg:py-32">
+      <section className="relative overflow-hidden bg-herb via-white to-golden-50 py-20 lg:py-32">
         {/* Decorative background elements */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-32 -top-32 h-64 w-64 rounded-full bg-brand-100/50 blur-3xl" />
-          <div className="absolute -right-32 top-1/2 h-96 w-96 rounded-full bg-golden-100/50 blur-3xl" />
+          <div className="absolute -left-32 -top-32 h-64 w-64 rounded-full bg-herb-tint/50 blur-3xl" />
+          <div className="absolute -right-32 top-1/2 h-96 w-96 rounded-full bg-paper/50 blur-3xl" />
         </div>
 
         <div className="container-app relative">
@@ -91,15 +91,15 @@ export default function HomePage() {
 
             <motion.h1
               variants={fadeInUp}
-              className="font-display text-display-lg md:text-display-xl lg:text-display-2xl text-gray-900"
+              className="font-display text-display-lg md:text-display-xl lg:text-display-2xl text-ink"
             >
               Homemade Food,{' '}
-              <span className="text-brand-500">Delivered Fresh</span>
+              <span className="text-herb">Delivered Fresh</span>
             </motion.h1>
 
             <motion.p
               variants={fadeInUp}
-              className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto"
+              className="mt-6 text-lg text-ink-soft max-w-2xl mx-auto"
             >
               Discover talented home chefs in your neighborhood and enjoy authentic,
               homemade meals delivered right to your doorstep.
@@ -118,7 +118,7 @@ export default function HomePage() {
                       className="border-0"
                     />
                   </div>
-                  <div className="hidden sm:block w-px h-10 bg-gray-200" />
+                  <div className="hidden sm:block w-px h-10 bg-mist" />
                   <div className="relative flex-1">
                     <Input
                       variant="ghost"
@@ -154,9 +154,9 @@ export default function HomePage() {
                 { icon: Star, label: '4.8 Average Rating' },
                 { icon: Clock, label: '30-45 min Delivery' },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-gray-600">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100">
-                    <Icon className="h-5 w-5 text-brand-600" />
+                <div key={label} className="flex items-center gap-2 text-ink-soft">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb-tint">
+                    <Icon className="h-5 w-5 text-herb" />
                   </div>
                   <span className="font-medium">{label}</span>
                 </div>
@@ -167,7 +167,7 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-bone">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -178,10 +178,10 @@ export default function HomePage() {
           >
             <motion.div variants={fadeInUp}>
               <Badge variant="brand" className="mb-4">How It Works</Badge>
-              <h2 className="font-display text-display-md text-gray-900">
+              <h2 className="font-display text-display-md text-ink">
                 Get Delicious Food in 3 Steps
               </h2>
-              <p className="mt-3 text-gray-600 max-w-xl mx-auto">
+              <p className="mt-3 text-ink-soft max-w-xl mx-auto">
                 From discovery to delivery, we make it simple to enjoy homemade food
               </p>
             </motion.div>
@@ -210,15 +210,15 @@ export default function HomePage() {
                 <motion.div key={step.title} variants={scaleIn}>
                   <Card variant="ghost" padding="lg" className="text-center relative">
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-herb text-sm font-medium text-paper">
                         {index + 1}
                       </span>
                     </div>
-                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-brand-100 to-brand-50 shadow-soft-md">
-                      <step.icon className="h-10 w-10 text-brand-600" />
+                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-herb shadow-soft-md">
+                      <step.icon className="h-10 w-10 text-herb" />
                     </div>
-                    <h3 className="mt-6 text-xl font-semibold text-gray-900">{step.title}</h3>
-                    <p className="mt-3 text-gray-600">{step.description}</p>
+                    <h3 className="mt-6 text-xl font-semibold text-ink">{step.title}</h3>
+                    <p className="mt-3 text-ink-soft">{step.description}</p>
                   </Card>
                 </motion.div>
               ))}
@@ -228,7 +228,7 @@ export default function HomePage() {
       </section>
 
       {/* Cuisines */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-paper">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -239,8 +239,8 @@ export default function HomePage() {
             <motion.div variants={fadeInUp} className="flex items-center justify-between">
               <div>
                 <Badge variant="brand" className="mb-3">Cuisines</Badge>
-                <h2 className="font-display text-display-md text-gray-900">Explore Flavors</h2>
-                <p className="mt-2 text-gray-600">Discover authentic dishes from around the world</p>
+                <h2 className="font-display text-display-md text-ink">Explore Flavors</h2>
+                <p className="mt-2 text-ink-soft">Discover authentic dishes from around the world</p>
               </div>
               <Button asChild variant="ghost" className="hidden sm:flex">
                 <Link to="/chefs">
@@ -257,18 +257,18 @@ export default function HomePage() {
                 <motion.div key={cuisine.name} variants={scaleIn}>
                   <Link
                     to={`/chefs?cuisine=${cuisine.name}`}
-                    className="group relative block overflow-hidden rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300"
+                    className="group relative block overflow-hidden rounded-2xl shadow-card hover:shadow-2 transition-all duration-300"
                   >
                     <div className="aspect-[4/3]">
                       <img
                         src={cuisine.image}
                         alt={cuisine.name}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
                       />
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    <div className="absolute inset-0 scrim-bottom" />
                     <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <h3 className="font-semibold text-white">{cuisine.name}</h3>
+                      <h3 className="font-semibold text-paper">{cuisine.name}</h3>
                     </div>
                   </Link>
                 </motion.div>
@@ -279,7 +279,7 @@ export default function HomePage() {
       </section>
 
       {/* Featured Chefs */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-bone">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -293,8 +293,8 @@ export default function HomePage() {
                   <Star className="h-3 w-3 mr-1 fill-golden-500" />
                   Top Rated
                 </Badge>
-                <h2 className="font-display text-display-md text-gray-900">Featured Chefs</h2>
-                <p className="mt-2 text-gray-600">Our community's favorite home chefs</p>
+                <h2 className="font-display text-display-md text-ink">Featured Chefs</h2>
+                <p className="mt-2 text-ink-soft">Our community's favorite home chefs</p>
               </div>
               <Button asChild variant="ghost" className="hidden sm:flex">
                 <Link to="/chefs">
@@ -329,17 +329,17 @@ export default function HomePage() {
             <Card
               variant="ghost"
               padding="none"
-              className="overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600"
+              className="overflow-hidden bg-herb"
             >
               <div className="flex flex-col items-center gap-8 p-8 text-center lg:flex-row lg:p-12 lg:text-left">
                 <div className="flex-1">
-                  <Badge variant="default" className="bg-white/20 text-white border-0 mb-4">
+                  <Badge variant="default" className="bg-bone/20 text-paper border-0 mb-4">
                     Catering Services
                   </Badge>
-                  <h2 className="text-3xl font-bold text-white">
+                  <h2 className="font-display text-3xl font-semibold tabular-nums text-paper">
                     Planning an Event?
                   </h2>
-                  <p className="mt-3 text-lg text-brand-100 max-w-xl">
+                  <p className="mt-3 text-lg text-herb-tint max-w-xl">
                     Get catering quotes from multiple home chefs. Perfect for parties,
                     corporate events, and special occasions.
                   </p>
@@ -348,7 +348,7 @@ export default function HomePage() {
                   asChild
                   variant="secondary"
                   size="xl"
-                  className="bg-white text-brand-600 hover:bg-brand-50"
+                  className="bg-bone text-herb hover:bg-herb-tint"
                 >
                   <Link to="/catering">Request Catering Quote</Link>
                 </Button>
@@ -359,7 +359,7 @@ export default function HomePage() {
       </section>
 
       {/* Why Choose Us */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-paper">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -369,10 +369,10 @@ export default function HomePage() {
           >
             <motion.div variants={fadeInUp} className="text-center">
               <Badge variant="brand" className="mb-4">Why Choose Us</Badge>
-              <h2 className="font-display text-display-md text-gray-900">
+              <h2 className="font-display text-display-md text-ink">
                 The Fe3dr Difference
               </h2>
-              <p className="mt-3 text-gray-600 max-w-xl mx-auto">
+              <p className="mt-3 text-ink-soft max-w-xl mx-auto">
                 Join thousands of happy customers enjoying homemade food
               </p>
             </motion.div>
@@ -412,8 +412,8 @@ export default function HomePage() {
                     <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-${feature.color}-100`}>
                       <feature.icon className={`h-8 w-8 text-${feature.color}-600`} />
                     </div>
-                    <h3 className="mt-5 text-lg font-semibold text-gray-900">{feature.title}</h3>
-                    <p className="mt-2 text-sm text-gray-600">{feature.description}</p>
+                    <h3 className="mt-5 text-lg font-semibold text-ink">{feature.title}</h3>
+                    <p className="mt-2 text-sm text-ink-soft">{feature.description}</p>
                   </Card>
                 </motion.div>
               ))}
@@ -423,7 +423,7 @@ export default function HomePage() {
       </section>
 
       {/* Become a Chef CTA */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-bone">
         <div className="container-app">
           <motion.div
             initial="hidden"
@@ -431,14 +431,14 @@ export default function HomePage() {
             viewport={{ once: true }}
             variants={fadeInUp}
           >
-            <Card variant="ghost" padding="none" className="overflow-hidden bg-gray-900 rounded-3xl">
+            <Card variant="ghost" padding="none" className="overflow-hidden bg-ink rounded-3xl">
               <div className="flex flex-col md:flex-row">
                 <div className="flex-1 p-8 md:p-12">
                   <Badge variant="brand" className="mb-4">Join Our Community</Badge>
-                  <h2 className="text-3xl font-bold text-white">
+                  <h2 className="font-display text-3xl font-semibold tabular-nums text-paper">
                     Love Cooking? Share Your Talent
                   </h2>
-                  <p className="mt-4 text-gray-300 max-w-lg">
+                  <p className="mt-4 text-ink-muted max-w-lg">
                     Turn your passion into income. Join our community of home chefs
                     and start earning by sharing your delicious homemade food.
                   </p>
@@ -446,7 +446,7 @@ export default function HomePage() {
                     <Button asChild variant="primary" size="lg">
                       <Link to="/become-chef">Become a Chef</Link>
                     </Button>
-                    <Button asChild variant="outline" size="lg" className="border-gray-600 text-white hover:bg-gray-800">
+                    <Button asChild variant="outline" size="lg" className="border-ink-soft text-paper hover:bg-ink">
                       <Link to="/chef-resources">Learn More</Link>
                     </Button>
                   </div>
@@ -457,7 +457,7 @@ export default function HomePage() {
                     alt="Home chef cooking"
                     className="h-full w-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-gray-900 to-transparent" />
+                  <div className="absolute inset-0 scrim-bottom" />
                 </div>
               </div>
             </Card>
@@ -507,9 +507,9 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
           <img
             src={chef.bannerImage || chef.profileImage}
             alt={chef.businessName}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute inset-0 scrim-bottom" />
 
           {chef.verified && (
             <Badge variant="success" size="sm" className="absolute top-3 left-3">
@@ -520,11 +520,11 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
           {/* Favorite button */}
           <button
             onClick={handleFavorite}
-            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-white hover:shadow-md"
+            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-sm backdrop-blur-sm transition-all hover:bg-bone hover:shadow-md"
           >
             <Heart
               className={`h-4 w-4 transition-colors ${
-                favorited ? 'fill-red-500 text-red-500' : 'text-gray-600'
+                favorited ? 'fill-paprika text-paprika' : 'text-ink-soft'
               }`}
             />
           </button>
@@ -534,7 +534,7 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
               src={chef.profileImage}
               alt={chef.businessName}
               size="xl"
-              className="border-4 border-white shadow-elevated"
+              className="border-4 border-bone shadow-elevated"
             />
           </div>
         </div>
@@ -543,19 +543,19 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
         <div className="p-4 pt-12">
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
+              <h3 className="font-semibold text-ink truncate group-hover:text-herb transition-colors">
                 {chef.businessName}
               </h3>
-              <p className="mt-1 text-sm text-gray-500 truncate">
+              <p className="mt-1 text-sm text-ink-muted truncate">
                 {chef.cuisines.slice(0, 2).join(' • ')}
               </p>
             </div>
             <RatingBadge value={chef.rating} />
           </div>
 
-          <p className="mt-3 line-clamp-2 text-sm text-gray-600">{chef.description}</p>
+          <p className="mt-3 line-clamp-2 text-sm text-ink-soft">{chef.description}</p>
 
-          <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
+          <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
               {chef.prepTime}

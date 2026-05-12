@@ -145,7 +145,7 @@ export function StepOperations({ errors }: Props) {
                   }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    className={`inline-block h-5 w-5 rounded-full bg-bone shadow-sm transition-transform ${
                       isOpen ? 'translate-x-[22px]' : 'translate-x-[2px]'
                     }`}
                   />

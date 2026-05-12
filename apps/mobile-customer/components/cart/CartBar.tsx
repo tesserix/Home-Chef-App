@@ -19,16 +19,16 @@ export function CartBar({ onPress }: CartBarProps) {
   return (
     <Pressable
       onPress={onPress}
-      className="absolute bottom-0 left-0 right-0 h-[72px] bg-orange-500 flex-row items-center px-5 gap-3 active:bg-orange-600"
+      className="absolute bottom-0 left-0 right-0 h-[72px] bg-herb flex-row items-center px-5 gap-3 active:bg-herb"
       accessibilityLabel={`View cart — ${itemCount} items, ₹${total.toFixed(2)}`}
       accessibilityRole="button"
     >
-      <View className="w-8 h-8 bg-orange-400 rounded-full items-center justify-center">
-        <Text className="text-white text-sm font-bold">{itemCount}</Text>
+      <View className="w-8 h-8 bg-herb-soft rounded-full items-center justify-center">
+        <Text className="text-paper text-sm font-medium">{itemCount}</Text>
       </View>
-      <ShoppingCart size={20} color="#fff" />
-      <Text className="flex-1 text-white text-base font-semibold">View Cart</Text>
-      <Text className="text-white text-base font-bold">₹{total.toFixed(2)}</Text>
+      <ShoppingCart size={20} color="#fafaf7" />
+      <Text className="flex-1 text-paper text-base font-semibold">View Cart</Text>
+      <Text className="text-paper text-base font-medium">₹{total.toFixed(2)}</Text>
     </Pressable>
   );
 }

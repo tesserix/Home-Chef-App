@@ -42,9 +42,9 @@ function usePartnerDetail(id: string) {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-row justify-between items-center py-3 border-b border-gray-100">
-      <Text className="text-sm text-gray-500">{label}</Text>
-      <Text className="text-sm font-medium text-gray-900">{value}</Text>
+    <View className="flex-row justify-between items-center py-3 border-b border-mist">
+      <Text className="text-sm text-ink-muted">{label}</Text>
+      <Text className="text-sm font-medium text-ink">{value}</Text>
     </View>
   );
 }
@@ -62,56 +62,56 @@ export default function PartnerDetailScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <View className="flex-row items-center px-4 pt-4 pb-2">
-        <TouchableOpacity onPress={handleBack} className="mr-3 p-1" activeOpacity={0.7}>
-          <ChevronLeft size={24} color="#374151" />
+        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={handleBack} className="mr-3 p-3" activeOpacity={0.7}>
+          <ChevronLeft size={24} color="#4a4a47" />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-gray-900">Partner Detail</Text>
+        <Text className="text-xl font-semibold text-ink">Partner Detail</Text>
       </View>
 
       {isLoading && (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       )}
 
       {isError && (
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-gray-500 text-base mb-4">Failed to load partner detail</Text>
+          <Text className="text-ink-muted text-base mb-4">Failed to load partner detail</Text>
           <TouchableOpacity
             onPress={() => refetch()}
-            className="bg-orange-500 px-6 py-3 rounded-xl"
+            className="bg-herb px-6 py-3 rounded-xl"
           >
-            <Text className="text-white font-semibold">Retry</Text>
+            <Text className="text-paper font-semibold">Retry</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {!isLoading && !isError && !partner && (
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-gray-500 text-base">Partner not found.</Text>
+          <Text className="text-ink-muted text-base">Partner not found.</Text>
         </View>
       )}
 
       {partner && (
         <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 32 }}>
           {/* Partner header card */}
-          <View className="bg-white rounded-2xl p-5 mt-4 shadow-sm items-center">
-            <View className="w-16 h-16 rounded-full bg-orange-100 items-center justify-center mb-3">
-              <Text className="text-2xl font-bold text-orange-500">
+          <View className="bg-bone rounded-2xl p-5 mt-4 shadow-sm items-center">
+            <View className="w-16 h-16 rounded-full bg-herb-tint items-center justify-center mb-3">
+              <Text className="font-display text-2xl font-semibold text-herb">
                 {partner.name.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text className="text-xl font-bold text-gray-900 mb-1">{partner.name}</Text>
+            <Text className="text-xl font-semibold text-ink mb-1">{partner.name}</Text>
             <View
               className={`px-3 py-1 rounded-full ${
-                partner.status === 'active' ? 'bg-green-100' : 'bg-gray-100'
+                partner.status === 'active' ? 'bg-herb-tint' : 'bg-mist'
               }`}
             >
               <Text
                 className={`text-sm font-medium ${
-                  partner.status === 'active' ? 'text-green-700' : 'text-gray-500'
+                  partner.status === 'active' ? 'text-herb' : 'text-ink-muted'
                 }`}
               >
                 {partner.status === 'active' ? 'Active' : 'Inactive'}
@@ -120,7 +120,7 @@ export default function PartnerDetailScreen() {
           </View>
 
           {/* Detail rows */}
-          <View className="bg-white rounded-2xl px-4 mt-3 shadow-sm">
+          <View className="bg-bone rounded-2xl px-4 mt-3 shadow-sm">
             <DetailRow label="Phone" value={partner.phone} />
             <DetailRow label="Rating" value={`\u2605 ${partner.rating.toFixed(1)}`} />
             <DetailRow label="Today's Deliveries" value={String(partner.todayDeliveries)} />

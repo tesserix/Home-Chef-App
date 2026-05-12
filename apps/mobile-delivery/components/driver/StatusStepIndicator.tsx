@@ -10,8 +10,8 @@ import Animated, {
 
 const STEPS = ['Picked Up', 'In Transit', 'At Dropoff', 'Delivered'];
 
-const ORANGE = '#FF6B35';
-const GREY = '#D1D5DB';
+const ORANGE = '#3e6b3c';
+const GREY = '#d4d3ce';
 
 function statusToStepIndex(status: string): number {
   switch (status) {

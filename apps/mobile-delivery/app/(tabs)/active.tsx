@@ -69,18 +69,18 @@ export default function ActiveScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (!currentDelivery) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
         <Text className="text-5xl mb-4">&#128692;</Text>
-        <Text className="text-xl font-bold text-gray-800 mb-2">No Active Delivery</Text>
-        <Text className="text-sm text-gray-500 text-center">
+        <Text className="text-xl font-semibold text-ink mb-2">No Active Delivery</Text>
+        <Text className="text-sm text-ink-muted text-center">
           Accept a delivery from the Available tab to get started.
         </Text>
       </SafeAreaView>
@@ -93,40 +93,40 @@ export default function ActiveScreen() {
     delivery.status === 'assigned' || delivery.status === 'at_pickup';
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <ScrollView
         className="flex-1"
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#FF6B35"
+            tintColor="#3e6b3c"
           />
         }
       >
         {/* Header */}
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Active Delivery</Text>
-          <Text className="text-sm text-gray-500 mt-1">
+          <Text className="font-display text-2xl font-semibold text-ink">Active Delivery</Text>
+          <Text className="text-sm text-ink-muted mt-1">
             Order #{delivery.orderId.slice(-6).toUpperCase()}
           </Text>
         </View>
 
         {/* Section 1: Status Step Indicator */}
-        <View className="mx-4 bg-white rounded-2xl px-4 py-3 mb-4 shadow-sm">
+        <View className="mx-4 bg-bone rounded-2xl px-4 py-3 mb-4 shadow-sm">
           <StatusStepIndicator currentStatus={delivery.status} />
-          <Text className="text-sm font-semibold text-gray-700 text-center mt-2">
+          <Text className="text-sm font-semibold text-ink-soft text-center mt-2">
             {STATUS_LABELS[delivery.status] ?? delivery.status}
           </Text>
         </View>
 
         {/* Cancelled banner */}
         {delivery.status === 'cancelled' && (
-          <View className="mx-4 mb-4 bg-red-100 rounded-2xl px-4 py-4">
-            <Text className="text-base font-bold text-red-700 text-center">
+          <View className="mx-4 mb-4 bg-paprika-tint rounded-2xl px-4 py-4">
+            <Text className="text-base font-medium text-paprika text-center">
               Delivery Cancelled
             </Text>
-            <Text className="text-sm text-red-500 text-center mt-1">
+            <Text className="text-sm text-paprika text-center mt-1">
               This delivery has been cancelled. Check the Available tab for new requests.
             </Text>
           </View>
@@ -139,17 +139,17 @@ export default function ActiveScreen() {
           >
             {/* Card header */}
             <View
-              className={`px-4 py-3 ${showPickupCard ? 'bg-orange-500' : 'bg-blue-500'}`}
+              className={`px-4 py-3 ${showPickupCard ? 'bg-herb' : 'bg-info'}`}
             >
-              <Text className="text-white font-bold text-base">
+              <Text className="text-paper font-semibold text-base">
                 {showPickupCard ? 'Pickup Location' : 'Dropoff Location'}
               </Text>
             </View>
 
-            <View className="bg-white px-4 py-4">
+            <View className="bg-bone px-4 py-4">
               {showPickupCard ? (
                 <>
-                  <Text className="text-base font-semibold text-gray-800 mb-1">
+                  <Text className="text-base font-semibold text-ink mb-1">
                     {delivery.pickup.chefName}
                   </Text>
                   <TouchableOpacity
@@ -157,22 +157,22 @@ export default function ActiveScreen() {
                       Linking.openURL(`tel:${delivery.pickup.chefPhone}`)
                     }
                   >
-                    <Text className="text-sm text-blue-500 mb-2">
+                    <Text className="text-sm text-info mb-2">
                       {delivery.pickup.chefPhone}
                     </Text>
                   </TouchableOpacity>
-                  <Text className="text-sm text-gray-600 mb-3">
+                  <Text className="text-sm text-ink-soft mb-3">
                     {delivery.pickup.address}
                   </Text>
                   {delivery.pickup.instructions ? (
-                    <Text className="text-xs text-gray-400 mb-3">
+                    <Text className="text-xs text-ink-muted mb-3">
                       Note: {delivery.pickup.instructions}
                     </Text>
                   ) : null}
                 </>
               ) : (
                 <>
-                  <Text className="text-base font-semibold text-gray-800 mb-1">
+                  <Text className="text-base font-semibold text-ink mb-1">
                     {delivery.dropoff.customerName}
                   </Text>
                   <TouchableOpacity
@@ -180,15 +180,15 @@ export default function ActiveScreen() {
                       Linking.openURL(`tel:${delivery.dropoff.customerPhone}`)
                     }
                   >
-                    <Text className="text-sm text-blue-500 mb-2">
+                    <Text className="text-sm text-info mb-2">
                       {delivery.dropoff.customerPhone}
                     </Text>
                   </TouchableOpacity>
-                  <Text className="text-sm text-gray-600 mb-3">
+                  <Text className="text-sm text-ink-soft mb-3">
                     {delivery.dropoff.address}
                   </Text>
                   {delivery.dropoff.instructions ? (
-                    <Text className="text-xs text-gray-400 mb-3">
+                    <Text className="text-xs text-ink-muted mb-3">
                       Note: {delivery.dropoff.instructions}
                     </Text>
                   ) : null}
@@ -213,11 +213,11 @@ export default function ActiveScreen() {
                   }
                 }}
                 className={`w-full py-3 rounded-xl items-center ${
-                  showPickupCard ? 'bg-orange-500' : 'bg-blue-500'
+                  showPickupCard ? 'bg-herb' : 'bg-info'
                 }`}
                 activeOpacity={0.8}
               >
-                <Text className="text-white font-semibold text-base">
+                <Text className="text-paper font-semibold text-base">
                   Navigate
                 </Text>
               </TouchableOpacity>
@@ -226,34 +226,34 @@ export default function ActiveScreen() {
         )}
 
         {/* Section 3: Order Summary (collapsible) */}
-        <View className="mx-4 mb-4 bg-white rounded-2xl shadow-sm overflow-hidden">
+        <View className="mx-4 mb-4 bg-bone rounded-2xl shadow-sm overflow-hidden">
           <TouchableOpacity
             onPress={() => setOrderExpanded((prev: boolean) => !prev)}
             className="px-4 py-3 flex-row items-center justify-between"
             activeOpacity={0.7}
           >
-            <Text className="text-base font-semibold text-gray-800">
+            <Text className="text-base font-semibold text-ink">
               Order Summary ({delivery.order.items.length}{' '}
               {delivery.order.items.length === 1 ? 'item' : 'items'})
             </Text>
-            <Text className="text-gray-400">{orderExpanded ? '▲' : '▼'}</Text>
+            <Text className="text-ink-muted">{orderExpanded ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {orderExpanded && (
             <View className="px-4 pb-4">
               {delivery.order.items.map((item, idx) => (
                 <View key={String(idx)} className="flex-row justify-between py-1">
-                  <Text className="text-sm text-gray-700">{item.name}</Text>
-                  <Text className="text-sm text-gray-500">x{item.quantity}</Text>
+                  <Text className="text-sm text-ink-soft">{item.name}</Text>
+                  <Text className="text-sm text-ink-muted">x{item.quantity}</Text>
                 </View>
               ))}
-              <View className="border-t border-gray-100 mt-2 pt-2 flex-row justify-between">
-                <Text className="text-sm font-semibold text-gray-700">Total</Text>
-                <Text className="text-sm font-bold text-orange-500">
+              <View className="border-t border-mist mt-2 pt-2 flex-row justify-between">
+                <Text className="text-sm font-semibold text-ink-soft">Total</Text>
+                <Text className="text-sm font-medium text-herb">
                   &#8377;{delivery.order.total}
                 </Text>
               </View>
               {delivery.order.specialInstructions ? (
-                <Text className="text-xs text-gray-400 mt-2">
+                <Text className="text-xs text-ink-muted mt-2">
                   Special instructions: {delivery.order.specialInstructions}
                 </Text>
               ) : null}
@@ -280,11 +280,11 @@ export default function ActiveScreen() {
           )}
 
           {delivery.status === 'delivered' && (
-            <View className="bg-green-100 rounded-2xl px-4 py-4 items-center">
-              <Text className="text-lg font-bold text-green-700 mb-1">
+            <View className="bg-herb-tint rounded-2xl px-4 py-4 items-center">
+              <Text className="text-lg font-medium text-herb mb-1">
                 Delivery Complete
               </Text>
-              <Text className="text-sm text-green-600">
+              <Text className="text-sm text-herb">
                 You earned &#8377;{delivery.payout} for this delivery
               </Text>
             </View>

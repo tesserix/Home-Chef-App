@@ -140,7 +140,7 @@ export default function OrdersScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor="#F97316"
+            tintColor="#3e6b3c"
           />
         }
         onEndReached={handleLoadMore}
@@ -149,7 +149,7 @@ export default function OrdersScreen() {
           isLoadingMore ? (
             <ActivityIndicator
               size="small"
-              color="#F97316"
+              color="#3e6b3c"
               style={styles.footerLoader}
             />
           ) : null
@@ -174,7 +174,7 @@ export default function OrdersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   filterRow: {
     paddingHorizontal: 16,
@@ -200,19 +200,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#e6e5e0',
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   filterChipTextActive: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
   },
   listContent: {
     paddingBottom: 24,
@@ -233,12 +233,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#7a7a76',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   skeletonRow: {
     height: 80,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#e6e5e0',
     borderRadius: 12,
     marginBottom: 12,
   },

@@ -114,7 +114,7 @@ export default function FleetOverviewPage() {
                 </div>
                 <span className="text-xs font-medium">{stat.label}</span>
               </div>
-              <p className="text-3xl font-bold text-foreground">{stat.value}</p>
+              <p className="font-display text-3xl font-semibold tabular-nums text-foreground">{stat.value}</p>
             </div>
           );
         })}
@@ -133,7 +133,7 @@ export default function FleetOverviewPage() {
                 <div className="flex justify-center mb-2">
                   <Icon className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="font-display text-2xl font-semibold text-foreground">{stat.value}</p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
               </div>
             );
@@ -149,7 +149,7 @@ export default function FleetOverviewPage() {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Today's Fleet Earnings</p>
-            <p className="text-2xl font-bold text-foreground">
+            <p className="font-display text-2xl font-semibold text-foreground">
               ${(overview?.todayEarnings ?? 0).toFixed(2)}
             </p>
           </div>

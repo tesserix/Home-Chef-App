@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { Input as DSInput, Label as DSLabel } from '@tesserix/web';
 import { cn } from '@tesserix/web';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -16,7 +16,7 @@ const inputVariants = cva(
     variants: {
       variant: {
         default: [
-          'border-2 border-input bg-background shadow-sm',
+          'border-2 border-input bg-background shadow-1',
           'hover:border-primary/30',
           'focus-visible:border-ring',
         ],
@@ -77,13 +77,22 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       label,
       hint,
       id,
+      'aria-describedby': ariaDescribedBy,
       ...props
     },
     ref
   ) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
-    const showError = error || hasError;
+    const reactId = useId();
+    const inputId = id ?? reactId;
+    const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
+    const showError = !!(error || hasError);
     const needsWrapper = label || error || hint || leftIcon || rightIcon;
+
+    const describedBy =
+      [error ? errorId : null, !error && hint ? hintId : null, ariaDescribedBy]
+        .filter(Boolean)
+        .join(' ') || undefined;
 
     // Simple case: no wrapper needed, delegate to DS Input
     if (!needsWrapper && variant === 'default' && !inputSize) {
@@ -91,13 +100,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <DSInput
           id={inputId}
           ref={ref}
+          aria-invalid={showError || undefined}
+          aria-describedby={describedBy}
           className={cn(showError && 'border-destructive', className)}
           {...(props as React.ComponentPropsWithoutRef<typeof DSInput>)}
         />
       );
     }
 
-    // Extended case: wrap DS input with label/error/hint/icons
     return (
       <div className="w-full">
         {label && (
@@ -110,14 +120,19 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
               {leftIcon}
             </div>
           )}
           <input
             id={inputId}
+            aria-invalid={showError || undefined}
+            aria-describedby={describedBy}
             className={cn(
-              inputVariants({ variant, inputSize, hasError: !!showError }),
+              inputVariants({ variant, inputSize, hasError: showError }),
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               className
@@ -126,16 +141,23 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {rightIcon && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <div
+              aria-hidden="true"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
               {rightIcon}
             </div>
           )}
         </div>
         {error && (
-          <p className="mt-1.5 text-sm text-destructive">{error}</p>
+          <p id={errorId} role="alert" className="mt-1.5 text-sm text-destructive">
+            {error}
+          </p>
         )}
         {hint && !error && (
-          <p className="mt-1.5 text-sm text-muted-foreground">{hint}</p>
+          <p id={hintId} className="mt-1.5 text-sm text-muted-foreground">
+            {hint}
+          </p>
         )}
       </div>
     );
@@ -157,7 +179,7 @@ const textareaVariants = cva(
     variants: {
       variant: {
         default: [
-          'border-2 border-input bg-background shadow-sm',
+          'border-2 border-input bg-background shadow-1',
           'hover:border-primary/30',
           'focus-visible:border-ring',
         ],
@@ -191,9 +213,30 @@ export interface TextareaProps
 }
 
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, variant, hasError, error, label, hint, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
-    const showError = error || hasError;
+  (
+    {
+      className,
+      variant,
+      hasError,
+      error,
+      label,
+      hint,
+      id,
+      'aria-describedby': ariaDescribedBy,
+      ...props
+    },
+    ref
+  ) => {
+    const reactId = useId();
+    const inputId = id ?? reactId;
+    const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
+    const showError = !!(error || hasError);
+
+    const describedBy =
+      [error ? errorId : null, !error && hint ? hintId : null, ariaDescribedBy]
+        .filter(Boolean)
+        .join(' ') || undefined;
 
     return (
       <div className="w-full">
@@ -207,8 +250,10 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         )}
         <textarea
           id={inputId}
+          aria-invalid={showError || undefined}
+          aria-describedby={describedBy}
           className={cn(
-            textareaVariants({ variant, hasError: !!showError }),
+            textareaVariants({ variant, hasError: showError }),
             'p-4 rounded-lg',
             className
           )}
@@ -216,10 +261,14 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {error && (
-          <p className="mt-1.5 text-sm text-destructive">{error}</p>
+          <p id={errorId} role="alert" className="mt-1.5 text-sm text-destructive">
+            {error}
+          </p>
         )}
         {hint && !error && (
-          <p className="mt-1.5 text-sm text-muted-foreground">{hint}</p>
+          <p id={hintId} className="mt-1.5 text-sm text-muted-foreground">
+            {hint}
+          </p>
         )}
       </div>
     );

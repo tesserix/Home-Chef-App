@@ -25,12 +25,12 @@ const SORT_OPTIONS: { label: string; value: ChefFilters['sort'] }[] = [
 
 function SkeletonCard() {
   return (
-    <View className="flex-1 rounded-2xl overflow-hidden bg-gray-100">
-      <View className="w-full h-40 bg-gray-200" />
+    <View className="flex-1 rounded-2xl overflow-hidden bg-mist">
+      <View className="w-full h-40 bg-mist" />
       <View className="p-3 gap-2">
-        <View className="h-4 w-3/4 rounded bg-gray-200" />
-        <View className="h-3 w-1/2 rounded bg-gray-200" />
-        <View className="h-3 w-1/3 rounded bg-gray-200" />
+        <View className="h-4 w-3/4 rounded bg-mist" />
+        <View className="h-3 w-1/2 rounded bg-mist" />
+        <View className="h-3 w-1/3 rounded bg-mist" />
       </View>
     </View>
   );
@@ -75,14 +75,14 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <>
       {/* Search bar */}
-      <View className="flex-row items-center bg-white border border-gray-200 rounded-xl mx-4 mt-4 mb-3 px-3 gap-2">
-        <Search size={18} color="#9CA3AF" />
+      <View className="flex-row items-center bg-bone border border-mist rounded-xl mx-4 mt-4 mb-3 px-3 gap-2">
+        <Search size={18} color="#7a7a76" />
         <TextInput
           value={searchText}
           onChangeText={setSearchText}
           placeholder="Search chefs, cuisines..."
-          placeholderTextColor="#9CA3AF"
-          className="flex-1 py-3 text-sm text-gray-900"
+          placeholderTextColor="#7a7a76"
+          className="flex-1 py-3 text-sm text-ink"
           returnKeyType="search"
           accessibilityLabel="Search chefs"
         />
@@ -101,15 +101,15 @@ export default function HomeScreen() {
             onPress={() => setSelectedCuisine(cuisine)}
             className={`px-4 py-2 rounded-full border ${
               selectedCuisine === cuisine
-                ? 'bg-orange-500 border-orange-500'
-                : 'bg-white border-gray-200'
+                ? 'bg-herb border-herb'
+                : 'bg-bone border-mist'
             }`}
             accessibilityRole="button"
             accessibilityLabel={`Filter by ${cuisine}`}
           >
             <Text
               className={`text-sm font-medium ${
-                selectedCuisine === cuisine ? 'text-white' : 'text-gray-700'
+                selectedCuisine === cuisine ? 'text-paper' : 'text-ink-soft'
               }`}
             >
               {cuisine}
@@ -123,16 +123,16 @@ export default function HomeScreen() {
         <Pressable
           onPress={() => setIsOpenOnly((prev: boolean) => !prev)}
           className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
-            isOpenOnly ? 'bg-green-500 border-green-500' : 'bg-white border-gray-200'
+            isOpenOnly ? 'bg-herb border-herb' : 'bg-bone border-mist'
           }`}
           accessibilityRole="button"
           accessibilityLabel="Toggle open now filter"
         >
           <View
-            className={`w-2 h-2 rounded-full ${isOpenOnly ? 'bg-white' : 'bg-green-400'}`}
+            className={`w-2 h-2 rounded-full ${isOpenOnly ? 'bg-bone' : 'bg-herb'}`}
           />
           <Text
-            className={`text-xs font-medium ${isOpenOnly ? 'text-white' : 'text-gray-700'}`}
+            className={`text-xs font-medium ${isOpenOnly ? 'text-paper' : 'text-ink-soft'}`}
           >
             Open Now
           </Text>
@@ -149,37 +149,37 @@ export default function HomeScreen() {
               onPress={() => setSort(opt.value)}
               className={`px-3 py-1.5 rounded-full border ${
                 sort === opt.value && SORT_OPTIONS.findIndex((o) => o.value === sort) === index
-                  ? 'bg-orange-100 border-orange-300'
-                  : 'bg-white border-gray-200'
+                  ? 'bg-herb-tint border-herb-tint'
+                  : 'bg-bone border-mist'
               }`}
               accessibilityRole="button"
               accessibilityLabel={`Sort by ${opt.label}`}
             >
-              <Text className="text-xs text-gray-700 font-medium">{opt.label}</Text>
+              <Text className="text-xs text-ink-soft font-medium">{opt.label}</Text>
             </Pressable>
           ))}
         </ScrollView>
 
-        <SlidersHorizontal size={18} color="#9CA3AF" />
+        <SlidersHorizontal size={18} color="#7a7a76" />
       </View>
 
       {/* Quick-access row: Social Feed and Catering */}
       <View className="flex-row gap-2 px-4 py-2 mb-1">
         <Pressable
           onPress={() => router.push('/social')}
-          className="bg-white border border-gray-200 rounded-full px-4 py-1.5 active:bg-gray-50"
+          className="bg-bone border border-mist rounded-full px-4 py-1.5 active:bg-paper"
           accessibilityRole="button"
           accessibilityLabel="Go to Social Feed"
         >
-          <Text className="text-sm text-gray-800">Social Feed</Text>
+          <Text className="text-sm text-ink">Social Feed</Text>
         </Pressable>
         <Pressable
           onPress={() => router.push('/catering')}
-          className="bg-white border border-gray-200 rounded-full px-4 py-1.5 active:bg-gray-50"
+          className="bg-bone border border-mist rounded-full px-4 py-1.5 active:bg-paper"
           accessibilityRole="button"
           accessibilityLabel="Go to Catering"
         >
-          <Text className="text-sm text-gray-800">Catering</Text>
+          <Text className="text-sm text-ink">Catering</Text>
         </Pressable>
       </View>
     </>
@@ -187,7 +187,7 @@ export default function HomeScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-gray-50">
+      <View className="flex-1 bg-paper">
         {renderHeader()}
         <View className="flex-row flex-wrap gap-3 px-4 pt-2">
           <View className="flex-1"><SkeletonCard /></View>
@@ -200,7 +200,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-paper">
       <FlatList
         data={chefs}
         keyExtractor={(item) => item.id}
@@ -217,8 +217,8 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-16">
-            <Text className="text-gray-400 text-base">No chefs found</Text>
-            <Text className="text-gray-300 text-sm mt-1">Try adjusting your filters</Text>
+            <Text className="text-ink-muted text-base">No chefs found</Text>
+            <Text className="text-ink-muted text-sm mt-1">Try adjusting your filters</Text>
           </View>
         }
       />

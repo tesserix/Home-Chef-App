@@ -73,22 +73,22 @@ export default function SocialFeedPage() {
   const posts = data?.data || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-paper">
       <div className="container-app py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
           {/* Main Feed */}
           <div className="flex-1 max-w-2xl">
             {/* Header */}
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Chef's Feed</h1>
-              <p className="mt-1 text-gray-600">
+              <h1 className="font-display text-2xl font-semibold text-ink">Chef's Feed</h1>
+              <p className="mt-1 text-ink-soft">
                 Discover culinary creations from our talented home chefs
               </p>
             </div>
 
             {/* Search */}
             <div className="mb-6 relative">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
               <input
                 type="text"
                 value={searchQuery}
@@ -104,8 +104,8 @@ export default function SocialFeedPage() {
                 onClick={() => setSelectedHashtag(null)}
                 className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedHashtag === null
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                    ? 'bg-herb text-paper'
+                    : 'bg-bone text-ink-soft hover:bg-mist'
                 }`}
               >
                 All
@@ -116,8 +116,8 @@ export default function SocialFeedPage() {
                   onClick={() => setSelectedHashtag(tag)}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                     selectedHashtag === tag
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
+                      ? 'bg-herb text-paper'
+                      : 'bg-bone text-ink-soft hover:bg-mist'
                   }`}
                 >
                   {tag}
@@ -128,13 +128,13 @@ export default function SocialFeedPage() {
             {/* Posts */}
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-herb" />
               </div>
             ) : posts.length === 0 ? (
-              <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-                <ChefHat className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-4 text-lg font-semibold text-gray-900">No posts yet</h3>
-                <p className="mt-2 text-gray-600">
+              <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+                <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                <h3 className="mt-4 text-lg font-semibold text-ink">No posts yet</h3>
+                <p className="mt-2 text-ink-soft">
                   Check back later for delicious content from our chefs
                 </p>
               </div>
@@ -155,8 +155,8 @@ export default function SocialFeedPage() {
           {/* Sidebar */}
           <div className="lg:w-80">
             {/* Trending Chefs */}
-            <div className="rounded-xl bg-white p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900">Trending Chefs</h3>
+            <div className="rounded-xl bg-bone p-6 shadow-sm">
+              <h3 className="font-semibold text-ink">Trending Chefs</h3>
               <div className="mt-4 space-y-4">
                 {[
                   { name: 'Priya\'s Kitchen', cuisine: 'South Indian', followers: '2.5k' },
@@ -164,28 +164,28 @@ export default function SocialFeedPage() {
                   { name: 'Sakura Home', cuisine: 'Japanese', followers: '1.2k' },
                 ].map((chef) => (
                   <div key={chef.name} className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-brand-100 flex items-center justify-center">
-                      <ChefHat className="h-5 w-5 text-brand-600" />
+                    <div className="h-10 w-10 rounded-full bg-herb-tint flex items-center justify-center">
+                      <ChefHat className="h-5 w-5 text-herb" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{chef.name}</p>
-                      <p className="text-sm text-gray-500">{chef.cuisine}</p>
+                      <p className="font-medium text-ink truncate">{chef.name}</p>
+                      <p className="text-sm text-ink-muted">{chef.cuisine}</p>
                     </div>
-                    <span className="text-sm text-gray-500">{chef.followers}</span>
+                    <span className="text-sm text-ink-muted">{chef.followers}</span>
                   </div>
                 ))}
               </div>
               <Link
                 to="/chefs"
-                className="mt-4 block text-center text-sm text-brand-600 hover:text-brand-700"
+                className="mt-4 block text-center text-sm text-herb hover:text-herb"
               >
                 View all chefs
               </Link>
             </div>
 
             {/* Popular Tags */}
-            <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900">Popular This Week</h3>
+            <div className="mt-6 rounded-xl bg-bone p-6 shadow-sm">
+              <h3 className="font-semibold text-ink">Popular This Week</h3>
               <div className="mt-4 space-y-2">
                 {[
                   { tag: '#biryani', posts: 234 },
@@ -197,10 +197,10 @@ export default function SocialFeedPage() {
                   <button
                     key={item.tag}
                     onClick={() => setSelectedHashtag(item.tag)}
-                    className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-gray-50"
+                    className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-paper"
                   >
-                    <span className="text-brand-600">{item.tag}</span>
-                    <span className="text-sm text-gray-500">{item.posts} posts</span>
+                    <span className="text-herb">{item.tag}</span>
+                    <span className="text-sm text-ink-muted">{item.posts} posts</span>
                   </button>
                 ))}
               </div>
@@ -225,7 +225,7 @@ function PostCard({
   const [imageIndex, setImageIndex] = useState(0);
 
   return (
-    <div className="rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         <Link to={`/chefs/${post.chefId}`} className="flex items-center gap-3">
@@ -235,14 +235,14 @@ function PostCard({
             className="h-10 w-10 rounded-full object-cover"
           />
           <div>
-            <p className="font-medium text-gray-900">{post.chef?.businessName}</p>
-            <div className="flex items-center gap-1 text-sm text-gray-500">
+            <p className="font-medium text-ink">{post.chef?.businessName}</p>
+            <div className="flex items-center gap-1 text-sm text-ink-muted">
               <Clock className="h-3 w-3" />
               {formatTimeAgo(post.createdAt)}
             </div>
           </div>
         </Link>
-        <button className="p-2 text-gray-400 hover:text-gray-600">
+        <button className="p-2 text-ink-muted hover:text-ink-soft">
           <MoreHorizontal className="h-5 w-5" />
         </button>
       </div>
@@ -263,20 +263,20 @@ function PostCard({
                     key={i}
                     onClick={() => setImageIndex(i)}
                     className={`h-2 w-2 rounded-full transition-colors ${
-                      i === imageIndex ? 'bg-white' : 'bg-white/50'
+                      i === imageIndex ? 'bg-bone' : 'bg-bone/50'
                     }`}
                   />
                 ))}
               </div>
               <button
                 onClick={() => setImageIndex((i) => (i > 0 ? i - 1 : post.images.length - 1))}
-                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white"
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-paper"
               >
                 ←
               </button>
               <button
                 onClick={() => setImageIndex((i) => (i < post.images.length - 1 ? i + 1 : 0))}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-paper"
               >
                 →
               </button>
@@ -291,7 +291,7 @@ function PostCard({
           <button
             onClick={onLike}
             className={`flex items-center gap-1.5 ${
-              post.isLiked ? 'text-red-500' : 'text-gray-600 hover:text-red-500'
+              post.isLiked ? 'text-paprika' : 'text-ink-soft hover:text-paprika'
             }`}
           >
             <Heart className={`h-6 w-6 ${post.isLiked ? 'fill-current' : ''}`} />
@@ -299,18 +299,18 @@ function PostCard({
           </button>
           <button
             onClick={() => setShowComments(!showComments)}
-            className="flex items-center gap-1.5 text-gray-600 hover:text-brand-500"
+            className="flex items-center gap-1.5 text-ink-soft hover:text-herb"
           >
             <MessageCircle className="h-6 w-6" />
             <span className="text-sm font-medium">{post.commentsCount}</span>
           </button>
-          <button className="text-gray-600 hover:text-brand-500">
+          <button className="text-ink-soft hover:text-herb">
             <Share2 className="h-6 w-6" />
           </button>
         </div>
         <button
           onClick={onSave}
-          className={`${post.isSaved ? 'text-brand-500' : 'text-gray-600 hover:text-brand-500'}`}
+          className={`${post.isSaved ? 'text-herb' : 'text-ink-soft hover:text-herb'}`}
         >
           <Bookmark className={`h-6 w-6 ${post.isSaved ? 'fill-current' : ''}`} />
         </button>
@@ -318,7 +318,7 @@ function PostCard({
 
       {/* Content */}
       <div className="px-4 pb-4">
-        <p className="text-gray-900">
+        <p className="text-ink">
           <Link to={`/chefs/${post.chefId}`} className="font-medium hover:underline">
             {post.chef?.businessName}
           </Link>{' '}
@@ -329,7 +329,7 @@ function PostCard({
         {post.hashtags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {post.hashtags.map((tag) => (
-              <span key={tag} className="text-brand-600 hover:underline cursor-pointer">
+              <span key={tag} className="text-herb hover:underline cursor-pointer">
                 {tag}
               </span>
             ))}
@@ -338,13 +338,13 @@ function PostCard({
 
         {/* Tagged Items */}
         {post.taggedMenuItems && post.taggedMenuItems.length > 0 && (
-          <div className="mt-3 rounded-lg bg-gray-50 p-3">
-            <p className="text-sm text-gray-500">Featured in this post:</p>
+          <div className="mt-3 rounded-lg bg-paper p-3">
+            <p className="text-sm text-ink-muted">Featured in this post:</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {post.taggedMenuItems.map((itemId) => (
                 <span
                   key={itemId}
-                  className="rounded-full bg-brand-100 px-3 py-1 text-sm text-brand-700"
+                  className="rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
                 >
                   Order now
                 </span>
@@ -357,7 +357,7 @@ function PostCard({
         {post.commentsCount > 0 && !showComments && (
           <button
             onClick={() => setShowComments(true)}
-            className="mt-2 text-sm text-gray-500 hover:text-gray-700"
+            className="mt-2 text-sm text-ink-muted hover:text-ink-soft"
           >
             View all {post.commentsCount} comments
           </button>
@@ -371,9 +371,9 @@ function PostCard({
             <input
               type="text"
               placeholder="Add a comment..."
-              className="flex-1 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
+              className="flex-1 border-none bg-transparent text-sm outline-none placeholder:text-ink-muted"
             />
-            <button className="text-sm font-medium text-brand-600 hover:text-brand-700">
+            <button className="text-sm font-medium text-herb hover:text-herb">
               Post
             </button>
           </div>

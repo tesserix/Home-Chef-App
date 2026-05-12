@@ -17,7 +17,7 @@ function CartItemRow({ item }: CartItemRowProps) {
   const removeItem = useCartStore((s) => s.removeItem);
 
   return (
-    <View className="flex-row items-center py-3 border-b border-gray-100 gap-3">
+    <View className="flex-row items-center py-3 border-b border-mist gap-3">
       {item.imageUrl ? (
         <Image
           source={{ uri: item.imageUrl }}
@@ -27,38 +27,38 @@ function CartItemRow({ item }: CartItemRowProps) {
           transition={150}
         />
       ) : (
-        <View style={{ width: 56, height: 56, borderRadius: 8 }} className="bg-gray-100" />
+        <View style={{ width: 56, height: 56, borderRadius: 8 }} className="bg-mist" />
       )}
 
       <View className="flex-1 gap-0.5">
-        <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+        <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
           {item.name}
         </Text>
-        <Text className="text-xs text-gray-500">₹{item.price.toFixed(2)} each</Text>
+        <Text className="text-xs text-ink-muted">₹{item.price.toFixed(2)} each</Text>
       </View>
 
       <View className="flex-row items-center gap-2">
         <Pressable
           onPress={() => updateQty(item.menuItemId, item.quantity - 1)}
-          className="w-7 h-7 rounded-full border border-gray-300 items-center justify-center active:bg-gray-100"
+          className="w-7 h-7 rounded-full border border-mist-strong items-center justify-center active:bg-mist"
           accessibilityLabel="Decrease quantity"
         >
-          <Minus size={14} color="#374151" />
+          <Minus size={14} color="#4a4a47" />
         </Pressable>
-        <Text className="text-sm font-bold text-gray-900 w-5 text-center">{item.quantity}</Text>
+        <Text className="text-sm font-medium text-ink w-5 text-center">{item.quantity}</Text>
         <Pressable
           onPress={() => updateQty(item.menuItemId, item.quantity + 1)}
-          className="w-7 h-7 rounded-full border border-gray-300 items-center justify-center active:bg-gray-100"
+          className="w-7 h-7 rounded-full border border-mist-strong items-center justify-center active:bg-mist"
           accessibilityLabel="Increase quantity"
         >
-          <Plus size={14} color="#374151" />
+          <Plus size={14} color="#4a4a47" />
         </Pressable>
         <Pressable
           onPress={() => removeItem(item.menuItemId)}
-          className="w-7 h-7 rounded-full bg-red-50 items-center justify-center ml-1 active:bg-red-100"
+          className="w-7 h-7 rounded-full bg-paprika-tint items-center justify-center ml-1 active:bg-paprika-tint"
           accessibilityLabel={`Remove ${item.name}`}
         >
-          <Trash2 size={14} color="#EF4444" />
+          <Trash2 size={14} color="#c95b3e" />
         </Pressable>
       </View>
     </View>
@@ -91,9 +91,9 @@ export const CartSheet = forwardRef<BottomSheetMethods>((_: unknown, ref: React.
       {/* @ts-expect-error — BottomSheetView children prop not compatible with React 19 JSX types */}
       <BottomSheetView style={{ flex: 1, paddingHorizontal: 16 }}>
         <View className="pb-2">
-          <Text className="text-lg font-bold text-gray-900">Your Cart</Text>
+          <Text className="text-lg font-medium text-ink">Your Cart</Text>
           {chefName ? (
-            <Text className="text-sm text-gray-500">{chefName}</Text>
+            <Text className="text-sm text-ink-muted">{chefName}</Text>
           ) : null}
         </View>
 
@@ -105,25 +105,25 @@ export const CartSheet = forwardRef<BottomSheetMethods>((_: unknown, ref: React.
         />
 
         {items.length > 0 && (
-          <View className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-3 bg-white border-t border-gray-100">
+          <View className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-3 bg-bone border-t border-mist">
             <View className="flex-row justify-between mb-3">
-              <Text className="text-base font-semibold text-gray-700">Subtotal</Text>
-              <Text className="text-base font-bold text-gray-900">₹{total.toFixed(2)}</Text>
+              <Text className="text-base font-semibold text-ink-soft">Subtotal</Text>
+              <Text className="text-base font-medium text-ink">₹{total.toFixed(2)}</Text>
             </View>
             <Pressable
               onPress={handleCheckout}
-              className="bg-orange-500 rounded-xl py-4 items-center active:bg-orange-600"
+              className="bg-herb rounded-xl py-4 items-center active:bg-herb"
               accessibilityLabel="Proceed to checkout"
               accessibilityRole="button"
             >
-              <Text className="text-white text-base font-bold">Proceed to Checkout</Text>
+              <Text className="text-paper text-base font-medium">Proceed to Checkout</Text>
             </Pressable>
           </View>
         )}
 
         {items.length === 0 && (
           <View className="flex-1 items-center justify-center pb-20">
-            <Text className="text-gray-400 text-base">Your cart is empty</Text>
+            <Text className="text-ink-muted text-base">Your cart is empty</Text>
           </View>
         )}
       </BottomSheetView>

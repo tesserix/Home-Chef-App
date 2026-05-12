@@ -98,7 +98,7 @@ export default function UserDetailPage() {
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{user.firstName} {user.lastName}</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">{user.firstName} {user.lastName}</h1>
           <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -125,9 +125,9 @@ export default function UserDetailPage() {
             <div className="flex items-center gap-5 mb-6">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                 {user.avatar ? (
-                  <img src={user.avatar} alt={user.firstName} className="h-20 w-20 rounded-full object-cover" />
+                  <img src={user.avatar} alt={user.firstName} className="h-20 w-20 rounded-full object-cover" loading="lazy" decoding="async" />
                 ) : (
-                  <span className="text-3xl font-bold text-primary">
+                  <span className="font-display text-3xl font-semibold tabular-nums text-primary">
                     {(user.firstName?.[0] || '?').toUpperCase()}
                   </span>
                 )}

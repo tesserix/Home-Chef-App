@@ -30,7 +30,7 @@ export function UndoSnackbar({ pendingUndo, onUndo }: UndoSnackbarProps) {
   if (!pendingUndo) return null;
 
   const isAccepted = pendingUndo.action === 'accepted';
-  const bgClass = isAccepted ? 'bg-green-600' : 'bg-red-600';
+  const bgClass = isAccepted ? 'bg-herb' : 'bg-paprika';
   const label = isAccepted ? 'Order accepted' : 'Order rejected';
 
   return (
@@ -38,12 +38,12 @@ export function UndoSnackbar({ pendingUndo, onUndo }: UndoSnackbarProps) {
       style={{ transform: [{ translateY }] }}
       className={`absolute bottom-4 left-4 right-4 z-50 flex-row items-center justify-between rounded-xl px-4 py-3 shadow-lg ${bgClass}`}
     >
-      <Text className="flex-1 text-sm font-medium text-white">{label}</Text>
+      <Text className="flex-1 text-sm font-medium text-paper">{label}</Text>
       <Pressable
         onPress={onUndo}
-        className="ml-4 rounded-md bg-white/20 px-3 py-1.5 active:bg-white/30"
+        className="ml-4 rounded-md bg-bone/20 px-3 py-1.5 active:bg-bone/30"
       >
-        <Text className="text-sm font-bold text-white">UNDO</Text>
+        <Text className="text-sm font-medium text-paper">UNDO</Text>
       </Pressable>
     </Animated.View>
   );

@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -16,7 +16,7 @@ const selectTriggerVariants = cva(
     'w-full',
     'text-foreground placeholder:text-muted-foreground',
     'transition-all duration-200 ease-premium',
-    'focus:outline-none focus:ring-2 focus:ring-offset-0',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0',
     'disabled:cursor-not-allowed disabled:opacity-50',
     '[&>span]:truncate',
   ],
@@ -26,12 +26,12 @@ const selectTriggerVariants = cva(
         default: [
           'border border-input bg-background',
           'hover:border-primary/30',
-          'focus:border-primary focus:ring-ring/20',
+          'focus-visible:border-primary focus-visible:ring-ring/20',
         ],
         filled: [
           'border-transparent bg-secondary',
           'hover:bg-secondary/80',
-          'focus:bg-background focus:border-primary focus:ring-ring/20',
+          'focus-visible:bg-background focus-visible:border-primary focus-visible:ring-ring/20',
         ],
       },
       size: {
@@ -40,7 +40,7 @@ const selectTriggerVariants = cva(
         lg: 'h-11 px-4 text-base rounded-xl',
       },
       hasError: {
-        true: 'border-destructive focus:border-destructive focus:ring-destructive/20',
+        true: 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
         false: '',
       },
     },
@@ -225,15 +225,28 @@ function SimpleSelect({
   disabled,
   className,
 }: SimpleSelectProps) {
+  const reactId = useId();
+  const triggerId = `${reactId}-trigger`;
+  const errorId = `${reactId}-error`;
   return (
     <div className={cn('w-full', className)}>
       {label && (
-        <label className="mb-1.5 block text-sm font-medium text-foreground">
+        <label
+          htmlFor={triggerId}
+          className="mb-1.5 block text-sm font-medium text-foreground"
+        >
           {label}
         </label>
       )}
       <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-        <SelectTrigger variant={variant} size={size} hasError={!!error}>
+        <SelectTrigger
+          id={triggerId}
+          variant={variant}
+          size={size}
+          hasError={!!error}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error ? errorId : undefined}
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -244,7 +257,11 @@ function SimpleSelect({
           ))}
         </SelectContent>
       </Select>
-      {error && <p className="mt-1.5 text-sm text-destructive">{error}</p>}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1.5 text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

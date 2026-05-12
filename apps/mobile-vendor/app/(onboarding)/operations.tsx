@@ -54,41 +54,41 @@ export default function OperationsScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-bone">
       <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-gray-200 mb-6">
-          <View className="h-1.5 rounded-full bg-orange-500" style={{ width: `${(3 / 6) * 100}%` }} />
+        <View className="h-1.5 rounded-full bg-mist mb-6">
+          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(3 / 6) * 100}%` }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Operations</Text>
-        <Text className="text-sm text-gray-500 mb-6">Set your working hours and service details</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-1">Operations</Text>
+        <Text className="text-sm text-ink-muted mb-6">Set your working hours and service details</Text>
 
-        <Text className="text-sm font-medium text-gray-700 mb-3">Operating Hours</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-3">Operating Hours</Text>
         {DAYS.map((day) => {
           const dayData = hours[day] ?? { open: '09:00', close: '21:00', closed: false };
           return (
             <View key={day} className="flex-row items-center mb-3">
               <View className="w-24">
-                <Text className="text-sm text-gray-700 font-medium">{DAY_LABELS[day].slice(0, 3)}</Text>
+                <Text className="text-sm text-ink-soft font-medium">{DAY_LABELS[day].slice(0, 3)}</Text>
               </View>
               <Switch
                 value={!dayData.closed}
                 onValueChange={(val) => toggleDay(day, !val)}
-                trackColor={{ false: '#D1D5DB', true: '#FED7AA' }}
-                thumbColor={!dayData.closed ? '#FF6B35' : '#9CA3AF'}
+                trackColor={{ false: '#d4d3ce', true: '#FED7AA' }}
+                thumbColor={!dayData.closed ? '#3e6b3c' : '#7a7a76'}
               />
               {!dayData.closed ? (
                 <View className="flex-row items-center ml-3 gap-2">
                   <TextInput
-                    className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 w-16 text-center"
+                    className="border border-mist-strong rounded px-2 py-1 text-sm text-ink w-16 text-center"
                     value={dayData.open}
                     onChangeText={(val) => updateDay(day, 'open', val)}
                     placeholder="09:00"
                     maxLength={5}
                   />
-                  <Text className="text-gray-400">–</Text>
+                  <Text className="text-ink-muted">–</Text>
                   <TextInput
-                    className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 w-16 text-center"
+                    className="border border-mist-strong rounded px-2 py-1 text-sm text-ink w-16 text-center"
                     value={dayData.close}
                     onChangeText={(val) => updateDay(day, 'close', val)}
                     placeholder="21:00"
@@ -96,13 +96,13 @@ export default function OperationsScreen() {
                   />
                 </View>
               ) : (
-                <Text className="ml-3 text-sm text-gray-400">Closed</Text>
+                <Text className="ml-3 text-sm text-ink-muted">Closed</Text>
               )}
             </View>
           );
         })}
 
-        <Text className="text-sm font-medium text-gray-700 mt-4 mb-2">Prep Time</Text>
+        <Text className="text-sm font-medium text-ink-soft mt-4 mb-2">Prep Time</Text>
         <View className="flex-row flex-wrap gap-2 mb-4">
           {PREP_TIME_OPTIONS.map((option) => (
             <TouchableOpacity
@@ -110,20 +110,20 @@ export default function OperationsScreen() {
               onPress={() => setPrepTime(option)}
               className={`px-4 py-2 rounded-full border ${
                 prepTime === option
-                  ? 'bg-orange-500 border-orange-500'
-                  : 'bg-white border-gray-300'
+                  ? 'bg-herb border-herb'
+                  : 'bg-bone border-mist-strong'
               }`}
             >
-              <Text className={`text-sm ${prepTime === option ? 'text-white font-medium' : 'text-gray-700'}`}>
+              <Text className={`text-sm ${prepTime === option ? 'text-paper font-medium' : 'text-ink-soft'}`}>
                 {option}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Service Radius (km)</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Service Radius (km)</Text>
         <TextInput
-          className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 mb-6"
+          className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-6"
           value={serviceRadius}
           onChangeText={setServiceRadius}
           keyboardType="number-pad"
@@ -132,10 +132,10 @@ export default function OperationsScreen() {
         />
 
         <TouchableOpacity
-          className="bg-orange-500 rounded-xl py-4 items-center"
+          className="bg-herb rounded-xl py-4 items-center"
           onPress={onNext}
         >
-          <Text className="text-white font-semibold text-base">Next</Text>
+          <Text className="text-paper font-semibold text-base">Next</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

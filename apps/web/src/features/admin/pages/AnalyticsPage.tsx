@@ -49,7 +49,7 @@ export default function AdminAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -59,14 +59,14 @@ export default function AdminAnalyticsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Analytics</h1>
-          <p className="mt-1 text-gray-400">Platform performance and insights</p>
+          <h1 className="font-display text-2xl font-semibold text-paper">Analytics</h1>
+          <p className="mt-1 text-ink-muted">Platform performance and insights</p>
         </div>
         <div className="flex gap-3">
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="rounded-lg bg-gray-800 border-gray-700 text-white"
+            className="rounded-lg bg-ink border-ink-soft text-paper"
           >
             {TIME_PERIODS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -74,7 +74,7 @@ export default function AdminAnalyticsPage() {
               </option>
             ))}
           </select>
-          <button className="btn-outline border-gray-600 text-white">
+          <button className="btn-outline border-ink-soft text-paper">
             <Download className="h-4 w-4" />
             Export
           </button>
@@ -111,8 +111,8 @@ export default function AdminAnalyticsPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Revenue Chart */}
-        <div className="rounded-xl bg-gray-800 p-6">
-          <h2 className="text-lg font-semibold text-white">Revenue Overview</h2>
+        <div className="rounded-xl bg-ink p-6">
+          <h2 className="text-lg font-semibold text-paper">Revenue Overview</h2>
           <div className="mt-6 h-64 flex items-end gap-2">
             {data?.revenueByDay?.slice(-14).map((day, i) => {
               const maxRevenue = Math.max(...(data.revenueByDay?.map((d) => d.revenue) || [1]));
@@ -120,11 +120,11 @@ export default function AdminAnalyticsPage() {
               return (
                 <div key={i} className="flex-1 flex flex-col items-center">
                   <div
-                    className="w-full bg-brand-500 rounded-t hover:bg-brand-400 transition-colors"
+                    className="w-full bg-herb rounded-t hover:bg-herb-soft transition-colors"
                     style={{ height: `${height}%` }}
                     title={fp(day.revenue)}
                   />
-                  <span className="mt-2 text-xs text-gray-500 rotate-45">
+                  <span className="mt-2 text-xs text-ink-muted rotate-45">
                     {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
@@ -134,8 +134,8 @@ export default function AdminAnalyticsPage() {
         </div>
 
         {/* Orders by Status */}
-        <div className="rounded-xl bg-gray-800 p-6">
-          <h2 className="text-lg font-semibold text-white">Orders by Status</h2>
+        <div className="rounded-xl bg-ink p-6">
+          <h2 className="text-lg font-semibold text-paper">Orders by Status</h2>
           <div className="mt-6 space-y-4">
             {Object.entries(data?.ordersByStatus || {}).map(([status, count]) => {
               const total = Object.values(data?.ordersByStatus || {}).reduce((a, b) => a + b, 0);
@@ -143,12 +143,12 @@ export default function AdminAnalyticsPage() {
               return (
                 <div key={status}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-300 capitalize">{status.replace('_', ' ')}</span>
-                    <span className="text-gray-400">{count}</span>
+                    <span className="text-ink-muted capitalize">{status.replace('_', ' ')}</span>
+                    <span className="text-ink-muted">{count}</span>
                   </div>
-                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-2 bg-ink-soft rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-brand-500 rounded-full"
+                      className="h-full bg-herb rounded-full"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -161,47 +161,47 @@ export default function AdminAnalyticsPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Top Chefs */}
-        <div className="rounded-xl bg-gray-800 p-6">
-          <h2 className="text-lg font-semibold text-white">Top Performing Chefs</h2>
+        <div className="rounded-xl bg-ink p-6">
+          <h2 className="text-lg font-semibold text-paper">Top Performing Chefs</h2>
           <div className="mt-4 space-y-3">
             {data?.topChefs?.map((chef, index) => (
-              <div key={chef.id} className="flex items-center gap-4 rounded-lg bg-gray-700/50 p-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/20 text-sm font-medium text-brand-400">
+              <div key={chef.id} className="flex items-center gap-4 rounded-lg bg-ink-soft/50 p-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-herb/20 text-sm font-medium text-herb-soft">
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white truncate">{chef.name}</p>
-                  <p className="text-sm text-gray-400">{chef.orders} orders</p>
+                  <p className="font-medium text-paper truncate">{chef.name}</p>
+                  <p className="text-sm text-ink-muted">{chef.orders} orders</p>
                 </div>
-                <p className="font-semibold text-white">{fp(chef.revenue)}</p>
+                <p className="font-semibold text-paper">{fp(chef.revenue)}</p>
               </div>
             ))}
             {(!data?.topChefs || data.topChefs.length === 0) && (
-              <p className="text-center text-gray-500 py-4">No data available</p>
+              <p className="text-center text-ink-muted py-4">No data available</p>
             )}
           </div>
         </div>
 
         {/* Top Cuisines */}
-        <div className="rounded-xl bg-gray-800 p-6">
-          <h2 className="text-lg font-semibold text-white">Popular Cuisines</h2>
+        <div className="rounded-xl bg-ink p-6">
+          <h2 className="text-lg font-semibold text-paper">Popular Cuisines</h2>
           <div className="mt-4 space-y-4">
             {data?.topCuisines?.map((cuisine) => (
               <div key={cuisine.name}>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-300">{cuisine.name}</span>
-                  <span className="text-gray-400">{cuisine.orders} orders</span>
+                  <span className="text-ink-muted">{cuisine.name}</span>
+                  <span className="text-ink-muted">{cuisine.orders} orders</span>
                 </div>
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-2 bg-ink-soft rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-purple-500 rounded-full"
+                    className="h-full bg-info rounded-full"
                     style={{ width: `${cuisine.percentage}%` }}
                   />
                 </div>
               </div>
             ))}
             {(!data?.topCuisines || data.topCuisines.length === 0) && (
-              <p className="text-center text-gray-500 py-4">No data available</p>
+              <p className="text-center text-ink-muted py-4">No data available</p>
             )}
           </div>
         </div>
@@ -222,15 +222,15 @@ function MetricCard({
   icon: typeof DollarSign;
 }) {
   return (
-    <div className="rounded-xl bg-gray-800 p-6">
+    <div className="rounded-xl bg-ink p-6">
       <div className="flex items-center justify-between">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500/20">
-          <Icon className="h-5 w-5 text-brand-400" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb/20">
+          <Icon className="h-5 w-5 text-herb-soft" />
         </div>
         {change !== undefined && (
           <span
             className={`flex items-center gap-1 text-sm ${
-              change >= 0 ? 'text-green-400' : 'text-red-400'
+              change >= 0 ? 'text-herb' : 'text-paprika'
             }`}
           >
             {change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
@@ -238,8 +238,8 @@ function MetricCard({
           </span>
         )}
       </div>
-      <p className="mt-4 text-2xl font-bold text-white">{value}</p>
-      <p className="mt-1 text-sm text-gray-400">{title}</p>
+      <p className="mt-4 font-display text-2xl font-semibold text-paper">{value}</p>
+      <p className="mt-1 text-sm text-ink-muted">{title}</p>
     </div>
   );
 }

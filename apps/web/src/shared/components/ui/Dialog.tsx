@@ -65,8 +65,8 @@ const DialogContent = forwardRef<
       >
         {children}
         {showClose && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring">
-            <X className="h-4 w-4" />
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <X aria-hidden="true" className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
@@ -140,7 +140,7 @@ interface AlertDialogContentProps
 const AlertDialogContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   AlertDialogContentProps
->(({ className, children, variant: _variant = 'default', ...props }, ref) => (
+>(({ className, children, variant = 'default', ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -152,6 +152,7 @@ const AlertDialogContent = forwardRef<
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        variant === 'danger' && 'border-destructive/40',
         className
       )}
       {...props}
@@ -168,21 +169,29 @@ const AlertDialogTitle = DialogTitle;
 const AlertDialogDescription = DialogDescription;
 const AlertDialogCancel = DialogPrimitive.Close;
 
-const AlertDialogAction = forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, ...props }, ref) => (
-  <button
-    ref={ref}
-    className={cn(
-      'inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-primary-foreground',
-      'hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-      'disabled:opacity-50 disabled:pointer-events-none',
-      className
-    )}
-    {...props}
-  />
-));
+interface AlertDialogActionProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'default' | 'danger';
+}
+
+const AlertDialogAction = forwardRef<HTMLButtonElement, AlertDialogActionProps>(
+  ({ className, variant = 'default', ...props }, ref) => (
+    <button
+      ref={ref}
+      className={cn(
+        'inline-flex h-10 items-center justify-center rounded-lg px-4 font-medium',
+        'transition-colors duration-200 ease-premium',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'disabled:opacity-50 disabled:pointer-events-none',
+        variant === 'danger'
+          ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive'
+          : 'bg-primary text-primary-foreground hover:bg-primary/90',
+        className
+      )}
+      {...props}
+    />
+  )
+);
 AlertDialogAction.displayName = 'AlertDialogAction';
 
 // Convenience wrapper

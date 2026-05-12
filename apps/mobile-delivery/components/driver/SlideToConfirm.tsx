@@ -28,7 +28,7 @@ export function SlideToConfirm({
   label,
   onConfirm,
   disabled = false,
-  color = '#FF6B35',
+  color = '#3e6b3c',
 }: SlideToConfirmProps) {
   const translateX = useSharedValue(0);
   const [trackWidth, setTrackWidth] = useState(0);

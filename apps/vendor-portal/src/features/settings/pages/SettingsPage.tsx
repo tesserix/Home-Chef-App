@@ -104,7 +104,7 @@ export default function SettingsPage() {
   if (isLoading || !localSettings) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-herb border-t-transparent" />
       </div>
     );
   }
@@ -127,10 +127,10 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Accepting Orders */}
-      <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+      <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="flex items-center gap-3">
-          <Power className="h-5 w-5 text-brand-500" />
-          <h2 className="text-lg font-semibold text-gray-900">Order Acceptance</h2>
+          <Power className="h-5 w-5 text-herb" />
+          <h2 className="text-lg font-semibold text-ink">Order Acceptance</h2>
         </div>
         <div className="mt-4 space-y-4">
           <ToggleRow
@@ -151,7 +151,7 @@ export default function SettingsPage() {
           />
           {localSettings.autoAcceptOrders && (
             <div className="ml-8">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-ink-soft">
                 Auto-accept threshold ($)
               </label>
               <input
@@ -163,9 +163,9 @@ export default function SettingsPage() {
                     autoAcceptThreshold: Number(e.target.value),
                   })
                 }
-                className="mt-1 w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                className="mt-1 w-32 rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-ink-muted">
                 Orders under this amount will be auto-accepted
               </p>
             </div>
@@ -174,13 +174,13 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Notifications */}
-      <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+      <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="flex items-center gap-3">
-          <Bell className="h-5 w-5 text-brand-500" />
-          <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
+          <Bell className="h-5 w-5 text-herb" />
+          <h2 className="text-lg font-semibold text-ink">Notifications</h2>
         </div>
         <div className="mt-4 space-y-4">
-          <h3 className="text-sm font-medium text-gray-500">Push Notifications</h3>
+          <h3 className="text-sm font-medium text-ink-muted">Push Notifications</h3>
           <ToggleRow
             label="New order alerts"
             description="Get notified when a new order comes in"
@@ -193,8 +193,8 @@ export default function SettingsPage() {
             checked={localSettings.notifications.pushOrderUpdate}
             onChange={() => toggleNotification('pushOrderUpdate')}
           />
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-sm font-medium text-gray-500">Email</h3>
+          <div className="border-t border-mist pt-4">
+            <h3 className="text-sm font-medium text-ink-muted">Email</h3>
           </div>
           <ToggleRow
             label="Daily summary"
@@ -208,8 +208,8 @@ export default function SettingsPage() {
             checked={localSettings.notifications.emailWeeklyReport}
             onChange={() => toggleNotification('emailWeeklyReport')}
           />
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-sm font-medium text-gray-500">SMS</h3>
+          <div className="border-t border-mist pt-4">
+            <h3 className="text-sm font-medium text-ink-muted">SMS</h3>
           </div>
           <ToggleRow
             label="New order SMS"
@@ -221,64 +221,64 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Payout Details */}
-      <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+      <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Banknote className="h-5 w-5 text-brand-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Payout Details</h2>
+            <Banknote className="h-5 w-5 text-herb" />
+            <h2 className="text-lg font-semibold text-ink">Payout Details</h2>
           </div>
           {payoutData?.razorpayConnected ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-herb-tint px-3 py-1 text-xs font-medium text-herb">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Razorpay Connected
             </span>
           ) : payoutData?.payoutMethod ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-tint px-3 py-1 text-xs font-medium text-amber">
               <XCircle className="h-3.5 w-3.5" />
               Razorpay Pending
             </span>
           ) : null}
         </div>
         {payoutData?.razorpayConnected && payoutData.razorpayAccountId && (
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-ink-muted">
             Linked Account: {payoutData.razorpayAccountId}
           </p>
         )}
 
         {payoutLoading ? (
           <div className="mt-4 flex items-center justify-center py-8">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-herb border-t-transparent" />
           </div>
         ) : !payoutEditing && payoutData?.payoutMethod ? (
           <div className="mt-4 space-y-3">
             {payoutData.payoutMethod === 'bank_transfer' ? (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Method</span>
-                  <span className="font-medium text-gray-900">Bank Transfer</span>
+                  <span className="text-ink-muted">Method</span>
+                  <span className="font-medium text-ink">Bank Transfer</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Account Holder</span>
-                  <span className="font-medium text-gray-900">{payoutData.bankAccountName}</span>
+                  <span className="text-ink-muted">Account Holder</span>
+                  <span className="font-medium text-ink">{payoutData.bankAccountName}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Account Number</span>
-                  <span className="font-medium text-gray-900">{payoutData.bankAccountNumber}</span>
+                  <span className="text-ink-muted">Account Number</span>
+                  <span className="font-medium text-ink">{payoutData.bankAccountNumber}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">IFSC Code</span>
-                  <span className="font-medium text-gray-900">{payoutData.bankIFSC}</span>
+                  <span className="text-ink-muted">IFSC Code</span>
+                  <span className="font-medium text-ink">{payoutData.bankIFSC}</span>
                 </div>
               </>
             ) : (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Method</span>
-                  <span className="font-medium text-gray-900">UPI</span>
+                  <span className="text-ink-muted">Method</span>
+                  <span className="font-medium text-ink">UPI</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">UPI ID</span>
-                  <span className="font-medium text-gray-900">{payoutData.upiId}</span>
+                  <span className="text-ink-muted">UPI ID</span>
+                  <span className="font-medium text-ink">{payoutData.upiId}</span>
                 </div>
               </>
             )}
@@ -293,7 +293,7 @@ export default function SettingsPage() {
           </div>
         ) : !payoutEditing ? (
           <div className="mt-4">
-            <p className="text-sm text-gray-500">No payout details configured yet.</p>
+            <p className="text-sm text-ink-muted">No payout details configured yet.</p>
             <Button
               size="sm"
               className="mt-3"
@@ -310,8 +310,8 @@ export default function SettingsPage() {
                 onClick={() => setPayoutForm({ ...payoutForm, payoutMethod: 'bank_transfer' })}
                 className={`relative inline-flex items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   payoutForm.payoutMethod === 'bank_transfer'
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    ? 'bg-herb text-paper'
+                    : 'bg-mist text-ink-soft hover:bg-mist-strong'
                 }`}
               >
                 Bank Transfer
@@ -321,8 +321,8 @@ export default function SettingsPage() {
                 onClick={() => setPayoutForm({ ...payoutForm, payoutMethod: 'upi' })}
                 className={`relative inline-flex items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   payoutForm.payoutMethod === 'upi'
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    ? 'bg-herb text-paper'
+                    : 'bg-mist text-ink-soft hover:bg-mist-strong'
                 }`}
               >
                 UPI
@@ -332,45 +332,45 @@ export default function SettingsPage() {
             {payoutForm.payoutMethod === 'bank_transfer' ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Account Holder Name</label>
+                  <label className="block text-sm font-medium text-ink-soft">Account Holder Name</label>
                   <input
                     type="text"
                     value={payoutForm.bankAccountName}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankAccountName: e.target.value })}
                     placeholder="Name as on bank account"
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Account Number</label>
+                  <label className="block text-sm font-medium text-ink-soft">Account Number</label>
                   <input
                     type="text"
                     value={payoutForm.bankAccountNumber}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankAccountNumber: e.target.value })}
                     placeholder="Enter account number"
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">IFSC Code</label>
+                  <label className="block text-sm font-medium text-ink-soft">IFSC Code</label>
                   <input
                     type="text"
                     value={payoutForm.bankIFSC}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankIFSC: e.target.value.toUpperCase() })}
                     placeholder="e.g. SBIN0001234"
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                   />
                 </div>
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700">UPI ID</label>
+                <label className="block text-sm font-medium text-ink-soft">UPI ID</label>
                 <input
                   type="text"
                   value={payoutForm.upiId}
                   onChange={(e) => setPayoutForm({ ...payoutForm, upiId: e.target.value })}
                   placeholder="yourname@upi"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
                 />
               </div>
             )}
@@ -413,37 +413,37 @@ export default function SettingsPage() {
 
       {/* Change Password — only for email/password accounts, not social logins */}
       {(!localSettings.authProvider || localSettings.authProvider === 'email') ? (
-        <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+        <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
           <div className="flex items-center gap-3">
-            <Lock className="h-5 w-5 text-brand-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Change Password</h2>
+            <Lock className="h-5 w-5 text-herb" />
+            <h2 className="text-lg font-semibold text-ink">Change Password</h2>
           </div>
           <div className="mt-4 max-w-md space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Current Password</label>
+              <label className="block text-sm font-medium text-ink-soft">Current Password</label>
               <input
                 type="password"
                 value={passwordForm.currentPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">New Password</label>
+              <label className="block text-sm font-medium text-ink-soft">New Password</label>
               <input
                 type="password"
                 value={passwordForm.newPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>
+              <label className="block text-sm font-medium text-ink-soft">Confirm New Password</label>
               <input
                 type="password"
                 value={passwordForm.confirmPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
             </div>
             <Button
@@ -467,12 +467,12 @@ export default function SettingsPage() {
           </div>
         </motion.div>
       ) : (
-        <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+        <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
           <div className="flex items-center gap-3">
-            <Lock className="h-5 w-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900">Change Password</h2>
+            <Lock className="h-5 w-5 text-ink-muted" />
+            <h2 className="text-lg font-semibold text-ink">Change Password</h2>
           </div>
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-ink-muted">
             Your account is linked to{' '}
             <span className="font-medium capitalize">{localSettings.authProvider}</span> login.
             Password management is handled by your social login provider.
@@ -481,12 +481,12 @@ export default function SettingsPage() {
       )}
 
       {/* Danger Zone */}
-      <motion.div variants={fadeInUp} className="rounded-xl border border-red-200 bg-white p-6">
+      <motion.div variants={fadeInUp} className="rounded-xl border border-paprika/30 bg-bone p-6">
         <div className="flex items-center gap-3">
-          <Trash2 className="h-5 w-5 text-red-500" />
-          <h2 className="text-lg font-semibold text-red-900">Danger Zone</h2>
+          <Trash2 className="h-5 w-5 text-paprika" />
+          <h2 className="text-lg font-semibold text-paprika">Danger Zone</h2>
         </div>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-ink-soft">
           Deactivating your account will hide your kitchen from customers and pause all orders.
         </p>
         <Button
@@ -527,17 +527,17 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="text-xs text-gray-500">{description}</p>
+        <p className="text-sm font-medium text-ink">{label}</p>
+        <p className="text-xs text-ink-muted">{description}</p>
       </div>
       <button
         onClick={onChange}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          checked ? 'bg-brand-500' : 'bg-gray-200'
+          checked ? 'bg-herb' : 'bg-mist'
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+          className={`inline-block h-4 w-4 rounded-full bg-bone transition-transform ${
             checked ? 'translate-x-6' : 'translate-x-1'
           }`}
         />
@@ -647,24 +647,24 @@ function StripeConnectCard() {
   const activeProvider = data?.paymentProvider ?? 'razorpay';
 
   return (
-    <motion.div variants={fadeInUp} className="rounded-xl border border-gray-200 bg-white p-6">
+    <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Globe className="h-5 w-5 text-brand-500" />
+          <Globe className="h-5 w-5 text-herb" />
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Stripe (International Payouts)</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-lg font-semibold text-ink">Stripe (International Payouts)</h2>
+            <p className="text-xs text-ink-muted">
               For chefs outside India, or as an alternative to Razorpay.
             </p>
           </div>
         </div>
         {data?.connected ? (
           ready ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-herb-tint px-3 py-1 text-xs font-medium text-herb">
               <CheckCircle2 className="h-3.5 w-3.5" /> Connected
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-tint px-3 py-1 text-xs font-medium text-amber">
               <XCircle className="h-3.5 w-3.5" /> Action Required
             </span>
           )
@@ -673,20 +673,20 @@ function StripeConnectCard() {
 
       {isLoading ? (
         <div className="mt-4 flex items-center justify-center py-8">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-herb border-t-transparent" />
         </div>
       ) : !data?.connected ? (
         <div className="mt-4 space-y-3">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-ink-soft">
             Accept payments and receive payouts in your local currency. Stripe handles KYC and bank
             verification on their hosted pages — just pick your country and follow the flow.
           </p>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Country</label>
+            <label className="block text-sm font-medium text-ink-soft">Country</label>
             <select
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="mt-1 w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              className="mt-1 w-full max-w-sm rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
             >
               {SUPPORTED_STRIPE_COUNTRIES.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -707,38 +707,38 @@ function StripeConnectCard() {
       ) : (
         <div className="mt-4 space-y-3">
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Country</p>
-              <p className="font-medium text-gray-900">{data.country || '—'}</p>
+            <div className="rounded-lg border border-mist bg-paper px-3 py-2">
+              <p className="text-xs text-ink-muted">Country</p>
+              <p className="font-medium text-ink">{data.country || '—'}</p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Charges</p>
-              <p className={`font-medium ${data.chargesEnabled ? 'text-green-600' : 'text-amber-600'}`}>
+            <div className="rounded-lg border border-mist bg-paper px-3 py-2">
+              <p className="text-xs text-ink-muted">Charges</p>
+              <p className={`font-medium ${data.chargesEnabled ? 'text-herb' : 'text-amber'}`}>
                 {data.chargesEnabled ? 'Enabled' : 'Pending'}
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Payouts</p>
-              <p className={`font-medium ${data.payoutsEnabled ? 'text-green-600' : 'text-amber-600'}`}>
+            <div className="rounded-lg border border-mist bg-paper px-3 py-2">
+              <p className="text-xs text-ink-muted">Payouts</p>
+              <p className={`font-medium ${data.payoutsEnabled ? 'text-herb' : 'text-amber'}`}>
                 {data.payoutsEnabled ? 'Enabled' : 'Pending'}
               </p>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Details Submitted</p>
-              <p className={`font-medium ${data.detailsSubmitted ? 'text-green-600' : 'text-amber-600'}`}>
+            <div className="rounded-lg border border-mist bg-paper px-3 py-2">
+              <p className="text-xs text-ink-muted">Details Submitted</p>
+              <p className={`font-medium ${data.detailsSubmitted ? 'text-herb' : 'text-amber'}`}>
                 {data.detailsSubmitted ? 'Yes' : 'No'}
               </p>
             </div>
           </div>
 
           {data.warning && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="rounded-lg border border-amber/30 bg-amber-tint px-3 py-2 text-xs text-amber">
               {data.warning}
             </div>
           )}
 
           {!ready && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <div className="flex items-start gap-2 rounded-lg border border-amber/30 bg-amber-tint px-3 py-2 text-xs text-amber">
               <span>
                 Stripe needs more information before you can accept payments. Resume onboarding to
                 finish.
@@ -782,9 +782,9 @@ function StripeConnectCard() {
             </Button>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-ink-muted">
             Active gateway for your orders:{' '}
-            <span className="font-medium text-gray-600">
+            <span className="font-medium text-ink-soft">
               {activeProvider === 'stripe' ? 'Stripe' : 'Razorpay'}
             </span>
           </p>

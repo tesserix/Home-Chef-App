@@ -124,7 +124,7 @@ export default function ChefMenuPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
@@ -139,8 +139,8 @@ export default function ChefMenuPage() {
       {/* Header */}
       <motion.div variants={fadeInUp} className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-display-xs text-gray-900">Menu Management</h1>
-          <p className="mt-1 text-gray-600">
+          <h1 className="font-display text-display-xs text-ink">Menu Management</h1>
+          <p className="mt-1 text-ink-soft">
             {allItems.length} item{allItems.length !== 1 ? 's' : ''} in your menu
           </p>
         </div>
@@ -184,9 +184,9 @@ export default function ChefMenuPage() {
       {filteredItems.length === 0 ? (
         <motion.div variants={fadeInUp}>
           <Card variant="filled" padding="lg" className="text-center">
-            <ChefHat className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 font-medium text-gray-900">No menu items</h3>
-            <p className="mt-2 text-gray-600">
+            <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+            <h3 className="mt-4 font-medium text-ink">No menu items</h3>
+            <p className="mt-2 text-ink-soft">
               {searchQuery
                 ? 'No items match your search'
                 : 'Add your first menu item to get started'}
@@ -277,8 +277,8 @@ function MenuItemCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="h-full w-full bg-gray-100 flex items-center justify-center">
-            <ChefHat className="h-12 w-12 text-gray-300" />
+          <div className="h-full w-full bg-mist flex items-center justify-center">
+            <ChefHat className="h-12 w-12 text-ink-muted" />
           </div>
         )}
         {item.isFeatured && (
@@ -288,7 +288,7 @@ function MenuItemCard({
           </Badge>
         )}
         {!item.isAvailable && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="absolute inset-0 flex items-center justify-center bg-ink/50">
             <Badge variant="default" size="md">Unavailable</Badge>
           </div>
         )}
@@ -298,8 +298,8 @@ function MenuItemCard({
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900">{item.name}</h3>
-            <p className="mt-1 text-sm text-gray-500 line-clamp-2">{item.description}</p>
+            <h3 className="font-semibold text-ink">{item.name}</h3>
+            <p className="mt-1 text-sm text-ink-muted line-clamp-2">{item.description}</p>
           </div>
         </div>
 
@@ -317,14 +317,14 @@ function MenuItemCard({
         {/* Price & Prep Time */}
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-gray-900">{fp(item.price)}</span>
+            <span className="text-lg font-medium text-ink">{fp(item.price)}</span>
             {item.comparePrice && (
-              <span className="text-sm text-gray-400 line-through">
+              <span className="text-sm text-ink-muted line-through">
                 {fp(item.comparePrice)}
               </span>
             )}
           </div>
-          <span className="text-sm text-gray-500">{item.prepTime} min</span>
+          <span className="text-sm text-ink-muted">{item.prepTime} min</span>
         </div>
 
         {/* Actions */}
@@ -342,7 +342,7 @@ function MenuItemCard({
             variant="outline"
             size="icon-sm"
             onClick={onEdit}
-            className="text-brand-600"
+            className="text-herb"
           >
             <Edit2 className="h-4 w-4" />
           </Button>
@@ -350,7 +350,7 @@ function MenuItemCard({
             variant="outline"
             size="icon-sm"
             onClick={onDelete}
-            className="text-red-600"
+            className="text-paprika"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -421,16 +421,16 @@ function MenuItemForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Image Upload */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">
+        <label className="mb-2 block text-sm font-medium text-ink-soft">
           Photo
         </label>
-        <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-300 p-8 hover:border-brand-400 transition-colors cursor-pointer">
+        <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-mist-strong p-8 hover:border-herb transition-colors cursor-pointer">
           <div className="text-center">
-            <Upload className="mx-auto h-8 w-8 text-gray-400" />
-            <p className="mt-2 text-sm text-gray-600">
+            <Upload className="mx-auto h-8 w-8 text-ink-muted" />
+            <p className="mt-2 text-sm text-ink-soft">
               Click to upload or drag and drop
             </p>
-            <p className="text-xs text-gray-400">PNG, JPG up to 5MB</p>
+            <p className="text-xs text-ink-muted">PNG, JPG up to 5MB</p>
           </div>
         </div>
       </div>
@@ -446,11 +446,11 @@ function MenuItemForm({
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Description</label>
+          <label className="mb-1.5 block text-sm font-medium text-ink-soft">Description</label>
           <textarea
             {...register('description')}
             rows={3}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink placeholder:text-ink-muted focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20 transition-all"
           />
         </div>
 
@@ -460,7 +460,7 @@ function MenuItemForm({
           step="0.01"
           {...register('price', { valueAsNumber: true })}
           error={errors.price?.message}
-          leftIcon={<span className="text-gray-400">$</span>}
+          leftIcon={<span className="text-ink-muted">$</span>}
         />
 
         <Input
@@ -468,14 +468,14 @@ function MenuItemForm({
           type="number"
           step="0.01"
           {...register('comparePrice', { valueAsNumber: true })}
-          leftIcon={<span className="text-gray-400">$</span>}
+          leftIcon={<span className="text-ink-muted">$</span>}
         />
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Category</label>
+          <label className="mb-1.5 block text-sm font-medium text-ink-soft">Category</label>
           <select
             {...register('categoryId')}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20 transition-all"
           >
             <option value="">No category</option>
             {categories.map((cat) => (
@@ -508,7 +508,7 @@ function MenuItemForm({
 
       {/* Dietary Tags */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">Dietary Tags</label>
+        <label className="mb-2 block text-sm font-medium text-ink-soft">Dietary Tags</label>
         <div className="flex flex-wrap gap-2">
           {DIETARY_TAGS.map((tag) => (
             <Button
@@ -526,7 +526,7 @@ function MenuItemForm({
 
       {/* Allergens */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">Contains Allergens</label>
+        <label className="mb-2 block text-sm font-medium text-ink-soft">Contains Allergens</label>
         <div className="flex flex-wrap gap-2">
           {ALLERGENS.map((allergen) => (
             <Button
@@ -548,17 +548,17 @@ function MenuItemForm({
           <input
             type="checkbox"
             {...register('isAvailable')}
-            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
           />
-          <span className="text-sm text-gray-700">Available for order</span>
+          <span className="text-sm text-ink-soft">Available for order</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             {...register('isFeatured')}
-            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
           />
-          <span className="text-sm text-gray-700">Featured item</span>
+          <span className="text-sm text-ink-soft">Featured item</span>
         </label>
       </div>
 

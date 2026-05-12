@@ -47,9 +47,9 @@ function useEarnings() {
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <View className="flex-1 bg-white rounded-2xl p-4 shadow-sm items-center">
-      <Text className="text-xs text-gray-400 mb-1">{label}</Text>
-      <Text className="text-lg font-bold text-gray-900">{value}</Text>
+    <View className="flex-1 bg-bone rounded-2xl p-4 shadow-sm items-center">
+      <Text className="text-xs text-ink-muted mb-1">{label}</Text>
+      <Text className="text-lg font-medium text-ink">{value}</Text>
     </View>
   );
 }
@@ -64,21 +64,21 @@ export default function EarningsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load earnings</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load earnings</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -90,20 +90,20 @@ export default function EarningsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#374151" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
+        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+          <ChevronLeft size={24} color="#4a4a47" />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-gray-900">Earnings</Text>
+        <Text className="text-lg font-semibold text-ink">Earnings</Text>
       </View>
 
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -120,13 +120,13 @@ export default function EarningsScreen() {
         </View>
 
         {data?.lastPayout && (
-          <View className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">Last Payout</Text>
+          <View className="bg-bone rounded-2xl p-4 shadow-sm mb-4">
+            <Text className="text-sm font-semibold text-ink-soft mb-2">Last Payout</Text>
             <View className="flex-row justify-between">
-              <Text className="text-base text-gray-900 font-semibold">
+              <Text className="text-base text-ink font-semibold">
                 ₹{data.lastPayout.amount.toLocaleString('en-IN')}
               </Text>
-              <Text className="text-sm text-gray-400">
+              <Text className="text-sm text-ink-muted">
                 {new Date(data.lastPayout.date).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',
@@ -138,44 +138,44 @@ export default function EarningsScreen() {
         )}
 
         {/* Payout details */}
-        <View className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-          <Text className="text-sm font-semibold text-gray-700 mb-3">Payout Account</Text>
+        <View className="bg-bone rounded-2xl p-4 shadow-sm mb-4">
+          <Text className="text-sm font-semibold text-ink-soft mb-3">Payout Account</Text>
           {data?.bankAccount ? (
             <View>
-              <Text className="text-xs text-gray-400 mb-0.5">Bank</Text>
-              <Text className="text-base text-gray-900 mb-2">{data.bankAccount.bankName}</Text>
-              <Text className="text-xs text-gray-400 mb-0.5">Account Number</Text>
-              <Text className="text-base text-gray-900 mb-2">
+              <Text className="text-xs text-ink-muted mb-0.5">Bank</Text>
+              <Text className="text-base text-ink mb-2">{data.bankAccount.bankName}</Text>
+              <Text className="text-xs text-ink-muted mb-0.5">Account Number</Text>
+              <Text className="text-base text-ink mb-2">
                 {maskAccount(data.bankAccount.accountNumber)}
               </Text>
-              <Text className="text-xs text-gray-400 mb-0.5">IFSC</Text>
-              <Text className="text-base text-gray-900">{data.bankAccount.ifsc}</Text>
+              <Text className="text-xs text-ink-muted mb-0.5">IFSC</Text>
+              <Text className="text-base text-ink">{data.bankAccount.ifsc}</Text>
             </View>
           ) : data?.upiId ? (
             <View>
-              <Text className="text-xs text-gray-400 mb-0.5">UPI ID</Text>
-              <Text className="text-base text-gray-900">{data.upiId}</Text>
+              <Text className="text-xs text-ink-muted mb-0.5">UPI ID</Text>
+              <Text className="text-base text-ink">{data.upiId}</Text>
             </View>
           ) : (
-            <Text className="text-sm text-gray-400">No payout account configured</Text>
+            <Text className="text-sm text-ink-muted">No payout account configured</Text>
           )}
         </View>
 
         {/* Weekly earnings bar chart */}
         {data?.earningsHistory && data.earningsHistory.length > 0 && (
-          <View className="bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-sm font-semibold text-gray-700 mb-4">Weekly Earnings</Text>
+          <View className="bg-bone rounded-2xl p-4 shadow-sm">
+            <Text className="text-sm font-semibold text-ink-soft mb-4">Weekly Earnings</Text>
             <View className="gap-3">
               {data.earningsHistory.map((entry) => (
                 <View key={entry.week} className="flex-row items-center gap-3">
-                  <Text className="text-xs text-gray-400 w-16 text-right">{entry.week}</Text>
-                  <View className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                  <Text className="text-xs text-ink-muted w-16 text-right">{entry.week}</Text>
+                  <View className="flex-1 h-6 bg-mist rounded-full overflow-hidden">
                     <View
-                      className="h-6 bg-orange-400 rounded-full"
+                      className="h-6 bg-herb-soft rounded-full"
                       style={{ width: `${(entry.amount / maxAmount) * 100}%` }}
                     />
                   </View>
-                  <Text className="text-xs text-gray-700 w-16">
+                  <Text className="text-xs text-ink-soft w-16">
                     ₹{entry.amount.toLocaleString('en-IN')}
                   </Text>
                 </View>

@@ -50,7 +50,7 @@ function FavoriteChefCard({
             hitSlop={8}
             accessibilityLabel={`Remove ${chef.name} from favorites`}
           >
-            <Heart size={20} color="#EF4444" fill="#EF4444" />
+            <Heart size={20} color="#c95b3e" fill="#c95b3e" />
           </Pressable>
         </View>
 
@@ -59,14 +59,14 @@ function FavoriteChefCard({
         </Text>
 
         <View style={styles.metaRow}>
-          <Star size={12} color="#F59E0B" fill="#F59E0B" />
+          <Star size={12} color="#d1a64a" fill="#d1a64a" />
           <Text style={styles.rating}>{chef.rating.toFixed(1)}</Text>
           <Text style={styles.reviewCount}>({chef.reviewCount})</Text>
 
           <View
             style={[
               styles.openBadge,
-              { backgroundColor: chef.isOpen ? '#22C55E' : '#9CA3AF' },
+              { backgroundColor: chef.isOpen ? '#3e6b3c' : '#7a7a76' },
             ]}
           >
             <Text style={styles.openBadgeText}>
@@ -119,7 +119,7 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       </SafeAreaView>
     );
@@ -146,7 +146,7 @@ export default function FavoritesScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={() => void refetch()}
-            tintColor="#F97316"
+            tintColor="#3e6b3c"
           />
         }
         ListEmptyComponent={
@@ -169,7 +169,7 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -187,11 +187,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   listContent: {
     padding: 16,
@@ -213,22 +213,22 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#7a7a76',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
   // Card styles
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 12,
-    shadowColor: '#000000',
+    shadowColor: '#1a1a18',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
@@ -250,13 +250,13 @@ const styles = StyleSheet.create({
   chefName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
     flex: 1,
     marginRight: 8,
   },
   cuisine: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   metaRow: {
     flexDirection: 'row',
@@ -267,11 +267,11 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
   },
   reviewCount: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   openBadge: {
     marginLeft: 'auto',
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   openBadgeText: {
     fontSize: 11,
-    color: '#FFFFFF',
+    color: '#fafaf7',
     fontWeight: '600',
   },
 });

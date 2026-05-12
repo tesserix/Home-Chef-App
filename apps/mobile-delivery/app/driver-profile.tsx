@@ -76,8 +76,8 @@ function useUploadProfileImage() {
 function StatBadge({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-1 items-center">
-      <Text className="text-xl font-bold text-gray-900">{value}</Text>
-      <Text className="text-xs text-gray-400 mt-0.5">{label}</Text>
+      <Text className="text-xl font-semibold text-ink">{value}</Text>
+      <Text className="text-xs text-ink-muted mt-0.5">{label}</Text>
     </View>
   );
 }
@@ -135,37 +135,37 @@ export default function DriverProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load profile</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load profile</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <ScrollView
         className="flex-1"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
         contentContainerStyle={{ paddingBottom: 32 }}
       >
         <View className="px-4 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-gray-900">Profile</Text>
+          <Text className="font-display text-2xl font-semibold text-ink">Profile</Text>
         </View>
 
         {/* Avatar */}
@@ -175,7 +175,7 @@ export default function DriverProfileScreen() {
             disabled={uploadImageMutation.isPending}
             activeOpacity={0.8}
           >
-            <View className="w-24 h-24 rounded-full overflow-hidden bg-orange-100 items-center justify-center border-2 border-orange-300">
+            <View className="w-24 h-24 rounded-full overflow-hidden bg-herb-tint items-center justify-center border-2 border-herb-tint">
               {profile?.profileImageUrl ? (
                 <Image
                   source={{ uri: profile.profileImageUrl }}
@@ -183,10 +183,10 @@ export default function DriverProfileScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <User size={40} color="#FB923C" />
+                <User size={40} color="#558257" />
               )}
             </View>
-            <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-orange-500 items-center justify-center border-2 border-white">
+            <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-herb items-center justify-center border-2 border-bone">
               {uploadImageMutation.isPending ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
@@ -197,11 +197,11 @@ export default function DriverProfileScreen() {
         </View>
 
         {/* Stats row */}
-        <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm flex-row mb-4">
+        <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm flex-row mb-4">
           <StatBadge label="Rating" value={`${(profile?.rating ?? 0).toFixed(1)} \u2B50`} />
-          <View className="w-px bg-gray-100 mx-2" />
+          <View className="w-px bg-mist mx-2" />
           <StatBadge label="Deliveries" value={String(profile?.totalDeliveries ?? 0)} />
-          <View className="w-px bg-gray-100 mx-2" />
+          <View className="w-px bg-mist mx-2" />
           <StatBadge
             label="Status"
             value={profile?.isVerified ? '\u2714 Verified' : 'Pending'}
@@ -209,82 +209,82 @@ export default function DriverProfileScreen() {
         </View>
 
         {/* Editable fields */}
-        <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm mb-4">
           <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-base font-semibold text-gray-700">Personal Info</Text>
+            <Text className="text-base font-semibold text-ink-soft">Personal Info</Text>
             {!isEditing && (
               <TouchableOpacity onPress={initEditFields} activeOpacity={0.7}>
-                <Text className="text-sm text-orange-500 font-medium">Edit</Text>
+                <Text className="text-sm text-herb font-medium">Edit</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Full Name</Text>
+            <Text className="text-xs text-ink-muted mb-1">Full Name</Text>
             {isEditing ? (
               <TextInput
                 value={name}
                 onChangeText={setName}
-                className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist-strong rounded-xl px-4 py-3 text-base text-ink"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{profile?.name ?? ''}</Text>
+              <Text className="text-base text-ink">{profile?.name ?? ''}</Text>
             )}
           </View>
 
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Phone</Text>
+            <Text className="text-xs text-ink-muted mb-1">Phone</Text>
             {isEditing ? (
               <TextInput
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-                className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist-strong rounded-xl px-4 py-3 text-base text-ink"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{profile?.phone ?? ''}</Text>
+              <Text className="text-base text-ink">{profile?.phone ?? ''}</Text>
             )}
           </View>
 
           <View>
-            <Text className="text-xs text-gray-400 mb-1">City</Text>
+            <Text className="text-xs text-ink-muted mb-1">City</Text>
             {isEditing ? (
               <TextInput
                 value={city}
                 onChangeText={setCity}
-                className="border border-gray-300 rounded-xl px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9CA3AF"
+                className="border border-mist-strong rounded-xl px-4 py-3 text-base text-ink"
+                placeholderTextColor="#7a7a76"
               />
             ) : (
-              <Text className="text-base text-gray-900">{profile?.city ?? ''}</Text>
+              <Text className="text-base text-ink">{profile?.city ?? ''}</Text>
             )}
           </View>
         </View>
 
         {/* Read-only vehicle info */}
-        <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm mb-4">
-          <Text className="text-base font-semibold text-gray-700 mb-4">Vehicle Details</Text>
+        <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm mb-4">
+          <Text className="text-base font-semibold text-ink-soft mb-4">Vehicle Details</Text>
           <View className="mb-3">
-            <Text className="text-xs text-gray-400 mb-1">Vehicle Type</Text>
-            <Text className="text-base text-gray-900 capitalize">
+            <Text className="text-xs text-ink-muted mb-1">Vehicle Type</Text>
+            <Text className="text-base text-ink capitalize">
               {profile?.vehicleType ?? '\u2014'}
             </Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-400 mb-1">Registration Number</Text>
-            <Text className="text-base text-gray-900 uppercase">
+            <Text className="text-xs text-ink-muted mb-1">Registration Number</Text>
+            <Text className="text-base text-ink uppercase">
               {profile?.vehicleNumber ?? '\u2014'}
             </Text>
           </View>
         </View>
 
         {/* Account info */}
-        <View className="mx-4 bg-white rounded-2xl p-4 shadow-sm">
-          <Text className="text-base font-semibold text-gray-700 mb-3">Account</Text>
-          <Text className="text-xs text-gray-400 mb-1">Email</Text>
-          <Text className="text-base text-gray-900">{profile?.email ?? ''}</Text>
+        <View className="mx-4 bg-bone rounded-2xl p-4 shadow-sm">
+          <Text className="text-base font-semibold text-ink-soft mb-3">Account</Text>
+          <Text className="text-xs text-ink-muted mb-1">Email</Text>
+          <Text className="text-base text-ink">{profile?.email ?? ''}</Text>
         </View>
 
         {/* Save button when editing */}
@@ -292,23 +292,23 @@ export default function DriverProfileScreen() {
           <View className="mx-4 mt-4 flex-row gap-3">
             <TouchableOpacity
               onPress={() => setIsEditing(false)}
-              className="flex-1 py-4 rounded-2xl items-center border border-gray-300"
+              className="flex-1 py-4 rounded-2xl items-center border border-mist-strong"
               activeOpacity={0.8}
             >
-              <Text className="text-gray-600 font-semibold">Cancel</Text>
+              <Text className="text-ink-soft font-semibold">Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSave}
               disabled={updateMutation.isPending}
               className={`flex-1 py-4 rounded-2xl items-center ${
-                updateMutation.isPending ? 'bg-orange-300' : 'bg-orange-500'
+                updateMutation.isPending ? 'bg-herb-soft' : 'bg-herb'
               }`}
               activeOpacity={0.8}
             >
               {updateMutation.isPending ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="text-white font-semibold">Save Changes</Text>
+                <Text className="text-paper font-semibold">Save Changes</Text>
               )}
             </TouchableOpacity>
           </View>

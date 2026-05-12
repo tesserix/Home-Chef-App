@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   eta: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
     marginBottom: 12,
   },
   steps: {
@@ -128,10 +128,10 @@ const styles = StyleSheet.create({
     height: 10,
   },
   connectorActive: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#3e6b3c',
   },
   connectorPending: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: '#d4d3ce',
   },
   stepContent: {
     flexDirection: 'row',
@@ -143,34 +143,34 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: '#d4d3ce',
     alignItems: 'center',
     justifyContent: 'center',
   },
   circleCompleted: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#3e6b3c',
   },
   circleCurrent: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
   },
   circleText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   circleTextCompleted: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
   },
   label: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   labelCompleted: {
-    color: '#111827',
+    color: '#1a1a18',
     fontWeight: '500',
   },
   labelCurrent: {
-    color: '#F97316',
+    color: '#3e6b3c',
     fontWeight: '600',
   },
 });

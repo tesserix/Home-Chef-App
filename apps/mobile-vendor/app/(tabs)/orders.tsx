@@ -10,20 +10,20 @@ type ActiveTab = 'live' | 'history';
 
 function SkeletonCard() {
   return (
-    <View className="mb-3 rounded-2xl bg-gray-200 h-36 animate-pulse" />
+    <View className="mb-3 rounded-2xl bg-mist h-36 animate-pulse" />
   );
 }
 
 function EmptyQueue() {
   return (
     <View className="flex-1 items-center justify-center px-8 py-16">
-      <View className="mb-4 h-16 w-16 rounded-full bg-orange-50 items-center justify-center">
+      <View className="mb-4 h-16 w-16 rounded-full bg-herb-tint items-center justify-center">
         <Text className="text-3xl">🍳</Text>
       </View>
-      <Text className="text-center text-base font-semibold text-gray-700">
+      <Text className="text-center text-base font-semibold text-ink-soft">
         No pending orders
       </Text>
-      <Text className="mt-2 text-center text-sm text-gray-400">
+      <Text className="mt-2 text-center text-sm text-ink-muted">
         New orders will appear here automatically
       </Text>
     </View>
@@ -32,27 +32,27 @@ function EmptyQueue() {
 
 function HistoryOrderRow({ order }: { order: Order }) {
   const statusColor: Record<string, string> = {
-    delivered: 'text-green-600',
-    cancelled: 'text-red-500',
-    rejected: 'text-red-500',
-    picked_up: 'text-teal-600',
+    delivered: 'text-herb',
+    cancelled: 'text-paprika',
+    rejected: 'text-paprika',
+    picked_up: 'text-herb',
   };
-  const colorClass = statusColor[order.status] ?? 'text-gray-500';
+  const colorClass = statusColor[order.status] ?? 'text-ink-muted';
   const itemCount = order.items.length;
 
   return (
-    <View className="mb-2 rounded-xl bg-white px-4 py-3 border border-gray-100">
+    <View className="mb-2 rounded-xl bg-bone px-4 py-3 border border-mist">
       <View className="flex-row items-center justify-between">
-        <Text className="text-sm font-semibold text-gray-900">{order.customerName}</Text>
+        <Text className="text-sm font-semibold text-ink">{order.customerName}</Text>
         <Text className={`text-xs font-medium capitalize ${colorClass}`}>
           {order.status.replace('_', ' ')}
         </Text>
       </View>
       <View className="mt-1 flex-row items-center justify-between">
-        <Text className="text-xs text-gray-400">
+        <Text className="text-xs text-ink-muted">
           {itemCount} item{itemCount !== 1 ? 's' : ''}
         </Text>
-        <Text className="text-sm font-bold text-gray-800">₹{order.total.toFixed(0)}</Text>
+        <Text className="text-sm font-medium text-ink">₹{order.total.toFixed(0)}</Text>
       </View>
     </View>
   );
@@ -83,8 +83,8 @@ function LiveQueue() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#f97316"
-            colors={['#f97316']}
+            tintColor="#3e6b3c"
+            colors={['#3e6b3c']}
           />
         }
         renderItem={({ item }) => (
@@ -128,7 +128,7 @@ function HistoryList() {
         <RefreshControl
           refreshing={isRefetching}
           onRefresh={() => { setPage(1); refetch(); }}
-          tintColor="#f97316"
+          tintColor="#3e6b3c"
         />
       }
       onEndReachedThreshold={0.3}
@@ -137,7 +137,7 @@ function HistoryList() {
       }}
       ListEmptyComponent={
         <View className="flex-1 items-center justify-center py-16">
-          <Text className="text-sm text-gray-400">No order history yet</Text>
+          <Text className="text-sm text-ink-muted">No order history yet</Text>
         </View>
       }
     />
@@ -148,23 +148,23 @@ export default function OrdersScreen() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('live');
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
       <View className="px-4 pt-4 pb-2">
-        <Text className="text-2xl font-bold text-gray-900">Orders</Text>
+        <Text className="font-display text-2xl font-semibold text-ink">Orders</Text>
       </View>
 
       {/* Segmented control */}
-      <View className="mx-4 mb-3 flex-row rounded-xl bg-gray-100 p-1">
+      <View className="mx-4 mb-3 flex-row rounded-xl bg-mist p-1">
         <Pressable
           onPress={() => setActiveTab('live')}
           className={`flex-1 rounded-lg py-2.5 items-center ${
-            activeTab === 'live' ? 'bg-orange-500' : 'bg-transparent'
+            activeTab === 'live' ? 'bg-herb' : 'bg-transparent'
           }`}
         >
           <Text
             className={`text-sm font-semibold ${
-              activeTab === 'live' ? 'text-white' : 'text-gray-600'
+              activeTab === 'live' ? 'text-paper' : 'text-ink-soft'
             }`}
           >
             Live Queue
@@ -173,12 +173,12 @@ export default function OrdersScreen() {
         <Pressable
           onPress={() => setActiveTab('history')}
           className={`flex-1 rounded-lg py-2.5 items-center ${
-            activeTab === 'history' ? 'bg-orange-500' : 'bg-transparent'
+            activeTab === 'history' ? 'bg-herb' : 'bg-transparent'
           }`}
         >
           <Text
             className={`text-sm font-semibold ${
-              activeTab === 'history' ? 'text-white' : 'text-gray-600'
+              activeTab === 'history' ? 'text-paper' : 'text-ink-soft'
             }`}
           >
             History

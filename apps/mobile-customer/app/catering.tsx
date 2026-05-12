@@ -64,17 +64,17 @@ function statusLabel(status: CateringRequest['status']): {
 } {
   switch (status) {
     case 'open':
-      return { label: 'Open', color: '#3B82F6' };
+      return { label: 'Open', color: '#4a73a3' };
     case 'quoted':
-      return { label: 'Quoted', color: '#F59E0B' };
+      return { label: 'Quoted', color: '#d1a64a' };
     case 'accepted':
-      return { label: 'Accepted', color: '#22C55E' };
+      return { label: 'Accepted', color: '#3e6b3c' };
     case 'completed':
-      return { label: 'Completed', color: '#6B7280' };
+      return { label: 'Completed', color: '#7a7a76' };
     case 'cancelled':
-      return { label: 'Cancelled', color: '#EF4444' };
+      return { label: 'Cancelled', color: '#c95b3e' };
     default:
-      return { label: status, color: '#6B7280' };
+      return { label: status, color: '#7a7a76' };
   }
 }
 
@@ -318,7 +318,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
         disabled={createRequest.isPending}
       >
         {createRequest.isPending ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator size="small" color="#fafaf7" />
         ) : (
           <Text style={styles.submitButtonText}>Submit Request</Text>
         )}
@@ -374,7 +374,7 @@ export default function CateringScreen() {
         <RequestForm onSuccess={() => setActiveTab('my-requests')} />
       ) : isLoading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       ) : (
         <FlatList
@@ -400,7 +400,7 @@ export default function CateringScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -415,13 +415,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginVertical: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#e6e5e0',
     borderRadius: 10,
     padding: 3,
   },
@@ -432,8 +432,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
+    backgroundColor: '#fafaf7',
+    shadowColor: '#1a1a18',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 2,
@@ -442,10 +442,10 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   tabTextActive: {
-    color: '#111827',
+    color: '#1a1a18',
     fontWeight: '700',
   },
   // Form
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
     marginTop: 14,
     marginBottom: 6,
   },
@@ -469,34 +469,34 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: '#d4d3ce',
+    backgroundColor: '#fafaf7',
     marginRight: 8,
   },
   eventTypeChipSelected: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#F97316',
+    backgroundColor: '#dde9d8',
+    borderColor: '#3e6b3c',
   },
   eventTypeChipText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   eventTypeChipTextSelected: {
-    color: '#F97316',
+    color: '#3e6b3c',
     fontWeight: '600',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#d4d3ce',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#111827',
-    backgroundColor: '#FAFAFA',
+    color: '#1a1a18',
+    backgroundColor: '#fafaf7',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: '#c95b3e',
   },
   textArea: {
     height: 100,
@@ -504,12 +504,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    color: '#EF4444',
+    color: '#c95b3e',
     marginTop: 4,
   },
   submitButton: {
     marginTop: 24,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -527,11 +527,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   requestCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000000',
+    shadowColor: '#1a1a18',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   requestEventType: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   statusDot: {
     paddingHorizontal: 10,
@@ -556,21 +556,21 @@ const styles = StyleSheet.create({
   statusDotText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#fafaf7',
   },
   requestMeta: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
     marginBottom: 4,
   },
   requestBudget: {
     fontSize: 13,
-    color: '#374151',
+    color: '#4a4a47',
     marginTop: 2,
   },
   viewQuoteHint: {
     fontSize: 12,
-    color: '#F97316',
+    color: '#3e6b3c',
     fontWeight: '500',
     marginTop: 6,
   },
@@ -586,12 +586,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4a4a47',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#7a7a76',
     textAlign: 'center',
     paddingHorizontal: 40,
   },

@@ -96,12 +96,16 @@ function FeedbackBanner({
     <div
       className={`mt-4 flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${
         value.kind === 'success'
-          ? 'border-green-200 bg-green-50 text-green-700'
-          : 'border-red-200 bg-red-50 text-red-700'
+          ? 'border-herb/30 bg-herb-tint text-herb'
+          : 'border-paprika/30 bg-paprika-tint text-paprika'
       }`}
     >
       <span>{value.message}</span>
-      <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100">
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb rounded p-0.5"
+      >
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -338,7 +342,7 @@ function OperatingHoursSection() {
                   className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
                     days.has(i)
                       ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-white text-foreground hover:bg-secondary'
+                      : 'border-border bg-bone text-foreground hover:bg-secondary'
                   }`}
                 >
                   {label}
@@ -515,7 +519,7 @@ function ServiceAreasSection() {
               </div>
               <button
                 onClick={() => remove.mutate(z.id)}
-                className="shrink-0 text-red-600 hover:text-red-700"
+                className="shrink-0 text-paprika hover:text-paprika"
                 title="Delete"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -591,7 +595,7 @@ function NumberField({
           if (max !== undefined) clamped = Math.min(max, clamped);
           onChange(clamped);
         }}
-        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
       />
     </div>
   );
@@ -616,7 +620,7 @@ function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
       />
     </div>
   );

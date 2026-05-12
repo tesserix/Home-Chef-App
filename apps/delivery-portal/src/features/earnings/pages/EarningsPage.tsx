@@ -46,7 +46,7 @@ export default function EarningsPage() {
             <DollarSign className="h-4 w-4" />
             <span className="text-xs font-medium">Total Earnings</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             ${(earnings?.totalEarnings ?? 0).toFixed(2)}
           </p>
         </div>
@@ -55,14 +55,14 @@ export default function EarningsPage() {
             <Truck className="h-4 w-4" />
             <span className="text-xs font-medium">Deliveries</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">{earnings?.totalDeliveries ?? 0}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{earnings?.totalDeliveries ?? 0}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <Banknote className="h-4 w-4" />
             <span className="text-xs font-medium">Tips</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             ${(earnings?.totalTips ?? 0).toFixed(2)}
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function EarningsPage() {
             <TrendingUp className="h-4 w-4" />
             <span className="text-xs font-medium">Avg/Delivery</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             ${(earnings?.avgPerDelivery ?? 0).toFixed(2)}
           </p>
         </div>

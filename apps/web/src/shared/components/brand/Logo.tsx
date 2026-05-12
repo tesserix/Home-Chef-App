@@ -45,7 +45,7 @@ export function Logo({
       {/* Logo Icon - Chef Hat with Bowl */}
       <div
         className={cn(
-          'flex items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 shadow-md',
+          'flex items-center justify-center rounded-xl bg-herb shadow-md',
           sizes.icon
         )}
       >
@@ -74,18 +74,18 @@ export function Logo({
         <div className="flex flex-col">
           <span
             className={cn(
-              'font-bold tracking-tight',
+              'font-semibold tracking-tight',
               sizes.text,
-              isLight ? 'text-white' : 'text-gray-900'
+              isLight ? 'text-paper' : 'text-ink'
             )}
           >
-            Fe<span className="text-brand-500">3dr</span>
+            Fe<span className="text-herb">3dr</span>
           </span>
           {showTagline && (
             <span
               className={cn(
                 sizes.tagline,
-                isLight ? 'text-white/70' : 'text-gray-500'
+                isLight ? 'text-paper/70' : 'text-ink-muted'
               )}
             >
               Homemade Food Delivered
@@ -120,12 +120,12 @@ export function LogoText({
   return (
     <span
       className={cn(
-        'font-display text-2xl font-bold tracking-tight',
-        isLight ? 'text-white' : 'text-gray-900',
+        'font-display font-display text-2xl font-semibold tracking-tight',
+        isLight ? 'text-paper' : 'text-ink',
         className
       )}
     >
-      Fe<span className="text-brand-500">3dr</span>
+      Fe<span className="text-herb">3dr</span>
     </span>
   );
 }
@@ -135,7 +135,7 @@ export function LogoFooter() {
   return (
     <div className="flex items-center gap-2">
       <Logo size="sm" linkTo="/" />
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-ink-muted">
         &copy; {new Date().getFullYear()} Fe3dr. All rights reserved.
       </span>
     </div>

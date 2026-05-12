@@ -39,7 +39,7 @@ export default function TrackOrderScreen() {
   if (isLoading || !tracking) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </View>
     );
   }
@@ -98,14 +98,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   sheetBackground: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     borderRadius: 16,
   },
   handleIndicator: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: '#d4d3ce',
   },
   sheetContent: {
     paddingHorizontal: 16,
@@ -115,12 +115,12 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
     marginBottom: 4,
   },
   chefName: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#7a7a76',
     marginBottom: 4,
   },
 });

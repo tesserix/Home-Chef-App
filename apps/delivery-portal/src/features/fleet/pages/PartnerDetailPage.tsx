@@ -184,7 +184,7 @@ export default function PartnerDetailPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-xl font-bold text-primary">
+              <span className="text-xl font-semibold text-primary">
                 {(partner.name || 'P').charAt(0).toUpperCase()}
               </span>
             </div>
@@ -347,7 +347,7 @@ export default function PartnerDetailPage() {
                 className="rounded-lg border border-border p-4 text-center"
               >
                 <Icon className="mx-auto h-5 w-5 text-muted-foreground mb-2" />
-                <p className="text-2xl font-bold text-foreground">
+                <p className="font-display text-2xl font-semibold text-foreground">
                   {item.value}
                 </p>
                 <p className="text-xs text-muted-foreground">{item.label}</p>
@@ -357,7 +357,7 @@ export default function PartnerDetailPage() {
         </div>
         <div className="mt-4 rounded-lg bg-primary/5 p-4 text-center">
           <p className="text-sm text-muted-foreground">Active Deliveries</p>
-          <p className="text-3xl font-bold text-primary">
+          <p className="font-display text-3xl font-semibold tabular-nums text-primary">
             {activeDeliveries}
           </p>
         </div>

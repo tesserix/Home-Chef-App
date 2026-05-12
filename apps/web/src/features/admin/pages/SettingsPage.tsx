@@ -57,8 +57,8 @@ export default function AdminSettingsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Platform Settings</h1>
-          <p className="mt-1 text-gray-400">Configure platform-wide settings</p>
+          <h1 className="font-display text-2xl font-semibold text-paper">Platform Settings</h1>
+          <p className="mt-1 text-ink-muted">Configure platform-wide settings</p>
         </div>
         <button
           onClick={handleSave}
@@ -75,15 +75,15 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Fees & Pricing */}
-      <div className="rounded-xl bg-gray-800 p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <DollarSign className="h-5 w-5 text-brand-400" />
+      <div className="rounded-xl bg-ink p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
+          <DollarSign className="h-5 w-5 text-herb-soft" />
           Fees & Pricing
         </h2>
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Platform Fee (%)
             </label>
             <div className="relative mt-1">
@@ -91,19 +91,19 @@ export default function AdminSettingsPage() {
                 type="number"
                 value={settings.platformFee}
                 onChange={(e) => setSettings({ ...settings, platformFee: Number(e.target.value) })}
-                className="w-full rounded-lg bg-gray-700 border-gray-600 text-white pr-8"
+                className="w-full rounded-lg bg-ink-soft border-ink-soft text-paper pr-8"
               />
-              <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
             </div>
-            <p className="mt-1 text-xs text-gray-500">Fee charged on each order</p>
+            <p className="mt-1 text-xs text-ink-muted">Fee charged on each order</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Base Delivery Fee ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
                 type="number"
                 step="0.01"
@@ -111,17 +111,17 @@ export default function AdminSettingsPage() {
                 onChange={(e) =>
                   setSettings({ ...settings, deliveryFeeBase: Number(e.target.value) })
                 }
-                className="w-full rounded-lg bg-gray-700 border-gray-600 text-white pl-7"
+                className="w-full rounded-lg bg-ink-soft border-ink-soft text-paper pl-7"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Delivery Fee per km ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
                 type="number"
                 step="0.01"
@@ -129,24 +129,24 @@ export default function AdminSettingsPage() {
                 onChange={(e) =>
                   setSettings({ ...settings, deliveryFeePerKm: Number(e.target.value) })
                 }
-                className="w-full rounded-lg bg-gray-700 border-gray-600 text-white pl-7"
+                className="w-full rounded-lg bg-ink-soft border-ink-soft text-paper pl-7"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Default Minimum Order ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
                 type="number"
                 value={settings.minimumOrderDefault}
                 onChange={(e) =>
                   setSettings({ ...settings, minimumOrderDefault: Number(e.target.value) })
                 }
-                className="w-full rounded-lg bg-gray-700 border-gray-600 text-white pl-7"
+                className="w-full rounded-lg bg-ink-soft border-ink-soft text-paper pl-7"
               />
             </div>
           </div>
@@ -154,15 +154,15 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Order Settings */}
-      <div className="rounded-xl bg-gray-800 p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <Settings className="h-5 w-5 text-brand-400" />
+      <div className="rounded-xl bg-ink p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
+          <Settings className="h-5 w-5 text-herb-soft" />
           Order Settings
         </h2>
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Max Delivery Radius (km)
             </label>
             <input
@@ -171,12 +171,12 @@ export default function AdminSettingsPage() {
               onChange={(e) =>
                 setSettings({ ...settings, maxDeliveryRadius: Number(e.target.value) })
               }
-              className="mt-1 w-full rounded-lg bg-gray-700 border-gray-600 text-white"
+              className="mt-1 w-full rounded-lg bg-ink-soft border-ink-soft text-paper"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Cancellation Window (minutes)
             </label>
             <input
@@ -185,15 +185,15 @@ export default function AdminSettingsPage() {
               onChange={(e) =>
                 setSettings({ ...settings, orderCancellationWindow: Number(e.target.value) })
               }
-              className="mt-1 w-full rounded-lg bg-gray-700 border-gray-600 text-white"
+              className="mt-1 w-full rounded-lg bg-ink-soft border-ink-soft text-paper"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-ink-muted">
               Time window for customers to cancel without penalty
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-ink-muted">
               Auto-Accept Timeout (minutes)
             </label>
             <input
@@ -202,9 +202,9 @@ export default function AdminSettingsPage() {
               onChange={(e) =>
                 setSettings({ ...settings, autoAcceptTimeout: Number(e.target.value) })
               }
-              className="mt-1 w-full rounded-lg bg-gray-700 border-gray-600 text-white"
+              className="mt-1 w-full rounded-lg bg-ink-soft border-ink-soft text-paper"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-ink-muted">
               Time before order auto-cancels if not accepted
             </p>
           </div>
@@ -212,17 +212,17 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Platform Controls */}
-      <div className="rounded-xl bg-gray-800 p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-          <Shield className="h-5 w-5 text-brand-400" />
+      <div className="rounded-xl bg-ink p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
+          <Shield className="h-5 w-5 text-herb-soft" />
           Platform Controls
         </h2>
 
         <div className="mt-6 space-y-4">
-          <div className="flex items-center justify-between rounded-lg bg-gray-700/50 p-4">
+          <div className="flex items-center justify-between rounded-lg bg-ink-soft/50 p-4">
             <div>
-              <p className="font-medium text-white">Maintenance Mode</p>
-              <p className="text-sm text-gray-400">Temporarily disable the platform</p>
+              <p className="font-medium text-paper">Maintenance Mode</p>
+              <p className="text-sm text-ink-muted">Temporarily disable the platform</p>
             </div>
             <Toggle
               enabled={settings.maintenanceMode}
@@ -231,10 +231,10 @@ export default function AdminSettingsPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-gray-700/50 p-4">
+          <div className="flex items-center justify-between rounded-lg bg-ink-soft/50 p-4">
             <div>
-              <p className="font-medium text-white">New User Signups</p>
-              <p className="text-sm text-gray-400">Allow new customers to register</p>
+              <p className="font-medium text-paper">New User Signups</p>
+              <p className="text-sm text-ink-muted">Allow new customers to register</p>
             </div>
             <Toggle
               enabled={settings.newUserSignups}
@@ -242,10 +242,10 @@ export default function AdminSettingsPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-gray-700/50 p-4">
+          <div className="flex items-center justify-between rounded-lg bg-ink-soft/50 p-4">
             <div>
-              <p className="font-medium text-white">New Chef Signups</p>
-              <p className="text-sm text-gray-400">Allow new chefs to apply</p>
+              <p className="font-medium text-paper">New Chef Signups</p>
+              <p className="text-sm text-ink-muted">Allow new chefs to apply</p>
             </div>
             <Toggle
               enabled={settings.newChefSignups}
@@ -256,17 +256,17 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* Danger Zone */}
-      <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-6">
-        <h2 className="text-lg font-semibold text-red-400">Danger Zone</h2>
-        <p className="mt-2 text-sm text-red-300/70">
+      <div className="rounded-xl bg-paprika/10 border border-paprika/20 p-6">
+        <h2 className="text-lg font-semibold text-paprika">Danger Zone</h2>
+        <p className="mt-2 text-sm text-paprika/70">
           These actions are irreversible. Please proceed with caution.
         </p>
 
         <div className="mt-4 flex gap-3">
-          <button className="btn-base bg-red-600 text-white hover:bg-red-700">
+          <button className="btn-base bg-paprika text-paper hover:bg-paprika">
             Clear All Cache
           </button>
-          <button className="btn-base bg-red-600 text-white hover:bg-red-700">
+          <button className="btn-base bg-paprika text-paper hover:bg-paprika">
             Rebuild Search Index
           </button>
         </div>
@@ -290,13 +290,13 @@ function Toggle({
       className={`relative h-6 w-11 rounded-full transition-colors ${
         enabled
           ? danger
-            ? 'bg-red-500'
-            : 'bg-brand-500'
-          : 'bg-gray-600'
+            ? 'bg-paprika'
+            : 'bg-herb'
+          : 'bg-ink-soft'
       }`}
     >
       <span
-        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-bone shadow transition-transform ${
           enabled ? 'translate-x-5' : ''
         }`}
       />

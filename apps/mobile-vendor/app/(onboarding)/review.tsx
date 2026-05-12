@@ -36,110 +36,110 @@ export default function ReviewScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-bone">
       <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-gray-200 mb-6">
-          <View className="h-1.5 rounded-full bg-orange-500" style={{ width: '100%' }} />
+        <View className="h-1.5 rounded-full bg-mist mb-6">
+          <View className="h-1.5 rounded-full bg-herb" style={{ width: '100%' }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Review Application</Text>
-        <Text className="text-sm text-gray-500 mb-6">Confirm your details before submitting</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-1">Review Application</Text>
+        <Text className="text-sm text-ink-muted mb-6">Confirm your details before submitting</Text>
 
-        <View className="bg-gray-50 rounded-xl p-4 mb-4">
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+        <View className="bg-paper rounded-xl p-4 mb-4">
+          <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
             Personal Information
           </Text>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Full Name</Text>
-            <Text className="text-sm text-gray-900 font-medium">{personalInfo.fullName}</Text>
+            <Text className="text-xs text-ink-muted">Full Name</Text>
+            <Text className="text-sm text-ink font-medium">{personalInfo.fullName}</Text>
           </View>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Phone</Text>
-            <Text className="text-sm text-gray-900 font-medium">{personalInfo.phone}</Text>
+            <Text className="text-xs text-ink-muted">Phone</Text>
+            <Text className="text-sm text-ink font-medium">{personalInfo.phone}</Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-500">Email</Text>
-            <Text className="text-sm text-gray-900 font-medium">{personalInfo.email}</Text>
+            <Text className="text-xs text-ink-muted">Email</Text>
+            <Text className="text-sm text-ink font-medium">{personalInfo.email}</Text>
           </View>
         </View>
 
-        <View className="bg-gray-50 rounded-xl p-4 mb-4">
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+        <View className="bg-paper rounded-xl p-4 mb-4">
+          <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
             Kitchen Details
           </Text>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Business Name</Text>
-            <Text className="text-sm text-gray-900 font-medium">{kitchenDetails.businessName}</Text>
+            <Text className="text-xs text-ink-muted">Business Name</Text>
+            <Text className="text-sm text-ink font-medium">{kitchenDetails.businessName}</Text>
           </View>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Cuisines</Text>
-            <Text className="text-sm text-gray-900 font-medium">{kitchenDetails.cuisines.join(', ')}</Text>
+            <Text className="text-xs text-ink-muted">Cuisines</Text>
+            <Text className="text-sm text-ink font-medium">{kitchenDetails.cuisines.join(', ')}</Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-500">Description</Text>
-            <Text className="text-sm text-gray-900" numberOfLines={3}>{kitchenDetails.description}</Text>
+            <Text className="text-xs text-ink-muted">Description</Text>
+            <Text className="text-sm text-ink" numberOfLines={3}>{kitchenDetails.description}</Text>
           </View>
         </View>
 
-        <View className="bg-gray-50 rounded-xl p-4 mb-4">
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+        <View className="bg-paper rounded-xl p-4 mb-4">
+          <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
             Operations
           </Text>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Open Days</Text>
-            <Text className="text-sm text-gray-900 font-medium capitalize">{openDays}</Text>
+            <Text className="text-xs text-ink-muted">Open Days</Text>
+            <Text className="text-sm text-ink font-medium capitalize">{openDays}</Text>
           </View>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Prep Time</Text>
-            <Text className="text-sm text-gray-900 font-medium">{operations.prepTime}</Text>
+            <Text className="text-xs text-ink-muted">Prep Time</Text>
+            <Text className="text-sm text-ink font-medium">{operations.prepTime}</Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-500">Service Radius</Text>
-            <Text className="text-sm text-gray-900 font-medium">{operations.serviceRadius} km</Text>
+            <Text className="text-xs text-ink-muted">Service Radius</Text>
+            <Text className="text-sm text-ink font-medium">{operations.serviceRadius} km</Text>
           </View>
         </View>
 
-        <View className="bg-gray-50 rounded-xl p-4 mb-4">
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+        <View className="bg-paper rounded-xl p-4 mb-4">
+          <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
             Documents
           </Text>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">ID Proof</Text>
-            <Text className="text-sm text-green-600 font-medium">
+            <Text className="text-xs text-ink-muted">ID Proof</Text>
+            <Text className="text-sm text-herb font-medium">
               {documents.idProofUri ? 'Uploaded' : 'Not uploaded'}
             </Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-500">FSSAI License</Text>
-            <Text className="text-sm text-green-600 font-medium">
+            <Text className="text-xs text-ink-muted">FSSAI License</Text>
+            <Text className="text-sm text-herb font-medium">
               {documents.fssaiUri ? 'Uploaded' : 'Not uploaded'}
             </Text>
           </View>
         </View>
 
-        <View className="bg-gray-50 rounded-xl p-4 mb-6">
-          <Text className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+        <View className="bg-paper rounded-xl p-4 mb-6">
+          <Text className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">
             Policies
           </Text>
           <View className="mb-2">
-            <Text className="text-xs text-gray-500">Terms Accepted</Text>
-            <Text className="text-sm text-green-600 font-medium">Yes</Text>
+            <Text className="text-xs text-ink-muted">Terms Accepted</Text>
+            <Text className="text-sm text-herb font-medium">Yes</Text>
           </View>
           <View>
-            <Text className="text-xs text-gray-500">Cancellation Policy</Text>
-            <Text className="text-sm text-gray-900 font-medium">{policies.cancellationPolicy}</Text>
+            <Text className="text-xs text-ink-muted">Cancellation Policy</Text>
+            <Text className="text-sm text-ink font-medium">{policies.cancellationPolicy}</Text>
           </View>
         </View>
 
         <TouchableOpacity
-          className={`rounded-xl py-4 items-center ${submitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+          className={`rounded-xl py-4 items-center ${submitting ? 'bg-herb-soft' : 'bg-herb'}`}
           onPress={onSubmit}
           disabled={submitting}
         >
           {submitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-base">Submit Application</Text>
+            <Text className="text-paper font-semibold text-base">Submit Application</Text>
           )}
         </TouchableOpacity>
       </View>

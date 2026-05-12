@@ -1,23 +1,25 @@
 @import "tailwindcss";
 @config "../../tailwind.config.js";
 
-/* Custom utilities (Tailwind 4 @utility — available in @apply) */
+/* ============================================================
+   Home Chef — Paper · Ink · Herb design system
+   Refined-consumer aesthetic, light-first with full dark mode.
+   Source of truth: /.impeccable.md at repo root.
+   ============================================================ */
+
+/* Safe-area utilities (iOS notch / PWA) ------------------------ */
 @utility safe-top {
   padding-top: env(safe-area-inset-top);
 }
-
 @utility safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
-
 @utility safe-left {
   padding-left: env(safe-area-inset-left);
 }
-
 @utility safe-right {
   padding-right: env(safe-area-inset-right);
 }
-
 @utility safe-area-inset {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -25,107 +27,188 @@
   padding-right: env(safe-area-inset-right);
 }
 
-/* HomeChef Design System - CSS Variables (full HSL values for Tailwind 4) */
+/* Tokens ----------------------------------------------------- */
 :root {
-  /* Core */
-  --background: hsl(30 100% 98%);         /* #FFFAF5 warm cream */
-  --foreground: hsl(24 10% 10%);          /* #1C1917 stone 900 */
-  --card: hsl(0 0% 100%);                 /* #FFFFFF */
-  --card-foreground: hsl(24 10% 10%);     /* #1C1917 */
-  --popover: hsl(0 0% 100%);             /* #FFFFFF */
-  --popover-foreground: hsl(24 10% 10%); /* #1C1917 */
+  /* Core surfaces */
+  --paper: oklch(0.985 0.003 80);              /* warm off-white page bg */
+  --bone: oklch(0.97 0.005 80);                /* elevated card / popover */
+  --mist: oklch(0.92 0.005 80);                /* hairlines, muted bg */
+  --mist-strong: oklch(0.88 0.005 80);         /* divider on bone */
 
-  /* Primary - Terracotta */
-  --primary: hsl(17 88% 40%);             /* #C2410C */
-  --primary-foreground: hsl(0 0% 100%);   /* #FFFFFF */
+  /* Ink scale */
+  --ink: oklch(0.18 0.01 80);                  /* primary text, primary CTA */
+  --ink-soft: oklch(0.40 0.01 80);             /* secondary text */
+  --ink-muted: oklch(0.55 0.005 80);           /* tertiary / placeholders */
 
-  /* Secondary - Warm stone */
-  --secondary: hsl(29 33% 94%);           /* #F5F0EB */
-  --secondary-foreground: hsl(30 6% 25%); /* #44403C */
+  /* Accent (the single brand accent) */
+  --herb: oklch(0.48 0.13 145);                /* deep editorial green */
+  --herb-soft: oklch(0.55 0.10 145);           /* hover */
+  --herb-tint: oklch(0.92 0.04 145);           /* selected backgrounds */
 
-  /* Muted */
-  --muted: hsl(30 50% 96%);               /* #FAF5F0 */
-  --muted-foreground: hsl(25 5% 45%);     /* #78716C */
+  /* Functional-only colors (signal, never decorate) */
+  --paprika: oklch(0.58 0.17 30);              /* destructive / error */
+  --paprika-tint: oklch(0.93 0.04 30);
+  --amber: oklch(0.74 0.13 75);                /* warning */
+  --amber-tint: oklch(0.93 0.06 75);
+  --info: oklch(0.55 0.12 240);                /* informational only */
+  --info-tint: oklch(0.94 0.03 240);
 
-  /* Accent - Amber/Golden */
-  --accent: hsl(48 96% 89%);              /* #FEF3C7 */
-  --accent-foreground: hsl(23 83% 31%);   /* #92400E */
+  /* Semantic aliases (shadcn / @tesserix/web compat) */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--bone);
+  --card-foreground: var(--ink);
+  --popover: var(--bone);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: var(--mist);
+  --secondary-foreground: var(--ink);
+  --muted: var(--mist);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--herb);
+  --accent-foreground: var(--paper);
+  --destructive: var(--paprika);
+  --destructive-foreground: var(--paper);
+  --success: var(--herb);
+  --success-foreground: var(--paper);
+  --warning: var(--amber);
+  --warning-foreground: var(--ink);
+  --error: var(--paprika);
+  --error-foreground: var(--paper);
+  --border: var(--mist);
+  --input: var(--mist);
+  --ring: var(--herb);
 
-  /* Destructive */
-  --destructive: hsl(0 72% 51%);          /* #DC2626 */
-  --destructive-foreground: hsl(0 0% 100%); /* #FFFFFF */
+  /* Sidebar (admin/vendor) — ink-dominant, used in chef + admin shells */
+  --sidebar: var(--ink);
+  --sidebar-foreground: var(--paper);
+  --sidebar-primary: var(--herb);
+  --sidebar-accent: oklch(0.25 0.01 80);
+  --sidebar-border: oklch(0.30 0.01 80);
 
-  /* Border & Input */
-  --border: hsl(30 23% 88%);              /* #E7E0D9 */
-  --input: hsl(30 23% 88%);               /* #E7E0D9 */
-  --ring: hsl(17 88% 40%);                /* #C2410C */
+  /* Shape */
+  --radius: 0.5rem;                            /* 8px default */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;                        /* sheets / modals */
 
-  /* Status */
-  --success: hsl(161 93% 30%);            /* #059669 */
-  --success-foreground: hsl(0 0% 100%);   /* #FFFFFF */
-  --warning: hsl(32 95% 44%);             /* #D97706 */
-  --warning-foreground: hsl(24 10% 10%);  /* #1C1917 */
-  --error: hsl(0 72% 51%);                /* #DC2626 */
-  --error-foreground: hsl(0 0% 100%);     /* #FFFFFF */
-  --info: hsl(221 83% 53%);               /* #2563EB */
-  --info-foreground: hsl(0 0% 100%);      /* #FFFFFF */
-
-  /* Sidebar (Chef/Admin) */
-  --sidebar: hsl(24 10% 10%);             /* #1C1917 */
-  --sidebar-foreground: hsl(29 33% 94%);  /* #F5F0EB */
-  --sidebar-primary: hsl(17 88% 40%);     /* #C2410C */
-  --sidebar-accent: hsl(12 7% 15%);       /* #292524 */
-  --sidebar-border: hsl(30 6% 25%);       /* #44403C */
-
-  /* Radius */
-  --radius: 0.625rem;
-
-  /* Mobile-specific spacing */
-  --spacing-safe-top: env(safe-area-inset-top);
-  --spacing-safe-bottom: env(safe-area-inset-bottom);
-  --spacing-safe-left: env(safe-area-inset-left);
-  --spacing-safe-right: env(safe-area-inset-right);
+  /* Elevation — three steps only */
+  --shadow-1: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.04);
+  --shadow-3: 0 20px 40px -8px oklch(0 0 0 / 0.15), 0 8px 16px -4px oklch(0 0 0 / 0.06);
 }
 
-/* CSS Keyframe Animations */
+/* Dark mode ---------------------------------------------------- */
+:root.dark,
+.dark {
+  --paper: oklch(0.16 0.005 80);
+  --bone: oklch(0.20 0.005 80);
+  --mist: oklch(0.26 0.005 80);
+  --mist-strong: oklch(0.32 0.005 80);
+
+  --ink: oklch(0.96 0.003 80);
+  --ink-soft: oklch(0.78 0.005 80);
+  --ink-muted: oklch(0.58 0.005 80);
+
+  --herb: oklch(0.62 0.14 145);
+  --herb-soft: oklch(0.70 0.12 145);
+  --herb-tint: oklch(0.28 0.06 145);
+
+  --paprika: oklch(0.68 0.17 30);
+  --paprika-tint: oklch(0.28 0.07 30);
+  --amber: oklch(0.78 0.14 75);
+  --amber-tint: oklch(0.30 0.07 75);
+  --info: oklch(0.66 0.13 240);
+  --info-tint: oklch(0.26 0.06 240);
+
+  --sidebar: oklch(0.12 0.005 80);
+  --sidebar-foreground: var(--ink);
+  --sidebar-accent: oklch(0.22 0.005 80);
+  --sidebar-border: oklch(0.28 0.005 80);
+
+  --shadow-1: 0 1px 2px 0 oklch(0 0 0 / 0.40);
+  --shadow-2: 0 4px 12px -4px oklch(0 0 0 / 0.50), 0 2px 4px -2px oklch(0 0 0 / 0.30);
+  --shadow-3: 0 20px 40px -8px oklch(0 0 0 / 0.60), 0 8px 16px -4px oklch(0 0 0 / 0.40);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --paper: oklch(0.16 0.005 80);
+    --bone: oklch(0.20 0.005 80);
+    --mist: oklch(0.26 0.005 80);
+    --mist-strong: oklch(0.32 0.005 80);
+    --ink: oklch(0.96 0.003 80);
+    --ink-soft: oklch(0.78 0.005 80);
+    --ink-muted: oklch(0.58 0.005 80);
+    --herb: oklch(0.62 0.14 145);
+    --herb-soft: oklch(0.70 0.12 145);
+    --herb-tint: oklch(0.28 0.06 145);
+    --paprika: oklch(0.68 0.17 30);
+    --paprika-tint: oklch(0.28 0.07 30);
+    --amber: oklch(0.78 0.14 75);
+    --amber-tint: oklch(0.30 0.07 75);
+    --info: oklch(0.66 0.13 240);
+    --info-tint: oklch(0.26 0.06 240);
+    --sidebar: oklch(0.12 0.005 80);
+    --sidebar-accent: oklch(0.22 0.005 80);
+    --sidebar-border: oklch(0.28 0.005 80);
+  }
+}
+
+/* Motion keyframes — entrance only, no bounce, no elastic ----- */
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes slide-down {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
+  from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
-
-@keyframes bounce-in {
-  from { opacity: 0; transform: scale(0.3); }
-  50% { transform: scale(1.05); }
-  70% { transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
-}
-
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
-/* Base styles */
+/* Reduced motion — strip every animation/transition ----------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Base styles ------------------------------------------------- */
 @layer base {
   * {
     @apply border-border;
@@ -135,6 +218,7 @@
     @apply scroll-smooth antialiased;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
 
   body {
@@ -144,29 +228,49 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Focus styles */
-  :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2;
+  /* Tabular numerals for prices, IDs, ETAs */
+  .tabular,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Better tap targets on mobile */
+  /* Editorial display type — Geist */
+  .font-display {
+    font-family: 'Geist', 'Inter', system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    letter-spacing: -0.015em;
+  }
+
+  /* Focus ring — visible, herb, never removed */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
   button, a, input, select, textarea {
     touch-action: manipulation;
   }
 
-  /* Disable text selection on interactive elements */
   button, .no-select {
     -webkit-user-select: none;
     user-select: none;
   }
 
-  /* Remove tap highlight on mobile */
   * {
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Skip link */
+  .skip-link {
+    @apply sr-only;
+  }
+  .skip-link:focus,
+  .skip-link:focus-visible {
+    @apply not-sr-only fixed left-3 top-3 z-[100] rounded-md bg-ink px-4 py-2
+           text-sm font-medium text-paper shadow-elevated;
+  }
 }
 
-/* Utility classes */
+/* Utilities --------------------------------------------------- */
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -176,278 +280,203 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
 
-  /* Card hover effects */
-  .card-hover-lift {
-    @apply transition-all duration-200;
+  /* Photo legibility scrim — the only allowed gradient */
+  .scrim-bottom {
+    background: linear-gradient(180deg, transparent 0%, oklch(0.18 0.01 80 / 0.7) 100%);
   }
-  .card-hover-lift:hover {
-    @apply -translate-y-1 shadow-card-hover;
-  }
-
-  .card-hover-scale {
-    @apply transition-transform duration-200;
-  }
-  .card-hover-scale:hover {
-    @apply scale-[1.02];
-  }
-
-  /* Glass effect */
-  .glass {
-    @apply bg-white/80 backdrop-blur-md;
-  }
-
-  .glass-dark {
-    @apply bg-[#1C1917]/80 backdrop-blur-md;
-  }
-
-  /* Food overlay gradient */
-  .bg-gradient-food-overlay {
-    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 100%);
+  .scrim-top {
+    background: linear-gradient(180deg, oklch(0.18 0.01 80 / 0.4) 0%, transparent 100%);
   }
 
   /* Touch-friendly sizing */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
-
   .touch-target-lg {
     @apply min-h-[48px] min-w-[48px];
   }
 
-  /* Skeleton loading */
+  /* Skeleton — only animates when [data-loading="true"] */
   .skeleton {
-    @apply bg-muted animate-pulse rounded;
+    @apply rounded bg-mist;
+  }
+  .skeleton[data-loading="true"],
+  .skeleton.is-loading {
+    @apply animate-pulse;
   }
 
-  .skeleton-shimmer {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+  /* Hairline rules (use instead of bordered cards) */
+  .hairline-y > * + * {
+    @apply border-t border-mist;
+  }
+  .hairline-x > * + * {
+    @apply border-l border-mist;
   }
 
-  /* Haptic feedback simulation */
-  .haptic-light:active {
-    transform: scale(0.98);
-  }
+  /* Mobile visibility */
+  .mobile-hidden { @apply hidden md:block; }
+  .mobile-only { @apply block md:hidden; }
 
-  .haptic-medium:active {
-    transform: scale(0.95);
-  }
-
-  /* Visibility utilities */
-  .mobile-hidden {
-    @apply hidden md:block;
-  }
-
-  .mobile-only {
-    @apply block md:hidden;
-  }
-
-  /* Bottom navigation spacing */
+  /* Bottom nav spacing */
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
   }
 
-  /* Snap scroll for carousels */
+  /* Snap-scroll carousels */
   .snap-x-mandatory {
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
   }
+  .snap-start { scroll-snap-align: start; }
+  .snap-center { scroll-snap-align: center; }
 
-  .snap-start {
-    scroll-snap-align: start;
-  }
-
-  .snap-center {
-    scroll-snap-align: center;
-  }
-
-  /* Momentum scrolling */
   .momentum-scroll {
     -webkit-overflow-scrolling: touch;
     overflow-y: auto;
   }
+  .no-overscroll { overscroll-behavior: none; }
 
-  /* Prevent overscroll bounce */
-  .no-overscroll {
-    overscroll-behavior: none;
-  }
-
-  /* Swipeable container */
   .swipeable {
     touch-action: pan-x;
     cursor: grab;
   }
-
-  .swipeable:active {
-    cursor: grabbing;
-  }
-
-  /* Image loading placeholder */
-  .img-loading {
-    @apply bg-muted animate-pulse;
-  }
+  .swipeable:active { cursor: grabbing; }
 }
 
-/* Component patterns */
+/* Component patterns ----------------------------------------- */
 @layer components {
-  /* Container */
+  /* Containers */
   .container-app {
     @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
   }
-
   .container-mobile {
     @apply mx-auto w-full px-4;
     max-width: min(100%, 640px);
   }
 
-  /* Page layout */
-  .page-header {
-    @apply mb-6 space-y-2;
-  }
-
+  /* Page header */
+  .page-header { @apply mb-6 space-y-2; }
   .page-title {
-    @apply text-2xl font-bold tracking-tight text-foreground md:text-3xl;
+    @apply font-display text-2xl font-semibold tracking-tight text-foreground md:text-3xl;
   }
-
   .page-description {
     @apply text-muted-foreground text-sm md:text-base;
   }
+  .section { @apply py-8 md:py-12 lg:py-16; }
 
-  .section {
-    @apply py-8 md:py-12 lg:py-16;
-  }
-
-  /* Mobile bottom navigation */
+  /* Mobile bottom nav — solid surface, hairline top, no glass */
   .bottom-nav {
-    @apply fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card
+    @apply fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-bone
            safe-bottom md:hidden;
   }
-
   .bottom-nav-item {
     @apply flex flex-1 flex-col items-center justify-center gap-1 py-2
            text-xs font-medium text-muted-foreground transition-colors
-           active:bg-secondary;
+           active:bg-muted;
   }
-
   .bottom-nav-item-active {
-    @apply flex flex-1 flex-col items-center justify-center gap-1 py-2
-           text-xs font-medium text-primary transition-colors
-           active:bg-secondary;
+    @apply text-foreground;
   }
 
   /* Mobile sheet */
   .mobile-sheet {
-    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-card
-           shadow-2xl safe-bottom transform transition-transform duration-300;
+    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-bone
+           shadow-elevated safe-bottom transform transition-transform duration-300;
   }
-
   .mobile-sheet-handle {
-    @apply mx-auto mt-3 h-1 w-10 rounded-full bg-border;
+    @apply mx-auto mt-3 h-1 w-10 rounded-full bg-mist;
   }
 
-  /* Swipe indicator dots */
-  .swipe-dots {
-    @apply flex items-center justify-center gap-1.5 py-2;
-  }
-
+  /* Swipe dots */
+  .swipe-dots { @apply flex items-center justify-center gap-1.5 py-2; }
   .swipe-dot {
-    @apply h-1.5 w-1.5 rounded-full bg-border transition-all duration-200;
+    @apply h-1.5 w-1.5 rounded-full bg-mist transition-colors;
   }
-
   .swipe-dot-active {
-    @apply h-1.5 w-4 rounded-full bg-primary transition-all duration-200;
+    @apply bg-foreground;
   }
 
   /* List items */
   .list-item {
-    @apply flex items-center gap-4 px-4 py-3 transition-colors active:bg-secondary;
+    @apply flex items-center gap-4 px-4 py-3 transition-colors active:bg-muted;
   }
-
   .list-item-border {
-    @apply flex items-center gap-4 px-4 py-3 transition-colors active:bg-secondary
-           border-b border-border;
+    @apply list-item border-b border-border;
   }
 
-  /* Sticky header */
+  /* Sticky header — solid, hairline bottom, NO backdrop-blur */
   .sticky-header {
-    @apply sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur safe-top;
+    @apply sticky top-0 z-40 border-b border-border bg-bone safe-top;
   }
 
   /* Notification dot */
   .notification-dot {
-    @apply absolute -right-1 -top-1 h-3 w-3 rounded-full bg-destructive
-           ring-2 ring-card;
+    @apply absolute -right-1 -top-1 h-3 w-3 rounded-full bg-paprika
+           ring-2 ring-bone;
   }
 
   /* Empty state */
   .empty-state {
     @apply flex flex-col items-center justify-center py-12 text-center;
   }
-
-  .empty-state-icon {
-    @apply h-16 w-16 text-border;
-  }
-
-  .empty-state-title {
-    @apply mt-4 text-lg font-semibold text-foreground;
-  }
-
-  .empty-state-description {
-    @apply mt-2 max-w-sm text-muted-foreground;
-  }
+  .empty-state-icon { @apply h-16 w-16 text-mist-strong; }
+  .empty-state-title { @apply mt-4 font-display text-lg font-semibold text-foreground; }
+  .empty-state-description { @apply mt-2 max-w-sm text-muted-foreground; }
 
   /* Logo */
-  .logo {
-    @apply flex items-center gap-2;
-  }
-
+  .logo { @apply flex items-center gap-2; }
   .logo-icon {
-    @apply flex h-10 w-10 items-center justify-center rounded-xl bg-primary;
+    @apply flex h-10 w-10 items-center justify-center rounded-lg bg-foreground;
   }
-
   .logo-icon span {
-    @apply text-xl font-bold text-primary-foreground;
+    @apply font-display text-xl font-semibold text-background;
   }
-
   .logo-text {
-    @apply text-xl font-bold text-foreground;
+    @apply font-display text-xl font-semibold text-foreground;
   }
+  .logo-tagline { @apply text-xs text-muted-foreground; }
 
-  .logo-tagline {
-    @apply text-xs text-muted-foreground;
-  }
-
-  /* Buttons */
+  /* Buttons — Ink primary (Cash App / Stripe pattern), Herb accent for go-actions */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-6 py-3
-           text-sm font-semibold text-white shadow-sm transition-colors
-           hover:bg-brand-600 active:bg-brand-700
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-foreground px-6 py-3
+           text-sm font-medium text-background shadow-card transition-colors
+           hover:bg-ink-soft active:bg-ink
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
   }
-
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-herb px-6 py-3
+           text-sm font-medium text-paper shadow-card transition-colors
+           hover:bg-herb-soft active:bg-herb
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
+  }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border
-           bg-card px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition-colors
-           hover:bg-secondary active:bg-secondary/80
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border
+           bg-bone px-6 py-3 text-sm font-medium text-foreground transition-colors
+           hover:bg-muted
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
   }
-
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-6 py-3
+           text-sm font-medium text-foreground transition-colors hover:bg-muted
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
+  }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-6 py-3
-           text-sm font-semibold text-destructive-foreground shadow-sm transition-colors
-           hover:bg-destructive/90 active:bg-destructive/80;
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-paprika px-6 py-3
+           text-sm font-medium text-paper transition-colors hover:opacity-90 active:opacity-80
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika focus-visible:ring-offset-2;
   }
 
-  /* Form inputs */
+  /* Form inputs — hairline border, herb focus */
   .input-base {
-    @apply w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-foreground
-           shadow-sm transition-colors placeholder:text-muted-foreground
-           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
+    @apply w-full rounded-md border border-input bg-bone px-3 py-2.5 text-sm text-foreground
+           transition-colors placeholder:text-muted-foreground
+           focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40
+           disabled:cursor-not-allowed disabled:opacity-50;
   }
 }
+</content>
+</invoke>

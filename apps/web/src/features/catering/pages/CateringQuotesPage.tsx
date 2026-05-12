@@ -21,12 +21,12 @@ import { apiClient } from '@/shared/services/api-client';
 import type { CateringRequest, CateringQuote, PaginatedResponse } from '@/shared/types';
 
 const STATUS_CONFIG = {
-  pending: { label: 'Awaiting Quotes', color: 'bg-yellow-100 text-yellow-800' },
-  quotes_received: { label: 'Quotes Received', color: 'bg-blue-100 text-blue-800' },
-  booked: { label: 'Booked', color: 'bg-green-100 text-green-800' },
-  in_progress: { label: 'In Progress', color: 'bg-purple-100 text-purple-800' },
-  completed: { label: 'Completed', color: 'bg-gray-100 text-gray-800' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+  pending: { label: 'Awaiting Quotes', color: 'bg-amber-tint text-amber' },
+  quotes_received: { label: 'Quotes Received', color: 'bg-info/10 text-info' },
+  booked: { label: 'Booked', color: 'bg-herb-tint text-herb' },
+  in_progress: { label: 'In Progress', color: 'bg-info/10 text-info' },
+  completed: { label: 'Completed', color: 'bg-mist text-ink-soft' },
+  cancelled: { label: 'Cancelled', color: 'bg-paprika-tint text-paprika' },
 };
 
 export default function CateringQuotesPage() {
@@ -74,18 +74,18 @@ export default function CateringQuotesPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">My Catering Requests</h1>
-            <p className="mt-1 text-gray-600">Manage your catering requests and quotes</p>
+            <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">My Catering Requests</h1>
+            <p className="mt-1 text-ink-soft">Manage your catering requests and quotes</p>
           </div>
           <Link to="/catering" className="btn-primary">
             <Plus className="h-4 w-4" />
@@ -96,16 +96,16 @@ export default function CateringQuotesPage() {
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           {/* Requests List */}
           <div className="lg:w-96">
-            <div className="rounded-xl bg-white shadow-sm">
+            <div className="rounded-xl bg-bone shadow-sm">
               <div className="border-b p-4">
-                <h2 className="font-semibold text-gray-900">Your Requests</h2>
+                <h2 className="font-semibold text-ink">Your Requests</h2>
               </div>
 
               {(requests?.data ?? []).length === 0 ? (
                 <div className="p-8 text-center">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 font-medium text-gray-900">No requests yet</h3>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <FileText className="mx-auto h-12 w-12 text-ink-muted" />
+                  <h3 className="mt-4 font-medium text-ink">No requests yet</h3>
+                  <p className="mt-2 text-sm text-ink-soft">
                     Create a catering request to receive quotes from our chefs
                   </p>
                   <Link to="/catering" className="btn-primary mt-4 inline-flex">
@@ -122,15 +122,15 @@ export default function CateringQuotesPage() {
                         onClick={() => setSelectedRequest(request.id)}
                         className={`w-full p-4 text-left transition-colors ${
                           selectedRequest === request.id
-                            ? 'bg-brand-50'
-                            : 'hover:bg-gray-50'
+                            ? 'bg-herb-tint'
+                            : 'hover:bg-paper'
                         }`}
                       >
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-gray-400" />
-                              <span className="font-medium text-gray-900">
+                              <Calendar className="h-4 w-4 text-ink-muted" />
+                              <span className="font-medium text-ink">
                                 {new Date(request.eventDate).toLocaleDateString('en-US', {
                                   month: 'short',
                                   day: 'numeric',
@@ -138,7 +138,7 @@ export default function CateringQuotesPage() {
                                 })}
                               </span>
                             </div>
-                            <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                            <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
                               <Users className="h-4 w-4" />
                               {request.guestCount} guests
                             </div>
@@ -147,14 +147,14 @@ export default function CateringQuotesPage() {
                             {status.label}
                           </span>
                         </div>
-                        <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                        <div className="mt-2 flex items-center gap-2 text-sm text-ink-muted">
                           <span>{request.cuisinePreferences.slice(0, 2).join(', ')}</span>
                           {request.cuisinePreferences.length > 2 && (
                             <span>+{request.cuisinePreferences.length - 2}</span>
                           )}
                         </div>
                         {request.quotesCount > 0 && (
-                          <div className="mt-2 text-sm text-brand-600">
+                          <div className="mt-2 text-sm text-herb">
                             {request.quotesCount} quote{request.quotesCount > 1 ? 's' : ''} received
                           </div>
                         )}
@@ -169,10 +169,10 @@ export default function CateringQuotesPage() {
           {/* Request Details & Quotes */}
           <div className="flex-1">
             {!selectedRequest ? (
-              <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-                <ChefHat className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-4 font-medium text-gray-900">Select a request</h3>
-                <p className="mt-2 text-sm text-gray-600">
+              <div className="rounded-xl bg-bone p-12 text-center shadow-sm">
+                <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                <h3 className="mt-4 font-medium text-ink">Select a request</h3>
+                <p className="mt-2 text-sm text-ink-soft">
                   Choose a request from the list to view details and quotes
                 </p>
               </div>
@@ -180,9 +180,9 @@ export default function CateringQuotesPage() {
               <>
                 {/* Request Details */}
                 {activeRequest && (
-                  <div className="rounded-xl bg-white p-6 shadow-sm">
+                  <div className="rounded-xl bg-bone p-6 shadow-sm">
                     <div className="flex items-start justify-between">
-                      <h2 className="text-lg font-semibold text-gray-900">Request Details</h2>
+                      <h2 className="text-lg font-semibold text-ink">Request Details</h2>
                       <span className={`rounded-full px-3 py-1 text-sm font-medium ${STATUS_CONFIG[activeRequest.status].color}`}>
                         {STATUS_CONFIG[activeRequest.status].label}
                       </span>
@@ -190,12 +190,12 @@ export default function CateringQuotesPage() {
 
                     <div className="mt-6 grid gap-6 md:grid-cols-2">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-100">
-                          <Calendar className="h-5 w-5 text-brand-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+                          <Calendar className="h-5 w-5 text-herb" />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Event Date</p>
-                          <p className="font-medium text-gray-900">
+                          <p className="text-sm text-ink-muted">Event Date</p>
+                          <p className="font-medium text-ink">
                             {new Date(activeRequest.eventDate).toLocaleDateString('en-US', {
                               weekday: 'long',
                               month: 'long',
@@ -207,32 +207,32 @@ export default function CateringQuotesPage() {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-100">
-                          <Clock className="h-5 w-5 text-brand-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+                          <Clock className="h-5 w-5 text-herb" />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Event Time</p>
-                          <p className="font-medium text-gray-900">{activeRequest.eventTime}</p>
+                          <p className="text-sm text-ink-muted">Event Time</p>
+                          <p className="font-medium text-ink">{activeRequest.eventTime}</p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-100">
-                          <Users className="h-5 w-5 text-brand-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+                          <Users className="h-5 w-5 text-herb" />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Guest Count</p>
-                          <p className="font-medium text-gray-900">{activeRequest.guestCount} guests</p>
+                          <p className="text-sm text-ink-muted">Guest Count</p>
+                          <p className="font-medium text-ink">{activeRequest.guestCount} guests</p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-100">
-                          <MapPin className="h-5 w-5 text-brand-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+                          <MapPin className="h-5 w-5 text-herb" />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Location</p>
-                          <p className="font-medium text-gray-900">
+                          <p className="text-sm text-ink-muted">Location</p>
+                          <p className="font-medium text-ink">
                             {activeRequest.eventLocation.city}, {activeRequest.eventLocation.state}
                           </p>
                         </div>
@@ -243,7 +243,7 @@ export default function CateringQuotesPage() {
                       {activeRequest.cuisinePreferences.map((cuisine) => (
                         <span
                           key={cuisine}
-                          className="rounded-full bg-brand-100 px-3 py-1 text-sm text-brand-700"
+                          className="rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
                         >
                           {cuisine}
                         </span>
@@ -251,7 +251,7 @@ export default function CateringQuotesPage() {
                       {activeRequest.dietaryRequirements.map((diet) => (
                         <span
                           key={diet}
-                          className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-700"
+                          className="rounded-full bg-herb-tint px-3 py-1 text-sm text-herb"
                         >
                           {diet}
                         </span>
@@ -259,26 +259,26 @@ export default function CateringQuotesPage() {
                     </div>
 
                     {activeRequest.description && (
-                      <p className="mt-4 text-gray-600">{activeRequest.description}</p>
+                      <p className="mt-4 text-ink-soft">{activeRequest.description}</p>
                     )}
                   </div>
                 )}
 
                 {/* Quotes */}
                 <div className="mt-6">
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-ink">
                     Quotes ({quotes?.data?.length ?? 0})
                   </h2>
 
                   {quotesLoading ? (
                     <div className="mt-4 flex items-center justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+                      <Loader2 className="h-8 w-8 animate-spin text-herb" />
                     </div>
                   ) : (quotes?.data ?? []).length === 0 ? (
-                    <div className="mt-4 rounded-xl bg-white p-8 text-center shadow-sm">
-                      <ChefHat className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-4 font-medium text-gray-900">No quotes yet</h3>
-                      <p className="mt-2 text-sm text-gray-600">
+                    <div className="mt-4 rounded-xl bg-bone p-8 text-center shadow-sm">
+                      <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                      <h3 className="mt-4 font-medium text-ink">No quotes yet</h3>
+                      <p className="mt-2 text-sm text-ink-soft">
                         Our chefs are reviewing your request. You'll receive quotes soon!
                       </p>
                     </div>
@@ -320,7 +320,7 @@ function QuoteCard({
   const fp = useFormatPrice();
 
   return (
-    <div className="rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-bone shadow-sm overflow-hidden">
       <div className="p-6">
         <div className="flex items-start gap-4">
           {/* Chef Info */}
@@ -332,18 +332,18 @@ function QuoteCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">{quote.chef?.businessName}</h3>
-                <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <h3 className="font-semibold text-ink">{quote.chef?.businessName}</h3>
+                <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
+                  <Star className="h-4 w-4 fill-amber text-amber" />
                   <span>{quote.chef?.rating}</span>
                   <span>({quote.chef?.totalReviews} reviews)</span>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="font-display text-2xl font-semibold text-ink">
                   {fp(quote.totalPrice)}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-ink-muted">
                   {fp(quote.pricePerPerson)} per person
                 </p>
               </div>
@@ -355,24 +355,24 @@ function QuoteCard({
         <div className="mt-4">
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="text-sm text-brand-600 hover:text-brand-700"
+            className="text-sm text-herb hover:text-herb"
           >
             {showDetails ? 'Hide menu details' : 'View menu details'}
           </button>
 
           {showDetails && (
-            <div className="mt-4 rounded-lg bg-gray-50 p-4">
-              <h4 className="font-medium text-gray-900">Proposed Menu</h4>
+            <div className="mt-4 rounded-lg bg-paper p-4">
+              <h4 className="font-medium text-ink">Proposed Menu</h4>
               <ul className="mt-3 space-y-2">
                 {quote.menuItems.map((item, index) => (
                   <li key={index} className="flex items-start justify-between text-sm">
                     <div>
-                      <span className="text-gray-900">{item.name}</span>
+                      <span className="text-ink">{item.name}</span>
                       {item.description && (
-                        <p className="text-gray-500">{item.description}</p>
+                        <p className="text-ink-muted">{item.description}</p>
                       )}
                     </div>
-                    <span className="text-gray-600">
+                    <span className="text-ink-soft">
                       {item.quantity}x {fp(item.pricePerUnit)}
                     </span>
                   </li>
@@ -380,8 +380,8 @@ function QuoteCard({
               </ul>
               {quote.serviceCharge && quote.serviceCharge > 0 && (
                 <div className="mt-3 pt-3 border-t flex justify-between text-sm">
-                  <span className="text-gray-600">Service Charge</span>
-                  <span className="text-gray-900">{fp(quote.serviceCharge)}</span>
+                  <span className="text-ink-soft">Service Charge</span>
+                  <span className="text-ink">{fp(quote.serviceCharge)}</span>
                 </div>
               )}
             </div>
@@ -390,15 +390,15 @@ function QuoteCard({
 
         {/* Notes */}
         {quote.notes && (
-          <div className="mt-4 rounded-lg bg-blue-50 p-3">
-            <p className="text-sm text-blue-800">
+          <div className="mt-4 rounded-lg bg-info/10 p-3">
+            <p className="text-sm text-info">
               <span className="font-medium">Chef's Note:</span> {quote.notes}
             </p>
           </div>
         )}
 
         {/* Valid Until */}
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="mt-4 text-sm text-ink-muted">
           Valid until {new Date(quote.validUntil).toLocaleDateString()}
         </p>
 
@@ -433,16 +433,16 @@ function QuoteCard({
         )}
 
         {quote.status === 'accepted' && (
-          <div className="mt-6 rounded-lg bg-green-50 p-4 text-center">
-            <Check className="mx-auto h-8 w-8 text-green-600" />
-            <p className="mt-2 font-medium text-green-800">Quote Accepted!</p>
-            <p className="text-sm text-green-600">The chef will contact you soon to finalize details.</p>
+          <div className="mt-6 rounded-lg bg-herb-tint p-4 text-center">
+            <Check className="mx-auto h-8 w-8 text-herb" />
+            <p className="mt-2 font-medium text-herb">Quote Accepted!</p>
+            <p className="text-sm text-herb">The chef will contact you soon to finalize details.</p>
           </div>
         )}
 
         {quote.status === 'declined' && (
-          <div className="mt-6 rounded-lg bg-gray-100 p-4 text-center">
-            <p className="text-sm text-gray-600">You declined this quote</p>
+          <div className="mt-6 rounded-lg bg-mist p-4 text-center">
+            <p className="text-sm text-ink-soft">You declined this quote</p>
           </div>
         )}
       </div>

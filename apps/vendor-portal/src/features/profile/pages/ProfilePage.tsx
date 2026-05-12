@@ -211,7 +211,7 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-herb border-t-transparent" />
       </div>
     );
   }
@@ -242,8 +242,8 @@ export default function ProfilePage() {
       {/* Page Header */}
       <motion.div variants={fadeInUp} className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kitchen Profile</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage your public profile and business settings</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Kitchen Profile</h1>
+          <p className="mt-1 text-sm text-ink-muted">Manage your public profile and business settings</p>
         </div>
         <Button
           type="button"
@@ -260,7 +260,7 @@ export default function ProfilePage() {
       <motion.div variants={fadeInUp}>
         <Card padding="none" className="overflow-hidden">
           {/* Banner */}
-          <div className="relative h-32 bg-gradient-to-r from-brand-500 to-brand-700 sm:h-40">
+          <div className="relative h-32 bg-herb sm:h-40">
             {profile?.bannerImage && (
               <img
                 src={profile.bannerImage}
@@ -272,7 +272,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => bannerInputRef.current?.click()}
               disabled={bannerMutation.isPending}
-              className="absolute bottom-3 right-3 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/60 disabled:opacity-50"
+              className="absolute bottom-3 right-3 rounded-full bg-ink/40 p-2 text-paper backdrop-blur-sm transition-colors hover:bg-ink/60 disabled:opacity-50"
             >
               {bannerMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -293,13 +293,13 @@ export default function ProfilePage() {
                   fallback={profile?.businessName?.charAt(0)}
                   size="2xl"
                   ring="brand"
-                  className="border-4 border-white"
+                  className="border-4 border-bone"
                 />
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={avatarMutation.isPending}
-                  className="absolute bottom-0 right-0 rounded-full bg-brand-500 p-1.5 text-white shadow-lg transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  className="absolute bottom-0 right-0 rounded-full bg-herb p-1.5 text-paper shadow-lg transition-colors hover:bg-herb disabled:opacity-50"
                 >
                   {avatarMutation.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -312,25 +312,25 @@ export default function ProfilePage() {
               {/* Name & Stats */}
               <div className="flex-1 pt-2 sm:pt-0">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-gray-900">
+                  <h2 className="text-xl font-semibold text-ink">
                     {profile?.businessName || 'Your Kitchen'}
                   </h2>
                   {profile?.verified && (
-                    <Shield className="h-5 w-5 text-brand-500" />
+                    <Shield className="h-5 w-5 text-herb" />
                   )}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <div className="flex items-center gap-1 text-sm text-ink-soft">
                     <Star className="h-4 w-4 fill-warning text-warning" />
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-ink">
                       {profile?.rating?.toFixed(1) || '0.0'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <div className="flex items-center gap-1 text-sm text-ink-soft">
                     <ShoppingBag className="h-4 w-4" />
                     <span>{profile?.totalOrders || 0} orders</span>
                   </div>
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <div className="flex items-center gap-1 text-sm text-ink-soft">
                     <MessageSquare className="h-4 w-4" />
                     <span>{profile?.totalReviews || 0} reviews</span>
                   </div>
@@ -339,18 +339,18 @@ export default function ProfilePage() {
 
               {/* Accepting Orders Toggle */}
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-ink-soft">
                   {acceptingOrders ? 'Accepting Orders' : 'Orders Paused'}
                 </span>
                 <button
                   type="button"
                   onClick={toggleAcceptingOrders}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    acceptingOrders ? 'bg-brand-500' : 'bg-gray-300'
+                    acceptingOrders ? 'bg-herb' : 'bg-mist-strong'
                   }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    className={`inline-block h-5 w-5 rounded-full bg-bone shadow-sm transition-transform ${
                       acceptingOrders ? 'translate-x-[22px]' : 'translate-x-[2px]'
                     }`}
                   />
@@ -364,8 +364,8 @@ export default function ProfilePage() {
       {/* Business Info */}
       <motion.div variants={fadeInUp}>
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900">Business Information</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-ink">Business Information</h3>
+          <p className="mt-1 text-sm text-ink-muted">
             This is displayed publicly on your kitchen profile
           </p>
 
@@ -391,8 +391,8 @@ export default function ProfilePage() {
       {/* Cuisines */}
       <motion.div variants={fadeInUp}>
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900">Cuisines</h3>
-          <p className="mt-1 text-sm text-gray-500">Select the cuisines you specialize in</p>
+          <h3 className="text-lg font-semibold text-ink">Cuisines</h3>
+          <p className="mt-1 text-sm text-ink-muted">Select the cuisines you specialize in</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {CUISINES.map((cuisine) => {
@@ -404,8 +404,8 @@ export default function ProfilePage() {
                   onClick={() => toggleCuisine(cuisine)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${
                     isSelected
-                      ? 'bg-brand-500 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? 'bg-herb text-paper shadow-sm'
+                      : 'bg-mist text-ink-soft hover:bg-mist'
                   }`}
                 >
                   {isSelected && <Check className="h-3.5 w-3.5" />}
@@ -423,8 +423,8 @@ export default function ProfilePage() {
       {/* Specialties */}
       <motion.div variants={fadeInUp}>
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900">Specialties</h3>
-          <p className="mt-1 text-sm text-gray-500">Add your signature dishes or specialties</p>
+          <h3 className="text-lg font-semibold text-ink">Specialties</h3>
+          <p className="mt-1 text-sm text-ink-muted">Add your signature dishes or specialties</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {specialties.map((specialty) => (
@@ -440,7 +440,7 @@ export default function ProfilePage() {
               </Badge>
             ))}
             {specialties.length === 0 && (
-              <p className="text-sm text-gray-400">No specialties added yet</p>
+              <p className="text-sm text-ink-muted">No specialties added yet</p>
             )}
           </div>
 
@@ -474,14 +474,14 @@ export default function ProfilePage() {
       <motion.div variants={fadeInUp}>
         <Card>
           <div className="flex items-center gap-2">
-            <Settings2 className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-900">Business Settings</h3>
+            <Settings2 className="h-5 w-5 text-ink-muted" />
+            <h3 className="text-lg font-semibold text-ink">Business Settings</h3>
           </div>
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <Clock className="h-4 w-4 text-gray-400" />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <Clock className="h-4 w-4 text-ink-muted" />
                 Average Prep Time
               </label>
               <select
@@ -496,8 +496,8 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <MapPin className="h-4 w-4 text-gray-400" />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <MapPin className="h-4 w-4 text-ink-muted" />
                 Delivery Radius (km)
               </label>
               <input
@@ -511,12 +511,12 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <IndianRupee className="h-4 w-4 text-gray-400" />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <IndianRupee className="h-4 w-4 text-ink-muted" />
                 Minimum Order
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
                   INR
                 </span>
                 <input
@@ -531,12 +531,12 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                <Truck className="h-4 w-4 text-gray-400" />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <Truck className="h-4 w-4 text-ink-muted" />
                 Delivery Fee
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
                   INR
                 </span>
                 <input
@@ -557,10 +557,10 @@ export default function ProfilePage() {
       <motion.div variants={fadeInUp}>
         <Card>
           <div className="flex items-center gap-3 mb-6">
-            <FileText className="h-5 w-5 text-brand-500" />
+            <FileText className="h-5 w-5 text-herb" />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Documents & Certificates</h3>
-              <p className="text-sm text-gray-500">Upload required documents for verification</p>
+              <h3 className="text-lg font-semibold text-ink">Documents & Certificates</h3>
+              <p className="text-sm text-ink-muted">Upload required documents for verification</p>
             </div>
           </div>
           <DocumentsSection chefId={profile?.id} />
@@ -573,17 +573,17 @@ export default function ProfilePage() {
           <Card hover="border" className="group">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50">
-                  <ChefHat className="h-6 w-6 text-brand-500" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-herb-tint">
+                  <ChefHat className="h-6 w-6 text-herb" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Kitchen Setup</h3>
-                  <p className="text-sm text-gray-500">
+                  <h3 className="font-semibold text-ink">Kitchen Setup</h3>
+                  <p className="text-sm text-ink-muted">
                     Operating hours, kitchen photos, and payout details
                   </p>
                 </div>
               </div>
-              <ArrowRight className="h-5 w-5 text-gray-400 transition-transform group-hover:translate-x-1" />
+              <ArrowRight className="h-5 w-5 text-ink-muted transition-transform group-hover:translate-x-1" />
             </div>
           </Card>
         </Link>
@@ -646,11 +646,11 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
   const statusBadge = (status: string) => {
     switch (status) {
       case 'verified':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600"><CheckCircle className="h-3 w-3" />Verified</span>;
+        return <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb"><CheckCircle className="h-3 w-3" />Verified</span>;
       case 'rejected':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600"><AlertCircle className="h-3 w-3" />Rejected</span>;
+        return <span className="inline-flex items-center gap-1 rounded-full bg-paprika-tint px-2 py-0.5 text-xs font-medium text-paprika"><AlertCircle className="h-3 w-3" />Rejected</span>;
       default:
-        return <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-600"><Clock className="h-3 w-3" />Pending</span>;
+        return <span className="inline-flex items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-xs font-medium text-amber"><Clock className="h-3 w-3" />Pending</span>;
     }
   };
 
@@ -661,36 +661,36 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
         const isUploading = uploadingType === docDef.type;
 
         return (
-          <div key={docDef.type} className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50/50 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50">
-              <FileText className="h-5 w-5 text-brand-500" />
+          <div key={docDef.type} className="flex items-center gap-4 rounded-lg border border-mist bg-paper/50 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-herb-tint">
+              <FileText className="h-5 w-5 text-herb" />
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-gray-900">{docDef.label}</p>
-                {docDef.required && <span className="text-xs text-red-500">Required</span>}
+                <p className="text-sm font-medium text-ink">{docDef.label}</p>
+                {docDef.required && <span className="text-xs text-paprika">Required</span>}
               </div>
-              <p className="text-xs text-gray-500">{docDef.description}</p>
+              <p className="text-xs text-ink-muted">{docDef.description}</p>
 
               {existingDoc && (
                 <div className="mt-1 flex items-center gap-2">
-                  <p className="text-xs text-gray-400 truncate max-w-[200px]">{existingDoc.fileName}</p>
-                  <span className="text-xs text-gray-300">|</span>
-                  <p className="text-xs text-gray-400">{formatBytes(existingDoc.fileSize)}</p>
+                  <p className="text-xs text-ink-muted truncate max-w-[200px]">{existingDoc.fileName}</p>
+                  <span className="text-xs text-ink-muted">|</span>
+                  <p className="text-xs text-ink-muted">{formatBytes(existingDoc.fileSize)}</p>
                   {statusBadge(existingDoc.status)}
                 </div>
               )}
 
               {existingDoc?.rejectionReason && (
-                <p className="mt-1 text-xs text-red-500">Reason: {existingDoc.rejectionReason}</p>
+                <p className="mt-1 text-xs text-paprika">Reason: {existingDoc.rejectionReason}</p>
               )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               {existingDoc?.fileUrl && (
                 <a href={existingDoc.fileUrl} target="_blank" rel="noopener noreferrer"
-                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Download">
+                  className="rounded-lg p-2 text-ink-muted hover:bg-mist hover:text-ink-soft transition-colors" title="Download">
                   <Download className="h-4 w-4" />
                 </a>
               )}
@@ -711,8 +711,8 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
                   />
                   <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                     existingDoc
-                      ? 'border border-gray-200 text-gray-600 hover:bg-gray-100'
-                      : 'bg-brand-500 text-white hover:bg-brand-600'
+                      ? 'border border-mist text-ink-soft hover:bg-mist'
+                      : 'bg-herb text-paper hover:bg-herb'
                   } ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                     {isUploading ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading...</>
@@ -726,7 +726,7 @@ function DocumentsSection({ chefId }: { chefId?: string }) {
               )}
 
               {existingDoc?.status === 'verified' && (
-                <span className="text-xs text-green-600 font-medium">Approved</span>
+                <span className="text-xs text-herb font-medium">Approved</span>
               )}
             </div>
           </div>

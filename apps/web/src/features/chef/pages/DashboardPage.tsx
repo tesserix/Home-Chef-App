@@ -2,19 +2,16 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-  DollarSign,
-  ShoppingBag,
   Star,
-  TrendingUp,
-  Clock,
   ChefHat,
   ArrowUpRight,
+  ArrowDownRight,
   ArrowRight,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
-import { Card, Badge, Button } from '@/shared/components/ui';
+import { Badge } from '@/shared/components/ui';
 import { fadeInUp, staggerContainer } from '@/shared/utils/animations';
 import type { Order, PaginatedResponse } from '@/shared/types';
 
@@ -58,274 +55,245 @@ export default function ChefDashboardPage() {
       }),
   });
 
+  const pendingCount = stats?.pendingOrders ?? 0;
+  const revenueChange = stats?.revenueChange;
+  const positive = revenueChange !== undefined && revenueChange >= 0;
+
   return (
     <motion.div
       initial="hidden"
       animate="visible"
       variants={staggerContainer}
-      className="space-y-6"
+      className="space-y-8"
     >
       {/* Header */}
-      <motion.div variants={fadeInUp}>
-        <h1 className="font-display text-display-xs text-gray-900">
-          Welcome back, {user?.firstName}!
+      <motion.header variants={fadeInUp}>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          Welcome back, {user?.firstName}
         </h1>
-        <p className="mt-1 text-gray-600">
-          Here's what's happening with your kitchen today
-        </p>
-      </motion.div>
+        <p className="mt-1 text-sm text-ink-soft">Here's your kitchen today.</p>
+      </motion.header>
 
-      {/* Stats Grid */}
-      <motion.div variants={fadeInUp} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Today's Revenue"
-          value={fp(stats?.todayRevenue || 0)}
-          change={stats?.revenueChange}
-          icon={DollarSign}
-          color="green"
-        />
-        <StatCard
-          title="Today's Orders"
-          value={stats?.todayOrders?.toString() || '0'}
-          change={stats?.ordersChange}
-          icon={ShoppingBag}
-          color="blue"
-        />
-        <StatCard
-          title="Pending Orders"
-          value={stats?.pendingOrders?.toString() || '0'}
-          icon={Clock}
-          color="yellow"
-          urgent={stats?.pendingOrders ? stats.pendingOrders > 0 : false}
-        />
-        <StatCard
-          title="Your Rating"
-          value={stats?.rating?.toFixed(1) || '0.0'}
-          subtitle={`${stats?.totalReviews || 0} reviews`}
-          icon={Star}
-          color="golden"
-        />
-      </motion.div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Pending Orders */}
-        <motion.div variants={fadeInUp}>
-          <Card variant="default" padding="lg">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Pending Orders</h2>
-              <Link to="/chef/orders">
-                <Button variant="link" size="sm">View all</Button>
-              </Link>
-            </div>
-
-            {(pendingOrders?.data ?? []).length === 0 ? (
-              <div className="mt-6 text-center py-8">
-                <ChefHat className="mx-auto h-12 w-12 text-gray-300" />
-                <p className="mt-3 text-gray-500">No pending orders</p>
-                <p className="text-sm text-gray-400">New orders will appear here</p>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {(pendingOrders?.data ?? []).slice(0, 4).map((order) => (
-                  <PendingOrderCard key={order.id} order={order} />
-                ))}
-              </div>
-            )}
-          </Card>
-        </motion.div>
-
-        {/* Quick Actions */}
-        <motion.div variants={fadeInUp} className="space-y-6">
-          <Card variant="default" padding="lg">
-            <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <QuickActionLink
-                to="/chef/menu"
-                icon={ChefHat}
-                color="brand"
-                title="Manage Menu"
-                subtitle="Add or edit items"
-              />
-              <QuickActionLink
-                to="/chef/orders"
-                icon={ShoppingBag}
-                color="blue"
-                title="View Orders"
-                subtitle="Manage all orders"
-              />
-              <QuickActionLink
-                to="/chef/earnings"
-                icon={DollarSign}
-                color="green"
-                title="Earnings"
-                subtitle="Track your income"
-              />
-              <QuickActionLink
-                to="/chef/social"
-                icon={TrendingUp}
-                color="purple"
-                title="Social Feed"
-                subtitle="Share your creations"
-              />
-            </div>
-          </Card>
-
-          {/* Pro Tip */}
-          <Card variant="premium" padding="lg" className="text-white">
-            <h3 className="font-semibold">Pro Tip</h3>
-            <p className="mt-2 text-brand-100">
-              Customers love seeing photos of your dishes! Post on the social feed
-              to increase visibility and attract more orders.
+      {/* Lead block — one prominent metric + pending-orders action */}
+      <motion.section
+        variants={fadeInUp}
+        className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end"
+      >
+        <div>
+          <p className="text-sm text-ink-soft">Today's revenue</p>
+          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+            {fp(stats?.todayRevenue || 0)}
+          </p>
+          {revenueChange !== undefined && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm">
+              {positive ? (
+                <ArrowUpRight className="h-4 w-4 text-herb" aria-hidden />
+              ) : (
+                <ArrowDownRight className="h-4 w-4 text-paprika" aria-hidden />
+              )}
+              <span className={`font-medium tabular-nums ${positive ? 'text-herb' : 'text-paprika'}`}>
+                {positive ? '+' : ''}
+                {revenueChange}%
+              </span>
+              <span className="text-ink-soft">vs. yesterday</span>
             </p>
-            <Link to="/chef/social">
-              <Button variant="ghost" size="sm" className="mt-4 bg-white/20 hover:bg-white/30 text-white">
-                Create a post
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+          )}
+        </div>
+
+        {pendingCount > 0 ? (
+          <Link
+            to="/chef/orders"
+            aria-label={`${pendingCount} pending orders need attention`}
+            className="group flex items-center justify-between gap-4 rounded-lg bg-herb px-5 py-4 text-paper transition-colors hover:bg-herb-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+          >
+            <div>
+              <p className="text-3xl font-semibold tabular-nums">
+                {pendingCount} {pendingCount === 1 ? 'order' : 'orders'}
+              </p>
+              <p className="mt-0.5 text-sm text-paper/80">Waiting for you to accept</p>
+            </div>
+            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
+        ) : (
+          <div className="rounded-lg border border-mist bg-bone px-5 py-4">
+            <p className="text-3xl font-semibold tabular-nums text-foreground">All caught up</p>
+            <p className="mt-0.5 text-sm text-ink-soft">New orders will appear here.</p>
+          </div>
+        )}
+      </motion.section>
+
+      {/* Stats — clean grid, no card chrome, hairline-divided */}
+      <motion.section
+        variants={fadeInUp}
+        aria-label="Today at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow label="Today's orders" value={stats?.todayOrders ?? 0} />
+        <StatRow
+          label="Rating"
+          value={stats?.rating !== undefined ? stats.rating.toFixed(1) : '—'}
+          icon={Star}
+          subtitle={stats?.totalReviews ? `${stats.totalReviews} reviews` : 'No reviews yet'}
+        />
+        <StatRow
+          label="This week"
+          value={stats?.weeklyOrders ?? 0}
+          subtitle={fp(stats?.weeklyRevenue || 0)}
+        />
+        <StatRow
+          label="vs. last week"
+          value={
+            stats?.ordersChange !== undefined
+              ? `${stats.ordersChange >= 0 ? '+' : ''}${stats.ordersChange}%`
+              : '—'
+          }
+          subtitle="Order change"
+        />
+      </motion.section>
+
+      {/* Work area — asymmetric 2:1, pending orders dominant */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        {/* Pending Orders */}
+        <motion.section variants={fadeInUp} aria-label="Pending orders" className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold text-foreground">Pending orders</h2>
+            <Link to="/chef/orders" className="text-sm font-medium text-herb hover:underline">
+              View all
             </Link>
-          </Card>
-        </motion.div>
+          </div>
+
+          {(pendingOrders?.data ?? []).length === 0 ? (
+            <div className="rounded-lg border border-mist bg-bone py-12 text-center">
+              <ChefHat className="mx-auto h-10 w-10 text-ink-muted" aria-hidden />
+              <p className="mt-3 font-medium text-foreground">No pending orders</p>
+              <p className="mt-1 text-sm text-ink-soft">
+                New orders will appear here as customers place them.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(pendingOrders?.data ?? []).slice(0, 4).map((order) => (
+                <PendingOrderCard key={order.id} order={order} />
+              ))}
+            </div>
+          )}
+        </motion.section>
+
+        {/* Shortcuts */}
+        <motion.aside variants={fadeInUp} aria-label="Shortcuts" className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">Shortcuts</h2>
+          <nav className="divide-y divide-mist rounded-lg border border-mist bg-bone">
+            <QuickActionLink to="/chef/menu" title="Manage menu" subtitle="Add or edit items" />
+            <QuickActionLink to="/chef/orders" title="View orders" subtitle="Manage all orders" />
+            <QuickActionLink to="/chef/earnings" title="Earnings" subtitle="Track your income" />
+            <QuickActionLink to="/chef/social" title="Social feed" subtitle="Share your creations" />
+          </nav>
+        </motion.aside>
       </div>
 
-      {/* Recent Orders */}
-      <motion.div variants={fadeInUp}>
-        <Card variant="default" padding="lg">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-            <Link to="/chef/orders">
-              <Button variant="link" size="sm" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                View all
-              </Button>
-            </Link>
-          </div>
+      {/* Recent Orders — clean table, hairline rows */}
+      <motion.section variants={fadeInUp} aria-label="Recent orders" className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Recent orders</h2>
+          <Link to="/chef/orders" className="text-sm font-medium text-herb hover:underline">
+            View all
+          </Link>
+        </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left text-sm text-gray-500">
-                  <th className="pb-3 font-medium">Order</th>
-                  <th className="pb-3 font-medium">Items</th>
-                  <th className="pb-3 font-medium">Total</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium">Time</th>
+        <div className="overflow-x-auto rounded-lg border border-mist bg-bone">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-mist text-left text-sm text-ink-soft">
+                <th className="px-4 py-3 font-medium">Order</th>
+                <th className="px-4 py-3 font-medium">Items</th>
+                <th className="px-4 py-3 text-right font-medium tabular-nums">Total</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium tabular-nums">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-mist">
+              {(recentOrders?.data ?? []).map((order) => (
+                <tr key={order.id} className="transition-colors hover:bg-mist/40">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/chef/orders/${order.id}`}
+                      className="font-medium tabular-nums text-foreground hover:text-herb"
+                    >
+                      #{order.orderNumber}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
+                    {fp(order.total)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <OrderStatusBadge status={order.status} />
+                  </td>
+                  <td className="px-4 py-3 text-ink-soft tabular-nums">
+                    {new Date(order.createdAt).toLocaleTimeString(undefined, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(recentOrders?.data ?? []).map((order) => (
-                  <tr key={order.id} className="text-sm">
-                    <td className="py-3">
-                      <Link
-                        to={`/chef/orders/${order.id}`}
-                        className="font-medium text-brand-600 hover:underline"
-                      >
-                        #{order.orderNumber}
-                      </Link>
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {order.items.length} item(s)
-                    </td>
-                    <td className="py-3 font-medium text-gray-900">
-                      {fp(order.total)}
-                    </td>
-                    <td className="py-3">
-                      <OrderStatusBadge status={order.status} />
-                    </td>
-                    <td className="py-3 text-gray-500">
-                      {new Date(order.createdAt).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </motion.div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </motion.section>
     </motion.div>
   );
 }
 
-function StatCard({
-  title,
+/** Stat cell — clean sans, no card chrome, tabular numerals. */
+function StatRow({
+  label,
   value,
-  change,
   subtitle,
   icon: Icon,
-  color,
-  urgent,
 }: {
-  title: string;
-  value: string;
-  change?: number;
+  label: string;
+  value: string | number;
   subtitle?: string;
-  icon: typeof DollarSign;
-  color: 'green' | 'blue' | 'yellow' | 'golden';
-  urgent?: boolean;
+  icon?: typeof Star;
 }) {
-  const colorClasses = {
-    green: 'bg-fresh-100 text-fresh-600',
-    blue: 'bg-blue-100 text-blue-600',
-    yellow: 'bg-yellow-100 text-yellow-600',
-    golden: 'bg-golden-100 text-golden-600',
-  };
-
   return (
-    <Card
-      variant="default"
-      padding="lg"
-      className={urgent ? 'ring-2 ring-yellow-400' : ''}
-    >
-      <div className="flex items-center justify-between">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${colorClasses[color]}`}>
-          <Icon className="h-6 w-6" />
-        </div>
-        {change !== undefined && (
-          <span className={`flex items-center gap-1 text-sm font-medium ${change >= 0 ? 'text-fresh-600' : 'text-red-600'}`}>
-            <ArrowUpRight className={`h-4 w-4 ${change < 0 ? 'rotate-180' : ''}`} />
-            {Math.abs(change)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-4 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-sm text-gray-500">{subtitle || title}</p>
-    </Card>
+    <div className="px-4 py-4 sm:px-5">
+      <p className="text-sm text-ink-soft">{label}</p>
+      <p className="mt-1.5 flex items-baseline gap-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+        {Icon && <Icon className="h-4 w-4 text-ink-muted" aria-hidden />}
+        {value}
+      </p>
+      {subtitle && <p className="mt-0.5 text-xs text-ink-soft tabular-nums">{subtitle}</p>}
+    </div>
   );
 }
 
+/** Shortcut list item — clean, single accent on hover via chevron. */
 function QuickActionLink({
   to,
-  icon: Icon,
-  color,
   title,
   subtitle,
 }: {
   to: string;
-  icon: typeof ChefHat;
-  color: 'brand' | 'blue' | 'green' | 'purple';
   title: string;
   subtitle: string;
 }) {
-  const colorClasses = {
-    brand: 'bg-brand-100 text-brand-600',
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-fresh-100 text-fresh-600',
-    purple: 'bg-purple-100 text-purple-600',
-  };
-
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 hover:bg-gray-50 hover:border-gray-300 transition-all"
+      className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-mist/60 first:rounded-t-lg last:rounded-b-lg"
     >
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${colorClasses[color]}`}>
-        <Icon className="h-5 w-5" />
+      <div className="min-w-0">
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="truncate text-sm text-ink-soft">{subtitle}</p>
       </div>
-      <div>
-        <p className="font-medium text-gray-900">{title}</p>
-        <p className="text-sm text-gray-500">{subtitle}</p>
-      </div>
+      <ArrowRight
+        className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-herb"
+        aria-hidden
+      />
     </Link>
   );
 }
@@ -337,24 +305,24 @@ function PendingOrderCard({ order }: { order: Order }) {
   return (
     <Link
       to={`/chef/orders/${order.id}`}
-      className={`flex items-center justify-between rounded-xl border p-4 transition-all hover:bg-gray-50 ${
-        isNew ? 'border-yellow-300 bg-yellow-50 hover:bg-yellow-100' : 'border-gray-200'
+      className={`flex items-center justify-between rounded-xl border p-4 transition-all hover:bg-paper ${
+        isNew ? 'border-amber/30 bg-amber-tint hover:bg-amber-tint' : 'border-mist'
       }`}
     >
       <div className="flex items-center gap-3">
         {isNew && (
-          <span className="flex h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+          <span className="flex h-2 w-2 rounded-full bg-amber animate-pulse" />
         )}
         <div>
-          <p className="font-medium text-gray-900">#{order.orderNumber}</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-medium text-ink">#{order.orderNumber}</p>
+          <p className="text-sm text-ink-muted">
             {order.items.length} items - {fp(order.total)}
           </p>
         </div>
       </div>
       <div className="text-right">
         <OrderStatusBadge status={order.status} />
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-ink-muted">
           {new Date(order.createdAt).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',

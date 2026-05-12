@@ -63,22 +63,22 @@ export default function KitchenDetailsScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-bone">
       <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-gray-200 mb-6">
-          <View className="h-1.5 rounded-full bg-orange-500" style={{ width: `${(2 / 6) * 100}%` }} />
+        <View className="h-1.5 rounded-full bg-mist mb-6">
+          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(2 / 6) * 100}%` }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Kitchen Details</Text>
-        <Text className="text-sm text-gray-500 mb-6">Tell us about your kitchen</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-1">Kitchen Details</Text>
+        <Text className="text-sm text-ink-muted mb-6">Tell us about your kitchen</Text>
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Business Name *</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Business Name *</Text>
         <Controller
           control={control}
           name="businessName"
           render={({ field: { onChange, onBlur, value } }) => (
             <TextInput
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 mb-1"
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
               placeholder="Your kitchen / business name"
               onBlur={onBlur}
               onChangeText={onChange}
@@ -88,11 +88,11 @@ export default function KitchenDetailsScreen() {
           )}
         />
         {errors.businessName && (
-          <Text className="text-red-500 text-xs mb-3">{errors.businessName.message}</Text>
+          <Text className="text-paprika text-xs mb-3">{errors.businessName.message}</Text>
         )}
         {!errors.businessName && <View className="mb-3" />}
 
-        <Text className="text-sm font-medium text-gray-700 mb-2">Cuisine Types *</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-2">Cuisine Types *</Text>
         <View className="flex-row flex-wrap gap-2 mb-1">
           {CUISINE_OPTIONS.map((cuisine) => {
             const selected = selectedCuisines?.includes(cuisine) ?? false;
@@ -102,11 +102,11 @@ export default function KitchenDetailsScreen() {
                 onPress={() => toggleCuisine(cuisine)}
                 className={`px-3 py-1.5 rounded-full border ${
                   selected
-                    ? 'bg-orange-500 border-orange-500'
-                    : 'bg-white border-gray-300'
+                    ? 'bg-herb border-herb'
+                    : 'bg-bone border-mist-strong'
                 }`}
               >
-                <Text className={`text-sm ${selected ? 'text-white font-medium' : 'text-gray-700'}`}>
+                <Text className={`text-sm ${selected ? 'text-paper font-medium' : 'text-ink-soft'}`}>
                   {cuisine}
                 </Text>
               </TouchableOpacity>
@@ -114,17 +114,17 @@ export default function KitchenDetailsScreen() {
           })}
         </View>
         {errors.cuisines && (
-          <Text className="text-red-500 text-xs mb-3">{errors.cuisines.message}</Text>
+          <Text className="text-paprika text-xs mb-3">{errors.cuisines.message}</Text>
         )}
         {!errors.cuisines && <View className="mb-3" />}
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Description *</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Description *</Text>
         <Controller
           control={control}
           name="description"
           render={({ field: { onChange, onBlur, value } }) => (
             <TextInput
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 mb-1"
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
               placeholder="Describe your kitchen, specialties, and cooking style (min 50 characters)"
               onBlur={onBlur}
               onChangeText={onChange}
@@ -140,24 +140,24 @@ export default function KitchenDetailsScreen() {
           control={control}
           name="description"
           render={({ field: { value } }) => (
-            <Text className="text-xs text-gray-400 text-right mb-1">
+            <Text className="text-xs text-ink-muted text-right mb-1">
               {(value ?? '').length} / 500
             </Text>
           )}
         />
         {errors.description && (
-          <Text className="text-red-500 text-xs mb-3">{errors.description.message}</Text>
+          <Text className="text-paprika text-xs mb-3">{errors.description.message}</Text>
         )}
         {!errors.description && <View className="mb-3" />}
 
         <TouchableOpacity
-          className="bg-orange-500 rounded-xl py-4 items-center mt-2"
+          className="bg-herb rounded-xl py-4 items-center mt-2"
           onPress={handleSubmit(onSubmit, (errs) => {
             const firstError = Object.values(errs)[0];
             if (firstError?.message) Alert.alert('Validation Error', firstError.message);
           })}
         >
-          <Text className="text-white font-semibold text-base">Next</Text>
+          <Text className="text-paper font-semibold text-base">Next</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

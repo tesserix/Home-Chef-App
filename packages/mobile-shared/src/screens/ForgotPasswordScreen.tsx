@@ -48,9 +48,9 @@ export function ForgotPasswordScreen({
 
   if (success) {
     return (
-      <View className="flex-1 bg-white px-6 pt-16">
+      <View className="flex-1 bg-bone px-6 pt-16">
         <H1 className="mb-4">Check your inbox</H1>
-        <Text size="base" color="#374151" className="mb-8">
+        <Text size="base" color="#4a4a47" className="mb-8">
           Check your email for a reset link
         </Text>
         {onNavigateToLogin ? (
@@ -63,15 +63,15 @@ export function ForgotPasswordScreen({
   }
 
   return (
-    <View className="flex-1 bg-white px-6 pt-16">
+    <View className="flex-1 bg-bone px-6 pt-16">
       <H1 className="mb-2">{title}</H1>
-      <Text size="base" color="#718096" className="mb-8">
+      <Text size="base" color="#7a7a76" className="mb-8">
         Enter your email address and we'll send you a reset link
       </Text>
 
       {error ? (
-        <View className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-          <Text size="sm" color="#b91c1c">{error}</Text>
+        <View className="bg-paprika-tint border border-paprika/30 rounded-lg p-3 mb-4">
+          <Text size="sm" color="#c95b3e">{error}</Text>
         </View>
       ) : null}
 

@@ -153,17 +153,17 @@ export default function CateringRequestPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app max-w-3xl">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-100">
-            <UtensilsCrossed className="h-8 w-8 text-brand-600" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-herb-tint">
+            <UtensilsCrossed className="h-8 w-8 text-herb" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-gray-900 md:text-3xl">
+          <h1 className="mt-4 font-display text-2xl font-semibold text-ink md:text-3xl">
             Request Catering Quotes
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-ink-soft">
             Tell us about your event and receive quotes from our home chefs
           </p>
         </div>
@@ -175,10 +175,10 @@ export default function CateringRequestPage() {
               <div
                 className={`flex h-10 w-10 items-center justify-center rounded-full font-medium ${
                   s < step
-                    ? 'bg-brand-500 text-white'
+                    ? 'bg-herb text-paper'
                     : s === step
-                    ? 'bg-brand-500 text-white ring-4 ring-brand-100'
-                    : 'bg-gray-200 text-gray-500'
+                    ? 'bg-herb text-paper ring-4 ring-herb/30'
+                    : 'bg-mist text-ink-muted'
                 }`}
               >
                 {s}
@@ -186,14 +186,14 @@ export default function CateringRequestPage() {
               {s < 3 && (
                 <div
                   className={`h-1 w-12 md:w-24 ${
-                    s < step ? 'bg-brand-500' : 'bg-gray-200'
+                    s < step ? 'bg-herb' : 'bg-mist'
                   }`}
                 />
               )}
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-center gap-4 text-sm text-gray-500">
+        <div className="mt-2 flex justify-center gap-4 text-sm text-ink-muted">
           <span className="w-20 text-center">Event Details</span>
           <span className="w-24 md:w-32" />
           <span className="w-20 text-center">Preferences</span>
@@ -205,14 +205,14 @@ export default function CateringRequestPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8">
           {/* Step 1: Event Details */}
           {step === 1 && (
-            <div className="rounded-xl bg-white p-6 shadow-sm md:p-8">
-              <h2 className="text-xl font-semibold text-gray-900">Event Details</h2>
-              <p className="mt-1 text-gray-600">Tell us about your event</p>
+            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+              <h2 className="text-xl font-semibold text-ink">Event Details</h2>
+              <p className="mt-1 text-ink-soft">Tell us about your event</p>
 
               <div className="mt-6 space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-ink-soft">
                       <Calendar className="mr-2 inline h-4 w-4" />
                       Event Date
                     </label>
@@ -223,12 +223,12 @@ export default function CateringRequestPage() {
                       className="input-base mt-1"
                     />
                     {errors.eventDate && (
-                      <p className="mt-1 text-xs text-red-600">{errors.eventDate.message}</p>
+                      <p className="mt-1 text-xs text-paprika">{errors.eventDate.message}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-ink-soft">
                       <Clock className="mr-2 inline h-4 w-4" />
                       Event Time
                     </label>
@@ -238,13 +238,13 @@ export default function CateringRequestPage() {
                       className="input-base mt-1"
                     />
                     {errors.eventTime && (
-                      <p className="mt-1 text-xs text-red-600">{errors.eventTime.message}</p>
+                      <p className="mt-1 text-xs text-paprika">{errors.eventTime.message}</p>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-ink-soft">
                     <Users className="mr-2 inline h-4 w-4" />
                     Number of Guests
                   </label>
@@ -256,14 +256,14 @@ export default function CateringRequestPage() {
                     className="input-base mt-1"
                   />
                   {errors.guestCount && (
-                    <p className="mt-1 text-xs text-red-600">{errors.guestCount.message}</p>
+                    <p className="mt-1 text-xs text-paprika">{errors.guestCount.message}</p>
                   )}
-                  <p className="mt-1 text-sm text-gray-500">Minimum 10, Maximum 500 guests</p>
+                  <p className="mt-1 text-sm text-ink-muted">Minimum 10, Maximum 500 guests</p>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-ink-soft">
                       <DollarSign className="mr-2 inline h-4 w-4" />
                       Budget Range (Optional)
                     </label>
@@ -274,7 +274,7 @@ export default function CateringRequestPage() {
                         placeholder="Min"
                         className="input-base"
                       />
-                      <span className="flex items-center text-gray-400">to</span>
+                      <span className="flex items-center text-ink-muted">to</span>
                       <input
                         type="number"
                         {...register('budgetMax', { valueAsNumber: true })}
@@ -297,13 +297,13 @@ export default function CateringRequestPage() {
 
           {/* Step 2: Preferences */}
           {step === 2 && (
-            <div className="rounded-xl bg-white p-6 shadow-sm md:p-8">
-              <h2 className="text-xl font-semibold text-gray-900">Food Preferences</h2>
-              <p className="mt-1 text-gray-600">Select your cuisine and dietary preferences</p>
+            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+              <h2 className="text-xl font-semibold text-ink">Food Preferences</h2>
+              <p className="mt-1 text-ink-soft">Select your cuisine and dietary preferences</p>
 
               <div className="mt-6 space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-ink-soft mb-3">
                     Cuisine Preferences (Select at least one)
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -314,8 +314,8 @@ export default function CateringRequestPage() {
                         onClick={() => toggleCuisine(cuisine)}
                         className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                           cuisines.includes(cuisine)
-                            ? 'bg-brand-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-herb text-paper'
+                            : 'bg-mist text-ink-soft hover:bg-mist'
                         }`}
                       >
                         {cuisine}
@@ -323,12 +323,12 @@ export default function CateringRequestPage() {
                     ))}
                   </div>
                   {errors.cuisinePreferences && (
-                    <p className="mt-2 text-xs text-red-600">{errors.cuisinePreferences.message}</p>
+                    <p className="mt-2 text-xs text-paprika">{errors.cuisinePreferences.message}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-ink-soft mb-3">
                     Dietary Requirements (Optional)
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -339,8 +339,8 @@ export default function CateringRequestPage() {
                         onClick={() => toggleDietary(option)}
                         className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                           dietary.includes(option)
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-herb text-paper'
+                            : 'bg-mist text-ink-soft hover:bg-mist'
                         }`}
                       >
                         {option}
@@ -350,7 +350,7 @@ export default function CateringRequestPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-ink-soft mb-3">
                     Service Type
                   </label>
                   <div className="space-y-3">
@@ -359,19 +359,19 @@ export default function CateringRequestPage() {
                         key={type.value}
                         className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
                           serviceType === type.value
-                            ? 'border-brand-500 bg-brand-50'
-                            : 'border-gray-200 hover:bg-gray-50'
+                            ? 'border-herb bg-herb-tint'
+                            : 'border-mist hover:bg-paper'
                         }`}
                       >
                         <input
                           type="radio"
                           {...register('serviceType')}
                           value={type.value}
-                          className="mt-1 h-4 w-4 text-brand-600 focus:ring-brand-500"
+                          className="mt-1 h-4 w-4 text-herb focus:ring-herb"
                         />
                         <div>
-                          <span className="font-medium text-gray-900">{type.label}</span>
-                          <p className="mt-1 text-sm text-gray-500">{type.description}</p>
+                          <span className="font-medium text-ink">{type.label}</span>
+                          <p className="mt-1 text-sm text-ink-muted">{type.description}</p>
                         </div>
                       </label>
                     ))}
@@ -379,7 +379,7 @@ export default function CateringRequestPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-ink-soft">
                     Additional Details (Optional)
                   </label>
                   <textarea
@@ -405,13 +405,13 @@ export default function CateringRequestPage() {
 
           {/* Step 3: Location */}
           {step === 3 && (
-            <div className="rounded-xl bg-white p-6 shadow-sm md:p-8">
-              <h2 className="text-xl font-semibold text-gray-900">Event Location</h2>
-              <p className="mt-1 text-gray-600">Where should we deliver the catering?</p>
+            <div className="rounded-xl bg-bone p-6 shadow-sm md:p-8">
+              <h2 className="text-xl font-semibold text-ink">Event Location</h2>
+              <p className="mt-1 text-ink-soft">Where should we deliver the catering?</p>
 
               <div className="mt-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-ink-soft">
                     <MapPin className="mr-2 inline h-4 w-4" />
                     Street Address
                   </label>
@@ -421,12 +421,12 @@ export default function CateringRequestPage() {
                     className="input-base mt-1"
                   />
                   {errors.addressLine1 && (
-                    <p className="mt-1 text-xs text-red-600">{errors.addressLine1.message}</p>
+                    <p className="mt-1 text-xs text-paprika">{errors.addressLine1.message}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-ink-soft">
                     Apartment, suite, etc. (Optional)
                   </label>
                   <input
@@ -438,33 +438,33 @@ export default function CateringRequestPage() {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">City</label>
+                    <label className="block text-sm font-medium text-ink-soft">City</label>
                     <input {...register('city')} className="input-base mt-1" />
                     {errors.city && (
-                      <p className="mt-1 text-xs text-red-600">{errors.city.message}</p>
+                      <p className="mt-1 text-xs text-paprika">{errors.city.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">State</label>
+                    <label className="block text-sm font-medium text-ink-soft">State</label>
                     <input {...register('state')} className="input-base mt-1" />
                     {errors.state && (
-                      <p className="mt-1 text-xs text-red-600">{errors.state.message}</p>
+                      <p className="mt-1 text-xs text-paprika">{errors.state.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Postal Code</label>
+                    <label className="block text-sm font-medium text-ink-soft">Postal Code</label>
                     <input {...register('postalCode')} className="input-base mt-1" />
                     {errors.postalCode && (
-                      <p className="mt-1 text-xs text-red-600">{errors.postalCode.message}</p>
+                      <p className="mt-1 text-xs text-paprika">{errors.postalCode.message}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Info Box */}
-              <div className="mt-6 flex items-start gap-3 rounded-lg bg-blue-50 p-4">
-                <Info className="h-5 w-5 flex-shrink-0 text-blue-600" />
-                <div className="text-sm text-blue-800">
+              <div className="mt-6 flex items-start gap-3 rounded-lg bg-info/10 p-4">
+                <Info className="h-5 w-5 flex-shrink-0 text-info" />
+                <div className="text-sm text-info">
                   <p className="font-medium">What happens next?</p>
                   <p className="mt-1">
                     Once you submit your request, our home chefs will review it and send you

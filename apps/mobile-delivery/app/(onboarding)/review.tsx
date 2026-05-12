@@ -19,9 +19,9 @@ interface SummaryRowProps {
 
 function SummaryRow({ label, value }: SummaryRowProps) {
   return (
-    <View className="flex-row justify-between py-3 border-b border-gray-100">
-      <Text className="text-gray-500 text-sm">{label}</Text>
-      <Text className="text-gray-900 text-sm font-medium flex-1 text-right ml-4">{value}</Text>
+    <View className="flex-row justify-between py-3 border-b border-mist">
+      <Text className="text-ink-muted text-sm">{label}</Text>
+      <Text className="text-ink text-sm font-medium flex-1 text-right ml-4">{value}</Text>
     </View>
   );
 }
@@ -66,21 +66,21 @@ export default function ReviewScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
+    <SafeAreaView className="flex-1 bg-bone" edges={['bottom']}>
       <ScrollView className="flex-1 px-6" keyboardShouldPersistTaps="handled">
         {/* Progress bar */}
-        <View className="mt-4 mb-6 h-1 bg-gray-200 rounded-full">
-          <View className="h-1 bg-orange-500 rounded-full w-full" />
+        <View className="mt-4 mb-6 h-1 bg-mist rounded-full">
+          <View className="h-1 bg-herb rounded-full w-full" />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-2">Review Your Application</Text>
-        <Text className="text-gray-500 mb-6">
+        <Text className="font-display text-2xl font-semibold text-ink mb-2">Review Your Application</Text>
+        <Text className="text-ink-muted mb-6">
           Please review your details before submitting
         </Text>
 
         {/* Personal Info Section */}
-        <View className="bg-gray-50 rounded-xl px-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 pt-4 pb-2">Personal Info</Text>
+        <View className="bg-paper rounded-xl px-4 mb-4">
+          <Text className="text-base font-semibold text-ink pt-4 pb-2">Personal Info</Text>
           <SummaryRow label="City" value={personalInfo.city || '—'} />
           <SummaryRow
             label="Vehicle Type"
@@ -94,8 +94,8 @@ export default function ReviewScreen() {
         </View>
 
         {/* Vehicle Details Section */}
-        <View className="bg-gray-50 rounded-xl px-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 pt-4 pb-2">Vehicle Details</Text>
+        <View className="bg-paper rounded-xl px-4 mb-4">
+          <Text className="text-base font-semibold text-ink pt-4 pb-2">Vehicle Details</Text>
           <SummaryRow label="Make & Model" value={`${vehicleDetails.vehicleMake} ${vehicleDetails.vehicleModel}`} />
           <SummaryRow label="Year & Color" value={`${vehicleDetails.vehicleYear} — ${vehicleDetails.vehicleColor}`} />
           <SummaryRow label="Registration" value={vehicleDetails.vehicleNumber || '—'} />
@@ -103,8 +103,8 @@ export default function ReviewScreen() {
         </View>
 
         {/* Documents Section */}
-        <View className="bg-gray-50 rounded-xl px-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 pt-4 pb-2">Documents</Text>
+        <View className="bg-paper rounded-xl px-4 mb-4">
+          <Text className="text-base font-semibold text-ink pt-4 pb-2">Documents</Text>
           <SummaryRow
             label="Documents Uploaded"
             value={`${docsUploaded}/${totalDocsRequired} required${documents.vehicleRcUri ? ' + RC' : ''}`}
@@ -112,14 +112,14 @@ export default function ReviewScreen() {
         </View>
 
         {/* Payout Section */}
-        <View className="bg-gray-50 rounded-xl px-4 mb-4">
-          <Text className="text-base font-semibold text-gray-800 pt-4 pb-2">Payout Method</Text>
+        <View className="bg-paper rounded-xl px-4 mb-4">
+          <Text className="text-base font-semibold text-ink pt-4 pb-2">Payout Method</Text>
           <SummaryRow label="Method" value={payoutSummary} />
         </View>
 
         {/* Subscription Section */}
-        <View className="bg-gray-50 rounded-xl px-4 mb-6">
-          <Text className="text-base font-semibold text-gray-800 pt-4 pb-2">Subscription Plan</Text>
+        <View className="bg-paper rounded-xl px-4 mb-6">
+          <Text className="text-base font-semibold text-ink pt-4 pb-2">Subscription Plan</Text>
           <SummaryRow label="Selected Plan" value={subscriptionInfo.planName || '—'} />
         </View>
 
@@ -130,33 +130,33 @@ export default function ReviewScreen() {
         >
           <View
             className={`w-5 h-5 mt-0.5 rounded border-2 items-center justify-center ${
-              termsAccepted ? 'bg-orange-500 border-orange-500' : 'border-gray-400 bg-white'
+              termsAccepted ? 'bg-herb border-herb' : 'border-mist-strong bg-bone'
             }`}
           >
-            {termsAccepted && <Text className="text-white text-xs font-bold">✓</Text>}
+            {termsAccepted && <Text className="text-paper text-xs font-medium">✓</Text>}
           </View>
-          <Text className="flex-1 text-gray-700 text-sm leading-5">
+          <Text className="flex-1 text-ink-soft text-sm leading-5">
             I accept the{' '}
-            <Text className="text-orange-500 font-medium">Terms of Service</Text>
+            <Text className="text-herb font-medium">Terms of Service</Text>
             {' '}and{' '}
-            <Text className="text-orange-500 font-medium">Privacy Policy</Text>
+            <Text className="text-herb font-medium">Privacy Policy</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
 
       {/* Submit Button */}
-      <View className="px-6 py-4 border-t border-gray-100">
+      <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={!termsAccepted || isSubmitting}
           className={`w-full py-4 rounded-xl items-center ${
-            termsAccepted && !isSubmitting ? 'bg-orange-500' : 'bg-gray-300'
+            termsAccepted && !isSubmitting ? 'bg-herb' : 'bg-mist-strong'
           }`}
         >
           {isSubmitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-base">Submit Application</Text>
+            <Text className="text-paper font-semibold text-base">Submit Application</Text>
           )}
         </TouchableOpacity>
       </View>

@@ -11,12 +11,12 @@ interface ChefGridProps {
 
 function SkeletonCard() {
   return (
-    <View className="flex-1 rounded-2xl overflow-hidden bg-gray-100">
-      <View className="w-full h-40 bg-gray-200" />
+    <View className="flex-1 rounded-2xl overflow-hidden bg-mist">
+      <View className="w-full h-40 bg-mist" />
       <View className="p-3 gap-2">
-        <View className="h-4 w-3/4 rounded bg-gray-200" />
-        <View className="h-3 w-1/2 rounded bg-gray-200" />
-        <View className="h-3 w-1/3 rounded bg-gray-200" />
+        <View className="h-4 w-3/4 rounded bg-mist" />
+        <View className="h-3 w-1/2 rounded bg-mist" />
+        <View className="h-3 w-1/3 rounded bg-mist" />
       </View>
     </View>
   );

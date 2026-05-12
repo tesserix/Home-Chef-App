@@ -188,7 +188,7 @@ export default function ProviderDetailPage() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-foreground">{provider.name}</h1>
+            <h1 className="font-display text-2xl font-semibold text-foreground">{provider.name}</h1>
             <span className="text-sm text-muted-foreground font-mono">{provider.code}</span>
           </div>
           {provider.description && (
@@ -230,7 +230,7 @@ export default function ProviderDetailPage() {
               <Truck className="h-5 w-5 text-primary" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             {(stats?.totalDeliveries ?? provider.totalDeliveries).toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground">Total Deliveries</p>
@@ -241,18 +241,18 @@ export default function ProviderDetailPage() {
               <CheckCircle className="h-5 w-5 text-success" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             {provider.successRate.toFixed(1)}%
           </p>
           <p className="text-xs text-muted-foreground">Success Rate</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-card">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50">
-              <Clock className="h-5 w-5 text-amber-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-tint">
+              <Clock className="h-5 w-5 text-amber" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             {(stats?.avgDeliveryTime ?? provider.avgDeliveryTime).toFixed(0)} min
           </p>
           <p className="text-xs text-muted-foreground">Avg Delivery Time</p>
@@ -263,7 +263,7 @@ export default function ProviderDetailPage() {
               <Activity className="h-5 w-5 text-info" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">
+          <p className="font-display text-2xl font-semibold text-foreground">
             {(stats?.activeDeliveries ?? provider.activeDeliveries ?? 0).toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground">Active Deliveries</p>
@@ -386,19 +386,19 @@ export default function ProviderDetailPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Completed</p>
-                  <p className="text-lg font-bold text-foreground">{stats.completedDeliveries}</p>
+                  <p className="text-lg font-medium text-foreground">{stats.completedDeliveries}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Failed</p>
-                  <p className="text-lg font-bold text-destructive">{stats.failedDeliveries}</p>
+                  <p className="text-lg font-medium text-destructive">{stats.failedDeliveries}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Cancelled</p>
-                  <p className="text-lg font-bold text-warning">{stats.cancelledDeliveries}</p>
+                  <p className="text-lg font-medium text-warning">{stats.cancelledDeliveries}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Total Cost</p>
-                  <p className="text-lg font-bold text-foreground">{fmt.format(stats.totalCost)}</p>
+                  <p className="text-lg font-medium text-foreground">{fmt.format(stats.totalCost)}</p>
                 </div>
               </div>
 
@@ -553,7 +553,7 @@ export default function ProviderDetailPage() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmAction(null)} />
+          <button type="button" aria-label="Close" className="fixed inset-0 bg-foreground/50" onClick={() => setConfirmAction(null)} />
           <div className="relative z-50 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl mx-4">
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {confirmAction === 'delete' ? 'Delete Provider' : provider.isEnabled ? 'Disable Provider' : 'Enable Provider'}

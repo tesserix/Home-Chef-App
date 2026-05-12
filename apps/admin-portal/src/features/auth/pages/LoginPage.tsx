@@ -121,7 +121,7 @@ export default function LoginPage() {
           alt="Overhead view of home-cooked Indian food spread on a wooden table"
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
+        <div className="absolute inset-0 scrim-bottom" />
 
         {/* Content overlay */}
         <div className="relative flex h-full flex-col justify-end p-10 xl:p-14">
@@ -131,26 +131,26 @@ export default function LoginPage() {
             transition={{ delay: 0.3, duration: 0.6 }}
           >
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-                <Shield className="h-5 w-5 text-white" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bone/20 backdrop-blur-sm">
+                <Shield className="h-5 w-5 text-paper" />
               </div>
-              <span className="text-xl font-bold text-white font-display">Fe3dr</span>
+              <span className="text-xl font-semibold text-paper font-display">Fe3dr</span>
             </div>
 
-            <h2 className="max-w-md text-3xl font-bold leading-tight text-white font-display xl:text-4xl">
+            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper font-display xl:text-4xl">
               Platform Administration
             </h2>
-            <p className="mt-3 max-w-md text-base text-white/80">
+            <p className="mt-3 max-w-md text-base text-paper/80">
               Manage users, chefs, orders, and analytics for the Fe3dr platform.
             </p>
 
             <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3">
               {FEATURES.map((feature) => (
                 <div key={feature} className="flex items-center gap-2.5">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                    <Check className="h-3 w-3 text-white" />
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
+                    <Check className="h-3 w-3 text-paper" />
                   </div>
-                  <span className="text-sm text-white/90">{feature}</span>
+                  <span className="text-sm text-paper/90">{feature}</span>
                 </div>
               ))}
             </div>
@@ -173,7 +173,7 @@ export default function LoginPage() {
                 <Shield className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground font-display">Fe3dr</h1>
+                <h1 className="text-xl font-semibold text-foreground font-display">Fe3dr</h1>
                 <p className="text-xs text-muted-foreground">Admin Portal</p>
               </div>
             </div>
@@ -181,7 +181,7 @@ export default function LoginPage() {
 
           {/* Heading */}
           <motion.div variants={fadeInUp} className="mb-8">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground font-display sm:text-3xl">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground font-display sm:text-3xl">
               Admin Sign In
             </h2>
             <p className="mt-2 text-muted-foreground">
@@ -273,7 +273,7 @@ export default function LoginPage() {
                   <img
                     src={`data:image/png;base64,${twoFactor.qr.qrCodeBase64}`}
                     alt="TOTP QR code"
-                    className="mx-auto h-40 w-40 rounded border border-border bg-white p-1"
+                    className="mx-auto h-40 w-40 rounded border border-border bg-bone p-1"
                   />
                   <p className="mt-2 break-all text-center text-xs text-muted-foreground">
                     or enter this key:&nbsp;

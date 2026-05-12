@@ -34,11 +34,11 @@ function getStatusStyle(status: Order['status']): StatusColor {
     case 'picked_up':
       return { bg: '#DCFCE7', text: '#166534', label: 'On the Way' };
     case 'delivered':
-      return { bg: '#F0FDF4', text: '#15803D', label: 'Delivered' };
+      return { bg: '#F0FDF4', text: '#3e6b3c', label: 'Delivered' };
     case 'cancelled':
-      return { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' };
+      return { bg: '#f3dcd2', text: '#991B1B', label: 'Cancelled' };
     default:
-      return { bg: '#F3F4F6', text: '#374151', label: status };
+      return { bg: '#e6e5e0', text: '#4a4a47', label: status };
   }
 }
 
@@ -62,7 +62,7 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#3e6b3c" />
         </View>
       </SafeAreaView>
     );
@@ -203,7 +203,7 @@ export default function OrderDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fafaf7',
   },
   centered: {
     flex: 1,
@@ -212,42 +212,42 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#7a7a76',
     marginBottom: 16,
   },
   backButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     borderRadius: 8,
   },
   backButtonText: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
     fontWeight: '600',
   },
   scrollContent: {
     paddingBottom: 32,
   },
   headerSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#e6e5e0',
   },
   chefName: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
     marginBottom: 4,
   },
   orderNumber: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   statusSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -266,23 +266,23 @@ const styles = StyleSheet.create({
   },
   etaText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   trackButton: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#F97316',
+    backgroundColor: '#3e6b3c',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
   trackButtonText: {
-    color: '#FFFFFF',
+    color: '#fafaf7',
     fontSize: 16,
     fontWeight: '700',
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fafaf7',
     marginTop: 8,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
     marginBottom: 12,
   },
   itemRow: {
@@ -307,21 +307,21 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 14,
-    color: '#374151',
+    color: '#4a4a47',
     flex: 1,
   },
   itemQty: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
   itemSubtotal: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#1a1a18',
   },
   addressText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#4a4a47',
     lineHeight: 22,
   },
   priceRow: {
@@ -331,27 +331,27 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#7a7a76',
   },
   priceValue: {
     fontSize: 14,
-    color: '#374151',
+    color: '#4a4a47',
   },
   totalRow: {
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#e6e5e0',
     marginTop: 8,
     paddingTop: 12,
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   totalValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1a1a18',
   },
   dateSection: {
     paddingHorizontal: 16,
@@ -360,6 +360,6 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#7a7a76',
   },
 });

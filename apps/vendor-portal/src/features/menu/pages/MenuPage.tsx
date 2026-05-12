@@ -160,7 +160,7 @@ export default function MenuPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Menu Management</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">Menu Management</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {menuItems.length} item{menuItems.length !== 1 ? 's' : ''} in your
             menu
@@ -376,7 +376,7 @@ function MenuItemCard({
           className={`absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors ${
             isSelected
               ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-white/80 bg-white/60 backdrop-blur-sm hover:bg-white/80'
+              : 'border-bone/80 bg-bone/60 backdrop-blur-sm hover:bg-bone/80'
           }`}
         >
           {isSelected && (
@@ -424,7 +424,7 @@ function MenuItemCard({
                 ₹{item.comparePrice.toFixed(2)}
               </span>
             )}
-            <span className="font-bold text-primary">
+            <span className="font-semibold text-primary">
               ₹{item.price.toFixed(2)}
             </span>
           </div>
@@ -495,7 +495,7 @@ function MenuItemCard({
               }`}
             >
               <div
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-bone shadow-sm transition-transform ${
                   item.isAvailable ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />

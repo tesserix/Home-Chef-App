@@ -245,7 +245,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
           {docs.map((doc) => (
             <div key={doc.id} className="flex items-center justify-between text-sm">
               <span className="text-foreground">{docTypeLabels[doc.type] || doc.type}</span>
-              <span className="flex items-center gap-1 text-green-600">
+              <span className="flex items-center gap-1 text-herb">
                 <CheckCircle className="h-3 w-3" />
                 {doc.status === 'verified' ? 'Verified' : 'Uploaded'}
               </span>

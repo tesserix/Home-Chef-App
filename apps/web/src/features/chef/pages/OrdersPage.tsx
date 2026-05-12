@@ -91,8 +91,8 @@ export default function ChefOrdersPage() {
       {/* Header */}
       <motion.div variants={fadeInUp} className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-display-xs text-gray-900">Orders</h1>
-          <p className="mt-1 text-gray-600">
+          <h1 className="font-display text-display-xs text-ink">Orders</h1>
+          <p className="mt-1 text-ink-soft">
             Manage and track your incoming orders
           </p>
         </div>
@@ -117,7 +117,7 @@ export default function ChefOrdersPage() {
           >
             {tab.label}
             {tab.value === 'pending' && pendingCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-paprika text-xs text-paper">
                 {pendingCount}
               </span>
             )}
@@ -138,14 +138,14 @@ export default function ChefOrdersPage() {
       {/* Orders List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb" />
         </div>
       ) : filteredOrders.length === 0 ? (
         <motion.div variants={fadeInUp}>
           <Card variant="filled" padding="lg" className="text-center">
-            <Package className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 font-medium text-gray-900">No orders found</h3>
-            <p className="mt-2 text-gray-600">
+            <Package className="mx-auto h-12 w-12 text-ink-muted" />
+            <h3 className="mt-4 font-medium text-ink">No orders found</h3>
+            <p className="mt-2 text-ink-soft">
               {statusFilter === 'all'
                 ? "You don't have any orders yet"
                 : `No ${statusFilter} orders`}
@@ -210,19 +210,19 @@ function OrderCard({
     <Card
       variant="default"
       padding="lg"
-      className={isNew ? 'ring-2 ring-yellow-400' : ''}
+      className={isNew ? 'ring-2 ring-amber' : ''}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         {/* Order Info */}
         <div className="flex items-start gap-4">
           {isNew && (
-            <span className="mt-1 flex h-3 w-3 rounded-full bg-yellow-500 animate-pulse" />
+            <span className="mt-1 flex h-3 w-3 rounded-full bg-amber animate-pulse" />
           )}
           <div>
             <div className="flex items-center gap-3">
               <button
                 onClick={onSelect}
-                className="text-lg font-semibold text-gray-900 hover:text-brand-600 transition-colors"
+                className="text-lg font-semibold text-ink hover:text-herb transition-colors"
               >
                 #{order.orderNumber}
               </button>
@@ -230,7 +230,7 @@ function OrderCard({
                 {status.label}
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-ink-muted">
               {new Date(order.createdAt).toLocaleString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -243,16 +243,16 @@ function OrderCard({
 
         {/* Total */}
         <div className="text-right">
-          <p className="text-xl font-bold text-gray-900">{fp(order.total)}</p>
-          <p className="text-sm text-gray-500">{order.items.length} item(s)</p>
+          <p className="text-xl font-semibold text-ink">{fp(order.total)}</p>
+          <p className="text-sm text-ink-muted">{order.items.length} item(s)</p>
         </div>
       </div>
 
       {/* Items Preview */}
-      <div className="mt-4 rounded-xl bg-gray-50 p-3">
+      <div className="mt-4 rounded-xl bg-paper p-3">
         <ul className="space-y-1 text-sm">
           {order.items.slice(0, 3).map((item) => (
-            <li key={item.id} className="flex justify-between text-gray-600">
+            <li key={item.id} className="flex justify-between text-ink-soft">
               <span>
                 {item.quantity}x {item.name}
               </span>
@@ -260,14 +260,14 @@ function OrderCard({
             </li>
           ))}
           {order.items.length > 3 && (
-            <li className="text-gray-400">+{order.items.length - 3} more items</li>
+            <li className="text-ink-muted">+{order.items.length - 3} more items</li>
           )}
         </ul>
       </div>
 
       {/* Special Instructions */}
       {order.specialInstructions && (
-        <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mt-3 rounded-xl bg-amber-tint p-3 text-sm text-amber">
           <span className="font-medium">Note:</span> {order.specialInstructions}
         </div>
       )}
@@ -289,7 +289,7 @@ function OrderCard({
             onClick={() => onUpdateStatus('cancelled')}
             disabled={isUpdating}
             leftIcon={<XCircle className="h-4 w-4" />}
-            className="text-red-600 border-red-300 hover:bg-red-50"
+            className="text-paprika border-paprika/30 hover:bg-paprika-tint"
           >
             Reject
           </Button>
@@ -320,7 +320,7 @@ function OrderDetailContent({
     <div className="space-y-6">
       {/* Status Badge */}
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-ink-muted">
           {new Date(order.createdAt).toLocaleString()}
         </p>
         <Badge variant={status.variant} size="md">
@@ -330,17 +330,17 @@ function OrderDetailContent({
 
       {/* Customer Info - Anonymized per RBAC */}
       <Card variant="filled" padding="md">
-        <h3 className="font-medium text-gray-900">Delivery Information</h3>
-        <div className="mt-3 space-y-2 text-sm text-gray-600">
+        <h3 className="font-medium text-ink">Delivery Information</h3>
+        <div className="mt-3 space-y-2 text-sm text-ink-soft">
           <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-gray-400" />
+            <MapPin className="h-4 w-4 text-ink-muted" />
             <span>
               {order.deliveryAddress.line1}, {order.deliveryAddress.city},{' '}
               {order.deliveryAddress.state} {order.deliveryAddress.postalCode}
             </span>
           </div>
           {order.deliveryAddress.deliveryInstructions && (
-            <p className="text-gray-500 italic">
+            <p className="text-ink-muted italic">
               {order.deliveryAddress.deliveryInstructions}
             </p>
           )}
@@ -349,7 +349,7 @@ function OrderDetailContent({
 
       {/* Order Items */}
       <div>
-        <h3 className="font-medium text-gray-900">Order Items</h3>
+        <h3 className="font-medium text-ink">Order Items</h3>
         <div className="mt-3 divide-y rounded-xl border">
           {order.items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 p-3">
@@ -361,14 +361,14 @@ function OrderDetailContent({
                 />
               )}
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{item.name}</p>
+                <p className="font-medium text-ink">{item.name}</p>
                 {item.notes && (
-                  <p className="text-sm text-gray-500">Note: {item.notes}</p>
+                  <p className="text-sm text-ink-muted">Note: {item.notes}</p>
                 )}
               </div>
               <div className="text-right">
-                <p className="font-medium text-gray-900">x{item.quantity}</p>
-                <p className="text-sm text-gray-500">{fp(item.subtotal)}</p>
+                <p className="font-medium text-ink">x{item.quantity}</p>
+                <p className="text-sm text-ink-muted">{fp(item.subtotal)}</p>
               </div>
             </div>
           ))}
@@ -377,17 +377,17 @@ function OrderDetailContent({
 
       {/* Special Instructions */}
       {order.specialInstructions && (
-        <Card variant="filled" padding="md" className="bg-amber-50">
-          <h3 className="font-medium text-amber-900">Special Instructions</h3>
-          <p className="mt-2 text-sm text-amber-800">{order.specialInstructions}</p>
+        <Card variant="filled" padding="md" className="bg-amber-tint">
+          <h3 className="font-medium text-amber">Special Instructions</h3>
+          <p className="mt-2 text-sm text-amber">{order.specialInstructions}</p>
         </Card>
       )}
 
       {/* Payment Summary */}
       <Card variant="filled" padding="md">
-        <h3 className="font-medium text-gray-900">Payment Summary</h3>
+        <h3 className="font-medium text-ink">Payment Summary</h3>
         <div className="mt-3 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
+          <div className="flex justify-between text-ink-soft">
             <span>Subtotal</span>
             <span>{fp(order.subtotal)}</span>
           </div>
@@ -398,12 +398,12 @@ function OrderDetailContent({
             </div>
           )}
           {order.tip > 0 && (
-            <div className="flex justify-between text-gray-600">
+            <div className="flex justify-between text-ink-soft">
               <span>Tip</span>
               <span>{fp(order.tip)}</span>
             </div>
           )}
-          <div className="flex justify-between border-t pt-2 font-semibold text-gray-900">
+          <div className="flex justify-between border-t pt-2 font-semibold text-ink">
             <span>Your Earnings</span>
             <span>{fp(order.subtotal - order.discount + order.tip)}</span>
           </div>
@@ -421,7 +421,7 @@ function OrderDetailContent({
               variant="outline"
               onClick={() => onUpdateStatus('cancelled')}
               disabled={isUpdating}
-              className="text-red-600 border-red-300 hover:bg-red-50"
+              className="text-paprika border-paprika/30 hover:bg-paprika-tint"
             >
               Reject Order
             </Button>

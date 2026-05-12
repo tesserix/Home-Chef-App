@@ -39,7 +39,7 @@ function StarRating({ rating }: { rating: number }) {
   return (
     <View className="flex-row">
       {[1, 2, 3, 4, 5].map((star) => (
-        <Text key={star} className={`text-base ${star <= rating ? 'text-amber-400' : 'text-gray-200'}`}>
+        <Text key={star} className={`text-base ${star <= rating ? 'text-amber' : 'text-mist-strong'}`}>
           ★
         </Text>
       ))}
@@ -49,13 +49,13 @@ function StarRating({ rating }: { rating: number }) {
 
 function ReviewCard({ review }: { review: Review }) {
   return (
-    <View className="bg-white rounded-2xl shadow-sm p-4 mb-3">
+    <View className="bg-bone rounded-2xl shadow-sm p-4 mb-3">
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-1">
-          <Text className="text-base font-semibold text-gray-900">{review.customerName}</Text>
+          <Text className="text-base font-semibold text-ink">{review.customerName}</Text>
           <StarRating rating={review.rating} />
         </View>
-        <Text className="text-xs text-gray-400">
+        <Text className="text-xs text-ink-muted">
           {new Date(review.createdAt).toLocaleDateString('en-IN', {
             day: 'numeric',
             month: 'short',
@@ -64,20 +64,20 @@ function ReviewCard({ review }: { review: Review }) {
         </Text>
       </View>
 
-      <Text className="text-sm text-gray-700 mb-3">{review.comment}</Text>
+      <Text className="text-sm text-ink-soft mb-3">{review.comment}</Text>
 
       {review.reply ? (
-        <View className="bg-orange-50 border-l-4 border-orange-400 pl-3 py-2 rounded-r-xl">
-          <Text className="text-xs font-semibold text-orange-600 mb-0.5">Your Reply</Text>
-          <Text className="text-sm text-gray-700">{review.reply}</Text>
+        <View className="bg-herb-tint border-l-4 border-herb pl-3 py-2 rounded-r-xl">
+          <Text className="text-xs font-semibold text-herb mb-0.5">Your Reply</Text>
+          <Text className="text-sm text-ink-soft">{review.reply}</Text>
         </View>
       ) : (
         <TouchableOpacity
           onPress={() => router.push(`/review/${review.id}` as never)}
-          className="self-start bg-orange-50 border border-orange-200 px-4 py-2 rounded-xl"
+          className="self-start bg-herb-tint border border-herb-tint px-4 py-2 rounded-xl"
           activeOpacity={0.7}
         >
-          <Text className="text-sm text-orange-600 font-medium">Reply</Text>
+          <Text className="text-sm text-herb font-medium">Reply</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -89,21 +89,21 @@ export default function ReviewsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load reviews</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load reviews</Text>
         <TouchableOpacity
           onPress={() => refetch()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -114,19 +114,19 @@ export default function ReviewsScreen() {
   const halfStar = avgRating - fullStars >= 0.5;
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-white border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#374151" />
+      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
+        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
+          <ChevronLeft size={24} color="#4a4a47" />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-gray-900">Customer Reviews</Text>
+        <Text className="text-lg font-semibold text-ink">Customer Reviews</Text>
       </View>
 
       {/* Rating header */}
-      <View className="bg-white px-4 py-4 border-b border-gray-100">
+      <View className="bg-bone px-4 py-4 border-b border-mist">
         <View className="flex-row items-center gap-3">
-          <Text className="text-4xl font-bold text-gray-900">{avgRating.toFixed(1)}</Text>
+          <Text className="font-display text-4xl font-semibold tabular-nums text-ink">{avgRating.toFixed(1)}</Text>
           <View>
             <View className="flex-row">
               {[1, 2, 3, 4, 5].map((star) => (
@@ -134,17 +134,17 @@ export default function ReviewsScreen() {
                   key={star}
                   className={`text-xl ${
                     star <= fullStars
-                      ? 'text-amber-400'
+                      ? 'text-amber'
                       : star === fullStars + 1 && halfStar
-                        ? 'text-amber-300'
-                        : 'text-gray-200'
+                        ? 'text-amber'
+                        : 'text-mist-strong'
                   }`}
                 >
                   ★
                 </Text>
               ))}
             </View>
-            <Text className="text-sm text-gray-400 mt-0.5">
+            <Text className="text-sm text-ink-muted mt-0.5">
               {data?.totalReviews ?? 0} reviews
             </Text>
           </View>
@@ -157,11 +157,11 @@ export default function ReviewsScreen() {
         renderItem={({ item }) => <ReviewCard review={item} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6B35" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
         ListEmptyComponent={
           <View className="items-center justify-center py-16">
-            <Text className="text-gray-400 text-base text-center">
+            <Text className="text-ink-muted text-base text-center">
               No reviews yet.{'\n'}Your first review will appear here.
             </Text>
           </View>

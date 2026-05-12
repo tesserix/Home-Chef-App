@@ -149,7 +149,7 @@ function DocUploadCard({ section }: { section: DocSection }) {
             )}
             {isUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             {existing && !isUploading && (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <CheckCircle2 className="h-4 w-4 text-herb" />
             )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">{section.description}</p>
@@ -176,13 +176,13 @@ export function StepDocuments({ errors }: Props) {
   return (
     <div className="space-y-6">
       {/* Info banner */}
-      <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+      <div className="flex items-start gap-3 rounded-xl border border-info/30 bg-info/10 p-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-info" />
         <div>
-          <p className="text-sm font-medium text-blue-900">
+          <p className="text-sm font-medium text-info">
             Documents help us verify your kitchen and enable payouts
           </p>
-          <p className="mt-1 text-xs text-blue-700">
+          <p className="mt-1 text-xs text-info">
             Your documents are encrypted and stored securely. They are only used for verification.
             FSSAI license is optional — many home chefs start without one and add it later.
           </p>

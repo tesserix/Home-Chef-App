@@ -5,21 +5,21 @@ import { useAuthStore } from '../../store/auth-store';
 import { DashboardStatsCard } from '../../components/vendor/DashboardStatsCard';
 
 function SkeletonBox({ className }: { className: string }) {
-  return <View className={`animate-pulse rounded-2xl bg-gray-200 ${className}`} />;
+  return <View className={`animate-pulse rounded-2xl bg-mist ${className}`} />;
 }
 
 function StatusBadge({ status }: { status: string }) {
   const colorMap: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    accepted: 'bg-blue-100 text-blue-700',
-    preparing: 'bg-orange-100 text-orange-700',
-    ready: 'bg-purple-100 text-purple-700',
-    delivered: 'bg-green-100 text-green-700',
-    cancelled: 'bg-red-100 text-red-700',
-    rejected: 'bg-red-100 text-red-700',
-    picked_up: 'bg-teal-100 text-teal-700',
+    pending: 'bg-amber-tint text-amber',
+    accepted: 'bg-info/10 text-info',
+    preparing: 'bg-herb-tint text-herb',
+    ready: 'bg-purple-100 text-info',
+    delivered: 'bg-herb-tint text-herb',
+    cancelled: 'bg-paprika-tint text-paprika',
+    rejected: 'bg-paprika-tint text-paprika',
+    picked_up: 'bg-herb-tint text-herb',
   };
-  const colorClass = colorMap[status] ?? 'bg-gray-100 text-gray-600';
+  const colorClass = colorMap[status] ?? 'bg-mist text-ink-soft';
   return (
     <View className={`rounded-full px-2 py-0.5 ${colorClass}`}>
       <Text className={`text-xs font-medium capitalize ${colorClass.split(' ')[1]}`}>
@@ -47,33 +47,33 @@ export default function DashboardScreen() {
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-gray-50 px-6">
-        <Text className="text-center text-base text-red-500">Failed to load dashboard</Text>
+      <SafeAreaView className="flex-1 items-center justify-center bg-paper px-6">
+        <Text className="text-center text-base text-paprika">Failed to load dashboard</Text>
         <Pressable
           onPress={() => refetch()}
-          className="mt-4 rounded-xl bg-orange-500 px-6 py-3 active:opacity-80"
+          className="mt-4 rounded-xl bg-herb px-6 py-3 active:opacity-80"
         >
-          <Text className="font-semibold text-white">Retry</Text>
+          <Text className="font-semibold text-paper">Retry</Text>
         </Pressable>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <ScrollView
         className="flex-1"
         contentContainerClassName="px-4 pb-8"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#f97316" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
         }
       >
         {/* Header */}
         <View className="mb-6 mt-4">
-          <Text className="text-2xl font-bold text-gray-900">
+          <Text className="font-display text-2xl font-semibold text-ink">
             {greeting}, {displayName}
           </Text>
-          <Text className="mt-1 text-sm text-gray-500">Here's your kitchen overview</Text>
+          <Text className="mt-1 text-sm text-ink-muted">Here's your kitchen overview</Text>
         </View>
 
         {/* Stats grid */}
@@ -115,18 +115,18 @@ export default function DashboardScreen() {
         )}
 
         {/* Accepting Orders toggle */}
-        <View className="mb-4 flex-row items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm border border-gray-100">
+        <View className="mb-4 flex-row items-center justify-between rounded-2xl bg-bone px-4 py-3 shadow-sm border border-mist">
           <View>
-            <Text className="text-base font-semibold text-gray-900">Accepting Orders</Text>
-            <Text className="text-xs text-gray-400 mt-0.5">
+            <Text className="text-base font-semibold text-ink">Accepting Orders</Text>
+            <Text className="text-xs text-ink-muted mt-0.5">
               {dashboard?.acceptingOrders ? 'Customers can place orders' : 'Kitchen is closed'}
             </Text>
           </View>
           <Switch
             value={dashboard?.acceptingOrders ?? false}
             onValueChange={(v) => toggleMutation.mutate(v)}
-            trackColor={{ false: '#d1d5db', true: '#f97316' }}
-            thumbColor="#ffffff"
+            trackColor={{ false: '#d4d3ce', true: '#3e6b3c' }}
+            thumbColor="#fafaf7"
             disabled={toggleMutation.isPending || isLoading}
           />
         </View>
@@ -134,16 +134,16 @@ export default function DashboardScreen() {
         {/* Recent Orders */}
         {!isLoading && (dashboard?.recentOrders?.length ?? 0) > 0 && (
           <View>
-            <Text className="mb-3 text-base font-semibold text-gray-900">Recent Orders</Text>
+            <Text className="mb-3 text-base font-semibold text-ink">Recent Orders</Text>
             <View className="gap-2">
               {(dashboard?.recentOrders ?? []).slice(0, 3).map((order) => (
                 <View
                   key={order.id}
-                  className="flex-row items-center justify-between rounded-xl bg-white px-4 py-3 border border-gray-100"
+                  className="flex-row items-center justify-between rounded-xl bg-bone px-4 py-3 border border-mist"
                 >
                   <View className="flex-1">
-                    <Text className="text-sm font-medium text-gray-900">{order.customerName}</Text>
-                    <Text className="text-xs text-gray-400 mt-0.5">₹{order.total.toFixed(0)}</Text>
+                    <Text className="text-sm font-medium text-ink">{order.customerName}</Text>
+                    <Text className="text-xs text-ink-muted mt-0.5">₹{order.total.toFixed(0)}</Text>
                   </View>
                   <StatusBadge status={order.status} />
                 </View>

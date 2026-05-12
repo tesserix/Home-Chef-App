@@ -223,7 +223,7 @@ export default function ProviderCreatePage() {
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Add Delivery Provider</h1>
+          <h1 className="font-display text-2xl font-semibold text-foreground">Add Delivery Provider</h1>
           <p className="text-sm text-muted-foreground">Configure a new delivery provider integration</p>
         </div>
       </div>

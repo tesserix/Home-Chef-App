@@ -129,7 +129,7 @@ export default function BrowseChefsPage() {
   ].filter(Boolean).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-paper py-8">
       <div className="container-app">
         {/* Header */}
         <motion.div
@@ -137,8 +137,8 @@ export default function BrowseChefsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="font-display text-display-sm text-gray-900">Explore Home Chefs</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="font-display text-display-sm text-ink">Explore Home Chefs</h1>
+          <p className="mt-2 text-ink-soft">
             Discover talented home chefs serving authentic homemade food
           </p>
         </motion.div>
@@ -195,7 +195,7 @@ export default function BrowseChefsPage() {
             >
               <Card variant="default" padding="md" className="mb-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-900">Filters</h3>
+                  <h3 className="font-semibold text-ink">Filters</h3>
                   {activeFilterCount > 0 && (
                     <Button variant="link" onClick={clearAllFilters}>
                       Clear all
@@ -226,7 +226,7 @@ export default function BrowseChefsPage() {
                   />
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    <label className="mb-1.5 block text-sm font-medium text-ink-soft">
                       Availability
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer mt-3">
@@ -236,9 +236,9 @@ export default function BrowseChefsPage() {
                         onChange={(e) =>
                           updateFilters({ isOpen: e.target.checked ? true : undefined })
                         }
-                        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                        className="h-4 w-4 rounded border-mist-strong text-herb focus:ring-herb"
                       />
-                      <span className="text-gray-700">Open Now</span>
+                      <span className="text-ink-soft">Open Now</span>
                     </label>
                   </div>
                 </div>
@@ -256,7 +256,7 @@ export default function BrowseChefsPage() {
               exit={{ opacity: 0, y: -10 }}
               className="mb-6 flex flex-wrap items-center gap-2"
             >
-              <span className="text-sm text-gray-500">Active filters:</span>
+              <span className="text-sm text-ink-muted">Active filters:</span>
               {filters.search && (
                 <Badge variant="brand" className="gap-1">
                   Search: {filters.search}
@@ -265,7 +265,7 @@ export default function BrowseChefsPage() {
                       setSearchQuery('');
                       updateFilters({ search: undefined });
                     }}
-                    className="hover:text-brand-900 ml-1"
+                    className="hover:text-herb ml-1"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -276,7 +276,7 @@ export default function BrowseChefsPage() {
                   {filters.cuisine}
                   <button
                     onClick={() => updateFilters({ cuisine: undefined })}
-                    className="hover:text-brand-900 ml-1"
+                    className="hover:text-herb ml-1"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -287,7 +287,7 @@ export default function BrowseChefsPage() {
                   {filters.dietary}
                   <button
                     onClick={() => updateFilters({ dietary: undefined })}
-                    className="hover:text-brand-900 ml-1"
+                    className="hover:text-herb ml-1"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -305,19 +305,19 @@ export default function BrowseChefsPage() {
             ))}
           </div>
         ) : error ? (
-          <Card variant="filled" padding="lg" className="text-center bg-red-50">
-            <p className="text-red-600">Failed to load chefs. Please try again.</p>
+          <Card variant="filled" padding="lg" className="text-center bg-paprika-tint">
+            <p className="text-paprika">Failed to load chefs. Please try again.</p>
             <Button variant="primary" className="mt-4" onClick={() => window.location.reload()}>
               Retry
             </Button>
           </Card>
         ) : (data?.data ?? []).length === 0 ? (
           <Card variant="filled" padding="lg" className="text-center">
-            <div className="mx-auto h-16 w-16 rounded-full bg-gray-200 flex items-center justify-center mb-4">
-              <Search className="h-8 w-8 text-gray-400" />
+            <div className="mx-auto h-16 w-16 rounded-full bg-mist flex items-center justify-center mb-4">
+              <Search className="h-8 w-8 text-ink-muted" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">No chefs found</h3>
-            <p className="mt-2 text-gray-600">
+            <h3 className="text-lg font-semibold text-ink">No chefs found</h3>
+            <p className="mt-2 text-ink-soft">
               Try adjusting your filters or search query
             </p>
             <Button variant="primary" className="mt-4" onClick={clearAllFilters}>
@@ -327,7 +327,7 @@ export default function BrowseChefsPage() {
         ) : (
           <>
             {/* Results count */}
-            <p className="mb-4 text-sm text-gray-500">
+            <p className="mb-4 text-sm text-ink-muted">
               Showing {data?.data?.length ?? 0} of {data?.pagination?.total ?? 0} chefs
             </p>
 
@@ -355,7 +355,7 @@ export default function BrowseChefsPage() {
                 >
                   Previous
                 </Button>
-                <span className="px-4 text-sm text-gray-600">
+                <span className="px-4 text-sm text-ink-soft">
                   Page {data.pagination.page} of {data.pagination.totalPages}
                 </span>
                 <Button
@@ -408,7 +408,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
           <img
             src={chef.bannerImage || chef.profileImage}
             alt={chef.businessName}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95 "
           />
           {chef.verified && (
             <Badge variant="success" size="sm" className="absolute top-2 left-2">
@@ -417,11 +417,11 @@ function ChefCardItem({ chef }: { chef: Chef }) {
           )}
           <button
             onClick={handleFavorite}
-            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-white hover:shadow-md"
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-sm backdrop-blur-sm transition-all hover:bg-bone hover:shadow-md"
           >
             <Heart
               className={`h-4 w-4 transition-colors ${
-                favorited ? 'fill-red-500 text-red-500' : 'text-gray-600'
+                favorited ? 'fill-paprika text-paprika' : 'text-ink-soft'
               }`}
             />
           </button>
@@ -431,7 +431,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
               alt={chef.businessName}
               size="xl"
               shape="square"
-              className="border-4 border-white shadow-elevated rounded-xl"
+              className="border-4 border-bone shadow-elevated rounded-xl"
             />
           </div>
         </div>
@@ -440,19 +440,19 @@ function ChefCardItem({ chef }: { chef: Chef }) {
         <div className="p-4 pt-10">
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-gray-900 truncate group-hover:text-brand-600 transition-colors">
+              <h3 className="font-semibold text-ink truncate group-hover:text-herb transition-colors">
                 {chef.businessName}
               </h3>
-              <p className="mt-1 text-sm text-gray-500 truncate">
+              <p className="mt-1 text-sm text-ink-muted truncate">
                 {chef.cuisines.slice(0, 2).join(' • ')}
               </p>
             </div>
             <RatingBadge value={chef.rating} className="ml-2" />
           </div>
 
-          <p className="mt-3 line-clamp-2 text-sm text-gray-600">{chef.description}</p>
+          <p className="mt-3 line-clamp-2 text-sm text-ink-soft">{chef.description}</p>
 
-          <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
+          <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
               {chef.prepTime}
@@ -461,7 +461,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
           </div>
 
           <div className="mt-3 flex items-center justify-between text-sm">
-            <div className="flex items-center gap-1 text-gray-500">
+            <div className="flex items-center gap-1 text-ink-muted">
               <MapPin className="h-4 w-4" />
               {chef.serviceRadius} km radius
             </div>

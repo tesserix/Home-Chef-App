@@ -38,22 +38,22 @@ export default function PersonalInfoScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-bone">
       <View className="px-6 pt-4 pb-2">
-        <View className="h-1.5 rounded-full bg-gray-200 mb-6">
-          <View className="h-1.5 rounded-full bg-orange-500" style={{ width: `${(1 / 6) * 100}%` }} />
+        <View className="h-1.5 rounded-full bg-mist mb-6">
+          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(1 / 6) * 100}%` }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Personal Information</Text>
-        <Text className="text-sm text-gray-500 mb-6">Tell us about yourself</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-1">Personal Information</Text>
+        <Text className="text-sm text-ink-muted mb-6">Tell us about yourself</Text>
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Full Name *</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Full Name *</Text>
         <Controller
           control={control}
           name="fullName"
           render={({ field: { onChange, onBlur, value } }) => (
             <TextInput
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 mb-1"
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
               placeholder="Enter your full name"
               onBlur={onBlur}
               onChangeText={onChange}
@@ -63,17 +63,17 @@ export default function PersonalInfoScreen() {
           )}
         />
         {errors.fullName && (
-          <Text className="text-red-500 text-xs mb-3">{errors.fullName.message}</Text>
+          <Text className="text-paprika text-xs mb-3">{errors.fullName.message}</Text>
         )}
         {!errors.fullName && <View className="mb-3" />}
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Phone Number *</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Phone Number *</Text>
         <Controller
           control={control}
           name="phone"
           render={({ field: { onChange, onBlur, value } }) => (
             <TextInput
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base text-gray-900 mb-1"
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
               placeholder="10-digit mobile number"
               onBlur={onBlur}
               onChangeText={onChange}
@@ -84,32 +84,32 @@ export default function PersonalInfoScreen() {
           )}
         />
         {errors.phone && (
-          <Text className="text-red-500 text-xs mb-3">{errors.phone.message}</Text>
+          <Text className="text-paprika text-xs mb-3">{errors.phone.message}</Text>
         )}
         {!errors.phone && <View className="mb-3" />}
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Email Address</Text>
+        <Text className="text-sm font-medium text-ink-soft mb-1">Email Address</Text>
         <Controller
           control={control}
           name="email"
           render={({ field: { value } }) => (
             <TextInput
-              className="border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-500 bg-gray-50 mb-1"
+              className="border border-mist rounded-lg px-4 py-3 text-base text-ink-muted bg-paper mb-1"
               value={value}
               editable={false}
             />
           )}
         />
-        <Text className="text-xs text-gray-400 mb-6">Email is pre-filled from your account</Text>
+        <Text className="text-xs text-ink-muted mb-6">Email is pre-filled from your account</Text>
 
         <TouchableOpacity
-          className="bg-orange-500 rounded-xl py-4 items-center"
+          className="bg-herb rounded-xl py-4 items-center"
           onPress={handleSubmit(onSubmit, (errs) => {
             const firstError = Object.values(errs)[0];
             if (firstError?.message) Alert.alert('Validation Error', firstError.message);
           })}
         >
-          <Text className="text-white font-semibold text-base">Next</Text>
+          <Text className="text-paper font-semibold text-base">Next</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

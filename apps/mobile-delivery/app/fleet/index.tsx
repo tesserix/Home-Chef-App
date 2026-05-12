@@ -75,9 +75,9 @@ function useFleetPartners(enabled: boolean) {
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <View className="flex-1 bg-white rounded-2xl p-4 shadow-sm">
-      <Text className="text-xs text-gray-500 mb-1">{label}</Text>
-      <Text className={`text-xl font-bold ${accent ? 'text-orange-500' : 'text-gray-900'}`}>
+    <View className="flex-1 bg-bone rounded-2xl p-4 shadow-sm">
+      <Text className="text-xs text-ink-muted mb-1">{label}</Text>
+      <Text className={`text-xl font-semibold ${accent ? 'text-herb' : 'text-ink'}`}>
         {value}
       </Text>
     </View>
@@ -89,27 +89,27 @@ function PartnerCard({ partner }: { partner: Partner }) {
   return (
     <TouchableOpacity
       onPress={() => router.push(`/fleet/partner/${partner.id}`)}
-      className="bg-white rounded-2xl p-4 mb-3 shadow-sm flex-row items-center"
+      className="bg-bone rounded-2xl p-4 mb-3 shadow-sm flex-row items-center"
       activeOpacity={0.75}
     >
       <View className="flex-1">
         <View className="flex-row items-center mb-1">
-          <Text className="text-base font-semibold text-gray-900 mr-2">{partner.name}</Text>
+          <Text className="text-base font-semibold text-ink mr-2">{partner.name}</Text>
           <View
-            className={`px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100' : 'bg-gray-100'}`}
+            className={`px-2 py-0.5 rounded-full ${isActive ? 'bg-herb-tint' : 'bg-mist'}`}
           >
             <Text
-              className={`text-xs font-medium ${isActive ? 'text-green-700' : 'text-gray-500'}`}
+              className={`text-xs font-medium ${isActive ? 'text-herb' : 'text-ink-muted'}`}
             >
               {isActive ? 'Active' : 'Inactive'}
             </Text>
           </View>
         </View>
         <View className="flex-row gap-4">
-          <Text className="text-sm text-gray-500">
+          <Text className="text-sm text-ink-muted">
             Today: {partner.todayDeliveries} deliveries
           </Text>
-          <Text className="text-sm text-yellow-500">
+          <Text className="text-sm text-amber">
             &#9733; {partner.rating.toFixed(1)}
           </Text>
         </View>
@@ -132,21 +132,21 @@ export default function FleetScreen() {
 
   if (fleetLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </SafeAreaView>
     );
   }
 
   if (fleetError) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-6">
-        <Text className="text-gray-500 text-base mb-4">Failed to load fleet data</Text>
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
+        <Text className="text-ink-muted text-base mb-4">Failed to load fleet data</Text>
         <TouchableOpacity
           onPress={() => refetchFleet()}
-          className="bg-orange-500 px-6 py-3 rounded-xl"
+          className="bg-herb px-6 py-3 rounded-xl"
         >
-          <Text className="text-white font-semibold">Retry</Text>
+          <Text className="text-paper font-semibold">Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -155,10 +155,10 @@ export default function FleetScreen() {
   // 403 returned null — show non-error lock screen for fleet managers only
   if (fleet === null) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 items-center justify-center px-8">
-        <Lock size={48} color="#9CA3AF" />
-        <Text className="text-xl font-bold text-gray-900 mt-4 mb-2">Fleet Management</Text>
-        <Text className="text-sm text-gray-500 text-center leading-5">
+      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-8">
+        <Lock size={48} color="#7a7a76" />
+        <Text className="text-xl font-semibold text-ink mt-4 mb-2">Fleet Management</Text>
+        <Text className="text-sm text-ink-muted text-center leading-5">
           Fleet management is available for fleet managers only. Contact your administrator to
           request access.
         </Text>
@@ -169,7 +169,7 @@ export default function FleetScreen() {
   const partnerList = partners ?? [];
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-paper">
       <FlatList<Partner>
         data={partnerList}
         keyExtractor={(item) => item.id}
@@ -178,13 +178,13 @@ export default function FleetScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetchFleet}
-            tintColor="#FF6B35"
+            tintColor="#3e6b3c"
           />
         }
         ListHeaderComponent={
           <View>
             <View className="pt-4 pb-2">
-              <Text className="text-2xl font-bold text-gray-900">Fleet Overview</Text>
+              <Text className="font-display text-2xl font-semibold text-ink">Fleet Overview</Text>
             </View>
 
             {/* Stats grid */}
@@ -202,13 +202,13 @@ export default function FleetScreen() {
             </View>
 
             {partnerList.length > 0 && (
-              <Text className="text-base font-semibold text-gray-700 mb-3">Partners</Text>
+              <Text className="text-base font-semibold text-ink-soft mb-3">Partners</Text>
             )}
           </View>
         }
         ListEmptyComponent={
           <View className="items-center justify-center py-12">
-            <Text className="text-base text-gray-400">No partners found.</Text>
+            <Text className="text-base text-ink-muted">No partners found.</Text>
           </View>
         }
         renderItem={({ item }) => <PartnerCard partner={item} />}

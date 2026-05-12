@@ -109,29 +109,29 @@ export default function VehicleScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
+    <SafeAreaView className="flex-1 bg-bone" edges={['bottom']}>
       <ScrollView className="flex-1 px-6" keyboardShouldPersistTaps="handled">
         {/* Progress bar */}
-        <View className="mt-4 mb-6 h-1 bg-gray-200 rounded-full">
-          <View className="h-1 bg-orange-500 rounded-full" style={{ width: '33.33%' }} />
+        <View className="mt-4 mb-6 h-1 bg-mist rounded-full">
+          <View className="h-1 bg-herb rounded-full" style={{ width: '33.33%' }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-2">Vehicle Details</Text>
-        <Text className="text-gray-500 mb-6">
+        <Text className="font-display text-2xl font-semibold text-ink mb-2">Vehicle Details</Text>
+        <Text className="text-ink-muted mb-6">
           Vehicle type: <Text className="font-semibold capitalize">{personalInfo.vehicleType}</Text>
         </Text>
 
         {fields.map((field) => (
           <View key={field.name} className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">
-              {field.label} <Text className="text-red-500">*</Text>
+            <Text className="text-sm font-medium text-ink-soft mb-1">
+              {field.label} <Text className="text-paprika">*</Text>
             </Text>
             <Controller
               control={control}
               name={field.name}
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  className={`border rounded-lg px-4 py-3 text-gray-900 ${errors[field.name] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`border rounded-lg px-4 py-3 text-ink ${errors[field.name] ? 'border-paprika' : 'border-mist-strong'}`}
                   placeholder={field.placeholder}
                   keyboardType={field.keyboardType ?? 'default'}
                   autoCapitalize={field.autoCapitalize ?? 'sentences'}
@@ -142,7 +142,7 @@ export default function VehicleScreen() {
               )}
             />
             {errors[field.name] && (
-              <Text className="text-red-500 text-sm mt-1">{errors[field.name]?.message}</Text>
+              <Text className="text-paprika text-sm mt-1">{errors[field.name]?.message}</Text>
             )}
           </View>
         ))}
@@ -151,16 +151,16 @@ export default function VehicleScreen() {
       </ScrollView>
 
       {/* Next Button */}
-      <View className="px-6 py-4 border-t border-gray-100">
+      <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting}
-          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-orange-300' : 'bg-orange-500'}`}
+          className={`w-full py-4 rounded-xl items-center ${isSubmitting ? 'bg-herb-soft' : 'bg-herb'}`}
         >
           {isSubmitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-base">Next</Text>
+            <Text className="text-paper font-semibold text-base">Next</Text>
           )}
         </TouchableOpacity>
       </View>

@@ -131,8 +131,8 @@ export default function DocumentsScreen() {
     uploadState: UploadState,
   ): React.ReactElement {
     return (
-      <View className="mb-6 border border-gray-200 rounded-xl p-4">
-        <Text className="text-sm font-semibold text-gray-800 mb-3">{label}</Text>
+      <View className="mb-6 border border-mist rounded-xl p-4">
+        <Text className="text-sm font-semibold text-ink mb-3">{label}</Text>
 
         {uri ? (
           <View className="items-center mb-3">
@@ -143,69 +143,69 @@ export default function DocumentsScreen() {
                 resizeMode="cover"
               />
             ) : (
-              <View className="w-full h-24 bg-gray-100 rounded-lg items-center justify-center">
+              <View className="w-full h-24 bg-mist rounded-lg items-center justify-center">
                 <Text className="text-3xl">📄</Text>
-                <Text className="text-sm text-gray-500 mt-1">PDF uploaded</Text>
+                <Text className="text-sm text-ink-muted mt-1">PDF uploaded</Text>
               </View>
             )}
-            <Text className="text-xs text-green-600 font-medium mt-2">Uploaded successfully</Text>
+            <Text className="text-xs text-herb font-medium mt-2">Uploaded successfully</Text>
           </View>
         ) : null}
 
         {uploadState.uploading ? (
           <View className="items-center py-4">
-            <ActivityIndicator color="#FF6B35" />
-            <Text className="text-sm text-gray-500 mt-2">Uploading...</Text>
+            <ActivityIndicator color="#3e6b3c" />
+            <Text className="text-sm text-ink-muted mt-2">Uploading...</Text>
           </View>
         ) : (
           <View className="flex-row gap-2">
             <TouchableOpacity
-              className="flex-1 border border-gray-300 rounded-lg py-2.5 items-center"
+              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
               onPress={() => handleCamera(docType)}
             >
-              <Text className="text-sm text-gray-700">Camera</Text>
+              <Text className="text-sm text-ink-soft">Camera</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className="flex-1 border border-gray-300 rounded-lg py-2.5 items-center"
+              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
               onPress={() => handleGallery(docType)}
             >
-              <Text className="text-sm text-gray-700">Gallery</Text>
+              <Text className="text-sm text-ink-soft">Gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className="flex-1 border border-gray-300 rounded-lg py-2.5 items-center"
+              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
               onPress={() => handlePdf(docType)}
             >
-              <Text className="text-sm text-gray-700">PDF</Text>
+              <Text className="text-sm text-ink-soft">PDF</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {uploadState.error ? (
-          <Text className="text-red-500 text-xs mt-2">{uploadState.error}</Text>
+          <Text className="text-paprika text-xs mt-2">{uploadState.error}</Text>
         ) : null}
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-bone">
       <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-gray-200 mb-6">
-          <View className="h-1.5 rounded-full bg-orange-500" style={{ width: `${(4 / 6) * 100}%` }} />
+        <View className="h-1.5 rounded-full bg-mist mb-6">
+          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(4 / 6) * 100}%` }} />
         </View>
 
-        <Text className="text-2xl font-bold text-gray-900 mb-1">Documents</Text>
-        <Text className="text-sm text-gray-500 mb-6">Upload your identity and FSSAI documents</Text>
+        <Text className="font-display text-2xl font-semibold text-ink mb-1">Documents</Text>
+        <Text className="text-sm text-ink-muted mb-6">Upload your identity and FSSAI documents</Text>
 
         {renderUploadSlot('ID Proof', 'id_proof', documents.idProofUri, documents.idProofType, idUpload)}
         {renderUploadSlot('FSSAI License', 'fssai_license', documents.fssaiUri, documents.fssaiType, fssaiUpload)}
 
         <TouchableOpacity
-          className={`rounded-xl py-4 items-center ${bothUploaded ? 'bg-orange-500' : 'bg-gray-300'}`}
+          className={`rounded-xl py-4 items-center ${bothUploaded ? 'bg-herb' : 'bg-mist-strong'}`}
           onPress={onNext}
           disabled={!bothUploaded}
         >
-          <Text className={`font-semibold text-base ${bothUploaded ? 'text-white' : 'text-gray-500'}`}>
+          <Text className={`font-semibold text-base ${bothUploaded ? 'text-paper' : 'text-ink-muted'}`}>
             Next
           </Text>
         </TouchableOpacity>

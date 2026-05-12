@@ -149,7 +149,7 @@ function SkeletonImage({
 
 function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn('rounded-xl bg-card border border-border p-6 shadow-sm', className)}>
+    <div className={cn('rounded-xl bg-card border border-border p-6 shadow-1', className)}>
       <SkeletonImage aspectRatio="video" className="mb-4" />
       <Skeleton className="h-5 w-3/4 mb-2" />
       <Skeleton className="h-4 w-1/2 mb-4" />
@@ -166,7 +166,7 @@ function SkeletonCard({ className }: { className?: string }) {
 
 function SkeletonFoodCard({ className }: { className?: string }) {
   return (
-    <div className={cn('rounded-xl bg-card border border-border overflow-hidden shadow-sm', className)}>
+    <div className={cn('rounded-xl bg-card border border-border overflow-hidden shadow-1', className)}>
       <SkeletonImage aspectRatio="square" className="rounded-none" />
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
@@ -186,7 +186,7 @@ function SkeletonFoodCard({ className }: { className?: string }) {
 
 function SkeletonChefCard({ className }: { className?: string }) {
   return (
-    <div className={cn('rounded-xl bg-card border border-border overflow-hidden shadow-sm', className)}>
+    <div className={cn('rounded-xl bg-card border border-border overflow-hidden shadow-1', className)}>
       <Skeleton className="h-32 rounded-none" />
       <div className="p-4 pt-10 relative">
         <SkeletonAvatar

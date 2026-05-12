@@ -97,7 +97,7 @@ export default function AuditLogsPage() {
                 setPage(1);
               }}
               placeholder="e.g. chef.verify"
-              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
             />
           </Field>
           <Field label="Entity type">
@@ -108,7 +108,7 @@ export default function AuditLogsPage() {
                 setPage(1);
               }}
               placeholder="e.g. user, chef"
-              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
             />
           </Field>
           <Field label="From">
@@ -119,7 +119,7 @@ export default function AuditLogsPage() {
                 setFrom(e.target.value);
                 setPage(1);
               }}
-              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
             />
           </Field>
           <Field label="To">
@@ -130,7 +130,7 @@ export default function AuditLogsPage() {
                 setTo(e.target.value);
                 setPage(1);
               }}
-              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
             />
           </Field>
         </div>

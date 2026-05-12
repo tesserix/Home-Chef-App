@@ -1,3 +1,5 @@
+import '../global.css';
+
 import '../lib/background-location'; // registers background task at module load
 import { useEffect, useRef } from 'react';
 import { Platform, View } from 'react-native';

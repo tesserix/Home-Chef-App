@@ -4,7 +4,6 @@ import { useFormatPrice } from '@/shared/utils/format-price';
 import {
   Package,
   Navigation,
-  DollarSign,
   Clock,
   MapPin,
   Phone,
@@ -12,7 +11,6 @@ import {
   Play,
   Loader2,
   Bike,
-  Star,
   AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -102,58 +100,69 @@ export default function DeliveryDashboardPage() {
       {/* Header with Online Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-gray-500">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${isOnline ? 'bg-herb' : 'bg-ink-muted'}`}
+              aria-hidden
+            />
             {isOnline ? 'Ready for deliveries' : 'Currently offline'}
           </p>
         </div>
         <button
+          type="button"
           onClick={toggleOnline}
-          className={`relative inline-flex h-12 w-24 items-center justify-center rounded-full font-medium transition-colors ${
+          aria-pressed={isOnline}
+          aria-label={isOnline ? 'Go offline' : 'Go online'}
+          className={`inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 ${
             isOnline
-              ? 'bg-green-500 text-white hover:bg-green-600'
-              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+              ? 'bg-foreground text-background hover:bg-ink-soft'
+              : 'border border-mist bg-bone text-foreground hover:bg-mist'
           }`}
         >
-          {isOnline ? 'Online' : 'Offline'}
+          {isOnline ? 'Go offline' : 'Go online'}
         </button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Today's Deliveries"
-          value={stats?.todayDeliveries || 0}
-          icon={Package}
-          color="bg-blue-500"
+      {/* Lead block — Today's earnings (dominant) */}
+      <section>
+        <p className="text-sm text-ink-soft">Today's earnings</p>
+        <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+          {fp(stats?.todayEarnings || 0)}
+        </p>
+        <p className="mt-2 text-sm text-ink-soft tabular-nums">
+          From {stats?.todayDeliveries ?? 0}{' '}
+          {stats?.todayDeliveries === 1 ? 'delivery' : 'deliveries'} today
+        </p>
+      </section>
+
+      {/* Stats — hairline-divided */}
+      <section
+        aria-label="Performance at a glance"
+        className="grid grid-cols-2 divide-y divide-mist border-y border-mist sm:grid-cols-4 sm:divide-x sm:divide-y-0"
+      >
+        <StatRow label="On-time rate" value={`${stats?.onTimeRate ?? 0}%`} />
+        <StatRow
+          label="Rating"
+          value={stats?.averageRating !== undefined ? stats.averageRating.toFixed(1) : '—'}
+          subtitle={stats?.totalReviews ? `${stats.totalReviews} reviews` : 'No reviews yet'}
         />
-        <StatCard
-          title="Today's Earnings"
-          value={fp(stats?.todayEarnings || 0)}
-          icon={DollarSign}
-          color="bg-green-500"
+        <StatRow
+          label="This week"
+          value={stats?.weekDeliveries ?? 0}
+          subtitle={stats?.weekDeliveries === 1 ? 'delivery' : 'deliveries'}
         />
-        <StatCard
-          title="On-Time Rate"
-          value={`${stats?.onTimeRate || 0}%`}
-          icon={Clock}
-          color="bg-purple-500"
-        />
-        <StatCard
-          title="Rating"
-          value={stats?.averageRating?.toFixed(1) || '0.0'}
-          subtitle={`${stats?.totalReviews || 0} reviews`}
-          icon={Star}
-          color="bg-yellow-500"
-        />
-      </div>
+        <StatRow label="Week earnings" value={fp(stats?.weekEarnings || 0)} />
+      </section>
 
       {/* Current Delivery */}
       {currentDelivery && (
-        <div className="rounded-xl bg-brand-50 border border-brand-200 p-6">
+        <div className="rounded-xl bg-herb-tint border border-herb-tint p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Current Delivery</h2>
-            <span className="rounded-full bg-brand-500 px-3 py-1 text-sm font-medium text-white">
+            <h2 className="text-lg font-semibold text-ink">Current Delivery</h2>
+            <span className="rounded-full bg-herb px-3 py-1 text-sm font-medium text-paper">
               In Progress
             </span>
           </div>
@@ -161,16 +170,16 @@ export default function DeliveryDashboardPage() {
           <div className="grid gap-6 md:grid-cols-2">
             {/* Pickup */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-                <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-orange-500" />
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+                <div className="h-6 w-6 rounded-full bg-herb-tint flex items-center justify-center">
+                  <div className="h-2 w-2 rounded-full bg-herb" />
                 </div>
                 PICKUP
               </div>
               <div className="pl-8">
-                <p className="font-medium text-gray-900">Chef's Kitchen</p>
-                <p className="text-gray-600">{currentDelivery.deliveryAddress.line1}</p>
-                <button className="mt-2 text-sm text-brand-600 font-medium flex items-center gap-1">
+                <p className="font-medium text-ink">Chef's Kitchen</p>
+                <p className="text-ink-soft">{currentDelivery.deliveryAddress.line1}</p>
+                <button className="mt-2 text-sm text-herb font-medium flex items-center gap-1">
                   <Navigation className="h-4 w-4" />
                   Navigate
                 </button>
@@ -179,16 +188,16 @@ export default function DeliveryDashboardPage() {
 
             {/* Dropoff */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-                <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <MapPin className="h-3 w-3 text-green-600" />
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-muted">
+                <div className="h-6 w-6 rounded-full bg-herb-tint flex items-center justify-center">
+                  <MapPin className="h-3 w-3 text-herb" />
                 </div>
                 DROP-OFF
               </div>
               <div className="pl-8">
-                <p className="font-medium text-gray-900">Customer</p>
-                <p className="text-gray-600">{currentDelivery.deliveryAddress.line1}</p>
-                <p className="text-gray-500 text-sm">
+                <p className="font-medium text-ink">Customer</p>
+                <p className="text-ink-soft">{currentDelivery.deliveryAddress.line1}</p>
+                <p className="text-ink-muted text-sm">
                   {currentDelivery.deliveryAddress.city}, {currentDelivery.deliveryAddress.state}
                 </p>
               </div>
@@ -196,14 +205,14 @@ export default function DeliveryDashboardPage() {
           </div>
 
           {/* Order Details */}
-          <div className="mt-6 flex items-center justify-between rounded-lg bg-white p-4">
+          <div className="mt-6 flex items-center justify-between rounded-lg bg-bone p-4">
             <div>
-              <p className="font-medium text-gray-900">Order #{currentDelivery.orderNumber}</p>
-              <p className="text-sm text-gray-500">{currentDelivery.items.length} items</p>
+              <p className="font-medium text-ink">Order #{currentDelivery.orderNumber}</p>
+              <p className="text-sm text-ink-muted">{currentDelivery.items.length} items</p>
             </div>
             <div className="text-right">
-              <p className="font-semibold text-gray-900">{fp(currentDelivery.deliveryFee)}</p>
-              <p className="text-sm text-gray-500">+ tip</p>
+              <p className="font-semibold text-ink">{fp(currentDelivery.deliveryFee)}</p>
+              <p className="text-sm text-ink-muted">+ tip</p>
             </div>
           </div>
 
@@ -247,7 +256,7 @@ export default function DeliveryDashboardPage() {
                   updateStatusMutation.mutate({ orderId: currentDelivery.id, status: 'delivered' })
                 }
                 disabled={updateStatusMutation.isPending}
-                className="flex-1 btn-primary bg-green-600 hover:bg-green-700"
+                className="flex-1 btn-primary bg-herb hover:bg-herb"
               >
                 {updateStatusMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -268,36 +277,36 @@ export default function DeliveryDashboardPage() {
       {/* Available Deliveries */}
       {!currentDelivery && isOnline && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Deliveries</h2>
+          <h2 className="text-lg font-semibold text-ink mb-4">Available Deliveries</h2>
           {availableDeliveries && availableDeliveries.length > 0 ? (
             <div className="space-y-4">
               {availableDeliveries.map((delivery) => (
                 <div
                   key={delivery.id}
-                  className="rounded-xl border border-gray-200 bg-white p-4 hover:border-brand-300 transition-colors"
+                  className="rounded-xl border border-mist bg-bone p-4 hover:border-herb-tint transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-ink">
                           #{delivery.orderNumber}
                         </span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-gray-600">{delivery.chefName}</span>
+                        <span className="text-ink-muted">•</span>
+                        <span className="text-ink-soft">{delivery.chefName}</span>
                       </div>
 
                       <div className="mt-3 space-y-2">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <div className="h-2 w-2 rounded-full bg-orange-500" />
+                        <div className="flex items-center gap-2 text-sm text-ink-soft">
+                          <div className="h-2 w-2 rounded-full bg-herb" />
                           {delivery.pickupAddress.line1}, {delivery.pickupAddress.city}
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="h-3 w-3 text-green-600" />
+                        <div className="flex items-center gap-2 text-sm text-ink-soft">
+                          <MapPin className="h-3 w-3 text-herb" />
                           {delivery.deliveryAddress.line1}, {delivery.deliveryAddress.city}
                         </div>
                       </div>
 
-                      <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
+                      <div className="mt-3 flex items-center gap-4 text-sm text-ink-muted">
                         <span className="flex items-center gap-1">
                           <Navigation className="h-4 w-4" />
                           {delivery.distance} km
@@ -314,7 +323,7 @@ export default function DeliveryDashboardPage() {
                     </div>
 
                     <div className="text-right">
-                      <p className="text-xl font-bold text-green-600">
+                      <p className="text-xl font-semibold text-herb">
                         {fp(delivery.estimatedPayout)}
                       </p>
                       <button
@@ -335,10 +344,10 @@ export default function DeliveryDashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl bg-gray-50 p-12 text-center">
-              <Bike className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 font-medium text-gray-900">No deliveries available</h3>
-              <p className="mt-2 text-gray-500">
+            <div className="rounded-xl bg-paper p-12 text-center">
+              <Bike className="mx-auto h-12 w-12 text-ink-muted" />
+              <h3 className="mt-4 font-medium text-ink">No deliveries available</h3>
+              <p className="mt-2 text-ink-muted">
                 New delivery requests will appear here. Stay online!
               </p>
             </div>
@@ -348,10 +357,10 @@ export default function DeliveryDashboardPage() {
 
       {/* Offline Message */}
       {!isOnline && (
-        <div className="rounded-xl bg-gray-100 p-12 text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 font-medium text-gray-900">You're currently offline</h3>
-          <p className="mt-2 text-gray-500">
+        <div className="rounded-xl bg-mist p-12 text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-ink-muted" />
+          <h3 className="mt-4 font-medium text-ink">You're currently offline</h3>
+          <p className="mt-2 text-ink-muted">
             Go online to start receiving delivery requests
           </p>
           <button onClick={toggleOnline} className="mt-4 btn-primary">
@@ -360,59 +369,26 @@ export default function DeliveryDashboardPage() {
         </div>
       )}
 
-      {/* Weekly Summary */}
-      <div className="rounded-xl bg-white border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900">This Week</h2>
-        <div className="mt-4 grid gap-6 sm:grid-cols-2">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
-              <Package className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats?.weekDeliveries || 0}</p>
-              <p className="text-sm text-gray-500">Deliveries completed</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {fp(stats?.weekEarnings || 0)}
-              </p>
-              <p className="text-sm text-gray-500">Total earnings</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
 
-function StatCard({
-  title,
+function StatRow({
+  label,
   value,
   subtitle,
-  icon: Icon,
-  color,
 }: {
-  title: string;
+  label: string;
   value: string | number;
   subtitle?: string;
-  icon: typeof Package;
-  color: string;
 }) {
   return (
-    <div className="rounded-xl bg-white border border-gray-200 p-4">
-      <div className="flex items-center justify-between">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </div>
-      <p className="mt-3 text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-sm text-gray-500">{title}</p>
-      {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+    <div className="px-4 py-4 sm:px-5">
+      <p className="text-sm text-ink-soft">{label}</p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+        {value}
+      </p>
+      {subtitle && <p className="mt-0.5 text-xs text-ink-soft tabular-nums">{subtitle}</p>}
     </div>
   );
 }

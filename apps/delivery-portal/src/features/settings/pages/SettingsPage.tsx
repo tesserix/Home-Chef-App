@@ -159,11 +159,11 @@ function StripeConnectCard() {
         </div>
         {data?.connected ? (
           ready ? (
-            <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+            <span className="flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs text-herb">
               <CheckCircle2 className="h-3 w-3" /> Connected
             </span>
           ) : (
-            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+            <span className="flex items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-xs text-amber">
               <XCircle className="h-3 w-3" /> Action Required
             </span>
           )
@@ -211,7 +211,7 @@ function StripeConnectCard() {
           </div>
 
           {data.warning && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="rounded-lg border border-amber/30 bg-amber-tint px-3 py-2 text-xs text-amber">
               {data.warning}
             </div>
           )}
@@ -262,7 +262,7 @@ function Cell({ label, value, good }: { label: string; value: string; good: bool
   return (
     <div className="rounded-lg border border-border bg-background px-3 py-2">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-sm font-medium ${good ? 'text-green-600' : 'text-amber-600'}`}>{value}</p>
+      <p className={`text-sm font-medium ${good ? 'text-herb' : 'text-amber'}`}>{value}</p>
     </div>
   );
 }

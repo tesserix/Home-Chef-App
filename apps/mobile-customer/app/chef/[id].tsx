@@ -45,16 +45,16 @@ export default function ChefDetailScreen() {
 
   if (chefLoading || menuLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#F97316" />
+      <View className="flex-1 items-center justify-center bg-bone">
+        <ActivityIndicator size="large" color="#3e6b3c" />
       </View>
     );
   }
 
   if (chefError || menuError || !chef) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6">
-        <Text className="text-base text-gray-500 text-center">
+      <View className="flex-1 items-center justify-center bg-bone px-6">
+        <Text className="text-base text-ink-muted text-center">
           Failed to load chef details. Please try again.
         </Text>
       </View>
@@ -62,7 +62,7 @@ export default function ChefDetailScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-paper">
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
@@ -72,7 +72,7 @@ export default function ChefDetailScreen() {
         )}
         ListEmptyComponent={
           <View className="py-10 items-center">
-            <Text className="text-gray-400">No items in this category</Text>
+            <Text className="text-ink-muted">No items in this category</Text>
           </View>
         }
         ListHeaderComponent={
@@ -87,17 +87,17 @@ export default function ChefDetailScreen() {
             />
 
             {/* Chef info */}
-            <View className="bg-white rounded-2xl p-4 mt-3 mb-3 shadow-sm border border-gray-100">
+            <View className="bg-bone rounded-2xl p-4 mt-3 mb-3 shadow-sm border border-mist">
               <View className="flex-row items-start justify-between">
                 <View className="flex-1">
-                  <Text className="text-xl font-bold text-gray-900">{chef.name}</Text>
-                  <Text className="text-sm text-gray-500 mt-0.5">{chef.cuisine}</Text>
+                  <Text className="text-xl font-semibold text-ink">{chef.name}</Text>
+                  <Text className="text-sm text-ink-muted mt-0.5">{chef.cuisine}</Text>
                 </View>
                 <View
-                  className={`px-3 py-1 rounded-full ${chef.isOpen ? 'bg-green-100' : 'bg-gray-100'}`}
+                  className={`px-3 py-1 rounded-full ${chef.isOpen ? 'bg-herb-tint' : 'bg-mist'}`}
                 >
                   <Text
-                    className={`text-xs font-semibold ${chef.isOpen ? 'text-green-700' : 'text-gray-500'}`}
+                    className={`text-xs font-semibold ${chef.isOpen ? 'text-herb' : 'text-ink-muted'}`}
                   >
                     {chef.isOpen ? 'Open' : 'Closed'}
                   </Text>
@@ -106,17 +106,17 @@ export default function ChefDetailScreen() {
 
               <View className="flex-row items-center gap-3 mt-2">
                 <View className="flex-row items-center gap-1">
-                  <Star size={14} color="#F59E0B" fill="#F59E0B" />
-                  <Text className="text-sm font-semibold text-gray-700">
+                  <Star size={14} color="#d1a64a" fill="#d1a64a" />
+                  <Text className="text-sm font-semibold text-ink-soft">
                     {chef.rating.toFixed(1)}
                   </Text>
-                  <Text className="text-xs text-gray-400">({chef.reviewCount})</Text>
+                  <Text className="text-xs text-ink-muted">({chef.reviewCount})</Text>
                 </View>
                 {chef.deliveryTime ? (
-                  <Text className="text-xs text-gray-500">{chef.deliveryTime}</Text>
+                  <Text className="text-xs text-ink-muted">{chef.deliveryTime}</Text>
                 ) : null}
                 {chef.deliveryFee != null ? (
-                  <Text className="text-xs text-gray-500">
+                  <Text className="text-xs text-ink-muted">
                     {chef.deliveryFee === 0 ? 'Free delivery' : `₹${chef.deliveryFee} delivery`}
                   </Text>
                 ) : null}
@@ -136,15 +136,15 @@ export default function ChefDetailScreen() {
                     onPress={() => setSelectedCategory(cat)}
                     className={`px-4 py-2 rounded-full border ${
                       activeCategory === cat
-                        ? 'bg-orange-500 border-orange-500'
-                        : 'bg-white border-gray-200'
+                        ? 'bg-herb border-herb'
+                        : 'bg-bone border-mist'
                     }`}
                     accessibilityRole="button"
                     accessibilityLabel={`Filter by ${cat}`}
                   >
                     <Text
                       className={`text-sm font-medium ${
-                        activeCategory === cat ? 'text-white' : 'text-gray-700'
+                        activeCategory === cat ? 'text-paper' : 'text-ink-soft'
                       }`}
                     >
                       {cat}

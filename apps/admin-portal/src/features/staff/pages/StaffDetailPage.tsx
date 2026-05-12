@@ -180,7 +180,7 @@ export default function StaffDetailPage() {
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="font-display text-2xl font-semibold text-foreground">
             {staff.firstName} {staff.lastName}
           </h1>
           <p className="text-sm text-muted-foreground">{staff.email}</p>
@@ -257,7 +257,7 @@ export default function StaffDetailPage() {
                     className="h-20 w-20 rounded-full object-cover"
                   />
                 ) : (
-                  <span className="text-3xl font-bold text-primary">
+                  <span className="font-display text-3xl font-semibold tabular-nums text-primary">
                     {(staff.firstName?.[0] || '?').toUpperCase()}
                   </span>
                 )}

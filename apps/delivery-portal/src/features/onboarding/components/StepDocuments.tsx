@@ -255,8 +255,8 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
             >
               <div className="flex items-center gap-3">
                 {uploaded ? (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
+                    <CheckCircle className="h-5 w-5 text-herb" />
                   </div>
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
@@ -276,7 +276,7 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
 
               <div className="flex items-center gap-2">
                 {uploaded && (
-                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                  <span className="rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
                     {uploaded.status === 'verified' ? 'Verified' : 'Uploaded'}
                   </span>
                 )}

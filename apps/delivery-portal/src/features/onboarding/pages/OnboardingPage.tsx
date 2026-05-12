@@ -122,7 +122,7 @@ export default function OnboardingPage() {
             <Truck className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-foreground">Become a Delivery Partner</h1>
+            <h1 className="text-lg font-medium text-foreground">Become a Delivery Partner</h1>
             <p className="text-xs text-muted-foreground">Complete your profile to start delivering</p>
           </div>
         </div>

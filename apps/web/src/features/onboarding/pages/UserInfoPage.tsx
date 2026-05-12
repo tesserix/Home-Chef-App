@@ -97,7 +97,7 @@ export default function UserInfoPage() {
       <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
           <div>
-            <h1 className="text-lg font-bold text-foreground">Complete Your Profile</h1>
+            <h1 className="text-lg font-medium text-foreground">Complete Your Profile</h1>
             <p className="text-xs text-muted-foreground">
               Step {currentStep + 1} of {TOTAL_STEPS} &mdash; {STEPS[currentStep]?.title}
             </p>

@@ -24,8 +24,8 @@ export function OfflineBanner() {
   if (!isOffline) return null;
 
   return (
-    <View className="bg-orange-500 px-4 py-2 flex-row items-center justify-center">
-      <Text className="text-white text-sm font-medium">
+    <View className="bg-herb px-4 py-2 flex-row items-center justify-center">
+      <Text className="text-paper text-sm font-medium">
         You are offline — showing cached data
       </Text>
     </View>

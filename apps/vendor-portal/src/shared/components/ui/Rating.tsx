@@ -60,7 +60,7 @@ const Rating = forwardRef<HTMLDivElement, RatingProps>(
             key={i}
             className={cn(
               'fill-warning text-warning',
-              !readonly && 'cursor-pointer hover:scale-110 transition-transform'
+              !readonly && 'cursor-pointer hover:opacity-95 transition-transform'
             )}
             onClick={() => !readonly && onValueChange?.(i)}
           />

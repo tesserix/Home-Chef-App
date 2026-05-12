@@ -27,21 +27,21 @@ const POLICIES: PolicyItem[] = [
     title: 'Kitchen Hygiene & Food Safety Commitment',
     description:
       'I commit to maintaining a clean and hygienic kitchen at all times. I will use fresh ingredients, follow proper food handling practices, store food at safe temperatures, and ensure all cooking utensils and surfaces are sanitised regularly. I understand Fe3dr may conduct periodic kitchen checks.',
-    icon: <Heart className="h-5 w-5 text-pink-500" />,
+    icon: <Heart className="h-5 w-5 text-info" />,
   },
   {
     key: 'acceptedCancellationPolicy',
     title: 'Order & Cancellation Policy',
     description:
       'I agree to accept or reject orders within 5 minutes. Once accepted, I will prepare the food within the estimated time. If I cannot fulfill an order, I will cancel immediately so the customer can be notified. Repeated late cancellations may affect my kitchen rating and visibility.',
-    icon: <AlertTriangle className="h-5 w-5 text-amber-500" />,
+    icon: <AlertTriangle className="h-5 w-5 text-amber" />,
   },
   {
     key: 'acceptedTerms',
     title: 'Fe3dr Platform Terms of Service',
     description:
       'I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement. I understand that Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account.',
-    icon: <BookOpen className="h-5 w-5 text-blue-500" />,
+    icon: <BookOpen className="h-5 w-5 text-info" />,
   },
 ];
 
@@ -77,7 +77,7 @@ export function StepPolicies({ errors }: Props) {
         <div className="mt-4 space-y-2">
           {COMPLIANCE_ITEMS.map((item, i) => (
             <div key={i} className="flex items-start gap-3 rounded-lg bg-secondary/50 p-3">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-herb" />
               <span className="text-sm text-foreground">{item}</span>
             </div>
           ))}
@@ -144,13 +144,13 @@ export function StepPolicies({ errors }: Props) {
 
       {/* Summary */}
       {allPoliciesAccepted && (
-        <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+        <div className="flex items-start gap-3 rounded-xl border border-herb/30 bg-herb-tint p-4">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-herb" />
           <div>
-            <p className="text-sm font-medium text-green-900">
+            <p className="text-sm font-medium text-herb">
               You're all set to submit your application!
             </p>
-            <p className="mt-1 text-xs text-green-700">
+            <p className="mt-1 text-xs text-herb">
               Our team will review your details and you'll be notified within 24-48 hours.
               You can start setting up your menu in the meantime.
             </p>
