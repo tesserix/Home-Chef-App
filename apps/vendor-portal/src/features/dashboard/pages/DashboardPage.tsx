@@ -532,7 +532,7 @@ export default function DashboardPage() {
       >
         <div>
           <p className="text-sm text-ink-soft">Today's revenue</p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+          <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-foreground sm:text-5xl">
             {formatCurrency(stats?.todayRevenue ?? 0)}
           </p>
           <p className="mt-2 text-sm text-ink-soft tabular-nums">
