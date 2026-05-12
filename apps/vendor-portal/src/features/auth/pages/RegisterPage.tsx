@@ -92,7 +92,7 @@ export default function RegisterPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.6 }}
           >
-            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper font-display xl:text-4xl">
+            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper xl:text-4xl">
               Start selling from your kitchen
             </h2>
             <p className="mt-3 max-w-md text-base text-paper/80">
@@ -138,7 +138,7 @@ export default function RegisterPage() {
           </motion.div>
 
           <motion.div variants={fadeInUp} className="mb-8">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground font-display sm:text-3xl">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Register your kitchen
             </h2>
             <p className="mt-2 text-muted-foreground">

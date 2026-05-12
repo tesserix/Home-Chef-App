@@ -101,21 +101,31 @@ export default function OrderHistoryPage() {
 
       {/* Date Range Filter */}
       <motion.div variants={fadeInUp} className="flex items-center gap-2">
-        <Calendar className="h-4 w-4 text-muted-foreground" />
-        <div className="flex gap-1 rounded-lg bg-secondary p-1">
-          {dateRangeOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => setDateRange(option.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
-                dateRange === option.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        <Calendar aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        <div
+          role="radiogroup"
+          aria-label="Filter orders by date range"
+          className="flex gap-1 rounded-lg bg-secondary p-1"
+        >
+          {dateRangeOptions.map((option) => {
+            const isActive = dateRange === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                onClick={() => setDateRange(option.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                  isActive
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </motion.div>
 

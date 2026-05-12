@@ -47,18 +47,29 @@ export default function AnalyticsPage() {
           <h1 className="page-title">Analytics</h1>
           <p className="page-description">Insights into your kitchen performance</p>
         </div>
-        <div className="flex rounded-lg border border-mist bg-bone p-1">
-          {(['7d', '30d', '90d'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                period === p ? 'bg-herb text-paper' : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : '90 Days'}
-            </button>
-          ))}
+        <div
+          role="radiogroup"
+          aria-label="Analytics period"
+          className="flex rounded-lg border border-mist bg-bone p-1"
+        >
+          {(['7d', '30d', '90d'] as const).map((p) => {
+            const isActive = period === p;
+            const label = p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : '90 Days';
+            return (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                onClick={() => setPeriod(p)}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                  isActive ? 'bg-herb text-paper' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </motion.div>
 

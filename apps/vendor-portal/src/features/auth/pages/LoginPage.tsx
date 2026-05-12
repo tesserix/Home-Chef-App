@@ -94,7 +94,7 @@ export default function LoginPage() {
               <span className="text-xl font-semibold text-paper font-display">Fe3dr</span>
             </div>
 
-            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper font-display xl:text-4xl">
+            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper xl:text-4xl">
               Grow your home kitchen business
             </h2>
             <p className="mt-3 max-w-md text-base text-paper/80">
@@ -138,7 +138,7 @@ export default function LoginPage() {
 
           {/* Heading */}
           <motion.div variants={fadeInUp} className="mb-8">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground font-display sm:text-3xl">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Welcome back
             </h2>
             <p className="mt-2 text-muted-foreground">
@@ -308,8 +308,9 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground">
               Want to start selling?{' '}
               <button
+                type="button"
                 onClick={() => register()}
-                className="font-semibold text-primary hover:text-primary/80 transition-colors"
+                className="rounded font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 Register as a vendor
               </button>

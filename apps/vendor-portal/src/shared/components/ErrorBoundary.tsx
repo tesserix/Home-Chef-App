@@ -78,10 +78,11 @@ export class ErrorBoundary extends Component<Props, State> {
             </pre>
           )}
           <button
+            type="button"
             onClick={this.handleRetry}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw aria-hidden="true" className="h-4 w-4" />
             Try Again
           </button>
         </div>

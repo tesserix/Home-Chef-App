@@ -85,9 +85,10 @@ const AlertDialogCancel = DialogPrimitive.Close;
 const AlertDialogAction = forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, ...props }, ref) => (
+>(({ className, type = 'button', ...props }, ref) => (
   <button
     ref={ref}
+    type={type}
     className={cn(
       'inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-primary-foreground',
       'hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',

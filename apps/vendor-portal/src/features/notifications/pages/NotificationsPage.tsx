@@ -168,10 +168,11 @@ export default function NotificationsPage() {
         </div>
         {hasUnread && (
           <button
+            type="button"
             onClick={() => markAllReadMutation.mutate()}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <CheckCheck className="h-4 w-4" />
+            <CheckCheck aria-hidden="true" className="h-4 w-4" />
             Mark all read
           </button>
         )}
@@ -310,10 +311,11 @@ export default function NotificationsPage() {
                     <div className="mt-3 flex items-center gap-2">
                       {!notif.isRead && (
                         <button
+                          type="button"
                           onClick={() => markReadMutation.mutate(notif.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
-                          <CheckCircle className="h-3.5 w-3.5" />
+                          <CheckCircle aria-hidden="true" className="h-3.5 w-3.5" />
                           Mark as read
                         </button>
                       )}
@@ -383,11 +385,12 @@ function RespondForm({ requestId }: { requestId: string }) {
       />
       <div className="mt-2 flex justify-end">
         <button
+          type="button"
           onClick={handleSend}
           disabled={sending || !response.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-1.5 text-xs font-medium text-success-foreground hover:bg-success/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-1.5 text-xs font-medium text-success-foreground transition-colors hover:bg-success/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          {sending ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> : <Send aria-hidden="true" className="h-3.5 w-3.5" />}
           Respond & Send
         </button>
       </div>

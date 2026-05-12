@@ -40,7 +40,11 @@ export default function MenuItemViewPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-muted-foreground">Menu item not found</p>
-        <button onClick={() => navigate('/menu')} className="mt-4 text-sm text-primary hover:underline">
+        <button
+          type="button"
+          onClick={() => navigate('/menu')}
+          className="mt-4 rounded text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           Back to Menu
         </button>
       </div>
@@ -54,8 +58,13 @@ export default function MenuItemViewPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/menu')} className="rounded-lg p-2 hover:bg-secondary transition-colors">
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <button
+            type="button"
+            aria-label="Back to menu"
+            onClick={() => navigate('/menu')}
+            className="rounded-lg p-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <ArrowLeft aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
           </button>
           <div>
             <h1 className="font-display text-2xl font-semibold text-foreground">{menuItem.name}</h1>
