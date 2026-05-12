@@ -88,11 +88,13 @@ Div.displayName = 'M.Div';
 
 const Section = forwardRef<HTMLElement, MDivProps>(({ preset, ...rest }, ref) => (
   <motion.section
-    // Cast through unknown: framer-motion's Ref type and React's
-    // Ref<HTMLElement> diverge under the React 18/19 type duplication
-    // in the current dependency graph. The runtime behaviour is correct;
-    // only the type checker is confused.
-    ref={ref as unknown as React.Ref<HTMLElement>}
+    // framer-motion's Ref type and React's Ref<HTMLElement> diverge
+    // under the React 18/19 type-duplication in the current dep graph.
+    // Both sides are the same shape at runtime — escape via `as any`
+    // because even `as unknown as React.Ref<...>` re-introduces one of
+    // the two duplicate types and re-trips the same TS2322.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ref={ref as any}
     {...(applyPreset(preset, rest) as HTMLMotionProps<'section'>)}
   />
 ));
