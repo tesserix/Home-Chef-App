@@ -163,13 +163,12 @@ jobs:
         id: sha
         run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout tesserix-k8s
-        uses: actions/checkout@v4
-        with:
-          repository: tesserix/tesserix-k8s
-          token: ${{ secrets.TESSERIX_K8S_BOT }}
-          path: tesserix-k8s
-          ref: main
+      # Clone tesserix-k8s anonymously — the repo is public so no auth
+      # is needed for read. Auth is only needed at push time, applied
+      # explicitly below. This avoids actions/checkout's basic-auth
+      # header format, which fine-grained PATs reject.
+      - name: Clone tesserix-k8s (public, no auth)
+        run: git clone --depth=1 -b main https://github.com/tesserix/tesserix-k8s.git tesserix-k8s
 
       - name: Install yq
         run: |
@@ -200,6 +199,8 @@ jobs:
 
       - name: Commit & push to tesserix-k8s main
         working-directory: tesserix-k8s
+        env:
+          BOT_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
         run: |
           set -euo pipefail
           git config user.name "tesserix-bot"
@@ -210,12 +211,15 @@ jobs:
           fi
           git add argocd/prod/apps/homechef/homechef-vendor-portal.yaml
           git commit -m "chore(homechef): bump homechef-vendor-portal to main-${{ steps.sha.outputs.short }}"
+          # Fine-grained PATs require username "x-access-token" in basic auth.
+          git remote set-url origin "https://x-access-token:${BOT_TOKEN}@github.com/tesserix/tesserix-k8s.git"
           for attempt in 1 2 3; do
-            if git push origin main; then
+            if git push origin HEAD:main; then
               exit 0
             fi
             echo "Push attempt $attempt failed — rebasing and retrying."
-            git pull --rebase origin main
+            git fetch origin main
+            git rebase origin/main
           done
           echo "Push failed after retries." >&2
           exit 1
