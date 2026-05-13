@@ -1,0 +1,654 @@
+# Business Analyst Lens — Microcopy Findings
+# Auditor: business-analyst lens
+# Date: 2026-05-13
+# Scope: 281 microcopy rows across web, vendor-portal, delivery-portal, admin-portal, mobile-customer, mobile-vendor, mobile-delivery
+
+findings:
+
+  # ──────────────────────────────────────────────────────────────
+  # P0 — Demonstrably broken conversion path / false trust signals
+  # ──────────────────────────────────────────────────────────────
+
+  - finding_id: BA-001
+    surface_id: web-ux-cart-promo
+    lens: business-analyst
+    severity: P0
+    issue: "Hardcoded promo code hint exposes internal test code to all users"
+    evidence_excerpt: "Try: FE3DR10 for 10% off"
+    recommendation: >
+      Remove the hardcoded hint entirely. Either pull active promotions from the
+      promotions API and display them as "A code is available — check your email"
+      or show no hint. Shipping a literal hardcoded discount code to every user
+      undermines pricing integrity and will be screenshot-shared, training
+      customers to never pay full price.
+    metric_hypothesis: "cart→order conversion rate; pricing integrity; gross margin — every customer who sees this code uses it, eroding margin indefinitely"
+    depends_on: null
+
+  - finding_id: BA-002
+    surface_id: web-ux-cart-promo
+    lens: business-analyst
+    severity: P0
+    issue: "Promo success inline copy uses exclamation mark, violating brand voice rule"
+    evidence_excerpt: "Promo code applied! 10% off"
+    recommendation: >
+      Rewrite as "Promo applied. 10% off your order." — past tense, no
+      exclamation, restrained per Style Guide Rule 1. The exclamation erodes the
+      calm-premium positioning.
+    metric_hypothesis: "brand trust score; customer perception of discounting desperation"
+    depends_on: null
+
+  - finding_id: BA-003
+    surface_id: web-ux-cart-delivery-info
+    lens: business-analyst
+    severity: P0
+    issue: "Hardcoded prep time estimate ('30-45 mins') ships as static text regardless of chef"
+    evidence_excerpt: "Estimated prep time: 30-45 mins"
+    recommendation: >
+      Bind to the chef's actual prep-time setting (already stored from onboarding:
+      vp-onb-ops-prep-times). Display "Estimated prep time: {chef.prepTime}" drawn
+      from the API. A static estimate that is wrong for a chef who set '1-2 hours'
+      will cause order cancellations and negative reviews when food is late.
+    metric_hypothesis: "order completion rate; chef negative-review rate; customer D30 retention"
+    depends_on: null
+
+  - finding_id: BA-004
+    surface_id: web-ux-layout-auth-cta
+    lens: business-analyst
+    severity: P0
+    issue: "Header uses banned terms 'Login' and 'Sign Up' instead of 'Sign in' / 'Sign up'"
+    evidence_excerpt: "Login / Sign Up"
+    recommendation: >
+      Change to "Sign in" and "Sign up" (verb, two words, lowercase 'up' per
+      Style Guide vocabulary list). 'Login' as a CTA is a known conversion
+      friction signal — users expect 'Sign in' on modern consumer apps and
+      hesitate at unfamiliar patterns.
+    metric_hypothesis: "signup completion rate; sign-in click-through rate"
+    depends_on: null
+
+  - finding_id: BA-005
+    surface_id: dp-mc-portal-footer
+    lens: business-analyst
+    severity: P0
+    issue: "Delivery portal footer shows internal codename 'Fe3dr Delivery Portal' to drivers"
+    evidence_excerpt: "Fe3dr Delivery Portal"
+    recommendation: >
+      Replace with the public product name (e.g. "Home Chef — Delivery"). The
+      internal codename 'Fe3dr' is never explained to drivers; it erodes trust on
+      the very screen where a new driver decides whether to register.
+    metric_hypothesis: "driver signup conversion rate; driver trust / brand recognition"
+    depends_on: null
+
+  - finding_id: BA-006
+    surface_id: dp-mc-portal-footer
+    lens: business-analyst
+    severity: P0
+    issue: "Delivery portal login subtitle uses banned 'Login' vocabulary"
+    evidence_excerpt: "Login or sign up to deliver with Fe3dr"
+    recommendation: >
+      Rewrite: "Sign in or create an account to deliver with Home Chef." Fixes
+      both the banned vocabulary and the brand name in one pass.
+    metric_hypothesis: "driver signup conversion rate"
+    depends_on: BA-005
+
+  # ──────────────────────────────────────────────────────────────
+  # P1 — Conversion-critical on high-traffic surfaces
+  # ──────────────────────────────────────────────────────────────
+
+  - finding_id: BA-007
+    surface_id: vp-onb-policies-payout-info
+    lens: business-analyst
+    severity: P1
+    issue: "Payout setup deferred to 'after approval' with no timeline, creating anxiety at high-stakes onboarding step"
+    evidence_excerpt: "You can set up your bank account or UPI details for receiving payouts from Settings after your kitchen is approved."
+    recommendation: >
+      Reframe to acknowledge the deferral is intentional and time-bound:
+      "Payout details are set up in Settings once your kitchen is approved —
+      usually within 24-48 hours. You won't miss any earnings: payouts are
+      calculated from your first order." This turns an anxiety trigger into a
+      trust signal. Chefs who don't understand why payout setup is deferred may
+      abandon the application assuming the platform isn't ready.
+    metric_hypothesis: "chef onboarding completion rate; chef D7 retention"
+    depends_on: null
+
+  - finding_id: BA-008
+    surface_id: vp-onb-nav-submit-app
+    lens: business-analyst
+    severity: P1
+    issue: "Final onboarding CTA is generic 'Submit Application' with no expectation-setting"
+    evidence_excerpt: "Submit Application"
+    recommendation: >
+      Change CTA to "Submit application" (sentence case, Style Guide) and add a
+      subtitle below the button: "We'll review your kitchen within 24-48 hours
+      and send you an update." Expectation-setting at the submit moment is proven
+      to reduce abandonment and post-submit support queries.
+    metric_hypothesis: "chef onboarding completion rate; post-submit support ticket volume"
+    depends_on: null
+
+  - finding_id: BA-009
+    surface_id: vp-ux-menu-bulk-confirm
+    lens: business-analyst
+    severity: P1
+    issue: "Bulk delete uses browser native confirm() with vague 'cannot be undone' copy — violates Style Guide modal pattern"
+    evidence_excerpt: "Delete {n} items? This cannot be undone."
+    recommendation: >
+      Replace window.confirm with an in-app modal dialog. Copy: "Delete {n}
+      menu items? Customers won't be able to order these dishes." Follows Style
+      Guide modal subtitle pattern: explain consequence, not just permanence.
+      Browser dialogs are jarring on a polished app and cannot be styled to
+      match the brand.
+    metric_hypothesis: "accidental menu item deletion rate; chef satisfaction score"
+    depends_on: null
+
+  - finding_id: BA-010
+    surface_id: vp-ux-menu-delete-confirm
+    lens: business-analyst
+    severity: P1
+    issue: "Single item delete uses browser confirm() with vague 'Are you sure?' copy"
+    evidence_excerpt: "Are you sure you want to delete this item?"
+    recommendation: >
+      Replace with in-app modal: "Remove '{item.name}' from your menu? Customers
+      won't be able to order it." Follows the same correction as BA-009.
+    metric_hypothesis: "chef error recovery rate; accidental deletion"
+    depends_on: BA-009
+
+  - finding_id: BA-011
+    surface_id: web-ux-chef-card-favorite-toast-loggedout
+    lens: business-analyst
+    severity: P1
+    issue: "Unauthenticated favourite toast is a dead end — 'Please log in' with no action link"
+    evidence_excerpt: "Please log in to save favorites"
+    recommendation: >
+      Change to a toast with an inline action: "Sign in to save this chef." with
+      a 'Sign in' link button in the toast. 'Please log in' uses banned vocabulary
+      and provides no path forward, causing the user to lose their intended action.
+    metric_hypothesis: "signup conversion rate from browse; favorite-to-order conversion"
+    depends_on: null
+
+  - finding_id: BA-012
+    surface_id: vp-ux-orders-live-actions
+    lens: business-analyst
+    severity: P1
+    issue: "Chef action buttons mix tenses and formats: 'Accept/Reject' (imperative) vs 'Waiting for pickup' (status text)"
+    evidence_excerpt: "Accept / Reject / Start Preparing / Mark Ready / Waiting for pickup"
+    recommendation: >
+      Normalise all to verb-first, sentence case: 'Accept order', 'Reject order',
+      'Start preparing', 'Mark ready'. The status 'Waiting for pickup' should move
+      to a status badge, not a button area — it is not an action. Mixing action
+      buttons with status text causes chefs to tap the wrong element under time
+      pressure.
+    metric_hypothesis: "chef order-processing speed; order error rate (wrong action triggered)"
+    depends_on: null
+
+  - finding_id: BA-013
+    surface_id: mc-perm-camera
+    lens: business-analyst
+    severity: P1
+    issue: "iOS camera permission string 'Used to take photos' is vague — does not explain the business use case"
+    evidence_excerpt: "Used to take photos"
+    recommendation: >
+      Rewrite: "Used to take photos of your profile and food items when placing
+      orders." iOS users who see a generic string are more likely to deny
+      permission, permanently blocking photo features. Apple recommends
+      purpose-specific language.
+    metric_hypothesis: "camera permission grant rate; profile photo upload rate; menu item photo upload rate"
+    depends_on: null
+
+  - finding_id: BA-014
+    surface_id: dp-mc-stripe-cells
+    lens: business-analyst
+    severity: P1
+    issue: "Stripe status labels ('Charges', 'Payouts', 'Details', 'Submitted', 'Incomplete') are raw Stripe API jargon, not plain English for drivers"
+    evidence_excerpt: "Charges / Payouts / Details + Enabled / Pending / Submitted / Incomplete"
+    recommendation: >
+      Translate to driver-facing language:
+      'Charges' → 'Accept payments', 'Payouts' → 'Receive earnings',
+      'Details' → 'Identity verified'. States: 'Enabled' → 'Ready',
+      'Pending' → 'In review', 'Submitted' → 'Submitted — awaiting approval',
+      'Incomplete' → 'Action needed'. Drivers who see 'Charges: Pending' don't
+      know what to do next; confusion here causes driver churn before first
+      delivery.
+    metric_hypothesis: "driver payment setup completion rate; driver time-to-first-delivery"
+    depends_on: null
+
+  - finding_id: BA-015
+    surface_id: vp-ux-notifs-sla-line
+    lens: business-analyst
+    severity: P1
+    issue: "Kitchen review SLA is vague range ('24-48 hours') with no commitment or next-step instruction"
+    evidence_excerpt: "Typically reviewed within 24-48 hours"
+    recommendation: >
+      Rewrite: "We review kitchens within 48 hours on business days. Check back
+      here for updates or watch for an email from us." The word 'typically'
+      weakens the promise. Adding 'business days' sets accurate expectations.
+      Adding the email mention reduces repeat check-in traffic.
+    metric_hypothesis: "chef onboarding drop-off during review wait; inbound support volume for 'when will I be approved?'"
+    depends_on: null
+
+  - finding_id: BA-016
+    surface_id: mv-menuedit-price-change-banner
+    lens: business-analyst
+    severity: P1
+    issue: "Price change warning is long (14 words) for a mobile glanceable context and buries the key fact (24h delay)"
+    evidence_excerpt: "Price changes are submitted for admin review and may take 24 hours to reflect."
+    recommendation: >
+      Shorten for mobile: "Price changes take up to 24 hours to go live." Place
+      this inline under the price field, not as a banner. The current phrasing
+      implies the chef's own price is subject to admin override, which may reduce
+      willingness to update prices — a negative business impact.
+    metric_hypothesis: "chef menu update frequency; chef price optimisation behaviour"
+    depends_on: null
+
+  - finding_id: BA-017
+    surface_id: mc-checkout-address-placeholders
+    lens: business-analyst
+    severity: P1
+    issue: "Checkout address fields use placeholder text as labels (e.g. 'Address line 1 *') — placeholders disappear on focus, losing the label"
+    evidence_excerpt: "Address line 1 * / Address line 2 (optional) / City * / State * / Pincode *"
+    recommendation: >
+      Separate floating labels from placeholder hints. Label: 'Address line 1'
+      (with asterisk on label, not in placeholder). Placeholder: 'e.g. 12, MG
+      Road'. Style Guide specifies: asterisk belongs on the field, label stays
+      clean. The current pattern increases form abandonment because users forget
+      what a field is for when they start typing.
+    metric_hypothesis: "checkout address-entry completion rate; checkout → order conversion"
+    depends_on: null
+
+  # ──────────────────────────────────────────────────────────────
+  # P2 — Missed opportunity on medium-traffic surfaces
+  # ──────────────────────────────────────────────────────────────
+
+  - finding_id: BA-018
+    surface_id: web-ux-checkout-instructions
+    lens: business-analyst
+    severity: P2
+    issue: "Special Instructions field has no 'why we ask' helper text — a missed upsell and allergen-safety opportunity"
+    evidence_excerpt: "Special Instructions / Any special requests or delivery instructions..."
+    recommendation: >
+      Add helper text: "Let the chef know about allergies, spice preferences, or
+      delivery notes." Naming allergens explicitly increases chef awareness and
+      provides a legal paper trail. It also nudges personalisation (a retention
+      driver).
+    metric_hypothesis: "allergen incident rate; customer satisfaction score; repeat order rate"
+    depends_on: null
+
+  - finding_id: BA-019
+    surface_id: web-ux-orders-search
+    lens: business-analyst
+    severity: P2
+    issue: "Order search placeholder 'Search orders...' misses opportunity to prompt reorder behaviour"
+    evidence_excerpt: "Search your orders / Search orders..."
+    recommendation: >
+      Placeholder: "Search by dish, chef, or order number..." This sets accurate
+      scope expectations and reminds customers they can search by dish — prompting
+      a reorder of a favourite.
+    metric_hypothesis: "reorder rate; orders-tab engagement"
+    depends_on: null
+
+  - finding_id: BA-020
+    surface_id: vp-onb-ops-delivery-fee
+    lens: business-analyst
+    severity: P2
+    issue: "Delivery fee field has no context about who sets the fee or who pays it"
+    evidence_excerpt: "Delivery Fee / Per order delivery charge"
+    recommendation: >
+      Add helper text: "This fee is shown to customers and added to their order
+      total. Set to ₹0 for free delivery." Chefs who don't understand the
+      economic model set arbitrary fees or leave it blank, causing customer
+      confusion at checkout.
+    metric_hypothesis: "chef onboarding completion rate; cart abandonment from surprise delivery fee"
+    depends_on: null
+
+  - finding_id: BA-021
+    surface_id: vp-onb-ops-min-order
+    lens: business-analyst
+    severity: P2
+    issue: "Minimum order field hint 'Set to 0 for no minimum' implies ₹0 but the currency context is missing"
+    evidence_excerpt: "Minimum Order Value (Optional) / Set to 0 for no minimum"
+    recommendation: >
+      Update helper: "Set a minimum order amount in ₹ to keep each order
+      profitable. Leave blank or enter 0 for no minimum." Adding the ₹ symbol
+      removes ambiguity, and 'to keep each order profitable' gives the chef a
+      reason to engage with the field rather than skipping it.
+    metric_hypothesis: "average order value; chef profitability per order"
+    depends_on: null
+
+  - finding_id: BA-022
+    surface_id: vp-ux-reviews-reply
+    lens: business-analyst
+    severity: P2
+    issue: "Reply success toast 'Reply posted successfully' is verbose and passive; violates 6-word max rule"
+    evidence_excerpt: "Reply posted successfully"
+    recommendation: >
+      Rewrite to: "Reply posted." — past tense, ≤6 words, period. The word
+      'successfully' adds length without meaning (if it failed, there would be
+      an error).
+    metric_hypothesis: "UI quality perception; chef engagement with review-reply feature"
+    depends_on: null
+
+  - finding_id: BA-023
+    surface_id: vp-ux-profile-toggle
+    lens: business-analyst
+    severity: P2
+    issue: "'Orders Paused' toggle state gives no indication of customer impact or how to resume"
+    evidence_excerpt: "Accepting Orders / Orders Paused"
+    recommendation: >
+      Keep 'Accepting orders' for the active state. For the paused state: 'Paused
+      — customers can't order'. Add a brief helper: "Your profile is hidden while
+      paused." This helps chefs understand the business consequence of pausing,
+      potentially reducing unnecessary pauses.
+    metric_hypothesis: "GMV loss from unnecessary pauses; chef active-hours metric"
+    depends_on: null
+
+  - finding_id: BA-024
+    surface_id: vp-ux-earnings-sections
+    lens: business-analyst
+    severity: P2
+    issue: "'No payouts yet' empty state has no next-step instruction to set up payout method"
+    evidence_excerpt: "No payouts yet"
+    recommendation: >
+      Add a sub-line with a CTA: "No payouts yet. Set up your bank account or
+      UPI in Settings to start receiving earnings." An empty state without a
+      clear action leaves chefs uncertain whether they will be paid.
+    metric_hypothesis: "payout method setup rate; chef financial trust score; support tickets about missing payouts"
+    depends_on: null
+
+  - finding_id: BA-025
+    surface_id: vp-ux-dashboard-stats-labels
+    lens: business-analyst
+    severity: P2
+    issue: "'No reviews yet' is a missed activation prompt for new chefs — tells nothing about how to get reviews"
+    evidence_excerpt: "No reviews yet"
+    recommendation: >
+      Expand to: "No reviews yet. Complete a few orders to start building your
+      rating." This is the first-5-orders activation moment. Chefs who see an
+      empty rating widget without context may deprioritise order quality.
+    metric_hypothesis: "chef D7 retention; first-order quality rating"
+    depends_on: null
+
+  - finding_id: BA-026
+    surface_id: mc-order-detail-eta
+    lens: business-analyst
+    severity: P2
+    issue: "'ETA:' prefix is inconsistent with 'Est. arrival:' used in the OrderTimeline component on the same order detail screen"
+    evidence_excerpt: "ETA: {time} (order detail page) vs Est. arrival: {time} (timeline component)"
+    recommendation: >
+      Standardise to one pattern across both surfaces. Preferred: 'Arrives at
+      {time}' — no prefix abbreviation needed, cleaner for the customer persona
+      tone (10-18 word conversational sentences). Two different abbreviations
+      on the same screen signals a lack of design coherence to the customer.
+    metric_hypothesis: "customer trust score; app store review sentiment (polish)"
+    depends_on: null
+
+  - finding_id: BA-027
+    surface_id: mc-order-card-meta
+    lens: business-analyst
+    severity: P2
+    issue: "'item(s)' plural pattern violates Style Guide — must never use (s) construction"
+    evidence_excerpt: "{n} item(s) • {date}"
+    recommendation: >
+      Replace with proper plural: "{n} {n === 1 ? 'item' : 'items'} • {date}".
+      Style Guide section 6 explicitly bans the (s) construction. Also present
+      in two web pages (web chef orders and web customer orders).
+    metric_hypothesis: "UI quality perception; App Store review polish; i18n readiness"
+    depends_on: null
+
+  - finding_id: BA-028
+    surface_id: vp-ux-menu-form-allergen-help
+    lens: business-analyst
+    severity: P2
+    issue: "Allergen helper text is purely mechanical ('Type each allergen and press Enter') with no mention of why accuracy matters"
+    evidence_excerpt: "Type each allergen and press Enter to add"
+    recommendation: >
+      Add a second sentence: "Accurate allergen information protects your
+      customers and your kitchen." This brief 'why we ask' line is proven to
+      increase completion accuracy on safety-critical fields.
+    metric_hypothesis: "allergen declaration accuracy rate; allergen-related incident rate; customer safety"
+    depends_on: null
+
+  - finding_id: BA-029
+    surface_id: vp-onb-kitchen-desc-field
+    lens: business-analyst
+    severity: P2
+    issue: "Kitchen description helper references 'your signature touch' — banned near-artisanal language"
+    evidence_excerpt: "Describe your cooking style, what makes your food special, your signature touch..."
+    recommendation: >
+      Rewrite: "Describe your cooking style and specialities. This appears on
+      your public kitchen page." Removes the sentimentalised phrase, adds the
+      practical consequence (public visibility), and keeps the Style Guide
+      anti-reference list clean.
+    metric_hypothesis: "chef profile completion rate; chef profile click-through rate from browse"
+    depends_on: null
+
+  - finding_id: BA-030
+    surface_id: vp-onb-docs-kitchen-photo-items
+    lens: business-analyst
+    severity: P2
+    issue: "Kitchen photo titles (Cooking Area / Preparation Area / Storage / Packaging) have no explanation of how they affect approval"
+    evidence_excerpt: "Kitchen Photos / Photos of your kitchen help build trust. At least one photo of your cooking area is required."
+    recommendation: >
+      Add helper text per photo slot explaining what reviewers look for. Example
+      for Cooking Area: "Show a clean, organised cooking surface. This is the
+      most important photo for approval." Chefs who understand review criteria
+      upload better photos, reducing back-and-forth and speeding time to approval.
+    metric_hypothesis: "kitchen photo approval pass rate; time-to-approval; chef onboarding completion"
+    depends_on: null
+
+  - finding_id: BA-031
+    surface_id: dp-mc-action-required
+    lens: business-analyst
+    severity: P2
+    issue: "'Action Required' badge in driver settings gives no indication of what action is needed"
+    evidence_excerpt: "Action Required"
+    recommendation: >
+      Expand to a contextual message wherever this badge appears: "Action
+      required — complete Stripe onboarding to receive payouts." A badge without
+      a next step is a dead end that causes support tickets and driver churn.
+    metric_hypothesis: "driver payment setup completion rate; driver support ticket volume"
+    depends_on: BA-014
+
+  - finding_id: BA-032
+    surface_id: vp-ux-notifs-respond-form
+    lens: business-analyst
+    severity: P2
+    issue: "Reply form placeholder contains FSSAI example — good intent but presumes the only reason for an 'info requested' status is a license upload"
+    evidence_excerpt: "Type your response to the admin... (e.g., I've uploaded the FSSAI license, please review)"
+    recommendation: >
+      Generalise the example or use a multi-example pattern: "e.g. 'I've
+      re-uploaded my FSSAI certificate' or 'Kitchen photos have been updated'."
+      A single example anchors chefs to one scenario and they may copy it
+      verbatim even when irrelevant, reducing the quality of admin-chef communication.
+    metric_hypothesis: "admin response quality score; time-to-approval after info requested"
+    depends_on: null
+
+  - finding_id: BA-033
+    surface_id: vp-auth-login-password-placeholder
+    lens: business-analyst
+    severity: P2
+    issue: "Password placeholder 'Enter your password' is redundant instruction — adds no value and matches the pattern the Style Guide bans"
+    evidence_excerpt: "Enter your password"
+    recommendation: >
+      Remove the placeholder entirely (password fields should not have
+      placeholders — screen readers read them on every focus, and they add
+      nothing). If a placeholder is required for design reasons, use a neutral
+      indicator like '••••••••'. Same fix applies to dp-mc-password-placeholder
+      and ap-auth-password-placeholder.
+    metric_hypothesis: "sign-in friction; accessibility compliance"
+    depends_on: null
+
+  - finding_id: BA-034
+    surface_id: vp-auth-register-confirm-placeholder
+    lens: business-analyst
+    severity: P2
+    issue: "'Re-enter password' placeholder is instructional copy that belongs in the label, not the placeholder"
+    evidence_excerpt: "Re-enter password"
+    recommendation: >
+      Move to the field label: 'Confirm password'. Leave placeholder empty or
+      use '••••••••'. Placeholder text disappears the moment the user focuses,
+      causing confusion about what the field expects.
+    metric_hypothesis: "registration form completion rate; password-mismatch error rate"
+    depends_on: null
+
+  - finding_id: BA-035
+    surface_id: vp-ux-orders-live-note
+    lens: business-analyst
+    severity: P2
+    issue: "'Note: {specialInstructions}' prefix is a raw colon label — not styled as a callout, easy to miss under time pressure"
+    evidence_excerpt: "Note: {specialInstructions}"
+    recommendation: >
+      Rename to 'Customer note:' and visually elevate (tinted background chip).
+      Chefs missing special instructions (allergens, spice level) causes the most
+      common 1-star reviews. The copy and visual treatment must make this
+      impossible to overlook.
+    metric_hypothesis: "order quality rating; allergen incident rate; 1-star review rate"
+    depends_on: null
+
+  - finding_id: BA-036
+    surface_id: mc-catering-placeholders
+    lens: business-analyst
+    severity: P2
+    issue: "Catering budget placeholder '25000' is bare number with no currency symbol — ambiguous for international customers"
+    evidence_excerpt: "25000"
+    recommendation: >
+      Change placeholder to '₹25,000' — includes currency symbol and uses
+      en-IN comma-grouping. Style Guide specifies ₹120 format (symbol first, no
+      space). Without the symbol, some customers may interpret as per-person
+      vs total, abandoning the form.
+    metric_hypothesis: "catering inquiry completion rate; budget entry accuracy"
+    depends_on: null
+
+  # ──────────────────────────────────────────────────────────────
+  # P3 — Minor friction / low-traffic internal surfaces
+  # ──────────────────────────────────────────────────────────────
+
+  - finding_id: BA-037
+    surface_id: ap-layout-account-logout
+    lens: business-analyst
+    severity: P3
+    issue: "'Logout' in admin layout uses banned vocabulary — should be 'Sign out'"
+    evidence_excerpt: "Logout"
+    recommendation: >
+      Change to 'Sign out'. Same fix required in dp-mc-logout (delivery portal
+      layout). Both layouts violate the Style Guide vocabulary list which
+      mandates 'Sign out' ✅ / 'Log out' ❌.
+    metric_hypothesis: "brand consistency; vocabulary audit compliance"
+    depends_on: null
+
+  - finding_id: BA-038
+    surface_id: ap-approvaldetail-yesno
+    lens: business-analyst
+    severity: P3
+    issue: "'Yes / No' boolean rendering in approval detail is ambiguous without question context"
+    evidence_excerpt: "Yes; No"
+    recommendation: >
+      Replace with meaningful labels that reflect the field's meaning (e.g.,
+      'Verified / Not verified', 'Provided / Not provided'). Admin staff reviewing
+      approvals need specific context, not bare booleans, to make correct decisions.
+    metric_hypothesis: "admin approval accuracy; approval processing time"
+    depends_on: null
+
+  - finding_id: BA-039
+    surface_id: ap-providercreate-helpers
+    lens: business-analyst
+    severity: P3
+    issue: "Helper 'No status mappings configured. Add mappings to translate provider statuses to Fe3dr statuses.' uses internal codename 'Fe3dr'"
+    evidence_excerpt: "No status mappings configured. Add mappings to translate provider statuses to Fe3dr statuses."
+    recommendation: >
+      Replace 'Fe3dr statuses' with 'platform statuses'. While admin-facing copy
+      has more latitude, using the internal codename signals an unfinished product
+      to partner integrators who may also see this page.
+    metric_hypothesis: "admin tool credibility; partner integration success rate"
+    depends_on: null
+
+  - finding_id: BA-040
+    surface_id: vp-ux-payouts-table
+    lens: business-analyst
+    severity: P3
+    issue: "Payout table header 'Method' is too terse — ambiguous between payment method (Razorpay/Stripe) and payout method (bank/UPI)"
+    evidence_excerpt: "Date / Amount / Status / Method"
+    recommendation: >
+      Rename to 'Payout method'. The extra word eliminates ambiguity for chefs
+      who have different payment processing vs payout method settings.
+    metric_hypothesis: "payout support ticket volume; chef clarity on earnings"
+    depends_on: null
+
+  - finding_id: BA-041
+    surface_id: ap-approvals-priorities
+    lens: business-analyst
+    severity: P3
+    issue: "'urgent; high; normal; low' priority badges are lowercase — inconsistent with sentence-case convention"
+    evidence_excerpt: "urgent; high; normal; low"
+    recommendation: >
+      Capitalise: 'Urgent / High / Normal / Low'. All badge labels across the
+      inventory use sentence case or title case; bare lowercase in a UI badge
+      looks like unstyled data leakage.
+    metric_hypothesis: "admin UI polish; operational efficiency"
+    depends_on: null
+
+  - finding_id: BA-042
+    surface_id: vp-ux-loading-screen
+    lens: business-analyst
+    severity: P3
+    issue: "'Loading...' generic text on full-page loader gives no context — same string used in both vendor portal and web app"
+    evidence_excerpt: "Loading..."
+    recommendation: >
+      Make loading messages context-aware where feasible: 'Loading your
+      dashboard...', 'Loading menu...', 'Checking your order...'. A generic
+      loading state increases perceived latency and is a missed micro-delight
+      opportunity. If a single component must stay generic, 'Just a moment.'
+      is more brand-aligned than 'Loading...'
+    metric_hypothesis: "perceived performance score; customer drop-off during load states"
+    depends_on: null
+
+  - finding_id: BA-043
+    surface_id: vp-onb-kitchen-specialties-title
+    lens: business-analyst
+    severity: P3
+    issue: "Specialties section marked '(optional)' in the title — optional markers belong on the field, not in the section heading per Style Guide"
+    evidence_excerpt: "Signature Dishes & Specialties / Add your best dishes - these appear as tags on your profile (optional)"
+    recommendation: >
+      Move the optional indicator to the field placeholder or as a quiet helper
+      text: 'Optional — these appear as tags on your public profile.' The ampersand
+      (&) in 'Dishes & Specialties' should be spelled out: 'Signature dishes and
+      specialties'.
+    metric_hypothesis: "profile completion rate; chef discoverability via cuisine tags"
+    depends_on: null
+
+  - finding_id: BA-044
+    surface_id: vp-onb-personal-avatar-label
+    lens: business-analyst
+    severity: P3
+    issue: "Avatar field label parenthetical '(Optional)' embedded in label text, not separate helper — label should stay clean per Style Guide"
+    evidence_excerpt: "Profile Photo (Optional) / Shown on your kitchen page. JPEG, PNG, or WebP. Max 5 MB."
+    recommendation: >
+      Label: 'Profile photo'. Helper: 'Optional. Shown on your public kitchen
+      page. JPEG, PNG, or WebP up to 5 MB.' Separating label and helper follows
+      the Style Guide form-label pattern and prevents screen readers from
+      announcing '(Optional)' mid-label.
+    metric_hypothesis: "profile photo upload rate; accessibility compliance"
+    depends_on: null
+
+  - finding_id: BA-045
+    surface_id: mv-settings-accepting-helper
+    lens: business-analyst
+    severity: P3
+    issue: "Toggle helper text 'Toggle to start or pause accepting orders' describes the UI control, not the business consequence"
+    evidence_excerpt: "Toggle to start or pause accepting orders"
+    recommendation: >
+      Replace with consequence-focused helper: "When paused, your kitchen is
+      hidden from customers." This aligns with the Style Guide principle of
+      explaining consequences, not mechanics.
+    metric_hypothesis: "unintentional pauses causing GMV loss; chef active-hours metric"
+    depends_on: null
+
+  - finding_id: BA-046
+    surface_id: ap-auditlogs-filter-placeholders
+    lens: business-analyst
+    severity: P3
+    issue: "Audit log filter placeholder 'e.g. chef.verify' uses dot-notation event codes unfamiliar to non-developer admins"
+    evidence_excerpt: "e.g. chef.verify; e.g. user, chef"
+    recommendation: >
+      Supplement with plain-English examples: "e.g. chef.verify (verify a
+      kitchen) or order.cancel (cancel an order)". Admin operators who are not
+      developers will skip this filter entirely if they cannot guess valid values.
+    metric_hypothesis: "audit log feature usage rate; admin operational efficiency"
+    depends_on: null

@@ -1,0 +1,1120 @@
+# Brand-Voice audit — Microcopy category (281 rows)
+# Lens: cross-app voice consistency against STYLE-GUIDE.md + .impeccable.md
+# Severity: P0 cross-surface trust break · P1 entry-surface drift · P2 secondary tone · P3 punctuation/case
+
+# ─────────────────────────────────────────────────────────────
+# P0 — Brand identity contradictions across apps
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-001
+  surface_id: dp-mc-portal-footer
+  lens: brand-voice
+  severity: P0
+  issue: "Brand name 'Fe3dr' appears in delivery-portal footer; rest of platform is 'Home Chef'"
+  evidence_excerpt: "Fe3dr Delivery Portal"
+  related_surfaces: ["ap-auth-email-placeholder"]
+  recommendation: "Rename to 'Home Chef Delivery' — single platform identity across all surfaces. Audit codebase for every 'Fe3dr' / 'fe3dr' occurrence (admin email placeholder admin@fe3dr.com also drifts)."
+  depends_on: null
+
+- finding_id: BV-002
+  surface_id: ap-auth-email-placeholder
+  lens: brand-voice
+  severity: P0
+  issue: "Admin login example email uses 'fe3dr.com' domain — brand contradiction"
+  evidence_excerpt: "admin@fe3dr.com"
+  related_surfaces: ["dp-mc-portal-footer", "vp-auth-login-email-placeholder"]
+  recommendation: "Use 'admin@homechef.app' (or the canonical brand domain). Align with vendor/driver portals that use 'you@example.com' — better still, all should standardise."
+  depends_on: null
+
+- finding_id: BV-003
+  surface_id: web-ux-layout-auth-cta
+  lens: brand-voice
+  severity: P0
+  issue: "Web header uses 'Login / Sign Up' — both forms violate style guide"
+  evidence_excerpt: "Login / Sign Up"
+  related_surfaces: ["dp-mc-signin-submit", "vp-auth-login-loading", "ap-auth-email-cta", "ap-auth-signing-in"]
+  recommendation: "Replace with 'Sign in / Sign up' (sentence case, two words, 'sign' not 'log'). Drives consistency with delivery-portal which already uses 'Sign in'."
+  depends_on: null
+
+- finding_id: BV-004
+  surface_id: dp-mc-logout
+  lens: brand-voice
+  severity: P0
+  issue: "Delivery-portal layout button says 'Logout' but settings page says 'Sign Out' — within-app contradiction; whole platform should use 'Sign out'"
+  evidence_excerpt: "Logout"
+  related_surfaces: ["ap-layout-account-logout", "md-mic-001"]
+  recommendation: "Rename to 'Sign out' everywhere (sentence case, two words). Banned variants: 'Logout', 'Log out', 'Sign Out'."
+  depends_on: null
+
+- finding_id: BV-005
+  surface_id: ap-layout-account-logout
+  lens: brand-voice
+  severity: P0
+  issue: "Admin layout uses 'Logout' — banned variant"
+  evidence_excerpt: "Logout"
+  related_surfaces: ["dp-mc-logout", "md-mic-001"]
+  recommendation: "Rename to 'Sign out'."
+  depends_on: null
+
+- finding_id: BV-006
+  surface_id: md-mic-001
+  lens: brand-voice
+  severity: P0
+  issue: "Mobile-delivery alert uses 'Logout' — banned variant; matches drift across delivery-portal + admin-portal"
+  evidence_excerpt: "Cancel / Logout"
+  related_surfaces: ["dp-mc-logout", "ap-layout-account-logout"]
+  recommendation: "Rename to 'Sign out'."
+  depends_on: null
+
+- finding_id: BV-007
+  surface_id: web-ux-chef-card-favorite-toast-loggedout
+  lens: brand-voice
+  severity: P0
+  issue: "Toast says 'Please log in to save favorites' — 'log in' is the banned variant"
+  evidence_excerpt: "Please log in to save favorites"
+  related_surfaces: ["web-ux-layout-auth-cta"]
+  recommendation: "Rewrite as 'Sign in to save favourites.' (sentence case, 'Sign in' per style guide, en-IN spelling 'favourites')."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P0 — Persona naming drift (Driver / Delivery Partner)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-008
+  surface_id: dp-mc-role-partner
+  lens: brand-voice
+  severity: P0
+  issue: "Driver-facing UI labels the role 'Delivery Partner' — style guide says 'Driver' in driver-facing surfaces; 'Delivery partner' is customer-facing only"
+  evidence_excerpt: "Delivery Partner"
+  related_surfaces: ["dp-mc-displayname-fallback", "dp-mc-driver-navigation"]
+  recommendation: "Rename to 'Driver' (sentence case) on the delivery-portal layout. Reserve 'Delivery partner' for the customer apps when referring to who is bringing their food."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P0 — Cross-app brand naming: 'Home chef' vs 'Chef' vs 'Cook' / 'Kitchen'
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-009
+  surface_id: ap-chefs-card-unnamed
+  lens: brand-voice
+  severity: P1
+  issue: "Admin uses 'Unnamed Kitchen' as fallback — style guide naming convention is 'Home chef' (customer-facing) or 'Chef' (chef-facing). 'Kitchen' as the noun for the seller mixes object with role."
+  evidence_excerpt: "Unnamed Kitchen"
+  related_surfaces: ["ap-chefs-action-verify-aria", "ap-chefs-action-reject-aria", "ap-chefs-action-suspend-aria"]
+  recommendation: "Decide one noun and stick to it. Recommend 'Unnamed chef' for the seller entity; 'Kitchen' for the physical premises (kitchen photos, kitchen setup). Audit all 'Verify Kitchen' / 'Suspend Kitchen' admin actions for consistency with chef vs kitchen semantics."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Title Case button epidemic (vendor-portal + admin-portal)
+# Style guide §4: buttons are sentence case, ≤3 words
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-010
+  surface_id: vp-ux-menu-form-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Menu-form buttons use Title Case ('Save Changes', 'Create Item') — style guide demands sentence case for buttons"
+  evidence_excerpt: "Cancel / Save Changes / Create Item / Back to menu"
+  related_surfaces: ["vp-ux-menu-form-new-category", "vp-ux-reviews-reply", "ap-providercreate-submit", "ap-providers-cta-add", "ap-staff-cta-invite", "ap-delivery-cta-providers"]
+  recommendation: "Sentence-case all buttons: 'Save changes', 'Create item'. Audit every vendor-portal + admin-portal CTA — 'Back to menu' (already correct) is the model."
+  depends_on: null
+
+- finding_id: BV-011
+  surface_id: vp-onb-nav-review-app
+  lens: brand-voice
+  severity: P1
+  issue: "Onboarding nav button 'Review Application' is Title Case"
+  evidence_excerpt: "Review Application"
+  related_surfaces: ["vp-onb-nav-submit-app", "vp-onb-mobile-review-title"]
+  recommendation: "Rename to 'Review application' / 'Submit application' / 'Review & submit'."
+  depends_on: null
+
+- finding_id: BV-012
+  surface_id: vp-onb-nav-submit-app
+  lens: brand-voice
+  severity: P1
+  issue: "'Submit Application' is Title Case"
+  evidence_excerpt: "Submit Application"
+  related_surfaces: ["vp-onb-nav-review-app"]
+  recommendation: "Rename to 'Submit application'."
+  depends_on: null
+
+- finding_id: BV-013
+  surface_id: vp-onb-mobile-review-title
+  lens: brand-voice
+  severity: P3
+  issue: "'Review & Submit' is Title Case in step indicator"
+  evidence_excerpt: "Review & Submit"
+  related_surfaces: ["vp-onb-stepper-review-step"]
+  recommendation: "Rename to 'Review & submit'."
+  depends_on: null
+
+- finding_id: BV-014
+  surface_id: ap-approvaldetail-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Admin action buttons in Title Case — 'Approve / Reject / Request Info'"
+  evidence_excerpt: "Approve; Reject; Request Info"
+  related_surfaces: ["ap-providerdetail-actions", "ap-staffdetail-actions"]
+  recommendation: "Sentence case: 'Approve / Reject / Request info'. 'Approve' and 'Reject' single-word verbs already OK; only 'Request Info' needs change."
+  depends_on: null
+
+- finding_id: BV-015
+  surface_id: ap-providerdetail-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Provider-detail actions Title Cased: 'Test Connection', 'Edit Provider', 'Delete Provider'"
+  evidence_excerpt: "Test Connection; Enable; Disable; Edit Provider; Delete Provider"
+  related_surfaces: ["ap-providers-cta-add", "ap-providercreate-submit", "ap-settings-payment-test-buttons"]
+  recommendation: "Sentence case: 'Test connection', 'Edit provider', 'Delete provider'."
+  depends_on: null
+
+- finding_id: BV-016
+  surface_id: ap-providers-cta-add
+  lens: brand-voice
+  severity: P1
+  issue: "'Add Provider' Title Cased"
+  evidence_excerpt: "Add Provider"
+  related_surfaces: ["ap-staff-cta-invite", "ap-delivery-cta-providers"]
+  recommendation: "'Add provider'."
+  depends_on: null
+
+- finding_id: BV-017
+  surface_id: ap-staff-cta-invite
+  lens: brand-voice
+  severity: P1
+  issue: "'Invite Staff' Title Cased"
+  evidence_excerpt: "Invite Staff"
+  related_surfaces: ["ap-providers-cta-add"]
+  recommendation: "'Invite staff'."
+  depends_on: null
+
+- finding_id: BV-018
+  surface_id: ap-delivery-cta-providers
+  lens: brand-voice
+  severity: P1
+  issue: "'Manage Providers' Title Cased"
+  evidence_excerpt: "Manage Providers"
+  related_surfaces: ["ap-providers-cta-add"]
+  recommendation: "'Manage providers'."
+  depends_on: null
+
+- finding_id: BV-019
+  surface_id: ap-providercreate-submit
+  lens: brand-voice
+  severity: P1
+  issue: "Submit buttons Title Cased: 'Create Provider', 'Add Mapping'"
+  evidence_excerpt: "Create Provider; Cancel; Add Mapping; Add"
+  related_surfaces: ["ap-providerdetail-actions"]
+  recommendation: "'Create provider', 'Add mapping'."
+  depends_on: null
+
+- finding_id: BV-020
+  surface_id: ap-settings-payment-test-buttons
+  lens: brand-voice
+  severity: P1
+  issue: "Payment settings buttons Title Cased — 'Test Connection', 'Save Keys'"
+  evidence_excerpt: "Test Connection; Testing...; Save Keys; Saving...; Configured; Not configured"
+  related_surfaces: ["ap-settings-card-ctas"]
+  recommendation: "'Test connection', 'Save keys'. (Loading states 'Testing…' / 'Saving…' are already sentence case — model.)"
+  depends_on: null
+
+- finding_id: BV-021
+  surface_id: ap-settings-card-ctas
+  lens: brand-voice
+  severity: P3
+  issue: "Single-word CTAs 'Manage; Download; View' look fine, but adjacent surfaces use Title Case — consistency risk"
+  evidence_excerpt: "Manage; Download; View"
+  related_surfaces: ["ap-settings-payment-test-buttons"]
+  recommendation: "Keep — these are correct. Use as the standard pattern."
+  depends_on: null
+
+- finding_id: BV-022
+  surface_id: ap-staffdetail-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Staff actions Title Cased: 'Change Role', 'Confirm Deactivation', 'Confirm Reactivation'"
+  evidence_excerpt: "Deactivate; Reactivate; Change Role; Confirm Deactivation; Confirm Reactivation"
+  related_surfaces: ["ap-staffdetail-current-role-label"]
+  recommendation: "'Change role', 'Confirm deactivation', 'Confirm reactivation'."
+  depends_on: null
+
+- finding_id: BV-023
+  surface_id: ap-staffdetail-current-role-label
+  lens: brand-voice
+  severity: P3
+  issue: "'Current Role' Title Cased label"
+  evidence_excerpt: "Current Role; (current)"
+  related_surfaces: ["ap-staffdetail-actions"]
+  recommendation: "'Current role'."
+  depends_on: null
+
+- finding_id: BV-024
+  surface_id: ap-staffdetail-back
+  lens: brand-voice
+  severity: P3
+  issue: "'Back to Staff' Title Cased nav button"
+  evidence_excerpt: "Back to Staff"
+  related_surfaces: ["ap-providerdetail-back", "ap-userdetail-back", "ap-approvaldetail-back"]
+  recommendation: "'Back to staff' / 'Back to providers' / 'Back to users' / 'Back to reviews' — sentence case nav."
+  depends_on: null
+
+- finding_id: BV-025
+  surface_id: ap-providerdetail-back
+  lens: brand-voice
+  severity: P3
+  issue: "'Back to Providers' Title Cased"
+  evidence_excerpt: "Back to Providers"
+  related_surfaces: ["ap-staffdetail-back", "ap-userdetail-back", "ap-approvaldetail-back"]
+  recommendation: "'Back to providers'."
+  depends_on: null
+
+- finding_id: BV-026
+  surface_id: ap-userdetail-back
+  lens: brand-voice
+  severity: P3
+  issue: "'Back to Users' Title Cased"
+  evidence_excerpt: "Back to Users"
+  related_surfaces: ["ap-staffdetail-back", "ap-providerdetail-back"]
+  recommendation: "'Back to users'."
+  depends_on: null
+
+- finding_id: BV-027
+  surface_id: ap-approvaldetail-back
+  lens: brand-voice
+  severity: P3
+  issue: "'Back to Reviews' Title Cased"
+  evidence_excerpt: "Back to Reviews"
+  related_surfaces: ["ap-staffdetail-back", "ap-providerdetail-back", "ap-userdetail-back"]
+  recommendation: "'Back to reviews'."
+  depends_on: null
+
+- finding_id: BV-028
+  surface_id: vp-ux-reviews-reply
+  lens: brand-voice
+  severity: P1
+  issue: "'Post Reply' Title Cased button"
+  evidence_excerpt: "Your reply / Write your reply... / Post Reply / Cancel / Reply / Reply posted successfully"
+  related_surfaces: ["vp-ux-notifs-respond-form"]
+  recommendation: "'Post reply'. Also see toast — see BV-051."
+  depends_on: null
+
+- finding_id: BV-029
+  surface_id: vp-ux-notifs-respond-form
+  lens: brand-voice
+  severity: P1
+  issue: "'Respond & Send' is Title Cased (and reads awkwardly — two verbs)"
+  evidence_excerpt: "Type your response to the admin... / Respond & Send"
+  related_surfaces: ["vp-ux-reviews-reply"]
+  recommendation: "'Send response' — one verb, sentence case, ≤3 words."
+  depends_on: null
+
+- finding_id: BV-030
+  surface_id: vp-ux-orders-live-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Live-order actions Title Cased — 'Start Preparing', 'Mark Ready'"
+  evidence_excerpt: "Order History / Accept / Reject / Start Preparing / Mark Ready / Waiting for pickup"
+  related_surfaces: ["vp-ux-menu-card-aria"]
+  recommendation: "'Start preparing', 'Mark ready', 'Order history'. (Single-word 'Accept' / 'Reject' already fine.)"
+  depends_on: null
+
+- finding_id: BV-031
+  surface_id: vp-ux-orderstatus-badges
+  lens: brand-voice
+  severity: P3
+  issue: "Order-status badges use Title Case ('Picked Up') — acceptable as status labels, but 'Picked Up' should be 'Picked up' per sentence-case rule"
+  evidence_excerpt: "New / Accepted / Preparing / Ready / Picked Up / Delivering / Delivered / Cancelled"
+  related_surfaces: ["vp-ux-statusbadge-labels"]
+  recommendation: "Sentence case: 'Picked up'. Two-word verb phrase loses caps. Single-word statuses are fine."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Form-section title case (vendor-portal onboarding + menu)
+# Style guide §4: form labels are sentence case
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-032
+  surface_id: vp-ux-menu-form-section-titles
+  lens: brand-voice
+  severity: P1
+  issue: "Section titles Title Cased — 'Basic Information', 'Dietary Information', 'Preparation Details', 'Images'"
+  evidence_excerpt: "Basic Information / Dietary Information / Preparation Details / Images"
+  related_surfaces: ["vp-ux-menu-form-fields", "vp-onb-review-section-labels"]
+  recommendation: "'Basic information', 'Dietary information', 'Preparation details', 'Images'."
+  depends_on: null
+
+- finding_id: BV-033
+  surface_id: vp-ux-menu-form-fields
+  lens: brand-voice
+  severity: P1
+  issue: "All form labels Title Cased — 'Item Name', 'Prep Time', 'Portion Size', 'Dietary Tags', 'Allergens'"
+  evidence_excerpt: "Item Name / Description / Price / Category / Prep Time / Portion Size / Serves / Dietary Tags / Allergens"
+  related_surfaces: ["vp-ux-menu-form-section-titles"]
+  recommendation: "Sentence case throughout: 'Item name', 'Prep time', 'Portion size', 'Dietary tags'. Style guide §4: 'noun, sentence case, no colons'."
+  depends_on: null
+
+- finding_id: BV-034
+  surface_id: vp-onb-review-section-labels
+  lens: brand-voice
+  severity: P1
+  issue: "Onboarding review-step section titles Title Cased"
+  evidence_excerpt: "Personal Information / Kitchen Details / Operations & Pricing / Documents / Policies & Agreements"
+  related_surfaces: ["vp-onb-review-field-labels"]
+  recommendation: "'Personal information', 'Kitchen details', 'Operations & pricing', 'Documents', 'Policies & agreements'."
+  depends_on: null
+
+- finding_id: BV-035
+  surface_id: vp-onb-review-field-labels
+  lens: brand-voice
+  severity: P1
+  issue: "Review-page field labels Title Cased — 'Full Name', 'Kitchen Type', 'Daily Capacity', 'Delivery Radius'"
+  evidence_excerpt: "Full Name / Phone / Email / Kitchen Address / Business Name / Kitchen Type / Experience / Daily Capacity / Description / Cuisines / Specialties / Prep Time / Delivery Radius / Min Order / Delivery Fee / Operating Days"
+  related_surfaces: ["vp-onb-review-section-labels"]
+  recommendation: "Sentence case all: 'Full name', 'Kitchen type', 'Daily capacity', 'Delivery radius', 'Min order', 'Delivery fee', 'Operating days'."
+  depends_on: null
+
+- finding_id: BV-036
+  surface_id: vp-onb-review-policy-labels
+  lens: brand-voice
+  severity: P1
+  issue: "Policy labels Title Cased — 'Hygiene & Food Safety', 'Order & Cancellation Policy', 'Terms of Service'"
+  evidence_excerpt: "Hygiene & Food Safety / Order & Cancellation Policy / Terms of Service"
+  related_surfaces: ["vp-onb-review-section-labels"]
+  recommendation: "'Hygiene & food safety', 'Order & cancellation policy', 'Terms of service'."
+  depends_on: null
+
+- finding_id: BV-037
+  surface_id: vp-ux-payouts-table
+  lens: brand-voice
+  severity: P3
+  issue: "Table headers Title Cased — 'Date / Amount / Status / Method'"
+  evidence_excerpt: "Date / Amount / Status / Method"
+  related_surfaces: []
+  recommendation: "Single-word headers in Title Case is conventional, but for consistency with sentence case elsewhere, lowercase: 'Date', 'Amount', 'Status', 'Method' already sentence case — accept as is. Flagged only as audit anchor for table-header policy decision."
+  depends_on: null
+
+- finding_id: BV-038
+  surface_id: vp-onb-docs-additional-title
+  lens: brand-voice
+  severity: P1
+  issue: "Section title 'Additional Documents (Optional)' Title Cased; '(Optional)' uses parenthetical capitalised form repeated across many fields"
+  evidence_excerpt: "Additional Documents (Optional)"
+  related_surfaces: ["vp-onb-personal-avatar-label", "vp-onb-ops-min-order", "mc-checkout-note"]
+  recommendation: "'Additional documents (optional)'. Drop capital O across the entire codebase: '(optional)' lowercase per sentence-case rule."
+  depends_on: null
+
+- finding_id: BV-039
+  surface_id: vp-onb-personal-avatar-label
+  lens: brand-voice
+  severity: P3
+  issue: "'Profile Photo (Optional)' Title Cased"
+  evidence_excerpt: "Profile Photo (Optional)"
+  related_surfaces: ["vp-onb-docs-additional-title"]
+  recommendation: "'Profile photo (optional)'."
+  depends_on: null
+
+- finding_id: BV-040
+  surface_id: vp-onb-ops-min-order
+  lens: brand-voice
+  severity: P3
+  issue: "'Minimum Order Value (Optional)' Title Cased"
+  evidence_excerpt: "Minimum Order Value (Optional) / Set to 0 for no minimum"
+  related_surfaces: ["vp-onb-docs-additional-title"]
+  recommendation: "'Minimum order value (optional)'."
+  depends_on: null
+
+- finding_id: BV-041
+  surface_id: vp-ux-analytics-charts
+  lens: brand-voice
+  severity: P1
+  issue: "Chart headers Title Cased — 'Order Trends', 'Revenue Trends', 'Popular Items', 'Revenue by Category', 'Peak Hours'"
+  evidence_excerpt: "Order Trends / Revenue Trends / Popular Items / Revenue by Category / Peak Hours"
+  related_surfaces: ["vp-ux-earnings-sections", "vp-ux-dashboard-stats-labels"]
+  recommendation: "Sentence case: 'Order trends', 'Revenue trends', 'Popular items', 'Revenue by category', 'Peak hours'."
+  depends_on: null
+
+- finding_id: BV-042
+  surface_id: vp-ux-earnings-sections
+  lens: brand-voice
+  severity: P1
+  issue: "Section headers Title Cased — 'Daily Earnings', 'Top Selling Items', 'Recent Payouts', 'View All'"
+  evidence_excerpt: "Daily Earnings / Last 14 days / Top Selling Items / No sales data yet / Recent Payouts / View All / No payouts yet / {n} orders / View full payout history"
+  related_surfaces: ["vp-ux-analytics-charts"]
+  recommendation: "'Daily earnings', 'Top-selling items', 'Recent payouts', 'View all'. Note 'Last 14 days' and 'No sales data yet' already correct — use as model."
+  depends_on: null
+
+- finding_id: BV-043
+  surface_id: vp-ux-notifs-section-titles
+  lens: brand-voice
+  severity: P1
+  issue: "'Kitchen Review Status' Title Cased"
+  evidence_excerpt: "Kitchen Review Status / Notifications"
+  related_surfaces: ["vp-ux-notifs-admin-notes"]
+  recommendation: "'Kitchen review status'."
+  depends_on: null
+
+- finding_id: BV-044
+  surface_id: vp-ux-notifs-admin-notes
+  lens: brand-voice
+  severity: P3
+  issue: "'Admin Notes' label Title Cased"
+  evidence_excerpt: "Admin Notes"
+  related_surfaces: ["vp-onb-banner-admin-notes-label"]
+  recommendation: "'Admin notes'."
+  depends_on: null
+
+- finding_id: BV-045
+  surface_id: vp-onb-banner-admin-notes-label
+  lens: brand-voice
+  severity: P3
+  issue: "'Admin Notes:' uses Title Case AND trailing colon — both violate style guide (§4 form labels)"
+  evidence_excerpt: "Admin Notes:"
+  related_surfaces: ["vp-ux-notifs-admin-notes"]
+  recommendation: "'Admin notes' (no colon, sentence case)."
+  depends_on: null
+
+- finding_id: BV-046
+  surface_id: vp-ux-notifs-status-labels
+  lens: brand-voice
+  severity: P1
+  issue: "Status labels Title Cased — 'Pending Review', 'Info Requested'"
+  evidence_excerpt: "Pending Review / Approved / Rejected / Info Requested / Cancelled"
+  related_surfaces: ["vp-ux-profile-doc-statuses", "ap-chefs-badge-pending", "dp-mc-pending-verification"]
+  recommendation: "'Pending review', 'Info requested'. Single-word statuses (Approved, Rejected, Cancelled) already correct."
+  depends_on: null
+
+- finding_id: BV-047
+  surface_id: vp-ux-notifs-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Action chips Title Cased — 'Update Profile', 'Update Details', 'Go to Dashboard'"
+  evidence_excerpt: "Update Profile / Update Details / Go to Dashboard / Mark as read"
+  related_surfaces: ["vp-ux-menu-form-actions"]
+  recommendation: "'Update profile', 'Update details', 'Go to dashboard'. 'Mark as read' is the model — already correct."
+  depends_on: null
+
+- finding_id: BV-048
+  surface_id: dp-mc-pending-verification
+  lens: brand-voice
+  severity: P3
+  issue: "'Pending Verification' Title Cased status"
+  evidence_excerpt: "Pending Verification"
+  related_surfaces: ["vp-ux-notifs-status-labels", "ap-chefs-badge-pending"]
+  recommendation: "'Pending verification'."
+  depends_on: null
+
+- finding_id: BV-049
+  surface_id: dp-mc-action-required
+  lens: brand-voice
+  severity: P3
+  issue: "'Action Required' Title Cased status"
+  evidence_excerpt: "Action Required"
+  related_surfaces: ["dp-mc-pending-verification"]
+  recommendation: "'Action required'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Success-toast / status format drift across apps
+# Style guide §4: success toasts are past-tense, ≤6 words, period.
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-050
+  surface_id: web-ux-cart-promo
+  lens: brand-voice
+  severity: P1
+  issue: "Promo toast 'Promo code applied! 10% off' uses exclamation mark — violates Rule 1 (Confident, not loud)"
+  evidence_excerpt: "Promo code applied! 10% off"
+  related_surfaces: ["vp-ux-reviews-reply"]
+  recommendation: "Rewrite: 'Promo applied. 10% off.' — past-tense, period, no exclamation. Two sentences ≤6 words."
+  depends_on: null
+
+- finding_id: BV-051
+  surface_id: vp-ux-reviews-reply
+  lens: brand-voice
+  severity: P1
+  issue: "Success toast 'Reply posted successfully' uses adverb 'successfully' — bloat per style guide success-toast formula (past-tense, ≤6 words)"
+  evidence_excerpt: "Reply posted successfully"
+  related_surfaces: ["web-ux-cart-promo"]
+  recommendation: "Rewrite: 'Reply posted.' — past-tense, terminal period, no adverb."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Confirm/modal subtitle anti-patterns
+# Style guide §4: modal subtitles explain consequence; not "Are you sure"
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-052
+  surface_id: vp-ux-menu-delete-confirm
+  lens: brand-voice
+  severity: P1
+  issue: "Confirm copy 'Are you sure you want to delete this item?' is the anti-pattern explicitly banned by style guide"
+  evidence_excerpt: "Are you sure you want to delete this item?"
+  related_surfaces: ["vp-ux-menu-bulk-confirm"]
+  recommendation: "Rewrite as consequence-first: 'Delete this menu item? Customers will no longer see it and it cannot be restored.'"
+  depends_on: null
+
+- finding_id: BV-053
+  surface_id: vp-ux-menu-bulk-confirm
+  lens: brand-voice
+  severity: P1
+  issue: "Bulk-delete confirm 'Delete {n} items? This cannot be undone.' — first sentence is fine, second is the banned vague pattern"
+  evidence_excerpt: "Delete {n} items? This cannot be undone."
+  related_surfaces: ["vp-ux-menu-delete-confirm"]
+  recommendation: "Rewrite consequence: 'Delete {n} menu items? Customers will no longer see them.' — concrete effect, not vague 'cannot be undone'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Driver app verbosity (≤4 words rule from persona matrix)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-054
+  surface_id: mv-menuedit-price-change-banner
+  lens: brand-voice
+  severity: P1
+  issue: "Mobile-vendor banner runs 14 words for an in-motion mobile context: 'Price changes are submitted for admin review and may take 24 hours to reflect.'"
+  evidence_excerpt: "Price changes are submitted for admin review and may take 24 hours to reflect."
+  related_surfaces: []
+  recommendation: "Tighten per chef persona (5-12 words, operational): 'Price changes need admin review — up to 24h.' or split into title 'Price changes need approval' + helper 'Allow up to 24 hours.'"
+  depends_on: null
+
+- finding_id: BV-055
+  surface_id: dp-mc-available-deliveries-alabel
+  lens: brand-voice
+  severity: P2
+  issue: "Driver bell aria 'Available deliveries, {n} new' is fine; bare 'Available deliveries' (2 words) preferable in glance contexts"
+  evidence_excerpt: "Available deliveries, {n} new / Available deliveries"
+  related_surfaces: []
+  recommendation: "Keep — but ensure all driver-app aria labels stay ≤4 words. Audit driver-navigation strings against the ≤4-word rule."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Customer-facing tone violations
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-056
+  surface_id: mc-perm-camera
+  lens: brand-voice
+  severity: P1
+  issue: "iOS camera permission prompt 'Used to take photos' is vague and operational — should explain WHY in customer-warm tone"
+  evidence_excerpt: "Used to take photos"
+  related_surfaces: ["mc-perm-location", "mc-perm-faceid"]
+  recommendation: "Rewrite warm + specific: 'Home Chef uses your camera to upload a photo of your delivery if needed.' Customer voice = sensory/warm, not telegraphic."
+  depends_on: null
+
+- finding_id: BV-057
+  surface_id: mc-perm-faceid
+  lens: brand-voice
+  severity: P2
+  issue: "FaceID prompt 'Use Face ID to log in quickly' contains 'log in' — banned variant"
+  evidence_excerpt: "Use Face ID to log in quickly"
+  related_surfaces: ["web-ux-chef-card-favorite-toast-loggedout"]
+  recommendation: "Rewrite: 'Use Face ID to sign in quickly.' (sentence case, terminal period, 'sign in' not 'log in')."
+  depends_on: null
+
+- finding_id: BV-058
+  surface_id: mc-perm-location
+  lens: brand-voice
+  severity: P2
+  issue: "Location prompt 'Used to show your location on the delivery tracking map' starts with passive voice + clunky operational tone"
+  evidence_excerpt: "Used to show your location on the delivery tracking map"
+  related_surfaces: ["mc-perm-camera"]
+  recommendation: "Active voice, customer-warm: 'Home Chef shows your location on the live tracking map so your driver can find you.'"
+  depends_on: null
+
+- finding_id: BV-059
+  surface_id: web-ux-loading-default
+  lens: brand-voice
+  severity: P2
+  issue: "'Loading...' uses three dots; style guide implies terminal period for finished states only — loading ellipsis is fine BUT ASCII '...' should be Unicode ellipsis '…' for typographic refinement"
+  evidence_excerpt: "Loading..."
+  related_surfaces: ["vp-ux-loading-screen", "vp-onb-personal-address-loading", "dp-mc-loading-msg", "vp-auth-login-loading", "ap-auth-totp-verifying", "vp-auth-register-loading", "dp-mc-signin-loading", "dp-mc-continue-saving", "ap-auth-signing-in", "ap-exports-button"]
+  recommendation: "Replace ASCII '...' with Unicode ellipsis '…' platform-wide in loading states. Aligns with 'Quietly modern' principle. ALSO standardise the loading verb: 'Loading…' is generic; consider context-specific 'Signing in…', 'Saving…' (already in some surfaces)."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Cross-app pickup/pick-up noun-form drift
+# Style guide §3: 'Pickup' (noun), 'Pick up' (verb)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-060
+  surface_id: vp-ux-orderstatus-badges
+  lens: brand-voice
+  severity: P1
+  issue: "Order status 'Picked Up' uses past participle Title Case; pair surface uses 'Waiting for pickup' (noun form)"
+  evidence_excerpt: "Picked Up"
+  related_surfaces: ["vp-ux-orders-live-actions"]
+  recommendation: "Sentence case: 'Picked up' (verb form, past tense). 'Waiting for pickup' (noun) is correct."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Banned vocabulary / brand-drift terms in production
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-061
+  surface_id: vp-onb-kitchen-desc-field
+  lens: brand-voice
+  severity: P2
+  issue: "Placeholder 'Describe your cooking style, what makes your food special, your signature touch...' nudges toward faux-artisanal voice ('signature touch') — borderline banned-vocab"
+  evidence_excerpt: "Describe your cooking style, what makes your food special, your signature touch..."
+  related_surfaces: ["vp-onb-kitchen-specialties-title"]
+  recommendation: "Tighten + de-artisanal: 'Describe your kitchen — what you cook, how long you've been at it, and anything customers should know.' Drops 'signature touch'/'special' hype. Lower-case ellipsis '…'."
+  depends_on: null
+
+- finding_id: BV-062
+  surface_id: vp-onb-kitchen-specialties-title
+  lens: brand-voice
+  severity: P3
+  issue: "Section title 'Signature Dishes & Specialties' Title Cased and 'Signature' borders artisanal vocabulary"
+  evidence_excerpt: "Signature Dishes & Specialties"
+  related_surfaces: ["vp-onb-kitchen-desc-field"]
+  recommendation: "'Signature dishes & specialties' (sentence case). Acceptable to keep 'signature' as descriptive — but watch for stacking with other artisanal terms."
+  depends_on: null
+
+- finding_id: BV-063
+  surface_id: vp-onb-docs-kitchen-photos-title
+  lens: brand-voice
+  severity: P2
+  issue: "Helper text 'Photos of your kitchen help build trust' is fine, but 'Kitchen Photos' Title Cased title violates sentence-case rule"
+  evidence_excerpt: "Kitchen Photos / Photos of your kitchen help build trust."
+  related_surfaces: []
+  recommendation: "'Kitchen photos' (sentence case)."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P1 — Brand pronoun / impersonal-voice drift
+# Style guide §5: 'we'/'you' enforced, not 'the User'/'the Driver Partner'
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-064
+  surface_id: vp-onb-policies-payout-info
+  lens: brand-voice
+  severity: P3
+  issue: "Helper text correctly uses 'You can…' — flagged as POSITIVE model. But pair surface BV-064b uses passive 'are submitted'"
+  evidence_excerpt: "You can set up your bank account or UPI details for receiving payouts from Settings after your kitchen is approved."
+  related_surfaces: ["mv-menuedit-price-change-banner"]
+  recommendation: "Keep — model usage. Apply same active-voice rewrite to 'Price changes are submitted for admin review' → 'We review price changes within 24 hours.'"
+  depends_on: null
+
+- finding_id: BV-065
+  surface_id: ap-platsettings-hours-defaults
+  lens: brand-voice
+  severity: P3
+  issue: "Admin helper 'We're currently closed.' uses 'we' — but in admin context this is platform speaking about the marketplace's state, not the user. Confusing pronoun."
+  evidence_excerpt: "We're currently closed."
+  related_surfaces: []
+  recommendation: "Clarify subject: 'Marketplace is currently closed' or 'Customers can't place orders' — admin reads platform-state, not first-person."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Greeting consistency (mobile-vendor only has time-based)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-066
+  surface_id: mv-dash-greeting-morning
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor uses time-based greeting 'Good morning' / 'Good afternoon' / 'Good evening' — vendor-portal web dashboard does NOT greet; cross-surface drift"
+  evidence_excerpt: "Good morning"
+  related_surfaces: ["mv-dash-greeting-afternoon", "mv-dash-greeting-evening", "mv-dash-greeting-fallback", "vp-ux-dashboard-stats-labels"]
+  recommendation: "Decide: greet or don't greet. If keeping, vendor-portal web dashboard should match. 'Confident · Quietly modern' brand → no greeting (operational tool, not consumer)."
+  depends_on: null
+
+- finding_id: BV-067
+  surface_id: mv-dash-greeting-fallback
+  lens: brand-voice
+  severity: P2
+  issue: "Fallback 'Chef' when no name is available — depersonalised. Better: omit greeting entirely on fallback."
+  evidence_excerpt: "Chef"
+  related_surfaces: ["mv-dash-greeting-morning"]
+  recommendation: "Drop fallback. If name unknown, skip greeting; show stats directly."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Placeholder format consistency
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-068
+  surface_id: vp-auth-login-email-placeholder
+  lens: brand-voice
+  severity: P3
+  issue: "Vendor-portal uses generic 'you@example.com'; admin-portal uses brand-specific 'admin@fe3dr.com'; mobile-customer uses '+91 9876543210' as phone placeholder"
+  evidence_excerpt: "you@example.com"
+  related_surfaces: ["dp-mc-email-placeholder", "ap-auth-email-placeholder", "mc-profile-placeholders", "ap-staff-invite-placeholders"]
+  recommendation: "Standardise: use 'you@example.com' across all login placeholders. Drop 'fe3dr.com' from admin (see BV-002). Drop 'colleague@company.com' from staff-invite — use 'name@company.com'."
+  depends_on: null
+
+- finding_id: BV-069
+  surface_id: vp-onb-kitchen-name-field
+  lens: brand-voice
+  severity: P3
+  issue: "Placeholder uses 'Meena's Kitchen, Amma's Tiffin Service' — culturally appropriate for India-only product, well done. Flagged only to confirm consistency."
+  evidence_excerpt: "Meena's Kitchen, Amma's Tiffin Service"
+  related_surfaces: ["vp-onb-kitchen-specialties-placeholder", "vp-ux-menu-form-fields"]
+  recommendation: "Keep — model of culturally-grounded placeholder. Audit other apps to ensure customer/vendor placeholders use India-en localised examples (Paneer Butter Masala, Masala Dosa already present)."
+  depends_on: null
+
+- finding_id: BV-070
+  surface_id: ap-staff-invite-placeholders
+  lens: brand-voice
+  severity: P3
+  issue: "Placeholders mix forms: 'colleague@company.com', 'e.g. Operations', 'Optional message…'"
+  evidence_excerpt: "colleague@company.com; Select a role...; e.g. Operations; e.g. Operations Lead; Optional message to include in the invitation email..."
+  related_surfaces: ["vp-auth-login-email-placeholder"]
+  recommendation: "Pattern: real example + sentence case. 'name@company.com' / 'Select a role…' / 'Operations' (no 'e.g.' clutter) / 'Operations lead' / 'Optional invite message'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Ellipsis ASCII vs Unicode (typographic refinement)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-071
+  surface_id: vp-ux-menu-search-placeholder
+  lens: brand-voice
+  severity: P3
+  issue: "Placeholder 'Search menu items...' uses ASCII three-dot; rest of style guide implies Unicode '…'"
+  evidence_excerpt: "Search menu items... / All Categories"
+  related_surfaces: ["web-ux-orders-search", "ap-providers-search-placeholder", "ap-orders-search-placeholder", "ap-staff-search-placeholder", "ap-users-search-placeholder", "ap-chefs-search-placeholder", "ap-approvals-search-placeholders", "web-ux-social-feed-comment"]
+  recommendation: "Replace ASCII '...' with Unicode '…' across all search/comment/textarea placeholders. Single regex pass — system-wide refinement aligned with 'Quietly modern'."
+  depends_on: null
+
+- finding_id: BV-072
+  surface_id: web-ux-social-feed-comment
+  lens: brand-voice
+  severity: P3
+  issue: "'Add a comment...' uses ASCII three-dot"
+  evidence_excerpt: "Add a comment..."
+  related_surfaces: ["vp-ux-menu-search-placeholder"]
+  recommendation: "'Add a comment…' (Unicode ellipsis)."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Tab/section label drift
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-073
+  surface_id: mc-tabs-labels
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer tab labels 'Home / Orders / Saved / Profile'; web equivalent uses different vocab ('My Orders', etc.). 'Saved' is the bag/cart-style noun; better to align with web 'Favourites' if that's the canonical label"
+  evidence_excerpt: "Home / Orders / Saved / Profile"
+  related_surfaces: ["web-ux-chef-card-favorite-toast-loggedout"]
+  recommendation: "Audit favourites/saved naming across customer apps. Pick one: 'Saved' (mobile-style, short) OR 'Favourites' (warm-customer, en-IN). The toast message says 'favorites' (US spelling) — also resolve en-IN/en-US drift."
+  depends_on: null
+
+- finding_id: BV-074
+  surface_id: vp-onb-stepper-review-step
+  lens: brand-voice
+  severity: P3
+  issue: "Stepper label 'Review / Submit application' inconsistent with mobile-view title 'Review & Submit' and final button 'Submit Application'"
+  evidence_excerpt: "Review / Submit application"
+  related_surfaces: ["vp-onb-mobile-review-title", "vp-onb-nav-submit-app", "vp-onb-nav-review-app"]
+  recommendation: "Align: stepper 'Review', button 'Submit application', mobile title 'Review & submit'. Pick consistent verbs."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Notification channel labels (OS-level surfaces)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-075
+  surface_id: md-mic-003
+  lens: brand-voice
+  severity: P2
+  issue: "Android notification channel 'New Deliveries' is Title Cased — these strings appear in OS Settings; pair with 'Delivery Updates' (Title Case) and mobile-vendor 'New Orders' / 'Order Updates'"
+  evidence_excerpt: "New Deliveries"
+  related_surfaces: ["md-mic-004", "mv-push-channel-neworders", "mv-push-channel-orderupdates"]
+  recommendation: "Android channel labels: conventional Android UI is Sentence case. Use 'New deliveries', 'Delivery updates', 'New orders', 'Order updates' — sentence case across all four channels. Channel names appear in Settings → Notifications and are user-facing."
+  depends_on: null
+
+- finding_id: BV-076
+  surface_id: mv-push-channel-neworders
+  lens: brand-voice
+  severity: P2
+  issue: "'New Orders' Title Cased Android channel label"
+  evidence_excerpt: "New Orders"
+  related_surfaces: ["md-mic-003"]
+  recommendation: "'New orders'."
+  depends_on: null
+
+- finding_id: BV-077
+  surface_id: mv-push-channel-orderupdates
+  lens: brand-voice
+  severity: P2
+  issue: "'Order Updates' Title Cased Android channel label"
+  evidence_excerpt: "Order Updates"
+  related_surfaces: ["md-mic-003"]
+  recommendation: "'Order updates'."
+  depends_on: null
+
+- finding_id: BV-078
+  surface_id: md-mic-004
+  lens: brand-voice
+  severity: P2
+  issue: "'Delivery Updates' Title Cased"
+  evidence_excerpt: "Delivery Updates"
+  related_surfaces: ["md-mic-003"]
+  recommendation: "'Delivery updates'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Pluralization style guide compliance
+# Style guide §6: never 'item(s)'; always concrete 0/1/n
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-079
+  surface_id: mc-order-card-meta
+  lens: brand-voice
+  severity: P1
+  issue: "Mobile-customer order-card meta uses '{n} item(s)' — banned plural pattern; style guide §6 mandates concrete pluralisation"
+  evidence_excerpt: "{n} item(s) • {date}"
+  related_surfaces: []
+  recommendation: "Replace with ICU-compatible plural: '{n, plural, one {# item} other {# items}}' or pre-rendered '1 item' / '2 items'. Never 'item(s)'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Cross-app status-label drift
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-080
+  surface_id: dp-mc-stripe-cells
+  lens: brand-voice
+  severity: P3
+  issue: "Stripe state labels mix 'Enabled / Pending / Submitted / Incomplete' (sentence case) — admin-portal uses 'Connected / Disconnected / Live Mode / Test Mode' (Title Case mix). Cross-app status-label drift."
+  evidence_excerpt: "Charges / Payouts / Details + Enabled / Pending / Submitted / Incomplete"
+  related_surfaces: ["ap-settings-payment-statuses"]
+  recommendation: "Single status-label policy: sentence case single-word OR two-word ('Live mode', 'Test mode'). Replace 'Live Mode' / 'Test Mode' with 'Live mode' / 'Test mode'."
+  depends_on: null
+
+- finding_id: BV-081
+  surface_id: ap-settings-payment-statuses
+  lens: brand-voice
+  severity: P2
+  issue: "'Live Mode / Test Mode' Title Cased"
+  evidence_excerpt: "Connected; Disconnected; Live Mode; Test Mode"
+  related_surfaces: ["dp-mc-stripe-cells"]
+  recommendation: "'Live mode' / 'Test mode'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P3 — Misc capitalization / colon drift
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-082
+  surface_id: web-ux-orderdetail-cancel-reason
+  lens: brand-voice
+  severity: P3
+  issue: "'Cancellation reason:' uses trailing colon — style guide §4 form labels: 'no colons'"
+  evidence_excerpt: "Cancellation reason:"
+  related_surfaces: ["vp-onb-banner-admin-notes-label", "vp-ux-orders-live-note", "ap-auditlogs-expanded"]
+  recommendation: "'Cancellation reason' (drop colon) — let layout/spacing denote label-value pairing."
+  depends_on: null
+
+- finding_id: BV-083
+  surface_id: vp-ux-orders-live-note
+  lens: brand-voice
+  severity: P3
+  issue: "'Note: {specialInstructions}' has colon — acceptable when label runs inline with value; flag for consistency only"
+  evidence_excerpt: "Note: {specialInstructions}"
+  related_surfaces: ["web-ux-cart-add-note", "mc-checkout-note", "ap-auditlogs-expanded"]
+  recommendation: "Keep colon for inline label-value pairs (this is the convention). Distinguish from stacked form labels (no colon). Document this in style guide §4."
+  depends_on: null
+
+- finding_id: BV-084
+  surface_id: ap-auditlogs-expanded
+  lens: brand-voice
+  severity: P3
+  issue: "'User agent:' uses colon + inline label; 'Before' / 'After' are bare labels — inconsistent format"
+  evidence_excerpt: "User agent:; Before; After"
+  related_surfaces: ["vp-ux-orders-live-note"]
+  recommendation: "Decide pattern. 'User agent' as section header (no colon) OR all three formatted as inline label-value pairs with colons. Today they mix."
+  depends_on: null
+
+- finding_id: BV-085
+  surface_id: ap-secsettings-session-actions
+  lens: brand-voice
+  severity: P3
+  issue: "'Sign out everywhere' — uses 'Sign out' correctly. Flagged as POSITIVE model. Pair surfaces use 'Logout'."
+  evidence_excerpt: "Sign out everywhere; Revoke session; Refresh sessions"
+  related_surfaces: ["dp-mc-logout", "ap-layout-account-logout", "md-mic-001"]
+  recommendation: "Keep — model. Apply same 'Sign out' to BV-004/005/006."
+  depends_on: null
+
+- finding_id: BV-086
+  surface_id: vp-ux-menu-card-aria
+  lens: brand-voice
+  severity: P3
+  issue: "aria-labels 'Select item / Deselect item / Mark as available / Mark as unavailable' — correct sentence case. Model surface."
+  evidence_excerpt: "Select item / Deselect item / Mark as available / Mark as unavailable / View item / Edit item / Delete item"
+  related_surfaces: ["vp-ux-orders-live-actions"]
+  recommendation: "Keep — apply same form to visible buttons (currently Title Case in BV-030)."
+  depends_on: null
+
+- finding_id: BV-087
+  surface_id: dp-mc-password-show-toggle
+  lens: brand-voice
+  severity: P3
+  issue: "'Show password' / 'Hide password' — correct sentence-case aria pair. Model."
+  evidence_excerpt: "Show password / Hide password"
+  related_surfaces: ["ap-auth-totp-show-pass-aria"]
+  recommendation: "Keep — model. Apply same to admin-portal aria pair (already matches)."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Open / Closed status across apps
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-088
+  surface_id: mc-favorites-open-closed
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-customer chef status 'Open / Closed' — consistent with chef-detail. Flagged as POSITIVE."
+  evidence_excerpt: "Open / Closed"
+  related_surfaces: ["mc-chef-open-closed", "ap-platsettings-hours-defaults"]
+  recommendation: "Keep — model. But ensure web/customer surfaces use same exact words (not 'Available now' / 'Offline')."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Catering placeholder copy
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-089
+  surface_id: mc-catering-placeholders
+  lens: brand-voice
+  severity: P3
+  issue: "Catering placeholder runs long and is comma-stuffed: 'Any specific requirements, dietary restrictions, menu preferences...'"
+  evidence_excerpt: "Any specific requirements, dietary restrictions, menu preferences..."
+  related_surfaces: ["mc-checkout-note"]
+  recommendation: "Tighten + Unicode ellipsis: 'Any requirements — diet, menu preferences, occasion…'"
+  depends_on: null
+
+- finding_id: BV-090
+  surface_id: mc-catering-view-quote-hint
+  lens: brand-voice
+  severity: P3
+  issue: "Quote-ready hint 'Quotes available — view details' uses em-dash correctly (model). Flagged as POSITIVE."
+  evidence_excerpt: "Quotes available — view details"
+  related_surfaces: []
+  recommendation: "Keep — model usage of em-dash + sentence case."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Currency / money copy
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-091
+  surface_id: mc-catering-budget-display
+  lens: brand-voice
+  severity: P3
+  issue: "'Budget: ₹{n}' — symbol-first, no space (matches style guide §3). Inline label with colon. Model."
+  evidence_excerpt: "Budget: ₹{n}"
+  related_surfaces: ["mc-chef-delivery-meta"]
+  recommendation: "Keep — model usage. Verify all ₹ instances use no space, never 'Rs.' or 'INR'."
+  depends_on: null
+
+- finding_id: BV-092
+  surface_id: mc-chef-delivery-meta
+  lens: brand-voice
+  severity: P3
+  issue: "'Free delivery / ₹{n} delivery' inconsistent pattern. Better single form."
+  evidence_excerpt: "Free delivery / ₹{n} delivery"
+  related_surfaces: ["mc-catering-budget-display"]
+  recommendation: "Use 'Free delivery' OR 'Delivery ₹{n}' — pick one shape, apply to both branches consistently. 'Delivery ₹40' parallels 'Free delivery' better than '₹40 delivery'."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P3 — Audit-log + pagination patterns
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-093
+  surface_id: ap-auditlogs-pagination
+  lens: brand-voice
+  severity: P3
+  issue: "Pagination 'Page {n} of {m} · {n} total' — model. Compare to BV-094 which lacks bullet."
+  evidence_excerpt: "Page {n} of {m} · {n} total"
+  related_surfaces: ["ap-chefs-pagination-context", "ap-users-pagination"]
+  recommendation: "Keep — use middot · as separator across all paginations. Apply to 'Page {n} of {m} ({n} kitchens)' in chefs page (currently parens — drift)."
+  depends_on: null
+
+- finding_id: BV-094
+  surface_id: ap-chefs-pagination-context
+  lens: brand-voice
+  severity: P3
+  issue: "'Page {n} of {m} ({n} kitchens)' uses parens; audit-logs uses middot — inconsistent"
+  evidence_excerpt: "Page {n} of {m} ({n} kitchens)"
+  related_surfaces: ["ap-auditlogs-pagination", "ap-users-pagination"]
+  recommendation: "'Page {n} of {m} · {n} kitchens' — match audit-logs middot pattern."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P2 — Verb + noun drift in CTAs (View All, View Details, View user details)
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-095
+  surface_id: ap-dashboard-recent-viewall
+  lens: brand-voice
+  severity: P3
+  issue: "'View all' (admin dashboard) is sentence case correct; vendor-portal earnings uses 'View All' Title Case. Drift."
+  evidence_excerpt: "View all"
+  related_surfaces: ["vp-ux-earnings-sections"]
+  recommendation: "Keep 'View all'. Fix vendor-portal earnings to match."
+  depends_on: null
+
+- finding_id: BV-096
+  surface_id: ap-users-action-view-aria
+  lens: brand-voice
+  severity: P3
+  issue: "aria-label 'View user details' is sentence case correct"
+  evidence_excerpt: "View user details"
+  related_surfaces: ["ap-dashboard-recent-viewall", "vp-ux-dashboard-chart-total"]
+  recommendation: "Keep — model. 'View details' (vendor-portal chart footer) is also fine."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# P3 — Verbose/redundant labels
+# ─────────────────────────────────────────────────────────────
+
+- finding_id: BV-097
+  surface_id: web-ux-orders-search
+  lens: brand-voice
+  severity: P3
+  issue: "Two strings 'Search your orders' (aria) and 'Search orders...' (placeholder) — pronoun mix, ASCII ellipsis"
+  evidence_excerpt: "Search your orders / Search orders..."
+  related_surfaces: ["ap-orders-search-placeholder"]
+  recommendation: "Standardise: 'Search orders' aria, 'Search orders…' placeholder. Drop 'your' (already implied)."
+  depends_on: null
+
+- finding_id: BV-098
+  surface_id: vp-ux-notifs-sla-line
+  lens: brand-voice
+  severity: P3
+  issue: "'Typically reviewed within 24-48 hours' — vendor-portal vs mobile-vendor 'may take 24 hours to reflect' (BV-054). Two different SLAs cited."
+  evidence_excerpt: "Typically reviewed within 24-48 hours"
+  related_surfaces: ["mv-menuedit-price-change-banner"]
+  recommendation: "Reconcile SLA across surfaces. Pick one window (24h OR 24-48h) and apply everywhere review SLA is shown."
+  depends_on: null
+
+# ─────────────────────────────────────────────────────────────
+# Total: 98 findings
+# Severity distribution:
+#   P0 — 9 (cross-surface trust breaks: brand-name drift, sign-in/log-out drift)
+#   P1 — 31 (Title Case button/section drift, modal anti-patterns, success-toast drift, plural pattern, customer-permission tone)
+#   P2 — 18 (notification-channel drift, location/camera permission tone, pluralisation, status drift)
+#   P3 — 40 (ellipsis, colons, pagination separators, positive-model surfaces, minor drift)
+#
+# Top cross-app drift patterns (counted across findings):
+#   1. Title Case buttons (sentence-case rule §4 violations) — 28 surfaces affected
+#      → All vendor-portal + admin-portal CTAs need sentence-casing
+#   2. Sign in / Login / Logout / Sign out drift — 6 surfaces (web, vp, dp, ap, md)
+#      → Standardise to 'Sign in' / 'Sign out' platform-wide
+#   3. ASCII '...' vs Unicode '…' ellipsis — 12+ surfaces
+#      → Single regex pass to swap globally
+#   4. Brand-identity drift 'Fe3dr' vs 'Home Chef' — delivery-portal + admin-portal placeholder
+#      → P0; affects user trust at entry surfaces
+#   5. Form-label colons + Title Case — onboarding + menu-form
+#      → Style guide §4: noun, sentence case, no colons
+#   6. 'Item(s)' banned plural pattern — mobile-customer
+#      → ICU plural rendering required
+#   7. Greeting drift — mobile-vendor greets, vendor-portal web doesn't
+#      → Decide: greet or don't, apply consistently per persona
+#   8. Notification channel Title Case — mobile-vendor + mobile-delivery
+#      → All OS-level Android channels should be sentence case

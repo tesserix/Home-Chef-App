@@ -1,0 +1,475 @@
+---
+# Legal lens findings — microcopy slice
+# Inventory rows audited: 281
+# All findings flagged depends_on: "needs lawyer review"
+# Lens scope: India jurisdiction (DPDP 2023, FSSAI, RBI PA, GST, CP Rules) + best-practice
+
+- finding_id: LEG-001
+  surface_id: web-ux-chef-card-verified
+  lens: legal
+  severity: P1
+  issue: '"Verified chef" badge — unqualified verification claim with no tooltip/disclosure of what is verified'
+  evidence_excerpt: '"Verified chef" (aria-label + title)'
+  recommendation: 'Qualify the claim (e.g., specify whether FSSAI license, identity, or kitchen photos verified) or add tooltip/help link. Unqualified "Verified" creates implied warranty exposure under CP Rules 2020 and FSSAI Display Regulations.'
+  citation: 'Consumer Protection Rules 2020 (misleading representation); FSSAI Labelling & Display Regs 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-002
+  surface_id: ap-chefs-badge-verified
+  lens: legal
+  severity: P1
+  issue: 'Admin "Verified" badge — same unqualified claim surfaced on admin chefs list with no scope definition'
+  evidence_excerpt: '"Verified"'
+  recommendation: 'Define what verification covers (FSSAI / identity / address / kitchen). Admin UI should link to verification criteria.'
+  citation: 'best-practice; FSSAI §31'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-003
+  surface_id: ap-chefs-action-verify-aria
+  lens: legal
+  severity: P1
+  issue: 'Single-click "Verify kitchen" action with no on-screen attestation of what admin is verifying'
+  evidence_excerpt: '"Verify kitchen / Verify Kitchen"'
+  recommendation: 'Require admin to tick attestation checklist (FSSAI checked, address checked, kitchen photos checked) before allowing verify. Single-button verify exposes platform to liability claims if a downstream incident occurs.'
+  citation: 'IT Rules 2021 §3 (due diligence); CP Rules 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-004
+  surface_id: ap-chefs-action-reject-aria
+  lens: legal
+  severity: P1
+  issue: 'Single-click "Reject application" with no required reason code — chef cannot dispute rejection without recorded reason'
+  evidence_excerpt: '"Reject application / Reject Application"'
+  recommendation: 'Require reason code + free-text justification before allowing reject. Document retention obligation under DPDP §8(5) (purpose specification + accuracy) requires recorded decision basis.'
+  citation: 'DPDP Act §8(5); CP Rules grievance redressal'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-005
+  surface_id: ap-chefs-action-suspend-aria
+  lens: legal
+  severity: P0
+  issue: 'Suspend action exposed as aria/tooltip only — no consequence disclosure for chef who is being deprived of earnings'
+  evidence_excerpt: '"Suspend kitchen / Suspend Kitchen"'
+  recommendation: 'Require confirmation modal explaining (a) earnings impact, (b) pending order handling, (c) appeal pathway, (d) reason code. Suspension without due-process disclosure raises CP Rules and natural-justice exposure.'
+  citation: 'CP Rules 2020; IT Rules 2021 §3(1)(b)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-006
+  surface_id: ap-users-action-suspend-aria
+  lens: legal
+  severity: P0
+  issue: 'Suspend user — aria-label only with no consequence disclosure for affected user account'
+  evidence_excerpt: '"Suspend user / Suspend User"'
+  recommendation: 'Confirmation modal must explain (a) what user loses access to, (b) data retention during suspension, (c) reactivation path, (d) reason. DPDP §11 requires fair process for restricting data principal rights.'
+  citation: 'DPDP Act §11; IT Rules 2021'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-007
+  surface_id: ap-staffdetail-actions
+  lens: legal
+  severity: P1
+  issue: 'Deactivate/Reactivate staff buttons — no audit/reason capture surfaced in UI labels'
+  evidence_excerpt: '"Deactivate; Reactivate; Change Role; Confirm Deactivation; Confirm Reactivation"'
+  recommendation: 'Confirm modal must capture reason for audit log. DPDP requires processing record for personnel data changes.'
+  citation: 'DPDP Act §8(4); best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-008
+  surface_id: ap-approvaldetail-actions
+  lens: legal
+  severity: P1
+  issue: 'Approve/Reject/Request Info buttons — notes field marked "(optional)" but rejection without reason is legally weak'
+  evidence_excerpt: '"Approve; Reject; Request Info" + "Add notes for this approval action (optional)..."'
+  recommendation: 'Reject action should require notes (not optional). Approval decisions without recorded basis fail FSSAI inspection and CP Rules grievance defence.'
+  citation: 'FSSAI §31; CP Rules grievance officer regime'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-009
+  surface_id: vp-ux-menu-form-dietary-tags
+  lens: legal
+  severity: P0
+  issue: 'Dietary tags include religious certification claims (Halal, Kosher, Jain) with no certification-required disclosure or verification mechanism in label'
+  evidence_excerpt: '"Vegetarian / Non-Veg / Eggetarian / Vegan / Jain / Gluten-Free / Halal / Kosher / Nut-Free / Dairy-Free / Sugar-Free"'
+  recommendation: 'Religious / certification claims (Halal, Kosher, Jain, Gluten-Free) require third-party certification under FSSAI Labelling Regs 2020 and Halal Certification Order. Add helper text warning chefs that claim must be backed by certification, or restrict to self-attestation with disclaimer.'
+  citation: 'FSSAI Food Safety and Standards (Labelling and Display) Regs 2020; Halal Certification (India) directives'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-010
+  surface_id: vp-ux-menu-form-fields
+  lens: legal
+  severity: P0
+  issue: 'Allergens field is free-text with helper "Type each allergen and press Enter" — no standard allergen list, no required-allergen-disclosure prompt'
+  evidence_excerpt: '"Allergens" / "Type an allergen and press Enter"'
+  recommendation: 'FSSAI requires disclosure of 8 major allergens (milk, eggs, fish, crustacean shellfish, tree nuts, peanuts, wheat, soy). UI should present these as required checkboxes plus free-text additions, not free-text only.'
+  citation: 'FSSAI Labelling Regs 2020 §2.2.2(e) (major allergens)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-011
+  surface_id: vp-ux-menu-form-allergen-help
+  lens: legal
+  severity: P1
+  issue: 'Allergen helper text gives no warning about legal duty to declare; chefs may skip field entirely'
+  evidence_excerpt: '"Type each allergen and press Enter to add"'
+  recommendation: 'Add helper text: "Declaring allergens is required by FSSAI. List anything in this dish that can trigger reactions." Make field required for dishes containing common allergens.'
+  citation: 'FSSAI Labelling Regs 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-012
+  surface_id: web-ux-checkout-instructions
+  lens: legal
+  severity: P1
+  issue: 'Customer "Special Instructions" textarea — no allergen-aware prompt; customer cannot easily flag allergy to chef'
+  evidence_excerpt: '"Special Instructions / Any special requests or delivery instructions..."'
+  recommendation: 'Either add dedicated allergy field or update placeholder to prompt allergy disclosure (e.g., "Note any allergies, dietary needs, or delivery instructions"). FSSAI / CP Rules pathway for allergic-reaction complaints is weakened when allergy data is buried.'
+  citation: 'FSSAI Labelling Regs; CP Rules grievance redressal'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-013
+  surface_id: mc-checkout-note
+  lens: legal
+  severity: P1
+  issue: 'Mobile checkout "Note to chef" — same gap as web; no allergy-specific field'
+  evidence_excerpt: '"Note to chef (optional) / Any special instructions..."'
+  recommendation: 'Mirror web fix — explicit allergy field or allergy-aware placeholder.'
+  citation: 'FSSAI Labelling Regs; CP Rules'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-014
+  surface_id: vp-ux-kitchen-payout-fields
+  lens: legal
+  severity: P0
+  issue: 'Bank Name / Account Number / IFSC Code fields have no DPDP purpose/retention notice in helper text'
+  evidence_excerpt: '"Bank Name / Account Number / IFSC Code / e.g. State Bank of India / Enter account number / e.g. SBIN0001234"'
+  recommendation: 'Add purpose-limitation helper near these fields: "We use these details only to pay out your earnings. Stored encrypted. See Privacy Policy." DPDP §6 requires purpose notice at point of collection for financial data (sensitive class).'
+  citation: 'DPDP Act §5, §6 (notice and purpose limitation); RBI PA Master Direction'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-015
+  surface_id: vp-ux-settings-payout-form
+  lens: legal
+  severity: P0
+  issue: 'Bank Transfer / UPI payout form — same DPDP notice gap, also no statement that UPI VPA is collected for payouts only'
+  evidence_excerpt: '"Bank Transfer / UPI / Name as on bank account / Enter account number / e.g. SBIN0001234 / yourname@upi"'
+  recommendation: 'Add DPDP notice + retention statement at collection. Specify that UPI VPA is used only for payouts and not shared with customers.'
+  citation: 'DPDP Act §5, §6; RBI PA Master Direction'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-016
+  surface_id: vp-onb-policies-payout-info
+  lens: legal
+  severity: P1
+  issue: 'Deferred payout setup explanation does not mention KYC requirement, expected timelines, or RBI PA settlement rules'
+  evidence_excerpt: '"You can set up your bank account or UPI details for receiving payouts from Settings after your kitchen is approved."'
+  recommendation: 'Mention (a) KYC will be required to set up payouts, (b) typical settlement timeline (e.g., T+N days per RBI PA Master Direction), (c) link to payout T&C.'
+  citation: 'RBI PA Master Direction 2020 (settlement timelines, KYC)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-017
+  surface_id: dp-mc-stripe-cells
+  lens: legal
+  severity: P1
+  issue: 'Driver Stripe "Charges / Payouts / Details / Enabled / Pending / Submitted / Incomplete" — terse state labels with no KYC/onboarding-status explanation visible to driver'
+  evidence_excerpt: '"Charges / Payouts / Details + Enabled / Pending / Submitted / Incomplete"'
+  recommendation: 'Add helper text per state explaining what driver must do next (KYC pending, document required, etc.). DPDP §5 requires notice + Stripe Connect onboarding triggers cross-border data transfer disclosure.'
+  citation: 'DPDP Act §5, §16 (cross-border transfer); RBI PA Master Direction'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-018
+  surface_id: dp-mc-action-required
+  lens: legal
+  severity: P1
+  issue: '"Action Required" payout badge — does not state what action, what regulatory requirement, or what happens to in-flight payouts'
+  evidence_excerpt: '"Action Required"'
+  recommendation: 'Explicit copy: "Action required: complete KYC to receive payouts" + linked CTA. Implicit requirements fail RBI PA transparency expectation.'
+  citation: 'RBI PA Master Direction; CP Rules'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-019
+  surface_id: dp-mc-connected
+  lens: legal
+  severity: P2
+  issue: '"Connected" status (Stripe) — no disclosure that connecting to a foreign payment processor entails cross-border data transfer'
+  evidence_excerpt: '"Connected"'
+  recommendation: 'Helper or tooltip noting Stripe data flow + link to Privacy Policy section on third-party processors. DPDP §16 requires notice for cross-border transfer.'
+  citation: 'DPDP Act §16'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-020
+  surface_id: mc-perm-camera
+  lens: legal
+  severity: P0
+  issue: 'iOS NSCameraUsageDescription "Used to take photos" — vague purpose violates Apple guidelines AND DPDP §6 purpose limitation'
+  evidence_excerpt: '"Used to take photos"'
+  recommendation: 'State specific purpose: e.g., "Take photos of food and order issues to share with chefs and support." DPDP §6 requires specific, lawful purpose statement at collection.'
+  citation: 'DPDP Act §6; Apple App Store Review Guideline 5.1.1'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-021
+  surface_id: mc-perm-faceid
+  lens: legal
+  severity: P1
+  issue: 'iOS NSFaceIDUsageDescription "Use Face ID to log in quickly" — does not state biometric handling (on-device, not transmitted)'
+  evidence_excerpt: '"Use Face ID to log in quickly"'
+  recommendation: 'Clarify: "Use Face ID to sign in. Your biometric data stays on your device and is never sent to our servers." Biometric data is sensitive class under DPDP; transparent collection notice required.'
+  citation: 'DPDP Act §2(t) (sensitive personal data definition), §6'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-022
+  surface_id: mc-perm-location
+  lens: legal
+  severity: P0
+  issue: 'iOS location permission "Used to show your location on the delivery tracking map" — acceptable purpose but missing retention/sharing statement'
+  evidence_excerpt: '"Used to show your location on the delivery tracking map"'
+  recommendation: 'Expand: "Used to show your location during delivery tracking. Location is shared with your driver only and not retained after delivery." DPDP §5/§6 + Apple guideline.'
+  citation: 'DPDP Act §5, §6; Apple App Store Guideline 5.1.1'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-023
+  surface_id: vp-onb-personal-address-fields
+  lens: legal
+  severity: P1
+  issue: 'Address fields (Address Line 1/2, Landmark, Country, State, City, PIN) collected without on-screen DPDP notice of purpose'
+  evidence_excerpt: '"Address Line 1 / Address Line 2 / Landmark / Country / State / City / PIN Code (+ placeholders)"'
+  recommendation: 'Add helper text or section preamble explaining address use (kitchen verification, customer delivery range, FSSAI license matching). DPDP §6 purpose notice.'
+  citation: 'DPDP Act §6'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-024
+  surface_id: vp-onb-personal-avatar-label
+  lens: legal
+  severity: P2
+  issue: 'Profile photo helper "Shown on your kitchen page" — does not disclose photo retention if account is later closed'
+  evidence_excerpt: '"Profile Photo (Optional) / Shown on your kitchen page. JPEG, PNG, or WebP. Max 5 MB."'
+  recommendation: 'Add retention statement or link to Privacy Policy section on closure/deletion. DPDP §8 retention duty.'
+  citation: 'DPDP Act §8(7) (retention/erasure)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-025
+  surface_id: vp-onb-docs-kitchen-photos-title
+  lens: legal
+  severity: P1
+  issue: 'Kitchen photos collected for "trust" without stating who can see them, retention, or what happens if rejected'
+  evidence_excerpt: '"Photos of your kitchen help build trust. At least one photo of your cooking area is required."'
+  recommendation: 'Add helper text on (a) who views these (admin team for verification + on profile), (b) retention if application rejected, (c) DPDP rights.'
+  citation: 'DPDP Act §5, §6, §8'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-026
+  surface_id: vp-onb-docs-additional-title
+  lens: legal
+  severity: P1
+  issue: '"Additional Documents (Optional) … help speed up verification and build customer trust" — implies that not submitting harms approval, which makes consent non-free'
+  evidence_excerpt: '"These are optional but help speed up verification and build customer trust."'
+  recommendation: 'Either make truly optional with no implied penalty, or list documents as required with explicit purpose. DPDP §7(3) requires free consent (not coerced by implied disadvantage).'
+  citation: 'DPDP Act §7(3) (free, specific, informed consent)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-027
+  surface_id: vp-onb-docs-upload-helper
+  lens: legal
+  severity: P2
+  issue: 'Document upload helper "Drop file here or click to browse. Max 5 MB." — no statement on document handling, encryption, or who reviews'
+  evidence_excerpt: '"Drop file here or click to browse. Max 5 MB."'
+  recommendation: 'Add DPDP-aware helper noting documents are stored securely and reviewed by admin. Documents commonly include PAN/Aadhaar/FSSAI — sensitive class.'
+  citation: 'DPDP Act §5, §8(4) (reasonable security)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-028
+  surface_id: vp-onb-docs-required-label
+  lens: legal
+  severity: P3
+  issue: '"Required" badge without statement of the underlying legal requirement (FSSAI license, PAN, etc.)'
+  evidence_excerpt: '"Required"'
+  recommendation: 'Tooltip or helper line citing FSSAI / Income Tax Act / KYC source for each required document. Helps consent be "informed" per DPDP.'
+  citation: 'DPDP Act §6 (informed); FSSAI registration rules'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-029
+  surface_id: mc-catering-placeholders
+  lens: legal
+  severity: P2
+  issue: 'Catering request placeholders include city/state/budget/dietary text — no DPDP notice on use of dietary information (sensitive when religion-linked)'
+  evidence_excerpt: '"2026-06-15 / 50 / 25000 / Mumbai / Maharashtra / Any specific requirements, dietary restrictions, menu preferences..."'
+  recommendation: 'Add notice that dietary restrictions are shared only with chef bidder. Dietary info can imply religion/health under DPDP sensitive class.'
+  citation: 'DPDP Act §2(t), §6'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-030
+  surface_id: web-ux-cart-promo
+  lens: legal
+  severity: P1
+  issue: 'Promo code UI "Promo code applied! 10% off / Try: FE3DR10 for 10% off" — no link to promo T&C / validity / capping rules'
+  evidence_excerpt: '"Promo code / Apply / Applied / Promo code applied! 10% off / Try: FE3DR10 for 10% off"'
+  recommendation: 'Add "View promo terms" link near promo code field. CP Rules 2020 prohibit misleading promotions; unstated terms (cap, expiry, eligible items) expose platform.'
+  citation: 'CP Rules 2020 §4 (Misleading Advertisement); CCPA guidelines'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-031
+  surface_id: vp-ux-menu-bulk-confirm
+  lens: legal
+  severity: P2
+  issue: 'Bulk delete confirm "Delete {n} items? This cannot be undone." — vague consequence; does not state effect on existing orders containing those items'
+  evidence_excerpt: '"Delete {n} items? This cannot be undone."'
+  recommendation: 'Per style guide modal subtitle rule + CP Rules: state actual consequence (e.g., "Deleting removes these items from your menu. In-flight orders are unaffected.").'
+  citation: 'Style guide §4 (modal subtitles); CP Rules 2020 (clarity)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-032
+  surface_id: vp-ux-menu-delete-confirm
+  lens: legal
+  severity: P2
+  issue: 'Generic "Are you sure you want to delete this item?" — vague consequence pattern banned by style guide and weak under consumer-rules transparency'
+  evidence_excerpt: '"Are you sure you want to delete this item?"'
+  recommendation: 'Replace with consequence-specific copy (e.g., "Deleting removes this item from your menu. Existing orders containing it are not affected.").'
+  citation: 'Style guide §4; CP Rules 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-033
+  surface_id: ap-secsettings-session-actions
+  lens: legal
+  severity: P1
+  issue: '"Sign out everywhere / Revoke session" actions without confirmation copy explaining downstream impact (in-flight admin actions, audit logging)'
+  evidence_excerpt: '"Sign out everywhere; Revoke session; Refresh sessions"'
+  recommendation: 'Confirmation modal explaining all active admin sessions will be terminated; audit-logged action. DPDP §8(4) reasonable security expectation requires informed admin self-service.'
+  citation: 'DPDP Act §8(4); best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-034
+  surface_id: ap-secsettings-apikey-meta
+  lens: legal
+  severity: P2
+  issue: 'API key metadata "no scopes; expires {date}; revoked" — minimal disclosure of what an unscoped key can access'
+  evidence_excerpt: '"no scopes; expires {date}; revoked"'
+  recommendation: '"no scopes" warning should be loud: "Warning — this key has full access." API key with unspecified scope is a DPDP §8(4) security risk; surface it.'
+  citation: 'DPDP Act §8(4); best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-035
+  surface_id: ap-exports-button
+  lens: legal
+  severity: P1
+  issue: 'Data Exports "Download CSV; Preparing..." — no surface disclosure of what export contains, retention of generated file, or DPDP data principal rights handling'
+  evidence_excerpt: '"Download CSV; Preparing..."'
+  recommendation: 'Helper text near export buttons: "Exports may contain personal data. Handle per Privacy Policy and DPDP obligations. File available for 24h." DPDP §11 (data principal rights) + §8(4).'
+  citation: 'DPDP Act §11 (rights), §8(4) (security)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-036
+  surface_id: ap-auditlogs-expanded
+  lens: legal
+  severity: P2
+  issue: 'Audit log expanded view "User agent: / Before / After" — no statement of retention policy or accessibility for data principal grievance officer use'
+  evidence_excerpt: '"User agent:; Before; After"'
+  recommendation: 'Footer or header note: "Audit logs retained N years per DPDP grievance/regulatory requirements." DPDP §8(7) retention duty.'
+  citation: 'DPDP Act §8(7); CP Rules grievance officer regime'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-037
+  surface_id: mv-menuedit-price-change-banner
+  lens: legal
+  severity: P1
+  issue: 'Price-change banner "Price changes are submitted for admin review and may take 24 hours to reflect." — does not disclose what happens to in-flight orders or that price is contractually fixed at order placement'
+  evidence_excerpt: '"Price changes are submitted for admin review and may take 24 hours to reflect."'
+  recommendation: 'Add: "Orders placed before the change are honoured at the old price." CP Rules 2020 + Sale of Goods Act fix price at acceptance — banner should disclose to chef.'
+  citation: 'CP Rules 2020; Sale of Goods Act'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-038
+  surface_id: dp-mc-uploaded-state
+  lens: legal
+  severity: P2
+  issue: 'Driver document state shows "Verified / Uploaded" without distinction of who verified or against what standard'
+  evidence_excerpt: '"Verified / Uploaded"'
+  recommendation: 'Tooltip clarifying verification scope (e.g., "Verified by Fe3dr team against {document type} standard"). Unqualified "Verified" creates same exposure as LEG-001.'
+  citation: 'CP Rules 2020; best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-039
+  surface_id: dp-mc-pending-verification
+  lens: legal
+  severity: P2
+  issue: '"Pending Verification" badge — no SLA, no statement of what cannot be done while pending, no DPDP retention notice for unverified documents'
+  evidence_excerpt: '"Pending Verification"'
+  recommendation: 'Add SLA expectation + impact on driver earnings + retention statement if rejected.'
+  citation: 'DPDP Act §8(7); best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-040
+  surface_id: vp-ux-notifs-respond-form
+  lens: legal
+  severity: P2
+  issue: 'Notification response placeholder example "I''ve uploaded the FSSAI license, please review" — fine to suggest, but no statement that admin reply may be audit-logged / retained'
+  evidence_excerpt: '"Type your response to the admin... (e.g., I''ve uploaded the FSSAI license, please review) / Respond & Send"'
+  recommendation: 'Helper text: "Your message is logged for our records." DPDP §8(4) audit + transparency.'
+  citation: 'DPDP Act §8(4)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-041
+  surface_id: vp-ux-notifs-sla-line
+  lens: legal
+  severity: P3
+  issue: '"Typically reviewed within 24-48 hours" — SLA statement is not framed as commitment vs. estimate, which can create CP Rules expectation gap'
+  evidence_excerpt: '"Typically reviewed within 24-48 hours"'
+  recommendation: 'Soften or commit explicitly. "Typically" is fine if Privacy/T&C section makes clear it is estimate not guarantee.'
+  citation: 'CP Rules 2020 (no misleading representations)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-042
+  surface_id: mv-onb-personal-email-helper
+  lens: legal
+  severity: P3
+  issue: 'Helper "Email is pre-filled from your account" — does not surface that the email is identity-linked and changing it requires re-verification'
+  evidence_excerpt: '"Email is pre-filled from your account"'
+  recommendation: 'Expand helper to: "Email is from your account. Contact support to change it." DPDP §11 right-to-correction implications.'
+  citation: 'DPDP Act §11(b) (correction right)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-043
+  surface_id: web-ux-orderdetail-cancel-reason
+  lens: legal
+  severity: P1
+  issue: '"Cancellation reason:" label — no surface statement of refund timeline or who pays for cancellation cost'
+  evidence_excerpt: '"Cancellation reason:"'
+  recommendation: 'Add adjacent helper or info box stating refund SLA (RBI PA Master Direction: refund within 7 days for digital payments) + link to cancellation policy.'
+  citation: 'RBI PA Master Direction 2020; CP Rules 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-044
+  surface_id: vp-ux-orders-history-cancel-reason
+  lens: legal
+  severity: P2
+  issue: 'Chef-side "Reason: {cancelReason}" — display only, no statement of chef-vs-platform-vs-customer-responsibility attribution for downstream refund liability'
+  evidence_excerpt: '"Reason: {cancelReason}"'
+  recommendation: 'Helper or info icon explaining who bears refund cost based on cancellation reason code. RBI PA Master Direction requires clear merchant-of-record disclosure.'
+  citation: 'RBI PA Master Direction; CP Rules 2020'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-045
+  surface_id: vp-ux-orders-live-actions
+  lens: legal
+  severity: P2
+  issue: '"Reject" order button has no captured-reason requirement at UI label level — rejection without reason weakens platform CP Rules grievance handling'
+  evidence_excerpt: '"Order History / Accept / Reject / Start Preparing / Mark Ready / Waiting for pickup"'
+  recommendation: 'Reject should open reason picker (out-of-stock, kitchen closed, can''t fulfil time, etc.). Captured reason supports CP Rules grievance defence and refund decisioning.'
+  citation: 'CP Rules 2020; RBI PA Master Direction'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-046
+  surface_id: mc-deliverymap-markers
+  lens: legal
+  severity: P3
+  issue: 'Map markers "Delivery Address / Chef Location / Driver" — chef address shown to customer without statement of approximation/precision and whose precise location is shared'
+  evidence_excerpt: '"Delivery Address / Chef Location / Driver"'
+  recommendation: 'If chef location is approximate, label "Approximate chef location". DPDP §6 + chef privacy expectation (home kitchens).'
+  citation: 'DPDP Act §6; best-practice'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-047
+  surface_id: web-ux-loading-default
+  lens: legal
+  severity: P3
+  issue: 'Loading screen "Loading..." — no statement during slow/blocked loads of timeout or grievance contact (covered better on legal pages, but app-shell exposure)'
+  evidence_excerpt: '"Loading..."'
+  recommendation: 'Out of scope for legal lens unless paired with prolonged blocking. Mention only because legal-page redirects from app shell should still expose grievance officer link.'
+  citation: 'best-practice (informational)'
+  depends_on: 'needs lawyer review'
