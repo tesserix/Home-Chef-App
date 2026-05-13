@@ -86,7 +86,7 @@ function StaffDashboard({ staffProfile }: { staffProfile: StaffProfile }) {
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
         <div>
           <p className="text-sm text-ink-soft">Today's fleet earnings</p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+          <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-foreground sm:text-5xl">
             {formatCurrency(overview?.todayEarnings ?? 0)}
           </p>
           <p className="mt-2 text-sm text-ink-soft tabular-nums">
@@ -212,7 +212,7 @@ function PartnerDashboard() {
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
         <div>
           <p className="text-sm text-ink-soft">Today's earnings</p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+          <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-foreground sm:text-5xl">
             {formatCurrency(stats?.today?.earnings ?? 0)}
           </p>
           <p className="mt-2 text-sm text-ink-soft tabular-nums">
