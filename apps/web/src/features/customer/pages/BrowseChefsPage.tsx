@@ -174,7 +174,7 @@ export default function BrowseChefsPage() {
             <Button
               variant={activeFilterCount > 0 ? 'brand-outline' : 'outline'}
               onClick={() => setShowFilters(!showFilters)}
-              leftIcon={<Filter className="h-4 w-4" />}
+              leftIcon={<Filter className="h-4 w-4"  aria-hidden="true" />}
             >
               Filters
               {activeFilterCount > 0 && (
@@ -262,36 +262,36 @@ export default function BrowseChefsPage() {
               {filters.search && (
                 <Badge variant="brand" className="gap-1">
                   Search: {filters.search}
-                  <button
+                  <button type="button"
                     onClick={() => {
                       setSearchQuery('');
                       updateFilters({ search: undefined });
                     }}
                     className="hover:text-herb ml-1"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 </Badge>
               )}
               {filters.cuisine && (
                 <Badge variant="brand" className="gap-1">
                   {filters.cuisine}
-                  <button
+                  <button type="button"
                     onClick={() => updateFilters({ cuisine: undefined })}
                     className="hover:text-herb ml-1"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 </Badge>
               )}
               {filters.dietary && (
                 <Badge variant="brand" className="gap-1">
                   {filters.dietary}
-                  <button
+                  <button type="button"
                     onClick={() => updateFilters({ dietary: undefined })}
                     className="hover:text-herb ml-1"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 </Badge>
               )}
@@ -316,7 +316,7 @@ export default function BrowseChefsPage() {
         ) : (data?.data ?? []).length === 0 ? (
           <Card variant="filled" padding="lg" className="text-center">
             <div className="mx-auto h-16 w-16 rounded-full bg-mist flex items-center justify-center mb-4">
-              <Search className="h-8 w-8 text-ink-muted" />
+              <Search className="h-8 w-8 text-ink-muted"  aria-hidden="true" />
             </div>
             <h3 className="text-lg font-semibold text-ink">No chefs found</h3>
             <p className="mt-2 text-ink-soft">
@@ -465,7 +465,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
 
           <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <Clock className="h-4 w-4"  aria-hidden="true" />
               {chef.prepTime}
             </div>
             <div>{chef.priceRange}</div>
@@ -473,7 +473,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
 
           <div className="mt-3 flex items-center justify-between text-sm">
             <div className="flex items-center gap-1 text-ink-muted">
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-4 w-4"  aria-hidden="true" />
               {chef.serviceRadius} km radius
             </div>
             {chef.acceptingOrders ? (

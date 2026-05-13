@@ -70,7 +70,7 @@ export default function AdminChefsPage() {
       {/* Status Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {STATUS_TABS.map((tab) => (
-          <button
+          <button type="button"
             key={tab.value}
             onClick={() => setStatusFilter(tab.value)}
             className={`relative rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -107,11 +107,11 @@ export default function AdminChefsPage() {
       {/* Chefs Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-herb" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
         </div>
       ) : chefs.length === 0 ? (
         <div className="rounded-xl bg-ink p-12 text-center">
-          <ChefHat className="mx-auto h-12 w-12 text-ink-soft" />
+          <ChefHat className="mx-auto h-12 w-12 text-ink-soft"  aria-hidden="true" />
           <h3 className="mt-4 font-medium text-paper">No chefs found</h3>
           <p className="mt-2 text-ink-muted">
             {statusFilter === 'pending'
@@ -171,12 +171,12 @@ function ChefCard({ chef, onSelect }: { chef: Chef; onSelect: () => void }) {
         <div className="absolute top-2 right-2">
           {chef.verified ? (
             <span className="flex items-center gap-1 rounded-full bg-herb/20 px-2 py-0.5 text-xs font-medium text-herb">
-              <Shield className="h-3 w-3" />
+              <Shield className="h-3 w-3"  aria-hidden="true" />
               Verified
             </span>
           ) : chef.verifiedAt === null ? (
             <span className="flex items-center gap-1 rounded-full bg-amber/20 px-2 py-0.5 text-xs font-medium text-amber">
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3 w-3"  aria-hidden="true" />
               Pending
             </span>
           ) : (
@@ -196,7 +196,7 @@ function ChefCard({ chef, onSelect }: { chef: Chef; onSelect: () => void }) {
 
         <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
           <div className="flex items-center gap-1">
-            <Star className="h-4 w-4 text-amber" />
+            <Star className="h-4 w-4 text-amber"  aria-hidden="true" />
             {chef.rating}
           </div>
           <div>{chef.totalOrders} orders</div>
@@ -206,7 +206,7 @@ function ChefCard({ chef, onSelect }: { chef: Chef; onSelect: () => void }) {
           variant="ghost"
           size="sm"
           fullWidth
-          leftIcon={<Eye className="h-4 w-4" />}
+          leftIcon={<Eye className="h-4 w-4"  aria-hidden="true" />}
           onClick={onSelect}
           className="mt-4 bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
         >
@@ -261,12 +261,12 @@ function ChefDetailModal({
             </div>
             {chef.verified ? (
               <span className="flex items-center gap-1 rounded-full bg-herb/20 px-3 py-1 text-sm font-medium text-herb">
-                <Shield className="h-4 w-4" />
+                <Shield className="h-4 w-4"  aria-hidden="true" />
                 Verified
               </span>
             ) : isPending ? (
               <span className="flex items-center gap-1 rounded-full bg-amber/20 px-3 py-1 text-sm font-medium text-amber">
-                <Clock className="h-4 w-4" />
+                <Clock className="h-4 w-4"  aria-hidden="true" />
                 Pending Verification
               </span>
             ) : (
@@ -283,7 +283,7 @@ function ChefDetailModal({
           <div className="mt-6 grid grid-cols-3 gap-4">
             <div className="rounded-lg bg-ink-soft/50 p-4 text-center">
               <div className="flex items-center justify-center gap-1 font-display text-2xl font-semibold text-paper">
-                <Star className="h-5 w-5 text-amber" />
+                <Star className="h-5 w-5 text-amber"  aria-hidden="true" />
                 {chef.rating}
               </div>
               <p className="text-sm text-ink-muted">{chef.totalReviews} reviews</p>
@@ -301,11 +301,11 @@ function ChefDetailModal({
           {/* Details */}
           <div className="mt-6 space-y-3">
             <div className="flex items-center gap-3 text-ink-muted">
-              <MapPin className="h-4 w-4 text-ink-muted" />
+              <MapPin className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
               Service area: {chef.serviceRadius} km radius
             </div>
             <div className="flex items-center gap-3 text-ink-muted">
-              <Clock className="h-4 w-4 text-ink-muted" />
+              <Clock className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
               Prep time: {chef.prepTime}
             </div>
           </div>
@@ -345,7 +345,7 @@ function ChefDetailModal({
                 fullWidth
                 isLoading={isUpdating}
                 disabled={isUpdating}
-                leftIcon={!isUpdating ? <XCircle className="h-4 w-4" /> : undefined}
+                leftIcon={!isUpdating ? <XCircle className="h-4 w-4"  aria-hidden="true" /> : undefined}
                 onClick={onReject}
               >
                 Reject
@@ -355,7 +355,7 @@ function ChefDetailModal({
                 fullWidth
                 isLoading={isUpdating}
                 disabled={isUpdating}
-                leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4" /> : undefined}
+                leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4"  aria-hidden="true" /> : undefined}
                 onClick={onVerify}
               >
                 Verify
@@ -378,7 +378,7 @@ function ChefDetailModal({
               fullWidth
               isLoading={isUpdating}
               disabled={isUpdating}
-              leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4" /> : undefined}
+              leftIcon={!isUpdating ? <CheckCircle className="h-4 w-4"  aria-hidden="true" /> : undefined}
               onClick={onVerify}
             >
               Reactivate

@@ -52,7 +52,7 @@ export default function CartPage() {
         <div className="container-app max-w-2xl text-center">
           <div className="rounded-xl bg-bone p-12 shadow-1">
             <div className="mx-auto h-24 w-24 rounded-full bg-mist flex items-center justify-center">
-              <ShoppingCart className="h-12 w-12 text-ink-muted" />
+              <ShoppingCart className="h-12 w-12 text-ink-muted"  aria-hidden="true" />
             </div>
             <h2 className="mt-6 font-display text-2xl font-semibold text-ink">
               Your cart is empty
@@ -102,7 +102,7 @@ export default function CartPage() {
                     {cart.chef.businessName}
                   </h3>
                 </div>
-                <ChevronRight className="h-5 w-5 text-ink-muted" />
+                <ChevronRight className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
               </Link>
             )}
 
@@ -130,11 +130,11 @@ export default function CartPage() {
                           {item.description}
                         </p>
                       </div>
-                      <button
+                      <button type="button"
                         onClick={() => cart.removeItem(item.id)}
                         className="p-1 text-ink-muted hover:text-paprika"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-5 w-5"  aria-hidden="true" />
                       </button>
                     </div>
 
@@ -146,18 +146,18 @@ export default function CartPage() {
 
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center rounded-lg border">
-                        <button
+                        <button type="button"
                           onClick={() => cart.updateQuantity(item.id, item.quantity - 1)}
                           className="p-2 hover:bg-mist"
                         >
-                          <Minus className="h-4 w-4" />
+                          <Minus className="h-4 w-4"  aria-hidden="true" />
                         </button>
                         <span className="w-8 text-center">{item.quantity}</span>
-                        <button
+                        <button type="button"
                           onClick={() => cart.updateQuantity(item.id, item.quantity + 1)}
                           className="p-2 hover:bg-mist"
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-4 w-4"  aria-hidden="true" />
                         </button>
                       </div>
                       <span className="font-semibold text-ink">
@@ -174,7 +174,7 @@ export default function CartPage() {
               to={`/chefs/${cart.chefId}`}
               className="mt-4 flex items-center justify-center gap-2 text-herb hover:text-herb"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4"  aria-hidden="true" />
               Add more items
             </Link>
           </div>
@@ -243,7 +243,7 @@ export default function CartPage() {
               {/* Minimum Order Warning */}
               {belowMinimum && (
                 <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-tint p-3 text-sm text-amber">
-                  <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                  <AlertCircle className="h-5 w-5 flex-shrink-0"  aria-hidden="true" />
                   <div>
                     <p className="font-medium">Minimum order not met</p>
                     <p>Add {fp(minimumOrder - subtotal)} more to proceed</p>
@@ -267,11 +267,11 @@ export default function CartPage() {
               {/* Delivery Info */}
               <div className="mt-6 space-y-3 border-t pt-6">
                 <div className="flex items-center gap-3 text-sm text-ink-soft">
-                  <MapPin className="h-5 w-5 text-ink-muted" />
+                  <MapPin className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
                   <span>Delivery within {cart.chef?.minimumOrder} km radius</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-ink-soft">
-                  <Clock className="h-5 w-5 text-ink-muted" />
+                  <Clock className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
                   <span>Estimated prep time: 30-45 mins</span>
                 </div>
               </div>

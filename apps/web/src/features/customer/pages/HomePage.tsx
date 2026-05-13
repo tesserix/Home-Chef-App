@@ -114,7 +114,7 @@ export default function HomePage() {
                       variant="ghost"
                       inputSize="lg"
                       placeholder="Enter your delivery address..."
-                      leftIcon={<MapPin className="h-5 w-5" />}
+                      leftIcon={<MapPin className="h-5 w-5"  aria-hidden="true" />}
                       className="border-0"
                     />
                   </div>
@@ -246,7 +246,7 @@ export default function HomePage() {
               </div>
               <Button asChild variant="ghost" className="hidden sm:flex">
                 <Link to="/chefs">
-                  View All <ArrowRight className="ml-2 h-4 w-4" />
+                  View All <ArrowRight className="ml-2 h-4 w-4"  aria-hidden="true" />
                 </Link>
               </Button>
             </motion.div>
@@ -304,7 +304,7 @@ export default function HomePage() {
               </div>
               <Button asChild variant="ghost" className="hidden sm:flex">
                 <Link to="/chefs">
-                  View All Chefs <ArrowRight className="ml-2 h-4 w-4" />
+                  View All Chefs <ArrowRight className="ml-2 h-4 w-4"  aria-hidden="true" />
                 </Link>
               </Button>
             </motion.div>
@@ -582,7 +582,7 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
 
           <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+              <Clock className="h-4 w-4"  aria-hidden="true" />
               {chef.prepTime}
             </div>
             <div>{chef.priceRange}</div>

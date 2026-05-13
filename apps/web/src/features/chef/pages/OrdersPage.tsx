@@ -98,7 +98,7 @@ export default function ChefOrdersPage() {
         </div>
         <Button
           variant="outline"
-          leftIcon={<RefreshCw className="h-4 w-4" />}
+          leftIcon={<RefreshCw className="h-4 w-4"  aria-hidden="true" />}
           onClick={() => refetch()}
         >
           Refresh
@@ -140,12 +140,12 @@ export default function ChefOrdersPage() {
       {/* Orders List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-herb" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
         </div>
       ) : filteredOrders.length === 0 ? (
         <motion.div variants={fadeInUp}>
           <Card variant="filled" padding="lg" className="text-center">
-            <Package className="mx-auto h-12 w-12 text-ink-muted" />
+            <Package className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
             <h3 className="mt-4 font-medium text-ink">No orders found</h3>
             <p className="mt-2 text-ink-soft">
               {statusFilter === 'all'
@@ -222,7 +222,7 @@ function OrderCard({
           )}
           <div>
             <div className="flex items-center gap-3">
-              <button
+              <button type="button"
                 onClick={onSelect}
                 className="text-lg font-semibold text-ink hover:text-herb transition-colors"
               >
@@ -290,7 +290,7 @@ function OrderCard({
             variant="outline"
             onClick={() => onUpdateStatus('cancelled')}
             disabled={isUpdating}
-            leftIcon={<XCircle className="h-4 w-4" />}
+            leftIcon={<XCircle className="h-4 w-4"  aria-hidden="true" />}
             className="text-paprika border-paprika/30 hover:bg-paprika-tint"
           >
             Reject
@@ -335,7 +335,7 @@ function OrderDetailContent({
         <h3 className="font-medium text-ink">Delivery Information</h3>
         <div className="mt-3 space-y-2 text-sm text-ink-soft">
           <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-ink-muted" />
+            <MapPin className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
             <span>
               {order.deliveryAddress.line1}, {order.deliveryAddress.city},{' '}
               {order.deliveryAddress.state} {order.deliveryAddress.postalCode}
@@ -433,7 +433,7 @@ function OrderDetailContent({
               variant="primary"
               onClick={() => onUpdateStatus(status.nextStatus!)}
               isLoading={isUpdating}
-              leftIcon={<CheckCircle className="h-4 w-4" />}
+              leftIcon={<CheckCircle className="h-4 w-4"  aria-hidden="true" />}
             >
               {status.nextAction}
             </Button>

@@ -298,10 +298,10 @@ export default function CheckoutPage() {
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                  <MapPin className="h-5 w-5 text-herb" />
+                  <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
                   Delivery Address
                 </h2>
-                <button
+                <button type="button"
                   onClick={() => setShowNewAddress(!showNewAddress)}
                   className="text-sm text-herb hover:text-herb"
                 >
@@ -454,7 +454,7 @@ export default function CheckoutPage() {
                         </p>
                       </div>
                       {selectedAddress === address.id && (
-                        <Check className="h-5 w-5 text-herb" />
+                        <Check className="h-5 w-5 text-herb"  aria-hidden="true" />
                       )}
                     </label>
                   ))}
@@ -465,7 +465,7 @@ export default function CheckoutPage() {
             {/* Delivery Time */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                <Clock className="h-5 w-5 text-herb" />
+                <Clock className="h-5 w-5 text-herb"  aria-hidden="true" />
                 Delivery Time
               </h2>
 
@@ -531,7 +531,7 @@ export default function CheckoutPage() {
             {/* Payment */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-                <Shield className="h-5 w-5 text-herb" />
+                <Shield className="h-5 w-5 text-herb"  aria-hidden="true" />
                 Payment
               </h2>
               <div className="mt-4 flex items-center gap-3 rounded-lg border border-mist bg-paper p-4">
@@ -562,7 +562,7 @@ export default function CheckoutPage() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {[0, 2, 5, 10].map((amount) => (
-                  <button
+                  <button type="button"
                     key={amount}
                     onClick={() => setTip(amount)}
                     className={`rounded-lg px-4 py-2 transition-colors ${

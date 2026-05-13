@@ -76,7 +76,7 @@ export default function CateringQuotesPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -104,7 +104,7 @@ export default function CateringQuotesPage() {
 
               {(requests?.data ?? []).length === 0 ? (
                 <div className="p-8 text-center">
-                  <FileText className="mx-auto h-12 w-12 text-ink-muted" />
+                  <FileText className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
                   <h3 className="mt-4 font-medium text-ink">No requests yet</h3>
                   <p className="mt-2 text-sm text-ink-soft">
                     Create a catering request to receive quotes from our chefs
@@ -118,7 +118,7 @@ export default function CateringQuotesPage() {
                   {(requests?.data ?? []).map((request) => {
                     const status = STATUS_CONFIG[request.status];
                     return (
-                      <button
+                      <button type="button"
                         key={request.id}
                         onClick={() => setSelectedRequest(request.id)}
                         className={`w-full p-4 text-left transition-colors ${
@@ -130,13 +130,13 @@ export default function CateringQuotesPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-ink-muted" />
+                              <Calendar className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
                               <span className="font-medium text-ink">
                                 {formatDate(request.eventDate)}
                               </span>
                             </div>
                             <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
-                              <Users className="h-4 w-4" />
+                              <Users className="h-4 w-4"  aria-hidden="true" />
                               {request.guestCount} guests
                             </div>
                           </div>
@@ -167,7 +167,7 @@ export default function CateringQuotesPage() {
           <div className="flex-1">
             {!selectedRequest ? (
               <div className="rounded-xl bg-bone p-12 text-center shadow-1">
-                <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                <ChefHat className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
                 <h3 className="mt-4 font-medium text-ink">Select a request</h3>
                 <p className="mt-2 text-sm text-ink-soft">
                   Choose a request from the list to view details and quotes
@@ -188,7 +188,7 @@ export default function CateringQuotesPage() {
                     <div className="mt-6 grid gap-6 md:grid-cols-2">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-                          <Calendar className="h-5 w-5 text-herb" />
+                          <Calendar className="h-5 w-5 text-herb"  aria-hidden="true" />
                         </div>
                         <div>
                           <p className="text-sm text-ink-muted">Event Date</p>
@@ -205,7 +205,7 @@ export default function CateringQuotesPage() {
 
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-                          <Clock className="h-5 w-5 text-herb" />
+                          <Clock className="h-5 w-5 text-herb"  aria-hidden="true" />
                         </div>
                         <div>
                           <p className="text-sm text-ink-muted">Event Time</p>
@@ -215,7 +215,7 @@ export default function CateringQuotesPage() {
 
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-                          <Users className="h-5 w-5 text-herb" />
+                          <Users className="h-5 w-5 text-herb"  aria-hidden="true" />
                         </div>
                         <div>
                           <p className="text-sm text-ink-muted">Guest Count</p>
@@ -225,7 +225,7 @@ export default function CateringQuotesPage() {
 
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-                          <MapPin className="h-5 w-5 text-herb" />
+                          <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
                         </div>
                         <div>
                           <p className="text-sm text-ink-muted">Location</p>
@@ -269,11 +269,11 @@ export default function CateringQuotesPage() {
 
                   {quotesLoading ? (
                     <div className="mt-4 flex items-center justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-herb" />
+                      <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
                     </div>
                   ) : (quotes?.data ?? []).length === 0 ? (
                     <div className="mt-4 rounded-xl bg-bone p-8 text-center shadow-1">
-                      <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                      <ChefHat className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
                       <h3 className="mt-4 font-medium text-ink">No quotes yet</h3>
                       <p className="mt-2 text-sm text-ink-soft">
                         Our chefs are reviewing your request. You'll receive quotes soon!
@@ -331,7 +331,7 @@ function QuoteCard({
               <div>
                 <h3 className="font-semibold text-ink">{quote.chef?.businessName}</h3>
                 <div className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
-                  <Star className="h-4 w-4 fill-amber text-amber" />
+                  <Star className="h-4 w-4 fill-amber text-amber"  aria-hidden="true" />
                   <span>{quote.chef?.rating}</span>
                   <span>({quote.chef?.totalReviews} reviews)</span>
                 </div>
@@ -350,7 +350,7 @@ function QuoteCard({
 
         {/* Menu Preview */}
         <div className="mt-4">
-          <button
+          <button type="button"
             onClick={() => setShowDetails(!showDetails)}
             className="text-sm text-herb hover:text-herb"
           >
@@ -430,7 +430,7 @@ function QuoteCard({
 
         {quote.status === 'accepted' && (
           <div className="mt-6 rounded-lg bg-herb-tint p-4 text-center">
-            <Check className="mx-auto h-8 w-8 text-herb" />
+            <Check className="mx-auto h-8 w-8 text-herb"  aria-hidden="true" />
             <p className="mt-2 font-medium text-herb">Quote Accepted!</p>
             <p className="text-sm text-herb">The chef will contact you soon to finalize details.</p>
           </div>

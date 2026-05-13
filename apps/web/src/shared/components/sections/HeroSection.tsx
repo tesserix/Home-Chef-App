@@ -104,7 +104,7 @@ function SearchBar() {
   return (
     <div className="mt-8 flex flex-col gap-3 sm:flex-row">
       <div className="flex flex-1 items-center gap-3 rounded-xl border border-mist bg-bone px-4 py-3 shadow-1 focus-within:border-herb focus-within:ring-2 focus-within:ring-herb/20">
-        <MapPin className="h-5 w-5 text-ink-muted" />
+        <MapPin className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
         <input
           type="text"
           placeholder="Enter your delivery address"

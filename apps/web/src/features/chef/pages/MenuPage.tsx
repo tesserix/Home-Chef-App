@@ -124,7 +124,7 @@ export default function ChefMenuPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -144,7 +144,7 @@ export default function ChefMenuPage() {
             {allItems.length} item{allItems.length !== 1 ? 's' : ''} in your menu
           </p>
         </div>
-        <Button variant="primary" leftIcon={<Plus className="h-5 w-5" />} onClick={() => setShowForm(true)}>
+        <Button variant="primary" leftIcon={<Plus className="h-5 w-5"  aria-hidden="true" />} onClick={() => setShowForm(true)}>
           Add Item
         </Button>
       </motion.div>
@@ -186,7 +186,7 @@ export default function ChefMenuPage() {
       {filteredItems.length === 0 ? (
         <motion.div variants={fadeInUp}>
           <Card variant="filled" padding="lg" className="text-center">
-            <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+            <ChefHat className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
             <h3 className="mt-4 font-medium text-ink">No menu items</h3>
             <p className="mt-2 text-ink-soft">
               {searchQuery
@@ -280,12 +280,12 @@ function MenuItemCard({
            loading="lazy" decoding="async"/>
         ) : (
           <div className="h-full w-full bg-mist flex items-center justify-center">
-            <ChefHat className="h-12 w-12 text-ink-muted" />
+            <ChefHat className="h-12 w-12 text-ink-muted"  aria-hidden="true" />
           </div>
         )}
         {item.isFeatured && (
           <Badge variant="solid-brand" size="sm" className="absolute top-2 left-2">
-            <Star className="mr-1 h-3 w-3" />
+            <Star className="mr-1 h-3 w-3"  aria-hidden="true" />
             Featured
           </Badge>
         )}
@@ -336,7 +336,7 @@ function MenuItemCard({
             size="sm"
             className="flex-1"
             onClick={onToggleAvailability}
-            leftIcon={item.isAvailable ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            leftIcon={item.isAvailable ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
           >
             {item.isAvailable ? 'Hide' : 'Show'}
           </Button>
@@ -346,7 +346,7 @@ function MenuItemCard({
             onClick={onEdit}
             className="text-herb"
           >
-            <Edit2 className="h-4 w-4" />
+            <Edit2 className="h-4 w-4"  aria-hidden="true" />
           </Button>
           <Button
             variant="outline"
@@ -354,7 +354,7 @@ function MenuItemCard({
             onClick={onDelete}
             className="text-paprika"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4"  aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -428,7 +428,7 @@ function MenuItemForm({
         </label>
         <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-mist-strong p-8 hover:border-herb transition-colors cursor-pointer">
           <div className="text-center">
-            <Upload className="mx-auto h-8 w-8 text-ink-muted" />
+            <Upload className="mx-auto h-8 w-8 text-ink-muted"  aria-hidden="true" />
             <p className="mt-2 text-sm text-ink-soft">
               Click to upload or drag and drop
             </p>

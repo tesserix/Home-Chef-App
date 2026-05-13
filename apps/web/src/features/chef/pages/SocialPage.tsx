@@ -55,7 +55,7 @@ export default function ChefSocialPage() {
         </div>
         <Button
           variant="primary"
-          leftIcon={<Plus className="h-5 w-5" />}
+          leftIcon={<Plus className="h-5 w-5"  aria-hidden="true" />}
           onClick={() => setShowCreateModal(true)}
         >
           Create Post
@@ -64,7 +64,7 @@ export default function ChefSocialPage() {
 
       {/* Content Moderation Notice */}
       <div className="flex items-start gap-3 rounded-xl bg-info/10 p-4">
-        <AlertCircle className="h-5 w-5 flex-shrink-0 text-info" />
+        <AlertCircle className="h-5 w-5 flex-shrink-0 text-info"  aria-hidden="true" />
         <div className="text-sm text-info">
           <p className="font-medium">Content Guidelines</p>
           <p className="mt-1">
@@ -78,7 +78,7 @@ export default function ChefSocialPage() {
       {/* Posts Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-herb" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
         </div>
       ) : (posts?.data ?? []).length === 0 ? (
         <div className="rounded-xl bg-bone p-12 text-center shadow-1">
@@ -170,7 +170,7 @@ function PostCard({
         {/* Stats */}
         <div className="mt-4 flex items-center gap-4 text-sm text-ink-muted">
           <span className="flex items-center gap-1">
-            <Heart className="h-4 w-4" />
+            <Heart className="h-4 w-4"  aria-hidden="true" />
             {post.likesCount}
           </span>
           <span className="flex items-center gap-1">
@@ -195,7 +195,7 @@ function PostCard({
             variant="ghost"
             size="sm"
             fullWidth
-            leftIcon={<Edit2 className="h-4 w-4" />}
+            leftIcon={<Edit2 className="h-4 w-4"  aria-hidden="true" />}
             onClick={onEdit}
             className="flex-1 bg-mist text-ink-soft hover:bg-mist/80 hover:text-ink-soft"
           >
@@ -205,7 +205,7 @@ function PostCard({
             variant="ghost"
             size="sm"
             fullWidth
-            leftIcon={<Trash2 className="h-4 w-4" />}
+            leftIcon={<Trash2 className="h-4 w-4"  aria-hidden="true" />}
             onClick={onDelete}
             className="flex-1 bg-paprika-tint text-paprika hover:bg-paprika-tint/80 hover:text-paprika"
           >
@@ -284,12 +284,12 @@ function CreatePostModal({
           <h2 className="text-lg font-semibold text-ink">
             {post ? 'Edit Post' : 'Create Post'}
           </h2>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label="Close"
             className="rounded-full p-1 text-ink-muted hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb"
           >
-            <X className="h-6 w-6" />
+            <X className="h-6 w-6"  aria-hidden="true" />
           </button>
         </div>
 
@@ -307,7 +307,7 @@ function CreatePostModal({
                     aria-label={`Remove image ${i + 1}`}
                     className="absolute -right-1 -top-1 rounded-full bg-paprika p-0.5 text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika focus-visible:ring-offset-1"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -317,7 +317,7 @@ function CreatePostModal({
                   aria-label="Upload photo"
                   className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-mist-strong transition-colors hover:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Upload className="h-6 w-6 text-ink-muted" />
+                  <Upload className="h-6 w-6 text-ink-muted"  aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -357,7 +357,7 @@ function CreatePostModal({
                     aria-label={`Remove hashtag ${tag}`}
                     className="rounded hover:text-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 </span>
               ))}

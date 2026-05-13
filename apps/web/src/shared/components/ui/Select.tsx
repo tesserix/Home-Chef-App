@@ -65,7 +65,7 @@ const SelectTrigger = forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground"  aria-hidden="true" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -83,7 +83,7 @@ const SelectScrollUpButton = forwardRef<
     )}
     {...props}
   >
-    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+    <ChevronUp className="h-4 w-4 text-muted-foreground"  aria-hidden="true" />
   </SelectPrimitive.ScrollUpButton>
 ));
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
@@ -100,7 +100,7 @@ const SelectScrollDownButton = forwardRef<
     )}
     {...props}
   >
-    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+    <ChevronDown className="h-4 w-4 text-muted-foreground"  aria-hidden="true" />
   </SelectPrimitive.ScrollDownButton>
 ));
 SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
@@ -174,7 +174,7 @@ const SelectItem = forwardRef<
   >
     <span className="absolute right-2 flex h-4 w-4 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-primary" />
+        <Check className="h-4 w-4 text-primary"  aria-hidden="true" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

@@ -72,7 +72,7 @@ export default function OrdersPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -86,7 +86,7 @@ export default function OrdersPage() {
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2 overflow-x-auto">
             {FILTER_OPTIONS.map((option) => (
-              <button
+              <button type="button"
                 key={option.value}
                 onClick={() => setFilter(option.value)}
                 className={`rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -120,7 +120,7 @@ export default function OrdersPage() {
           {filteredOrders.length === 0 ? (
             <div className="rounded-xl bg-bone p-12 text-center shadow-1">
               <div className="mx-auto h-16 w-16 rounded-full bg-mist flex items-center justify-center">
-                <Package className="h-8 w-8 text-ink-muted" />
+                <Package className="h-8 w-8 text-ink-muted"  aria-hidden="true" />
               </div>
               <h3 className="mt-4 text-lg font-semibold text-ink">No orders found</h3>
               <p className="mt-2 text-ink-soft">
@@ -229,7 +229,7 @@ function OrderCard({ order }: { order: Order }) {
           <div className="flex items-center gap-2 text-sm text-ink-soft">
             {order.estimatedDeliveryAt && isActive && (
               <>
-                <Clock className="h-4 w-4" />
+                <Clock className="h-4 w-4"  aria-hidden="true" />
                 <span>
                   Est. delivery:{' '}
                   {formatTime(order.estimatedDeliveryAt)}
@@ -239,7 +239,7 @@ function OrderCard({ order }: { order: Order }) {
           </div>
           <div className="flex items-center gap-1 text-herb">
             <span className="text-sm font-medium">View Details</span>
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4"  aria-hidden="true" />
           </div>
         </div>
       </div>

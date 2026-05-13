@@ -81,7 +81,7 @@ export default function DeliveryOrdersPage() {
         <div className="rounded-xl bg-bone border border-mist p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info/10">
-              <Package className="h-5 w-5 text-info" />
+              <Package className="h-5 w-5 text-info"  aria-hidden="true" />
             </div>
             <div>
               <p className="font-display text-2xl font-semibold text-ink">{orders?.length || 0}</p>
@@ -92,7 +92,7 @@ export default function DeliveryOrdersPage() {
         <div className="rounded-xl bg-bone border border-mist p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-              <DollarSign className="h-5 w-5 text-herb" />
+              <DollarSign className="h-5 w-5 text-herb"  aria-hidden="true" />
             </div>
             <div>
               <p className="font-display text-2xl font-semibold text-ink">{fp(totalEarnings)}</p>
@@ -103,7 +103,7 @@ export default function DeliveryOrdersPage() {
         <div className="rounded-xl bg-bone border border-mist p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-tint">
-              <Star className="h-5 w-5 text-amber" />
+              <Star className="h-5 w-5 text-amber"  aria-hidden="true" />
             </div>
             <div>
               <p className="font-display text-2xl font-semibold text-ink">{averageRating.toFixed(1)}</p>
@@ -117,7 +117,7 @@ export default function DeliveryOrdersPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
           {STATUS_TABS.map((tab) => (
-            <button
+            <button type="button"
               key={tab.value}
               onClick={() => setStatusFilter(tab.value)}
               className={`rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -160,7 +160,7 @@ export default function DeliveryOrdersPage() {
       {/* Orders List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-herb" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
         </div>
       ) : orders && orders.length > 0 ? (
         <div className="space-y-3">
@@ -176,18 +176,18 @@ export default function DeliveryOrdersPage() {
                     <span className="font-medium text-ink">#{order.orderNumber}</span>
                     {order.status === 'completed' ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
-                        <CheckCircle className="h-3 w-3" />
+                        <CheckCircle className="h-3 w-3"  aria-hidden="true" />
                         Completed
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-paprika-tint px-2 py-0.5 text-xs font-medium text-paprika">
-                        <XCircle className="h-3 w-3" />
+                        <XCircle className="h-3 w-3"  aria-hidden="true" />
                         Cancelled
                       </span>
                     )}
                     {order.rating && (
                       <span className="inline-flex items-center gap-1 text-sm text-amber">
-                        <Star className="h-4 w-4 fill-amber" />
+                        <Star className="h-4 w-4 fill-amber"  aria-hidden="true" />
                         {order.rating}
                       </span>
                     )}
@@ -195,11 +195,11 @@ export default function DeliveryOrdersPage() {
 
                   <div className="mt-2 flex items-center gap-4 text-sm text-ink-muted">
                     <span className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
+                      <Calendar className="h-4 w-4"  aria-hidden="true" />
                       {new Date(order.completedAt).toLocaleDateString()}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Navigation className="h-4 w-4" />
+                      <Navigation className="h-4 w-4"  aria-hidden="true" />
                       {order.distance} km
                     </span>
                   </div>
@@ -222,7 +222,7 @@ export default function DeliveryOrdersPage() {
                   {order.tip > 0 && (
                     <p className="text-sm text-herb">+{fp(order.tip)} tip</p>
                   )}
-                  <ChevronRight className="ml-auto mt-2 h-5 w-5 text-ink-muted" />
+                  <ChevronRight className="ml-auto mt-2 h-5 w-5 text-ink-muted"  aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -230,7 +230,7 @@ export default function DeliveryOrdersPage() {
         </div>
       ) : (
         <div className="rounded-xl bg-paper p-12 text-center">
-          <Package className="mx-auto h-12 w-12 text-ink-muted" />
+          <Package className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
           <h3 className="mt-4 font-medium text-ink">No deliveries found</h3>
           <p className="mt-2 text-ink-muted">
             {statusFilter !== 'all'
@@ -269,12 +269,12 @@ function OrderDetailModal({
             </div>
             {order.status === 'completed' ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-3 py-1 text-sm font-medium text-herb">
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle className="h-4 w-4"  aria-hidden="true" />
                 Completed
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-paprika-tint px-3 py-1 text-sm font-medium text-paprika">
-                <XCircle className="h-4 w-4" />
+                <XCircle className="h-4 w-4"  aria-hidden="true" />
                 Cancelled
               </span>
             )}
@@ -301,7 +301,7 @@ function OrderDetailModal({
 
             <div>
               <div className="flex items-center gap-2 text-xs font-medium text-ink-muted uppercase">
-                <MapPin className="h-4 w-4 text-herb" />
+                <MapPin className="h-4 w-4 text-herb"  aria-hidden="true" />
                 Drop-off
               </div>
               <div className="mt-1 pl-6">
@@ -350,7 +350,7 @@ function OrderDetailModal({
                           ? 'fill-amber text-amber'
                           : 'text-ink-muted'
                       }`}
-                    />
+                     aria-hidden="true" />
                   ))}
                 </div>
                 <span className="font-medium text-ink">{order.rating}/5</span>

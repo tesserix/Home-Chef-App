@@ -74,7 +74,7 @@ export default function AdminSettingsPage() {
       {/* Fees & Pricing */}
       <div className="rounded-xl bg-ink p-6">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
-          <DollarSign className="h-5 w-5 text-herb-soft" />
+          <DollarSign className="h-5 w-5 text-herb-soft"  aria-hidden="true" />
           Fees & Pricing
         </h2>
 
@@ -153,7 +153,7 @@ export default function AdminSettingsPage() {
       {/* Order Settings */}
       <div className="rounded-xl bg-ink p-6">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
-          <Settings className="h-5 w-5 text-herb-soft" />
+          <Settings className="h-5 w-5 text-herb-soft"  aria-hidden="true" />
           Order Settings
         </h2>
 
@@ -211,7 +211,7 @@ export default function AdminSettingsPage() {
       {/* Platform Controls */}
       <div className="rounded-xl bg-ink p-6">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-paper">
-          <Shield className="h-5 w-5 text-herb-soft" />
+          <Shield className="h-5 w-5 text-herb-soft"  aria-hidden="true" />
           Platform Controls
         </h2>
 

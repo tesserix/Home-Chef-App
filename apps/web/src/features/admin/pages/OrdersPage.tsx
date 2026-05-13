@@ -90,11 +90,11 @@ export default function AdminOrdersPage() {
       <div className="rounded-xl bg-ink overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-herb" />
+            <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
           </div>
         ) : orders.length === 0 ? (
           <div className="p-12 text-center">
-            <ShoppingBag className="mx-auto h-12 w-12 text-ink-soft" />
+            <ShoppingBag className="mx-auto h-12 w-12 text-ink-soft"  aria-hidden="true" />
             <h3 className="mt-4 font-medium text-paper">No orders found</h3>
             <p className="mt-2 text-ink-muted">Try adjusting your filters</p>
           </div>
@@ -160,7 +160,7 @@ export default function AdminOrdersPage() {
                           onClick={() => setSelectedOrder(order)}
                           className="text-ink-muted hover:bg-ink-soft/50 hover:text-paper"
                         >
-                          <Eye className="h-5 w-5" />
+                          <Eye className="h-5 w-5"  aria-hidden="true" />
                         </Button>
                       </td>
                     </tr>
@@ -186,7 +186,7 @@ export default function AdminOrdersPage() {
                 onClick={() => setPage(page - 1)}
                 className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-5 w-5"  aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
@@ -196,7 +196,7 @@ export default function AdminOrdersPage() {
                 onClick={() => setPage(page + 1)}
                 className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-5 w-5"  aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -293,7 +293,7 @@ function OrderDetailModal({ order, onClose }: { order: Order; onClose: () => voi
 
           {/* Payment Status */}
           <div className="flex items-center gap-2 text-ink-muted">
-            <DollarSign className="h-4 w-4 text-ink-muted" />
+            <DollarSign className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
             Payment: {order.paymentStatus} via {order.paymentMethod || 'Card'}
           </div>
         </div>

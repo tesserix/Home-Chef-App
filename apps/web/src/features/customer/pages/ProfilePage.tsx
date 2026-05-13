@@ -102,7 +102,7 @@ export default function ProfilePage() {
               {/* Navigation */}
               <nav className="mt-4 space-y-1">
                 {TABS.map((tab) => (
-                  <button
+                  <button type="button"
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
@@ -119,11 +119,11 @@ export default function ProfilePage() {
 
               {/* Logout */}
               <div className="mt-4 pt-4 border-t">
-                <button
+                <button type="button"
                   onClick={logout}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-paprika hover:bg-paprika-tint transition-colors"
                 >
-                  <LogOut className="h-5 w-5" />
+                  <LogOut className="h-5 w-5"  aria-hidden="true" />
                   <span className="font-medium">Log Out</span>
                 </button>
               </div>
@@ -232,7 +232,7 @@ function ProfileTab() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">Personal Information</h2>
         {!isEditing && (
-          <button
+          <button type="button"
             onClick={() => setIsEditing(true)}
             className="text-sm text-herb hover:text-herb"
           >
@@ -266,7 +266,7 @@ function ProfileTab() {
             {isUploading ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-mist-strong border-t-transparent" />
             ) : (
-              <Camera className="h-4 w-4 text-ink-soft" />
+              <Camera className="h-4 w-4 text-ink-soft"  aria-hidden="true" />
             )}
             <input
               type="file"
@@ -777,7 +777,7 @@ function AddressesTab() {
         <h2 className="text-lg font-semibold text-ink">Saved Addresses</h2>
         {formMode === 'hidden' && (
           <Button variant="outline" size="sm" onClick={openAdd}>
-            <Plus className="mr-1.5 h-4 w-4" />
+            <Plus className="mr-1.5 h-4 w-4"  aria-hidden="true" />
             Add New
           </Button>
         )}
@@ -926,10 +926,10 @@ function AddressesTab() {
         </div>
       ) : addresses.length === 0 && formMode === 'hidden' ? (
         <div className="mt-6 text-center py-8">
-          <MapPin className="mx-auto h-10 w-10 text-ink-muted" />
+          <MapPin className="mx-auto h-10 w-10 text-ink-muted"  aria-hidden="true" />
           <p className="mt-2 text-sm text-ink-muted">No saved addresses yet</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={openAdd}>
-            <Plus className="mr-1.5 h-4 w-4" />
+            <Plus className="mr-1.5 h-4 w-4"  aria-hidden="true" />
             Add your first address
           </Button>
         </div>
@@ -959,14 +959,14 @@ function AddressesTab() {
                 </p>
               </div>
               <div className="flex gap-1">
-                <button
+                <button type="button"
                   className="rounded-md p-2 text-ink-muted hover:bg-mist hover:text-ink-soft"
                   onClick={() => openEdit(address)}
                   title="Edit address"
                 >
-                  <Edit2 className="h-4 w-4" />
+                  <Edit2 className="h-4 w-4"  aria-hidden="true" />
                 </button>
-                <button
+                <button type="button"
                   className="rounded-md p-2 text-ink-muted hover:bg-paprika-tint hover:text-paprika"
                   onClick={() => handleDelete(address.id)}
                   disabled={deletingId === address.id}
@@ -975,7 +975,7 @@ function AddressesTab() {
                   {deletingId === address.id ? (
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-mist-strong border-t-red-600" />
                   ) : (
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4"  aria-hidden="true" />
                   )}
                 </button>
               </div>
@@ -1010,7 +1010,7 @@ function PaymentsTab() {
           >
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-16 items-center justify-center rounded bg-mist">
-                <CreditCard className="h-6 w-6 text-ink-muted" />
+                <CreditCard className="h-6 w-6 text-ink-muted"  aria-hidden="true" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -1027,11 +1027,11 @@ function PaymentsTab() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="p-2 text-ink-muted hover:text-ink-soft">
-                <Edit2 className="h-4 w-4" />
+              <button type="button" className="p-2 text-ink-muted hover:text-ink-soft">
+                <Edit2 className="h-4 w-4"  aria-hidden="true" />
               </button>
-              <button className="p-2 text-ink-muted hover:text-paprika">
-                <Trash2 className="h-4 w-4" />
+              <button type="button" className="p-2 text-ink-muted hover:text-paprika">
+                <Trash2 className="h-4 w-4"  aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -1096,7 +1096,7 @@ function NotificationsTab() {
             ].map((item) => (
               <label key={item.key} className="flex items-center justify-between">
                 <span className="text-ink-soft">{item.label}</span>
-                <button
+                <button type="button"
                   onClick={() => toggleSetting(item.key as keyof typeof settings)}
                   className={`relative h-6 w-11 rounded-full transition-colors ${
                     settings[item.key as keyof typeof settings] ? 'bg-herb' : 'bg-mist-strong'
@@ -1306,7 +1306,7 @@ function TwoFactorSection() {
       <div className="rounded-xl bg-bone p-6 shadow-1">
         <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
         <div className="mt-4 flex items-start gap-3">
-          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" />
+          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted"  aria-hidden="true" />
           <div>
             <p className="text-sm text-ink-soft">
               Add an extra layer of security to your account by requiring a verification code from your authenticator app when signing in.
@@ -1347,7 +1347,7 @@ function TwoFactorSection() {
                 }}
                 className="shrink-0 text-ink-muted hover:text-ink-soft"
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="h-4 w-4"  aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -1362,7 +1362,7 @@ function TwoFactorSection() {
               setCode(val);
             }}
             placeholder="000000"
-            leftIcon={<Lock className="h-4 w-4" />}
+            leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
             className="font-mono text-center tracking-widest"
             autoComplete="one-time-code"
             inputMode="numeric"
@@ -1391,7 +1391,7 @@ function TwoFactorSection() {
         <h2 className="text-lg font-semibold text-ink">Save Your Backup Codes</h2>
 
         <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber/30 bg-amber-tint p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber"  aria-hidden="true" />
           <p className="text-sm text-amber">
             Save these codes in a safe place. They won't be shown again. Each code can only be used once to sign in if you lose access to your authenticator app.
           </p>
@@ -1410,11 +1410,11 @@ function TwoFactorSection() {
 
         <div className="mt-4 flex flex-wrap gap-3">
           <Button variant="outline" size="sm" onClick={copyAllCodes}>
-            <Copy className="mr-1.5 h-4 w-4" />
+            <Copy className="mr-1.5 h-4 w-4"  aria-hidden="true" />
             Copy All
           </Button>
           <Button variant="outline" size="sm" onClick={downloadCodes}>
-            <Download className="mr-1.5 h-4 w-4" />
+            <Download className="mr-1.5 h-4 w-4"  aria-hidden="true" />
             Download
           </Button>
         </div>
@@ -1450,7 +1450,7 @@ function TwoFactorSection() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-ink">Two-Factor Authentication</h2>
           <Badge variant="success">
-            <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+            <ShieldCheck className="mr-1 h-3.5 w-3.5"  aria-hidden="true" />
             Enabled
           </Badge>
         </div>
@@ -1465,7 +1465,7 @@ function TwoFactorSection() {
         )}
         {backupCodesRemaining === 0 && (
           <div className="mt-2 flex items-start gap-2 text-sm text-amber">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"  aria-hidden="true" />
             <span>No backup codes remaining. Regenerate them now.</span>
           </div>
         )}
@@ -1514,7 +1514,7 @@ function TwoFactorSection() {
             setCode(val);
           }}
           placeholder="000000"
-          leftIcon={<Lock className="h-4 w-4" />}
+          leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
           className="font-mono text-center tracking-widest"
           autoComplete="one-time-code"
           inputMode="numeric"
@@ -1595,7 +1595,7 @@ function SecurityTab() {
 
         {isSocialLogin ? (
           <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber/30 bg-amber-tint p-4">
-            <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber" />
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber"  aria-hidden="true" />
             <div>
               <p className="text-sm font-medium text-amber">
                 Password change is not available
@@ -1613,10 +1613,10 @@ function SecurityTab() {
               type={showCurrent ? 'text' : 'password'}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4" />}
+              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
               rightIcon={
                 <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="cursor-pointer">
-                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showCurrent ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
                 </button>
               }
               required
@@ -1626,10 +1626,10 @@ function SecurityTab() {
               type={showNew ? 'text' : 'password'}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4" />}
+              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
               rightIcon={
                 <button type="button" onClick={() => setShowNew(!showNew)} className="cursor-pointer">
-                  {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showNew ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
                 </button>
               }
               hint="Must be at least 8 characters"
@@ -1640,10 +1640,10 @@ function SecurityTab() {
               type={showConfirm ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              leftIcon={<Lock className="h-4 w-4" />}
+              leftIcon={<Lock className="h-4 w-4"  aria-hidden="true" />}
               rightIcon={
                 <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="cursor-pointer">
-                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showConfirm ? <EyeOff className="h-4 w-4"  aria-hidden="true" /> : <Eye className="h-4 w-4"  aria-hidden="true" />}
                 </button>
               }
               error={confirmPassword && newPassword !== confirmPassword ? 'Passwords do not match' : undefined}
@@ -1697,7 +1697,7 @@ function SecurityTab() {
               <span className="font-medium text-ink">{account.name}</span>
               {authProvider === account.provider ? (
                 <span className="flex items-center gap-1 text-sm text-herb">
-                  <Check className="h-4 w-4" />
+                  <Check className="h-4 w-4"  aria-hidden="true" />
                   Connected
                 </span>
               ) : (

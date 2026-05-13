@@ -70,7 +70,7 @@ export default function DeliveryEarningsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -97,7 +97,7 @@ export default function DeliveryEarningsPage() {
               </option>
             ))}
           </select>
-          <Button variant="outline" size="sm" leftIcon={<Download className="h-4 w-4" />}>
+          <Button variant="outline" size="sm" leftIcon={<Download className="h-4 w-4"  aria-hidden="true" />}>
             Export
           </Button>
         </div>
@@ -108,9 +108,9 @@ export default function DeliveryEarningsPage() {
         <div className="rounded-xl bg-herb p-6 text-paper">
           <div className="flex items-center justify-between">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-bone/20">
-              <Wallet className="h-5 w-5" />
+              <Wallet className="h-5 w-5"  aria-hidden="true" />
             </div>
-            <ArrowUpRight className="h-5 w-5 opacity-70" />
+            <ArrowUpRight className="h-5 w-5 opacity-70"  aria-hidden="true" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums">{fp(data?.currentBalance || 0)}</p>
           <p className="mt-1 text-herb-soft">Available Balance</p>
@@ -127,7 +127,7 @@ export default function DeliveryEarningsPage() {
         <div className="rounded-xl bg-bone border border-mist p-6">
           <div className="flex items-center justify-between">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-tint">
-              <Clock className="h-5 w-5 text-amber" />
+              <Clock className="h-5 w-5 text-amber"  aria-hidden="true" />
             </div>
           </div>
           <p className="mt-4 font-display text-2xl font-semibold text-ink">
@@ -139,7 +139,7 @@ export default function DeliveryEarningsPage() {
         <div className="rounded-xl bg-bone border border-mist p-6">
           <div className="flex items-center justify-between">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info/10">
-              <CreditCard className="h-5 w-5 text-info" />
+              <CreditCard className="h-5 w-5 text-info"  aria-hidden="true" />
             </div>
           </div>
           <p className="mt-4 font-display text-2xl font-semibold text-ink">
@@ -191,7 +191,7 @@ export default function DeliveryEarningsPage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg bg-paper p-4">
             <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-ink-muted" />
+              <Package className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
               <span className="text-sm text-ink-muted">Delivery Fees</span>
             </div>
             <p className="mt-2 text-lg font-semibold text-ink">
@@ -200,7 +200,7 @@ export default function DeliveryEarningsPage() {
           </div>
           <div className="rounded-lg bg-herb-tint p-4">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-herb" />
+              <DollarSign className="h-4 w-4 text-herb"  aria-hidden="true" />
               <span className="text-sm text-herb">Tips</span>
             </div>
             <p className="mt-2 text-lg font-semibold text-herb">
@@ -209,7 +209,7 @@ export default function DeliveryEarningsPage() {
           </div>
           <div className="rounded-lg bg-info/10 p-4">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-info" />
+              <TrendingUp className="h-4 w-4 text-info"  aria-hidden="true" />
               <span className="text-sm text-info">Bonuses</span>
             </div>
             <p className="mt-2 text-lg font-semibold text-info">
@@ -218,7 +218,7 @@ export default function DeliveryEarningsPage() {
           </div>
           <div className="rounded-lg bg-paprika-tint p-4">
             <div className="flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-paprika" />
+              <TrendingDown className="h-4 w-4 text-paprika"  aria-hidden="true" />
               <span className="text-sm text-paprika">Deductions</span>
             </div>
             <p className="mt-2 text-lg font-semibold text-paprika">
@@ -309,7 +309,7 @@ export default function DeliveryEarningsPage() {
                           ? 'text-amber'
                           : 'text-paprika'
                       }`}
-                    />
+                     aria-hidden="true" />
                   </div>
                   <div>
                     <p className="font-medium text-ink">{payout.method}</p>

@@ -183,7 +183,7 @@ export default function DeliveryDashboardPage() {
                 <Button
                   variant="link"
                   size="sm"
-                  leftIcon={<Navigation className="h-4 w-4" />}
+                  leftIcon={<Navigation className="h-4 w-4"  aria-hidden="true" />}
                   className="mt-2"
                 >
                   Navigate
@@ -195,7 +195,7 @@ export default function DeliveryDashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-ink-muted">
                 <div className="h-6 w-6 rounded-full bg-herb-tint flex items-center justify-center">
-                  <MapPin className="h-3 w-3 text-herb" />
+                  <MapPin className="h-3 w-3 text-herb"  aria-hidden="true" />
                 </div>
                 DROP-OFF
               </div>
@@ -302,22 +302,22 @@ export default function DeliveryDashboardPage() {
                           {delivery.pickupAddress.line1}, {delivery.pickupAddress.city}
                         </div>
                         <div className="flex items-center gap-2 text-sm text-ink-soft">
-                          <MapPin className="h-3 w-3 text-herb" />
+                          <MapPin className="h-3 w-3 text-herb"  aria-hidden="true" />
                           {delivery.deliveryAddress.line1}, {delivery.deliveryAddress.city}
                         </div>
                       </div>
 
                       <div className="mt-3 flex items-center gap-4 text-sm text-ink-muted">
                         <span className="flex items-center gap-1">
-                          <Navigation className="h-4 w-4" />
+                          <Navigation className="h-4 w-4"  aria-hidden="true" />
                           {delivery.distance} km
                         </span>
                         <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
+                          <Clock className="h-4 w-4"  aria-hidden="true" />
                           ~{delivery.estimatedTime} min
                         </span>
                         <span className="flex items-center gap-1">
-                          <Package className="h-4 w-4" />
+                          <Package className="h-4 w-4"  aria-hidden="true" />
                           {delivery.itemCount} items
                         </span>
                       </div>
@@ -345,7 +345,7 @@ export default function DeliveryDashboardPage() {
             </div>
           ) : (
             <div className="rounded-xl bg-paper p-12 text-center">
-              <Bike className="mx-auto h-12 w-12 text-ink-muted" />
+              <Bike className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
               <h3 className="mt-4 font-medium text-ink">No deliveries available</h3>
               <p className="mt-2 text-ink-muted">
                 New delivery requests will appear here. Stay online!
@@ -358,7 +358,7 @@ export default function DeliveryDashboardPage() {
       {/* Offline Message */}
       {!isOnline && (
         <div className="rounded-xl bg-mist p-12 text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-ink-muted" />
+          <AlertCircle className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
           <h3 className="mt-4 font-medium text-ink">You're currently offline</h3>
           <p className="mt-2 text-ink-muted">
             Go online to start receiving delivery requests

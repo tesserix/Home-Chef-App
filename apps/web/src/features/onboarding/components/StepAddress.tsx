@@ -48,7 +48,7 @@ export function StepAddress() {
     <Card>
       <div className="flex items-center gap-3 mb-6">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <MapPin className="h-5 w-5 text-primary" />
+          <MapPin className="h-5 w-5 text-primary"  aria-hidden="true" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-foreground">Delivery Address</h2>

@@ -110,7 +110,7 @@ export default function ChefProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -156,9 +156,9 @@ export default function ChefProfilePage() {
         <div className="flex items-center gap-3">
           <div className={`rounded-full p-2 ${profile?.verified ? 'bg-herb-tint' : 'bg-amber-tint'}`}>
             {profile?.verified ? (
-              <Shield className="h-5 w-5 text-herb" />
+              <Shield className="h-5 w-5 text-herb"  aria-hidden="true" />
             ) : (
-              <Shield className="h-5 w-5 text-amber" />
+              <Shield className="h-5 w-5 text-amber"  aria-hidden="true" />
             )}
           </div>
           <div>
@@ -195,7 +195,7 @@ export default function ChefProfilePage() {
                      loading="lazy" decoding="async"/>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <ChefHat className="h-12 w-12 text-ink-muted" />
+                      <ChefHat className="h-12 w-12 text-ink-muted"  aria-hidden="true" />
                     </div>
                   )}
                 </div>
@@ -207,7 +207,7 @@ export default function ChefProfilePage() {
                     aria-label="Change profile photo"
                     className="absolute bottom-0 right-0 rounded-full shadow-3"
                   >
-                    <Camera className="h-4 w-4" />
+                    <Camera className="h-4 w-4"  aria-hidden="true" />
                   </Button>
                 )}
               </div>
@@ -228,7 +228,7 @@ export default function ChefProfilePage() {
                      loading="lazy" decoding="async"/>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <Camera className="h-12 w-12 text-ink-muted" />
+                      <Camera className="h-12 w-12 text-ink-muted"  aria-hidden="true" />
                     </div>
                   )}
                 </div>
@@ -240,7 +240,7 @@ export default function ChefProfilePage() {
                     aria-label="Change banner image"
                     className="absolute bottom-2 right-2 rounded-full shadow-3"
                   >
-                    <Camera className="h-4 w-4" />
+                    <Camera className="h-4 w-4"  aria-hidden="true" />
                   </Button>
                 )}
               </div>
@@ -309,7 +309,7 @@ export default function ChefProfilePage() {
                     : 'bg-mist text-ink-soft'
                 } ${isEditing ? 'hover:opacity-80' : ''}`}
               >
-                {cuisines.includes(cuisine) && <Check className="mr-1 inline h-4 w-4" />}
+                {cuisines.includes(cuisine) && <Check className="mr-1 inline h-4 w-4"  aria-hidden="true" />}
                 {cuisine}
               </button>
             ))}
@@ -338,7 +338,7 @@ export default function ChefProfilePage() {
                     aria-label={`Remove ${specialty}`}
                     className="hover:text-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3 w-3"  aria-hidden="true" />
                   </button>
                 )}
               </span>
@@ -365,7 +365,7 @@ export default function ChefProfilePage() {
               <Button
                 type="button"
                 variant="outline"
-                leftIcon={<Plus className="h-4 w-4" />}
+                leftIcon={<Plus className="h-4 w-4"  aria-hidden="true" />}
                 onClick={addSpecialty}
               >
                 Add
@@ -478,7 +478,7 @@ export default function ChefProfilePage() {
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 font-display text-3xl font-semibold tabular-nums text-ink">
-                <Star className="h-6 w-6 fill-amber text-amber" />
+                <Star className="h-6 w-6 fill-amber text-amber"  aria-hidden="true" />
                 {profile?.rating || 0}
               </div>
               <p className="mt-1 text-sm text-ink-muted">Rating</p>

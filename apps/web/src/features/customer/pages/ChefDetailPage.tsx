@@ -77,7 +77,7 @@ export default function ChefDetailPage() {
   if (chefLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -85,7 +85,7 @@ export default function ChefDetailPage() {
   if (!chef) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <AlertCircle className="h-16 w-16 text-ink-muted" />
+        <AlertCircle className="h-16 w-16 text-ink-muted"  aria-hidden="true" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Chef not found</h2>
         <Button asChild variant="primary" className="mt-4">
           <Link to="/chefs">Browse Chefs</Link>
@@ -142,7 +142,7 @@ export default function ChefDetailPage() {
                     </h1>
                     {chef.verified && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs font-medium text-herb">
-                        <Check className="h-3 w-3" />
+                        <Check className="h-3 w-3"  aria-hidden="true" />
                         Verified
                       </span>
                     )}
@@ -173,7 +173,7 @@ export default function ChefDetailPage() {
               <div className="mt-6 flex flex-wrap gap-6">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 rounded-lg bg-herb-tint px-2 py-1">
-                    <Star className="h-4 w-4 fill-herb text-herb" />
+                    <Star className="h-4 w-4 fill-herb text-herb"  aria-hidden="true" />
                     <span className="font-semibold text-herb">{chef.rating}</span>
                   </div>
                   <span className="text-sm text-ink-muted">
@@ -182,17 +182,17 @@ export default function ChefDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <Clock className="h-4 w-4" />
+                  <Clock className="h-4 w-4"  aria-hidden="true" />
                   {chef.prepTime} prep time
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <MapPin className="h-4 w-4" />
+                  <MapPin className="h-4 w-4"  aria-hidden="true" />
                   {chef.serviceRadius} km delivery radius
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-ink-soft">
-                  <ChefHat className="h-4 w-4" />
+                  <ChefHat className="h-4 w-4"  aria-hidden="true" />
                   {chef.totalOrders}+ orders
                 </div>
               </div>
@@ -235,7 +235,7 @@ export default function ChefDetailPage() {
             <div className="rounded-xl bg-bone p-4 shadow-1 lg:sticky lg:top-24">
               <h3 className="font-semibold text-ink mb-3">Categories</h3>
               <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-1">
-                <button
+                <button type="button"
                   onClick={() => setSelectedCategory(null)}
                   className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                     selectedCategory === null
@@ -248,7 +248,7 @@ export default function ChefDetailPage() {
                 {categories.map((category) => {
                   const count = menuItems.filter((i) => i.categoryId === category.id).length;
                   return (
-                    <button
+                    <button type="button"
                       key={category.id}
                       onClick={() => setSelectedCategory(category.id)}
                       className={`rounded-lg px-3 py-2 text-left text-sm transition-colors ${
@@ -265,12 +265,12 @@ export default function ChefDetailPage() {
 
               {/* Reviews Link */}
               <div className="mt-6 pt-4 border-t">
-                <button
+                <button type="button"
                   onClick={() => setShowReviews(!showReviews)}
                   className="flex items-center justify-between w-full text-left text-sm text-ink-soft hover:text-ink"
                 >
                   <span>Reviews ({chef.totalReviews})</span>
-                  <ChevronRight className={`h-4 w-4 transition-transform ${showReviews ? 'rotate-90' : ''}`} />
+                  <ChevronRight className={`h-4 w-4 transition-transform ${showReviews ? 'rotate-90' : ''}`}  aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -280,7 +280,7 @@ export default function ChefDetailPage() {
           <div className="flex-1">
             {menuLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-herb" />
+                <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
               </div>
             ) : showReviews ? (
               <ReviewsList reviews={reviews?.data || []} />
@@ -437,18 +437,18 @@ function MenuItemCard({
               <div className="flex items-center gap-2">
                 {/* Quantity selector */}
                 <div className="flex items-center rounded-lg border">
-                  <button
+                  <button type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                     className="p-2 hover:bg-mist"
                   >
-                    <Minus className="h-4 w-4" />
+                    <Minus className="h-4 w-4"  aria-hidden="true" />
                   </button>
                   <span className="w-8 text-center">{quantity}</span>
-                  <button
+                  <button type="button"
                     onClick={() => setQuantity(quantity + 1)}
                     className="p-2 hover:bg-mist"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4 w-4"  aria-hidden="true" />
                   </button>
                 </div>
 
@@ -492,7 +492,7 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
                           ? 'fill-amber text-amber'
                           : 'text-ink-muted'
                       }`}
-                    />
+                     aria-hidden="true" />
                   ))}
                 </div>
                 <span className="text-sm text-ink-muted">

@@ -159,7 +159,7 @@ export default function CateringRequestPage() {
         {/* Header */}
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-herb-tint">
-            <UtensilsCrossed className="h-8 w-8 text-herb" />
+            <UtensilsCrossed className="h-8 w-8 text-herb"  aria-hidden="true" />
           </div>
           <h1 className="mt-4 font-display text-2xl font-semibold text-ink md:text-3xl">
             Request Catering Quotes
@@ -506,7 +506,7 @@ export default function CateringRequestPage() {
 
               {/* Info Box */}
               <div className="mt-6 flex items-start gap-3 rounded-lg bg-info/10 p-4">
-                <Info className="h-5 w-5 flex-shrink-0 text-info" />
+                <Info className="h-5 w-5 flex-shrink-0 text-info"  aria-hidden="true" />
                 <div className="text-sm text-info">
                   <p className="font-medium">What happens next?</p>
                   <p className="mt-1">

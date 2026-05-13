@@ -160,7 +160,7 @@ export function MainLayout() {
               {/* User menu */}
               {isAuthenticated ? (
                 <div className="relative">
-                  <button
+                  <button type="button"
                     ref={userMenuButtonRef}
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     aria-haspopup="menu"
@@ -181,7 +181,7 @@ export function MainLayout() {
                       />
                     ) : (
                       <div aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint text-herb">
-                        <User className="h-4 w-4" />
+                        <User className="h-4 w-4"  aria-hidden="true" />
                       </div>
                     )}
                   </button>
@@ -249,7 +249,7 @@ export function MainLayout() {
                             </Link>
                           </div>
                           <div className="border-t border-mist py-1">
-                            <button
+                            <button type="button"
                               role="menuitem"
                               onClick={() => {
                                 setUserMenuOpen(false);

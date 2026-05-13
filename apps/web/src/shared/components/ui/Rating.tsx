@@ -78,16 +78,16 @@ const Rating = forwardRef<HTMLDivElement, RatingProps>(
       const isHalf = i === fullStars + 1 && hasHalfStar;
 
       const visualStar = isFull ? (
-        <Star className="fill-warning text-warning" />
+        <Star className="fill-warning text-warning"  aria-hidden="true" />
       ) : isHalf ? (
         <span className="relative inline-flex">
-          <Star className="text-border" />
+          <Star className="text-border"  aria-hidden="true" />
           <span className="absolute inset-0 overflow-hidden w-1/2">
-            <Star className="fill-warning text-warning" />
+            <Star className="fill-warning text-warning"  aria-hidden="true" />
           </span>
         </span>
       ) : (
-        <Star className="text-border" />
+        <Star className="text-border"  aria-hidden="true" />
       );
 
       if (readonly) {

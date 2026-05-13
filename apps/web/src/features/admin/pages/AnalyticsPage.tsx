@@ -50,7 +50,7 @@ export default function AdminAnalyticsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function AdminAnalyticsPage() {
           </select>
           <Button
             variant="outline"
-            leftIcon={<Download className="h-4 w-4" />}
+            leftIcon={<Download className="h-4 w-4"  aria-hidden="true" />}
             className="border-ink-soft text-paper hover:bg-ink-soft/30 hover:text-paper hover:border-ink-soft"
           >
             Export
@@ -237,7 +237,7 @@ function MetricCard({
               change >= 0 ? 'text-herb' : 'text-paprika'
             }`}
           >
-            {change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+            {change >= 0 ? <TrendingUp className="h-4 w-4"  aria-hidden="true" /> : <TrendingDown className="h-4 w-4"  aria-hidden="true" />}
             {Math.abs(change)}%
           </span>
         )}

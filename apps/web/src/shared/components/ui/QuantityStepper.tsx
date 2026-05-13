@@ -243,7 +243,7 @@ const AddToCartQuantity = ({
       )}
       aria-label="Add to cart"
     >
-      <Plus className="h-5 w-5" />
+      <Plus className="h-5 w-5"  aria-hidden="true" />
     </button>
   );
 };

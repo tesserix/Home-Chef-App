@@ -48,7 +48,7 @@ export default function ChefEarningsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -73,7 +73,7 @@ export default function ChefEarningsPage() {
               </option>
             ))}
           </select>
-          <Button variant="outline" leftIcon={<Download className="h-4 w-4" />}>
+          <Button variant="outline" leftIcon={<Download className="h-4 w-4"  aria-hidden="true" />}>
             Export
           </Button>
         </div>
@@ -84,7 +84,7 @@ export default function ChefEarningsPage() {
         <div className="rounded-xl bg-herb p-6 text-paper">
           <div className="flex items-center justify-between">
             <span className="text-herb-tint">Available Balance</span>
-            <DollarSign className="h-5 w-5 text-herb-tint" />
+            <DollarSign className="h-5 w-5 text-herb-tint"  aria-hidden="true" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums">{fp(earnings?.balance || 0)}</p>
           <Button
@@ -99,7 +99,7 @@ export default function ChefEarningsPage() {
         <div className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">Pending</span>
-            <Calendar className="h-5 w-5 text-ink-muted" />
+            <Calendar className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
             {fp(earnings?.pendingBalance || 0)}
@@ -111,9 +111,9 @@ export default function ChefEarningsPage() {
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">This Month</span>
             {(earnings?.monthlyChange || 0) >= 0 ? (
-              <TrendingUp className="h-5 w-5 text-herb" />
+              <TrendingUp className="h-5 w-5 text-herb"  aria-hidden="true" />
             ) : (
-              <TrendingDown className="h-5 w-5 text-paprika" />
+              <TrendingDown className="h-5 w-5 text-paprika"  aria-hidden="true" />
             )}
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
@@ -123,9 +123,9 @@ export default function ChefEarningsPage() {
             (earnings?.monthlyChange || 0) >= 0 ? 'text-herb' : 'text-paprika'
           }`}>
             {(earnings?.monthlyChange || 0) >= 0 ? (
-              <ArrowUpRight className="h-4 w-4" />
+              <ArrowUpRight className="h-4 w-4"  aria-hidden="true" />
             ) : (
-              <ArrowDownRight className="h-4 w-4" />
+              <ArrowDownRight className="h-4 w-4"  aria-hidden="true" />
             )}
             {Math.abs(earnings?.monthlyChange || 0)}% vs last month
           </p>
@@ -134,7 +134,7 @@ export default function ChefEarningsPage() {
         <div className="rounded-xl bg-bone p-6 shadow-1">
           <div className="flex items-center justify-between">
             <span className="text-ink-muted">Total Earned</span>
-            <DollarSign className="h-5 w-5 text-ink-muted" />
+            <DollarSign className="h-5 w-5 text-ink-muted"  aria-hidden="true" />
           </div>
           <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-ink">
             {fp(earnings?.totalEarnings || 0)}
@@ -150,7 +150,7 @@ export default function ChefEarningsPage() {
           <h2 className="text-lg font-semibold text-ink">Earnings Overview</h2>
           <div className="mt-6 h-64 flex items-center justify-center border-2 border-dashed border-mist rounded-lg">
             <div className="text-center text-ink-muted">
-              <TrendingUp className="mx-auto h-12 w-12" />
+              <TrendingUp className="mx-auto h-12 w-12"  aria-hidden="true" />
               <p className="mt-2">Chart visualization</p>
               <p className="text-sm">Would display earnings over time</p>
             </div>
@@ -255,7 +255,7 @@ export default function ChefEarningsPage() {
                   </td>
                   <td className="py-4 text-ink-soft">
                     <span className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
+                      <CreditCard className="h-4 w-4"  aria-hidden="true" />
                       Bank Transfer
                     </span>
                   </td>
@@ -292,7 +292,7 @@ export default function ChefEarningsPage() {
         <div className="mt-4 flex items-center justify-between rounded-lg border p-4">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-mist">
-              <CreditCard className="h-6 w-6 text-ink-soft" />
+              <CreditCard className="h-6 w-6 text-ink-soft"  aria-hidden="true" />
             </div>
             <div>
               <p className="font-medium text-ink">Bank Account ••••4242</p>

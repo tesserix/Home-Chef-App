@@ -176,7 +176,7 @@ interface AlertDialogActionProps
 
 const AlertDialogAction = forwardRef<HTMLButtonElement, AlertDialogActionProps>(
   ({ className, variant = 'default', ...props }, ref) => (
-    <button
+    <button type="button"
       ref={ref}
       className={cn(
         'inline-flex h-10 items-center justify-center rounded-lg px-4 font-medium',

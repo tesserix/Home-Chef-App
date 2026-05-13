@@ -34,7 +34,7 @@ export default function FavoritesPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-paper px-4">
-        <Heart className="h-16 w-16 text-ink-muted" />
+        <Heart className="h-16 w-16 text-ink-muted"  aria-hidden="true" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Log in to see your favorites</h2>
         <p className="mt-2 text-ink-soft text-center">
           Save your favorite home chefs to quickly find them later
@@ -55,7 +55,7 @@ export default function FavoritesPage() {
           className="mb-8"
         >
           <div className="flex items-center gap-3">
-            <Heart className="h-6 w-6 text-paprika fill-paprika" />
+            <Heart className="h-6 w-6 text-paprika fill-paprika"  aria-hidden="true" />
             <h1 className="font-display text-display-sm text-ink">My Favorite Chefs</h1>
           </div>
           <p className="mt-2 text-ink-soft">
@@ -72,11 +72,11 @@ export default function FavoritesPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-herb" />
+            <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
           </div>
         ) : favorites.length === 0 ? (
           <Card variant="filled" padding="lg" className="text-center">
-            <Heart className="mx-auto h-12 w-12 text-ink-muted" />
+            <Heart className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
             <h3 className="mt-4 text-lg font-semibold text-ink">No favorites yet</h3>
             <p className="mt-2 text-ink-soft">
               Browse chefs and tap the heart icon to save up to {MAX_FAVORITES}
@@ -135,11 +135,11 @@ export default function FavoritesPage() {
 
                         <div className="mt-3 flex items-center gap-4 text-sm text-ink-muted">
                           <div className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
+                            <Clock className="h-3.5 w-3.5"  aria-hidden="true" />
                             {fav.chef.prepTime}
                           </div>
                           <div className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
+                            <MapPin className="h-3.5 w-3.5"  aria-hidden="true" />
                             {fav.chef.serviceRadius} km
                           </div>
                           {fav.chef.acceptingOrders ? (
@@ -152,11 +152,11 @@ export default function FavoritesPage() {
                     </Link>
 
                     <div className="border-t px-4 py-2">
-                      <button
+                      <button type="button"
                         onClick={() => handleRemove(fav.chef.id, fav.chef.businessName)}
                         className="flex items-center gap-1.5 text-sm text-paprika hover:text-paprika transition-colors"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5"  aria-hidden="true" />
                         Remove
                       </button>
                     </div>

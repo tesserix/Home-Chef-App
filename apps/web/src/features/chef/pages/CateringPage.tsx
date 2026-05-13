@@ -75,7 +75,7 @@ export default function ChefCateringPage() {
       {/* Tabs */}
       <div className="flex gap-2 border-b">
         {TABS.map((tab) => (
-          <button
+          <button type="button"
             key={tab.value}
             onClick={() => setActiveTab(tab.value)}
             className={`relative px-4 py-3 text-sm font-medium transition-colors ${
@@ -100,7 +100,7 @@ export default function ChefCateringPage() {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-herb" />
+          <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
         </div>
       ) : activeTab === 'requests' ? (
         <RequestsList
@@ -149,7 +149,7 @@ function RequestsList({
   if (requests.length === 0) {
     return (
       <div className="rounded-xl bg-bone p-12 text-center shadow-1">
-        <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+        <ChefHat className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
         <h3 className="mt-4 font-medium text-ink">No open requests</h3>
         <p className="mt-2 text-ink-soft">
           New catering requests will appear here
@@ -165,7 +165,7 @@ function RequestsList({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-herb" />
+                <Calendar className="h-5 w-5 text-herb"  aria-hidden="true" />
                 <span className="font-semibold text-ink">
                   {new Date(request.eventDate).toLocaleDateString(undefined, {
                     weekday: 'long',
@@ -184,21 +184,21 @@ function RequestsList({
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <Users className="h-4 w-4" />
+              <Users className="h-4 w-4"  aria-hidden="true" />
               {request.guestCount} guests
             </div>
             <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-4 w-4"  aria-hidden="true" />
               {request.eventLocation.city}, {request.eventLocation.state}
             </div>
             {request.budgetMin && request.budgetMax && (
               <div className="flex items-center gap-2 text-sm text-ink-soft">
-                <DollarSign className="h-4 w-4" />
+                <DollarSign className="h-4 w-4"  aria-hidden="true" />
                 {fp(request.budgetMin)} - {fp(request.budgetMax)}
               </div>
             )}
             <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <Clock className="h-4 w-4" />
+              <Clock className="h-4 w-4"  aria-hidden="true" />
               {request.serviceType.replace('_', ' ')}
             </div>
           </div>
@@ -229,7 +229,7 @@ function RequestsList({
           <div className="mt-6 flex gap-3">
             <Button
               variant="primary"
-              leftIcon={<Send className="h-4 w-4" />}
+              leftIcon={<Send className="h-4 w-4"  aria-hidden="true" />}
               onClick={() => onSelectRequest(request)}
             >
               Submit Quote
@@ -247,7 +247,7 @@ function QuotesList({ quotes }: { quotes: CateringQuote[] }) {
   if (quotes.length === 0) {
     return (
       <div className="rounded-xl bg-bone p-12 text-center shadow-1">
-        <Send className="mx-auto h-12 w-12 text-ink-muted" />
+        <Send className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
         <h3 className="mt-4 font-medium text-ink">No pending quotes</h3>
         <p className="mt-2 text-ink-soft">
           Your submitted quotes will appear here
@@ -310,7 +310,7 @@ function BookedEventsList({ events }: { events: CateringQuote[] }) {
   if (events.length === 0) {
     return (
       <div className="rounded-xl bg-bone p-12 text-center shadow-1">
-        <CheckCircle className="mx-auto h-12 w-12 text-ink-muted" />
+        <CheckCircle className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
         <h3 className="mt-4 font-medium text-ink">No booked events</h3>
         <p className="mt-2 text-ink-soft">
           Your confirmed catering events will appear here
@@ -324,7 +324,7 @@ function BookedEventsList({ events }: { events: CateringQuote[] }) {
       {events.map((event) => (
         <div key={event.id} className="rounded-xl bg-bone p-6 shadow-1 ring-2 ring-herb/30">
           <div className="flex items-center gap-2 text-herb mb-4">
-            <CheckCircle className="h-5 w-5" />
+            <CheckCircle className="h-5 w-5"  aria-hidden="true" />
             <span className="font-medium">Confirmed Booking</span>
           </div>
 
@@ -476,7 +476,7 @@ function QuoteFormModal({
                       onClick={() => removeMenuItem(index)}
                       className="text-paprika hover:bg-paprika-tint hover:text-paprika"
                     >
-                      <XCircle className="h-5 w-5" />
+                      <XCircle className="h-5 w-5"  aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -545,7 +545,7 @@ function QuoteFormModal({
               variant="primary"
               isLoading={isSubmitting}
               disabled={isSubmitting || menuItems.every((i) => !i.name)}
-              leftIcon={!isSubmitting ? <Send className="h-4 w-4" /> : undefined}
+              leftIcon={!isSubmitting ? <Send className="h-4 w-4"  aria-hidden="true" /> : undefined}
             >
               Submit Quote
             </Button>

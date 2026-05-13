@@ -121,11 +121,11 @@ export default function AdminUsersPage() {
       <div className="rounded-xl bg-ink overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-herb" />
+            <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
           </div>
         ) : users.length === 0 ? (
           <div className="p-12 text-center">
-            <User className="mx-auto h-12 w-12 text-ink-soft" />
+            <User className="mx-auto h-12 w-12 text-ink-soft"  aria-hidden="true" />
             <h3 className="mt-4 font-medium text-paper">No users found</h3>
             <p className="mt-2 text-ink-muted">Try adjusting your filters</p>
           </div>
@@ -194,7 +194,7 @@ export default function AdminUsersPage() {
                         onClick={() => setSelectedUser(user)}
                         className="text-ink-muted hover:bg-ink-soft/50 hover:text-paper"
                       >
-                        <MoreHorizontal className="h-5 w-5" />
+                        <MoreHorizontal className="h-5 w-5"  aria-hidden="true" />
                       </Button>
                     </td>
                   </tr>
@@ -220,7 +220,7 @@ export default function AdminUsersPage() {
                 onClick={() => setPage(page - 1)}
                 className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-5 w-5"  aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
@@ -230,7 +230,7 @@ export default function AdminUsersPage() {
                 onClick={() => setPage(page + 1)}
                 className="bg-ink-soft text-paper hover:bg-ink-soft/80 hover:text-paper"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-5 w-5"  aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -276,7 +276,7 @@ function RoleBadge({ role }: { role: string }) {
 function StatusBadge({ status }: { status: string }) {
   return status === 'active' ? (
     <span className="inline-flex items-center gap-1 rounded-full bg-herb/20 px-2.5 py-0.5 text-xs font-medium text-herb">
-      <CheckCircle className="h-3 w-3" />
+      <CheckCircle className="h-3 w-3"  aria-hidden="true" />
       Active
     </span>
   ) : (
@@ -326,17 +326,17 @@ function UserDetailModal({
 
           <div className="mt-6 space-y-3">
             <div className="flex items-center gap-3 text-ink-muted">
-              <Mail className="h-4 w-4 text-ink-muted" />
+              <Mail className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
               {user.email}
             </div>
             {user.phone && (
               <div className="flex items-center gap-3 text-ink-muted">
-                <Phone className="h-4 w-4 text-ink-muted" />
+                <Phone className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
                 {user.phone}
               </div>
             )}
             <div className="flex items-center gap-3 text-ink-muted">
-              <Calendar className="h-4 w-4 text-ink-muted" />
+              <Calendar className="h-4 w-4 text-ink-muted"  aria-hidden="true" />
               Joined {new Date(user.createdAt).toLocaleDateString()}
             </div>
           </div>
@@ -360,7 +360,7 @@ function UserDetailModal({
               !isUpdating
                 ? user.isActive
                   ? <Ban className="h-4 w-4" />
-                  : <CheckCircle className="h-4 w-4" />
+                  : <CheckCircle className="h-4 w-4"  aria-hidden="true" />
                 : undefined
             }
             onClick={onSuspend}

@@ -122,7 +122,7 @@ export default function UserInfoPage() {
                       : 'bg-secondary text-muted-foreground'
                   }`}
                 >
-                  {i < currentStep ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                  {i < currentStep ? <CheckCircle2 className="h-4 w-4"  aria-hidden="true" /> : i + 1}
                 </div>
                 <span className="hidden sm:inline text-sm font-medium text-foreground">
                   {step.title}
@@ -163,7 +163,7 @@ export default function UserInfoPage() {
               setErrors({});
             }}
             disabled={currentStep === 0}
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            leftIcon={<ArrowLeft className="h-4 w-4"  aria-hidden="true" />}
           >
             Back
           </Button>
@@ -175,7 +175,7 @@ export default function UserInfoPage() {
               size="lg"
               onClick={handleComplete}
               isLoading={isSubmitting}
-              leftIcon={<CheckCircle2 className="h-4 w-4" />}
+              leftIcon={<CheckCircle2 className="h-4 w-4"  aria-hidden="true" />}
             >
               Complete
             </Button>
@@ -185,7 +185,7 @@ export default function UserInfoPage() {
               variant="primary"
               size="lg"
               onClick={handleNext}
-              rightIcon={<ArrowRight className="h-4 w-4" />}
+              rightIcon={<ArrowRight className="h-4 w-4"  aria-hidden="true" />}
             >
               Continue
             </Button>

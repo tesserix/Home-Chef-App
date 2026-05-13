@@ -112,7 +112,7 @@ export default function OrderDetailPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-herb" />
+        <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
       </div>
     );
   }
@@ -120,7 +120,7 @@ export default function OrderDetailPage() {
   if (error || !order) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
-        <AlertCircle className="h-16 w-16 text-ink-muted" />
+        <AlertCircle className="h-16 w-16 text-ink-muted"  aria-hidden="true" />
         <h2 className="mt-4 text-xl font-semibold text-ink">Order not found</h2>
         <Button asChild variant="primary" className="mt-4">
           <Link to="/orders">View All Orders</Link>
@@ -142,7 +142,7 @@ export default function OrderDetailPage() {
           to="/orders"
           className="inline-flex items-center gap-2 text-ink-soft hover:text-ink"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4"  aria-hidden="true" />
           Back to Orders
         </Link>
 
@@ -154,11 +154,11 @@ export default function OrderDetailPage() {
                 <h1 className="text-xl font-semibold text-ink">
                   Order #{order.orderNumber}
                 </h1>
-                <button
+                <button type="button"
                   onClick={handleCopyOrderNumber}
                   className="p-1 text-ink-muted hover:text-ink-soft"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="h-4 w-4"  aria-hidden="true" />
                 </button>
               </div>
               <p className="mt-1 text-sm text-ink-muted">
@@ -186,7 +186,7 @@ export default function OrderDetailPage() {
               <OrderProgress status={order.status} />
               {order.estimatedDeliveryAt && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-ink-soft">
-                  <Clock className="h-4 w-4" />
+                  <Clock className="h-4 w-4"  aria-hidden="true" />
                   <span>
                     Estimated delivery:{' '}
                     <span className="font-medium">
@@ -244,7 +244,7 @@ export default function OrderDetailPage() {
         {/* Delivery Address */}
         <div className="mt-6 rounded-xl bg-bone p-6 shadow-1">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-            <MapPin className="h-5 w-5 text-herb" />
+            <MapPin className="h-5 w-5 text-herb"  aria-hidden="true" />
             Delivery Address
           </h2>
           <div className="mt-4">
@@ -306,7 +306,7 @@ export default function OrderDetailPage() {
           </div>
 
           <div className="mt-4 flex items-center gap-2 text-sm text-ink-muted">
-            <CheckCircle className="h-4 w-4 text-herb" />
+            <CheckCircle className="h-4 w-4 text-herb"  aria-hidden="true" />
             <span>
               Paid via {order.paymentMethod || 'Card'} • {order.paymentStatus}
             </span>

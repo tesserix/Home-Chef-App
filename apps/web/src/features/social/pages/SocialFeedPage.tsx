@@ -103,7 +103,7 @@ export default function SocialFeedPage() {
 
             {/* Trending Tags */}
             <div className="mb-6 flex flex-wrap gap-2">
-              <button
+              <button type="button"
                 onClick={() => setSelectedHashtag(null)}
                 className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedHashtag === null
@@ -114,7 +114,7 @@ export default function SocialFeedPage() {
                 All
               </button>
               {TRENDING_HASHTAGS.map((tag) => (
-                <button
+                <button type="button"
                   key={tag}
                   onClick={() => setSelectedHashtag(tag)}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -131,11 +131,11 @@ export default function SocialFeedPage() {
             {/* Posts */}
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-herb" />
+                <Loader2 className="h-8 w-8 animate-spin text-herb"  aria-hidden="true" />
               </div>
             ) : posts.length === 0 ? (
               <div className="rounded-xl bg-bone p-12 text-center shadow-1">
-                <ChefHat className="mx-auto h-12 w-12 text-ink-muted" />
+                <ChefHat className="mx-auto h-12 w-12 text-ink-muted"  aria-hidden="true" />
                 <h3 className="mt-4 text-lg font-semibold text-ink">No posts yet</h3>
                 <p className="mt-2 text-ink-soft">
                   Check back later for delicious content from our chefs
@@ -168,7 +168,7 @@ export default function SocialFeedPage() {
                 ].map((chef) => (
                   <div key={chef.name} className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-herb-tint flex items-center justify-center">
-                      <ChefHat className="h-5 w-5 text-herb" />
+                      <ChefHat className="h-5 w-5 text-herb"  aria-hidden="true" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-ink truncate">{chef.name}</p>
@@ -197,7 +197,7 @@ export default function SocialFeedPage() {
                   { tag: '#desserts', posts: 134 },
                   { tag: '#healthyfood', posts: 98 },
                 ].map((item) => (
-                  <button
+                  <button type="button"
                     key={item.tag}
                     onClick={() => setSelectedHashtag(item.tag)}
                     className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-paper"
@@ -240,13 +240,13 @@ function PostCard({
           <div>
             <p className="font-medium text-ink">{post.chef?.businessName}</p>
             <div className="flex items-center gap-1 text-sm text-ink-muted">
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3 w-3"  aria-hidden="true" />
               {formatTimeAgo(post.createdAt)}
             </div>
           </div>
         </Link>
-        <button className="p-2 text-ink-muted hover:text-ink-soft">
-          <MoreHorizontal className="h-5 w-5" />
+        <button type="button" className="p-2 text-ink-muted hover:text-ink-soft">
+          <MoreHorizontal className="h-5 w-5"  aria-hidden="true" />
         </button>
       </div>
 
@@ -262,7 +262,7 @@ function PostCard({
             <>
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
                 {post.images.map((_, i) => (
-                  <button
+                  <button type="button"
                     key={i}
                     onClick={() => setImageIndex(i)}
                     className={`h-2 w-2 rounded-full transition-colors ${
@@ -271,13 +271,13 @@ function PostCard({
                   />
                 ))}
               </div>
-              <button
+              <button type="button"
                 onClick={() => setImageIndex((i) => (i > 0 ? i - 1 : post.images.length - 1))}
                 className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-paper"
               >
                 ←
               </button>
-              <button
+              <button type="button"
                 onClick={() => setImageIndex((i) => (i < post.images.length - 1 ? i + 1 : 0))}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-ink/50 p-2 text-paper"
               >
@@ -291,31 +291,31 @@ function PostCard({
       {/* Actions */}
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-4">
-          <button
+          <button type="button"
             onClick={onLike}
             className={`flex items-center gap-1.5 ${
               post.isLiked ? 'text-paprika' : 'text-ink-soft hover:text-paprika'
             }`}
           >
-            <Heart className={`h-6 w-6 ${post.isLiked ? 'fill-current' : ''}`} />
+            <Heart className={`h-6 w-6 ${post.isLiked ? 'fill-current' : ''}`}  aria-hidden="true" />
             <span className="text-sm font-medium">{post.likesCount}</span>
           </button>
-          <button
+          <button type="button"
             onClick={() => setShowComments(!showComments)}
             className="flex items-center gap-1.5 text-ink-soft hover:text-herb"
           >
             <MessageCircle className="h-6 w-6" />
             <span className="text-sm font-medium">{post.commentsCount}</span>
           </button>
-          <button className="text-ink-soft hover:text-herb">
-            <Share2 className="h-6 w-6" />
+          <button type="button" className="text-ink-soft hover:text-herb">
+            <Share2 className="h-6 w-6"  aria-hidden="true" />
           </button>
         </div>
-        <button
+        <button type="button"
           onClick={onSave}
           className={`${post.isSaved ? 'text-herb' : 'text-ink-soft hover:text-herb'}`}
         >
-          <Bookmark className={`h-6 w-6 ${post.isSaved ? 'fill-current' : ''}`} />
+          <Bookmark className={`h-6 w-6 ${post.isSaved ? 'fill-current' : ''}`}  aria-hidden="true" />
         </button>
       </div>
 
@@ -358,7 +358,7 @@ function PostCard({
 
         {/* View Comments */}
         {post.commentsCount > 0 && !showComments && (
-          <button
+          <button type="button"
             onClick={() => setShowComments(true)}
             className="mt-2 text-sm text-ink-muted hover:text-ink-soft"
           >
@@ -376,7 +376,7 @@ function PostCard({
               placeholder="Add a comment..."
               className="flex-1 border-none bg-transparent text-sm outline-none placeholder:text-ink-muted"
             />
-            <button className="text-sm font-medium text-herb hover:text-herb">
+            <button type="button" className="text-sm font-medium text-herb hover:text-herb">
               Post
             </button>
           </div>
