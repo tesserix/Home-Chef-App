@@ -109,7 +109,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5">
-            City <span className="text-destructive">*</span>
+            City <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
             type="text"
@@ -122,7 +122,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5">
-            Emergency Contact Name <span className="text-destructive">*</span>
+            Emergency Contact Name <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
             type="text"
@@ -135,7 +135,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5">
-            Emergency Phone <span className="text-destructive">*</span>
+            Emergency Phone <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
             type="tel"
@@ -158,7 +158,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-3">
-            Vehicle Type <span className="text-destructive">*</span>
+            Vehicle Type <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <div className="grid grid-cols-3 gap-3">
             {vehicleTypes.map((type) => {

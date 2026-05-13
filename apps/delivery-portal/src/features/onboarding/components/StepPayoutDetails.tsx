@@ -122,7 +122,7 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
           <>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Account Holder Name <span className="text-destructive">*</span>
+                Account Holder Name <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 type="text"
@@ -134,7 +134,7 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Account Number <span className="text-destructive">*</span>
+                Account Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 type="text"
@@ -146,7 +146,7 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                IFSC Code <span className="text-destructive">*</span>
+                IFSC Code <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 type="text"
@@ -160,7 +160,7 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
         ) : (
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">
-              UPI ID <span className="text-destructive">*</span>
+              UPI ID <span aria-hidden="true" className="text-muted-foreground">*</span>
             </label>
             <input
               type="text"

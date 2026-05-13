@@ -143,7 +143,7 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-3">
-                Can your bicycle carry a delivery box / bag? <span className="text-destructive">*</span>
+                Can your bicycle carry a delivery box / bag? <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <p className="mb-3 text-xs text-muted-foreground">
                 You'll need a carrier rack or basket to hold the delivery bag securely.
@@ -232,7 +232,7 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Vehicle Registration Number <span className="text-destructive">*</span>
+                Vehicle Registration Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 type="text"
@@ -245,7 +245,7 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Driving License Number <span className="text-destructive">*</span>
+                Driving License Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
                 type="text"

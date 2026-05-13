@@ -266,7 +266,7 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     {slot.label}
-                    {slot.required && <span className="ml-1 text-destructive">*</span>}
+                    {slot.required && <span aria-hidden="true" className="ml-1 text-muted-foreground">*</span>}
                   </p>
                   {uploaded && (
                     <p className="text-xs text-muted-foreground">{uploaded.fileName}</p>

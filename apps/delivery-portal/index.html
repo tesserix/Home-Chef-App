@@ -24,8 +24,11 @@
     <title>Fe3dr Delivery</title>
 
     <!-- No-flash theme bootstrap. Reads localStorage('hc-theme') + prefers-color-scheme
-         and sets the `dark` class on <html> before React mounts. -->
-    <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+         and sets the `dark`/`light` class on <html> before React mounts.
+         Both classes are toggled mutually-exclusively so the `:not(.light)` CSS
+         escape hatch under `@media (prefers-color-scheme: dark)` doesn't fire
+         when the user has explicitly chosen Light. -->
+    <script>(function(){try{var t=localStorage.getItem('hc-theme');var d=t==='dark'||(t==='auto'||!t)&&window.matchMedia('(prefers-color-scheme: dark)').matches;var r=document.documentElement;r.classList.toggle('dark',d);r.classList.toggle('light',!d);r.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
     <title>Fe3dr Delivery</title>
   </head>
   <body>
