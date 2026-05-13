@@ -187,6 +187,9 @@ jobs:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
           set -euo pipefail
+          # Override the runner-injected GITHUB_TOKEN which gh CLI would
+          # otherwise prefer over our GH_TOKEN (set via env above).
+          unset GITHUB_TOKEN
           NEW_TAG="main-${SHORT_SHA}"
           TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
