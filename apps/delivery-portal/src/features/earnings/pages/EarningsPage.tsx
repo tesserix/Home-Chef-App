@@ -23,20 +23,26 @@ export default function EarningsPage() {
       </div>
 
       {/* Period Selector */}
-      <div className="flex gap-2 rounded-xl bg-muted p-1">
-        {['day', 'week', 'month', 'all'].map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-              period === p
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {p.charAt(0).toUpperCase() + p.slice(1)}
-          </button>
-        ))}
+      <div role="radiogroup" aria-label="Earnings period" className="flex gap-2 rounded-xl bg-muted p-1">
+        {['day', 'week', 'month', 'all'].map((p) => {
+          const isActive = period === p;
+          return (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              onClick={() => setPeriod(p)}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                isActive
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          );
+        })}
       </div>
 
       {/* Summary Cards */}
