@@ -227,10 +227,10 @@ export default function BrowseChefsPage() {
                     onValueChange={(value) => updateFilters({ rating: value ? Number(value) : undefined })}
                   />
 
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-ink-soft">
+                  <div role="group" aria-labelledby="browse-availability-label">
+                    <span id="browse-availability-label" className="mb-1.5 block text-sm font-medium text-ink-soft">
                       Availability
-                    </label>
+                    </span>
                     <label className="flex items-center gap-2 cursor-pointer mt-3">
                       <input
                         type="checkbox"
