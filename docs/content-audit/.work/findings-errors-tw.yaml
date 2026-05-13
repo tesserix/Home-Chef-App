@@ -1,0 +1,1515 @@
+# Technical Writer lens findings — errors-empty category
+# Auditor: TW lens agent
+# Date: 2026-05-13
+# Style guide: docs/content-audit/STYLE-GUIDE.md
+# Brief: docs/content-audit/lens-briefs/technical-writer.md
+# Slice size: 282 rows. Approach: P0/P1 per-row; P2/P3 grouped by pattern where appropriate.
+#
+# Formula references (from STYLE-GUIDE.md §4):
+#   Errors:        "What happened → What to do." Two sentences max. No blame. No "Oops!".
+#   Empty states:  "Why it's empty → One action."
+#   Success toasts: past tense, ≤6 words, period.
+#   Buttons:       verb-first, ≤3 words, sentence case.
+
+findings:
+
+  # =====================================================================
+  # P0 — Factually misleading / commitment-breaking error copy
+  # =====================================================================
+
+  - finding_id: TW-001
+    surface_id: api-error-payment-config
+    lens: technical-writer
+    severity: P0
+    issue: "Customer-facing payment error leaks an internal infra state ('Stripe gateway not configured', 'Payment gateway not configured by platform admin') that the customer cannot act on. The copy blames the platform admin and gives the customer no recovery path. Violates 'what happened → what to do' and exposes implementation detail."
+    evidence_excerpt: "Payment gateway not configured / Stripe gateway not configured / Stripe gateway not configured by platform admin"
+    recommendation: "Replace with a customer-safe message + recovery: 'Payments are temporarily unavailable. Try again in a few minutes or contact support.' Log the gateway-specific detail server-side only. Never surface 'platform admin' to a customer."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: api-error-stripe-connect
+    lens: technical-writer
+    severity: P0
+    issue: "Error string exposes a literal API path to the end user: 'No Stripe account — call /chef/stripe/connect first'. This is developer-console copy reaching a chef's UI. Factually misleading because the chef cannot 'call' an endpoint — they need to tap a button."
+    evidence_excerpt: "No Stripe account — call /chef/stripe/connect first / No Stripe account — call /delivery/stripe/connect first"
+    recommendation: "Rewrite as user action: 'Connect your Stripe account to receive payouts. Open Settings → Payouts → Connect Stripe.' Remove the API path entirely. Same fix for the delivery variant."
+    depends_on: null
+
+  - finding_id: TW-003
+    surface_id: api-error-order-cancel-stage
+    lens: technical-writer
+    severity: P0
+    issue: "'Order cannot be cancelled at this stage' tells the customer NO about a refund-bearing action without saying what the stage is, what stage allows cancellation, or whether they will be charged. For a money-bearing flow this is misleading because it implies cancellation is impossible without explaining the time/state window or refund consequence."
+    evidence_excerpt: "Order cannot be cancelled at this stage"
+    recommendation: "Be specific: 'Orders can be cancelled until the chef starts preparing. Contact support to request a refund.' Cite the cancellation cutoff. Link to refund policy."
+    depends_on: null
+
+  - finding_id: TW-004
+    surface_id: api-error-payment-refund
+    lens: technical-writer
+    severity: P0
+    issue: "Refund-constraint strings expose internal rules to the user but never communicate the refund timeline or refund policy. 'Can only refund completed payments' and 'Refund amount cannot exceed order total' are accurate but read as developer assertions, not user-facing copy. For a refund-bearing flow this risks commitment ambiguity (is the customer getting a refund? when?)."
+    evidence_excerpt: "Can only refund completed payments / Refund amount cannot exceed order total / Failed to process refund / Payment not captured"
+    recommendation: "Two fixes: (1) Rephrase to user language — 'We can only refund payments that have completed.' (2) Pair with refund SLA copy: 'Refunds reach your card in 5-7 business days.' Defer the dev-style version to logs."
+    depends_on: null
+
+  - finding_id: TW-005
+    surface_id: api-error-upload-size
+    lens: technical-writer
+    severity: P0
+    issue: "Four near-identical 'file too large' errors use three different size formats: '10MB', '5 MB', '5MB'. Same code path, different units shown to the same user. This is a numerals-formatting violation (style guide §6 mandates consistent unit formatting) and risks customer confusion about the actual limit."
+    evidence_excerpt: "File too large (max 10MB) / File too large. Maximum 5 MB. / Profile photo too large (max 5MB) / Each image must be under 5 MB"
+    recommendation: "Lock one format: 'File too large. Max 5 MB.' Use the space (5 MB, not 5MB) consistently. Add a shared constant for upload limits and reference one helper to format size + render the error. Audit fix should also de-duplicate the four variants into one helper."
+    depends_on: null
+
+  # =====================================================================
+  # P1 — Conversion-critical voice drift / blocking confusion
+  # =====================================================================
+
+  - finding_id: TW-006
+    surface_id: web-err-login-generic
+    lens: technical-writer
+    severity: P1
+    issue: "'Something went wrong. Please try again.' on the customer login surface is conversion-critical voice drift. It violates the error formula (no 'what happened' — completely opaque) and appears on a login page where bounce risk is high. Same string is duplicated across HomePage, BrowseChefsPage, ChefDetailPage, LoginPage."
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: "Pick a more specific message when possible. When truly generic, use 'We couldn't sign you in. Try again, or reset your password.' For non-login surfaces use 'We couldn't load this. Refresh to try again.' Drop 'Please' — it's filler. Centralize the message in i18n key so the four duplicates become one."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: dp-err-generic-auth
+    lens: technical-writer
+    severity: P1
+    issue: "Driver login generic error 'Something went wrong. Please try again.' is too verbose for driver tone (≤4 words target per persona matrix) AND gives the driver no recovery hint on a glance-critical login screen. A driver who can't sign in cannot accept work."
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: "Driver-targeted rewrite: 'Sign-in failed. Try again.' Keep at 4 words. Use the same string across driver-portal + mobile-delivery to prevent drift."
+    depends_on: TW-006
+
+  - finding_id: TW-008
+    surface_id: dp-err-access-denied
+    lens: technical-writer
+    severity: P1
+    issue: "'Access denied. Please check your credentials and try again.' on driver login mixes a security-flavored phrase ('Access denied' implies the user is unauthorized) with credential-recovery guidance (implies bad password). The two halves contradict — is the account blocked, or did they fumble the password? Conversion-critical on a sign-in surface."
+    evidence_excerpt: "Access denied. Please check your credentials and try again."
+    recommendation: "Pick one: if credentials are wrong → 'Invalid email or password. Try again.' If account is blocked → 'This account isn't approved for driver access. Contact support.' Choose based on the API response code; never show 'Access denied' generically."
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: ap-auth-error-access-denied
+    lens: technical-writer
+    severity: P1
+    issue: "Admin login surface shows 'Access denied. Only administrators can sign in to this portal.' This leaks the access policy to anyone reaching the URL, including potential attackers, AND uses 'Access denied' on a login surface where it competes with credential-error messages."
+    evidence_excerpt: "Access denied. Only administrators can sign in to this portal."
+    recommendation: "Drop the policy explanation from the public error. Use a uniform credential message: 'We couldn't sign you in. Check your email and password.' Log the RBAC denial server-side. (Brand voice + security consideration; defer security framing to Legal lens.)"
+    depends_on: TW-008
+
+  - finding_id: TW-010
+    surface_id: web-err-error-boundary
+    lens: technical-writer
+    severity: P1
+    issue: "Top-level error boundary copy is 35 words and uses three sentences ('Something broke on our end. We've been notified and we're looking into it...') — violates customer-facing 25-word max sentence rule AND the two-sentence error formula. The 'we've been notified' line is a promise the platform cannot verify in real time."
+    evidence_excerpt: "Unexpected error / Something broke on our end. / We've been notified and we're looking into it... / Try again / Refresh page"
+    recommendation: "Cut to formula: 'Something broke. Refresh the page, or try again in a moment.' Drop 'we've been notified' (unverifiable commitment). One CTA, not two — 'Refresh page' is the universal recovery; 'Try again' is redundant. Total ≤15 words."
+    depends_on: null
+
+  - finding_id: TW-011
+    surface_id: web-ux-cart-empty
+    lens: technical-writer
+    severity: P1
+    issue: "Empty cart copy is 28 words across two sentences and uses chatty filler ('Looks like you haven't added any items yet'). Violates customer max-25-word sentence rule and the empty-state formula 'why → one action' (the 'why' here is six redundant words)."
+    evidence_excerpt: "Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs..."
+    recommendation: "Cut to: 'Your cart is empty. Browse chefs near you.' Total 8 words. Keep the 'Browse chefs' CTA visible separately as the single action."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: web-ux-favorites-loggedout
+    lens: technical-writer
+    severity: P1
+    issue: "'Log in to see your favorites' uses banned 'Log in' verb (style guide §3: always 'Sign in')."
+    evidence_excerpt: "Log in to see your favorites"
+    recommendation: "Replace with 'Sign in to see your favorites.' Audit fix should grep for 'Log in' / 'Login' across all surfaces."
+    depends_on: null
+
+  - finding_id: TW-013
+    surface_id: mc-checkout-errors
+    lens: technical-writer
+    severity: P1
+    issue: "Payment timeout error on customer mobile checkout is 14 words and verbose for a payment failure moment: 'Payment confirmation timed out. Check your order history to confirm status.' The user is in a high-anxiety post-payment state — they want a yes/no, not navigation instructions."
+    evidence_excerpt: "Payment confirmation timed out. Check your order history to confirm status."
+    recommendation: "Tighten + add an in-place action: 'Payment confirmation timed out. We'll update your order when it clears.' Then auto-route to order history rather than telling the user to navigate. Two sentences max, ≤15 words."
+    depends_on: null
+
+  - finding_id: TW-014
+    surface_id: api-error-auth-suspended
+    lens: technical-writer
+    severity: P1
+    issue: "'Account is suspended' gives no reason and no contact path. For a sign-in blocker on a money-bearing platform this leaves the user dead-ended on the login screen."
+    evidence_excerpt: "Account is suspended"
+    recommendation: "Pair with recovery: 'This account is suspended. Contact support@homechef.in to appeal.' Two sentences, formula-compliant, gives the user one action."
+    depends_on: null
+
+  - finding_id: TW-015
+    surface_id: api-error-delivery-already-active
+    lens: technical-writer
+    severity: P1
+    issue: "Error payload includes a raw snake_case slug ('no_active_delivery') alongside a human string ('You already have an active delivery'). The slug is reaching the user-facing layer per inventory note. Driver tone matrix expects ≤4 words imperative — the slug also violates that."
+    evidence_excerpt: "You already have an active delivery / no_active_delivery"
+    recommendation: "Keep the slug as an internal code for client-side routing; never display it. Display string: 'You already have a delivery in progress.' (≤8 words, imperative-state)."
+    depends_on: null
+
+  - finding_id: TW-016
+    surface_id: api-error-delivery-online
+    lens: technical-writer
+    severity: P1
+    issue: "Driver-facing errors use 'Partner' to refer to the driver ('Partner has reached maximum concurrent deliveries', 'Partner is not verified or active') but the driver app addresses the user as 'you'. Voice mismatch on the same surface."
+    evidence_excerpt: "Partner has reached maximum concurrent deliveries / Partner is not verified or active"
+    recommendation: "Switch to second person: 'You've reached your delivery limit.' / 'Your account isn't verified yet.' Per style guide, 'Partner' is customer-facing-only ('Delivery partner'); driver app uses 'driver' or 'you'."
+    depends_on: null
+
+  - finding_id: TW-017
+    surface_id: api-error-auth-unauthorized
+    lens: technical-writer
+    severity: P1
+    issue: "Four variants of the same auth-failure concept: 'Unauthorized' / 'unauthorized' / 'Authentication required' / 'Token required'. The lowercase 'unauthorized' is especially poor — looks like raw HTTP status text leaking through."
+    evidence_excerpt: "Unauthorized / unauthorized / Authentication required / Token required"
+    recommendation: "Pick one user-facing message: 'Sign in to continue.' Use a single error-key (AUTH_REQUIRED) at the API layer; the UI maps to the friendly string. 'Token required' is internal-only; never surface."
+    depends_on: null
+
+  - finding_id: TW-018
+    surface_id: web-err-checkout-no-addresses
+    lens: technical-writer
+    severity: P1
+    issue: "Empty-state copy on a money-bearing surface is wordy and uses chatty 'don't have any saved...yet' phrasing: 'You don't have any saved addresses yet. Add one to continue.' At checkout, the customer is task-focused; trim to formula."
+    evidence_excerpt: "You don't have any saved addresses yet. Add one to continue."
+    recommendation: "Cut to: 'No saved addresses. Add a delivery address to continue.' Pair with a prominent 'Add address' button (one action)."
+    depends_on: null
+
+  # =====================================================================
+  # P2 — Microcopy formula violations grouped by pattern
+  # =====================================================================
+
+  - finding_id: TW-019
+    surface_id: pattern-error-missing-what-to-do
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: ~40 error strings give only the 'what happened' half of the error formula — no 'what to do' recovery action. Includes load-failures across vendor-portal, delivery-portal, mobile-vendor, mobile-delivery dashboards, earnings, analytics, profile, menu, reviews, settings."
+    evidence_excerpt: "vp-ux-earnings-error 'Unable to load earnings' | vp-ux-menu-error-state 'Failed to load menu' | mv-dash-fail-error 'Failed to load dashboard' | mv-menu-load-error 'Failed to load menu' | mv-analytics-load-error 'Failed to load analytics' | mv-earnings-load-error 'Failed to load earnings' | mv-profile-load-error 'Failed to load profile' | mv-reviews-load-error 'Failed to load reviews' | mv-settings-load-error 'Failed to load settings' | md-err-001..009 'Failed to load X' | ap-users-toast-fail-suspend / -activate"
+    recommendation: "Apply formula 'what happened → what to do' as a template: 'Couldn't load {thing}. Tap retry, or check your connection.' Pair every Failed-to-load error with a visible Retry button (most already exist) AND a single helper sentence. Create a shared <ErrorState> component with mandatory `action` prop so the formula is enforced at the type level."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: pattern-error-failed-to-x
+    lens: technical-writer
+    severity: P2
+    issue: "API surfaces ~100 variants of 'Failed to X' (accept quote, add comment, add favorite, cancel order, create address, etc.). Vague, no remediation, generic. Inventory note explicitly flags this as 'should generally not surface to end users without translation'."
+    evidence_excerpt: "Failed to accept quote / Failed to add comment / Failed to cancel order / Failed to create address ... ~100 variants"
+    recommendation: "Two-tier approach: (1) API returns a stable error code + technical message. (2) UI maps to one of ~10 user-facing templates: 'Couldn't {verb}. Try again.' Where retry isn't the right action ('cancel order' may need support), the template includes 'Contact support if it keeps failing.' Centralize in `apps/*/src/shared/lib/error-messages.ts`."
+    depends_on: TW-019
+
+  - finding_id: TW-021
+    surface_id: pattern-error-oops-uhoh
+    lens: technical-writer
+    severity: P2
+    issue: "Style-guide §4 explicitly bans 'Oops!' / 'Uh oh!' patterns. Repo currently shows no 'Oops!' but does use the related blame-deflecting pattern 'Something went wrong / Something broke on our end' across error boundaries and generic toasts."
+    evidence_excerpt: "web-err-login-generic / web-err-generic-retry / vp-auth-login-generic-error / dp-err-generic-auth / ap-auth-error-generic / mc-onb-step3-error / vp-err-boundary-fallback 'Something went wrong' / web-err-error-boundary 'Something broke on our end' / mv-onb-review-submit-error-body 'Submission failed. Please try again.'"
+    recommendation: "Reserve 'Something went wrong' for cases where the API truly returned nothing — and even then pair with action ('Refresh, or try again in a moment.'). Where the failure is known (network, server 500, validation), use specific copy. Audit fix: replace blanket 'Something went wrong' with `getFriendlyError(error)` helper that returns the right specific string."
+    depends_on: TW-006
+
+  - finding_id: TW-022
+    surface_id: pattern-empty-no-action
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: ~25 empty states give 'why it's empty' but not the one action (formula §4). Common across vendor-portal, mobile-vendor, mobile-delivery, admin-portal lists."
+    evidence_excerpt: "vp-ux-dashboard-recent-empty 'No recent orders' | vp-ux-reviews-empty 'No reviews yet' | mv-orders-history-empty 'No order history yet' | mv-earnings-no-payout-account 'No payout account configured' | dp-empty-history-body 'Your completed deliveries will appear here.' | ap-chefs-empty 'No chefs found' | ap-orders-empty 'No orders found' | ap-delivery-empty 'No deliveries found' | ap-providers-empty 'No delivery providers found' | ap-users-empty 'No users found' | ap-staff-empty-invites 'No invitations found' | ap-staff-empty-members 'No staff members found' | dp-empty-partner-docs 'No documents uploaded.' | md-emp-005 'No partners found.'"
+    recommendation: "For every empty list, define a single primary action below the empty-state text. Templates: 'No orders yet. Orders will appear here as customers place them.' (passive) is fine only when no user action exists; otherwise pair with action ('No reviews yet. Invite customers to review after delivery.'). For admin filtered-empty states, action = 'Clear filters'."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: pattern-empty-state-chatty
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: several empty states use the chatty 'Looks like...' / 'It's lonely...' tone explicitly banned in style guide §4."
+    evidence_excerpt: "web-ux-cart-empty 'Looks like you haven't added any items yet.' | mc-favorites-empty 'No saved chefs yet / Tap the heart on any chef to save them!' | dp-empty-active-body 'Check available deliveries to pick up a new order.'"
+    recommendation: "Strip 'Looks like'. Drop exclamation marks. Convert to formula: 'No favorites yet. Tap the heart on a chef to save them.' (no '!'). 'Check available deliveries' is fine in spirit but use imperative ≤4 words for driver: 'Open the Available tab to start.'"
+    depends_on: null
+
+  - finding_id: TW-024
+    surface_id: pattern-button-too-long
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: buttons inside error/empty surfaces exceed the 3-word, sentence-case rule (§4)."
+    evidence_excerpt: "vp-ux-menu-empty 'Add Your First Item' (4 words, Title Case) | vp-err-boundary-fallback 'Try Again' (Title Case) | web-err-error-boundary 'Try again' + 'Refresh page' (two CTAs) | dp-empty-history-body / dp-empty-active-body / dp-empty-available-body (CTA implied — actual buttons live elsewhere; check)"
+    recommendation: "Rule: verb-first, ≤3 words, sentence case. Fixes: 'Add Your First Item' → 'Add dish' or 'Add item'. 'Try Again' → 'Try again' (already correct words, fix capitalization). For error boundaries, pick ONE primary CTA — 'Refresh page' is the canonical recovery."
+    depends_on: null
+
+  - finding_id: TW-025
+    surface_id: pattern-please-padding
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: ~30+ validation errors begin with 'Please' as filler. 'Please' adds no information and inflates length, especially harmful for driver tone matrix (≤4 words target)."
+    evidence_excerpt: "web-err-register-validation 'Please fill in all fields' | vp-auth-login-missing-fields 'Please enter your email and password' | vp-onb-validate-required-toast 'Please fill in all required fields' | vp-onb-policies-required-toast 'Please accept all required policies' | dp-err-credentials-empty | dp-err-step1-required | dp-err-payout-bank | dp-err-payout-upi | dp-err-step5-terms | mv-onb-policies-* | api-error-chef-onboarding 'Please complete...' (5 variants) | api-error-tos 'You must accept the terms and conditions'"
+    recommendation: "Drop 'Please' from validation errors — they are imperative state messages, not requests. 'Please fill in all required fields' → 'Fill in all required fields.' / 'Required field missing.' Style guide §1 Rule 2 (plain English) prefers the shorter form. Keep 'Please' only when explicit politeness is warranted (e.g., support contact prompts)."
+    depends_on: null
+
+  - finding_id: TW-026
+    surface_id: pattern-toast-non-past-tense
+    lens: technical-writer
+    severity: P2
+    issue: "Style guide §4 toast formula: past tense, ≤6 words, period. Several error/empty toasts use non-past-tense or run over six words. Cross-checked because failure toasts also fall under the toast format rule."
+    evidence_excerpt: "vp-onb-save-failure-toast 'Failed to save your details. Please try again.' (9 words, 2 sentences) | dp-err-step3-upload 'Upload failed. Please try again.' (5 words; OK length, but 'Please' filler) | mv-menuedit-photo-upload-fail 'Failed to upload photo. Please try again.' (7 words) | mv-checkout-errors 'Order creation failed. Please try again.' | api-error-chef-onboarding 'Failed to submit onboarding. Please try again.'"
+    recommendation: "Keep toast formula. Failure toasts: 'Couldn't save. Try again.' (4 words) / 'Upload failed.' (2 words). Drop 'Please' (see TW-025). Audit fix: extract a `failureToast(thing: string)` helper that produces 'Couldn't {thing}. Try again.'"
+    depends_on: TW-025
+
+  - finding_id: TW-027
+    surface_id: pattern-period-inconsistency
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: errors and empty-state strings inconsistently use trailing periods within the same surface family. Style guide §4 success-toast formula says period; errors are 'two sentences max' implying punctuation should be consistent. Currently some say 'No reviews yet' (no period) and others say 'No documents uploaded.' (period), often in the same app."
+    evidence_excerpt: "vp-ux-reviews-empty 'No reviews yet' | vp-ux-dashboard-recent-empty 'No recent orders' | dp-empty-partner-docs 'No documents uploaded.' | dp-empty-partner-notfound 'Partner not found.' | dp-empty-history-body 'Your completed deliveries will appear here.' | api-error-phone-duplicate 'This phone number is already registered with another account.' (period) | api-error-favorites 'Chef is already in your favorites' (no period)"
+    recommendation: "Adopt a rule: single-sentence labels and headings → no period. Sentences (≥1 verb, full clause) → period. Apply across the family. Codify in style guide §4 as an addendum and use a lint rule (e.g., regex check in i18n keys)."
+    depends_on: null
+
+  - finding_id: TW-028
+    surface_id: pattern-emoji-in-empty-states
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-customer empty states embed emoji ('🍽️', '📸', heart) in copy. Style guide does not explicitly ban emoji but §1 Rule 1 'Confident, not loud' and Rule 4 'One accent per surface' argue against decorative emoji in copy that's already paired with iconography."
+    evidence_excerpt: "mc-favorites-empty 'No saved chefs yet / Tap the heart on any chef to save them!' (with heart emoji) | mc-orders-empty (with 🍽️) | mc-catering-empty (with 🍽️) | mc-social-empty (with 📸)"
+    recommendation: "Move decorative emoji into the visual icon slot; keep copy emoji-free. Strip the exclamation marks. Verify with Brand Voice lens before final rewrite."
+    depends_on: null
+
+  - finding_id: TW-029
+    surface_id: pattern-exclamation-overuse
+    lens: technical-writer
+    severity: P2
+    issue: "Style guide §1 Rule 1: '≤1 exclamation per page'. Multiple empty/error strings use exclamation in mundane states."
+    evidence_excerpt: "vp-ux-dashboard-pending-empty 'All caught up! / No pending orders right now' | mc-favorites-empty '... Tap the heart on any chef to save them!' | mc-orders-empty '... place your first order!'"
+    recommendation: "Drop exclamation marks from empty-state copy unless genuinely celebratory (and even then ≤1 per surface). 'All caught up.' is calmer and on-brand."
+    depends_on: TW-023
+
+  - finding_id: TW-030
+    surface_id: pattern-title-case-leakage
+    lens: technical-writer
+    severity: P2
+    issue: "Pattern: Title Case bleeds into error/empty headings in vendor-portal and admin-portal where style guide expects sentence case across UI."
+    evidence_excerpt: "vp-onb-banner-rejected-title 'Application Rejected' | vp-onb-banner-info-requested-title 'More Information Needed' | dp-empty-active-title 'No Active Delivery' | dp-empty-available-title 'No Available Deliveries' | dp-empty-history-title 'No Deliveries Yet' | mv-onb-docs-required-title 'Documents Required' | mv-onb-policies-policy-required-title 'Policy Required' | mv-onb-personal-validation-alert 'Validation Error' | mv-onb-review-submit-error-title 'Submission Error' | md-emp-006 'Fleet Management' | md-emp-010 'Staff Management'"
+    recommendation: "Sentence case everywhere except product/brand names. 'Application Rejected' → 'Application not approved' (softer + sentence case). 'No Active Delivery' → 'No active delivery'. Add a lint rule against repeated capitalised words in i18n keys."
+    depends_on: null
+
+  - finding_id: TW-031
+    surface_id: pattern-validation-shouty-cap
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-vendor uses 'Validation Error' / 'Submission Error' as alert titles. These are dev-console titles, not user-facing. Style guide expects neutral noun-phrase headings."
+    evidence_excerpt: "mv-onb-personal-validation-alert 'Validation Error' | mv-onb-review-submit-error-title 'Submission Error' | mv-profile-displayname-required (alert title 'Validation')"
+    recommendation: "Drop the 'Validation' / 'Submission' labels entirely — the body says enough. If a title is required by the alert API, use the specific issue: 'Check your details' / 'Couldn't submit'."
+    depends_on: null
+
+  - finding_id: TW-032
+    surface_id: pattern-zod-bare-message
+    lens: technical-writer
+    severity: P2
+    issue: "Zod validation strings come through as bare field rules without form context: 'Name must be at least 2 characters', 'Description must be at most 500 characters', 'Price must be between ₹1 and ₹10,000'. These appear next to the field in most cases so context is OK, but: (a) some are duplicated with slightly different wording in customer vs vendor, (b) some use 'at least' / 'at most' / 'between' inconsistently."
+    evidence_excerpt: "vp-ux-menu-form-validation '... Name must be at least 2 characters / Name must be under 100 characters / Description must be at least 10 characters / Description must be under 500 characters' | mv-onb-kitchen-desc-min-err 'Description must be at least 50 characters' / mv-onb-kitchen-desc-max-err 'Description must be at most 500 characters' | mv-menunew-name-err 'Name must be at least 3 characters' (vs vendor-portal 'at least 2')"
+    recommendation: "Standardize verbs: 'Name needs at least N characters.' / 'Description must be under N characters.' Pick one set of bounds across customer + chef onboarding (vendor-portal says min=2 chars for name; mobile-vendor says min=3). Audit fix should align bounds across surfaces and pull validation messages from a single zod schema module."
+    depends_on: null
+
+  - finding_id: TW-033
+    surface_id: pattern-snake-case-leak
+    lens: technical-writer
+    severity: P2
+    issue: "Snake-case slugs reach user-facing copy in at least one place (already flagged in TW-015). General scan didn't find more — but the pattern is to alert authors during the audit fix: any string containing underscores in i18n keys is suspicious."
+    evidence_excerpt: "api-error-delivery-already-active includes 'no_active_delivery'"
+    recommendation: "Add a lint rule: i18n value strings must not contain `[a-z]_[a-z]` (rough heuristic) outside of email/URL/code-snippet contexts. Catch slug leaks before merge."
+    depends_on: TW-015
+
+  - finding_id: TW-034
+    surface_id: pattern-payout-method-jargon
+    lens: technical-writer
+    severity: P2
+    issue: "Payout-validation strings contain backend jargon: 'payoutMethod must be...', 'bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer'. Field names are camelCase developer identifiers reaching the user."
+    evidence_excerpt: "payoutMethod must be 'bank_transfer' or 'upi' / bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer / upiId is required for upi payout method"
+    recommendation: "Rephrase to label-style: 'Choose bank transfer or UPI.' / 'Account number, IFSC, and account name are required for bank transfer.' / 'Enter your UPI ID.' Never expose camelCase field names."
+    depends_on: null
+
+  - finding_id: TW-035
+    surface_id: pattern-not-verified-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Two near-identical 'Account not verified' strings in the same handler file — inconsistent ('Account not verified' vs 'Account not verified yet')."
+    evidence_excerpt: "Account not verified / Account not verified yet"
+    recommendation: "Pick one. 'Yet' implies a future state and is friendlier — use 'Account not verified yet. Check your email for the verification link.' Add the recovery half."
+    depends_on: null
+
+  - finding_id: TW-036
+    surface_id: pattern-password-incorrect-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Two strings for the same concept: 'Current password is incorrect' / 'Password is incorrect'."
+    evidence_excerpt: "Current password is incorrect / Password is incorrect"
+    recommendation: "Use one based on context. In change-password forms: 'Current password is incorrect.' In sign-in: deliberately keep credentials vague ('Invalid email or password'). Don't mix in the same handler."
+    depends_on: null
+
+  - finding_id: TW-037
+    surface_id: pattern-reset-token-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Three near-duplicate variants of password-reset / enrollment token errors."
+    evidence_excerpt: "Reset token has expired / Invalid or expired reset token / Invalid or expired enrollment token"
+    recommendation: "Single template: 'This {token type} is invalid or has expired. Request a new one.' Pass token type as parameter. Add the recovery action — 'Request a new one' or 'Resend code'."
+    depends_on: null
+
+  - finding_id: TW-038
+    surface_id: pattern-2fa-vague
+    lens: technical-writer
+    severity: P2
+    issue: "Four 2FA errors are all variants of 'Failed to ...' with zero remediation. 2FA failures are high-friction security touchpoints; users need clarity."
+    evidence_excerpt: "Failed to enable 2FA / Failed to start 2FA challenge / Failed to start 2FA enrollment / Invalid or expired challenge"
+    recommendation: "Add recovery: 'Couldn't start 2FA. Try again, or contact support.' / 'Code expired. Start over to get a new one.' Two sentences, formula-compliant."
+    depends_on: TW-019
+
+  - finding_id: TW-039
+    surface_id: pattern-uploaded-file-allowed-list-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Five variants of 'Invalid file type. Allowed: ...' with slightly different allowed lists shown to the user."
+    evidence_excerpt: "Invalid file type. Allowed: JPEG, PNG, PDF. / Invalid file type. Allowed: JPEG, PNG, WebP, PDF / Invalid file type. Allowed: JPEG, PNG, WebP. / Invalid image type. Allowed: JPEG, PNG, WebP. / Profile photo must be JPEG or PNG"
+    recommendation: "Pull the allowed list from a single source per upload type (document, image, profile photo). Single template: 'This file type isn't supported. Use {list}.' Always include final period. Match the format from TW-005."
+    depends_on: TW-005
+
+  - finding_id: TW-040
+    surface_id: pattern-image-count-friendly-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Image-count limit errors show four variants — only one includes 'remove one before adding another' (the recovery half)."
+    evidence_excerpt: "Maximum 3 images per review / Maximum 4 images per post / Maximum 5 images per menu item / Maximum 5 kitchen photos allowed. Remove one before adding another."
+    recommendation: "Apply the kitchen-photos pattern to all: 'Up to {N} {thing} allowed. Remove one before adding another.' Or even tighter: 'Maximum {N} {thing}. Remove one to add a new one.'"
+    depends_on: null
+
+  - finding_id: TW-041
+    surface_id: pattern-cart-empty-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Same 'cart empty' state is expressed three different ways across surfaces — drift across customer apps."
+    evidence_excerpt: "web-ux-cart-empty 'Your cart is empty / Looks like you haven't added any items yet...' (28 words) | mc-checkout-empty-cart 'Your cart is empty.' (period) | mc-cartsheet-empty 'Your cart is empty' (no period)"
+    recommendation: "Single i18n key: `empty.cart` = 'Your cart is empty. Browse chefs near you.' Apply in all three places. Decide on period (see TW-027)."
+    depends_on: TW-011
+
+  - finding_id: TW-042
+    surface_id: pattern-no-X-found-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Same 'no X found' phrasing appears with subtle variations across admin / web / vendor / driver: 'No chefs found', 'No orders found', 'No deliveries found', 'No payouts yet', 'No staff members yet', 'No staff members found', 'No partners found', 'No partners found matching your criteria', 'No staff members. Send an invitation...'"
+    evidence_excerpt: "ap-chefs-empty 'No chefs found' | web-err-browse-empty 'No chefs found / Try adjusting your filters or search query' | ap-orders-empty 'No orders found' | ap-staff-empty-members 'No staff members found' | dp-empty-staff 'No staff members yet. Send an invitation to get started.' | dp-empty-partners 'No partners found matching your criteria.'"
+    recommendation: "Adopt a binary: (a) Filtered/searched result is empty → 'No {things} match your filters.' + 'Clear filters' CTA. (b) Truly empty list → 'No {things} yet.' + primary action. Codify across admin/vendor/driver. The strongest example is dp-empty-staff which is formula-compliant; clone its structure."
+    depends_on: TW-022
+
+  - finding_id: TW-043
+    surface_id: pattern-not-found-bare
+    lens: technical-writer
+    severity: P2
+    issue: "Detail pages for missing resources show bare 'X not found' with no recovery action visible in copy. ~42 backend variants of 'X not found' (see api-error-validation-not-found inventory note) and frontend equivalents."
+    evidence_excerpt: "web-ux-chefdetail-not-found 'Chef not found' | web-err-orderdetail-not-found 'Order not found / View All Orders' | mc-order-detail-not-found 'Order not found / Go Back' | ap-providerdetail-notfound 'Provider not found' | ap-userdetail-notfound 'User not found' | ap-staffdetail-notfound 'Staff member not found' | dp-empty-partner-notfound 'Partner not found.' | md-emp-004 'Delivery not found.' | md-emp-008 'Partner not found.'"
+    recommendation: "Pair every detail-not-found with an explicit recovery CTA in copy: 'Order not found. It may have been removed.' + 'Back to orders' button. Add the recovery half to every variant. Standardize the back-link wording: 'Back to {list}'."
+    depends_on: null
+
+  - finding_id: TW-044
+    surface_id: pattern-status-transition-vague
+    lens: technical-writer
+    severity: P2
+    issue: "'Invalid status transition' / 'Invalid status' / 'Delivery is in a terminal state' are dev-flavored states reaching user copy."
+    evidence_excerpt: "Invalid status transition / Invalid status / Delivery is in a terminal state"
+    recommendation: "Translate to action-relevant language: 'This delivery is already {state}.' For drivers: 'Already marked delivered.' Never expose 'terminal state' / 'status transition'."
+    depends_on: null
+
+  - finding_id: TW-045
+    surface_id: pattern-vendor-customer-noun
+    lens: technical-writer
+    severity: P2
+    issue: "Style guide §3: vendor-portal and admin should use 'chef' (their self-identity) not 'vendor' / 'cook' / 'seller'; customer surfaces should use 'Home chef'; driver app should use 'Driver' / 'Partner' only customer-facing. Scan finds 'vendor' appearing in chef-facing strings."
+    evidence_excerpt: "vp-auth-login-access-denied 'This portal is only for vendor accounts. Please use the Fe3dr customer app.'"
+    recommendation: "Rewrite: 'This portal is only for chef accounts. Use the customer app to order.' Replace 'Fe3dr' with the correct product name if it's a placeholder. (Brand voice owns the Fe3dr question; defer.)"
+    depends_on: null
+
+  - finding_id: TW-046
+    surface_id: pattern-go-back-button-form
+    lens: technical-writer
+    severity: P2
+    issue: "Recovery buttons on not-found / error pages use Title Case and inconsistent verbs."
+    evidence_excerpt: "web-ux-chefdetail-not-found 'Browse Chefs' (Title Case) | web-err-orderdetail-not-found 'View All Orders' (Title Case, 3 words) | mc-order-detail-not-found 'Go Back' (Title Case)"
+    recommendation: "Sentence case, verb-first, ≤3 words: 'Browse chefs' / 'View orders' / 'Back to orders'. Avoid the generic 'Go back' — name the destination."
+    depends_on: TW-024
+
+  - finding_id: TW-047
+    surface_id: pattern-offline-banner-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Three offline banners across the codebase, three different wordings."
+    evidence_excerpt: "web-err-layout-offline 'You're offline. Some features may be unavailable.' | vp-ux-layout-offline 'You're offline. Orders will sync when connected.' | dp-err-offline-banner 'You're offline. Updates will sync when connected.' | ap-layout-offline-banner 'You're offline. Data may not be up to date.'"
+    recommendation: "Each is appropriate to its surface — keep specificity. But standardize the format: 'You're offline. {what happens now}.' Across surfaces, ensure the second clause names the consequence (sync, freshness, feature-loss) per audience. Add to style guide §4 as the 'connectivity banner' formula."
+    depends_on: null
+
+  - finding_id: TW-048
+    surface_id: pattern-confirm-this-action-cannot
+    lens: technical-writer
+    severity: P2
+    issue: "Style guide §4 explicitly cites 'Are you sure? This action cannot be undone.' as ❌ — vague, doesn't explain WHAT. Admin-portal uses this exact pattern in three places."
+    evidence_excerpt: "ap-providerdetail-dialog-bodies 'Are you sure you want to delete this delivery provider? This action cannot be undone.' (and two siblings) | ap-providers-dialog-delete-body (same) | mv-menuitem-delete-alert 'Are you sure you want to delete this menu item?'"
+    recommendation: "Apply the §4 modal subtitle formula: 'explain consequence in one sentence.' Examples: 'Deleting this provider stops all assignments and removes history.' / 'This menu item will be hidden from your storefront immediately.' Drop 'Are you sure'; the dialog title and the destructive button already imply the question."
+    depends_on: null
+
+  - finding_id: TW-049
+    surface_id: pattern-staff-confirm-soften
+    lens: technical-writer
+    severity: P2
+    issue: "Staff deactivate/reactivate confirmations use 'Are you sure you want to...' opener (banned by formula) but at least explain the consequence."
+    evidence_excerpt: "ap-staffdetail-confirm-deactivate 'Are you sure you want to deactivate this staff member? They will lose access to all portals.' | ap-staffdetail-confirm-reactivate 'Are you sure you want to reactivate this staff member? They will regain access based on their role.'"
+    recommendation: "Drop the 'Are you sure' opener: 'Deactivating this staff member removes access to all portals.' / 'Reactivating restores access based on their assigned role.' One sentence each; the destructive button is the confirm."
+    depends_on: TW-048
+
+  - finding_id: TW-050
+    surface_id: pattern-logout-confirm
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-vendor logout confirm uses 'Are you sure you want to log out?' which (a) violates banned 'log out' (style guide §3: 'sign out'), (b) uses 'Are you sure' filler, (c) doesn't explain consequence."
+    evidence_excerpt: "mv-more-logout-confirm-body 'Are you sure you want to log out?' (Title: 'Logout')"
+    recommendation: "Title: 'Sign out'. Body: 'You'll need to sign in again to access orders.' Confirm button: 'Sign out'. Tighter, on-brand, no banned terms."
+    depends_on: null
+
+  - finding_id: TW-051
+    surface_id: pattern-permissions-required
+    lens: technical-writer
+    severity: P2
+    issue: "Locked-feature explanations on mobile-delivery use a passive, slightly defensive tone: 'Fleet management is available for fleet managers only. Contact your administrator to request access.'"
+    evidence_excerpt: "md-emp-007 'Fleet management is available for fleet managers only. Contact your administrator to request access.' | md-emp-011 'Staff management requires manager permissions. Contact your administrator to request access.'"
+    recommendation: "Active voice and shorter: 'Only fleet managers can open this. Ask your admin for access.' (12 → 10 words) Use the same 'Ask your admin' pattern across both. Avoids 'request access' which sounds like a button label that doesn't exist."
+    depends_on: null
+
+  - finding_id: TW-052
+    surface_id: pattern-rejected-banner-soften
+    lens: technical-writer
+    severity: P2
+    issue: "Vendor-portal onboarding rejection banner reads 'Application Rejected' / 'Your previous application was not approved.' 'Rejected' is harsh; the body softens but the title doesn't."
+    evidence_excerpt: "vp-onb-banner-rejected-title 'Application Rejected' / vp-onb-banner-rejected-body 'Your previous application was not approved. Please review the feedback below and re-submit.'"
+    recommendation: "Title: 'Application not approved' (sentence case, softer). Body: 'Review the feedback below and resubmit.' Drop 'Please' (TW-025), use one word 'resubmit'."
+    depends_on: TW-030
+
+  - finding_id: TW-053
+    surface_id: pattern-more-info-needed-banner
+    lens: technical-writer
+    severity: P2
+    issue: "Companion banner: 'More Information Needed' (Title Case) + 'The admin team needs additional information before approving your application.' Wordy."
+    evidence_excerpt: "vp-onb-banner-info-requested-title 'More Information Needed' / vp-onb-banner-info-requested-body 'The admin team needs additional information before approving your application.'"
+    recommendation: "Title: 'More info needed' (sentence case, shorter). Body: 'We need a few more details before approving your application.' 'We' is preferred over 'The admin team' (style guide §5 — though applied here to operational copy)."
+    depends_on: TW-030
+
+  - finding_id: TW-054
+    surface_id: pattern-failed-to-load-vague-mobile-delivery
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-delivery has nine 'Failed to load X' strings (md-err-001..009) that all violate driver tone matrix (≤4 words target where possible) AND lack remediation. Driver surfaces are the most glance-critical."
+    evidence_excerpt: "md-err-001 'Failed to load dashboard' | md-err-002 'Failed to load delivery detail' | md-err-003 'Failed to load earnings' | md-err-004 'Failed to load delivery history' | md-err-005 'Failed to load delivery detail' | md-err-006 'Failed to load profile' | md-err-007 'Failed to load fleet data' | md-err-008 'Failed to load partner detail' | md-err-009 'Failed to load staff list'"
+    recommendation: "Driver-tone fix: 'Couldn't load. Tap to retry.' (4 words) as a shared component. Don't spell out what failed — the screen context is the answer. Pair with a visible retry. Apply TW-019 globally."
+    depends_on: TW-019
+
+  - finding_id: TW-055
+    surface_id: pattern-bicycle-carrier
+    lens: technical-writer
+    severity: P2
+    issue: "'Please indicate if your bicycle can carry a delivery box' (9 words, 'Please' filler, awkward 'indicate' verb). Driver tone is glanceable imperative."
+    evidence_excerpt: "dp-err-step2-bike-carrier 'Please indicate if your bicycle can carry a delivery box'"
+    recommendation: "Reword as a yes/no field label or telegraphic: 'Tell us if your bicycle can carry a delivery box.' or as the form question itself ('Can your bicycle carry a delivery box?') — and let the radio/checkbox communicate the action."
+    depends_on: TW-025
+
+  - finding_id: TW-056
+    surface_id: pattern-stripe-onboarding-jargon
+    lens: technical-writer
+    severity: P2
+    issue: "Chef-facing Stripe errors mix vendor jargon and dev hints. Several variants describe the same situation."
+    evidence_excerpt: "Chef has not completed Stripe onboarding / Chef's Stripe account is not ready to accept charges — onboarding may be incomplete / Complete Stripe onboarding before switching to Stripe / Complete Razorpay payout setup before switching to Razorpay"
+    recommendation: "User-facing chef voice: 'Finish setting up your Stripe payout account before switching.' / 'Your Stripe account isn't ready to accept payments yet.' One template per scenario; never 'Chef has not completed' (third person about themselves)."
+    depends_on: null
+
+  - finding_id: TW-057
+    surface_id: pattern-search-min-chars
+    lens: technical-writer
+    severity: P2
+    issue: "'Search query must be at least 2 characters' is fine voice but uses developer noun 'query'."
+    evidence_excerpt: "api-error-search-min 'Search query must be at least 2 characters'"
+    recommendation: "Replace 'Search query' with 'Search': 'Search must be at least 2 characters.'"
+    depends_on: null
+
+  - finding_id: TW-058
+    surface_id: pattern-favorites-limit-numeric
+    lens: technical-writer
+    severity: P2
+    issue: "'You can save up to 7 favorite chefs. Remove one first.' uses an arbitrary numeric limit in copy. Functionally fine; tonal nitpick is 'Remove one first' implies a sequence the user doesn't think in. Also reuses across three customer pages."
+    evidence_excerpt: "web-err-favorite-max-limit 'You can save up to 7 favorite chefs. Remove one first.'"
+    recommendation: "Tighten: 'You've saved the maximum 7 chefs. Remove one to save a new favorite.' Make the second sentence the action verb the user is trying to do (save, not remove)."
+    depends_on: null
+
+  - finding_id: TW-059
+    surface_id: pattern-coming-soon-leak
+    lens: technical-writer
+    severity: P2
+    issue: "'Chart coming soon' on admin analytics — placeholder copy that exposes unfinished feature work to the user. Style guide §1 Rule 5 'Restraint over urgency' implies we don't tease."
+    evidence_excerpt: "ap-analytics-coming-soon 'Chart coming soon'"
+    recommendation: "Either ship the chart or hide the section. As a stopgap: 'Analytics for this metric will be available in a future release.' Better: feature-flag and remove from UI when disabled."
+    depends_on: null
+
+  - finding_id: TW-060
+    surface_id: pattern-locked-toast-onboarding
+    lens: technical-writer
+    severity: P2
+    issue: "Two onboarding-locked toasts in vp-onb use slightly different framings for the same locked state."
+    evidence_excerpt: "vp-onb-locked-conflict-toast 'Your kitchen is already under review or live. Returning to the dashboard.' | vp-onb-locked-info-toast 'Your kitchen is already submitted. Manage it from the dashboard.'"
+    recommendation: "Pick one verb. 'Your kitchen is already submitted. Manage it from the dashboard.' covers both. If the distinction matters operationally, separate codes — but show the same string."
+    depends_on: null
+
+  - finding_id: TW-061
+    surface_id: pattern-empty-no-description
+    lens: technical-writer
+    severity: P2
+    issue: "Various 'No description provided' / 'No documents uploaded' / 'No specialties added yet' / 'No days set' / 'None selected' empty inline strings vary in style: some end with period, some don't; some use 'yet', some don't."
+    evidence_excerpt: "vp-ux-menu-view-empty-desc 'No description provided' | vp-onb-kitchen-specialties-empty 'No specialties added yet' | vp-onb-review-empty-cuisines 'None selected' | vp-onb-review-empty-days 'No days set' | vp-onb-review-empty-docs 'No documents uploaded' | ap-secsettings-apikey-empty 'No keys yet.' | ap-platsettings-zones-empty 'No zones yet — delivery is available everywhere until a zone is created.'"
+    recommendation: "Standardize as 'No {things} yet' (no period when used as a label) with the dash-explanation variant ('No zones yet — delivery is available everywhere...') only when context is needed. Drop the period from labels; keep the period if used as a full sentence."
+    depends_on: TW-027
+
+  - finding_id: TW-062
+    surface_id: pattern-saved-addresses-yet
+    lens: technical-writer
+    severity: P2
+    issue: "Customer 'No addresses' empty state is duplicated across web checkout and mobile checkout with slightly different wording."
+    evidence_excerpt: "web-err-checkout-no-addresses 'You don't have any saved addresses yet. Add one to continue.' | mc-checkout-address-errors (Zod errors covering similar territory)"
+    recommendation: "Single template: 'No saved addresses. Add a delivery address to continue.' Identical across web + mobile. See TW-018."
+    depends_on: TW-018
+
+  - finding_id: TW-063
+    surface_id: pattern-pending-orders-drift
+    lens: technical-writer
+    severity: P2
+    issue: "'No pending orders' appears with three different bodies across vendor-portal and mobile-vendor."
+    evidence_excerpt: "vp-ux-dashboard-pending-empty 'All caught up! / No pending orders right now' | vp-ux-orders-live-empty 'No active orders right now. New orders will appear here automatically.' | mv-orders-empty-title 'No pending orders' / mv-orders-empty-body 'New orders will appear here automatically'"
+    recommendation: "One template: 'No pending orders. New orders appear here automatically.' Drop 'right now' (filler), drop 'All caught up!' (exclamation), drop the variant in mobile-vendor that omits the second sentence."
+    depends_on: TW-029
+
+  - finding_id: TW-064
+    surface_id: pattern-rate-limit-friendly
+    lens: technical-writer
+    severity: P2
+    issue: "Chat rate-limit message 'Please wait a moment before sending another message' is friendly but contains 'Please' filler and is wordy for a transient banner."
+    evidence_excerpt: "api-error-chat-availability 'Please wait a moment before sending another message'"
+    recommendation: "Tighter: 'Slow down — wait a moment before sending another message.' Or simpler: 'You're sending messages too fast. Wait a moment.'"
+    depends_on: TW-025
+
+  - finding_id: TW-065
+    surface_id: pattern-chat-availability-wordy
+    lens: technical-writer
+    severity: P2
+    issue: "Chat-closed errors carry redundant phrasing across three near-identical variants."
+    evidence_excerpt: "api-error-chat-availability 'Chat is not available for completed/cancelled orders' / 'This chat room is closed' / 'This chat room is closed because the order is no longer active'"
+    recommendation: "Standardize: 'Chat closed — this order is complete.' / 'Chat closed — this order was cancelled.' Single template with state-specific reason. Drop 'chat room' (use 'chat'). Drop 'no longer active' (vague)."
+    depends_on: null
+
+  - finding_id: TW-066
+    surface_id: pattern-otto-retry
+    lens: technical-writer
+    severity: P2
+    issue: "'Try again' as a standalone button in OttoChat retry. Per style guide formula, fine — but appears alongside an error toast in same flow that already says 'Something went wrong'. Two redundant CTAs."
+    evidence_excerpt: "web-err-otto-retry 'Try again'"
+    recommendation: "Keep 'Try again' as the button; ensure paired error message gives the 'what happened' half. E.g., 'Couldn't connect to Otto. Try again.' + button reading 'Try again' (the body provides context, button stays short)."
+    depends_on: null
+
+  - finding_id: TW-067
+    surface_id: pattern-validation-error-counts
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-customer catering form (mc-catering-errors) bundles 9 separate Zod messages with 40 total words. Some use 'is required' verb, some use specific verbs ('must be in the future'). Mixed patterns make the form feel chaotic."
+    evidence_excerpt: "Event type is required / Date must be YYYY-MM-DD / Event date must be in the future / Guest count must be a number / At least 1 guest required / Budget must be a number / Budget must be positive / City is required / State is required"
+    recommendation: "Two formula families: (a) Required: '{Field} is required.' (b) Validation: '{Field} must be {rule}.' Pick a date verb: 'Pick a future date.' (active, friendlier). 'Budget must be positive' → 'Budget must be more than ₹0.'"
+    depends_on: null
+
+  - finding_id: TW-068
+    surface_id: pattern-zod-india-format
+    lens: technical-writer
+    severity: P2
+    issue: "Several validation strings hard-code India-specific assumptions in the message: 'Enter a valid 10-digit Indian mobile number', 'Enter a valid 6-digit pincode', 'upiId is required'. Fine for v1 but the messages are inconsistent: some say 'Indian', some don't."
+    evidence_excerpt: "mc-onb-step1-errors 'Enter a valid 10-digit Indian mobile number' | mc-onb-step2-errors 'Enter a valid 6-digit pincode' | mv-onb-personal-phone-err 'Enter a valid 10-digit Indian mobile number'"
+    recommendation: "Drop 'Indian' (the form is India-only at v1). 'Enter a valid 10-digit mobile number.' / 'Enter a valid 6-digit PIN code.' (style guide says 'PIN code' not 'pincode'). Centralize India-format validation messages in shared zod schemas."
+    depends_on: null
+
+  - finding_id: TW-069
+    surface_id: pattern-mobile-customer-profile-error-alert
+    lens: technical-writer
+    severity: P2
+    issue: "Mobile-customer profile errors use both a title ('Error') and a body — title-less alerts would be friendlier."
+    evidence_excerpt: "mc-profile-save-error 'Error / Could not update profile. Please try again. / Could not save preferences.'"
+    recommendation: "Drop the 'Error' title; the body is enough. If a title is structurally required, use 'Couldn't save profile' (specific). Drop 'Please' (TW-025). 'Couldn't update profile. Try again.' (5 words)."
+    depends_on: TW-031
+
+  - finding_id: TW-070
+    surface_id: pattern-mobile-vendor-permission-alerts
+    lens: technical-writer
+    severity: P2
+    issue: "Permission alerts on mobile-vendor use Title Case headings + verbose bodies: 'Permission Required' + 'Camera permission is needed to take photos.'"
+    evidence_excerpt: "mv-onb-docs-perm-title 'Permission Required' / mv-onb-docs-camera-perm 'Camera permission is needed to take photos.' / mv-onb-docs-gallery-perm 'Gallery permission is needed to select photos.'"
+    recommendation: "Sentence case + tight: 'Camera access needed' / 'We need camera access to take photos.' Drop 'is needed' (passive). Audit fix should consolidate camera+gallery into one helper since both files reuse them."
+    depends_on: TW-030
+
+  - finding_id: TW-071
+    surface_id: pattern-tos-error
+    lens: technical-writer
+    severity: P2
+    issue: "'You must accept the terms and conditions' on driver onboarding has no link to the actual T&C. The user is being told to accept something but the doc isn't surfaced inline."
+    evidence_excerpt: "api-error-tos 'You must accept the terms and conditions'"
+    recommendation: "TW-side fix: 'Accept the Terms of Service to continue.' (drops 'You must', shorter). Legal lens owns the link-to-doc requirement; flag for them. Also align casing — 'Terms of Service' (proper noun) vs 'terms and conditions' (lowercase) drift."
+    depends_on: null
+
+  - finding_id: TW-072
+    surface_id: pattern-payments-policy-missing
+    lens: technical-writer
+    severity: P2
+    issue: "Order-already-paid / payment-not-captured / refund-amount errors don't communicate the refund/charge policy. From a TW lens this is a missing-recovery-half issue."
+    evidence_excerpt: "api-error-order-already-paid 'Order already paid' | api-error-payment-refund 'Payment not captured' | 'Refund amount cannot exceed order total'"
+    recommendation: "Pair each with policy line: 'Order already paid. View receipt or contact support for a refund.' / 'Payment not captured yet. We'll release the hold within 7 days.' Legal lens owns exact wording on refund SLA; TW recommends paired action exists."
+    depends_on: TW-004
+
+  - finding_id: TW-073
+    surface_id: pattern-error-boundaries-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Four different error-boundary strings across apps. Same global-failure concept, four wordings."
+    evidence_excerpt: "web-err-error-boundary 'Unexpected error / Something broke on our end. / We've been notified...' | vp-err-boundary-fallback 'Something went wrong / An unexpected error occurred while loading this page. / Try Again' | dp-err-boundary-title 'Something went wrong' / dp-err-boundary-body 'An unexpected error occurred while loading this page.' | ap-errorboundary-title 'Something went wrong' / ap-errorboundary-body 'An unexpected error occurred while loading this page.'"
+    recommendation: "Pick one template across all four apps: Title 'Something broke' / Body 'Refresh to try again, or come back in a moment.' / Single CTA 'Refresh page'. Drop 'we've been notified' (TW-010). Sentence case throughout."
+    depends_on: TW-010
+
+  - finding_id: TW-074
+    surface_id: pattern-driver-history-empty-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Driver-portal and mobile-delivery have the same 'no deliveries yet' empty state with slightly different wording."
+    evidence_excerpt: "dp-empty-history-title 'No Deliveries Yet' / dp-empty-history-body 'Your completed deliveries will appear here.' | md-emp-003 'No deliveries yet. Your completed deliveries will appear here.'"
+    recommendation: "Single template: 'No deliveries yet. Completed deliveries appear here.' Apply across both. Sentence case (TW-030)."
+    depends_on: TW-030
+
+  - finding_id: TW-075
+    surface_id: pattern-staff-empty-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Admin-portal staff empty state has a clean message that includes the action; delivery-portal staff empty does too; mobile-delivery staff empty does not."
+    evidence_excerpt: "ap-staff-empty-members 'No staff members found' (no action) | dp-empty-staff 'No staff members yet. Send an invitation to get started.' (has action) | md-emp-009 'No staff members yet.' (no action)"
+    recommendation: "Apply dp-empty-staff's structure everywhere: 'No staff yet. Send an invitation to get started.' Drop 'members' (redundant)."
+    depends_on: TW-022
+
+  - finding_id: TW-076
+    surface_id: pattern-fleet-empty-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Two 'no partners' empty states, two wordings; both lack a recovery action."
+    evidence_excerpt: "dp-empty-partners 'No partners found matching your criteria.' | md-emp-005 'No partners found.'"
+    recommendation: "If filtered: 'No partners match your filters.' + 'Clear filters'. If empty: 'No partners yet.' + 'Add partner' CTA. Decide which surface is which and apply."
+    depends_on: TW-042
+
+  - finding_id: TW-077
+    surface_id: pattern-empty-list-period
+    lens: technical-writer
+    severity: P2
+    issue: "Inconsistency: admin-portal empty states mostly omit periods on single-line labels ('No chefs found'); delivery-portal and mobile-delivery mix them ('No partners found.', 'Delivery not found.')."
+    evidence_excerpt: "ap-chefs-empty 'No chefs found' (no period) vs md-emp-005 'No partners found.' (period) vs dp-empty-partner-notfound 'Partner not found.' (period)"
+    recommendation: "Apply TW-027: single-line labels → no period. Apply consistently across all four apps."
+    depends_on: TW-027
+
+  - finding_id: TW-078
+    surface_id: pattern-validation-error-suspend
+    lens: technical-writer
+    severity: P2
+    issue: "Admin user-action failure toasts are bare 'Failed to suspend user' / 'Failed to activate user' — no recovery."
+    evidence_excerpt: "ap-users-toast-fail-suspend 'Failed to suspend user' | ap-users-toast-fail-activate 'Failed to activate user'"
+    recommendation: "'Couldn't suspend user. Try again.' / 'Couldn't activate user. Try again.' Add the recovery half."
+    depends_on: TW-019
+
+  - finding_id: TW-079
+    surface_id: pattern-validation-pin-vs-pincode
+    lens: technical-writer
+    severity: P2
+    issue: "Inconsistent terminology: 'pincode', 'PIN code', 'PIN'. Customer-facing should align with Indian official term 'PIN code'."
+    evidence_excerpt: "vp-onb-personal-validation '... PIN code is required' | mc-onb-step2-errors 'Enter a valid 6-digit pincode' | mc-checkout-address-errors 'Pincode must be 6 digits'"
+    recommendation: "Adopt 'PIN code' everywhere. Update zod schemas + label strings in mobile-customer."
+    depends_on: TW-068
+
+  - finding_id: TW-080
+    surface_id: pattern-app-name-fe3dr
+    lens: technical-writer
+    severity: P2
+    issue: "Vendor-portal access-denied error mentions 'Fe3dr customer app' — likely a placeholder app name. TW flags the inconsistency; brand voice owns the canonical name."
+    evidence_excerpt: "vp-auth-login-access-denied 'This portal is only for vendor accounts. Please use the Fe3dr customer app.'"
+    recommendation: "Confirm canonical app name with brand owner; update everywhere. TW-side fix: 'This portal is only for chef accounts. Use the customer app to order.' (drops the brand placeholder, drops 'vendor' per TW-045)."
+    depends_on: TW-045
+
+  - finding_id: TW-081
+    surface_id: pattern-validation-percentage-vs-percent
+    lens: technical-writer
+    severity: P2
+    issue: "'Percentage discount must be between 0 and 100' uses 'Percentage' as noun in an awkward UI position. Could read more naturally."
+    evidence_excerpt: "api-error-validation-numeric 'Percentage discount must be between 0 and 100' / 'rate must be between 0 and 100'"
+    recommendation: "'Discount must be 0-100%.' / 'Rate must be 0-100%.' Use the percent symbol for compactness. Drop 'Percentage' / 'rate' as bare lower-case nouns."
+    depends_on: null
+
+  - finding_id: TW-082
+    surface_id: pattern-validation-interval
+    lens: technical-writer
+    severity: P2
+    issue: "'Invalid interval. Must be monthly, quarterly, or yearly' on subscription form — but the form should be a dropdown that prevents invalid entry, making the error rare."
+    evidence_excerpt: "api-error-validation-interval 'Invalid interval. Must be monthly, quarterly, or yearly'"
+    recommendation: "If reachable: 'Pick an interval: monthly, quarterly, or yearly.' If unreachable in UI: log only, return generic. Decide based on form design."
+    depends_on: null
+
+  - finding_id: TW-083
+    surface_id: pattern-validation-min-2-chars
+    lens: technical-writer
+    severity: P2
+    issue: "'Name must be at least 2 characters' min-length applied to chef-onboarding name field — bounded incorrectly given Indian names like 'Om' (2 chars valid). But more importantly, the same field shows min=3 on mobile-vendor."
+    evidence_excerpt: "vp-ux-menu-form-validation 'Name must be at least 2 characters' | mv-menunew-name-err 'Name must be at least 3 characters'"
+    recommendation: "Align validation bounds across vendor-portal + mobile-vendor (both refer to menu items, not human names — confirm). Use the looser bound (2 chars) unless there's a data reason. Keep messages identical: 'Name needs at least N characters.'"
+    depends_on: TW-032
+
+  - finding_id: TW-084
+    surface_id: pattern-mobile-vendor-photo-upload-fail
+    lens: technical-writer
+    severity: P2
+    issue: "Three near-identical photo-upload-fail toasts in mv-profile/menuedit, each with slightly different wording."
+    evidence_excerpt: "mv-profile-photo-upload-fail 'Failed to upload profile photo.' | mv-profile-kitchenphoto-upload-fail 'Failed to upload kitchen photo.' | mv-menuedit-photo-upload-fail 'Failed to upload photo. Please try again.'"
+    recommendation: "Single template: 'Couldn't upload {photo type}. Try again.' E.g., 'Couldn't upload your kitchen photo. Try again.' Drop 'Please' (TW-025), drop 'Failed to' (TW-026)."
+    depends_on: TW-026
+
+  - finding_id: TW-085
+    surface_id: pattern-mobile-customer-favorites-error
+    lens: technical-writer
+    severity: P2
+    issue: "'Could not remove from favorites. Please try again.' is OK but missing a soft 'we': 'Could not' is impersonal."
+    evidence_excerpt: "mc-favorites-error 'Could not remove from favorites. Please try again.'"
+    recommendation: "Use 'Couldn't' (informal) or 'We couldn't' (personal). 'Couldn't remove from favorites. Try again.' Drop 'Please' (TW-025)."
+    depends_on: TW-025
+
+  - finding_id: TW-086
+    surface_id: pattern-checkout-payment-cancelled
+    lens: technical-writer
+    severity: P2
+    issue: "'Payment cancelled' (2 words) appears as a toast — but doesn't follow toast formula (past tense, period, ≤6 words). Past tense ✓, ≤6 words ✓; missing period."
+    evidence_excerpt: "web-err-checkout-cancel 'Payment cancelled'"
+    recommendation: "Add period: 'Payment cancelled.' Toast formula compliance. Consider expanding for clarity: 'Payment cancelled. Your cart is saved.' (5 words; still formula-compliant + reassures the customer they didn't lose work)."
+    depends_on: null
+
+  - finding_id: TW-087
+    surface_id: pattern-chef-not-accepting
+    lens: technical-writer
+    severity: P2
+    issue: "'Chef is not accepting orders' has no alternative action for the customer mid-funnel."
+    evidence_excerpt: "api-error-chef-not-accepting 'Chef is not accepting orders'"
+    recommendation: "Pair with action: 'This chef isn't accepting orders right now. Browse other chefs near you.' Two sentences, formula-compliant, redirects rather than dead-ends."
+    depends_on: null
+
+  - finding_id: TW-088
+    surface_id: pattern-quote-already-submitted
+    lens: technical-writer
+    severity: P2
+    issue: "'This request is no longer accepting quotes' / 'You have already submitted a quote for this request' / 'Quote deadline has passed' — three near-related error states, all without recovery action."
+    evidence_excerpt: "api-error-quotes-catering 'This request is no longer accepting quotes' / 'You have already submitted a quote for this request' / 'Quote deadline has passed'"
+    recommendation: "Add recovery: 'This request is no longer accepting quotes. Browse other open requests.' / 'You've already quoted this request. View your quote.' / 'The quote deadline has passed.' For chef-side: each links back to a list of open requests."
+    depends_on: null
+
+  - finding_id: TW-089
+    surface_id: pattern-promo-not-found
+    lens: technical-writer
+    severity: P2
+    issue: "Promo errors include 'Promo code already exists' / 'Promo code not found' / 'Promotion not found or already activated' — three subtly different concepts."
+    evidence_excerpt: "api-error-promo 'Promo code already exists' / 'Promo code not found' / 'Promotion not found or already activated'"
+    recommendation: "Distinguish copy clearly. (1) At creation: 'This promo code already exists. Pick a different code.' (2) At redemption: 'Promo code not found.' (3) At activation: 'Promotion not found or already activated.' Three formulas, clear distinction; pair with action where possible."
+    depends_on: null
+
+  - finding_id: TW-090
+    surface_id: pattern-review-only-delivered
+    lens: technical-writer
+    severity: P2
+    issue: "'Can only review delivered orders' / 'This order has already been reviewed' — fine information but missing recovery."
+    evidence_excerpt: "api-error-order-review-rules 'Can only review delivered orders' / 'This order has already been reviewed'"
+    recommendation: "Pair with action: 'Reviews are available after delivery.' (active voice) / 'You've already reviewed this order. View your review.'"
+    depends_on: null
+
+  - finding_id: TW-091
+    surface_id: pattern-invitation-token-drift
+    lens: technical-writer
+    severity: P2
+    issue: "Four invitation-token error variants very close in meaning."
+    evidence_excerpt: "api-error-invitation 'Invitation has expired' / 'Invalid or expired invitation' / 'Invalid invitation token' / 'A pending invitation already exists for this email'"
+    recommendation: "Standardize: 'This invitation has expired. Ask the admin to resend.' / 'Invitation not valid. Check the link and try again.' / 'A pending invitation already exists for this email.' Keep 'token' out of user copy."
+    depends_on: TW-037
+
+  - finding_id: TW-092
+    surface_id: pattern-staff-permissions-tone
+    lens: technical-writer
+    severity: P2
+    issue: "Staff permission errors are accurate but blunt: 'You don't have permission to invite staff' / 'Cannot deactivate yourself' / 'Not a staff member'."
+    evidence_excerpt: "api-error-staff-permissions 'You don't have permission to invite staff' / 'Only super admins can change staff roles' / 'Only super admins can invite other super admins' / 'Cannot change role of a default super admin' / 'Cannot deactivate a default super admin' / 'Cannot deactivate yourself' / 'Not a staff member' / 'This person is already a staff member'"
+    recommendation: "Soften without losing precision (admin tone, but still respectful): 'Only super admins can invite staff. Ask one to send the invite.' / 'You can't deactivate your own account.' / 'This person isn't a staff member.' Drop the bare 'Not a staff member' (sounds like an error code)."
+    depends_on: null
+
+  # =====================================================================
+  # P3 — Polish / small consistency wins
+  # =====================================================================
+
+  - finding_id: TW-093
+    surface_id: pattern-currency-formatting
+    lens: technical-writer
+    severity: P3
+    issue: "Error strings mix currency formats: '₹120' (no space, correct), but the price-range error uses '₹1 and ₹10,000' — fine — and other errors mention bare numbers ('between 0 and 100'). No violations of style guide §6 found in error copy specifically, but worth a polish pass."
+    evidence_excerpt: "mv-menunew-price-range 'Price must be between ₹1 and ₹10,000' (correct format) | vp-ux-menu-form-validation 'Minimum price is ₹20'"
+    recommendation: "Keep as-is; flag this as PASSED for the audit fix. Polish only: align min-price across vendor-portal (₹20) and mobile-vendor (₹1) — those are different rules, confirm intent."
+    depends_on: null
+
+  - finding_id: TW-094
+    surface_id: pattern-retry-cta-text
+    lens: technical-writer
+    severity: P3
+    issue: "Retry CTAs across surfaces use a mix of 'Retry', 'Try again', 'Try Again', 'Refresh page'."
+    evidence_excerpt: "mv-dash-retry-cta 'Retry' | web-err-otto-retry 'Try again' | vp-ux-menu-error-state 'Try Again' | vp-err-boundary-fallback 'Try Again' | web-err-error-boundary 'Try again' + 'Refresh page'"
+    recommendation: "Pick one canonical retry: 'Try again' (sentence case). Use 'Retry' only when space is constrained (driver glance contexts). Use 'Refresh page' only for full-page error boundaries."
+    depends_on: TW-024
+
+  - finding_id: TW-095
+    surface_id: pattern-payouts-history-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal payouts empty state body is wordy: 'Your payout history will appear here once you receive your first payout.' (12 words)."
+    evidence_excerpt: "vp-ux-payouts-empty 'No payouts yet / Your payout history will appear here once you receive your first payout.'"
+    recommendation: "Tighten: 'No payouts yet. Your first payout will appear here.' (9 words)."
+    depends_on: null
+
+  - finding_id: TW-096
+    surface_id: pattern-notifications-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal notifications empty is informative but wordy: 'No admin requests yet / Admin requests for document uploads, profile updates, and review feedback will appear here.' (17 words)."
+    evidence_excerpt: "vp-ux-notifs-empty 'No admin requests yet / Admin requests for document uploads, profile updates, and review feedback will appear here.'"
+    recommendation: "Tighten and lead with the user's stake: 'No admin requests yet. Document and profile requests will appear here.' (10 words)."
+    depends_on: null
+
+  - finding_id: TW-097
+    surface_id: pattern-orders-empty-customer
+    lens: technical-writer
+    severity: P3
+    issue: "Customer orders-empty body is OK but has redundant phrasing in the filtered case."
+    evidence_excerpt: "web-err-orders-empty 'No orders found / You haven't placed any orders yet. / No {filter} orders found.'"
+    recommendation: "Two states: (a) Truly empty: 'No orders yet. Browse chefs near you.' (b) Filtered: 'No {filter} orders.' + 'Clear filters' action. Drop the 'No orders found / You haven't placed any orders yet.' redundancy."
+    depends_on: TW-042
+
+  - finding_id: TW-098
+    surface_id: pattern-favorites-empty-customer
+    lens: technical-writer
+    severity: P3
+    issue: "Web 'No favorites yet' is barebones (3 words); mobile is chatty ('No saved chefs yet / Tap the heart on any chef to save them!'). Cross-surface inconsistency."
+    evidence_excerpt: "web-err-favorites-empty 'No favorites yet' | mc-favorites-empty 'No saved chefs yet / Tap the heart on any chef to save them!'"
+    recommendation: "Single template: 'No favorites yet. Tap the heart on a chef to save.' Apply across web + mobile. Drop exclamation (TW-029)."
+    depends_on: TW-028
+
+  - finding_id: TW-099
+    surface_id: pattern-empty-category
+    lens: technical-writer
+    severity: P3
+    issue: "Two surfaces show 'No items in this category' as an empty state — fine, but neither offers an action."
+    evidence_excerpt: "web-err-chefdetail-empty-category 'No items in this category' | mc-chef-empty-category 'No items in this category'"
+    recommendation: "OK to leave actionless if the user can browse other categories visually (tabs/filters). If category list is hidden, add: 'No items in this category. Try another.'"
+    depends_on: null
+
+  - finding_id: TW-100
+    surface_id: pattern-cart-minimum
+    lens: technical-writer
+    severity: P3
+    issue: "'Minimum order not met / Add {amount} more to proceed' is fine but 'Add {amount} more to proceed' could be friendlier."
+    evidence_excerpt: "web-err-cart-minimum 'Minimum order not met / Add {amount} more to proceed'"
+    recommendation: "Tighter: 'Add ₹{amount} more to place your order.' (replaces 'proceed' jargon, names the action 'place order')."
+    depends_on: null
+
+  - finding_id: TW-101
+    surface_id: pattern-no-posts-yet
+    lens: technical-writer
+    severity: P3
+    issue: "Social feed empty: web shows 'No posts yet' (3 words); mobile shows 'No posts yet / Chefs will share their latest creations here.' (8 words). Inconsistent."
+    evidence_excerpt: "web-err-social-feed-empty 'No posts yet' | mc-social-empty 'No posts yet / Chefs will share their latest creations here.'"
+    recommendation: "Use the mobile version on both (it gives context). Sentence-case + period: 'No posts yet. Chefs will share their latest creations here.'"
+    depends_on: null
+
+  - finding_id: TW-102
+    surface_id: pattern-dashboard-recent-activity
+    lens: technical-writer
+    severity: P3
+    issue: "Admin 'Recent activity' empty is two-line: 'No recent activity / Platform events will appear here.' Period inconsistency."
+    evidence_excerpt: "ap-dashboard-recent-empty-title 'No recent activity' / ap-dashboard-recent-empty-body 'Platform events will appear here.'"
+    recommendation: "Body fine; standardize period rule per TW-027."
+    depends_on: TW-027
+
+  - finding_id: TW-103
+    surface_id: pattern-audit-logs-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Audit-logs empty is a filtered-empty case but reads like a truly-empty case."
+    evidence_excerpt: "ap-auditlogs-empty 'No audit events match these filters.'"
+    recommendation: "OK; consider 'No audit events match these filters. Clear filters to see all.' to give the user an action."
+    depends_on: TW-042
+
+  - finding_id: TW-104
+    surface_id: pattern-data-exports-download-failed
+    lens: technical-writer
+    severity: P3
+    issue: "'Download failed' (2 words) on admin exports — formula-compliant but bare."
+    evidence_excerpt: "ap-exports-error 'Download failed'"
+    recommendation: "Add recovery: 'Download failed. Try again.' (4 words; satisfies error formula + ≤6 word toast rule)."
+    depends_on: null
+
+  - finding_id: TW-105
+    surface_id: pattern-platform-settings-zones
+    lens: technical-writer
+    severity: P3
+    issue: "Platform-settings zones empty has a great context-aware message but uses an em-dash style that's inconsistent across the rest of the app."
+    evidence_excerpt: "ap-platsettings-zones-empty 'No zones yet — delivery is available everywhere until a zone is created.'"
+    recommendation: "Keep the em-dash style as a recommended pattern for explanatory empty states. Apply elsewhere where useful: 'No keys yet — generate one to authenticate API requests.'"
+    depends_on: null
+
+  - finding_id: TW-106
+    surface_id: pattern-security-no-keys
+    lens: technical-writer
+    severity: P3
+    issue: "Admin API keys empty is bare: 'No keys yet.'"
+    evidence_excerpt: "ap-secsettings-apikey-empty 'No keys yet.'"
+    recommendation: "Apply TW-105 pattern: 'No API keys yet — generate one to authenticate requests.'"
+    depends_on: TW-105
+
+  - finding_id: TW-107
+    surface_id: pattern-dashboard-allclear
+    lens: technical-writer
+    severity: P3
+    issue: "Admin dashboard 'No pending chef applications.' is bare; can give value-add context."
+    evidence_excerpt: "ap-dashboard-allclear-body 'No pending chef applications.'"
+    recommendation: "Add reassurance + a quick action: 'No pending applications. Review past decisions in the chefs list.' (or similar)."
+    depends_on: null
+
+  - finding_id: TW-108
+    surface_id: pattern-staff-permissions-data
+    lens: technical-writer
+    severity: P3
+    issue: "Admin staff permissions empty has awkward formulation: 'No specific permissions data available for this role.'"
+    evidence_excerpt: "ap-staffdetail-perms-empty 'No specific permissions data available for this role.'"
+    recommendation: "Reword: 'No specific permissions for this role.' or 'This role uses default permissions.'"
+    depends_on: null
+
+  - finding_id: TW-109
+    surface_id: pattern-approval-history-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Approval history empty 'No history recorded yet.' is fine but the 'recorded' word is slightly bureaucratic."
+    evidence_excerpt: "ap-approvaldetail-history-empty 'No history recorded yet.'"
+    recommendation: "Tighter: 'No history yet.' (matches the other 'No X yet' family)."
+    depends_on: TW-061
+
+  - finding_id: TW-110
+    surface_id: pattern-mobile-onb-step3-error
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer onboarding setup failure alert: 'Setup failed / Something went wrong. Please try again.' — duplicates a generic message in a critical onboarding step."
+    evidence_excerpt: "mc-onb-step3-error 'Setup failed / Something went wrong. Please try again.'"
+    recommendation: "Drop the duplicate 'Setup failed' title; the body covers it. 'Couldn't finish setup. Try again.' (5 words)."
+    depends_on: TW-021
+
+  - finding_id: TW-111
+    surface_id: pattern-document-required-alerts-drift
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor onboarding has multiple 'Required' alerts that mix title and body styles."
+    evidence_excerpt: "mv-onb-docs-required-title 'Documents Required' / mv-onb-docs-required-alert 'Please upload both ID proof and FSSAI license to continue.' | mv-onb-policies-terms-required-title 'Terms Required' / mv-onb-policies-terms-required-alert 'Please accept the terms and conditions to continue.' | mv-onb-policies-policy-required-title 'Policy Required' / mv-onb-policies-policy-required-alert 'Please select a cancellation policy.'"
+    recommendation: "Sentence case titles, drop 'Required' (covered by body): 'Upload documents' / 'Upload both ID proof and FSSAI license to continue.' / 'Accept terms' / 'Accept the Terms of Service to continue.' Drop 'Please' (TW-025)."
+    depends_on: TW-025
+
+  - finding_id: TW-112
+    surface_id: pattern-step1-personal-validation
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal onboarding step 1 validation listing is bare ('Full name is required / Phone number is required / Email is required ...'). Fine for inline, but as a toast bundle it's seven sentences."
+    evidence_excerpt: "vp-onb-personal-validation 'Full name is required / Phone number is required / Email is required / Address is required / City is required / State is required / PIN code is required'"
+    recommendation: "Show inline per-field; if combined toast needed: 'Some required fields are missing.' Then scroll to the first error. Don't list all seven."
+    depends_on: null
+
+  - finding_id: TW-113
+    surface_id: pattern-checkout-zod
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer checkout address Zod errors duplicate the same patterns from onboarding ('City is required / State is required'). Drift risk — different schemas, same field."
+    evidence_excerpt: "mc-checkout-address-errors 'Address line 1 is required / City is required / State is required / Pincode must be 6 digits' | mc-onb-step2-errors 'Address must be at least 5 characters / City is required / State is required / Enter a valid 6-digit pincode'"
+    recommendation: "Centralize address-field validation messages in shared schema; reuse across onboarding + checkout. Use 'PIN code' (TW-079). Pick one address-line message ('Address must be at least 5 characters' vs 'Address line 1 is required')."
+    depends_on: TW-068
+
+  - finding_id: TW-114
+    surface_id: pattern-prep-time-validation
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal menu form prep-time validation uses 'Prep time required / Prep time must be at least 1 minute / Prep time must be under 8 hours'. Inconsistent: 'required' uses elided 'is'; others spell out the bound. Also 'serves count' is awkward."
+    evidence_excerpt: "vp-ux-menu-form-validation 'Prep time required / Prep time must be at least 1 minute / Prep time must be under 8 hours / Must serve at least 1 / Must serve under 100 / Serves count is required'"
+    recommendation: "Standardize: 'Prep time is required.' / 'Prep time must be at least 1 minute.' / 'Prep time must be under 8 hours.' / 'Serves at least 1 person.' / 'Serves at most 100 people.' / 'Number of servings is required.' Treat 'serves' as the verb, not a noun."
+    depends_on: TW-032
+
+  - finding_id: TW-115
+    surface_id: pattern-card-empty-mobile-customer
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer cart-sheet says 'Your cart is empty' (4 words, no period); checkout says 'Your cart is empty.' (4 words, period). Same surface family, micro-drift."
+    evidence_excerpt: "mc-cartsheet-empty 'Your cart is empty' vs mc-checkout-empty-cart 'Your cart is empty.'"
+    recommendation: "Single string + period consistency rule. Suggest 'Your cart is empty.' (period since it's a full sentence). See TW-041."
+    depends_on: TW-041
+
+  - finding_id: TW-116
+    surface_id: pattern-customer-orders-empty-emoji
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer orders empty uses emoji-in-copy: '🍽️ No orders yet / Browse chefs to place your first order!'"
+    evidence_excerpt: "mc-orders-empty 'No orders yet / Browse chefs to place your first order!' (with 🍽️ emoji)"
+    recommendation: "Drop emoji from copy (place in visual icon slot). Drop exclamation. 'No orders yet. Browse chefs to place your first order.' (10 words)."
+    depends_on: TW-028
+
+  - finding_id: TW-117
+    surface_id: pattern-customer-catering-empty-emoji
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer catering empty uses emoji-in-copy: '🍽️ No requests yet / Submit a catering request to get quotes from chefs.'"
+    evidence_excerpt: "mc-catering-empty 'No requests yet / Submit a catering request to get quotes from chefs.' (with 🍽️ emoji)"
+    recommendation: "Drop emoji. 'No requests yet. Submit a catering request to get quotes from chefs.' (12 words)."
+    depends_on: TW-028
+
+  - finding_id: TW-118
+    surface_id: pattern-mobile-vendor-photo-delete
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor photo-delete confirm uses 'Remove this photo?' with title 'Delete Photo'. Verb mismatch (Remove vs Delete) within the same dialog."
+    evidence_excerpt: "mv-menuedit-delete-photo-alert 'Remove this photo?' (Title: 'Delete Photo')"
+    recommendation: "Align verbs: title 'Remove photo' (sentence case) + body 'This photo will be removed from your listing.' Use 'remove' throughout."
+    depends_on: TW-030
+
+  - finding_id: TW-119
+    surface_id: pattern-mobile-vendor-reply-fallback
+    lens: technical-writer
+    severity: P3
+    issue: "Two near-identical reply-too-short errors in the same screen: 'Reply must be at least 10 characters' (Zod) and 'Reply is too short' (fallback)."
+    evidence_excerpt: "mv-reviewdetail-min-err 'Reply must be at least 10 characters' / mv-reviewdetail-min-fallback 'Reply is too short'"
+    recommendation: "Pick one. Style guide prefers specific bound: 'Reply must be at least 10 characters.'"
+    depends_on: TW-032
+
+  - finding_id: TW-120
+    surface_id: pattern-mobile-vendor-toggle-online-status
+    lens: technical-writer
+    severity: P3
+    issue: "Toast 'Failed to update status' reused in dashboard + active delivery — bare and missing the entity (online status? delivery status? menu status?)."
+    evidence_excerpt: "dp-err-toggle-status-failed 'Failed to update status'"
+    recommendation: "Be specific per surface: 'Couldn't update online status. Try again.' / 'Couldn't update delivery status. Try again.'"
+    depends_on: TW-019
+
+  - finding_id: TW-121
+    surface_id: pattern-customer-chef-load-error
+    lens: technical-writer
+    severity: P3
+    issue: "Customer mobile chef-detail load error reads 'Failed to load chef details. Please try again.' — 7 words, 'Please' filler."
+    evidence_excerpt: "mc-chef-error-load 'Failed to load chef details. Please try again.'"
+    recommendation: "Customer tone: 'Couldn't load chef details. Try again.' (5 words)."
+    depends_on: TW-025
+
+  - finding_id: TW-122
+    surface_id: pattern-otto-no-recovery
+    lens: technical-writer
+    severity: P3
+    issue: "Otto chat retry button has no associated error message text in inventory — only the button. If the surrounding banner uses 'Something went wrong', combine."
+    evidence_excerpt: "web-err-otto-retry 'Try again'"
+    recommendation: "Audit fix verifies: paired error text exists and follows formula. If not, add: 'Couldn't reach Otto. Try again.'"
+    depends_on: null
+
+  - finding_id: TW-123
+    surface_id: pattern-mobile-onboarding-empty-specialties
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal kitchen step shows 'No specialties added yet' — fine, but should pair with the 'Add specialty' action visible nearby. Confirm UI."
+    evidence_excerpt: "vp-onb-kitchen-specialties-empty 'No specialties added yet'"
+    recommendation: "Verify nearby button exists. If not, add inline link 'Add specialty'."
+    depends_on: null
+
+  - finding_id: TW-124
+    surface_id: pattern-mobile-vendor-orders-history-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor 'No order history yet' is bare (4 words); web equivalent has a body."
+    evidence_excerpt: "mv-orders-history-empty 'No order history yet' | vp-ux-orders-history-empty 'No orders found / You have no completed or cancelled orders yet. / No orders found for the selected time period. Try a wider date range.'"
+    recommendation: "Mobile keeps concision but should add one body line: 'No completed orders yet.' Web is too wordy ('You have no completed or cancelled orders yet' → 'No completed or cancelled orders yet.')."
+    depends_on: null
+
+  - finding_id: TW-125
+    surface_id: pattern-mobile-vendor-onb-fullname
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor full-name validation matches the same 'X must be at least N characters' pattern but is missing from the vendor-portal full-name validator (vendor-portal only checks 'Full name is required')."
+    evidence_excerpt: "mv-onb-personal-fullname-err 'Full name must be at least 2 characters' (mobile) | vp-onb-personal-validation 'Full name is required' (vendor-portal — no length check)"
+    recommendation: "Cross-app consistency: both should require a min length (2 chars) AND use the same message. Define in shared zod schema."
+    depends_on: TW-032
+
+  - finding_id: TW-126
+    surface_id: pattern-mobile-vendor-policies-required
+    lens: technical-writer
+    severity: P3
+    issue: "'Please accept the terms and conditions to continue.' — 'Please' filler; 'terms and conditions' lowercase but Stripe-Connect strings use 'Terms of Service' capitalized."
+    evidence_excerpt: "mv-onb-policies-terms-required-alert 'Please accept the terms and conditions to continue.'"
+    recommendation: "'Accept the Terms of Service to continue.' Cap as proper noun. Align across apps (api-error-tos, mv-onb-policies-terms-required-alert, dp-err-step5-terms)."
+    depends_on: TW-071
+
+  - finding_id: TW-127
+    surface_id: pattern-mobile-vendor-menu-empty
+    lens: technical-writer
+    severity: P3
+    issue: "'No menu items yet. Tap + to add your first item.' — fine, uses formula well, but uses 'Tap +' which depends on a visible UI affordance."
+    evidence_excerpt: "mv-menu-empty 'No menu items yet. Tap + to add your first item.'"
+    recommendation: "Keep — this is a model empty-state on a mobile surface. Verify the '+' affordance is always visible. If audience misses it, swap to button text: 'Tap Add to start building your menu.'"
+    depends_on: null
+
+  - finding_id: TW-128
+    surface_id: pattern-mobile-vendor-reviews-empty
+    lens: technical-writer
+    severity: P3
+    issue: "'No reviews yet. Your first review will appear here.' — friendly but slightly passive."
+    evidence_excerpt: "mv-reviews-empty 'No reviews yet. Your first review will appear here.'"
+    recommendation: "Action-oriented variant: 'No reviews yet. Invite customers to review their orders.' Or keep current as passive baseline if action surface is elsewhere."
+    depends_on: TW-022
+
+  - finding_id: TW-129
+    surface_id: pattern-vendor-portal-menu-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal menu empty has two branches — empty list and filtered-empty — both wordy."
+    evidence_excerpt: "vp-ux-menu-empty 'No menu items yet / Start building your menu by adding your first dish. / Add Your First Item / No items match your search / Try adjusting your search or filter criteria.'"
+    recommendation: "Tighten: 'No menu items yet. Add your first dish.' + 'Add dish' button (verb-first, sentence case). Filtered: 'No items match your search.' + 'Clear filters' button. Drop 'Try adjusting...' (vague)."
+    depends_on: TW-024
+
+  - finding_id: TW-130
+    surface_id: pattern-vendor-portal-menu-error
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to load menu / Something went wrong while fetching your menu items. / Try Again' — three pieces, redundant."
+    evidence_excerpt: "vp-ux-menu-error-state 'Failed to load menu / Something went wrong while fetching your menu items. / Try Again'"
+    recommendation: "Single message + action: 'Couldn't load your menu. Try again.' + button 'Try again'. Drop the redundant explanatory line."
+    depends_on: TW-021
+
+  - finding_id: TW-131
+    surface_id: pattern-vendor-portal-payouts-empty-error
+    lens: technical-writer
+    severity: P3
+    issue: "Payouts page bundles empty + error states in one inventory row with 18 words."
+    evidence_excerpt: "vp-ux-payouts-empty 'No payouts yet / Your payout history will appear here once you receive your first payout. / Unable to load payouts / Please try again later.'"
+    recommendation: "Split clearly. Empty: 'No payouts yet. Your first payout will appear here.' Error: 'Couldn't load payouts. Try again.' Drop 'Please try again later' (vague — 'later' is non-actionable)."
+    depends_on: TW-019
+
+  - finding_id: TW-132
+    surface_id: pattern-vendor-portal-earnings-error
+    lens: technical-writer
+    severity: P3
+    issue: "'Unable to load earnings / Please try again later.' — 'Unable to' is more bureaucratic than 'Couldn't'; 'try again later' is non-actionable."
+    evidence_excerpt: "vp-ux-earnings-error 'Unable to load earnings / Please try again later.'"
+    recommendation: "'Couldn't load earnings. Try again.' (4 words)."
+    depends_on: TW-019
+
+  - finding_id: TW-133
+    surface_id: pattern-image-validation-toast
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal menu file-upload validation prefixes filename then says 'Invalid type. Allowed: JPEG, PNG, WebP.' — the {name}: prefix is a UI convention that risks overflow on long filenames."
+    evidence_excerpt: "vp-ux-menu-form-image-errors '{name}: Invalid type. Allowed: JPEG, PNG, WebP. / {name}: Too large. Max 5 MB.'"
+    recommendation: "Truncate filenames in UI (≤30 chars + ellipsis). Keep message tight: 'JPEG, PNG, or WebP only.' / 'Max 5 MB per file.' — and let the filename live separately above."
+    depends_on: TW-039
+
+  - finding_id: TW-134
+    surface_id: pattern-staff-default-superadmin
+    lens: technical-writer
+    severity: P3
+    issue: "Repeated phrase 'default super admin' is technical jargon for the user."
+    evidence_excerpt: "api-error-staff-permissions 'Cannot change role of a default super admin' / 'Cannot deactivate a default super admin'"
+    recommendation: "Rephrase user-facing: 'Cannot change role of the primary super admin.' / 'Cannot deactivate the primary super admin.' 'Primary' is clearer than 'default' to non-developers."
+    depends_on: TW-092
+
+  - finding_id: TW-135
+    surface_id: pattern-no-pending-invites
+    lens: technical-writer
+    severity: P3
+    issue: "Admin staff invitations empty: 'No pending invitations.' Period inconsistency vs other admin empties; otherwise fine."
+    evidence_excerpt: "ap-staff-empty-invites 'No invitations found' | dp-empty-pending-invites 'No pending invitations.'"
+    recommendation: "Align: 'No pending invitations.' across both. See TW-027."
+    depends_on: TW-027
+
+  - finding_id: TW-136
+    surface_id: pattern-mobile-onboarding-step3
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer preferences setup-failure: 'Setup failed / Something went wrong. Please try again.'"
+    evidence_excerpt: "mc-onb-step3-error 'Setup failed / Something went wrong. Please try again.'"
+    recommendation: "Already covered by TW-110; merge."
+    depends_on: TW-110
+
+  - finding_id: TW-137
+    surface_id: pattern-mobile-customer-checkout-cart-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer checkout empty cart 'Your cart is empty.' — fine but missing recovery action visible in copy."
+    evidence_excerpt: "mc-checkout-empty-cart 'Your cart is empty.'"
+    recommendation: "Add action: 'Your cart is empty. Browse chefs near you.'"
+    depends_on: TW-041
+
+  - finding_id: TW-138
+    surface_id: pattern-validation-event-date-future
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer catering: 'Event date must be in the future' — fine but uses formal 'in the future'."
+    evidence_excerpt: "mc-catering-errors 'Event date must be in the future'"
+    recommendation: "Friendlier: 'Pick a date in the future.' or 'Event must be in the future.'"
+    depends_on: TW-067
+
+  - finding_id: TW-139
+    surface_id: pattern-validation-event-type
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer catering 'Event type is required' — bare; helper text would solve this."
+    evidence_excerpt: "mc-catering-errors 'Event type is required'"
+    recommendation: "Pair the field with helper text ('e.g., Birthday, Anniversary, Office party') above the error message. Per style guide §4 form labels."
+    depends_on: null
+
+  - finding_id: TW-140
+    surface_id: pattern-mobile-customer-profile-validation
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer profile bundles 'First name is required / Last name is required / Invalid phone number' — fine but 'Invalid phone number' is bare vs other apps that say 'Enter a valid 10-digit mobile number'."
+    evidence_excerpt: "mc-profile-errors 'First name is required / Last name is required / Invalid phone number'"
+    recommendation: "Align with mc-onb-step1-errors: 'Enter a valid 10-digit mobile number.' Replace 'Invalid phone number'."
+    depends_on: TW-068
+
+  - finding_id: TW-141
+    surface_id: pattern-mobile-vendor-display-name
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor 'Display name is required.' uses period; vendor-portal 'Full name is required' uses no period. Cross-app drift."
+    evidence_excerpt: "mv-profile-displayname-required 'Display name is required.' (period) vs vp-onb-personal-validation 'Full name is required' (no period)"
+    recommendation: "Pick period rule (TW-027) and apply."
+    depends_on: TW-027
+
+  - finding_id: TW-142
+    surface_id: pattern-mobile-vendor-update-failures
+    lens: technical-writer
+    severity: P3
+    issue: "Three near-identical 'Failed to update X. Please try again.' on mobile-vendor."
+    evidence_excerpt: "mv-menuedit-update-fail 'Failed to update menu item. Please try again.' | mv-profile-update-fail 'Failed to update profile. Please try again.' | mv-menunew-create-fail 'Failed to create menu item. Please try again.'"
+    recommendation: "Helper template: 'Couldn't {update|create} {thing}. Try again.' Drop 'Please' (TW-025), 'Failed to' (TW-026). Implement as a `failureToast(verb, thing)` helper."
+    depends_on: TW-026
+
+  - finding_id: TW-143
+    surface_id: pattern-mobile-vendor-photo-delete-fail
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to delete photo.' (3 words, no recovery)."
+    evidence_excerpt: "mv-menuedit-delete-photo-fail 'Failed to delete photo.'"
+    recommendation: "'Couldn't delete photo. Try again.' (5 words)."
+    depends_on: TW-019
+
+  - finding_id: TW-144
+    surface_id: pattern-mobile-delivery-tone
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-delivery 'Accept a delivery from the Available tab to get started.' is 10 words — driver-tone matrix targets ≤4 words. Long for a glance surface."
+    evidence_excerpt: "md-emp-002 'Accept a delivery from the Available tab to get started.'"
+    recommendation: "Tighten: 'Open Available to start.' (4 words). Pair with the Available tab icon (visual context covers the rest)."
+    depends_on: null
+
+  - finding_id: TW-145
+    surface_id: pattern-mobile-delivery-available-empty
+    lens: technical-writer
+    severity: P3
+    issue: "'No deliveries available nearby. Pull to refresh.' is 7 words — fine for driver. Period after 'nearby' could feel abrupt; comma might flow better; but rule is fine."
+    evidence_excerpt: "md-err-002 'No deliveries available nearby. Pull to refresh.'"
+    recommendation: "Keep. Optional polish: 'No deliveries nearby — pull to refresh.' (5 words)."
+    depends_on: null
+
+  - finding_id: TW-146
+    surface_id: pattern-mobile-delivery-staff-lock
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-delivery staff/fleet locked screens use 'Contact your administrator to request access.' — formal; long for driver tone."
+    evidence_excerpt: "md-emp-007 'Fleet management is available for fleet managers only. Contact your administrator to request access.' | md-emp-011 'Staff management requires manager permissions. Contact your administrator to request access.'"
+    recommendation: "Driver-tone: 'Fleet managers only. Ask your admin for access.' / 'Manager permissions needed. Ask your admin for access.' Tighter, same meaning."
+    depends_on: TW-051
+
+  - finding_id: TW-147
+    surface_id: pattern-csv-vs-comma-list
+    lens: technical-writer
+    severity: P3
+    issue: "File-upload type-error lists use comma-separated formats: 'JPEG, PNG, WebP, PDF'. Customer-facing should use Oxford comma or 'or' — currently ambiguous as 'and' vs 'or'."
+    evidence_excerpt: "api-error-upload-type 'Invalid file type. Allowed: JPEG, PNG, WebP, PDF' | vp-ux-menu-form-image-errors 'Allowed: JPEG, PNG, WebP.'"
+    recommendation: "Use 'or' for either/or lists: 'Use JPEG, PNG, WebP, or PDF.' Apply across all upload errors. Note: keeping the list short (3-4) is fine; longer lists should use a help-link instead."
+    depends_on: TW-039
+
+  - finding_id: TW-148
+    surface_id: pattern-mobile-vendor-cuisines-error
+    lens: technical-writer
+    severity: P3
+    issue: "'Select at least one cuisine type' / 'Select at least one cuisine' / 'Select at least one dietary tag' — minor drift on whether to use 'type'."
+    evidence_excerpt: "mv-onb-kitchen-cuisines-err 'Select at least one cuisine type' | vp-onb-kitchen-validation 'Select at least one cuisine' | vp-ux-menu-form-validation 'Select at least one dietary tag'"
+    recommendation: "Drop 'type': 'Select at least one cuisine.' Apply across apps."
+    depends_on: null
+
+  - finding_id: TW-149
+    surface_id: pattern-driver-onboarding-prereq
+    lens: technical-writer
+    severity: P3
+    issue: "Five 'Please complete X' variants on driver onboarding say the same thing slightly differently."
+    evidence_excerpt: "api-error-chef-onboarding 'Please complete all previous onboarding steps before submitting' / 'Please complete earlier onboarding steps first' / 'Please complete step 1 (personal details) first' / 'Please upload at least one document before submitting' / 'Please indicate if your bicycle can carry a delivery box'"
+    recommendation: "Standardize: 'Complete step {N} ({label}) before submitting.' Generate via parameter. Drop 'Please' (TW-025)."
+    depends_on: TW-025
+
+  - finding_id: TW-150
+    surface_id: pattern-driver-onboarding-state
+    lens: technical-writer
+    severity: P3
+    issue: "Driver application status: 'Your application has already been approved' / 'Your application is already under review' — fine voice but lacks an action."
+    evidence_excerpt: "api-error-chef-onboarding 'Your application has already been approved' / 'Your application is already under review'"
+    recommendation: "Pair with action: 'Your application is already approved. Open the dashboard to start.' / 'Your application is already under review. We'll notify you when it's decided.'"
+    depends_on: null
+
+  - finding_id: TW-151
+    surface_id: pattern-validate-vs-zod-summary
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory shows vp-ux-menu-form-validation has 60 words bundling 15 Zod messages — that's expected of a Zod summary but should never display as one toast."
+    evidence_excerpt: "vp-ux-menu-form-validation (15 messages, 60 words)"
+    recommendation: "Verify inline display: each Zod message attaches to its field, never bundled as toast. If a summary toast is desired: 'Some fields need attention.' + scroll to first error."
+    depends_on: TW-112
+
+  - finding_id: TW-152
+    surface_id: pattern-vendor-onboarding-min-radius
+    lens: technical-writer
+    severity: P3
+    issue: "Vendor-portal: 'Minimum 1 km radius' (4 words, no period). Style guide expects sentence form."
+    evidence_excerpt: "vp-onb-ops-radius-validation 'Minimum 1 km radius'"
+    recommendation: "'Service radius must be at least 1 km.' (matches mobile-vendor mv-onb-ops-radius-err format)."
+    depends_on: null
+
+  - finding_id: TW-153
+    surface_id: pattern-mobile-vendor-radius-range
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-vendor radius validation: 'Service radius must be between 1 and 50 km' — bound on both ends; vendor-portal only enforces minimum. Inconsistency."
+    evidence_excerpt: "mv-onb-ops-radius-err 'Service radius must be between 1 and 50 km' vs vp-onb-ops-radius-validation 'Minimum 1 km radius'"
+    recommendation: "Align bounds. If max is 50 km on both, message: 'Service radius must be between 1 and 50 km.' Centralize zod."
+    depends_on: TW-32
+
+  - finding_id: TW-154
+    surface_id: pattern-driver-step-payout
+    lens: technical-writer
+    severity: P3
+    issue: "Driver onboarding payout errors use bare 'Please fill in all bank details' (5 words, 'Please' filler)."
+    evidence_excerpt: "dp-err-payout-bank 'Please fill in all bank details' | dp-err-payout-upi 'Please enter your UPI ID'"
+    recommendation: "Drop 'Please': 'Fill in all bank details.' / 'Enter your UPI ID.' Driver tone tighter."
+    depends_on: TW-025
+
+  - finding_id: TW-155
+    surface_id: pattern-driver-onboarding-step1-required
+    lens: technical-writer
+    severity: P3
+    issue: "Driver onboarding step1 'Please fill in all required fields' (5 words) is reused across step2 — overgeneralized message."
+    evidence_excerpt: "dp-err-step1-required 'Please fill in all required fields' (reused step2)"
+    recommendation: "Per-field inline validation handles this; if a summary toast is needed: 'Some required fields are missing.' Drop 'Please'."
+    depends_on: TW-112
+
+  - finding_id: TW-156
+    surface_id: pattern-driver-step-load-review
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to load review data' on driver step-5 — bare, no recovery."
+    evidence_excerpt: "dp-err-step5-load 'Failed to load review data'"
+    recommendation: "'Couldn't load your application data. Try again.' (7 words)."
+    depends_on: TW-019
+
+  - finding_id: TW-157
+    surface_id: pattern-driver-step-submit
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to submit. Please try again.' on driver step-5 submission."
+    evidence_excerpt: "dp-err-step5-submit 'Failed to submit. Please try again.'"
+    recommendation: "'Couldn't submit your application. Try again.' (6 words)."
+    depends_on: TW-026
+
+  - finding_id: TW-158
+    surface_id: pattern-driver-plan-load
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to load subscription plans' (4 words) on driver step-4."
+    evidence_excerpt: "dp-err-step4-plans-load 'Failed to load subscription plans'"
+    recommendation: "'Couldn't load plans. Try again.' (5 words)."
+    depends_on: TW-019
+
+  - finding_id: TW-159
+    surface_id: pattern-driver-plan-select
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to select plan. Please try again.' (6 words)."
+    evidence_excerpt: "dp-err-step4-plan-failed 'Failed to select plan. Please try again.'"
+    recommendation: "'Couldn't select that plan. Try again.' (6 words)."
+    depends_on: TW-026
+
+  - finding_id: TW-160
+    surface_id: pattern-driver-invite-create
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to create invitation' (3 words, no recovery)."
+    evidence_excerpt: "dp-err-invite-create 'Failed to create invitation'"
+    recommendation: "'Couldn't create invitation. Try again.' (5 words)."
+    depends_on: TW-019
+
+  - finding_id: TW-161
+    surface_id: pattern-driver-invite-required
+    lens: technical-writer
+    severity: P3
+    issue: "'Email and role are required' (5 words) — fine but missing period vs other admin tone strings."
+    evidence_excerpt: "dp-err-invite-required 'Email and role are required'"
+    recommendation: "Add period if used as sentence ('Email and role are required.'). Per TW-027."
+    depends_on: TW-027
+
+  - finding_id: TW-162
+    surface_id: pattern-driver-partner-status
+    lens: technical-writer
+    severity: P3
+    issue: "Driver fleet admin: 'Failed to update partner status' / 'Failed to verify partner' — bare, no recovery."
+    evidence_excerpt: "dp-err-partner-status 'Failed to update partner status' | dp-err-partner-verify 'Failed to verify partner'"
+    recommendation: "'Couldn't update partner status. Try again.' / 'Couldn't verify partner. Try again.'"
+    depends_on: TW-019
+
+  - finding_id: TW-163
+    surface_id: pattern-driver-accept-failed
+    lens: technical-writer
+    severity: P3
+    issue: "Driver mobile 'Failed to accept delivery' (3 words) — high-stakes moment, deserves better recovery copy."
+    evidence_excerpt: "dp-err-accept-failed 'Failed to accept delivery'"
+    recommendation: "Driver-tone with action: 'Couldn't accept. Try again, or pick another.' (≤6 words, gives a fallback)."
+    depends_on: TW-019
+
+  - finding_id: TW-164
+    surface_id: pattern-driver-upload-fail
+    lens: technical-writer
+    severity: P3
+    issue: "'Upload failed. Please try again.' / 'File too large. Max {n}MB for {label}' on driver onboarding documents."
+    evidence_excerpt: "dp-err-step3-upload 'Upload failed. Please try again.' | dp-err-step3-file-size 'File too large. Max {n}MB for {label}'"
+    recommendation: "Drop 'Please' (TW-025): 'Upload failed. Try again.' Standardize size unit per TW-005: 'File too large. Max {n} MB for {label}.'"
+    depends_on: TW-005
+
+  - finding_id: TW-165
+    surface_id: pattern-driver-referral-invalid
+    lens: technical-writer
+    severity: P3
+    issue: "'Invalid referral code' (3 words) — bare. For driver onboarding where bonuses depend on referrals, deserves clear recovery."
+    evidence_excerpt: "dp-err-step1-referral-invalid 'Invalid referral code'"
+    recommendation: "'Referral code not recognized. Skip this field if you don't have one.' Helps the driver continue rather than stalling."
+    depends_on: null

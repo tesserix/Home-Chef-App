@@ -1,0 +1,877 @@
+# Business Analyst findings — errors-empty section
+# Lens: conversion, activation, recovery, trust
+# Auditor: BA lens agent
+# Date: 2026-05-13
+# Total inventory rows audited: 282
+
+findings:
+
+  # ─── P0: BROKEN RECOVERY PATHS ──────────────────────────────────────────────
+
+  - finding_id: BA-ERR-001
+    surface_id: ap-analytics-coming-soon
+    lens: business-analyst
+    severity: P0
+    issue: "\"Chart coming soon\" placeholder ships to admin operators — fake/unfinished dashboard signal"
+    evidence_excerpt: "Chart coming soon"
+    recommendation: >
+      Either deliver a real chart or hide the section entirely until ready.
+      Shipping a visible placeholder to paying operators signals an unfinished product and erodes platform credibility.
+      If data is not yet available, show an honest empty state: "Analytics data will appear after your first orders are processed."
+    metric_hypothesis: "trust score; admin churn — operators who see 'coming soon' placeholders in a paid tool question the platform's readiness and may abandon before merchant activation"
+    depends_on: null
+
+  - finding_id: BA-ERR-002
+    surface_id: api-error-payment-config
+    lens: business-analyst
+    severity: P0
+    issue: "Internal payment gateway config error leaked verbatim to end customer — kills checkout conversion"
+    evidence_excerpt: "Payment gateway not configured / Stripe gateway not configured / Stripe gateway not configured by platform admin"
+    recommendation: >
+      Replace all payment-config error messages surfaced to customers with a single generic message:
+      "Payment is temporarily unavailable. Try again in a few minutes or contact support."
+      The underlying cause (misconfigured gateway) must never reach the customer UI — it signals platform unreadiness and will cause immediate cart abandonment.
+      Route the specific config error to admin dashboard alerts instead.
+    metric_hypothesis: "cart-to-order conversion; customers who see a backend config message interpret it as a platform fault and do not retry — lost GMV per incident"
+    depends_on: null
+
+  - finding_id: BA-ERR-003
+    surface_id: api-error-stripe-connect
+    lens: business-analyst
+    severity: P0
+    issue: "Raw API paths exposed in error messages to chef users — signals broken product"
+    evidence_excerpt: "No Stripe account — call /chef/stripe/connect first / No Stripe account — call /delivery/stripe/connect first"
+    recommendation: >
+      Replace with actionable human copy: "Complete your Stripe payout setup before switching payment methods. Go to Earnings > Payout setup."
+      API endpoint paths must never appear in user-facing strings — they signal an incomplete integration and destroy trust during the chef activation flow.
+    metric_hypothesis: "chef D7 retention; chefs who encounter raw API paths during payout setup interpret the platform as broken and drop out of the activation funnel"
+    depends_on: null
+
+  - finding_id: BA-ERR-004
+    surface_id: web-err-checkout-cancel
+    lens: business-analyst
+    severity: P0
+    issue: "Payment cancellation produces only \"Payment cancelled\" with no next-step CTA — stranded customer"
+    evidence_excerpt: "Payment cancelled"
+    recommendation: >
+      Replace with a recovery flow: "Payment not completed. Your cart is saved — try again or use a different payment method."
+      Add two CTAs: "Try again" (primary) and "Change payment method" (secondary).
+      A cancelled Razorpay session is the highest-value recovery moment in the checkout funnel — a bare two-word toast wastes it entirely.
+    metric_hypothesis: "cart-to-order conversion; customers who cancel Razorpay and see only a toast with no recovery CTA have no path back to checkout — estimated 30–50% drop on this state"
+    depends_on: null
+
+  - finding_id: BA-ERR-005
+    surface_id: mc-checkout-errors
+    lens: business-analyst
+    severity: P0
+    issue: "Payment confirmation timeout on mobile presents only a vague message with no clear status resolution path"
+    evidence_excerpt: "Payment confirmation timed out. Check your order history to confirm status."
+    recommendation: >
+      Replace with: "Payment status unclear. Check your orders — if no order appears within 5 minutes, the payment was not charged. [View orders]"
+      The current copy leaves the customer uncertain whether money was debited. This is the highest-anxiety state in mobile checkout.
+      Add a deep-link CTA directly to the orders tab, not generic instruction.
+    metric_hypothesis: "cart-to-order conversion; payment anxiety on mobile; customers who are unsure if they were charged will contact support or dispute charges — both outcomes damage platform economics"
+    depends_on: null
+
+  - finding_id: BA-ERR-006
+    surface_id: api-error-auth-suspended
+    lens: business-analyst
+    severity: P0
+    issue: "\"Account is suspended\" with no reason or support path — dead end for user"
+    evidence_excerpt: "Account is suspended"
+    recommendation: >
+      Replace with: "Your account has been suspended. Contact support to find out why and how to resolve it. [Contact support]"
+      A suspended user who hits a wall with no path forward will post publicly about the experience.
+      Include a support link or email. Separately, if the suspension reason is shareable, surface it.
+    metric_hypothesis: "trust score; support ticket volume; suspended accounts with no recovery path generate negative reviews and support escalations"
+    depends_on: null
+
+  # ─── P1: HIGH-TRAFFIC CONVERSION-CRITICAL ISSUES ────────────────────────────
+
+  - finding_id: BA-ERR-007
+    surface_id: web-ux-cart-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Empty cart copy is passive and does not name a specific chef discovery path"
+    evidence_excerpt: "Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs..."
+    recommendation: >
+      Replace with: "Your cart is empty. Browse home chefs near you." with a single CTA "Find a chef" linking directly to the browsing page.
+      "Browse our home chefs..." is trailing copy — unclear where to go. Cut the filler phrase "Looks like you haven't added any items yet."
+      The style guide empty-state formula is: Why it's empty → One action. The current copy adds a redundant explanation sentence.
+    metric_hypothesis: "cart-to-order conversion; empty cart recovery rate — a direct CTA converts better than descriptive text"
+    depends_on: null
+
+  - finding_id: BA-ERR-008
+    surface_id: web-err-favorites-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Empty favorites state offers no prompt to discover or save a chef — missed activation nudge"
+    evidence_excerpt: "No favorites yet"
+    recommendation: >
+      Replace with: "No saved chefs. Browse home chefs and tap the heart to save your favourites." with CTA "Browse chefs".
+      Three-word empty states with no action convert at near-zero. This is the first post-signup engagement hook for new customers.
+    metric_hypothesis: "customer D7 retention; favorite-save rate as an activation proxy — customers who save at least one chef have significantly higher repeat order rates"
+    depends_on: null
+
+  - finding_id: BA-ERR-009
+    surface_id: mc-favorites-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile empty favorites uses a trailing exclamation mark and emoji — violates voice and adds friction language"
+    evidence_excerpt: "No saved chefs yet / Tap the heart on any chef to save them!"
+    recommendation: >
+      Replace with: "No saved chefs. Tap the heart on any chef to save them." Remove the exclamation mark (Rule 1: no urgency tricks).
+      The emoji is also a style-guide violation for body/utility copy. The functional guidance is good — just strip the punctuation energy.
+    metric_hypothesis: "brand trust; customer activation rate — consistent, calm copy builds trust with the premium-positioning customer"
+    depends_on: null
+
+  - finding_id: BA-ERR-010
+    surface_id: web-err-orders-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Empty orders state for a filtered view says \"No {filter} orders found\" with no suggestion to clear the filter"
+    evidence_excerpt: "No orders found / You haven't placed any orders yet. / No {filter} orders found."
+    recommendation: >
+      For the filtered variant: "No {filter} orders. Try a different filter or browse all orders." with CTA "View all orders".
+      For first-time empty state: "No orders yet. Browse home chefs to place your first order." with CTA "Find a chef".
+      The filter-stuck variant is a conversion trap — customers assume no orders exist and leave rather than clearing the filter.
+    metric_hypothesis: "repeat order rate; filter abandonment — customers who see a filtered empty state without a clear-filter CTA have a high exit rate from the orders page"
+    depends_on: null
+
+  - finding_id: BA-ERR-011
+    surface_id: mc-orders-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile orders empty state uses a plate emoji in functional copy — violates style guide"
+    evidence_excerpt: "No orders yet / Browse chefs to place your first order!"
+    recommendation: >
+      Replace with: "No orders yet. Browse home chefs to place your first order." Remove the exclamation mark and the 🍽️ emoji.
+      The guidance in the style guide is explicit: no exclamation marks except in genuine celebration. An empty state is not a celebration.
+    metric_hypothesis: "brand consistency; new customer activation — voice inconsistency between web and mobile creates a fragmented brand impression"
+    depends_on: null
+
+  - finding_id: BA-ERR-012
+    surface_id: vp-ux-menu-empty
+    lens: business-analyst
+    severity: P1
+    issue: "New chef empty menu state has a CTA \"Add Your First Item\" but no walkthrough guidance — activation drop-off risk"
+    evidence_excerpt: "No menu items yet / Start building your menu by adding your first dish. / Add Your First Item"
+    recommendation: >
+      The CTA is present and action-oriented — this is the right direction. Strengthen by adding a one-line hint about what happens after:
+      "No menu items yet. Add your first dish and publish your menu to start accepting orders." CTA: "Add first dish".
+      Chefs who do not add at least one menu item during the first session have near-zero activation. The current copy does not explain the consequence of not acting.
+    metric_hypothesis: "chef D1 activation; chef menu-publish rate — chefs need to understand that adding a dish is the prerequisite to going live"
+    depends_on: null
+
+  - finding_id: BA-ERR-013
+    surface_id: mv-menu-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile vendor empty menu state has no consequence framing — chef does not know why adding a dish matters"
+    evidence_excerpt: "No menu items yet. Tap + to add your first item."
+    recommendation: >
+      Replace with: "No menu items yet. Add a dish to start accepting orders." Remove the gesture hint ("Tap +") — the native affordance is visible.
+      Chefs need to know that the menu is the blocker between them and their first order. The current copy sounds like a neutral instruction.
+    metric_hypothesis: "chef D1 activation; menu-publish conversion — framing the consequence increases urgency without violating the no-urgency-tricks rule"
+    depends_on: null
+
+  - finding_id: BA-ERR-014
+    surface_id: vp-ux-payouts-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Empty payouts state gives no guidance on when the first payout should be expected"
+    evidence_excerpt: "No payouts yet / Your payout history will appear here once you receive your first payout."
+    recommendation: >
+      Replace with: "No payouts yet. Payouts are processed every [X] days after order completion. Your first payout will appear here once processed."
+      Without a timeline, chefs who have completed orders will contact support thinking payouts are broken.
+      If no SLA is defined, use: "Payouts are processed weekly. Your first will appear once an order completes."
+    metric_hypothesis: "chef D30 retention; support ticket volume — unclear payout timelines are a top driver of chef churn and support load"
+    depends_on: null
+
+  - finding_id: BA-ERR-015
+    surface_id: vp-onb-banner-rejected-title
+    lens: business-analyst
+    severity: P1
+    issue: "Application rejection banner uses title case \"Application Rejected\" — cold and administrative, violates voice"
+    evidence_excerpt: "Application Rejected"
+    recommendation: >
+      Replace with: "Application not approved" (sentence case, softer framing).
+      Body: "Review the feedback below and resubmit when ready." Remove "Please review the feedback below and re-submit."
+      The body already has "please" — the title does not need to be an administrative verdict. A chef hitting rejection is a high-churn moment.
+    metric_hypothesis: "chef resubmission rate; chef D30 retention — rejections delivered harshly have lower resubmission rates than those framed with a recovery path"
+    depends_on: null
+
+  - finding_id: BA-ERR-016
+    surface_id: vp-onb-banner-rejected-body
+    lens: business-analyst
+    severity: P1
+    issue: "Rejection body uses \"was not approved\" passive and \"re-submit\" hyphenated — inconsistent vocabulary and voice"
+    evidence_excerpt: "Your previous application was not approved. Please review the feedback below and re-submit."
+    recommendation: >
+      Replace with: "Your application was not approved. Review the feedback below and resubmit when you're ready."
+      Fix: "re-submit" → "resubmit" (no hyphen, per style conventions). Remove "Please" — the chef is already stressed, instructions don't need politeness markers, just clarity.
+    metric_hypothesis: "chef resubmission rate — friction in rejection copy reduces the likelihood of resubmission"
+    depends_on: null
+
+  - finding_id: BA-ERR-017
+    surface_id: api-error-order-cancel-stage
+    lens: business-analyst
+    severity: P1
+    issue: "\"Order cannot be cancelled at this stage\" — no refund implications, no alternative action offered"
+    evidence_excerpt: "Order cannot be cancelled at this stage"
+    recommendation: >
+      Replace with: "This order can't be cancelled — it's already being prepared. Contact support if there's an urgent issue. [Contact support]"
+      Customers who attempt to cancel a confirmed order and hit a wall without a support path will dispute the charge.
+      The refund policy implication (no refund at this stage) must be implied or stated depending on policy.
+    metric_hypothesis: "chargeback rate; customer support ticket volume — customers who cannot cancel and have no alternative become chargebacks"
+    depends_on: null
+
+  - finding_id: BA-ERR-018
+    surface_id: api-error-chef-not-accepting
+    lens: business-analyst
+    severity: P1
+    issue: "\"Chef is not accepting orders\" — no alternative suggestion, dead end for customer on chef detail page"
+    evidence_excerpt: "Chef is not accepting orders"
+    recommendation: >
+      Replace with: "This chef isn't taking orders right now. Browse other chefs near you." with CTA "Find another chef".
+      A customer blocked at the chef detail page with no forward path will abandon the session. The recovery CTA is the entire conversion here.
+    metric_hypothesis: "browse-to-order conversion; session abandonment rate — customers who hit availability blocks without a redirect CTA exit at a higher rate"
+    depends_on: null
+
+  - finding_id: BA-ERR-019
+    surface_id: web-err-error-boundary
+    lens: business-analyst
+    severity: P1
+    issue: "Global error boundary uses \"We've been notified\" — unverified trust claim that may not be true for all error types"
+    evidence_excerpt: "Something broke on our end. / We've been notified and we're looking into it... / Try again / Refresh page"
+    recommendation: >
+      Replace "We've been notified and we're looking into it..." with: "If this keeps happening, contact support."
+      "We've been notified" is a false trust signal if error monitoring is not comprehensive. It also contradicts the no-fake-signals principle.
+      The ellipsis (...) further weakens confidence. Keep: "Something went wrong on our end." Remove the notification claim.
+    metric_hypothesis: "trust score; error recovery rate — false assurances that are not honored erode trust more than honest admissions"
+    depends_on: null
+
+  - finding_id: BA-ERR-020
+    surface_id: vp-err-boundary-fallback
+    lens: business-analyst
+    severity: P1
+    issue: "Vendor portal error boundary has no support path — chef in active order management hitting this state is stranded"
+    evidence_excerpt: "Something went wrong / An unexpected error occurred while loading this page. / Try Again"
+    recommendation: >
+      Add a support contact path: "Something went wrong. [Try again] If orders are affected, [contact support]."
+      A chef who hits an error boundary during active order fulfillment needs an emergency escalation path — the single "Try Again" button is insufficient.
+    metric_hypothesis: "chef D7 retention; order fulfilment rate — chefs who lose access during active service and have no recovery path will churn"
+    depends_on: null
+
+  - finding_id: BA-ERR-021
+    surface_id: dp-err-boundary-title
+    lens: business-analyst
+    severity: P1
+    issue: "Delivery portal error boundary identical to vendor and web — no role-specific recovery for a driver who may have an active delivery"
+    evidence_excerpt: "Something went wrong / An unexpected error occurred while loading this page."
+    recommendation: >
+      For drivers with an active delivery, add: "Something went wrong. If you have an active delivery, call the customer directly. [Contact support]"
+      A driver who loses app access mid-delivery has safety and earnings implications. Generic error copy is a liability.
+    metric_hypothesis: "driver D7 retention; delivery completion rate — drivers who lose context on active deliveries with no recovery instruction will DNF the order"
+    depends_on: null
+
+  - finding_id: BA-ERR-022
+    surface_id: dp-err-access-denied
+    lens: business-analyst
+    severity: P1
+    issue: "\"Access denied. Please check your credentials and try again\" — security-evoking language for what is likely a role mismatch"
+    evidence_excerpt: "Access denied. Please check your credentials and try again."
+    recommendation: >
+      Replace with: "This portal is for delivery drivers only. Sign in with your driver account, or sign up as a driver."
+      "Access denied" is threat language — it makes a legitimate user feel suspected rather than redirected. The issue is almost certainly a role mismatch, not a security incident.
+    metric_hypothesis: "driver signup conversion; driver D1 activation — confusing rejection language causes legitimate applicants to abandon signup"
+    depends_on: null
+
+  - finding_id: BA-ERR-023
+    surface_id: vp-auth-login-access-denied
+    lens: business-analyst
+    severity: P1
+    issue: "Vendor portal access denied message references \"Fe3dr customer app\" — an incorrect or placeholder app name"
+    evidence_excerpt: "This portal is only for vendor accounts. Please use the Fe3dr customer app."
+    recommendation: >
+      Replace "Fe3dr" with the correct app name. If the brand name is "Home Chef", the message should read:
+      "This portal is for chefs only. Sign in to the Home Chef customer app instead."
+      "Fe3dr" appears to be a placeholder or internal codename that should never have reached production copy.
+    metric_hypothesis: "trust score; misdirected-user conversion — wrong app names in error messages signal unfinished product and damage brand credibility at the first login touchpoint"
+    depends_on: null
+
+  - finding_id: BA-ERR-024
+    surface_id: vp-ux-orders-live-empty
+    lens: business-analyst
+    severity: P1
+    issue: "Live orders empty state is passive — does not tell a new chef what to do to get their first order"
+    evidence_excerpt: "No active orders right now. New orders will appear here automatically."
+    recommendation: >
+      For a chef with an unpublished menu: "No orders yet. Publish your menu to start accepting orders. [Go to menu]"
+      For a chef with a live menu: "No active orders. Orders will appear here when customers place them."
+      The current message does not differentiate between a new chef who hasn't published yet (who needs a CTA) and an active chef who is simply waiting (who needs reassurance).
+    metric_hypothesis: "chef D1 activation; menu-publish rate — new chefs who see a waiting message without understanding the prerequisite (published menu) do not complete activation"
+    depends_on: null
+
+  # ─── P2: MISSED RECOVERY OPPORTUNITIES ON MEDIUM-TRAFFIC SURFACES ────────────
+
+  - finding_id: BA-ERR-025
+    surface_id: web-err-browse-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Empty chef search results offers \"Clear filters\" but no fallback to browse without filters"
+    evidence_excerpt: "No chefs found / Try adjusting your filters or search query"
+    recommendation: >
+      Replace "Try adjusting your filters or search query" with: "No chefs match these filters. Clear all filters or browse all chefs near you."
+      Add two CTAs: "Clear filters" and "Browse all chefs". The single generic suggestion wastes the recovery moment.
+    metric_hypothesis: "browse-to-order conversion; search abandonment rate — customers who cannot find chefs via search need a clear fallback to unfiltered browse"
+    depends_on: null
+
+  - finding_id: BA-ERR-026
+    surface_id: mc-home-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile home empty state \"No chefs found / Try adjusting your filters\" — same passive fallback as web but worse on mobile"
+    evidence_excerpt: "No chefs found / Try adjusting your filters"
+    recommendation: >
+      Replace with: "No chefs near you right now. Try a wider area or check back later." with CTA "Clear filters".
+      On mobile the guidance to "try adjusting filters" requires the user to know which filter to change. A direct "clear all" action is more recoverable on a small screen.
+    metric_hypothesis: "mobile browse-to-order conversion — filter abandonment on mobile is higher than web due to interaction cost"
+    depends_on: null
+
+  - finding_id: BA-ERR-027
+    surface_id: web-ux-favorites-loggedout
+    lens: business-analyst
+    severity: P2
+    issue: "Logged-out favorites state uses \"Log in\" — banned term, should be \"Sign in\""
+    evidence_excerpt: "Log in to see your favorites"
+    recommendation: >
+      Replace with: "Sign in to see your saved chefs." — correct vocabulary per style guide (Sign in, not Log in).
+      Also strengthen the value prop: the current message tells users what they can't do, not why they should sign in.
+    metric_hypothesis: "signup/sign-in conversion from favorites page — vocabulary consistency reinforces brand trust and prevents confusion between portals"
+    depends_on: null
+
+  - finding_id: BA-ERR-028
+    surface_id: web-err-checkout-no-addresses
+    lens: business-analyst
+    severity: P2
+    issue: "No saved addresses empty state during checkout is a conversion blocker with a passive instruction"
+    evidence_excerpt: "You don't have any saved addresses yet. Add one to continue."
+    recommendation: >
+      Replace with: "No delivery address saved. Add an address to complete your order." CTA: "Add address".
+      The current text is accurate but the CTA is missing from the excerpt — if it's absent in the UI, this is a checkout blocking state with no action button.
+      Verify a direct "Add address" button exists inline, not just instruction text.
+    metric_hypothesis: "checkout completion rate — address-less users who see instruction text without an inline CTA have higher checkout abandonment"
+    depends_on: null
+
+  - finding_id: BA-ERR-029
+    surface_id: web-ux-chefdetail-not-found
+    lens: business-analyst
+    severity: P2
+    issue: "Chef not found state has \"Browse Chefs\" CTA which is good — but copy \"Chef not found\" is blunt and offers no explanation"
+    evidence_excerpt: "Chef not found / Browse Chefs"
+    recommendation: >
+      Replace with: "This chef is no longer available. Browse other chefs near you." CTA: "Browse chefs" (sentence case).
+      "Chef not found" sounds like a technical error. "No longer available" is honest and less alarming. The CTA case fix (title→sentence) is a vocabulary compliance fix.
+    metric_hypothesis: "bounce rate on dead chef links; browse-to-order recovery — a softer 404 with explanation retains the customer in the funnel"
+    depends_on: null
+
+  - finding_id: BA-ERR-030
+    surface_id: mc-catering-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Catering requests empty state uses 🍽️ emoji in functional copy — violates style guide"
+    evidence_excerpt: "No requests yet / Submit a catering request to get quotes from chefs."
+    recommendation: >
+      Remove the emoji. The functional copy is good ("Submit a catering request to get quotes from chefs") — it explains the action and the value.
+      Just enforce the no-emoji-in-body rule. Optionally add a CTA button: "Request catering".
+    metric_hypothesis: "catering funnel activation — minor; primarily a brand consistency concern on a low-volume surface"
+    depends_on: null
+
+  - finding_id: BA-ERR-031
+    surface_id: mc-social-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Social feed empty state uses 📸 emoji in body copy — violates style guide"
+    evidence_excerpt: "No posts yet / Chefs will share their latest creations here."
+    recommendation: >
+      Remove the emoji. The body copy is adequate. Optionally add: "Follow chefs to see their updates here first." to add a behavioral nudge.
+    metric_hypothesis: "social feature adoption — minor brand consistency finding"
+    depends_on: null
+
+  - finding_id: BA-ERR-032
+    surface_id: vp-ux-reviews-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Empty reviews state \"No reviews yet\" — no guidance on how to get the first review"
+    evidence_excerpt: "No reviews yet"
+    recommendation: >
+      Replace with: "No reviews yet. Complete your first order and your customer's review will appear here."
+      Reviews are a trust and conversion signal for chefs. An empty three-word state misses the opportunity to explain how reviews are earned and why they matter.
+    metric_hypothesis: "chef activation quality; order completion rate — chefs who understand the reviews mechanism are more motivated to fulfil their first orders"
+    depends_on: null
+
+  - finding_id: BA-ERR-033
+    surface_id: mv-reviews-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile vendor reviews empty state \"No reviews yet. Your first review will appear here.\" — same passive framing as web"
+    evidence_excerpt: "No reviews yet. Your first review will appear here."
+    recommendation: >
+      Replace with: "No reviews yet. Complete your first order — your customer's review will appear here."
+      The addition of the prerequisite ("complete your first order") turns a passive wait message into an activation nudge.
+    metric_hypothesis: "chef D7 activation; first-order completion rate"
+    depends_on: null
+
+  - finding_id: BA-ERR-034
+    surface_id: vp-ux-orders-history-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Order history empty state for date range filter gives no indication of what range contains orders"
+    evidence_excerpt: "No orders found for the selected time period. Try a wider date range."
+    recommendation: >
+      Replace with: "No orders in this period. Widen your date range or [view all order history]." Add a CTA "View all history".
+      The current message is accurate but provides no escape. Chefs who cannot find their order history will assume the data is lost.
+    metric_hypothesis: "chef trust; support ticket volume — chefs who cannot find historical orders contact support unnecessarily"
+    depends_on: null
+
+  - finding_id: BA-ERR-035
+    surface_id: vp-ux-earnings-error
+    lens: business-analyst
+    severity: P2
+    issue: "Earnings load failure offers no support path — a chef who cannot see their earnings will escalate"
+    evidence_excerpt: "Unable to load earnings / Please try again later."
+    recommendation: >
+      Replace with: "Couldn't load earnings. Try again — if the problem continues, contact support. [Retry] [Contact support]"
+      Earnings are the primary retention hook for chefs. A load failure with no support escalation path will generate support tickets and churn.
+    metric_hypothesis: "chef D30 retention; support ticket volume — earnings visibility directly drives chef motivation to stay active"
+    depends_on: null
+
+  - finding_id: BA-ERR-036
+    surface_id: mv-earnings-no-payout-account
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile vendor \"No payout account configured\" — no CTA to configure it, dead end on a revenue-critical screen"
+    evidence_excerpt: "No payout account configured"
+    recommendation: >
+      Replace with: "No payout account set up. Add your bank or UPI details to receive earnings." CTA: "Set up payouts" linking to payout settings.
+      A chef who cannot see a path to receiving payment has no motivation to fulfil orders. This state must include an actionable CTA.
+    metric_hypothesis: "chef D7 activation; payout setup completion rate — chefs without a payout method configured have near-zero long-term retention"
+    depends_on: null
+
+  - finding_id: BA-ERR-037
+    surface_id: vp-ux-notifs-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Admin notifications empty state is verbose and unexplained — chef does not know what triggers notifications"
+    evidence_excerpt: "No admin requests yet / Admin requests for document uploads, profile updates, and review feedback will appear here."
+    recommendation: >
+      The explanation is actually good for context. Tighten: "No admin requests. When admin needs action from you — document uploads, profile changes, or review responses — it will appear here."
+      The current copy is slightly awkward ("Admin requests for document uploads, profile updates, and review feedback will appear here" reads like a category list).
+    metric_hypothesis: "chef compliance rate; onboarding completion — chefs who understand the notification system respond faster to admin requests"
+    depends_on: null
+
+  - finding_id: BA-ERR-038
+    surface_id: dp-empty-active-body
+    lens: business-analyst
+    severity: P2
+    issue: "Active delivery empty state directs driver to \"check available deliveries\" — good direction but telegram copy not followed"
+    evidence_excerpt: "Check available deliveries to pick up a new order."
+    recommendation: >
+      Replace with: "No active delivery. Check Available tab." (telegraphic ≤4 words per sentence for driver persona per style guide tone matrix).
+      The current sentence is 9 words — driver UI should be glanceable and imperative. CTA should link directly to the available tab.
+    metric_hypothesis: "driver delivery acceptance rate — telegraphic copy on driver UI reduces cognitive load and increases tab-switch speed"
+    depends_on: null
+
+  - finding_id: BA-ERR-039
+    surface_id: md-err-002
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile delivery available-deliveries empty state tells driver to \"Pull to refresh\" — gesture instruction in copy is redundant and low-value"
+    evidence_excerpt: "No deliveries available nearby. Pull to refresh."
+    recommendation: >
+      Replace with: "No deliveries nearby. Check again soon." — remove the pull-to-refresh instruction (the pull affordance is standard and the gesture hint adds noise).
+      Alternatively, provide an auto-refresh indication: "No deliveries nearby. Checking every 30 seconds."
+    metric_hypothesis: "driver engagement; session length — a passive wait message is better than a gesture instruction that implies nothing is happening"
+    depends_on: null
+
+  - finding_id: BA-ERR-040
+    surface_id: md-emp-007
+    lens: business-analyst
+    severity: P2
+    issue: "Permission denied for fleet management gives admin contact instruction but no action — stranded driver"
+    evidence_excerpt: "Fleet management is available for fleet managers only. Contact your administrator to request access."
+    recommendation: >
+      Replace with: "Fleet management is for fleet managers. Ask your admin for access." — shorter, driver-persona telegraphic style.
+      If an in-app contact mechanism exists, link to it. A "contact your administrator" instruction with no link is an incomplete recovery path.
+    metric_hypothesis: "driver activation; role-escalation request rate — drivers who cannot reach admins via the app to request access churn silently"
+    depends_on: null
+
+  - finding_id: BA-ERR-041
+    surface_id: api-error-payment-refund
+    lens: business-analyst
+    severity: P2
+    issue: "Refund error messages expose constraint details with no refund policy or timeline context"
+    evidence_excerpt: "Can only refund completed payments / Refund amount cannot exceed order total / Failed to process refund / No Razorpay payment found for this order"
+    recommendation: >
+      Customer-facing refund errors should be generic and empathetic: "Refund could not be processed. Contact support to resolve this."
+      The constraint details ("no Razorpay payment found") must not reach the customer — these are internal diagnostics.
+      Separately, every refund-related error should include the expected refund timeline when a refund IS being processed.
+    metric_hypothesis: "refund dispute rate; support ticket volume — customers who see confusing refund errors will initiate chargebacks instead of contacting support"
+    depends_on: null
+
+  - finding_id: BA-ERR-042
+    surface_id: api-error-generic-failed
+    lens: business-analyst
+    severity: P2
+    issue: "~100 \"Failed to X\" API error variants are passed directly to UI with no user-friendly translation layer"
+    evidence_excerpt: "Failed to create address / Failed to process refund / Failed to fetch chefs / Failed to send message [and ~95 more variants]"
+    recommendation: >
+      Establish a UI-layer error translation map: API error codes → friendly copy following the style guide format "What happened → What to do."
+      Currently, raw "Failed to X" strings surface verbatim to customers, chefs, and drivers. These strings are developer-facing diagnostics.
+      Priority translation targets: any "Failed to" that appears on checkout, payment, order creation, and delivery acceptance flows.
+    metric_hypothesis: "checkout and order completion rate; trust score — developer-toned error strings lower consumer confidence at high-stakes moments"
+    depends_on: null
+
+  - finding_id: BA-ERR-043
+    surface_id: api-error-auth-not-verified
+    lens: business-analyst
+    severity: P2
+    issue: "Two variants of account-not-verified error exist: \"Account not verified\" and \"Account not verified yet\" — inconsistent and no recovery path"
+    evidence_excerpt: "Account not verified / Account not verified yet"
+    recommendation: >
+      Consolidate to one message and add a recovery path: "Your account isn't verified yet. Check your email for the verification link, or [resend it]."
+      "Not verified yet" is marginally better (implies it will be fixed) but both lack the critical resend-verification CTA.
+      Unverified accounts that cannot self-serve verification will churn rather than contact support.
+    metric_hypothesis: "signup completion rate; email verification rate — adding a resend CTA inline with the error message increases verification completion"
+    depends_on: null
+
+  - finding_id: BA-ERR-044
+    surface_id: web-err-login-generic
+    lens: business-analyst
+    severity: P2
+    issue: "Generic login error \"Something went wrong. Please try again.\" has no diagnostic context or support link"
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: >
+      Keep "Something went wrong. Try again." as the primary message for transient errors.
+      Add a secondary line after 2+ failed attempts: "Still having trouble? [Contact support]"
+      A persistent "Something went wrong" loop with no escape route causes permanent login abandonment — especially for chefs and drivers who rely on the app for income.
+    metric_hypothesis: "login completion rate; D1 reactivation — login failures with no support path result in silent churn"
+    depends_on: null
+
+  - finding_id: BA-ERR-045
+    surface_id: dp-err-generic-auth
+    lens: business-analyst
+    severity: P2
+    issue: "Delivery portal generic auth error same pattern as web — no driver-specific recovery path"
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: >
+      Same fix as BA-ERR-044 with driver-specific support copy. For the delivery portal, drivers losing access mid-shift need a higher-urgency support path.
+      After 2 failures: "Can't sign in? Contact fleet support immediately if you have an active delivery."
+    metric_hypothesis: "driver session recovery rate; delivery completion rate — drivers who cannot sign in and have active deliveries need emergency escalation"
+    depends_on: BA-ERR-044
+
+  - finding_id: BA-ERR-046
+    surface_id: vp-onb-docs-upload-failed
+    lens: business-analyst
+    severity: P2
+    issue: "Document upload failure \"Upload failed\" — no guidance on file format, size, or retry mechanism during onboarding"
+    evidence_excerpt: "Upload failed"
+    recommendation: >
+      Replace with: "Upload failed. Check the file is a JPEG, PNG, or PDF under 10 MB, then try again."
+      Two-word error toasts during onboarding are conversion killers. The chef has no idea why the upload failed or what to change.
+      This is particularly damaging at the document step — it is a mandatory onboarding gate.
+    metric_hypothesis: "chef onboarding completion rate — upload failures at the document step are a top drop-off point when copy provides no remediation"
+    depends_on: null
+
+  - finding_id: BA-ERR-047
+    surface_id: mv-onb-docs-upload-fail
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile vendor document upload failure same four-word message — same activation blocker as vendor portal"
+    evidence_excerpt: "Upload failed. Please try again."
+    recommendation: >
+      Replace with: "Upload failed. Use a JPEG, PNG, or PDF under 5 MB." — telegraphic and actionable.
+      The "Please try again" adds no information. Give the chef the constraint so they can fix it.
+    metric_hypothesis: "chef mobile onboarding completion rate — same finding as BA-ERR-046 on a different surface"
+    depends_on: BA-ERR-046
+
+  - finding_id: BA-ERR-048
+    surface_id: api-error-upload-size
+    lens: business-analyst
+    severity: P2
+    issue: "Inconsistent file size formatting across upload errors: \"10MB\" vs \"5 MB\" vs \"5MB\" — creates user confusion"
+    evidence_excerpt: "File too large (max 10MB) / File too large. Maximum 5 MB. / Profile photo too large (max 5MB) / Each image must be under 5 MB"
+    recommendation: >
+      Standardize to: "File too large. Maximum [X] MB." (space before MB, period-terminated sentence).
+      Apply consistently across all upload error points. Inconsistent formatting implies different limits when they may be the same limit.
+    metric_hypothesis: "upload completion rate — format inconsistency causes users to re-read and second-guess limits, increasing abandonment"
+    depends_on: null
+
+  - finding_id: BA-ERR-049
+    surface_id: api-error-upload-type
+    lens: business-analyst
+    severity: P2
+    issue: "Five variants of file-type rejection with slightly different allowed lists — user confusion about what is actually accepted"
+    evidence_excerpt: "Invalid file type. Allowed: JPEG, PNG, PDF. / Invalid file type. Allowed: JPEG, PNG, WebP, PDF / Invalid file type. Allowed: JPEG, PNG, WebP. / Invalid image type. Allowed: JPEG, PNG, WebP. / Profile photo must be JPEG or PNG"
+    recommendation: >
+      Audit which types are genuinely accepted per upload context and create one canonical message per context.
+      Example: "Unsupported file type. Use JPEG, PNG, or PDF." (for documents); "Unsupported image. Use JPEG, PNG, or WebP." (for photos).
+      Having 5 slightly different lists makes users unsure which formats are universally safe to use.
+    metric_hypothesis: "upload completion rate; onboarding completion — type confusion at the document step blocks chef activation"
+    depends_on: null
+
+  - finding_id: BA-ERR-050
+    surface_id: vp-onb-review-missing-docs
+    lens: business-analyst
+    severity: P2
+    issue: "Missing documents warning \"Please go back to Step 4\" — step references become incorrect if the wizard structure changes"
+    evidence_excerpt: "Missing required documents / Please go back to Step 4 and upload: ..."
+    recommendation: >
+      Replace step number references with section labels: "Missing required documents. Go back to Document uploads and add the required files."
+      Use a direct CTA button: "Go to Document uploads" that navigates to the correct step rather than relying on the user to count backward.
+    metric_hypothesis: "onboarding completion rate — navigation friction in multi-step wizards is a drop-off cause; direct jump links remove that friction"
+    depends_on: null
+
+  - finding_id: BA-ERR-051
+    surface_id: vp-onb-review-policies-pending
+    lens: business-analyst
+    severity: P2
+    issue: "Unaccepted policies warning uses step number reference — same fragility as BA-ERR-050"
+    evidence_excerpt: "Policies not accepted / Please go back to Step 5 and accept all required policies."
+    recommendation: >
+      Replace with: "Policies not accepted. Go back to Policies and accept all required agreements." with CTA "Go to Policies".
+    metric_hypothesis: "chef onboarding completion rate — same finding as BA-ERR-050"
+    depends_on: BA-ERR-050
+
+  - finding_id: BA-ERR-052
+    surface_id: api-error-auth-reset-expired
+    lens: business-analyst
+    severity: P2
+    issue: "Three near-duplicate reset token error variants; none include a \"resend reset link\" recovery path"
+    evidence_excerpt: "Reset token has expired / Invalid or expired reset token / Invalid or expired enrollment token"
+    recommendation: >
+      Consolidate to: "This link has expired. Request a new one." with CTA "Resend reset link".
+      A reset link expiry error with no resend action is a permanent lock-out for the affected user. The recovery CTA is mandatory.
+    metric_hypothesis: "password reset completion rate — expired token errors without a resend CTA result in permanent account loss for that session"
+    depends_on: null
+
+  - finding_id: BA-ERR-053
+    surface_id: api-error-auth-2fa
+    lens: business-analyst
+    severity: P2
+    issue: "2FA errors are vague with no guidance — admin who loses 2FA access has no recovery path in the error copy"
+    evidence_excerpt: "Failed to enable 2FA / Failed to start 2FA challenge / Invalid or expired challenge"
+    recommendation: >
+      For "Invalid or expired challenge": "This code has expired. Request a new one." with retry CTA.
+      For "Failed to enable 2FA": "2FA setup failed. Try again or contact support."
+      Admins locked out of 2FA become permanently blocked and represent a high-severity support escalation.
+    metric_hypothesis: "admin 2FA adoption rate; admin lockout ticket volume — clear 2FA error recovery reduces lockouts and increases 2FA completion"
+    depends_on: null
+
+  - finding_id: BA-ERR-054
+    surface_id: dp-err-step4-plans-load
+    lens: business-analyst
+    severity: P2
+    issue: "Subscription plans load failure during driver onboarding \"Failed to load subscription plans\" — no driver can proceed; entire onboarding blocked"
+    evidence_excerpt: "Failed to load subscription plans"
+    recommendation: >
+      Replace with: "Couldn't load subscription plans. Try again — or contact support if this continues. [Retry] [Contact support]"
+      Subscription plan selection is a mandatory onboarding step for drivers. A load failure with only a retry button and no support escalation blocks all drivers who experience this.
+    metric_hypothesis: "driver onboarding completion rate; support ticket volume — plan-load failures are a critical onboarding blocker requiring an escalation path"
+    depends_on: null
+
+  - finding_id: BA-ERR-055
+    surface_id: vp-ux-dashboard-pending-empty
+    lens: business-analyst
+    severity: P2
+    issue: "\"All caught up! / No pending orders right now\" — exclamation mark in non-celebratory dashboard state"
+    evidence_excerpt: "All caught up! / No pending orders right now"
+    recommendation: >
+      Replace with: "No pending orders. New orders will appear here automatically."
+      "All caught up!" is a faux-celebration on an operational dashboard. A chef with zero orders does not have a reason to feel celebrated — they need clear information.
+      Style guide Rule 1: no exclamation marks except in genuine celebration.
+    metric_hypothesis: "brand consistency; chef engagement — jarring tone in an operational context signals design inconsistency"
+    depends_on: null
+
+  # ─── P3: MINOR FRICTION ON LOW-TRAFFIC SURFACES ──────────────────────────────
+
+  - finding_id: BA-ERR-056
+    surface_id: ap-providerdetail-dialog-bodies
+    lens: business-analyst
+    severity: P3
+    issue: "Confirmation dialogs use \"Are you sure you want to...\" phrasing — vague and violates modal subtitle pattern"
+    evidence_excerpt: "Are you sure you want to delete this delivery provider? This action cannot be undone."
+    recommendation: >
+      Replace with consequence-first format per style guide: "Deleting this provider removes all delivery assignments. This cannot be undone."
+      "Are you sure?" adds no information. The consequence sentence is the only content that matters.
+    metric_hypothesis: "admin error rate; accidental deletion rate — consequence-first dialogs reduce misclick-driven errors"
+    depends_on: null
+
+  - finding_id: BA-ERR-057
+    surface_id: ap-staffdetail-confirm-deactivate
+    lens: business-analyst
+    severity: P3
+    issue: "Staff deactivation confirmation uses \"Are you sure\" pattern — same pattern violation as BA-ERR-056"
+    evidence_excerpt: "Are you sure you want to deactivate this staff member? They will lose access to all portals."
+    recommendation: >
+      Replace with: "Deactivating this staff member removes their access to all portals immediately."
+      Keep the consequence sentence — it is informative. Remove "Are you sure you want to."
+    metric_hypothesis: "admin error rate — consistent modal patterns reduce cognitive load in admin operations"
+    depends_on: BA-ERR-056
+
+  - finding_id: BA-ERR-058
+    surface_id: ap-providers-dialog-delete-body
+    lens: business-analyst
+    severity: P3
+    issue: "Delivery provider delete dialog uses \"Are you sure\" and \"This action cannot be undone\" — both are vague per style guide"
+    evidence_excerpt: "Are you sure you want to delete this delivery provider? This action cannot be undone."
+    recommendation: >
+      Replace with: "Deleting this provider removes all associated delivery zones and configuration permanently."
+      "This action cannot be undone" is a banned pattern per the style guide — it explains nothing about what is undone.
+    metric_hypothesis: "admin confidence; accidental deletion rate — specific consequences are more informative than generic irreversibility warnings"
+    depends_on: BA-ERR-056
+
+  - finding_id: BA-ERR-059
+    surface_id: api-error-validation-required
+    lens: business-analyst
+    severity: P3
+    issue: "18 variants of \"X is required\" with inconsistent field name casing (e.g., \"chefId\" vs \"country\") — internal inconsistency"
+    evidence_excerpt: "Email is required / chefId is required / country is required / Verification token is required"
+    recommendation: >
+      Standardize: all required-field error messages should use sentence-case field names readable to the user, not camelCase API field names.
+      "chefId is required" should never surface to a customer UI — translate to "Please select a chef" or the equivalent user-facing label.
+    metric_hypothesis: "form completion rate; customer support — technical field names in validation errors confuse non-technical users"
+    depends_on: null
+
+  - finding_id: BA-ERR-060
+    surface_id: api-error-auth-unauthorized
+    lens: business-analyst
+    severity: P3
+    issue: "Four variants of unauthorized error exist including mixed case \"Unauthorized\" and \"unauthorized\" — inconsistency in production"
+    evidence_excerpt: "Unauthorized / unauthorized / Authentication required / Token required"
+    recommendation: >
+      Consolidate to a single user-facing message: "Your session has expired. Sign in again."
+      The technical variants ("Token required", "unauthorized") should never reach user-facing copy — they are middleware responses.
+      If these strings are surfaced directly, add a UI translation layer.
+    metric_hypothesis: "login recovery rate — session expiry messages that reference tokens confuse non-technical users"
+    depends_on: null
+
+  - finding_id: BA-ERR-061
+    surface_id: ap-secsettings-apikey-empty
+    lens: business-analyst
+    severity: P3
+    issue: "\"No keys yet.\" — full stop with trailing period is inconsistent with most other empty states in admin portal"
+    evidence_excerpt: "No keys yet."
+    recommendation: >
+      Replace with: "No API keys yet. Generate a key to start using the API." with CTA "Generate key".
+      The current state is a dead end — an admin who lands here has no path to creating a key.
+    metric_hypothesis: "admin API adoption rate — empty states without CTAs on capability-discovery pages slow feature adoption"
+    depends_on: null
+
+  - finding_id: BA-ERR-062
+    surface_id: vp-onb-review-empty-cuisines
+    lens: business-analyst
+    severity: P3
+    issue: "\"None selected\" for cuisines in onboarding review — does not tell the chef if cuisine selection is required"
+    evidence_excerpt: "None selected"
+    recommendation: >
+      Replace with: "No cuisines selected. Add at least one cuisine type to continue." — make the requirement explicit in context.
+      Chefs who see "None selected" at review may not know if it blocks submission.
+    metric_hypothesis: "onboarding completion rate — ambiguous required-field states at the review step cause confusion and drop-off"
+    depends_on: null
+
+  - finding_id: BA-ERR-063
+    surface_id: vp-onb-review-empty-days
+    lens: business-analyst
+    severity: P3
+    issue: "\"No days set\" for operating hours in onboarding review — same ambiguity as BA-ERR-062"
+    evidence_excerpt: "No days set"
+    recommendation: >
+      Replace with: "No operating hours set. Go back to add your availability." with CTA "Set availability".
+    metric_hypothesis: "chef onboarding completion rate — same as BA-ERR-062"
+    depends_on: BA-ERR-062
+
+  - finding_id: BA-ERR-064
+    surface_id: api-error-delivery-online
+    lens: business-analyst
+    severity: P3
+    issue: "\"Partner has reached maximum concurrent deliveries\" — uses \"Partner\" terminology in a driver-facing context"
+    evidence_excerpt: "Partner has reached maximum concurrent deliveries / Partner is not verified or active"
+    recommendation: >
+      Replace "Partner" with "you" in driver-facing contexts: "You've reached the maximum active deliveries. Complete your current delivery first."
+      "Partner is not verified or active" → "Your account isn't verified yet. Contact support." — includes a path forward.
+    metric_hypothesis: "driver experience quality — role-terminology mismatch signals a backend string was exposed without UI translation"
+    depends_on: null
+
+  - finding_id: BA-ERR-065
+    surface_id: api-error-delivery-already-active
+    lens: business-analyst
+    severity: P3
+    issue: "Snake_case slug \"no_active_delivery\" exposed as error message variant alongside human-readable text"
+    evidence_excerpt: "You already have an active delivery / no_active_delivery"
+    recommendation: >
+      Remove "no_active_delivery" from any user-facing surface. This is a machine-readable enum that must never appear in UI copy.
+      Add a UI translation layer to convert status slugs to human copy before rendering.
+    metric_hypothesis: "driver trust; technical perception — status codes in UI copy signal a broken frontend"
+    depends_on: null
+
+  - finding_id: BA-ERR-066
+    surface_id: mv-more-logout-confirm-body
+    lens: business-analyst
+    severity: P3
+    issue: "Logout confirmation title is \"Logout\" (single word) — should be \"Sign out\" per vocabulary list"
+    evidence_excerpt: "Are you sure you want to log out? [Title: Logout]"
+    recommendation: >
+      Replace title "Logout" with "Sign out". Replace body "Are you sure you want to log out?" with "Sign out of your account?"
+      Two vocabulary violations on one dialog (Logout, log out — both banned per style guide). Chef persona copy should also be crisper.
+    metric_hypothesis: "vocabulary consistency — minor, but confirms style guide compliance is not applied consistently in mobile"
+    depends_on: null
+
+  - finding_id: BA-ERR-067
+    surface_id: mv-onb-personal-validation-alert
+    lens: business-analyst
+    severity: P3
+    issue: "\"Validation Error\" as alert title is a technical term, not a user-oriented label"
+    evidence_excerpt: "Validation Error"
+    recommendation: >
+      Replace with: "Check your details" — descriptive, not technical.
+      "Validation Error" is developer language. The user does not know what "validation" means in this context.
+    metric_hypothesis: "mobile onboarding completion rate — technical terminology in mobile alerts increases confusion at form-completion steps"
+    depends_on: null
+
+  - finding_id: BA-ERR-068
+    surface_id: mv-onb-review-submit-error-title
+    lens: business-analyst
+    severity: P3
+    issue: "\"Submission Error\" alert title — same technical phrasing as BA-ERR-067"
+    evidence_excerpt: "Submission Error"
+    recommendation: >
+      Replace with: "Couldn't submit" — plain English, non-technical.
+    metric_hypothesis: "chef mobile onboarding completion — technical alert titles create anxiety at the final step"
+    depends_on: BA-ERR-067
+
+  - finding_id: BA-ERR-069
+    surface_id: ap-layout-offline-banner
+    lens: business-analyst
+    severity: P3
+    issue: "Admin offline banner \"Data may not be up to date\" — vague about which operations are affected"
+    evidence_excerpt: "You're offline. Data may not be up to date."
+    recommendation: >
+      Replace with: "You're offline. Approvals and status changes will not save until reconnected."
+      The admin portal has real consequences for offline actions (approving chefs, suspending users). The banner should be specific about what cannot be done.
+    metric_hypothesis: "admin error rate — vague offline banners lead admins to take actions they believe will save, but do not"
+    depends_on: null
+
+  - finding_id: BA-ERR-070
+    surface_id: vp-ux-layout-offline
+    lens: business-analyst
+    severity: P3
+    issue: "Vendor offline banner is stronger than others: \"Orders will sync when connected\" — good but inconsistently applied"
+    evidence_excerpt: "You're offline. Orders will sync when connected."
+    recommendation: >
+      This is the best offline banner in the inventory — it explains the sync behavior.
+      Propagate this pattern to all other portals: web uses "Some features may be unavailable" (weaker), admin uses "Data may not be up to date" (weaker), delivery uses "Updates will sync when connected" (acceptable).
+      Standardize to the vendor-portal pattern as the benchmark.
+    metric_hypothesis: "cross-portal brand consistency; operational confidence — users who understand offline sync behavior are less likely to panic or create duplicate actions"
+    depends_on: null

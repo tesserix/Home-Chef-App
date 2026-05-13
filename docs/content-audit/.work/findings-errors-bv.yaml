@@ -1,0 +1,878 @@
+# Brand-Voice findings — ERRORS-EMPTY category (282 surfaces)
+# Lens: cross-surface and cross-app voice consistency vs STYLE-GUIDE.md + .impeccable.md
+# Severity: P0 cross-surface contradiction · P1 entry-surface drift · P2 secondary tone drift · P3 punctuation/capitalization
+
+# =============================================================================
+# CROSS-APP DRIFT — same error class, different copy across 7 apps + API
+# =============================================================================
+
+- finding_id: BV-001
+  surface_id: web-err-login-generic
+  lens: brand-voice
+  severity: P0
+  issue: "'Something went wrong. Please try again.' generic copy duplicated verbatim across 6 surfaces; vendor-portal, admin-portal, web, delivery-portal, mobile-customer, mobile-vendor — and the duplication is itself the violation (no contextual variant)"
+  evidence_excerpt: "Something went wrong. Please try again."
+  related_surfaces: ["web-err-generic-retry", "vp-auth-login-generic-error", "ap-auth-error-generic", "dp-err-generic-auth", "mc-onb-step3-error", "mv-onb-review-submit-error-body"]
+  recommendation: "Centralize as a single shared string token (e.g., errors.generic) — but require a contextual variant ('Sign-in failed. Try again.', 'Couldn't save changes. Try again.') for every place it appears. Generic 'something went wrong' violates Rule 2 (plain English over jargon) — 'something' is vague."
+  depends_on: null
+
+- finding_id: BV-002
+  surface_id: web-err-login-session-expired
+  lens: brand-voice
+  severity: P3
+  issue: "'Your session has expired. Please sign in again.' appears identically in web, vendor-portal, delivery-portal, admin-portal — this one IS consistent and good. Flag as positive baseline, no rewrite."
+  evidence_excerpt: "Your session has expired. Please sign in again."
+  related_surfaces: ["vp-auth-login-session-expired", "ap-auth-error-session-expired", "dp-err-session-expired"]
+  recommendation: "Keep as-is. Centralize as shared token errors.session_expired."
+  depends_on: null
+
+- finding_id: BV-003
+  surface_id: web-err-error-boundary
+  lens: brand-voice
+  severity: P0
+  issue: "Error-boundary fallback copy drifts heavily across apps: web uses 'Something broke on our end. We've been notified and we're looking into it...'; vendor-portal uses 'An unexpected error occurred while loading this page.'; admin-portal uses same as VP; mobile apps have no global boundary copy at all"
+  evidence_excerpt: "Unexpected error / Something broke on our end. / We've been notified and we're looking into it..."
+  related_surfaces: ["vp-err-boundary-fallback", "ap-errorboundary-body", "dp-err-boundary-body"]
+  recommendation: "Define one canonical error-boundary string: 'Something broke. We've logged it and are looking into it. Try again or reload.' Same across all 7 apps. The phrase 'unexpected error occurred while loading this page' is bureaucratic — passive, no agent, no recovery suggested."
+  depends_on: null
+
+- finding_id: BV-004
+  surface_id: web-err-layout-offline
+  lens: brand-voice
+  severity: P1
+  issue: "Offline banner copy drifts: web 'You're offline. Some features may be unavailable.' / vendor-portal 'You're offline. Orders will sync when connected.' / delivery-portal 'You're offline. Updates will sync when connected.' / admin-portal 'You're offline. Data may not be up to date.' — four variants of the same network state"
+  evidence_excerpt: "You're offline. Some features may be unavailable."
+  related_surfaces: ["vp-ux-layout-offline", "dp-err-offline-banner", "ap-layout-offline-banner"]
+  recommendation: "Define per-persona variants but keep structure identical: customer 'You're offline. We'll sync when you reconnect.' / chef 'Offline. Orders sync when you reconnect.' (shorter — chef in kitchen) / driver 'Offline. Updates sync when connected.' (telegraphic per persona matrix) / admin 'Offline. Data may be stale.' (neutral operator)"
+  depends_on: null
+
+- finding_id: BV-005
+  surface_id: vp-ux-orders-live-empty
+  lens: brand-voice
+  severity: P0
+  issue: "'No pending orders' empty state drifts between vendor-portal ('All caught up! / No pending orders right now') and mobile-vendor ('No pending orders / New orders will appear here automatically') — same chef, two different products, two different tones"
+  evidence_excerpt: "All caught up! / No pending orders right now"
+  related_surfaces: ["mv-orders-empty-title", "mv-orders-empty-body", "vp-ux-dashboard-pending-empty"]
+  recommendation: "'All caught up!' violates Rule 1 (no exclamation marks). Keep the structural shorter mobile copy across both: 'No pending orders. New orders appear here automatically.' Same string, both surfaces."
+  depends_on: null
+
+- finding_id: BV-006
+  surface_id: web-ux-cart-empty
+  lens: brand-voice
+  severity: P0
+  issue: "Cart-empty copy drifts: web 'Your cart is empty. Looks like you haven't added any items yet. Browse our home chefs...' (28 words) vs mobile-customer 'Your cart is empty.' (4 words) vs CartSheet 'Your cart is empty' (4 words, no period) — same concept, three lengths"
+  evidence_excerpt: "Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs..."
+  related_surfaces: ["mc-checkout-empty-cart", "mc-cartsheet-empty"]
+  recommendation: "Drop 'Looks like you haven't added any items yet' — it's filler that violates Rule 1 (loud) and is the exact 'cuteness' pattern STYLE-GUIDE banned. Standardize: title 'Your cart is empty.' + body 'Browse chefs to start an order.' Same wording on all three surfaces."
+  depends_on: null
+
+- finding_id: BV-007
+  surface_id: web-err-browse-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'No chefs found' empty state drifts: web 'No chefs found / Try adjusting your filters or search query' vs mobile-customer 'No chefs found / Try adjusting your filters' (no 'or search query' tail) vs admin-portal 'No chefs found' (no body)"
+  evidence_excerpt: "No chefs found / Try adjusting your filters or search query"
+  related_surfaces: ["mc-home-empty", "ap-chefs-empty"]
+  recommendation: "Customer-facing (web + mobile-customer): same string 'No chefs match your filters. Try widening the search.' Admin: 'No chefs found' (neutral operator tone OK)."
+  depends_on: null
+
+- finding_id: BV-008
+  surface_id: web-err-orderdetail-not-found
+  lens: brand-voice
+  severity: P2
+  issue: "'Order not found' uses inconsistent CTA capitalization: web 'View All Orders' (Title Case violates STYLE-GUIDE.md §4 buttons — sentence case required); mobile-customer 'Go Back' (Title Case)"
+  evidence_excerpt: "Order not found / View All Orders"
+  related_surfaces: ["mc-order-detail-not-found"]
+  recommendation: "Sentence case: 'View all orders' / 'Go back'. Same body across surfaces."
+  depends_on: null
+
+- finding_id: BV-009
+  surface_id: vp-ux-menu-empty
+  lens: brand-voice
+  severity: P1
+  issue: "Vendor menu-empty CTA 'Add Your First Item' is Title Case — STYLE-GUIDE bans Title Case on buttons (sentence case + verb-first ≤3 words). Mobile equivalent is more conformant: 'Tap + to add your first item.' — but mixed metaphors across surfaces"
+  evidence_excerpt: "No menu items yet / Start building your menu by adding your first dish. / Add Your First Item"
+  related_surfaces: ["mv-menu-empty"]
+  recommendation: "Sentence-case CTA: 'Add first item'. Body unified: 'No menu items. Add your first dish.' (matches STYLE-GUIDE empty-state pattern exactly)."
+  depends_on: null
+
+- finding_id: BV-010
+  surface_id: dp-empty-active-title
+  lens: brand-voice
+  severity: P1
+  issue: "Driver app titles use Title Case ('No Active Delivery', 'No Available Deliveries', 'No Deliveries Yet') — violates STYLE-GUIDE sentence-case rule AND violates driver persona-matrix telegraphic ≤4-word imperative tone"
+  evidence_excerpt: "No Active Delivery / No Available Deliveries / No Deliveries Yet"
+  related_surfaces: ["dp-empty-available-title", "dp-empty-history-title", "md-emp-001"]
+  recommendation: "Driver telegraphic: 'No active delivery.' / 'No deliveries available.' / 'No deliveries yet.' Sentence case + period. Drop redundant 'Yet' where the body already says 'will appear here'."
+  depends_on: null
+
+- finding_id: BV-011
+  surface_id: md-emp-006
+  lens: brand-voice
+  severity: P1
+  issue: "Mobile-delivery uses Title Case heading 'Fleet Management' and 'Staff Management' on lock screens — Title Case banned, plus 'Management' is generic SaaS-dashboard jargon"
+  evidence_excerpt: "Fleet Management / Staff Management"
+  related_surfaces: ["md-emp-010"]
+  recommendation: "Sentence case + plain: 'Fleet access required.' / 'Staff access required.' Body stays similar."
+  depends_on: null
+
+- finding_id: BV-012
+  surface_id: dp-empty-active-body
+  lens: brand-voice
+  severity: P2
+  issue: "Driver app body copy is too conversational for driver persona-matrix telegraphic ≤4-word tone: 'Check available deliveries to pick up a new order.' (9 words) / 'New orders will appear here when they're ready for pickup.' (10 words)"
+  evidence_excerpt: "Check available deliveries to pick up a new order."
+  related_surfaces: ["dp-empty-available-body", "md-emp-002"]
+  recommendation: "Driver-telegraphic rewrite: 'Open Available to pick one up.' (6 words) / 'New orders appear when ready.' (5 words). STYLE-GUIDE persona-matrix says driver = imperative ≤4 words where possible."
+  depends_on: null
+
+# =============================================================================
+# "OOPS / UH OH / WHOOPS / SOMETHING WENT WRONG" PATTERN
+# =============================================================================
+
+- finding_id: BV-013
+  surface_id: web-err-login-generic
+  lens: brand-voice
+  severity: P1
+  issue: "'Something went wrong' pattern appears 6+ times across the codebase — STYLE-GUIDE §4 errors explicitly bans 'Oops!' / 'Uh oh!' family; 'something went wrong' is the same anti-pattern in a different costume (vague, no cause, no recovery)"
+  evidence_excerpt: "Something went wrong. Please try again."
+  related_surfaces: ["web-err-generic-retry", "vp-auth-login-generic-error", "ap-auth-error-generic", "dp-err-generic-auth"]
+  recommendation: "Replace with cause + action per STYLE-GUIDE: 'Sign-in failed. Check your email and password.' / 'Couldn't reach the server. Try again.' / 'Network lost. Reconnect to keep tracking.' (the exact good example from STYLE-GUIDE)"
+  depends_on: null
+
+- finding_id: BV-014
+  surface_id: mc-profile-save-error
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer wraps every Alert.alert error with a generic title 'Error' — that's the JS/RN equivalent of 'Oops!'. Customer-facing surface, six instances"
+  evidence_excerpt: "Error / Could not update profile. Please try again."
+  related_surfaces: ["mc-catering-submit-error", "mv-onb-personal-validation-alert", "mv-onb-review-submit-error-title", "mv-profile-displayname-required"]
+  recommendation: "Drop the 'Error' title — the body line is the title. Use 'Couldn't save profile.' as the leading line; if a system alert needs a title, use the cause ('Profile not saved') not the genre. Vendor 'Validation Error' / 'Submission Error' similar — use 'Check your details' / 'Submission failed' instead."
+  depends_on: null
+
+- finding_id: BV-015
+  surface_id: mv-onb-docs-required-title
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-vendor uses Title Case alert titles ('Documents Required', 'Permission Required', 'Terms Required', 'Policy Required', 'Validation Error', 'Submission Error') — Title Case banned by STYLE-GUIDE, AND noun-only titles are vague non-imperative"
+  evidence_excerpt: "Documents Required / Permission Required / Terms Required / Policy Required"
+  related_surfaces: ["mv-onb-docs-perm-title", "mv-onb-policies-terms-required-title", "mv-onb-policies-policy-required-title", "mv-onb-personal-validation-alert", "mv-onb-review-submit-error-title"]
+  recommendation: "Sentence-case + actionable: 'Upload required documents' / 'Camera access needed' / 'Accept terms to continue' / 'Pick a cancellation policy' / 'Check your details' / 'Couldn't submit'."
+  depends_on: null
+
+# =============================================================================
+# BLAME LANGUAGE — "you forgot", "you haven't"
+# =============================================================================
+
+- finding_id: BV-016
+  surface_id: web-ux-cart-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'Looks like you haven't added any items yet' — combines 'looks like' (banned cuteness) with blame phrasing 'you haven't'. STYLE-GUIDE §4 empty-state pattern is 'Why it's empty → One action', not blame"
+  evidence_excerpt: "Looks like you haven't added any items yet."
+  related_surfaces: []
+  recommendation: "Drop entirely. 'Your cart is empty. Browse chefs to start an order.'"
+  depends_on: null
+
+- finding_id: BV-017
+  surface_id: web-err-orders-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'You haven't placed any orders yet.' — blame phrasing. STYLE-GUIDE allows 'No orders yet. Browse chefs near you.' (positive, action-led)"
+  evidence_excerpt: "No orders found / You haven't placed any orders yet."
+  related_surfaces: []
+  recommendation: "'No orders yet. Browse chefs to place your first.'"
+  depends_on: null
+
+- finding_id: BV-018
+  surface_id: vp-ux-orders-history-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'You have no completed or cancelled orders yet.' — blame-tinged 'you have no' phrasing; also redundant 'orders found / You have no... orders yet' (double-negative wrap)"
+  evidence_excerpt: "No orders found / You have no completed or cancelled orders yet."
+  related_surfaces: []
+  recommendation: "'No order history yet. Completed and cancelled orders appear here.'"
+  depends_on: null
+
+- finding_id: BV-019
+  surface_id: web-err-checkout-no-addresses
+  lens: brand-voice
+  severity: P3
+  issue: "'You don't have any saved addresses yet.' — soft blame; STYLE-GUIDE prefers state + action ('No saved addresses. Add one to continue.')"
+  evidence_excerpt: "You don't have any saved addresses yet. Add one to continue."
+  related_surfaces: []
+  recommendation: "'No saved addresses. Add one to continue.'"
+  depends_on: null
+
+# =============================================================================
+# EMPTY-STATE CUTENESS — banned by lens brief
+# =============================================================================
+
+- finding_id: BV-020
+  surface_id: mc-favorites-empty
+  lens: brand-voice
+  severity: P1
+  issue: "'No saved chefs yet / Tap the heart on any chef to save them!' — exclamation mark violates Rule 1 (no exclamations) on a customer empty state; 'them' is grammatical drift ('it' is correct singular antecedent)"
+  evidence_excerpt: "No saved chefs yet / Tap the heart on any chef to save them!"
+  related_surfaces: []
+  recommendation: "'No saved chefs yet. Tap the heart on any chef to save it.' (period, singular pronoun, no exclamation)"
+  depends_on: null
+
+- finding_id: BV-021
+  surface_id: mc-orders-empty
+  lens: brand-voice
+  severity: P1
+  issue: "'Browse chefs to place your first order!' — exclamation on customer empty state. Notes column flags 🍽️ emoji-in-copy in same surface; emoji decoration on customer-facing OK per matrix but exclamation isn't"
+  evidence_excerpt: "No orders yet / Browse chefs to place your first order!"
+  related_surfaces: []
+  recommendation: "'No orders yet. Browse chefs to place your first.'"
+  depends_on: null
+
+- finding_id: BV-022
+  surface_id: mc-social-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'Chefs will share their latest creations here.' — 'creations' is on the edge of artisanal-banned vocabulary; STYLE-GUIDE bans 'artisanal/handcrafted/curated/foodie'; 'creations' rides the same vibe"
+  evidence_excerpt: "Chefs will share their latest creations here."
+  related_surfaces: []
+  recommendation: "'Chefs will share their latest dishes here.' Plain noun, no faux-artisanal."
+  depends_on: null
+
+- finding_id: BV-023
+  surface_id: mv-orders-empty-body
+  lens: brand-voice
+  severity: P3
+  issue: "'New orders will appear here automatically' — 'automatically' is filler; chef persona-matrix says crisp 5-12 words"
+  evidence_excerpt: "New orders will appear here automatically"
+  related_surfaces: ["vp-ux-orders-live-empty"]
+  recommendation: "'New orders appear here.' (4 words)"
+  depends_on: null
+
+- finding_id: BV-024
+  surface_id: ap-platsettings-zones-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'No zones yet — delivery is available everywhere until a zone is created.' — em-dash plus passive 'until a zone is created' violates active-voice preference; STYLE-GUIDE §5 'we refund within 7 days' active-voice example applies"
+  evidence_excerpt: "No zones yet — delivery is available everywhere until a zone is created."
+  related_surfaces: []
+  recommendation: "'No zones yet. Without a zone, delivery is available everywhere.'"
+  depends_on: null
+
+# =============================================================================
+# EMOJI / DECORATIVE IN ERROR-EMPTY CONTEXTS
+# =============================================================================
+
+- finding_id: BV-025
+  surface_id: mc-favorites-empty
+  lens: brand-voice
+  severity: P3
+  issue: "Heart emoji in empty-state copy on customer surface — lens brief says customer OK occasional but this is a single-action empty state where photo-forward principle (Rule 3) means the icon does the work, not emoji-in-text"
+  evidence_excerpt: "(heart emoji in copy per inventory note)"
+  related_surfaces: ["mc-orders-empty", "mc-catering-empty", "mc-social-empty"]
+  recommendation: "Remove emoji from copy strings. Use the lucide-react / native icon component above the text instead — keeps copy clean and translation-ready."
+  depends_on: null
+
+# =============================================================================
+# ANTHROPOMORPHISM / VOICE DRIFT
+# =============================================================================
+
+- finding_id: BV-026
+  surface_id: vp-ux-payouts-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'Your payout history will appear here once you receive your first payout.' — 19 words on a chef surface; chef persona-matrix says crisp 5-12 words. 'Once you receive' is also conditional-future heavy"
+  evidence_excerpt: "Your payout history will appear here once you receive your first payout."
+  related_surfaces: []
+  recommendation: "'Payouts appear here after your first payout.' (7 words)"
+  depends_on: null
+
+- finding_id: BV-027
+  surface_id: vp-ux-notifs-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'Admin requests for document uploads, profile updates, and review feedback will appear here.' — 14 words listing every category violates chef-tone crispness AND reads like a help-doc entry rather than empty state"
+  evidence_excerpt: "Admin requests for document uploads, profile updates, and review feedback will appear here."
+  related_surfaces: []
+  recommendation: "'No admin requests. They appear here when admin needs something.'"
+  depends_on: null
+
+- finding_id: BV-028
+  surface_id: ap-staffdetail-perms-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'No specific permissions data available for this role.' — admin persona allows neutral operator tone but this is bureaucratic ('data available') for what is just 'no permissions set'"
+  evidence_excerpt: "No specific permissions data available for this role."
+  related_surfaces: []
+  recommendation: "'No permissions configured for this role.'"
+  depends_on: null
+
+- finding_id: BV-029
+  surface_id: md-emp-007
+  lens: brand-voice
+  severity: P2
+  issue: "Driver lock-screen body 'Fleet management is available for fleet managers only. Contact your administrator to request access.' — 14 words; driver tone says ≤4 telegraphic; 'your administrator' is enterprise-SaaS vocabulary"
+  evidence_excerpt: "Fleet management is available for fleet managers only. Contact your administrator to request access."
+  related_surfaces: ["md-emp-011"]
+  recommendation: "'For fleet managers only. Ask your manager for access.' (10 words, plainer)"
+  depends_on: null
+
+# =============================================================================
+# BANNED VOCABULARY — STYLE-GUIDE §3
+# =============================================================================
+
+- finding_id: BV-030
+  surface_id: ap-providerdetail-dialog-bodies
+  lens: brand-voice
+  severity: P2
+  issue: "'Are you sure you want to delete this delivery provider? This action cannot be undone.' — STYLE-GUIDE §4 modal-subtitle pattern explicitly flags 'Are you sure? This action cannot be undone.' as the ❌ example because it doesn't explain WHAT can't be undone"
+  evidence_excerpt: "Are you sure you want to delete this delivery provider? This action cannot be undone."
+  related_surfaces: ["ap-providers-dialog-delete-body", "ap-staffdetail-confirm-deactivate", "ap-staffdetail-confirm-reactivate", "mv-menuitem-delete-alert", "mv-menuedit-delete-photo-alert", "mv-more-logout-confirm-body"]
+  recommendation: "Replace with consequence-led: 'Delete this provider permanently? Orders already assigned stay; no new ones will route here.' Same pattern across all 7 'Are you sure' surfaces — say what specifically can't be undone, not generic 'cannot be undone'."
+  depends_on: null
+
+- finding_id: BV-031
+  surface_id: ap-providerdetail-dialog-bodies
+  lens: brand-voice
+  severity: P3
+  issue: "'Are you sure you want to disable this provider?' / 'Are you sure you want to enable this provider?' — opening with 'Are you sure' is the banned modal pattern from STYLE-GUIDE; also overuse of the same phrase across 7+ confirmations"
+  evidence_excerpt: "Are you sure you want to disable this provider? No new deliveries will be assigned to it."
+  related_surfaces: ["ap-providers-dialog-disable-body"]
+  recommendation: "Lead with the action: 'Disable this provider? No new deliveries will be assigned. Existing deliveries continue.' Modal title carries the question; body explains consequence."
+  depends_on: null
+
+- finding_id: BV-032
+  surface_id: api-error-stripe-connect
+  lens: brand-voice
+  severity: P0
+  issue: "'No Stripe account — call /chef/stripe/connect first' leaks an API path to end users; inventory notes flag this. Brand-voice catastrophic — this is plumber-talk to a customer"
+  evidence_excerpt: "No Stripe account — call /chef/stripe/connect first"
+  related_surfaces: []
+  recommendation: "Replace with user-facing: 'Connect Stripe in your payout settings before switching payment methods.' Internal-only error codes stay in API logs."
+  depends_on: null
+
+- finding_id: BV-033
+  surface_id: api-error-delivery-already-active
+  lens: brand-voice
+  severity: P1
+  issue: "'no_active_delivery' snake_case slug surfaced as user-facing error string — inventory notes flag this. Snake_case is API-internal vocabulary, never voice."
+  evidence_excerpt: "no_active_delivery"
+  related_surfaces: []
+  recommendation: "Map snake_case to a user-facing message before serialization: 'You don't have an active delivery.' Keep slug as machine-readable code in a separate field."
+  depends_on: null
+
+- finding_id: BV-034
+  surface_id: api-error-delivery-online
+  lens: brand-voice
+  severity: P2
+  issue: "'Partner has reached maximum concurrent deliveries' / 'Partner is not verified or active' — 'Partner' is admin-portal vocabulary; driver app refers to driver as 'you'. Same error, two voices, breaks identity per STYLE-GUIDE §3 ('Driver' ✅ in driver-facing, 'Delivery partner' only customer-facing)"
+  evidence_excerpt: "Partner has reached maximum concurrent deliveries / Partner is not verified or active"
+  related_surfaces: ["dp-err-partner-status", "dp-empty-partner-notfound", "dp-empty-partner-docs", "dp-err-partner-verify", "dp-empty-partners"]
+  recommendation: "Driver-facing copy: 'You've hit the max active deliveries.' / 'Your account isn't verified yet.' Admin-facing keeps 'Partner not found' (admin context, neutral operator tone). API should return code + driver-facing message; admin UI builds its own admin-tone string from the code."
+  depends_on: null
+
+# =============================================================================
+# CAPITALIZATION DRIFT — BUTTON / CTA TITLE CASE
+# =============================================================================
+
+- finding_id: BV-035
+  surface_id: vp-ux-menu-error-state
+  lens: brand-voice
+  severity: P3
+  issue: "'Try Again' button label uses Title Case across vendor-portal (menu, dashboard, analytics, earnings, reviews) — STYLE-GUIDE §4 button format is sentence case + ≤3 words verb-first"
+  evidence_excerpt: "Try Again"
+  related_surfaces: ["vp-err-boundary-fallback", "mv-dash-retry-cta"]
+  recommendation: "'Try again' (sentence case). Note mobile-vendor already uses 'Retry' (1 word) — even better. Pick one: 'Retry' (preferred for crispness)."
+  depends_on: null
+
+- finding_id: BV-036
+  surface_id: web-ux-chefdetail-not-found
+  lens: brand-voice
+  severity: P3
+  issue: "'Browse Chefs' CTA in Title Case on web 'Chef not found' empty state; same in 'View All Orders'"
+  evidence_excerpt: "Chef not found / Browse Chefs"
+  related_surfaces: ["web-err-orderdetail-not-found", "web-err-orders-empty"]
+  recommendation: "'Browse chefs' / 'View all orders' (sentence case)."
+  depends_on: null
+
+- finding_id: BV-037
+  surface_id: vp-onb-banner-rejected-title
+  lens: brand-voice
+  severity: P3
+  issue: "Onboarding banner titles in Title Case: 'Application Rejected' / 'More Information Needed' — chef-facing operational copy; STYLE-GUIDE sentence-case applies"
+  evidence_excerpt: "Application Rejected / More Information Needed"
+  related_surfaces: ["vp-onb-banner-info-requested-title"]
+  recommendation: "'Application rejected' / 'More information needed' — sentence case."
+  depends_on: null
+
+# =============================================================================
+# PUNCTUATION CONSISTENCY
+# =============================================================================
+
+- finding_id: BV-038
+  surface_id: mc-cartsheet-empty
+  lens: brand-voice
+  severity: P3
+  issue: "Period inconsistency: 'Your cart is empty' (no period, CartSheet) vs 'Your cart is empty.' (with period, checkout list) vs full sentence on web. Empty-state titles inconsistent on period usage across codebase"
+  evidence_excerpt: "Your cart is empty"
+  related_surfaces: ["mc-checkout-empty-cart", "web-ux-cart-empty"]
+  recommendation: "Adopt rule: empty-state titles end with period when they read as a sentence ('Your cart is empty.'); fragment titles don't ('No orders yet'). Document in STYLE-GUIDE §4. Then sweep."
+  depends_on: null
+
+- finding_id: BV-039
+  surface_id: dp-empty-partners
+  lens: brand-voice
+  severity: P3
+  issue: "Trailing-period drift in delivery-portal: 'No partners found matching your criteria.' (period) vs 'No partners found.' (period) vs 'No Available Deliveries' (no period) — same surface family"
+  evidence_excerpt: "No partners found matching your criteria."
+  related_surfaces: ["dp-empty-partner-notfound", "dp-empty-partner-docs", "dp-empty-pending-invites", "md-emp-005", "md-emp-008", "md-emp-004"]
+  recommendation: "Apply rule from BV-038. Driver-app titles fragmentary (no period), bodies with sentences (period)."
+  depends_on: null
+
+- finding_id: BV-040
+  surface_id: api-error-phone-duplicate
+  lens: brand-voice
+  severity: P3
+  issue: "API errors are wildly inconsistent on trailing periods: 'This phone number is already registered with another account.' (period) vs ~140 others without period ('Invalid email or password', 'Chef not found'). Inventory notes flag this"
+  evidence_excerpt: "This phone number is already registered with another account."
+  related_surfaces: ["api-error-validation-required", "api-error-validation-not-found", "api-error-validation-invalid-id"]
+  recommendation: "Adopt rule: API error 'message' field ALWAYS ends with period (writing is complete-sentence). The API isn't the surface; the frontend may strip or keep. Document in STYLE-GUIDE."
+  depends_on: null
+
+# =============================================================================
+# AI-SLOP / GENERIC PLACEHOLDER COPY
+# =============================================================================
+
+- finding_id: BV-041
+  surface_id: ap-analytics-coming-soon
+  lens: brand-voice
+  severity: P0
+  issue: "'Chart coming soon' shipped to production admin surface — inventory notes flag 'placeholder; surfaces unfinished work to users'. This violates Rule 5 (restraint) AND lens brief 'Coming soon features in production'"
+  evidence_excerpt: "Chart coming soon"
+  related_surfaces: []
+  recommendation: "Either ship the chart or hide the section. Never ship 'coming soon' to production. If it must stay visible during a phased rollout, use 'Analytics in beta — full charts arriving next release' with a specific commitment."
+  depends_on: null
+
+- finding_id: BV-042
+  surface_id: ap-dashboard-recent-empty-body
+  lens: brand-voice
+  severity: P3
+  issue: "'Platform events will appear here.' — generic SaaS-dashboard placeholder (lens brief 'Generic SaaS dashboard'). No information about what counts as a platform event"
+  evidence_excerpt: "Platform events will appear here."
+  related_surfaces: []
+  recommendation: "'No recent activity. Approvals, suspensions, and refunds appear here.' (specific, useful)"
+  depends_on: null
+
+- finding_id: BV-043
+  surface_id: ap-secsettings-apikey-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'No keys yet.' — under-informative; admin tone allows precision but 'No keys yet' could be 'No API keys. Generate one to grant programmatic access.'"
+  evidence_excerpt: "No keys yet."
+  related_surfaces: []
+  recommendation: "'No API keys yet. Generate one to grant programmatic access.'"
+  depends_on: null
+
+# =============================================================================
+# PERSONA-TONE VIOLATIONS
+# =============================================================================
+
+- finding_id: BV-044
+  surface_id: mc-checkout-errors
+  lens: brand-voice
+  severity: P1
+  issue: "'Payment confirmation timed out. Check your order history to confirm status.' — customer-facing on a money-sensitive surface; 17 words for what should be ~10. STYLE-GUIDE customer-matrix says 10-18 words conversational, but this is operational not conversational"
+  evidence_excerpt: "Payment confirmation timed out. Check your order history to confirm status."
+  related_surfaces: []
+  recommendation: "'Payment is still processing. We'll update your order when it confirms.' (warmer + 11 words + no blame on customer)"
+  depends_on: null
+
+- finding_id: BV-045
+  surface_id: api-error-payment-config
+  lens: brand-voice
+  severity: P1
+  issue: "'Stripe gateway not configured by platform admin' — leaks internal config state to customer; 'platform admin' is internal vocabulary. Customer doesn't know who that is"
+  evidence_excerpt: "Stripe gateway not configured by platform admin"
+  related_surfaces: []
+  recommendation: "Customer-facing: 'Card payments aren't available right now. Try a different method or contact support.' Log the internal cause separately."
+  depends_on: null
+
+- finding_id: BV-046
+  surface_id: api-error-auth-suspended
+  lens: brand-voice
+  severity: P2
+  issue: "'Account is suspended' — no reason, no contact-support guidance. Inventory notes flag this. Suspending a user is a high-trust moment; copy should support recovery path"
+  evidence_excerpt: "Account is suspended"
+  related_surfaces: []
+  recommendation: "'Your account is suspended. Contact support@homechef.in to appeal.' (with actual support address from contact config)"
+  depends_on: null
+
+- finding_id: BV-047
+  surface_id: api-error-order-cancel-stage
+  lens: brand-voice
+  severity: P1
+  issue: "'Order cannot be cancelled at this stage' — no refund implication, no explanation of WHICH stage allows cancellation. Customer money is involved"
+  evidence_excerpt: "Order cannot be cancelled at this stage"
+  related_surfaces: []
+  recommendation: "'Your chef has started cooking — cancellation closed. Contact the chef via chat to discuss.' (specific + actionable). Backend should return both code and the stage so frontend can craft per-stage copy."
+  depends_on: null
+
+- finding_id: BV-048
+  surface_id: api-error-chef-not-accepting
+  lens: brand-voice
+  severity: P2
+  issue: "'Chef is not accepting orders' — no alternative ('try another chef'); customer surface should always offer a next action per Rule 5 (no urgency tricks but always offer the door)"
+  evidence_excerpt: "Chef is not accepting orders"
+  related_surfaces: []
+  recommendation: "'This chef isn't accepting orders right now. Browse other chefs nearby.' (with a link back to browse)"
+  depends_on: null
+
+# =============================================================================
+# INCONSISTENT SAME-CONCEPT MESSAGING
+# =============================================================================
+
+- finding_id: BV-049
+  surface_id: api-error-auth-unauthorized
+  lens: brand-voice
+  severity: P0
+  issue: "Same auth-failure concept across API: 'Unauthorized' / 'unauthorized' / 'Authentication required' / 'Token required' — four variants. Casing inconsistent within one variant"
+  evidence_excerpt: "Unauthorized / unauthorized / Authentication required / Token required"
+  related_surfaces: []
+  recommendation: "Pick one user-facing string: 'Sign in to continue.' (or 'Session expired. Sign in again.' if it's a refresh). Internal HTTP codes stay 401. Audit handlers/* and consolidate."
+  depends_on: null
+
+- finding_id: BV-050
+  surface_id: api-error-auth-not-verified
+  lens: brand-voice
+  severity: P2
+  issue: "'Account not verified' vs 'Account not verified yet' — two variants in same file (handlers/auth.go per inventory). The 'yet' variant is friendlier"
+  evidence_excerpt: "Account not verified / Account not verified yet"
+  related_surfaces: []
+  recommendation: "Keep 'yet' + add action: 'Your account isn't verified yet. Check your email for the verification link.'"
+  depends_on: null
+
+- finding_id: BV-051
+  surface_id: api-error-auth-current-pw
+  lens: brand-voice
+  severity: P2
+  issue: "'Current password is incorrect' vs 'Password is incorrect' — two variants of same concept"
+  evidence_excerpt: "Current password is incorrect / Password is incorrect"
+  related_surfaces: []
+  recommendation: "Settle on context: 'Current password is incorrect.' for change-password flow; 'Incorrect email or password.' for sign-in (deliberately vague for security). Document both as canonical."
+  depends_on: null
+
+- finding_id: BV-052
+  surface_id: api-error-auth-reset-expired
+  lens: brand-voice
+  severity: P2
+  issue: "'Reset token has expired' / 'Invalid or expired reset token' / 'Invalid or expired enrollment token' — three variants of token-expiry concept"
+  evidence_excerpt: "Reset token has expired / Invalid or expired reset token / Invalid or expired enrollment token"
+  related_surfaces: []
+  recommendation: "Unified: 'This link has expired. Request a new one.' Customers don't think in 'tokens'."
+  depends_on: null
+
+- finding_id: BV-053
+  surface_id: api-error-upload-size
+  lens: brand-voice
+  severity: P0
+  issue: "'10MB' vs '5 MB' vs '5MB' — three different formats of the same unit on the same product. Inventory notes flag this. Customer-visible inconsistency on file uploads"
+  evidence_excerpt: "File too large (max 10MB) / File too large. Maximum 5 MB. / Profile photo too large (max 5MB)"
+  related_surfaces: ["api-error-upload-type", "vp-ux-menu-form-image-errors", "dp-err-step3-file-size"]
+  recommendation: "Standardize: '5 MB' (space, capital MB) everywhere. Standardize wrapper: 'File too large. Max 5 MB.' (period, sentence case, no parenthesis)."
+  depends_on: null
+
+- finding_id: BV-054
+  surface_id: api-error-upload-type
+  lens: brand-voice
+  severity: P1
+  issue: "5 variants of 'Invalid file type' with slightly different allowed lists ('JPEG, PNG, PDF' vs 'JPEG, PNG, WebP, PDF' vs 'JPEG, PNG, WebP' vs 'JPEG, PNG, WebP' vs 'Profile photo must be JPEG or PNG'). Inventory flags this"
+  evidence_excerpt: "Invalid file type. Allowed: JPEG, PNG, PDF."
+  related_surfaces: []
+  recommendation: "Standardize structure: 'Invalid file type. Allowed: {list}.' — generated from server-side allowlist constant per endpoint. Never hand-roll the variant list."
+  depends_on: null
+
+- finding_id: BV-055
+  surface_id: api-error-upload-count
+  lens: brand-voice
+  severity: P2
+  issue: "Upload-count errors inconsistent on remediation: 'Maximum 5 kitchen photos allowed. Remove one before adding another.' (good — adds 'Remove one') vs 'Maximum 3 images per review' (no remediation)"
+  evidence_excerpt: "Maximum 3 images per review / Maximum 5 kitchen photos allowed. Remove one before adding another."
+  related_surfaces: []
+  recommendation: "Apply remediation to all: 'Maximum 3 images per review. Remove one before adding another.' STYLE-GUIDE §4 error pattern: What happened → What to do."
+  depends_on: null
+
+- finding_id: BV-056
+  surface_id: web-err-favorite-max-limit
+  lens: brand-voice
+  severity: P3
+  issue: "'You can save up to 7 favorite chefs. Remove one first.' — good remediation pattern (matches BV-055 recommendation). Flag as positive baseline."
+  evidence_excerpt: "You can save up to 7 favorite chefs. Remove one first."
+  related_surfaces: []
+  recommendation: "Keep. Use as template across upload-count and any limit error: '{What's the rule}. {What to do.}'"
+  depends_on: null
+
+# =============================================================================
+# ALL CAPS / SHOUTY
+# =============================================================================
+
+- finding_id: BV-057
+  surface_id: vp-onb-docs-required-title
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor 'Documents Required' / 'Permission Required' / 'Terms Required' titles read shouty (Title Case + commanding noun); chef-tone matrix says crisp 5-12 words operational, not exclamatory"
+  evidence_excerpt: "Documents Required / Permission Required / Terms Required"
+  related_surfaces: ["mv-onb-docs-perm-title", "mv-onb-policies-terms-required-title"]
+  recommendation: "See BV-015 (already covered). Cross-reference."
+  depends_on: BV-015
+
+# =============================================================================
+# REDUNDANT / OVERLONG CHEF/DRIVER COPY
+# =============================================================================
+
+- finding_id: BV-058
+  surface_id: vp-ux-menu-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'Start building your menu by adding your first dish.' — 9 words but starts with 'Start' (filler verb), 'building your menu' is over-described"
+  evidence_excerpt: "Start building your menu by adding your first dish."
+  related_surfaces: []
+  recommendation: "'Add your first dish to get started.' (7 words) — or just the STYLE-GUIDE example 'No menu items. Add your first dish.' (covered in BV-009)."
+  depends_on: BV-009
+
+- finding_id: BV-059
+  surface_id: mv-reviews-empty
+  lens: brand-voice
+  severity: P3
+  issue: "'No reviews yet. Your first review will appear here.' — chef-facing, 'your first review will appear here' is redundant with 'No reviews yet' (both mean: empty list)"
+  evidence_excerpt: "No reviews yet. Your first review will appear here."
+  related_surfaces: ["vp-ux-reviews-empty"]
+  recommendation: "Just 'No reviews yet.' (vendor-portal version is already correct; align mobile-vendor)."
+  depends_on: null
+
+- finding_id: BV-060
+  surface_id: dp-empty-staff
+  lens: brand-voice
+  severity: P3
+  issue: "'No staff members yet. Send an invitation to get started.' — admin surface in driver portal; 'to get started' is filler. Admin matrix: precise, no fluff"
+  evidence_excerpt: "No staff members yet. Send an invitation to get started."
+  related_surfaces: []
+  recommendation: "'No staff yet. Send an invitation.' (or align with the admin-portal version 'No staff members found')."
+  depends_on: null
+
+# =============================================================================
+# SAME-NAME / DIFFERENT-WORDS CONCEPT DRIFT
+# =============================================================================
+
+- finding_id: BV-061
+  surface_id: vp-onb-locked-conflict-toast
+  lens: brand-voice
+  severity: P2
+  issue: "Two variants of 'kitchen already submitted' state: 'Your kitchen is already under review or live.' vs 'Your kitchen is already submitted.' — same concept, two toasts"
+  evidence_excerpt: "Your kitchen is already under review or live. / Your kitchen is already submitted."
+  related_surfaces: ["vp-onb-locked-info-toast"]
+  recommendation: "Pick state-precise variant: 'Your kitchen is already {status}.' where status comes from the API (under review / approved / live). Avoid the catchall 'submitted'."
+  depends_on: null
+
+- finding_id: BV-062
+  surface_id: api-error-validation-required
+  lens: brand-voice
+  severity: P0
+  issue: "18 variants of 'X is required' across API handlers; inventory notes 'Inconsistent casing on field names (chefId vs country)'. Customer surfaces will see camelCase and human-readable mixed"
+  evidence_excerpt: "Email is required / chefId is required / currencyCode is required"
+  related_surfaces: []
+  recommendation: "API: always use human-readable label, never camelCase: 'Chef is required.' not 'chefId is required.'. Audit all handlers and update binding error formatters. Document in STYLE-GUIDE §3 'Field names in user-facing strings'."
+  depends_on: null
+
+- finding_id: BV-063
+  surface_id: api-error-validation-invalid-id
+  lens: brand-voice
+  severity: P0
+  issue: "~40 variants of 'Invalid X' / 'Invalid X ID'; inventory flags this. Customer sees 'Invalid menuItem' — that's a developer-facing string leaked"
+  evidence_excerpt: "Invalid menuItem ID / Invalid OAuth provider / Invalid request body"
+  related_surfaces: []
+  recommendation: "Distinguish: (1) field-format errors stay specific in human label ('Invalid menu item.'); (2) framework errors ('Invalid request body') should never surface — wrap as 'Something looks off with your input. Try again.'"
+  depends_on: null
+
+- finding_id: BV-064
+  surface_id: api-error-generic-failed
+  lens: brand-voice
+  severity: P0
+  issue: "100+ 'Failed to X' variants across API; inventory: 'Should generally not surface to end users without translation'. Brand-voice catastrophe — these are operational/dev strings"
+  evidence_excerpt: "Failed to fetch chefs / Failed to create order / Failed to upload file"
+  related_surfaces: []
+  recommendation: "Frontend should NEVER surface 'Failed to {verb}' verbatim from API. Map at the frontend layer: 'Couldn't load chefs. Try again.' / 'We couldn't place your order. Try again or contact support.' API string can stay technical (operational logs); the surfaced message is curated."
+  depends_on: null
+
+- finding_id: BV-065
+  surface_id: api-error-quotes-catering
+  lens: brand-voice
+  severity: P3
+  issue: "Catering quote errors generally well-phrased ('This request is no longer accepting quotes' / 'Quote deadline has passed') — positive baseline; flag for inclusion in STYLE-GUIDE examples"
+  evidence_excerpt: "This request is no longer accepting quotes"
+  related_surfaces: []
+  recommendation: "Use as template for state-based errors elsewhere. Pattern: 'This {thing} is no longer {state}.' or 'The {window} has passed.'"
+  depends_on: null
+
+# =============================================================================
+# PARITY DRIFT — same concept, mobile vs web
+# =============================================================================
+
+- finding_id: BV-066
+  surface_id: web-err-chefdetail-empty-category
+  lens: brand-voice
+  severity: P3
+  issue: "'No items in this category' — identical between web and mobile-customer (positive baseline). Flag for reuse pattern."
+  evidence_excerpt: "No items in this category"
+  related_surfaces: ["mc-chef-empty-category"]
+  recommendation: "Keep as canonical shared string. Same word count, no period (fragment)."
+  depends_on: null
+
+- finding_id: BV-067
+  surface_id: web-err-browse-load-failed
+  lens: brand-voice
+  severity: P2
+  issue: "'Failed to load chefs. Please try again.' (web) vs 'Failed to load chef details. Please try again.' (mobile-customer chef detail) vs 'Failed to load menu' (mobile-vendor menu — no period, no remediation). Drift across same family"
+  evidence_excerpt: "Failed to load chefs. Please try again."
+  related_surfaces: ["mc-chef-error-load", "mv-menu-load-error", "mv-dash-fail-error", "mv-analytics-load-error", "mv-earnings-load-error", "md-err-001"]
+  recommendation: "Pattern: 'Couldn't load {thing}. Try again.' (sentence case, 'couldn't' over 'failed', period, no 'please'). Apply across all 10+ load-failure surfaces."
+  depends_on: null
+
+- finding_id: BV-068
+  surface_id: mc-checkout-errors
+  lens: brand-voice
+  severity: P2
+  issue: "'Order creation failed. Please try again.' vs API-side 'Failed to create order' — same concept, two phrasings (passive vs active 'Failed'). Customer should see warmer variant"
+  evidence_excerpt: "Order creation failed. Please try again."
+  related_surfaces: []
+  recommendation: "'We couldn't place your order. Try again or contact support.' (warmer + actionable). Drop 'Please' — STYLE-GUIDE pattern is no 'please' in errors (consequence/action, not pleading)."
+  depends_on: null
+
+- finding_id: BV-069
+  surface_id: vp-ux-payouts-empty
+  lens: brand-voice
+  severity: P2
+  issue: "'Unable to load X / Please try again later.' pattern (vendor-portal earnings/payouts) uses 'Unable to' which is unnecessarily formal; 'try again later' is also weaker than 'Try again'"
+  evidence_excerpt: "Unable to load earnings / Please try again later."
+  related_surfaces: ["vp-ux-earnings-error"]
+  recommendation: "'Couldn't load earnings. Try again.' Drop 'later' (no concrete time = filler)."
+  depends_on: null
+
+- finding_id: BV-070
+  surface_id: vp-onb-save-failure-toast
+  lens: brand-voice
+  severity: P3
+  issue: "'Failed to save your details. Please try again.' (VP onboarding) vs 'Failed to save. Please try again.' (DP onboarding) — same concept, drift on 'your details'"
+  evidence_excerpt: "Failed to save your details. Please try again."
+  related_surfaces: ["dp-err-save-retry"]
+  recommendation: "'Couldn't save. Try again.' (shortest, sentence case, no 'please')."
+  depends_on: null
+
+# =============================================================================
+# MISC — punctuation, format, hyphens
+# =============================================================================
+
+- finding_id: BV-071
+  surface_id: vp-onb-banner-rejected-body
+  lens: brand-voice
+  severity: P3
+  issue: "'Your previous application was not approved.' — passive voice. STYLE-GUIDE §5 'Active voice' applies even to non-legal copy"
+  evidence_excerpt: "Your previous application was not approved."
+  related_surfaces: []
+  recommendation: "'We didn't approve your previous application. Review the feedback below and resubmit.' (active, single sentence)."
+  depends_on: null
+
+- finding_id: BV-072
+  surface_id: vp-ux-menu-form-image-errors
+  lens: brand-voice
+  severity: P3
+  issue: "'{name}: Invalid type. Allowed: JPEG, PNG, WebP.' format prepends filename with colon — leading filename is OK but the structure '{name}: X. Y.' is jargony"
+  evidence_excerpt: "{name}: Invalid type. Allowed: JPEG, PNG, WebP."
+  related_surfaces: []
+  recommendation: "'{name} — invalid file type. Allowed: JPEG, PNG, WebP.' (em-dash, lowercase 'invalid', no double-colon)."
+  depends_on: null
+
+- finding_id: BV-073
+  surface_id: dp-err-step3-file-size
+  lens: brand-voice
+  severity: P3
+  issue: "'File too large. Max {n}MB for {label}' — no space in '{n}MB', conflicts with BV-053 standardization '5 MB'"
+  evidence_excerpt: "File too large. Max {n}MB for {label}"
+  related_surfaces: []
+  recommendation: "'File too large. Max {n} MB for {label}.' (space + period)."
+  depends_on: BV-053
+
+- finding_id: BV-074
+  surface_id: api-error-search-min
+  lens: brand-voice
+  severity: P3
+  issue: "'Search query must be at least 2 characters' — 'query' is dev jargon for customer; STYLE-GUIDE plain-English rule applies"
+  evidence_excerpt: "Search query must be at least 2 characters"
+  related_surfaces: []
+  recommendation: "'Search must be at least 2 characters.' (period; 'search' as noun)."
+  depends_on: null
+
+- finding_id: BV-075
+  surface_id: api-error-validation-numeric
+  lens: brand-voice
+  severity: P3
+  issue: "'overallRating must be between 1 and 5' — camelCase field name in user-visible message"
+  evidence_excerpt: "overallRating must be between 1 and 5"
+  related_surfaces: ["api-error-validation-required", "api-error-validation-invalid-id"]
+  recommendation: "'Rating must be between 1 and 5.' Audit all numeric-bounds errors for camelCase. See BV-062."
+  depends_on: BV-062
+
+# =============================================================================
+# POSITIVE BASELINES (flag for STYLE-GUIDE examples)
+# =============================================================================
+
+- finding_id: BV-076
+  surface_id: api-error-chef-kitchen-name
+  lens: brand-voice
+  severity: P3
+  issue: "'A kitchen with this name already exists. Please choose a different name.' — friendly, complete, sentence-case. Flag as positive baseline. (Drop 'Please' per BV-068 if applying consistently.)"
+  evidence_excerpt: "A kitchen with this name already exists. Please choose a different name."
+  related_surfaces: []
+  recommendation: "Keep. Use as template. Optionally tighten: 'A kitchen with this name already exists. Choose another.'"
+  depends_on: null
+
+- finding_id: BV-077
+  surface_id: api-error-chat-availability
+  lens: brand-voice
+  severity: P3
+  issue: "'Please wait a moment before sending another message' — friendly rate-limit; positive baseline"
+  evidence_excerpt: "Please wait a moment before sending another message"
+  related_surfaces: []
+  recommendation: "Keep. (Adds period: 'Please wait a moment before sending another message.')"
+  depends_on: null
+
+- finding_id: BV-078
+  surface_id: api-error-favorites
+  lens: brand-voice
+  severity: P3
+  issue: "'Chef is already in your favorites' — clean, action-implied. Positive baseline"
+  evidence_excerpt: "Chef is already in your favorites"
+  related_surfaces: []
+  recommendation: "Keep. Add period."
+  depends_on: null
+
+# =============================================================================
+# SUMMARY METADATA
+# =============================================================================
+# total_findings: 78
+# P0: 13 (cross-app drift on canonical errors, AI/dev-string leaks)
+# P1: 14 (entry-surface drift, persona violations, banned exclamations on customer entry, all-caps headlines)
+# P2: 24 (secondary tone drift, blame language, anthropomorphism, missing remediation)
+# P3: 27 (punctuation/capitalization, redundant words, positive baselines)
+#
+# top_cross_app_drift:
+#   1. "Something went wrong. Please try again." — 6 surfaces across 6 apps (BV-001, BV-013)
+#   2. Error-boundary fallback copy — 3 distinct variants across 4 apps (BV-003)
+#   3. Offline banner — 4 variants across 4 apps (BV-004)
+#   4. "No pending orders" empty state — 2 variants between vendor-portal and mobile-vendor (BV-005)
+#   5. Cart-empty copy — 3 word counts across web/mobile/cart-sheet (BV-006)
+#   6. Title Case CTAs ("Try Again", "Browse Chefs", "View All Orders", "Add Your First Item") — banned by STYLE-GUIDE (BV-008, BV-009, BV-035, BV-036)
+#   7. "Are you sure... cannot be undone" — STYLE-GUIDE-banned anti-pattern in 7+ confirmation surfaces (BV-030, BV-031)
+#   8. Driver app Title Case headings on glanceable lock screens (BV-010, BV-011)
+#   9. API "Failed to X" + "X is required" + "Invalid X" — 150+ dev-string variants leak to UI (BV-062, BV-063, BV-064)
+#   10. File-size format "5 MB" vs "5MB" vs "10MB" — customer-visible unit inconsistency (BV-053)
+#   11. "Partner" vs "you" terminology — same error, two voices across driver-portal + API (BV-034)
+#   12. Trailing-period drift across empty-state titles (BV-038, BV-039, BV-040)

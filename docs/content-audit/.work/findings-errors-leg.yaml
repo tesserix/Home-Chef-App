@@ -1,0 +1,982 @@
+# Legal lens findings — ERRORS-EMPTY category (282 surfaces)
+# Scope: India regulatory exposure (DPDP Act 2023, FSSAI 2011/2018, RBI PA MD 2020/2024,
+# CGST/GST 2017, Consumer Protection Act 2019 + E-Commerce Rules 2020, IT Act 2000 §43/§43A/§66,
+# IT Rules 2021, MV Act 1988 for drivers) + generic best-practice
+# IMPORTANT: Every finding carries depends_on: "needs lawyer review" — this audit is not legal advice.
+# Focus for errors-empty: information leakage (API paths, snake_case slugs, internal config),
+# account-existence disclosure, payment-error categorisation (RBI), refund-timeline communication,
+# misleading "try again" copy on permanent failures, PII in error messages (DPDP §8(5)),
+# misleading regulatory/empty-state claims, T&C acknowledgement errors without link to T&Cs,
+# driver/chef onboarding rejection notices (gig classification + DPDP rights to know),
+# permission-denial framing (Consumer Protection E-Commerce Rules §4(5) on transparent redress).
+
+findings:
+
+  # ============================================================================
+  # API INFORMATION LEAKAGE — IT Act §43 / DPDP §8(5) reasonable security
+  # Internal paths, snake_case slugs, raw config errors surface to end users
+  # ============================================================================
+
+  - finding_id: LEG-ERR-001
+    surface_id: api-error-stripe-connect
+    lens: legal
+    severity: P0
+    issue: "Error messages leak internal API routes to end users ('call /chef/stripe/connect first', 'call /delivery/stripe/connect first'). This is internal architecture disclosure — a reasonable-security failure under IT Act §43A / DPDP Act §8(5) (Data Fiduciary obligation to maintain reasonable security)."
+    evidence_excerpt: "No Stripe account — call /chef/stripe/connect first / No Stripe account — call /delivery/stripe/connect first"
+    recommendation: "Strip all internal route paths from user-facing errors. Map server-side error codes to user-friendly text on the client. Surface a remediation in user terms (e.g., 'Finish payout setup before connecting Stripe'). Server logs should retain the technical detail; the API response should not. Cite as reasonable-security gap."
+    citation: "IT Act 2000 §43A; DPDP Act 2023 §8(5); CERT-In Directions 28 Apr 2022 (incident-reporting context for poor security hygiene)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-002
+    surface_id: api-error-payment-config
+    lens: legal
+    severity: P0
+    issue: "Payment-gateway configuration error leaks internal infrastructure status to the customer ('Payment gateway not configured', 'Stripe gateway not configured by platform admin'). Customer learns the platform has mis-configured a payment processor — undermines trust and exposes operational state. Under RBI PA framework merchant must communicate availability transparently but must not disclose backend implementation."
+    evidence_excerpt: "Payment gateway not configured / Stripe gateway not configured / Stripe gateway not configured by platform admin / Stripe gateway not configured"
+    recommendation: "Replace with a single user-facing message that does not name vendors or admin state (e.g., 'This chef cannot accept payment right now. Try again later or pick another chef.'). Keep vendor name (Razorpay / Stripe) in logs only. RBI PA MD requires transparency about payment availability, not about internal configuration."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §7 (Customer Grievance); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-003
+    surface_id: api-error-delivery-already-active
+    lens: legal
+    severity: P1
+    issue: "Snake_case slug 'no_active_delivery' is surfaced to the user as an error string. This is an internal enum value leaking through to UI — not a translation key resolved into a sentence. Suggests inconsistent error envelope contract and undermines plain-language obligation."
+    evidence_excerpt: "You already have an active delivery / no_active_delivery"
+    recommendation: "All user-facing error strings must be translated sentences, not enum slugs. Establish an error-envelope contract: `{ code: 'no_active_delivery', message: '<localised sentence>' }`. Audit all handlers for similar leaks. Cite Consumer Protection (E-Commerce) Rules §4(5) on clear consumer communication."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-004
+    surface_id: api-error-generic-failed
+    lens: legal
+    severity: P1
+    issue: "100+ variants of generic 'Failed to X' errors surface to all user roles without remediation guidance, classification, or contact pathway. Consumer Protection (E-Commerce) Rules §4(5) requires a transparent redress mechanism — opaque 'Failed to fetch X' messages do not meet this standard and may be deemed unfair trade practice if persistent."
+    evidence_excerpt: "Failed to accept quote / Failed to create order / Failed to fetch orders / Failed to process refund / Failed to verify partner / [~100 variants]"
+    recommendation: "Define an error taxonomy with a finite set of user-facing messages, each carrying: (a) what happened in plain English, (b) one recovery action, (c) a grievance link when applicable. The Grievance Officer (DPDP §10) must be reachable from any persistent failure. Generic 'Failed to X' is acceptable only as last-resort fallback with contact-support CTA."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5), r.5(3); DPDP Act 2023 §10 (Grievance Officer); CP Act 2019 §2(47) (unfair trade practice)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-005
+    surface_id: api-error-validation-required
+    lens: legal
+    severity: P2
+    issue: "Field-name casing leaks internal API contract to users ('chefId is required', 'currencyCode is required', 'stripePaymentIntentId is required'). camelCase identifiers are programmer-facing; consumer-facing errors must use human field names."
+    evidence_excerpt: "Email is required / chefId is required / stripePaymentIntentId is required / currencyCode is required"
+    recommendation: "Map each API field to a user-facing label. Surface 'Chef is required', not 'chefId is required'. Audit all 18 variants. Plain-language obligation under Consumer Protection (E-Commerce) Rules §4."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-006
+    surface_id: api-error-validation-invalid-id
+    lens: legal
+    severity: P2
+    issue: "~40 variants of 'Invalid X' errors include internal entity types ('Invalid payload', 'Invalid signature', 'Invalid OAuth provider', 'Invalid applicableTo'). These leak implementation detail and provide zero remediation."
+    evidence_excerpt: "Invalid signature / Invalid OAuth provider / Invalid applicableTo / Invalid request body / Invalid payload"
+    recommendation: "Replace developer-facing 'Invalid X' messages with user-actionable text. 'Invalid signature' on a webhook should never reach the customer UI — segregate webhook errors from user-API errors. Consumer-facing errors must point to a fix; technical errors belong in logs."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ACCOUNT-EXISTENCE DISCLOSURE — DPDP / privacy / OWASP A07
+  # ============================================================================
+
+  - finding_id: LEG-ERR-007
+    surface_id: api-error-auth-invalid-credentials
+    lens: legal
+    severity: P1
+    issue: "Login error 'Invalid credentials' is correctly ambiguous and does not disclose whether email or password is wrong — privacy-safe. Document this as the canonical pattern. However, the codebase ALSO has 'Invalid email or password' variants (web-err-login-validation, web-err-auth-service, dp-err-invalid-credentials, ap-auth-error-invalid-creds, vp-auth-login-invalid-credentials) which read fine but inconsistency across portals creates risk that an account-enumeration variant slips in."
+    evidence_excerpt: "Invalid credentials (api) / Invalid email or password (web, vp, dp, ap)"
+    recommendation: "Standardise across all portals + API to one ambiguous message. Forbid any login error that distinguishes 'no such user' from 'wrong password'. Document in a security style guide; cite as DPDP §8(5) reasonable-security control against account enumeration. Re-audit forgot-password, register-existing, and OAuth flows."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A; OWASP ASVS V2.5 (best practice)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-008
+    surface_id: api-error-phone-duplicate
+    lens: legal
+    severity: P0
+    issue: "Registration error 'This phone number is already registered with another account' confirms account existence to an unauthenticated user — classic account-enumeration vulnerability. An attacker can probe whether a phone is on the platform. DPDP §8(5) reasonable-security failure."
+    evidence_excerpt: "This phone number is already registered with another account."
+    recommendation: "Replace with privacy-safe pattern: on registration submit, ALWAYS return success state and (if phone exists) send an SMS to the owner explaining a sign-up attempt was made; never confirm existence to the requesting browser. Same applies to email duplicate checks. Cite DPDP §8(5) and Consumer Protection (E-Commerce) Rules §5(3) on consent/privacy."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A; OWASP ASVS V3.2.3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-009
+    surface_id: api-error-favorites
+    lens: legal
+    severity: P3
+    issue: "'Chef is already in your favorites' discloses authenticated-user state — acceptable inside the customer session, but flag for consistency if the favorites API is ever reused unauthenticated."
+    evidence_excerpt: "Chef is already in your favorites"
+    recommendation: "Verify the favorites endpoint requires session auth before responding. If endpoint is ever reachable unauthenticated, this becomes an enumeration vector for which chefs a known user favorites."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-010
+    surface_id: vp-auth-login-access-denied
+    lens: legal
+    severity: P1
+    issue: "Vendor-portal access-denied error 'This portal is only for vendor accounts. Please use the Fe3dr customer app.' confirms (a) that the credentials are valid and (b) that the account is a customer account. This is partial account-type disclosure to whoever holds the credentials. Acceptable if behind successful authn, but the message reveals account category."
+    evidence_excerpt: "This portal is only for vendor accounts. Please use the Fe3dr customer app."
+    recommendation: "If returned AFTER successful auth, this is privacy-acceptable but verify. If returned during auth flow (pre-token-issue), do not disclose role. Also: 'Fe3dr' brand reference should be confirmed correct/intentional — looks like a typo or legacy brand name that may mislead users."
+    citation: "DPDP Act 2023 §8(5); CP Act 2019 §2(47) on misleading text"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-011
+    surface_id: ap-auth-error-access-denied
+    lens: legal
+    severity: P1
+    issue: "Admin-portal access-denied error 'Access denied. Only administrators can sign in to this portal.' confirms credentials are valid for a non-admin role — partial role enumeration. RBAC framing also flagged as 'legal-adjacent' in inventory notes."
+    evidence_excerpt: "Access denied. Only administrators can sign in to this portal."
+    recommendation: "Either (a) keep admin portal entirely separate so non-admins never reach this page, or (b) return generic 'Invalid credentials' without distinguishing role mismatch from password mismatch. Document admin auth flow in security policy. Cite DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-012
+    surface_id: dp-err-access-denied
+    lens: legal
+    severity: P2
+    issue: "Driver-portal 'Access denied. Please check your credentials and try again.' — phrasing is acceptable (does not reveal which credential is wrong) but the verb 'Access denied' implies authorisation failure rather than authentication failure. May mislead a legitimate driver whose credentials are correct but whose account is suspended into trying again instead of contacting support."
+    evidence_excerpt: "Access denied. Please check your credentials and try again."
+    recommendation: "Differentiate authn failures ('Invalid credentials') from authz / suspension states ('Your driver account is not active. Contact support: <Grievance Officer>'). DPDP §10 requires Grievance Officer contact for account-state issues; this generic error does not point to one."
+    citation: "DPDP Act 2023 §10; Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-013
+    surface_id: api-error-auth-suspended
+    lens: legal
+    severity: P0
+    issue: "'Account is suspended' provides no reason, no appeal pathway, no Grievance Officer contact. Suspension is a deprivation of platform access affecting livelihood for chefs and drivers — DPDP §10 (Grievance Officer) AND Consumer Protection (E-Commerce) Rules §5(3) (transparent grievance redress in 1 month) BOTH require redress contact. The driver gig-worker context heightens this (right to procedural fairness)."
+    evidence_excerpt: "Account is suspended"
+    recommendation: "Suspension errors must surface: (i) brief reason category (e.g., 'safety review', 'document expired'), (ii) appeal link or Grievance Officer contact email, (iii) expected timeline. Cite DPDP §10, CP E-Commerce Rules §5(3), and emerging Social Security Code 2020 §141 (gig-worker grievance) considerations."
+    citation: "DPDP Act 2023 §10; Consumer Protection (E-Commerce) Rules 2020 r.5(3); Code on Social Security 2020 §141 (gig workers)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-014
+    surface_id: api-error-auth-not-verified
+    lens: legal
+    severity: P2
+    issue: "Two variants 'Account not verified' and 'Account not verified yet' on the same handler — inconsistent. Neither points to the verification path or a Grievance Officer if the verification email never arrived."
+    evidence_excerpt: "Account not verified / Account not verified yet"
+    recommendation: "Standardise to one message that includes a 'Resend verification' action and a fallback contact. Inconsistent error copy weakens plain-language obligation under Consumer Protection (E-Commerce) Rules §4."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SESSION / TOKEN ERRORS — PII / data-handling on reconnect
+  # ============================================================================
+
+  - finding_id: LEG-ERR-015
+    surface_id: web-err-login-session-expired
+    lens: legal
+    severity: P2
+    issue: "Session-expired banner 'Your session has expired. Please sign in again.' is correct in tone but does not inform the user what happened to any unsaved data, whether cart/draft data persists across re-auth, or how DPDP-relevant session data is handled at expiry. Same pattern repeats across vp-auth-login-session-expired, ap-auth-error-session-expired, dp-err-session-expired."
+    evidence_excerpt: "Your session has expired. Please sign in again."
+    recommendation: "Surface (or link to) a short data-handling note at the session-expired moment for surfaces that hold drafts (cart, menu draft, catering request): 'Your cart is saved for 24 hours.' DPDP §6(2)(d) requires the data principal to be informed about retention. At minimum, link to Privacy Policy from the expired-session banner."
+    citation: "DPDP Act 2023 §6(2)(d) (notice content); §8(3) (retention)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-016
+    surface_id: api-error-auth-reset-expired
+    lens: legal
+    severity: P2
+    issue: "Three near-duplicate variants 'Reset token has expired', 'Invalid or expired reset token', 'Invalid or expired enrollment token' — inconsistent across handler. Password-reset and 2FA-enrollment token errors must not allow the requester to distinguish 'no such token' from 'expired token' (subtle enumeration)."
+    evidence_excerpt: "Reset token has expired / Invalid or expired reset token / Invalid or expired enrollment token"
+    recommendation: "Collapse to one message that does not distinguish 'invalid' from 'expired' — both should read 'This link is no longer valid. Request a new password reset.' Cite DPDP §8(5) and OWASP ASVS V3.2."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-017
+    surface_id: api-error-auth-current-pw
+    lens: legal
+    severity: P2
+    issue: "Two variants 'Current password is incorrect' and 'Password is incorrect' on the same handler — inconsistent. Both are acceptable in an authenticated change-password flow."
+    evidence_excerpt: "Current password is incorrect / Password is incorrect"
+    recommendation: "Standardise. Voice consistency is a plain-language obligation under Consumer Protection rules; not a security issue here."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-018
+    surface_id: api-error-auth-2fa
+    lens: legal
+    severity: P1
+    issue: "All 2FA errors are vague 'Failed to enable 2FA', 'Failed to start 2FA challenge', 'Invalid or expired challenge' with no remediation. 2FA is a DPDP §8(5) reasonable-security control — silent failure of a security control without operator guidance is a security and audit-trail concern."
+    evidence_excerpt: "Failed to enable 2FA / Failed to start 2FA challenge / Failed to start 2FA enrollment / Invalid or expired challenge"
+    recommendation: "Each 2FA error must surface (a) plain reason, (b) recovery (re-scan QR, generate new backup code, contact admin), (c) audit-log reference for admin escalation. DPDP §8(5) reasonable-security obligation."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-019
+    surface_id: web-err-auth-service
+    lens: legal
+    severity: P2
+    issue: "Fallback errors 'Invalid email or password', 'Registration failed', 'Token refresh failed' thrown client-side when API returns no message — the third one ('Token refresh failed') is a session/security failure that should redirect to login, not surface as a toast. Surfacing a refresh-token failure may confuse user about data state."
+    evidence_excerpt: "Invalid email or password / Registration failed / Token refresh failed"
+    recommendation: "Token refresh failure should silently redirect to login with session-expired banner — not display 'Token refresh failed' as user-visible text (developer language). DPDP §6(2)(d) notice on retention/expiry."
+    citation: "DPDP Act 2023 §6(2)(d), §8(5); Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-020
+    surface_id: dp-err-auth-service-refresh
+    lens: legal
+    severity: P2
+    issue: "Driver-portal surfaces 'Token refresh failed' as user-visible text. Drivers are in motion; developer-language errors during a live shift are unsafe and not consistent with gig-worker procedural fairness expectations."
+    evidence_excerpt: "Token refresh failed"
+    recommendation: "Suppress developer-language session errors. Driver-app should silently re-auth and surface only 'Signed out — sign in to continue.' Critical because driver-tracking, deliveries, earnings are mid-stream when this fires."
+    citation: "Code on Social Security 2020 §141; DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # OFFLINE / NETWORK ERRORS — DPDP data-handling on reconnect
+  # ============================================================================
+
+  - finding_id: LEG-ERR-021
+    surface_id: web-err-layout-offline
+    lens: legal
+    severity: P2
+    issue: "Offline banner 'You're offline. Some features may be unavailable.' does not clarify what happens to inputs (cart additions, order placements) during offline — whether queued locally, what PII is held in browser storage, and whether queued data persists when the device goes back online. DPDP §6(2)(d) requires clarity on processing and retention."
+    evidence_excerpt: "You're offline. Some features may be unavailable."
+    recommendation: "Add a one-line clarifier when relevant context is at stake (cart, checkout, order tracking): 'Your cart is saved locally and will sync when reconnected.' Link to Privacy Policy section on local storage. DPDP §6 notice obligations."
+    citation: "DPDP Act 2023 §6(2)(d), §8(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-022
+    surface_id: vp-ux-layout-offline
+    lens: legal
+    severity: P2
+    issue: "Vendor offline banner 'You're offline. Orders will sync when connected.' makes an operational promise ('orders will sync') without explaining data integrity guarantees, what happens to a mark-ready action taken offline, or the impact on customer-side timer. If the sync fails or is delayed, customers see stale state — risk of unfair-trade-practice signal."
+    evidence_excerpt: "You're offline. Orders will sync when connected."
+    recommendation: "Quantify: 'Last sync 7 min ago. Actions taken now will queue and sync when reconnected.' Lawyer to review the operational warranty implied by 'will sync' — set realistic expectations and document divergence behaviour. Consumer Protection §2(47) unfair-trade-practice exposure if customers rely on stale chef state."
+    citation: "CP Act 2019 §2(47); CP (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-023
+    surface_id: dp-err-offline-banner
+    lens: legal
+    severity: P1
+    issue: "Driver offline banner 'You're offline. Updates will sync when connected.' is a contractual statement during active delivery. If a delivery 'Picked Up' or 'Delivered' status taken offline doesn't sync, customers, chef, and platform all see divergent state — wider exposure than vendor offline. MV Act / consumer-protection ramifications if a delivered order shows undelivered or vice-versa."
+    evidence_excerpt: "You're offline. Updates will sync when connected."
+    recommendation: "Specify queue size, last sync time, and risk: 'Offline since 12:34. 2 status updates queued. Order tracking on customer side may show stale.' Driver app must also clearly state DPDP retention of location data taken offline. Refer to Motor Vehicles Aggregator Guidelines 2020 §4 on data handling."
+    citation: "MV Act 1988; MV Aggregator Guidelines 2020 §4; DPDP Act 2023 §6, §8; CP Act 2019 §2(47)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-024
+    surface_id: ap-layout-offline-banner
+    lens: legal
+    severity: P2
+    issue: "Admin offline banner 'You're offline. Data may not be up to date.' is fine for admins, but admins make moderation/suspension decisions; the banner does not warn that actions taken offline (suspend user, approve chef) may race with concurrent server state. Audit-trail integrity (DPDP §8(5)) concern."
+    evidence_excerpt: "You're offline. Data may not be up to date."
+    recommendation: "For admin destructive actions, gate behind an online check or require explicit 'I understand state may be stale' confirmation. Audit-log entries should mark offline-origin actions for compliance review."
+    citation: "DPDP Act 2023 §8(5), §8(7) (audit obligations); IT Rules 2021 r.3 (record-keeping)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # PAYMENT / REFUND / RBI EXPOSURE
+  # ============================================================================
+
+  - finding_id: LEG-ERR-025
+    surface_id: api-error-payment-refund
+    lens: legal
+    severity: P0
+    issue: "Refund-error responses leak who-can-initiate ('Only the chef or admin can initiate refunds'), processor identity ('No Razorpay payment found for this order', 'No Stripe payment found for this order'), and processor state ('Payment not captured') to the customer. RBI Payment Aggregator MD requires customer-visible refund policy disclosure but does NOT require leakage of which processor or who-can-act. More importantly, NO refund TIMELINE is communicated — RBI PA MD requires explicit refund SLA (T+1 instruction to issuer, customer-visible)."
+    evidence_excerpt: "Can only refund completed payments / Refund amount cannot exceed order total / Only the chef or admin can initiate refunds / Failed to process refund / No Razorpay payment found for this order / No Stripe payment found for this order / Payment not captured"
+    recommendation: "Refund errors must (a) NOT name processors to the customer, (b) state the SLA explicitly when accepted ('Refund initiated. Funds arrive in your account in 5-7 working days as per RBI guidelines.'), (c) provide Grievance Officer contact when refused. Separate internal error codes from customer-facing copy. Lawyer to draft RBI-compliant refund-error matrix."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §6, §7; RBI Master Direction on Credit/Debit Cards 2022 (refund timelines); Consumer Protection (E-Commerce) Rules 2020 r.5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-026
+    surface_id: web-err-checkout-cancel
+    lens: legal
+    severity: P1
+    issue: "Razorpay dismissal toast says only 'Payment cancelled'. Customer is left without confirmation that no money was captured, no record was created, and what happens next. RBI PA framework requires transparent communication of payment state."
+    evidence_excerpt: "Payment cancelled"
+    recommendation: "Expand to: 'Payment cancelled. No charge was made. Your cart is saved — try again when ready.' RBI PA MD §7 (Customer Grievance) requires clarity on payment outcome including cancellation."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §7"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-027
+    surface_id: mc-checkout-errors
+    lens: legal
+    severity: P0
+    issue: "Mobile customer checkout error 'Payment confirmation timed out. Check your order history to confirm status.' is a high-risk message: the customer paid (or may have), but the app does not know. Currently directs customer to self-resolve via order history. Under RBI PA MD §7 the platform MUST communicate definitive outcome OR initiate auto-reconciliation with a stated SLA, not push the burden to the customer."
+    evidence_excerpt: "Order creation failed. Please try again. / Payment was not completed. Please try again. / Payment confirmation timed out. Check your order history to confirm status. / Dismiss"
+    recommendation: "Rewrite with explicit reconciliation promise: 'Payment status pending. We're confirming with your bank. You'll get a confirmation in <X minutes>. If charged but no order created, the amount is auto-refunded within Y days per RBI rules.' Cite RBI PA MD on reconciliation duties and dispute pathways. The 'Order creation failed. Please try again.' is also dangerous — risks double-charge if user retries while first attempt was actually accepted."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §7; RBI Harmonisation of TAT for Failed Transactions Circular 20 Sep 2019 (T+5 auto-reversal)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-028
+    surface_id: api-error-order-already-paid
+    lens: legal
+    severity: P1
+    issue: "'Order already paid' is correct but offers no remediation if customer believes they were not paid. RBI failed-transaction harmonisation circular requires platform to surface dispute/reconciliation path."
+    evidence_excerpt: "Order already paid"
+    recommendation: "Expand: 'Order already paid. If you don't see the charge on your bank statement, contact our Grievance Officer at <email> within 7 days.' Cite RBI 20-Sep-2019 circular."
+    citation: "RBI Harmonisation of TAT Circular 20 Sep 2019; RBI PA MD 17 Mar 2020 §7"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-029
+    surface_id: api-error-order-cancel-stage
+    lens: legal
+    severity: P0
+    issue: "'Order cannot be cancelled at this stage' surfaces no refund/no-refund implication, no contact pathway. Customer's right to cancel and entitlement to refund is core to Consumer Protection (E-Commerce) Rules §5 — a flat refusal without explaining refund consequences or escalation is a CP-Rules failure."
+    evidence_excerpt: "Order cannot be cancelled at this stage"
+    recommendation: "Expand: 'Your order is already being prepared and cannot be cancelled. To dispute or report an issue, contact the chef directly or our support team within 24 hours of delivery.' Reference cancellation/refund policy and Grievance Officer per CP E-Commerce Rules §5(3) and DPDP §10."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.5; DPDP Act 2023 §10; CP Act 2019 §2(47)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-030
+    surface_id: api-error-chef-not-accepting
+    lens: legal
+    severity: P2
+    issue: "'Chef is not accepting orders' offers no alternative or reason. Borderline unfair-trade-practice if a chef is shown in browse results but rejects at order time — customer expectation mismatch."
+    evidence_excerpt: "Chef is not accepting orders"
+    recommendation: "Expand with 'This chef has paused new orders. Browse other chefs nearby.' Also: ensure browse-time filters surface 'open now' state correctly to avoid the order-time rejection altogether — discover/order mismatch is a CP-Rules §5 misleading-listing risk."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.5(3); CP Act 2019 §2(47)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-031
+    surface_id: api-error-validation-payout-method
+    lens: legal
+    severity: P1
+    issue: "Payout-method validation surfaces 'payoutMethod must be \"bank_transfer\" or \"upi\"' — internal enum values to a chef/driver. Also no tax-context disclaimer (chefs/drivers are responsible for income-tax declaration; KYC under PMLA 2002 applies). NO link to KYC requirements or income-tax obligations."
+    evidence_excerpt: "payoutMethod must be 'bank_transfer' or 'upi' / bankAccountNumber, bankIFSC, and bankAccountName are required for bank_transfer / upiId is required for upi payout method"
+    recommendation: "Rewrite in human terms: 'Choose Bank Transfer or UPI for payouts.' Add a footer link on the payout-method screen to KYC requirements (PMLA 2002 §12), TDS obligations under Income-Tax Act §194-O (e-commerce TDS @ 1%), and chef tax FAQ. Pure technical error is acceptable internally but must be paired with regulatory context on the screen."
+    citation: "PMLA 2002 §12; Income-Tax Act 1961 §194-O; RBI PA MD 17 Mar 2020 §8 (settlement)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # FSSAI / FOOD-SAFETY EXPOSURE IN ERRORS / EMPTY STATES
+  # ============================================================================
+
+  - finding_id: LEG-ERR-032
+    surface_id: mv-onb-docs-required-alert
+    lens: legal
+    severity: P0
+    issue: "Mobile-vendor onboarding error 'Please upload both ID proof and FSSAI license to continue.' is correct in requiring FSSAI but does not specify which FSSAI category (Registration vs State License vs Central License — turnover-tiered under FSS Act 2006 + Regulations 2011). Chefs may upload the wrong tier."
+    evidence_excerpt: "Please upload both ID proof and FSSAI license to continue."
+    recommendation: "Surface FSSAI category guidance inline: 'FSSAI Basic Registration (turnover < ₹12L), State License (₹12L-₹20Cr), or Central License (> ₹20Cr). Choose the licence that matches your expected turnover.' Link to FSSAI portal. Without this guidance the platform may admit chefs operating without correct FSSAI tier — FSS Act §63 (penal exposure)."
+    citation: "Food Safety and Standards Act 2006 §31, §63; FSS (Licensing & Registration) Regulations 2011 r.2.1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-033
+    surface_id: vp-onb-docs-upload-failed
+    lens: legal
+    severity: P1
+    issue: "FSSAI / KYC document-upload failure says only 'Upload failed' with no retry guidance, no support contact, no statement of data handling for partial uploads. Chef onboarding documents are SENSITIVE PERSONAL DATA under IT Rules 2011 and DPDP §3. Failed upload without retention disclosure is a DPDP §6(2)(d) gap."
+    evidence_excerpt: "Upload failed"
+    recommendation: "Expand: 'Upload failed. Try again, or contact support if it keeps failing. Failed uploads are not retained.' Link to Privacy Policy section on document retention. DPDP §6 notice + §8(3) retention."
+    citation: "DPDP Act 2023 §6(2)(d), §8(3); IT Rules 2011 r.3 (sensitive personal data)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-034
+    surface_id: mc-chef-empty-category
+    lens: legal
+    severity: P3
+    issue: "Empty menu-category state 'No items in this category' is innocuous but flag as related-to FSSAI labelling: ensure menu-category names cannot be confused with regulated category claims (e.g., 'Organic', 'Diabetic-Safe', 'Sugar-Free') unless verified by chef — FSS Act §53 misleading advertising."
+    evidence_excerpt: "No items in this category"
+    recommendation: "Audit allowable category taxonomies for regulated nutrition claims. Add reviewer-side validation on FSS-regulated descriptors. Not a copy fix on this surface, but a category-taxonomy compliance flag."
+    citation: "FSS Act 2006 §53; FSS (Advertising & Claims) Regulations 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-035
+    surface_id: vp-onb-banner-rejected-body
+    lens: legal
+    severity: P0
+    issue: "Onboarding-rejection banner 'Your previous application was not approved. Please review the feedback below and re-submit.' does NOT specify (a) FSSAI/KYC reason categorisation, (b) appeal rights, (c) Grievance Officer contact, (d) retention period for rejected-application data. DPDP §8(3) retention + §10 Grievance + Consumer Protection (E-Commerce) Rules §4(5) transparent communication."
+    evidence_excerpt: "Your previous application was not approved. Please review the feedback below and re-submit."
+    recommendation: "Expand: 'Your application was not approved. See feedback below. You can re-submit once resolved. To appeal or ask questions, contact <Grievance Officer email>.' Also state retention of rejected-application data ('Your data will be deleted in 90 days if not re-submitted'). Cite DPDP §8(3), §10."
+    citation: "DPDP Act 2023 §8(3), §10; Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-036
+    surface_id: vp-onb-banner-info-requested-body
+    lens: legal
+    severity: P1
+    issue: "'The admin team needs additional information before approving your application.' — no specifics on what's needed, no SLA on response time, no Grievance Officer if the information request itself seems unjustified. DPDP §11 (right to information) is implicated when a Data Fiduciary asks for further personal data."
+    evidence_excerpt: "The admin team needs additional information before approving your application."
+    recommendation: "Itemise what's requested inline. State the purpose for which each additional item is being collected (DPDP §6(2)(a) notice obligation when personal data is sought). State expected approval SLA after submission."
+    citation: "DPDP Act 2023 §6(2)(a), §11; Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-037
+    surface_id: vp-onb-locked-conflict-toast
+    lens: legal
+    severity: P2
+    issue: "'Your kitchen is already under review or live. Returning to the dashboard.' offers no detail and no contact path if the user believes this is wrong. State-confusion at onboarding step is procedurally risky."
+    evidence_excerpt: "Your kitchen is already under review or live. Returning to the dashboard."
+    recommendation: "Add 'If this seems wrong, contact <Grievance Officer email>.' DPDP §10 Grievance reachability."
+    citation: "DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # TERMS-AND-CONDITIONS ACKNOWLEDGEMENT ERRORS — contract enforceability
+  # ============================================================================
+
+  - finding_id: LEG-ERR-038
+    surface_id: api-error-tos
+    lens: legal
+    severity: P0
+    issue: "Driver onboarding error 'You must accept the terms and conditions' is correct in gating but DOES NOT LINK to the actual T&Cs in the error. Click-wrap acceptance for driver/gig worker is contract-formation; a bare error without a link is poor practice and weakens Indian Contract Act §10 enforceability. Inventory note explicitly flags this."
+    evidence_excerpt: "You must accept the terms and conditions"
+    recommendation: "Always pair acceptance-error with link: 'Open Terms & Conditions, Driver Agreement, and Privacy Policy. You must read and accept these to continue.' Cite Indian Contract Act §10, IT Act §10A (click-wrap enforceability), and DPDP §6 notice for the privacy-policy half."
+    citation: "Indian Contract Act 1872 §10; IT Act 2000 §10A; DPDP Act 2023 §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-039
+    surface_id: dp-err-step5-terms
+    lens: legal
+    severity: P0
+    issue: "Driver web-portal error 'Please accept the terms and conditions' — same as LEG-ERR-038 — does not link to the binding documents. Driver contract-formation moment."
+    evidence_excerpt: "Please accept the terms and conditions"
+    recommendation: "Pair with links to (a) Platform Terms, (b) Driver Agreement (gig-worker classification), (c) Privacy Policy, (d) Payout/KYC terms. Indian Contract Act §10, IT Act §10A, Social Security Code 2020 §141."
+    citation: "Indian Contract Act 1872 §10; IT Act 2000 §10A; Code on Social Security 2020 §141"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-040
+    surface_id: mv-onb-policies-terms-required-alert
+    lens: legal
+    severity: P0
+    issue: "Mobile-vendor 'Please accept the terms and conditions to continue.' — chef/vendor contract-formation. Same gap as drivers. Chef contract is more complex (food-safety responsibility split FSS Act §31, GST registration obligation, payout/TDS) yet error does not link to anything."
+    evidence_excerpt: "Please accept the terms and conditions to continue."
+    recommendation: "Pair with links to Chef Agreement (FSSAI compliance, GST obligations, payout terms), Privacy Policy, allergen-handling addendum. Critical for FSS Act §31 (chef as 'food business operator' responsible for safety) and Income-Tax Act §194-O (e-commerce TDS)."
+    citation: "Indian Contract Act 1872 §10; IT Act 2000 §10A; FSS Act 2006 §31; Income-Tax Act 1961 §194-O"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-041
+    surface_id: vp-onb-review-policies-pending
+    lens: legal
+    severity: P1
+    issue: "'Policies not accepted / Please go back to Step 5 and accept all required policies.' — points to a step but does not enumerate which policies are pending. Procedural-fairness obligation under Consumer Protection (E-Commerce) Rules §4."
+    evidence_excerpt: "Policies not accepted / Please go back to Step 5 and accept all required policies."
+    recommendation: "Enumerate pending policies in the error itself with links. Each policy should also have a 'plain-language summary' callout per house style guide §5."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-042
+    surface_id: vp-onb-policies-required-toast
+    lens: legal
+    severity: P1
+    issue: "'Please accept all required policies' — same as above without surface-specific detail. Toast offers zero context."
+    evidence_excerpt: "Please accept all required policies"
+    recommendation: "Replace toast with inline error listing the unchecked policies, linked. Acceptance-tracking is critical for downstream proof-of-consent under DPDP §6 and IT Act §10A."
+    citation: "DPDP Act 2023 §6; IT Act 2000 §10A; Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-043
+    surface_id: mv-onb-policies-policy-required-alert
+    lens: legal
+    severity: P1
+    issue: "'Please select a cancellation policy.' — chef chooses their own cancellation policy. The policy choice surface must, by Consumer Protection (E-Commerce) Rules §5(3), describe the consequence of each option to the chef (refund obligations, dispute exposure). The error alone is procedural; the screen design needs lawyer review."
+    evidence_excerpt: "Please select a cancellation policy."
+    recommendation: "On the cancellation-policy selection screen, surface for each option: (i) refund SLA chef commits to, (ii) chef's dispute liability, (iii) customer-side messaging. Cite CP E-Commerce Rules §5(3). Error itself is fine; screen needs the disclosure."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.5(3); RBI PA MD 17 Mar 2020 §7"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # KYC / VERIFICATION ERRORS
+  # ============================================================================
+
+  - finding_id: LEG-ERR-044
+    surface_id: dp-err-step1-referral-invalid
+    lens: legal
+    severity: P3
+    issue: "'Invalid referral code' — minor; ensure that submitting an invalid code does NOT confirm whether referral programme is active for the user's region (could surface marketing-eligibility data)."
+    evidence_excerpt: "Invalid referral code"
+    recommendation: "Verify referral code validation does not leak referrer identity or region eligibility. DPDP §8(5) hygiene."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-045
+    surface_id: dp-err-step3-file-size
+    lens: legal
+    severity: P3
+    issue: "'File too large. Max {n}MB for {label}' — fine but ensure consistent size representation across all driver upload surfaces (KYC, vehicle docs, profile). Inconsistent limits across portals may suggest different KYC tiers, confusing drivers and exposing platform to procedural-fairness claims."
+    evidence_excerpt: "File too large. Max {n}MB for {label}"
+    recommendation: "Standardise driver upload max sizes; surface explicitly per document type. Cite MV Aggregator Guidelines 2020 §4 on driver document handling."
+    citation: "MV Aggregator Guidelines 2020 §4; DPDP Act 2023 §6(2)(d)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-046
+    surface_id: api-error-upload-type
+    lens: legal
+    severity: P2
+    issue: "5 variants of 'Invalid file type. Allowed: …' with different allowed lists (JPEG/PNG/PDF; JPEG/PNG/WebP/PDF; JPEG/PNG/WebP; etc.) and inconsistent punctuation. For KYC/onboarding uploads this inconsistency means a chef/driver may try a format that worked elsewhere and be rejected — procedural-fairness exposure under Consumer Protection (E-Commerce) Rules §4(5)."
+    evidence_excerpt: "Invalid file type. Allowed: JPEG, PNG, PDF. / Invalid file type. Allowed: JPEG, PNG, WebP, PDF / Invalid file type. Allowed: JPEG, PNG, WebP. / Invalid image type. Allowed: JPEG, PNG, WebP. / Profile photo must be JPEG or PNG"
+    recommendation: "Define one canonical allowed-format list per upload context (KYC docs, profile photo, menu image, review image, social post) and document. Standardise punctuation. Plain-language obligation."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-047
+    surface_id: api-error-upload-size
+    lens: legal
+    severity: P2
+    issue: "Inconsistent size formatting: '10MB' vs '5 MB' vs '5MB' vs '5 MB'. Mobile-vendor uses '5 MB' (with space) per locale spec, web uses '5MB' (no space). Style-guide §6 requires consistent unit formatting. For KYC/payout uploads this inconsistency reads as platform sloppiness."
+    evidence_excerpt: "File too large (max 10MB) / File too large. Maximum 5 MB. / Profile photo too large (max 5MB) / Each image must be under 5 MB"
+    recommendation: "Standardise to '5 MB' (en-IN spacing) everywhere. Plain-language consistency under CP E-Commerce Rules §4(5)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-048
+    surface_id: api-error-upload-count
+    lens: legal
+    severity: P3
+    issue: "'Maximum 3 images per review' / 'Maximum 4 images per post' / 'Maximum 5 images per menu item' / 'Maximum 5 kitchen photos allowed. Remove one before adding another.' — only the last has friendly remediation. Procedural consistency."
+    evidence_excerpt: "Maximum 3 images per review / Maximum 4 images per post / Maximum 5 images per menu item / Maximum 5 kitchen photos allowed. Remove one before adding another."
+    recommendation: "All count limits must include the remediation ('Remove one before adding another'). Cite plain-language obligation."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN / DESTRUCTIVE ACTIONS — audit-trail and procedural fairness
+  # ============================================================================
+
+  - finding_id: LEG-ERR-049
+    surface_id: ap-providerdetail-dialog-bodies
+    lens: legal
+    severity: P1
+    issue: "Three branched confirmation messages on delivery-provider delete/disable/enable are vague generic 'Are you sure you want to…' without surfacing (a) impact on in-flight deliveries, (b) audit-trail commitment, (c) reversal pathway. DPDP §8(5) audit obligations; CP §5(3) procedural fairness for affected drivers/partners."
+    evidence_excerpt: "Are you sure you want to delete this delivery provider? This action cannot be undone.; Are you sure you want to disable this provider? No new deliveries will be assigned to it.; Are you sure you want to enable this provider? It will start receiving delivery assignments."
+    recommendation: "Each confirmation should state: (i) impact on in-flight items, (ii) audit-log entry that will be created, (iii) Grievance contact for affected partner if applicable. 'This action cannot be undone' is too vague (style-guide §4 modal-subtitle pattern)."
+    citation: "DPDP Act 2023 §8(5); Consumer Protection (E-Commerce) Rules 2020 r.5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-050
+    surface_id: ap-providers-dialog-delete-body
+    lens: legal
+    severity: P1
+    issue: "'Are you sure you want to delete this delivery provider? This action cannot be undone.' duplicated across surfaces. 'Cannot be undone' is regulatory exposure if the deletion also purges audit data — DPDP §8(7) and IT Rules 2021 require record retention for grievance lookups. Verify deletion is logical / preserves audit, not physical purge."
+    evidence_excerpt: "Are you sure you want to delete this delivery provider? This action cannot be undone."
+    recommendation: "Distinguish 'delete' (soft, audit-trail preserved) from 'purge' (hard, GDPR-style right-to-erasure flow under DPDP §13). The copy should match the engineering behaviour. Lawyer to confirm record-retention policy aligns with IT Rules 2021 r.3 and tax-record obligations under Income-Tax Act §44AA (8 years)."
+    citation: "DPDP Act 2023 §8(3), §8(7), §13; IT Rules 2021 r.3; Income-Tax Act 1961 §44AA"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-051
+    surface_id: ap-staffdetail-confirm-deactivate
+    lens: legal
+    severity: P1
+    issue: "'Are you sure you want to deactivate this staff member? They will lose access to all portals.' — does not surface (a) audit trail of deactivation, (b) access-revocation timestamp, (c) data-retention for deactivated-staff's audit history. IT Rules 2021 r.3 require audit-trail retention for at least 180 days for OSPs / intermediaries."
+    evidence_excerpt: "Are you sure you want to deactivate this staff member? They will lose access to all portals."
+    recommendation: "Add: '<Staff name>'s actions are retained in the audit log for [X years] per regulatory requirements.' Cite IT Rules 2021 r.3 record-keeping."
+    citation: "IT Rules 2021 r.3; DPDP Act 2023 §8(7)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-052
+    surface_id: api-error-staff-permissions
+    lens: legal
+    severity: P2
+    issue: "Staff-permission errors expose internal role hierarchy: 'Only super admins can change staff roles', 'Only super admins can invite other super admins', 'Cannot change role of a default super admin', 'Cannot deactivate a default super admin'. Internal role taxonomy leaks to anyone with admin-portal access. Limited risk (admins only) but documents RBAC structure."
+    evidence_excerpt: "You don't have permission to invite staff / Only super admins can change staff roles / Only super admins can invite other super admins / Cannot change role of a default super admin / Cannot deactivate a default super admin / Cannot deactivate yourself"
+    recommendation: "Acceptable for admin portal but ensure these are NEVER returned to non-admin sessions. Centralise role taxonomy in a single source of truth (also helps DPDP §8(5) reasonable security on RBAC enforcement)."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-053
+    surface_id: ap-users-toast-fail-suspend
+    lens: legal
+    severity: P2
+    issue: "'Failed to suspend user' / 'Failed to activate user' — admin destructive actions failing silently with no audit-log reference. If admin retries and second attempt succeeds, audit trail may show duplicate or inconsistent state. DPDP §8(7) audit-log integrity."
+    evidence_excerpt: "Failed to suspend user / Failed to activate user"
+    recommendation: "Each admin destructive-action failure must capture an audit-log ID surfaced to the admin: 'Failed to suspend user. Audit ID: <X>. Check audit log before retrying.' Cite DPDP §8(7) and IT Rules 2021 r.3."
+    citation: "DPDP Act 2023 §8(7); IT Rules 2021 r.3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-054
+    surface_id: ap-auditlogs-empty
+    lens: legal
+    severity: P2
+    issue: "Audit-log empty state 'No audit events match these filters.' is fine. Verify that an empty audit-log table EVER displays this — would indicate no events captured (compliance gap). The empty state should never appear without a filter active."
+    evidence_excerpt: "No audit events match these filters."
+    recommendation: "Distinguish 'no audit events ever' (compliance failure — should never happen) from 'no events match filter' (normal). The former should never be silent. Cite IT Rules 2021 r.3."
+    citation: "IT Rules 2021 r.3; DPDP Act 2023 §8(7)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-055
+    surface_id: ap-analytics-coming-soon
+    lens: legal
+    severity: P1
+    issue: "'Chart coming soon' is a placeholder shown to admin users in production. Surfacing unfinished work to operators looks unprofessional and risks an admin acting on stale/incomplete data because 'analytics' implies present-tense capability. Procedural-fairness concern if admin decisions rely on analytics."
+    evidence_excerpt: "Chart coming soon"
+    recommendation: "Either hide the surface entirely or replace with 'This analytics view is in development. Use Reports > X for current data.' Do not ship 'coming soon' to a paying tenant's admin."
+    citation: "Consumer Protection Act 2019 §2(47) (misleading representation, B2B-adjacent); best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ERROR BOUNDARIES — top-level fallbacks, log-leak risk
+  # ============================================================================
+
+  - finding_id: LEG-ERR-056
+    surface_id: web-err-error-boundary
+    lens: legal
+    severity: P1
+    issue: "Top-level error fallback 'Unexpected error / Something broke on our end. / We've been notified and we're looking into it... / Try again / Refresh page' makes the operational claim 'We've been notified'. If error reporting (Sentry/etc.) is misconfigured, the claim is FALSE — Consumer Protection §2(47) misleading representation. Also: does not surface a Grievance Officer contact for persistent failures (DPDP §10)."
+    evidence_excerpt: "Unexpected error / Something broke on our end. / We've been notified and we're looking into it... / Try again / Refresh page"
+    recommendation: "Verify error reporting is wired and the 'We've been notified' claim is factually true. Add Grievance Officer contact for persistent failures: 'Still broken? Contact <email>.' Cite DPDP §10 + CP §2(47)."
+    citation: "DPDP Act 2023 §10; CP Act 2019 §2(47)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-057
+    surface_id: vp-err-boundary-fallback
+    lens: legal
+    severity: P1
+    issue: "Vendor error boundary 'Something went wrong / An unexpected error occurred while loading this page. / Try Again' — no Grievance contact, no error reference ID. Chefs facing a persistent error during a live cooking shift have no escalation path. CP E-Commerce Rules §5(3) procedural fairness."
+    evidence_excerpt: "Something went wrong / An unexpected error occurred while loading this page. / Try Again"
+    recommendation: "Surface a unique error ID and a Grievance contact when persistent. Critical for vendor portal because chef revenue depends on uptime."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.5(3); DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-058
+    surface_id: dp-err-boundary-body
+    lens: legal
+    severity: P0
+    issue: "Driver-portal error boundary 'Something went wrong / An unexpected error occurred while loading this page.' — fatal for a driver mid-delivery. No fallback for active-delivery state, no offline-cache reference, no support contact. MV Aggregator Guidelines 2020 require operational safety + grievance redress for gig workers."
+    evidence_excerpt: "Something went wrong / An unexpected error occurred while loading this page."
+    recommendation: "Error boundary must (a) check for active-delivery state and surface it, (b) provide a phone-number fallback for ops support, (c) instruct driver to NOT leave delivery state — call customer if needed. Cite MV Aggregator Guidelines 2020 §4 + Code on Social Security §141."
+    citation: "MV Aggregator Guidelines 2020 §4; Code on Social Security 2020 §141; Consumer Protection (E-Commerce) Rules 2020 r.5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-059
+    surface_id: ap-errorboundary-body
+    lens: legal
+    severity: P1
+    issue: "Admin error boundary same generic pattern. Admin actions are evidentiary — an error during a destructive action without an audit reference is an audit-trail risk."
+    evidence_excerpt: "Something went wrong / An unexpected error occurred while loading this page."
+    recommendation: "Admin error boundary must include action context and audit-log reference if action was attempted. DPDP §8(7) audit-log integrity."
+    citation: "DPDP Act 2023 §8(7); IT Rules 2021 r.3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-060
+    surface_id: web-err-generic-retry
+    lens: legal
+    severity: P2
+    issue: "'Something went wrong. Please try again.' duplicated across 5+ surfaces (HomePage, BrowseChefsPage, ChefDetailPage, LoginPage, vp variants, ap variants, dp variants). Generic 'try again' may be MISLEADING if the failure is permanent (e.g., chef permanently deactivated, deleted product). Consumer Protection §2(47) misleading representation; CP E-Commerce Rules §4(5) transparent communication."
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: "Distinguish transient errors (retry works) from permanent ones (don't retry). For permanent errors surface specific remediation. Never advise 'try again' on a permanent failure — exposes platform to misleading-trade claims for repeated futile attempts."
+    citation: "CP Act 2019 §2(47); Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CHAT / MODERATION ERRORS — IT Rules 2021 + content moderation
+  # ============================================================================
+
+  - finding_id: LEG-ERR-061
+    surface_id: api-error-chat-availability
+    lens: legal
+    severity: P1
+    issue: "Chat-availability errors include: 'Chat is not available for completed/cancelled orders', 'This chat room is closed', 'File uploads are not allowed in chat'. For an order in dispute the customer/chef may need chat history. IT Rules 2021 r.3 require intermediaries to retain message data for 180 days for legal lookup. The error should clarify that history is retained / accessible to support."
+    evidence_excerpt: "Chat is not available for completed/cancelled orders / This chat room is closed / This chat room is closed because the order is no longer active / File uploads are not allowed in chat / Please wait a moment before sending another message / Message must be 500 characters or fewer / You are not a participant in this order"
+    recommendation: "When closing a chat add: 'This chat is closed. Your message history is retained for 180 days for disputes. Contact <Grievance Officer> if you need to follow up.' Cite IT Rules 2021 r.3, DPDP §10."
+    citation: "IT Rules 2021 r.3; DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CATERING / QUOTES — RBI + Consumer Protection
+  # ============================================================================
+
+  - finding_id: LEG-ERR-062
+    surface_id: api-error-quotes-catering
+    lens: legal
+    severity: P1
+    issue: "Catering-quote errors include 'This quote has expired', 'Quote deadline has passed', 'This quote cannot be accepted' — no SLA explanation, no refund implication when a quote expires after payment has been initiated, no Grievance contact."
+    evidence_excerpt: "This request is no longer accepting quotes / You have already submitted a quote for this request / Quote deadline has passed / This quote cannot be accepted / This quote has expired / Event date must be in the future"
+    recommendation: "Quotes are pre-contract offers under Indian Contract Act §2. Errors must clarify: (i) whether any deposit is auto-refunded, (ii) refund SLA, (iii) alternative quote pathway. Cite Indian Contract Act §6 (revocation of offer) and RBI PA MD if payment was tied."
+    citation: "Indian Contract Act 1872 §2, §6; RBI PA MD 17 Mar 2020 §7"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # EMPTY-STATE CLAIMS — implicit regulatory / quality claims
+  # ============================================================================
+
+  - finding_id: LEG-ERR-063
+    surface_id: ap-platsettings-zones-empty
+    lens: legal
+    severity: P2
+    issue: "Platform-settings empty state 'No zones yet — delivery is available everywhere until a zone is created.' makes a service-area claim 'available everywhere' that may be false in practice (carrier limitations, FSSAI catchment, MV-permit limits). Misleading representation under CP §2(47) if a customer order is refused after this state."
+    evidence_excerpt: "No zones yet — delivery is available everywhere until a zone is created."
+    recommendation: "Replace with: 'No delivery zones set. Configure your serviceable zones before going live.' Avoid claims about geographic coverage that may not survive operational reality."
+    citation: "CP Act 2019 §2(47); MV Act 1988 (permit limits)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-064
+    surface_id: dp-empty-active-body
+    lens: legal
+    severity: P3
+    issue: "'Check available deliveries to pick up a new order.' — neutral. Verify the driver-availability terminology does not conflict with the driver's contractual relationship (independent contractor vs employee classification under Code on Social Security 2020 §2(35) gig-worker definition)."
+    evidence_excerpt: "Check available deliveries to pick up a new order."
+    recommendation: "Audit driver-app copy globally for language that implies employer-employee relationship vs gig-worker classification. 'Available deliveries' is fine; 'assigned shifts', 'roster' would not be."
+    citation: "Code on Social Security 2020 §2(35), §141"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-065
+    surface_id: md-emp-007
+    lens: legal
+    severity: P3
+    issue: "'Fleet management is available for fleet managers only. Contact your administrator to request access.' — surfaces internal role taxonomy ('fleet managers', 'administrator') and an access-request pathway. Fine for B2B but ensure no PII leakage if 'administrator' refers to a specific contact."
+    evidence_excerpt: "Fleet management is available for fleet managers only. Contact your administrator to request access."
+    recommendation: "Verify 'administrator' is generic, not a named contact. DPDP §8(5) hygiene."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-066
+    surface_id: md-emp-011
+    lens: legal
+    severity: P3
+    issue: "'Staff management requires manager permissions. Contact your administrator to request access.' — same as above."
+    evidence_excerpt: "Staff management requires manager permissions. Contact your administrator to request access."
+    recommendation: "Same as LEG-ERR-065. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # FAVORITE LIMIT — soft-cap as implicit policy
+  # ============================================================================
+
+  - finding_id: LEG-ERR-067
+    surface_id: web-err-favorite-max-limit
+    lens: legal
+    severity: P3
+    issue: "'You can save up to 7 favorite chefs. Remove one first.' — duplicated across BrowseChefsPage, ChefDetailPage, HomePage. Limit of 7 is arbitrary; if the limit ever rises, all copies must update. Best practice: centralise via token/config and reference."
+    evidence_excerpt: "You can save up to 7 favorite chefs. Remove one first."
+    recommendation: "Centralise the constant. Not a legal issue per se but inconsistent limits across surfaces become procedural-fairness signals if not maintained."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MISSING ITEMS — empty states that should never be empty
+  # ============================================================================
+
+  - finding_id: LEG-ERR-068
+    surface_id: ap-staffdetail-perms-empty
+    lens: legal
+    severity: P2
+    issue: "'No specific permissions data available for this role.' — admin sees an empty permissions list. If this ever appears in production, it suggests an RBAC configuration gap. Admin acting on a role with no documented permissions is procedural exposure. DPDP §8(5) requires documented access controls."
+    evidence_excerpt: "No specific permissions data available for this role."
+    recommendation: "If permissions are missing, this is a system-config error not a normal empty state. Replace empty state with an error surfacing a config issue + admin escalation. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); IT Rules 2021 r.3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-069
+    surface_id: ap-secsettings-apikey-empty
+    lens: legal
+    severity: P3
+    issue: "'No keys yet.' for API-key management. Verify that an admin creating their first API key sees a one-time disclosure of (a) key handling responsibility, (b) revocation pathway, (c) audit-log retention. Currently no copy at the empty state on these obligations."
+    evidence_excerpt: "No keys yet."
+    recommendation: "On empty state, add a small note: 'API keys grant programmatic access. Created keys are shown once. Revoke immediately if leaked.' DPDP §8(5) reasonable-security framing."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CART EMPTY — pre-contract data handling
+  # ============================================================================
+
+  - finding_id: LEG-ERR-070
+    surface_id: web-ux-cart-empty
+    lens: legal
+    severity: P3
+    issue: "Empty cart copy 'Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs...' is fine. Flag for DPDP §6(2)(d): the cart, even when empty, may carry session/tracking cookies. The cart page is a sensible place to surface a small cookie-policy link."
+    evidence_excerpt: "Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs..."
+    recommendation: "Not a copy fix for the empty state itself. But verify a cookie/consent banner is visible globally per DPDP §6(2)(d) notice requirements."
+    citation: "DPDP Act 2023 §6(2)(d)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-071
+    surface_id: web-err-cart-minimum
+    lens: legal
+    severity: P1
+    issue: "'Minimum order not met / Add {amount} more to proceed' — minimum-order rule is a chef-set policy. Customer should see WHO set the minimum (platform vs chef) and reason — particularly for FSSAI catering compliance or chef-side prep economics. Procedural-fairness disclosure."
+    evidence_excerpt: "Minimum order not met / Add {amount} more to proceed"
+    recommendation: "Clarify: 'This chef requires a minimum order of ₹X. Add ₹Y more to proceed.' Identifying the minimum as chef-set vs platform-set is important for refund/dispute pathways."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5), r.5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MOBILE-CUSTOMER SPECIFIC
+  # ============================================================================
+
+  - finding_id: LEG-ERR-072
+    surface_id: mc-onb-step1-errors
+    lens: legal
+    severity: P2
+    issue: "Mobile-customer onboarding validation 'Enter a valid 10-digit Indian mobile number' is India-specific. Acceptable for India launch but make sure the app refuses sign-ups from outside India (DPDP §3 applicability, RBI KYC, FEMA cross-border data). The validation alone is not an enforcement — back-end must also gate."
+    evidence_excerpt: "First name must be at least 2 characters / Last name must be at least 2 characters / Enter a valid 10-digit Indian mobile number"
+    recommendation: "Confirm back-end mobile validation and country-of-residence checks. If platform serves only India, surface that on signup. Cite DPDP §3 territorial scope."
+    citation: "DPDP Act 2023 §3; RBI KYC Master Direction 2016; FEMA 1999"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-073
+    surface_id: mv-onb-personal-phone-err
+    lens: legal
+    severity: P2
+    issue: "Same India-specific mobile pattern enforced on chef onboarding. Chef registration is consumer-identifying AND tax-identifying (TDS under §194-O requires PAN). The mobile validation alone may admit non-resident chefs."
+    evidence_excerpt: "Enter a valid 10-digit Indian mobile number"
+    recommendation: "Pair mobile validation with PAN capture step for chefs (Income-Tax Act §194-O e-commerce TDS @ 1% requires payee PAN; otherwise TDS @ 5%)."
+    citation: "Income-Tax Act 1961 §194-O, §139A; PMLA 2002 §12"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-074
+    surface_id: mc-catering-errors
+    lens: legal
+    severity: P2
+    issue: "Catering form validation '… Event date must be in the future / Guest count must be a number / Budget must be a number / Budget must be positive / City is required / State is required' — for large catering events FSSAI bulk-catering rules and GST registration thresholds may apply. The form does not capture or warn about these."
+    evidence_excerpt: "Event type is required / Date must be YYYY-MM-DD / Event date must be in the future / Guest count must be a number / At least 1 guest required / Budget must be a number / Budget must be positive / City is required / State is required"
+    recommendation: "Above guest count / budget thresholds, surface a one-line FSSAI / GST-applicability note linking to a help page. Cite FSS Act §31 and CGST §22 (threshold for GST registration ₹20L general / ₹10L special category states)."
+    citation: "FSS Act 2006 §31; CGST Act 2017 §22"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-075
+    surface_id: mc-favorites-empty
+    lens: legal
+    severity: P3
+    issue: "'No saved chefs yet / Tap the heart on any chef to save them!' — innocuous but verify favourites data is covered in Privacy Policy as collected personal data (DPDP §3 inclusion of preference/behavioural data)."
+    evidence_excerpt: "No saved chefs yet / Tap the heart on any chef to save them!"
+    recommendation: "Privacy Policy must enumerate 'favourites / saved chefs' as collected data. Not a copy fix on this surface; policy gap."
+    citation: "DPDP Act 2023 §3, §6(2)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MENU-FORM VALIDATION — implicit pricing / FSSAI claims
+  # ============================================================================
+
+  - finding_id: LEG-ERR-076
+    surface_id: vp-ux-menu-form-validation
+    lens: legal
+    severity: P2
+    issue: "Menu-item form validation includes 'Select at least one dietary tag' — dietary-tag taxonomy is FSSAI-relevant (allergens, vegetarian/non-vegetarian, eggetarian, jain). FSS (Packaging and Labelling) Regulations 2011 r.2.4 require accurate veg/non-veg labelling. Validation must enforce mutual-exclusion (a dish cannot be both 'veg' and 'non-veg'). Audit the tag-taxonomy backend for compliance, not the error copy."
+    evidence_excerpt: "Select at least one dietary tag (among 14 validation messages)"
+    recommendation: "Verify dietary-tag taxonomy is FSSAI-compliant. Surface allergen-disclosure CTA at the dish form. Cite FSS (Packaging & Labelling) Regulations 2011 r.2.4.5 (veg/non-veg mandatory)."
+    citation: "FSS (Packaging & Labelling) Regulations 2011 r.2.4; FSS (Advertising & Claims) Regulations 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-077
+    surface_id: mv-menunew-price-range
+    lens: legal
+    severity: P3
+    issue: "'Price must be between ₹1 and ₹10,000' — flat range no tax-context. Confirm whether displayed price is inclusive of GST (chefs above ₹20L turnover must register). Style-guide §3 'Tax' wording applies."
+    evidence_excerpt: "Price must be between ₹1 and ₹10,000"
+    recommendation: "Pair price field with explicit inclusive/exclusive of tax toggle and GSTIN capture (when applicable). Cite CGST §22 + §31 (tax invoice)."
+    citation: "CGST Act 2017 §22, §31; CGST Rules 2017 r.46"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CONFIRMATION DIALOG WORDING — modal-subtitle compliance
+  # ============================================================================
+
+  - finding_id: LEG-ERR-078
+    surface_id: mv-onb-docs-required-title
+    lens: legal
+    severity: P3
+    issue: "'Documents Required' as an alert title — combined with 'Please upload both ID proof and FSSAI license to continue.' body. Surfaces FSSAI dependency clearly which is good. Title-case vs sentence-case inconsistency throughout mobile-vendor alerts."
+    evidence_excerpt: "Documents Required / Permission Required / Terms Required / Policy Required / Validation Error / Submission Error"
+    recommendation: "Standardise to sentence-case ('Documents required', etc.) per style guide §4 modal-subtitle pattern. Plain-language obligation under CP §4(5)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-079
+    surface_id: mv-more-logout-confirm-body
+    lens: legal
+    severity: P3
+    issue: "'Are you sure you want to log out?' — uses 'log out' (style-guide bans this, requires 'sign out'). Voice consistency. Also: at logout, DPDP §6(2)(d) suggests surfacing what local-cache data persists vs purges."
+    evidence_excerpt: "Are you sure you want to log out?"
+    recommendation: "Rewrite per style guide §3: 'Sign out?' Style-guide §3 bans 'log out'. DPDP §6 notice for the logout-data-handling note."
+    citation: "DPDP Act 2023 §6(2)(d); CP (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-080
+    surface_id: mv-menuitem-delete-alert
+    lens: legal
+    severity: P3
+    issue: "'Are you sure you want to delete this menu item?' — does not state whether deleting a menu item with active customer orders cancels those orders, refunds them, or what happens. Procedural fairness for in-flight customers."
+    evidence_excerpt: "Are you sure you want to delete this menu item?"
+    recommendation: "Surface: 'Deleting this item won't affect orders already placed. The item will be unavailable for new orders.' If actual behaviour differs, fix the message. Consumer Protection §2(47) misleading-representation risk."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5), r.5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # FINAL CROSS-CUTTING
+  # ============================================================================
+
+  - finding_id: LEG-ERR-081
+    surface_id: api-error-validation-numeric
+    lens: legal
+    severity: P3
+    issue: "Numeric-bounds errors 'overallRating must be between 1 and 5', 'Percentage discount must be between 0 and 100', 'rate must be between 0 and 100' — 'rate' is ambiguous (tax rate? commission rate? interest rate?). 'rate must be between 0 and 100' surfaces an internal field name."
+    evidence_excerpt: "overallRating must be between 1 and 5 / Percentage discount must be between 0 and 100 / rate must be between 0 and 100"
+    recommendation: "Disambiguate 'rate' in context. Plain-language obligation."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-082
+    surface_id: api-error-validation-not-found
+    lens: legal
+    severity: P3
+    issue: "~42 'X not found' variants. Mostly safe but flag 'Verification token not found' / 'Invitation token not found' as potential enumeration vectors (attacker can probe valid-vs-invalid token states). Also 'Chef not found or not available' compounds existence + availability — could leak chef-state to an unauthenticated probe."
+    evidence_excerpt: "Verification token not found / Invitation token not found / Chef not found or not available / ~40 other variants"
+    recommendation: "Token-not-found should be indistinguishable from token-expired (one canonical message). Chef-not-available should be distinct from chef-not-found only when the requester is authenticated and authorised to know. Cite DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-083
+    surface_id: api-error-auth-unauthorized
+    lens: legal
+    severity: P2
+    issue: "Four variants 'Unauthorized', 'unauthorized', 'Authentication required', 'Token required' — inconsistent casing AND inconsistent terminology. From a user's perspective these all mean 'sign in', but the inconsistency reads as platform sloppiness AND may make automated grievance-handling harder (Grievance Officer needs to map error code to user-facing complaint)."
+    evidence_excerpt: "Unauthorized / unauthorized / Authentication required / Token required"
+    recommendation: "Standardise to one user-facing string ('Please sign in to continue.') with one internal code. Plain-language obligation; DPDP §10 Grievance Officer effectiveness."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-084
+    surface_id: api-error-chef-onboarding
+    lens: legal
+    severity: P2
+    issue: "Chef-onboarding pre-submit checks include 'Your application has already been approved' / 'Your application is already under review'. State-leak through error message — an attacker with stolen credentials learns the account's onboarding state. Limited risk (post-auth) but document. Also note the inventory mislabels this as driver_onboarding.go but it gates chef flow — verify."
+    evidence_excerpt: "Please complete all previous onboarding steps before submitting / Please complete earlier onboarding steps first / Please complete step 1 (personal details) first / Please upload at least one document before submitting / Please indicate if your bicycle can carry a delivery box / Your application has already been approved / Your application is already under review"
+    recommendation: "Standardise progression-blocking errors. Approval-state errors are post-auth and acceptable, but flag inconsistency ('complete all previous' vs 'complete earlier'). The 'bicycle delivery box' check is driver-specific — clarify which onboarding (chef or driver) the messages belong to. Plain-language."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 r.4(5); DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-085
+    surface_id: api-error-delivery-online
+    lens: legal
+    severity: P1
+    issue: "Driver-state errors mix 'You must be online to accept deliveries' (driver-facing 'you') with 'Partner has reached maximum concurrent deliveries' and 'Partner is not verified or active' (using 'Partner' terminology). Inconsistent point-of-view AND surfaces internal taxonomy. 'Partner is not verified' is also state-leak through error."
+    evidence_excerpt: "You must be online to accept deliveries / Order not available for delivery / Partner has reached maximum concurrent deliveries / Partner is not verified or active"
+    recommendation: "Use one POV ('you') in driver-facing surfaces. 'Partner is not verified or active' should never reach a verified driver — if it does, that's a state-machine bug. Cite MV Aggregator Guidelines 2020 §4 and procedural fairness for gig workers."
+    citation: "MV Aggregator Guidelines 2020 §4; Code on Social Security 2020 §141; CP (E-Commerce) Rules 2020 r.4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-086
+    surface_id: api-error-order-review-rules
+    lens: legal
+    severity: P3
+    issue: "'Can only review delivered orders' / 'This order has already been reviewed' — fine, but verify the review-system terms (one-review-per-order, edit-window, defamation pathway) are surfaced when a customer first reviews. IT Rules 2021 r.4(2) require intermediaries to enable grievance for unlawful content within 24 hours."
+    evidence_excerpt: "Can only review delivered orders / This order has already been reviewed"
+    recommendation: "Review-submission flow should surface defamation-policy and report-mechanism. Errors themselves are fine. IT Rules 2021 r.4(2)."
+    citation: "IT Rules 2021 r.4(2); DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-087
+    surface_id: ap-exports-error
+    lens: legal
+    severity: P1
+    issue: "Admin data-export error 'Download failed' is minimal. Data exports include PII subject to DPDP §11 (right to access). A failed export of a DPDP §11 request must (a) be retried automatically, (b) be logged for audit, (c) surface a Grievance contact if persistent. 'Download failed' alone is insufficient."
+    evidence_excerpt: "Download failed"
+    recommendation: "Expand: 'Download failed. The request has been re-queued (ID: <X>). Contact <Grievance Officer> if it doesn't complete within 30 days.' DPDP §11 right-of-access timelines."
+    citation: "DPDP Act 2023 §11, §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-ERR-088
+    surface_id: api-error-invitation
+    lens: legal
+    severity: P2
+    issue: "'Invitation has expired' / 'Invalid or expired invitation' / 'Invalid invitation token' / 'A pending invitation already exists for this email' — the last one CONFIRMS email existence in the staff/partner system. Privacy enumeration vector. Same pattern as registration phone-duplicate (LEG-ERR-008)."
+    evidence_excerpt: "Invitation has expired / Invalid or expired invitation / Invalid invitation token / A pending invitation already exists for this email"
+    recommendation: "Replace the 'pending invitation exists' message with a generic 'Invitation sent. If you don't receive an email, contact your admin.' Do not confirm email existence to the requester. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # Closing note
+  # ============================================================================
+  # Total surfaces audited: 282 ERRORS-EMPTY rows
+  # Total findings: 88
+  # All findings carry depends_on: "needs lawyer review"
+  # No binding text drafted — this is a gap analysis only
