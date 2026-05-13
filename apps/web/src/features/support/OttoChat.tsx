@@ -18,6 +18,7 @@ import { useAuth } from '@/app/providers/AuthProvider';
 // questions. DOB is unnecessary because HomeChef identifies orders by
 // the signed-in account, not by birthday lookup.
 const HOMECHEF_REASONS: readonly ReasonOption[] = [
+  { value: 'general_question', label: 'Ask a quick question', requiresStatus: false },
   { value: 'order_tracking', label: 'Order tracking / ETA' },
   { value: 'delivery_issue', label: 'Delivery problem' },
   { value: 'refund', label: 'Refund request' },
@@ -41,6 +42,7 @@ export function OttoChat() {
       productName="HomeChef Support"
       tenantId="homechef"
       reasons={HOMECHEF_REASONS}
+      statusPlaceholder="e.g. Order #ORD-2041 stuck on 'preparing'"
       customerName={displayName}
       customerEmail={user?.email ?? undefined}
     />
