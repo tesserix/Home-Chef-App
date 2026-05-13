@@ -360,7 +360,7 @@ function OrderDetailContent({
                   src={item.imageUrl}
                   alt={item.name}
                   className="h-12 w-12 rounded-lg object-cover"
-                />
+                 loading="lazy" decoding="async"/>
               )}
               <div className="flex-1">
                 <p className="font-medium text-ink">{item.name}</p>

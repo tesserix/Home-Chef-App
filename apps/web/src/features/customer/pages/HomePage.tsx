@@ -472,7 +472,7 @@ export default function HomePage() {
                     alt="Home chef cooking"
                     width={600}
                     height={500}
-                    loading="lazy"
+                    fetchPriority="high"
                     decoding="async"
                     className="absolute inset-0 h-full w-full object-cover"
                   />

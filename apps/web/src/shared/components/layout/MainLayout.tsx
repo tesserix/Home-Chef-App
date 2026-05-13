@@ -176,6 +176,8 @@ export function MainLayout() {
                         className="h-8 w-8 rounded-full object-cover"
                         draggable={false}
                         onContextMenu={(e) => e.preventDefault()}
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint text-herb">

@@ -64,6 +64,8 @@ export function HeroSection({ variant = 'home', className }: HeroSectionProps) {
           src={content.image}
           alt=""
           className="h-full w-full object-cover"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-paper/0" />
       </div>
@@ -168,6 +170,8 @@ export function PageHero({
             src={backgroundImage}
             alt=""
             className="h-full w-full object-cover opacity-20"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       )}

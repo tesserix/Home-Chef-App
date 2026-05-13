@@ -67,6 +67,8 @@ export default function RegisterPage() {
           className="absolute inset-0 h-full w-full object-cover"
           src="https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?w=1200&h=900&fit=crop"
           alt="Home chef preparing food"
+          fetchPriority="high"
+          decoding="async"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/20 to-transparent" />
         <div className="absolute inset-0 flex items-center justify-center p-12">

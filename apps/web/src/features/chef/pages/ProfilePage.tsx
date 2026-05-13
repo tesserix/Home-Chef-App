@@ -192,7 +192,7 @@ export default function ChefProfilePage() {
                       src={profile.profileImage}
                       alt="Profile"
                       className="h-full w-full object-cover"
-                    />
+                     loading="lazy" decoding="async"/>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <ChefHat className="h-12 w-12 text-ink-muted" />
@@ -225,7 +225,7 @@ export default function ChefProfilePage() {
                       src={profile.bannerImage}
                       alt="Banner"
                       className="h-full w-full object-cover"
-                    />
+                     loading="lazy" decoding="async"/>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <Camera className="h-12 w-12 text-ink-muted" />

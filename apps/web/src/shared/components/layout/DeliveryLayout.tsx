@@ -62,7 +62,7 @@ export function DeliveryLayout() {
                   src={user.avatar}
                   alt=""
                   className="h-8 w-8 rounded-full object-cover"
-                />
+                 loading="lazy" decoding="async"/>
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint">
                   <User aria-hidden="true" className="h-4 w-4 text-herb" />

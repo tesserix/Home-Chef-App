@@ -101,6 +101,7 @@ export function PlaceholderImage({
           setHasError(true);
         }}
         loading="lazy"
+        decoding="async"
       />
     </div>
   );

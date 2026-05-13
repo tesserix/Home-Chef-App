@@ -109,7 +109,7 @@ export default function ChefDetailPage() {
           alt=""
           width={1600}
           height={640}
-          loading="eager"
+          fetchPriority="high"
           decoding="async"
           className="h-full w-full object-cover"
         />

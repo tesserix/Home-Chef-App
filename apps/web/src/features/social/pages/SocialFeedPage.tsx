@@ -236,7 +236,7 @@ function PostCard({
             src={post.chef?.profileImage || '/placeholder-avatar.png'}
             alt={post.chef?.businessName}
             className="h-10 w-10 rounded-full object-cover"
-          />
+           loading="lazy" decoding="async"/>
           <div>
             <p className="font-medium text-ink">{post.chef?.businessName}</p>
             <div className="flex items-center gap-1 text-sm text-ink-muted">
@@ -257,7 +257,7 @@ function PostCard({
             src={post.images[imageIndex]}
             alt="Post"
             className="h-full w-full object-cover"
-          />
+           loading="lazy" decoding="async"/>
           {post.images.length > 1 && (
             <>
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">

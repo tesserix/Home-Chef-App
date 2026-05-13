@@ -92,7 +92,7 @@ export function ChefLayout() {
                   src={user.avatar}
                   alt={user.firstName}
                   className="h-10 w-10 rounded-full object-cover"
-                />
+                 loading="lazy" decoding="async"/>
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-herb-tint">
                   <User aria-hidden="true" className="h-5 w-5 text-herb" />

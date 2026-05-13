@@ -159,13 +159,13 @@ function ChefCard({ chef, onSelect }: { chef: Chef; onSelect: () => void }) {
           src={chef.bannerImage || chef.profileImage}
           alt={chef.businessName}
           className="h-full w-full object-cover"
-        />
+         loading="lazy" decoding="async"/>
         <div className="absolute -bottom-6 left-4">
           <img
             src={chef.profileImage}
             alt={chef.businessName}
             className="h-12 w-12 rounded-xl border-4 border-ink object-cover"
-          />
+           loading="lazy" decoding="async"/>
         </div>
         {/* Status Badge */}
         <div className="absolute top-2 right-2">
@@ -243,13 +243,13 @@ function ChefDetailModal({
             src={chef.bannerImage || chef.profileImage}
             alt={chef.businessName}
             className="h-full w-full object-cover rounded-t-xl"
-          />
+           loading="lazy" decoding="async"/>
           <div className="absolute -bottom-10 left-6">
             <img
               src={chef.profileImage}
               alt={chef.businessName}
               className="h-20 w-20 rounded-xl border-4 border-ink object-cover"
-            />
+             loading="lazy" decoding="async"/>
           </div>
         </div>
 

@@ -80,6 +80,8 @@ export default function ProfilePage() {
                         src={user.avatar}
                         alt={user.firstName}
                         className="h-full w-full rounded-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <span className="text-lg font-semibold text-herb">
@@ -250,6 +252,8 @@ function ProfileTab() {
                 className="h-full w-full rounded-full object-cover"
                 draggable={false}
                 onContextMenu={(e) => e.preventDefault()}
+                loading="lazy"
+                decoding="async"
               />
             ) : (
               <span className="text-2xl font-semibold text-herb">

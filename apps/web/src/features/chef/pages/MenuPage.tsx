@@ -277,7 +277,7 @@ function MenuItemCard({
             src={item.imageUrl}
             alt={item.name}
             className="h-full w-full object-cover"
-          />
+           loading="lazy" decoding="async"/>
         ) : (
           <div className="h-full w-full bg-mist flex items-center justify-center">
             <ChefHat className="h-12 w-12 text-ink-muted" />

@@ -220,7 +220,7 @@ export default function OrderDetailPage() {
                     src={item.imageUrl}
                     alt={item.name}
                     className="h-16 w-16 rounded-lg object-cover"
-                  />
+                   loading="lazy" decoding="async"/>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">

@@ -325,7 +325,7 @@ function QuoteCard({
             src={quote.chef?.profileImage || '/placeholder-chef.png'}
             alt={quote.chef?.businessName}
             className="h-14 w-14 rounded-xl object-cover"
-          />
+           loading="lazy" decoding="async"/>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div>
