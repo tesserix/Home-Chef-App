@@ -1,0 +1,309 @@
+# Brand-Voice lens findings — MARKETING category
+# Auditor: brand-voice lens agent
+# Scope: 22 marketing-category surfaces across web (landing, hero, auth marketing rails, footer, browse, catering, brand)
+#        + vendor-portal register marketing rail
+# Date: 2026-05-13
+#
+# Marketing is the brand's ENTRY surface. Every drift here defines first impressions, so
+# severity skews higher than for deep operational screens. AI-slop placeholder metrics
+# (the user's explicit concern) are P0 across the board because they erode platform trust.
+
+findings:
+  # ─────────────────────────────────────────────────────────────────────────
+  # P0 — Unverified social-proof / AI-slop hardcoded metrics
+  # (User's stated #1 concern. Every instance is a brand-trust violation
+  #  AND a Rule 5 "Restraint over urgency" / Rule 1 "Confident, not loud" violation.)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-001
+    surface_id: web-mkt-landing-hero-badge
+    lens: brand-voice
+    severity: P0
+    issue: "Hardcoded '500+ Home Chefs Near You' on landing hero badge — unverified platform claim, almost certainly fake, and the same number is repeated three times across the homepage (badge, trust row, shared HeroSection Stats) signaling AI-slop placeholder content rather than real data."
+    evidence_excerpt: "<Badge variant=\"premium\" size=\"lg\" className=\"mb-6\"><Sparkles … /> 500+ Home Chefs Near You </Badge>"
+    related_surfaces:
+      - web-mkt-landing-trust-badges
+      - web-mkt-register-benefits
+      - web-mkt-hero-variants
+    recommendation: "Replace with a real metric fed from the API (e.g., useQuery returning live chef count for the user's pincode → '127 chefs near you', or scoped 'Chefs in Bengaluru'). If real count is below the brag-threshold, drop the badge entirely — restraint > inflated proof. Never hardcode '500+'."
+    depends_on: null
+
+  - finding_id: BV-002
+    surface_id: web-mkt-landing-trust-badges
+    lens: brand-voice
+    severity: P0
+    issue: "Three hardcoded 'trust signals' below the hero — '500+ Home Chefs', '4.8 Average Rating', '30-45 min Delivery' — all static strings, none read from real platform data. Classic AI-slop trust-badge pattern, identical to the look critiqued in `.impeccable.md`. The 4.8 rating in particular is a statistical claim with no source."
+    evidence_excerpt: "{ icon: ChefHat, label: '500+ Home Chefs' }, { icon: Star, label: '4.8 Average Rating' }, { icon: Clock, label: '30-45 min Delivery' }"
+    related_surfaces:
+      - web-mkt-landing-hero-badge
+      - web-mkt-hero-variants
+      - web-mkt-landing-why-choose
+    recommendation: "Either bind these to live aggregates (chef count from `/chefs/count?near=…`, rolling 30-day avg rating from `/reviews/aggregate`, p50 delivery time from `/orders/eta-summary`) or delete the row. Hardcoded marketing stats are worse than no stats — they read as untrustworthy on inspection and translate badly to other locales."
+    depends_on: null
+
+  - finding_id: BV-003
+    surface_id: web-mkt-hero-variants
+    lens: brand-voice
+    severity: P0
+    issue: "Shared `HeroSection` `Stats` component hardcodes the same fabricated metrics as the homepage hero ('500+', '4.8', '30min'), meaning any page that mounts this hero (chefs, catering, feed variants) repeats the unverified claim. Cross-surface amplification of a single AI-slop placeholder."
+    evidence_excerpt: "const stats = [ { icon: ChefHat, value: '500+', label: 'Home Chefs' }, { icon: Star, value: '4.8', label: 'Avg Rating' }, { icon: Clock, value: '30min', label: 'Avg Delivery' } ];"
+    related_surfaces:
+      - web-mkt-landing-hero-badge
+      - web-mkt-landing-trust-badges
+    recommendation: "Lift the Stats component out of the hero entirely, OR accept a `stats` prop from the parent route loader that fetches real numbers. Default to no-stats when the loader returns null. Same rule as BV-001/002 — no hardcoded numerals in marketing."
+    depends_on: BV-001
+
+  - finding_id: BV-004
+    surface_id: web-mkt-landing-why-choose
+    lens: brand-voice
+    severity: P0
+    issue: "'Join thousands of happy customers enjoying homemade food' under 'The Fe3dr Difference' headline — textbook unverified social-proof platitude. 'Thousands' has no source, 'happy customers' is unverifiable, and the phrasing is exactly the generic-DTC pattern `.impeccable.md` lists as an anti-reference."
+    evidence_excerpt: "<h2 …>The Fe3dr Difference</h2> <p …>Join thousands of happy customers enjoying homemade food</p>"
+    related_surfaces:
+      - vp-mkt-register-benefits-list
+      - web-mkt-register-benefits
+    recommendation: "Replace the subhead with substance, not size: 'Verified home kitchens. Real recipes. Delivered today.' or similar. If 'thousands' is genuinely true and disclosable, prove it with a specific number sourced from the analytics service; otherwise remove."
+    depends_on: null
+
+  - finding_id: BV-005
+    surface_id: web-mkt-register-benefits
+    lens: brand-voice
+    severity: P0
+    issue: "RegisterPage left-rail hardcodes 'Access to 500+ home chefs' in the BENEFITS array — same fabricated count, now on the signup conversion surface. A customer who counts <500 chefs in their pincode will catch the lie."
+    evidence_excerpt: "const BENEFITS = [ 'Access to 500+ home chefs', 'Authentic homemade food', 'Fast & reliable delivery', 'Support local home chefs' ];"
+    related_surfaces:
+      - web-mkt-landing-hero-badge
+      - web-mkt-landing-trust-badges
+      - web-mkt-hero-variants
+    recommendation: "Swap the count for an evergreen claim: 'Home chefs in every metro we serve' or 'Verified neighborhood kitchens'. Generic-quantity claims belong on landing only when the data backs them, never on the signup surface where users are about to compare reality against the promise."
+    depends_on: BV-001
+
+  - finding_id: BV-006
+    surface_id: web-mkt-register-benefits
+    lens: brand-voice
+    severity: P0
+    issue: "Heading 'Get access to hundreds of home chefs serving authentic, homemade food in your area' — second unverified count on the same surface ('hundreds') and contradicts the badge's '500+' just one row above. Two different fake numbers on the same hero is a credibility break."
+    evidence_excerpt: "<p>Get access to hundreds of home chefs serving authentic, homemade food in your area.</p>"
+    related_surfaces:
+      - web-mkt-register-benefits
+      - web-mkt-landing-hero-badge
+    recommendation: "Pick one truthful, scoped framing per surface. Suggested: 'Real home kitchens in your neighborhood, serving the food you actually want to eat.' No number, no internal contradiction."
+    depends_on: BV-005
+
+  - finding_id: BV-007
+    surface_id: vp-mkt-register-benefits-list
+    lens: brand-voice
+    severity: P0
+    issue: "Vendor portal register page promises 'Join thousands of home chefs earning with Fe3dr' AND 'Zero commission first month' as the headline benefits. Both are marketing claims without proof: 'thousands' is unverified social proof identical to BV-004; 'zero commission first month' is an explicit financial promise on an entry surface with no terms link and no expiry mechanism."
+    evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules. … BENEFITS = [{ title: 'Zero commission first month', desc: 'Get started completely risk-free' }, …]"
+    related_surfaces:
+      - web-mkt-landing-why-choose
+      - web-mkt-register-benefits
+    recommendation: "Remove 'thousands'. The zero-commission claim must either (a) be backed by a live, version-controlled promotion record with explicit start/end dates and link to vendor T&Cs, or (b) be replaced with neutral language ('Transparent commission structure — see plans'). Otherwise this exposes the platform to consumer-protection complaints in addition to brand drift."
+    depends_on: null
+
+  - finding_id: BV-008
+    surface_id: web-mkt-landing-featured-chefs-heading
+    lens: brand-voice
+    severity: P0
+    issue: "'Our community's favorite home chefs' subhead under 'Featured Chefs / Top Rated' — 'favorite' is a verifiable claim with no underlying ranking source visible. Worse, the featured query uses `sort: 'rating', limit: 6` so a single 5-star review on a new chef may surface them above veterans — the copy promises social validation the algorithm doesn't deliver."
+    evidence_excerpt: "<Badge variant=\"premium\">Top Rated</Badge> <h2>Featured Chefs</h2> <p>Our community's favorite home chefs</p>"
+    related_surfaces: []
+    recommendation: "Either tie 'favorite' to a real signal (e.g., 'Most ordered this week') sourced from order count, or use neutral language like 'Highly rated home chefs near you'. The badge 'Top Rated' should also reflect a documented threshold (≥4.5 with ≥20 reviews, etc.) and that threshold should be visible somewhere."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P1 — Brand identity drift on entry surfaces
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-009
+    surface_id: web-mkt-login-testimonial
+    lens: brand-voice
+    severity: P1
+    issue: "Login page right-rail features a fabricated testimonial: 'Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!' attributed to 'Sarah M., Happy Customer'. Initial + role pattern is the canonical AI-slop fake-testimonial signature called out in the lens brief. Worse, it sits on the LOGIN page — the user has already decided to use the product, so the testimonial does nothing but erode credibility on entry."
+    evidence_excerpt: "\"Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!\" — Sarah M. / Happy Customer"
+    related_surfaces:
+      - web-mkt-register-benefits
+    recommendation: "Either replace with a real, named, opt-in testimonial sourced from a reviewed customer (with their consent on file) and reviewed by legal, or remove the testimonial card entirely and let the food photography carry the rail. 'Happy Customer' role tag is a tell — real testimonials use the person's actual context (city, dish ordered, etc.)."
+    depends_on: null
+
+  - finding_id: BV-010
+    surface_id: web-mkt-landing-hero-title
+    lens: brand-voice
+    severity: P1
+    issue: "Two different homepage heroes coexist in the codebase. The live `HomePage.tsx` uses 'Homemade Food, Delivered Fresh' while the shared `HeroSection.tsx` variant `home` uses the same title with a different description ('Connect with talented home chefs in your area. Enjoy authentic, homemade meals prepared with love and delivered to your doorstep.'). Any route mounting the shared hero shows a different brand promise than the homepage. Cross-surface voice drift on the brand's primary headline."
+    evidence_excerpt: "HomePage: 'Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep.' vs HeroSection.home: 'Connect with talented home chefs in your area. Enjoy authentic, homemade meals prepared with love and delivered to your doorstep.'"
+    related_surfaces:
+      - web-mkt-landing-hero-subtitle
+      - web-mkt-hero-variants
+    recommendation: "One canonical homepage hero copy. Move the headline + description into a single exported constant (`HOMEPAGE_HERO`) consumed by both `HomePage` and the shared `HeroSection.home` variant. Also: 'prepared with love' is faux-artisanal (BV-013) — pick the cleaner of the two and drop that phrase."
+    depends_on: null
+
+  - finding_id: BV-011
+    surface_id: web-mkt-hero-variants
+    lens: brand-voice
+    severity: P1
+    issue: "Catering hero variant: 'Catering for Every Occasion / our home chefs bring authentic flavors to your special events.' — 'authentic flavors' + 'special events' is the generic SaaS marketing copy register the style guide bans ('amazing food', 'experience the difference' family). Reads like AI placeholder text written from a brief."
+    evidence_excerpt: "catering: { title: 'Catering for', titleHighlight: 'Every Occasion', description: 'From intimate gatherings to large celebrations, our home chefs bring authentic flavors to your special events.', cta: 'Plan Your Event' }"
+    related_surfaces:
+      - web-mkt-catering-request-heading
+      - web-mkt-landing-catering-cta
+    recommendation: "Rewrite with specifics that only a home-kitchen marketplace could say: 'Catering from real home kitchens. Birthdays, office lunches, weddings — quotes within a day.' Cut 'authentic flavors' and 'special events'. Same treatment for feed variant ('Food / Inspiration / See what your favorite chefs are cooking today') which is also vague-SaaS."
+    depends_on: null
+
+  - finding_id: BV-012
+    surface_id: web-mkt-layout-footer
+    lens: brand-voice
+    severity: P1
+    issue: "Footer brand blurb 'Connecting you with home chefs for authentic, homemade food delivered to your doorstep.' is the THIRD variant of the brand description on a single page (hero + register + footer all phrase it differently). Same intent, three voices."
+    evidence_excerpt: "Connecting you with home chefs for authentic, homemade food delivered to your doorstep."
+    related_surfaces:
+      - web-mkt-landing-hero-subtitle
+      - web-mkt-brand-tagline
+      - web-mkt-register-benefits
+    recommendation: "Define a single canonical brand-statement string in `shared/constants/brand.ts` (e.g., `BRAND_STATEMENT_SHORT`, `BRAND_STATEMENT_LONG`). Import it in footer, hero, register, and meta tags. Recommend short form: 'Homemade food, delivered from your neighborhood.' (matches Logo tagline, drops 'authentic')."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Faux-artisanal language / banned vocabulary on marketing surfaces
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-013
+    surface_id: web-mkt-landing-why-choose
+    lens: brand-voice
+    severity: P2
+    issue: "'Made with Love / Every meal is prepared fresh with authentic family recipes' is exactly the faux-artisanal register STYLE-GUIDE.md section 3 bans ('handcrafted with love', 'lovingly prepared', 'homestyle goodness'). Pairs with a heart icon and paprika tint — visual maximalism reinforces the copy drift."
+    evidence_excerpt: "{ icon: Heart, title: 'Made with Love', description: 'Every meal is prepared fresh with authentic family recipes', tone: 'paprika' }"
+    related_surfaces:
+      - web-mkt-hero-variants
+      - vp-mkt-register-benefits-list
+    recommendation: "Replace title with a functional benefit ('Cooked when you order', 'Family recipes', or 'No reheats'). Drop the heart icon. The other three cards (Verified Chefs / Secure Payments / Fast Delivery) are functional — this card is the only one with brand-personality drift in the row."
+    depends_on: null
+
+  - finding_id: BV-014
+    surface_id: web-mkt-landing-hero-subtitle
+    lens: brand-voice
+    severity: P2
+    issue: "Hero description: 'Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep.' — 'talented', 'authentic', 'right to your doorstep' are all generic-marketing modifiers the style guide says compete with the food photo. Six modifiers in a 22-word sentence is the opposite of 'photo-forward, chrome-light' (Rule 3)."
+    evidence_excerpt: "Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep."
+    related_surfaces:
+      - web-mkt-hero-variants
+      - web-mkt-browse-heading
+      - web-mkt-layout-footer
+    recommendation: "Cut by half. Suggested: 'Real home kitchens, delivered in your neighborhood.' (8 words). 'Authentic' is a flag — STYLE-GUIDE doesn't ban it explicitly but it appears in 4 different marketing surfaces here, signalling overuse. Consider adding it to the banned list."
+    depends_on: null
+
+  - finding_id: BV-015
+    surface_id: web-mkt-browse-heading
+    lens: brand-voice
+    severity: P2
+    issue: "'Discover talented home chefs serving authentic homemade food' — repeats the 'talented + authentic + homemade' modifier stack from the homepage hero (BV-014), suggesting these come from a single fill-in-the-blanks template rather than considered per-surface copy. Cross-surface voice monotony."
+    evidence_excerpt: "<h1>Explore Home Chefs</h1> <p>Discover talented home chefs serving authentic homemade food</p>"
+    related_surfaces:
+      - web-mkt-landing-hero-subtitle
+    recommendation: "Each surface should sound like it was written for that surface. Browse-page subhead can be more functional: 'Filter by cuisine, distance, or what's available right now.' This is a tool page, not a brand moment."
+    depends_on: BV-014
+
+  - finding_id: BV-016
+    surface_id: web-mkt-landing-cuisines
+    lens: brand-voice
+    severity: P2
+    issue: "'Cuisines / Explore Flavors / Discover authentic dishes from around the world' — 'around the world' is generic-SaaS travel-blog filler and contradicts the marketplace's actual scope (six hardcoded cuisines: South Indian, Italian, Japanese, North Indian, Mexican, Thai are NOT 'around the world')."
+    evidence_excerpt: "<Badge>Cuisines</Badge> <h2>Explore Flavors</h2> <p>Discover authentic dishes from around the world</p>"
+    related_surfaces: []
+    recommendation: "Subhead should match scope and tone: 'Pick a cuisine, see chefs cooking it tonight.' The six cuisines should also be data-driven (top-6 cuisines by chef count from the API) rather than hardcoded — same root cause as the AI-slop metric findings."
+    depends_on: null
+
+  - finding_id: BV-017
+    surface_id: web-mkt-landing-how-it-works
+    lens: brand-voice
+    severity: P2
+    issue: "'Get Delicious Food in 3 Steps' uses 'Delicious Food' — generic consumer-marketing modifier the style guide flags as bland ('amazing food', 'best in city'). Title-cases 'Delicious Food' for emphasis where sentence case is the style-guide default."
+    evidence_excerpt: "<h2>Get Delicious Food in 3 Steps</h2> <p>From discovery to delivery, we make it simple to enjoy homemade food</p>"
+    related_surfaces: []
+    recommendation: "Sentence case + sharper noun: 'From discovery to doorstep, in three steps.' Drop 'delicious'. The step labels themselves (Discover / Order / Enjoy) are fine; the subhead is where the drift lives."
+    depends_on: null
+
+  - finding_id: BV-018
+    surface_id: web-mkt-landing-become-chef
+    lens: brand-voice
+    severity: P2
+    issue: "'Love Cooking? Share Your Talent / Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food.' — 'passion into income', 'share your talent', 'delicious homemade food' all hit the faux-artisanal + generic-DTC pattern stack. The card sits on `bg-ink` (dark background, herb CTA) which would be fine if the copy weren't shouting two voice violations at once."
+    evidence_excerpt: "Love Cooking? Share Your Talent. Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food."
+    related_surfaces:
+      - vp-mkt-register-benefits-list
+    recommendation: "Functional rewrite: 'Cook from home. Sell to your neighborhood. / Set your menu, your prices, your hours. Weekly payouts, transparent fees, no exclusivity.' Anchors on what the chef actually gets, not vague aspiration. Also: this is consumer-side marketing for a chef CTA — voice should LEAN to the chef tone-matrix row (functional, time-aware) once they click through."
+    depends_on: null
+
+  - finding_id: BV-019
+    surface_id: web-mkt-landing-catering-cta
+    lens: brand-voice
+    severity: P2
+    issue: "'Catering Services / Planning an Event?' uses Title Case for 'Catering Services' (badge), and the subhead 'Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions.' has a comma-listed-occasions pattern ('parties, corporate events, special occasions') that reads like an SEO meta description rather than considered marketing copy."
+    evidence_excerpt: "<Badge>Catering Services</Badge> <h2>Planning an Event?</h2> <p>Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions.</p>"
+    related_surfaces:
+      - web-mkt-hero-variants
+      - web-mkt-catering-request-heading
+    recommendation: "Drop the badge or sentence-case it ('Catering'). Rewrite subhead: 'Tell us about your event. Home chefs send you quotes within a day.' Specific timeline, concrete outcome."
+    depends_on: BV-011
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P3 — Punctuation / capitalization / cross-link drift
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-020
+    surface_id: web-mkt-landing-search-cta
+    lens: brand-voice
+    severity: P3
+    issue: "Primary search CTA reads 'Find Food' (Title Case) while the shared HeroSection's equivalent CTA is 'Find Chefs' (also Title Case) and ALL other primary buttons in the design system use sentence case. Two issues: capitalization drift from style-guide buttons-rule, and label drift ('food' vs 'chefs') between two heroes that serve the same job."
+    evidence_excerpt: "<Link to=\"/chefs?…\">Find Food</Link>  vs  <Button>Find Chefs</Button>"
+    related_surfaces:
+      - web-mkt-hero-search
+      - web-mkt-hero-variants
+    recommendation: "Sentence case + decide on a single noun. Recommend 'Find chefs' across both heroes (matches the route /chefs and the rest of the IA). If the homepage hero is genuinely dish-first, 'Find dishes' is acceptable — but pick one per surface and keep it consistent."
+    depends_on: null
+
+  - finding_id: BV-021
+    surface_id: web-mkt-hero-how-it-works-cta
+    lens: brand-voice
+    severity: P3
+    issue: "Secondary CTA 'How It Works' is Title Case in the shared hero AND in the homepage 'How It Works' section badge — both are violations of the buttons rule (sentence case). Lowercase 'How it works' is the style-guide default."
+    evidence_excerpt: "<Link to=\"/how-it-works\">How It Works</Link>"
+    related_surfaces:
+      - web-mkt-landing-how-it-works
+    recommendation: "Rename to 'How it works' everywhere (button, badge, route slug stays /how-it-works). This is a 5-instance global rename — same string appears in MainLayout nav too."
+    depends_on: null
+
+  - finding_id: BV-022
+    surface_id: web-mkt-landing-featured-chefs-heading
+    lens: brand-voice
+    severity: P3
+    issue: "'View All Chefs' (Title Case) on a ghost-variant button; cuisines section uses 'View All' (also Title Case). Both violate sentence-case button rule. Also: two different labels for what is essentially the same action ('View all chefs' on featured row vs 'View all' on cuisines row)."
+    evidence_excerpt: "<Link to=\"/chefs\">View All Chefs <ArrowRight … /></Link>  /  <Link to=\"/chefs\">View All <ArrowRight … /></Link>"
+    related_surfaces:
+      - web-mkt-landing-cuisines
+    recommendation: "Sentence case + unify: 'View all chefs' on both rows (or 'See all' if shorter is wanted). Pair label with section purpose: featured-row link can stay 'View all chefs' while cuisines-row should be 'View all cuisines' (currently misleading — 'View All' without an object next to a cuisine grid)."
+    depends_on: null
+
+  - finding_id: BV-023
+    surface_id: web-mkt-landing-become-chef
+    lens: brand-voice
+    severity: P3
+    issue: "Become-a-chef section has two CTAs: 'Become a Chef' (Title Case) and 'Learn More' (Title Case). Style guide: sentence case for buttons. 'Learn more →' is allowed by the style guide only when paired with topic context; standalone 'Learn More' is on the banned list."
+    evidence_excerpt: "<Link to=\"/become-chef\">Become a Chef</Link>  /  <Link to=\"/chef-resources\">Learn More</Link>"
+    related_surfaces: []
+    recommendation: "Sentence case both: 'Become a chef' / 'Read chef resources' (or 'See how it works for chefs'). Drop the standalone 'Learn More' — replace with descriptive link text per style-guide Rule 3 vocabulary table."
+    depends_on: null
+
+  - finding_id: BV-024
+    surface_id: web-mkt-brand-tagline
+    lens: brand-voice
+    severity: P3
+    issue: "Logo tagline 'Homemade Food Delivered' is Title Case, contradicting all other tagline-like strings on the marketing surface which are sentence case or full sentences. Also: it's the cleanest brand statement in the codebase (vs the three verbose footer/hero/register variants) and isn't reused as the canonical short statement (see BV-012)."
+    evidence_excerpt: "<span>Homemade Food Delivered</span>"
+    related_surfaces:
+      - web-mkt-layout-footer
+      - web-mkt-landing-hero-subtitle
+      - web-mkt-register-benefits
+    recommendation: "Sentence case: 'Homemade food, delivered.' (note the comma + period for editorial feel matching `.impeccable.md` 'Confident, not loud'). Promote this exact string to `shared/constants/brand.ts` as `BRAND_STATEMENT_SHORT` and consume from footer + meta tags."
+    depends_on: BV-012

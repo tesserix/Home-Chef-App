@@ -1,0 +1,388 @@
+# Legal lens findings — MARKETING category
+# Jurisdiction: India + generic best-practice
+# Auditor note: NOT a lawyer. Every finding flags depends_on: "needs lawyer review"
+#                for human binding-text drafting.
+
+findings:
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Unverified social-proof metrics (ASCI / CP E-Commerce Rules 2020)
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-001
+    surface_id: web-mkt-landing-hero-badge
+    lens: legal
+    severity: P0
+    issue: "Hardcoded social-proof metric '500+ Home Chefs Near You' rendered without substantiation, geographic qualifier, or 'as of date' — misleading advertising exposure"
+    evidence_excerpt: "500+ Home Chefs Near You"
+    recommendation: "Either (a) bind the number to a live count from the chefs API with a verifiable 'as-of' timestamp and a geographic qualifier ('Near You' is location-dependent), or (b) remove the metric. If retained, store the substantiation file (count source + date) per ASCI Code Chapter I.1 'all claims, direct or implied, must be capable of substantiation'. Avoid the '+' suffix unless the rounded figure is documented."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11) (no false/misleading advertising); ASCI Code Chapter I.1 (substantiation of claims)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-002
+    surface_id: web-mkt-landing-trust-badges
+    lens: legal
+    severity: P0
+    issue: "Trust badge row asserts three quantified marketing claims ('500+ Home Chefs', '4.8 Average Rating', '30-45 min Delivery') without substantiation, methodology, or 'as of' date"
+    evidence_excerpt: "500+ Home Chefs / 4.8 Average Rating / 30-45 min Delivery"
+    recommendation: "Each claim needs substantiation per ASCI guidelines: (1) chef count must reference a live data source with timestamp; (2) '4.8 Average Rating' needs sample size disclosure (e.g., 'across 12,400 reviews, as of <date>') and the rating must be re-checked periodically; (3) '30-45 min Delivery' is a performance claim that must be qualified ('typical', 'in select pin codes', 'subject to traffic') or it constitutes a deliverable promise the platform may not be able to honour, exposing it under Rule 4(11)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); ASCI Code Chapter I.1 (substantiation); ASCI Guidelines on Misleading Advertising"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-003
+    surface_id: web-mkt-register-benefits
+    lens: legal
+    severity: P0
+    issue: "Marketing claim '500+ home chefs' duplicated on registration entry page reinforces unsubstantiated metric at the conversion moment — consumer-decision point under CP E-Comm Rules"
+    evidence_excerpt: "Access to 500+ home chefs"
+    recommendation: "Same substantiation requirement as LEG-MKT-001/002. The legal exposure is HIGHER here because the claim is presented at the registration conversion moment — i.e., the consumer is forming the contractual relationship in reliance on the claim. Either bind to a live count or remove."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11) and Rule 5(3) (no misrepresentation to induce a transaction); ASCI Code Chapter I.1"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Food-safety claims in marketing (FSSAI consistency required)
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-004
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P0
+    issue: "Marketing card states 'All our home chefs are verified for food safety and quality' — this is a regulated food-safety claim that requires evidence of an actual verification process consistent with FSSAI registration/licensing"
+    evidence_excerpt: "Verified Chefs / All our home chefs are verified for food safety and quality"
+    recommendation: "Either (a) the platform must document and operate an actual chef-verification programme (FSSAI registration check, food-handler training certificate, kitchen photos, periodic re-verification) and link the consumer to the verification status on each chef profile, or (b) the claim must be removed. The phrase 'verified for food safety' implies regulatory oversight; if FSSAI registration is not in fact collected/displayed per FSS (Licensing & Registration) Regulations 2011, this is an unsubstantiated regulatory claim under Rule 4(11)."
+    citation: "FSS (Licensing & Registration) Regulations 2011; FSS Act 2006 §31; Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); ASCI Guidelines on Misleading Advertising"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-005
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P1
+    issue: "'Made with Love / Every meal is prepared fresh with authentic family recipes' — 'fresh' and 'authentic' are unqualified food-quality claims that map to FSSAI's restricted descriptors"
+    evidence_excerpt: "Made with Love / Every meal is prepared fresh with authentic family recipes"
+    recommendation: "Per FSS (Advertising and Claims) Regulations 2018, descriptors like 'fresh' and 'authentic' must not mislead. 'Fresh' specifically has a working definition (not preserved, recently prepared). Either define what 'fresh' means on this platform (e.g., 'prepared within X hours of pickup') in a tooltip / linked policy, or use less regulated alternatives ('home-cooked', 'home-prepared'). 'Authentic family recipes' is harder to substantiate per-chef — consider a softer phrasing."
+    citation: "FSS (Advertising and Claims) Regulations 2018 §4 (no misleading descriptors); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-006
+    surface_id: web-mkt-landing-hero-title
+    lens: legal
+    severity: P1
+    issue: "Hero title 'Homemade Food, Delivered Fresh' uses 'Fresh' as the herb-accent marketing word without a substantiation pathway"
+    evidence_excerpt: "Homemade Food, Delivered Fresh"
+    recommendation: "Same as LEG-MKT-005 — 'Fresh' is a regulated descriptor under FSSAI claims rules. Either define 'fresh' platform-wide (in T&C or a linked claims page) and ensure operational compliance (e.g., max prep-to-delivery time), or replace with a non-regulated descriptor."
+    citation: "FSS (Advertising and Claims) Regulations 2018 §4; ASCI Guidelines on Misleading Advertising"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-007
+    surface_id: web-mkt-landing-how-it-works
+    lens: legal
+    severity: P2
+    issue: "'Get fresh homemade food delivered to your doorstep' restates 'fresh' as a deliverable promise without definition"
+    evidence_excerpt: "Get fresh homemade food delivered to your doorstep"
+    recommendation: "Align with the platform-wide 'fresh' definition once established (see LEG-MKT-005). If 'fresh' cannot be operationalised, drop it. Avoid using the same regulated descriptor in 4+ places without a single source of truth."
+    citation: "FSS (Advertising and Claims) Regulations 2018 §4; best-practice (claim-consistency across surfaces)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-008
+    surface_id: web-mkt-browse-heading
+    lens: legal
+    severity: P2
+    issue: "Browse-chefs page intro 'Discover talented home chefs serving authentic homemade food' — 'authentic' is a regulated quality descriptor"
+    evidence_excerpt: "Discover talented home chefs serving authentic homemade food"
+    recommendation: "Per FSS Advertising Claims Regulations, 'authentic' implies origin/recipe verification. Either drop the word ('homemade' alone is sufficient and accurate to the model) or define what 'authentic' verification means."
+    citation: "FSS (Advertising and Claims) Regulations 2018 §4 (no implied superiority without substantiation)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-009
+    surface_id: web-mkt-landing-hero-subtitle
+    lens: legal
+    severity: P2
+    issue: "Hero subtitle 'Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep' compounds 'authentic' with a geographic implication ('in your neighborhood')"
+    evidence_excerpt: "Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep."
+    recommendation: "Two issues: (1) 'authentic' — see LEG-MKT-008; (2) 'in your neighborhood' is a geographic promise. If the platform operates in only some pin codes, this claim is misleading to visitors outside coverage. Add a 'check availability in your area' qualifier or geo-detect before showing this claim."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); FSS (Advertising and Claims) Regulations 2018"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Performance / delivery-time claims
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-010
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P0
+    issue: "'Fast Delivery / Reliable delivery to your doorstep within 30-45 minutes' is a quantified performance promise that may bind the platform under CP E-Commerce Rules and create a guaranteed-delivery expectation"
+    evidence_excerpt: "Fast Delivery / Reliable delivery to your doorstep within 30-45 minutes"
+    recommendation: "Quantified time-window promises are HIGH-risk: a consumer who experiences a 50-minute delivery has a colourable claim of misleading advertising and possibly a refund right. Recommend (a) qualify with 'typical', 'in eligible areas', 'subject to chef availability and traffic'; (b) tie to a documented SLA with a refund/credit mechanism if breached; or (c) drop the specific window in favour of a softer claim ('delivery to your doorstep'). Note: also restated in trust badges (LEG-MKT-002) — fix once, propagate."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11) and Rule 5(3); Consumer Protection Act 2019 §2(28) (unfair trade practice — false delivery promises); ASCI Code Chapter I.1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-011
+    surface_id: web-mkt-hero-variants
+    lens: legal
+    severity: P1
+    issue: "Shared HeroSection component holds 4 hero variants used across home/chefs/catering/feed pages — claims propagate to every page that imports it. Single source of truth for marketing claims is the weakest link"
+    evidence_excerpt: "Homemade Food, Delivered Fresh / Discover Local Chefs / Catering for Every Occasion / Food Inspiration / Browse Local Chefs / Start Exploring / Plan Your Event / Explore Feed"
+    recommendation: "Catalogue every claim emitted from this shared component and run each through the same substantiation test (LEG-MKT-001 through -010). Where the live HomePage hero (HomePage.tsx) and the reusable HeroSection diverge in copy ('Delivered Fresh' vs 'Discover Local Chefs'), only one set is in production today — audit which is authoritative and retire the unused variant to reduce drift and legal-claim surface area."
+    citation: "best-practice (single source of truth for advertising claims); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Testimonial / endorsement substantiation (ASCI)
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-012
+    surface_id: web-mkt-login-testimonial
+    lens: legal
+    severity: P0
+    issue: "Testimonial attributed to 'Sarah M., Happy Customer' with brand-superlative claim ('Fe3dr has changed how I eat. Finally, real homemade food…') — no evidence the testimonial is from a real customer; ASCI requires endorsements to be genuine and substantiable"
+    evidence_excerpt: "\"Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!\" — Sarah M., Happy Customer"
+    recommendation: "Per ASCI Guidelines for Influencer Advertising and ASCI Code Chapter I.4, testimonials must (a) be from real customers who have actually used the service, (b) be capable of substantiation (the customer can be contacted, the statement is theirs), (c) not be misleading by selective quotation. Action: either source genuine testimonials with consent (and retain consent records), or remove the placeholder testimonial. The current Sarah M. quote on the login page reads as marketing fiction and is HIGH-risk if challenged."
+    citation: "ASCI Code Chapter I.4 (testimonials); ASCI Guidelines for Influencer Advertising; Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-013
+    surface_id: web-mkt-landing-featured-chefs-heading
+    lens: legal
+    severity: P1
+    issue: "'Top Rated' badge applied to featured-chefs section without disclosed methodology — what makes a chef 'top rated'? Rating threshold, sample size, time window all undefined"
+    evidence_excerpt: "Top Rated / Featured Chefs / Our community's favorite home chefs"
+    recommendation: "ASCI requires comparative claims like 'top rated' to be substantiated with methodology. Either (a) document the criteria ('rated 4.5+ across at least 20 reviews in the last 90 days') in a tooltip / linked policy, or (b) replace with a non-comparative phrase ('Featured Chefs' alone is fine; 'Top Rated' adds legal exposure with no marketing lift)."
+    citation: "ASCI Code Chapter I.1 and Chapter III (comparative advertising — substantiation required); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-014
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P1
+    issue: "'Join thousands of happy customers enjoying homemade food' — unsubstantiated user-count claim ('thousands') and emotional outcome claim ('happy')"
+    evidence_excerpt: "Join thousands of happy customers enjoying homemade food"
+    recommendation: "ASCI requires substantiation for quantified social-proof claims even when rounded ('thousands'). Either (a) bind to actual user-count data with a freshness date, or (b) drop the quantifier. 'Happy' is a subjective outcome claim — defensible only if backed by survey data (NPS, satisfaction score). Recommend softer phrasing: 'Join the home-cooked food community' (no quantified or outcome claim)."
+    citation: "ASCI Code Chapter I.1 (substantiation); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Vendor-side marketing promises (chef onboarding)
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-015
+    surface_id: vp-mkt-register-benefits-list
+    lens: legal
+    severity: P0
+    issue: "'Zero commission first month / Get started completely risk-free' is a binding financial promise at the chef-onboarding step. If commission terms in the actual chef agreement differ, this constitutes misrepresentation inducing the contract"
+    evidence_excerpt: "Zero commission first month / Get started completely risk-free"
+    recommendation: "(1) Verify the actual chef T&C / commercial terms enforce zero commission in month 1 — the promise must be operationalised in the contract and billing system. (2) 'Risk-free' is an absolute claim; a chef still bears food-cost risk, time risk, and reputational risk — 'risk-free' is misleading. Replace with 'No platform commission for your first month' (precise and operational). (3) The promise needs an end-date, eligibility criteria, and a clearly stated post-month-1 commission rate (or a link to it) so the chef is not surprised."
+    citation: "Indian Contract Act 1872 §17 (misrepresentation); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); ASCI Code Chapter I.1; best-practice (offer-terms must be operationally enforceable)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-016
+    surface_id: vp-mkt-register-benefits-list
+    lens: legal
+    severity: P1
+    issue: "'Weekly payouts / Get paid directly to your bank account' is a payment-flow commitment that must align with the platform's actual settlement schedule and RBI Payment Aggregator rules"
+    evidence_excerpt: "Weekly payouts / Get paid directly to your bank account"
+    recommendation: "(1) Verify the platform operates a weekly settlement cycle; if monthly or T+N, the marketing claim is false. (2) RBI's Payment Aggregator Guidelines require disclosure of settlement timelines in the merchant agreement — keep marketing copy aligned with the contractual SLA. (3) Add a qualifier 'subject to KYC completion and order delivery confirmation' since payouts cannot be unconditional. (4) Identify the merchant of record (chef or platform) in the underlying T&C — marketing copy here implies chef-as-merchant which has tax/KYC consequences."
+    citation: "RBI Guidelines on Regulation of Payment Aggregators and Payment Gateways (Mar 2020) §8 (settlement timelines, disclosure); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-017
+    surface_id: vp-mkt-register-benefits-list
+    lens: legal
+    severity: P1
+    issue: "'Never miss an order with instant notifications' is an absolute reliability claim ('never', 'instant') that the platform cannot technically guarantee"
+    evidence_excerpt: "Real-time order tracking / Never miss an order with instant notifications"
+    recommendation: "Absolute reliability claims ('never', 'always', '100%', 'guaranteed') are flagged by ASCI as high-risk. Push notifications fail for many reasons outside platform control (device offline, OS throttling, app uninstalled). Soften to 'Real-time order notifications' — drop 'never miss' and 'instant'."
+    citation: "ASCI Guidelines on Misleading Advertising (absolute claims); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-018
+    surface_id: web-mkt-landing-become-chef
+    lens: legal
+    severity: P1
+    issue: "'Turn your passion into income' on the consumer-facing landing page solicits chef enrolment without disclosing earnings model, commission, KYC, FSSAI registration requirement, or platform terms — borderline on income-claim regulation"
+    evidence_excerpt: "Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food."
+    recommendation: "(1) Income-related solicitations on consumer surfaces should link to a transparent earnings page with rate cards, payout cycles, and an income disclaimer ('actual earnings vary by orders, pricing, market'). (2) Disclose chef-side obligations up front: FSSAI registration may be required for chefs above the turnover threshold; KYC required for payouts. (3) ASCI scrutinises 'turn your passion into income' framing on gig platforms — add a 'no guaranteed earnings' disclaimer and link to chef onboarding terms before the CTA."
+    citation: "FSS (Licensing & Registration) Regulations 2011 (chef-side compliance); RBI Payment Aggregator Guidelines (KYC); ASCI Guidelines on Misleading Advertising (income claims); Consumer Protection (E-Commerce) Rules 2020 Rule 4(11)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Pricing claims (catering, hidden conditions)
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-019
+    surface_id: web-mkt-landing-catering-cta
+    lens: legal
+    severity: P1
+    issue: "'Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions.' — no disclosure of who is liable for the catering contract (chef vs platform), no pricing model, no cancellation policy reference"
+    evidence_excerpt: "Catering Services / Planning an Event? / Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions."
+    recommendation: "Catering = higher-value transactions with bigger consumer exposure. (1) Marketing copy must indicate that quotes are non-binding and the contract is between the customer and the chef (or platform, whichever is operative) — this affects refund rights, FSSAI licensing scope (caterers above ₹12 lakh turnover need FSSAI Central licence), and tax invoicing. (2) Add a disclosure or link 'See how catering works' near the CTA covering scope, payment terms, cancellation. (3) Avoid 'Perfect for' superlatives unless substantiated."
+    citation: "FSS (Licensing & Registration) Regulations 2011 (caterer thresholds); Consumer Protection (E-Commerce) Rules 2020 Rule 5(3) (clear disclosure of seller identity); ASCI Code Chapter I.1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-020
+    surface_id: web-mkt-catering-request-heading
+    lens: legal
+    severity: P2
+    issue: "Catering-request flow heading 'Tell us about your event' onboards the consumer into a high-value transaction without a visible reference to terms of service or catering-specific policies"
+    evidence_excerpt: "Event Details / Tell us about your event"
+    recommendation: "Before the consumer submits event details (which is personal data + a commercial intent), surface a brief 'How catering quotes work' inline notice with a link to the catering T&C and DPDP notice for the personal data being collected (date, address, guest count, dietary requirements — some of which may be sensitive)."
+    citation: "DPDP Act 2023 §5 (notice at point of collection); Consumer Protection (E-Commerce) Rules 2020 Rule 5(3); best-practice"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Brand identity confusion ("Fe3dr" vs "HomeChef")
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-021
+    surface_id: web-mkt-layout-footer
+    lens: legal
+    severity: P0
+    issue: "Footer copyright reads '© <year> Fe3dr' while the project name in CLAUDE.md is 'Home Chef' / 'Home Chef Mobile Apps'. Brand identity inconsistency across marketing surfaces creates trademark, attribution, and contract-formation ambiguity"
+    evidence_excerpt: "© {new Date().getFullYear()} Fe3dr. All rights reserved."
+    recommendation: "Pick ONE consumer-facing brand name and use it consistently across (a) all marketing pages, (b) T&C and Privacy Policy (the 'data fiduciary' identification under DPDP §5), (c) tax invoices, (d) email-from headers, (e) the legal entity name. Current state — 'Fe3dr' in HomePage hero/why-choose/footer, 'HomeChef' in branding contexts — risks customers being unable to identify who they are contracting with. This is a foundational legal issue (you cannot enforce a contract or comply with DPDP fiduciary-identification requirements if the consumer doesn't know who you are)."
+    citation: "DPDP Act 2023 §5 (data fiduciary identification); Trade Marks Act 1999 (brand consistency for trademark enforcement); Consumer Protection (E-Commerce) Rules 2020 Rule 5(1) (seller identification); Companies Act 2013 §12 (use of registered name)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-022
+    surface_id: web-mkt-login-testimonial
+    lens: legal
+    severity: P1
+    issue: "Testimonial references 'Fe3dr' brand name in user-attributed quotation — if 'Fe3dr' is not the legal brand customers register under, the testimonial cannot be authentic"
+    evidence_excerpt: "\"Fe3dr has changed how I eat...\""
+    recommendation: "Compound issue with LEG-MKT-012 (testimonial authenticity) and LEG-MKT-021 (brand confusion). Resolve brand identity first, then re-verify testimonial copy."
+    citation: "ASCI Code Chapter I.4 (testimonials must be genuine); Trade Marks Act 1999"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-023
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P1
+    issue: "'The Fe3dr Difference' section header — same brand-identity issue surfaces in marketing copy at the value-proposition headline"
+    evidence_excerpt: "The Fe3dr Difference"
+    recommendation: "Resolve via brand consolidation (LEG-MKT-021). Until resolved, every 'Fe3dr' string on a marketing surface compounds the trademark and contract-identification exposure."
+    citation: "Trade Marks Act 1999; Consumer Protection (E-Commerce) Rules 2020 Rule 5(1)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-024
+    surface_id: web-mkt-register-benefits
+    lens: legal
+    severity: P1
+    issue: "Registration page invites user to 'Join Fe3dr Today' — at the contract-formation moment the user is told they are joining 'Fe3dr', but the underlying T&C and privacy policy must match this name exactly"
+    evidence_excerpt: "Join Fe3dr Today"
+    recommendation: "Verify (a) T&C identifies 'Fe3dr' as the contracting party (or the legal entity that owns the Fe3dr brand), (b) Privacy Policy identifies 'Fe3dr' as the data fiduciary, (c) post-registration emails come from a Fe3dr-branded domain consistent with this name. If any of (a)/(b)/(c) uses a different name (e.g., 'HomeChef Pvt Ltd' or another entity), the user has a colourable misrepresentation claim."
+    citation: "DPDP Act 2023 §5 (data fiduciary identification at notice); Consumer Protection (E-Commerce) Rules 2020 Rule 5(1) (seller identification); Indian Contract Act 1872 §17"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-025
+    surface_id: web-mkt-brand-tagline
+    lens: legal
+    severity: P3
+    issue: "Logo tagline 'Homemade Food Delivered' is non-quantified and low-risk on its own, but the shared Logo component is the brand anchor — its tagline must be consistent with whichever brand identity is finalised"
+    evidence_excerpt: "Homemade Food Delivered"
+    recommendation: "Low-priority. Once brand identity is consolidated (LEG-MKT-021), confirm the Logo tagline does not silently introduce a third brand variant or food-quality claim."
+    citation: "best-practice (brand-claim consistency)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P0 — Footer: legal-link discoverability + DPDP grievance officer
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-026
+    surface_id: web-mkt-layout-footer
+    lens: legal
+    severity: P0
+    issue: "Footer links 'Privacy Policy' and 'Terms of Service' are present, but no link to a DPDP grievance-officer contact, no link to FSSAI licence display, no link to a refund/return policy, no 'Cancellation Policy', and no 'Contact Us' for consumer disputes"
+    evidence_excerpt: "Privacy Policy / Terms of Service / Help Center / About Us"
+    recommendation: "CP E-Commerce Rules 2020 Rule 5 requires e-commerce entities to display: (a) name, principal address, contact details; (b) grievance officer name and contact; (c) ticket/complaint redressal mechanism. DPDP Act §8(9) separately requires a grievance officer for data-protection complaints. Add footer links: 'Grievance Officer', 'Refund & Cancellation Policy', 'Contact Us', 'FSSAI Licence' (platform's own + a link to chef-level disclosure). 'Help Center' is not a legal-redressal substitute."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(3) and Rule 5 (mandatory disclosures); DPDP Act 2023 §8(9) (grievance officer for personal data); FSS (Licensing & Registration) Regulations 2011 §2.1.13 (FSSAI licence display)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-027
+    surface_id: web-mkt-layout-footer
+    lens: legal
+    severity: P1
+    issue: "Footer brand description 'Connecting you with home chefs for authentic, homemade food delivered to your doorstep' frames the platform as a marketplace ('connecting you with') but does not disclose whether the platform is a 'marketplace e-commerce entity' or 'inventory e-commerce entity' under CP E-Comm Rules — affects liability allocation"
+    evidence_excerpt: "Connecting you with home chefs for authentic, homemade food delivered to your doorstep."
+    recommendation: "Per Rule 5(1)(a)/(b), an e-commerce entity must declare whether it is a marketplace (facilitator between chefs and customers) or inventory (selling its own food). This affects: liability for product quality (FSSAI), refund obligations, GST treatment. The current footer copy implies marketplace but doesn't formally declare it; T&C must align. Recommend the About / T&C explicitly state the classification, and the footer or About copy reference it ('Home Chef is a marketplace platform connecting customers with home chefs')."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(1)(a) and Rule 6 (marketplace classification, liability allocation)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P1 — Marketing page CTAs lacking conditions/qualifiers
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-028
+    surface_id: web-mkt-landing-search-cta
+    lens: legal
+    severity: P2
+    issue: "Primary CTA 'Find Food' on the home page leads to /chefs without any geographic or availability filter — visitors outside coverage areas may be misled into thinking the service is available everywhere"
+    evidence_excerpt: "Find Food"
+    recommendation: "(1) Either gate the search by serviceable pin codes (so non-coverage areas get a clear 'we don't operate here yet' message), or (2) qualify the home-page promise with a 'Available in <list of cities>' line near the hero. CP E-Comm Rules treat undisclosed geographic limitations as a form of misleading advertising."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-029
+    surface_id: web-mkt-landing-search-placeholders
+    lens: legal
+    severity: P3
+    issue: "Search placeholder 'Enter your delivery address...' collects an address (personal data) in an unauthenticated context — DPDP requires notice even for pre-login data collection"
+    evidence_excerpt: "Enter your delivery address... / Search dishes or chefs..."
+    recommendation: "If the address entered in the search bar is transmitted to backend or persisted (even in a cookie), DPDP §5 requires a notice at point of collection — even for non-account users. Recommend a small 'How we use this' tooltip or a one-line privacy note under the search bar referencing the privacy policy. If the address is purely client-side and ephemeral, document that in a code-comment to defend the position."
+    citation: "DPDP Act 2023 §5 (notice at point of collection); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-030
+    surface_id: web-mkt-hero-search
+    lens: legal
+    severity: P3
+    issue: "Shared HeroSection search ('Enter your delivery address / Find Chefs') replicates the same pre-login data-collection issue across every page using the shared component"
+    evidence_excerpt: "Enter your delivery address / Find Chefs"
+    recommendation: "Fix at the component level — a single privacy/notice treatment in the shared HeroSection covers all consuming pages."
+    citation: "DPDP Act 2023 §5; best-practice (fix shared components once)"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P2 — Marketing copy referencing operational claims without scope
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-031
+    surface_id: web-mkt-landing-cuisines
+    lens: legal
+    severity: P3
+    issue: "Cuisine cards (South Indian, Italian, Japanese, North Indian, Mexican, Thai) imply all six cuisines are available in every market — if certain cuisines are not present in some pin codes, this misleads"
+    evidence_excerpt: "Cuisines / Explore Flavors / Discover authentic dishes from around the world"
+    recommendation: "Either (a) ensure each cuisine card leads to non-empty results in every serviceable area, or (b) gate visibility by location, or (c) softer phrasing 'Cuisines our community cooks' (no implicit availability promise). Also 'authentic dishes from around the world' is a regulated descriptor — see LEG-MKT-008."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(11); FSS (Advertising and Claims) Regulations 2018 §4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-032
+    surface_id: web-mkt-landing-why-choose
+    lens: legal
+    severity: P2
+    issue: "'Secure Payments / Safe and secure payment processing for every order' — 'safe', 'secure', 'every' are absolute security claims with regulatory implications under RBI Payment Aggregator rules"
+    evidence_excerpt: "Secure Payments / Safe and secure payment processing for every order"
+    recommendation: "Absolute security claims ('safe', 'secure', 'every') are flagged risk under ASCI guidelines (no system is absolutely secure). Soften to 'Payments processed by <Razorpay/Stripe>, PCI-DSS compliant' — this is a substantiable factual statement instead of an absolute claim. Also creates an opportunity to disclose the actual payment aggregator, which CP E-Comm Rules 5(3) requires."
+    citation: "ASCI Guidelines on Misleading Advertising (absolute claims); RBI Guidelines on Payment Aggregators (disclosure); Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-033
+    surface_id: web-mkt-landing-how-it-works
+    lens: legal
+    severity: P3
+    issue: "How-It-Works step 'Order — Select your favorite dishes and place your order securely' duplicates the 'securely' absolute claim from the Why-Choose-Us block"
+    evidence_excerpt: "Order / Select your favorite dishes and place your order securely"
+    recommendation: "Same fix as LEG-MKT-032 — replace 'securely' with a substantiable factual reference, or drop the adverb (the action 'place your order' is sufficient)."
+    citation: "ASCI Guidelines on Misleading Advertising"
+    depends_on: "needs lawyer review"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # P1 — DPDP notice exposure on marketing-context CTAs
+  # ─────────────────────────────────────────────────────────────────────
+  - finding_id: LEG-MKT-034
+    surface_id: web-mkt-landing-catering-cta
+    lens: legal
+    severity: P1
+    issue: "Catering CTA 'Request Catering Quote' leads to a form that will collect personal data (name, contact, event details) — DPDP requires the notice to be served at or before collection, not buried in a privacy policy link"
+    evidence_excerpt: "Request Catering Quote"
+    recommendation: "Per DPDP §5(1), a notice in 'clear and plain language' must accompany the request for consent at point of collection. On the catering form page (the link target), surface an inline DPDP-compliant notice: purpose, data fiduciary identity, grievance officer, rights (access/correction/erasure/grievance). Marketing CTA does not need the notice, but the target page must."
+    citation: "DPDP Act 2023 §5 (notice); DPDP Act 2023 §6 (consent must be free, specific, informed)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-MKT-035
+    surface_id: web-mkt-landing-become-chef
+    lens: legal
+    severity: P1
+    issue: "'Become a Chef' CTA leads chef-onboarding flow that will collect KYC-class personal data (PAN, bank details, FSSAI registration, identity proofs) — DPDP §5 + §9 (sensitive data) require enhanced notice"
+    evidence_excerpt: "Become a Chef"
+    recommendation: "(1) Chef onboarding collects significantly more sensitive data than customer signup — DPDP requires a proportionately detailed notice including purposes, recipients (e.g., bank verification API, FSSAI authority, KYC provider), retention period, grievance officer. (2) RBI Payment Aggregator rules require chef-side KYC; this must be disclosed up-front, not at the end of the funnel."
+    citation: "DPDP Act 2023 §5 and §6 (consent); RBI Guidelines on Payment Aggregators §6 (merchant KYC)"
+    depends_on: "needs lawyer review"

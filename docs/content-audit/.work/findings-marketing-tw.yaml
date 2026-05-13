@@ -1,0 +1,240 @@
+findings:
+  # ============================================================
+  # AI-SLOP / UNVERIFIED METRICS  (Style Guide Rule 5 — Restraint)
+  # ============================================================
+  - finding_id: TW-001
+    surface_id: web-mkt-landing-hero-badge
+    lens: technical-writer
+    severity: P1
+    issue: "Hardcoded social-proof metric '500+ Home Chefs Near You' in hero badge — unverified number on entry surface, AI-slop placeholder copy."
+    evidence_excerpt: "500+ Home Chefs Near You"
+    recommendation: "Remove the hardcoded count. Either bind to a live signal (e.g., 'Home chefs in {city}') driven by API, or replace with a non-numeric brand pill like 'Homemade, never restaurant'. Never ship hardcoded metrics in marketing surfaces."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-mkt-landing-trust-badges
+    lens: technical-writer
+    severity: P1
+    issue: "Hardcoded '500+ Home Chefs' + '4.8 Average Rating' + '30-45 min Delivery' trust row. All three are unverified, hardcoded metrics presented as factual claims on the landing page."
+    evidence_excerpt: "{ icon: ChefHat, label: '500+ Home Chefs' }, { icon: Star, label: '4.8 Average Rating' }, { icon: Clock, label: '30-45 min Delivery' }"
+    recommendation: "Replace with API-backed live stats (chef count, current avg rating, median delivery time computed server-side) or remove the trust-row entirely until real data exists. Hardcoded marketing numbers are P1 because they could become P0 false-advertising claims if the real numbers diverge."
+    depends_on: null
+
+  - finding_id: TW-003
+    surface_id: web-mkt-landing-why-choose
+    lens: technical-writer
+    severity: P1
+    issue: "Generic AI-slop social proof: 'Join thousands of happy customers enjoying homemade food.' Unverified metric ('thousands') + filler superlative ('happy customers') — violates Rule 5 (restraint) and Rule 1 (confident, not loud)."
+    evidence_excerpt: "Join thousands of happy customers enjoying homemade food"
+    recommendation: "Rewrite without a metric: 'Made by people who cook for a living, not at scale.' or 'Real cooks. Real kitchens. Real food.' If keeping a count, bind it to live data and pluralise correctly."
+    depends_on: null
+
+  - finding_id: TW-004
+    surface_id: web-mkt-register-benefits
+    lens: technical-writer
+    severity: P1
+    issue: "Hardcoded 'Access to 500+ home chefs' in registration benefits list — same unverified metric as the homepage hero, repeated on the signup conversion surface."
+    evidence_excerpt: "const BENEFITS = ['Access to 500+ home chefs', 'Authentic homemade food', 'Fast & reliable delivery', 'Support local home chefs']"
+    recommendation: "Drop the number. Use 'Home chefs near you' or bind to live API count. Keeping '500+' creates a contract that customers can verify on /chefs — if the directory shows fewer, this becomes P0 false advertising."
+    depends_on: TW-001
+
+  - finding_id: TW-005
+    surface_id: web-mkt-hero-variants
+    lens: technical-writer
+    severity: P1
+    issue: "Shared HeroSection.tsx Stats component hardcodes '500+ Home Chefs', '4.8 Avg Rating', '30min Avg Delivery' — duplicates the landing-page AI-slop in a reusable shared component, multiplying the risk."
+    evidence_excerpt: "const stats = [{ icon: ChefHat, value: '500+', label: 'Home Chefs' }, { icon: Star, value: '4.8', label: 'Avg Rating' }, { icon: Clock, value: '30min', label: 'Avg Delivery' }]"
+    recommendation: "Remove the Stats() sub-component or refactor it to accept props bound to live data. Shared components should never embed hardcoded marketing numbers — fix once, fix everywhere."
+    depends_on: TW-002
+
+  - finding_id: TW-006
+    surface_id: web-mkt-login-testimonial
+    lens: technical-writer
+    severity: P1
+    issue: "Hardcoded testimonial from fabricated user 'Sarah M., Happy Customer' on the login page. No source, no real reviewer, generic 'Happy Customer' attribution — textbook AI-slop social proof."
+    evidence_excerpt: "\"Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!\" — Sarah M., Happy Customer"
+    recommendation: "Remove until a real verified testimonial exists with full name, photo, and verifiable source (review platform, video). If kept temporarily, mark clearly as 'Illustrative example' — but the better fix is to delete and let the photo carry the page."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: vp-mkt-register-benefits-list
+    lens: technical-writer
+    severity: P0
+    issue: "Vendor portal register page promises 'Zero commission first month' as a concrete commercial commitment in marketing copy. If the product cannot honor this for every signup (or the policy changes), this is a factually misleading claim — TW P0 by definition (commitment the product can't keep)."
+    evidence_excerpt: "{ title: 'Zero commission first month', desc: 'Get started completely risk-free' }"
+    recommendation: "Either (a) verify with product/legal that zero-commission-first-month is a binding, currently-active policy and add a footnote linking to terms; or (b) replace with a softer non-binding line like 'Low platform fees' or 'Pricing built for home kitchens'. 'Completely risk-free' is also banned-style absolute language — soften to 'No upfront cost'."
+    depends_on: null
+
+  # ============================================================
+  # VOICE / RULE-1 DRIFT (loud, generic, filler)
+  # ============================================================
+  - finding_id: TW-008
+    surface_id: web-mkt-landing-hero-subtitle
+    lens: technical-writer
+    severity: P2
+    issue: "Hero subtitle is generic landing-page filler — 'Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep.' Combines two banned-style flourishes ('talented', 'authentic') and ends with the cliché 'right to your doorstep'."
+    evidence_excerpt: "Discover talented home chefs in your neighborhood and enjoy authentic, homemade meals delivered right to your doorstep."
+    recommendation: "Tighten to ≤15 words, one verb, one image. e.g. 'Order from home cooks in your neighbourhood. Delivered hot.' Per Rule 3, the photo carries the brand — copy supports, doesn't compete."
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: web-mkt-browse-heading
+    lens: technical-writer
+    severity: P2
+    issue: "Browse page intro duplicates the same 'Discover talented home chefs serving authentic homemade food' filler — repeated cliché stack ('talented' + 'authentic') across surfaces. Within-surface voice drift from the more restrained tone elsewhere."
+    evidence_excerpt: "Explore Home Chefs / Discover talented home chefs serving authentic homemade food"
+    recommendation: "Replace with action-oriented intro: 'Home chefs near you. Filter by cuisine, diet, or delivery time.' Cuts banned-style adjectives and tells the user what they can do on the page."
+    depends_on: TW-008
+
+  - finding_id: TW-010
+    surface_id: web-mkt-landing-how-it-works
+    lens: technical-writer
+    severity: P2
+    issue: "'Get Delicious Food in 3 Steps' — 'Delicious' is filler adjective; 'we make it simple' is generic SaaS-speak ('From discovery to delivery, we make it simple to enjoy homemade food'). Voice drifts away from confident-restrained toward promotional-loud."
+    evidence_excerpt: "Get Delicious Food in 3 Steps / From discovery to delivery, we make it simple to enjoy homemade food"
+    recommendation: "Heading: 'How ordering works'. Sub: 'Three steps from browse to plate.' Removes filler adjective and 'we make it simple' cliché. Title case on heading is fine; banned word 'delicious' is purely decorative here."
+    depends_on: null
+
+  - finding_id: TW-011
+    surface_id: web-mkt-landing-why-choose
+    lens: technical-writer
+    severity: P2
+    issue: "Feature card 'Made with Love / Every meal is prepared fresh with authentic family recipes' — 'Made with Love' is exactly the banned brand-drift term from style guide Sec 3. 'Authentic family recipes' is filler."
+    evidence_excerpt: "Made with Love / Every meal is prepared fresh with authentic family recipes"
+    recommendation: "Replace card title with operational: 'Cooked to order' or 'Same-day cooking'. Body: 'Your meal is prepared after you order, never reheated.' Removes banned 'made with love' kitsch and tells the user a concrete fact."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: web-mkt-landing-become-chef
+    lens: technical-writer
+    severity: P2
+    issue: "'Love Cooking? Share Your Talent' + 'Turn your passion into income' — both phrases are generic creator-economy / gig-app filler. Within-surface drift from restrained brand voice."
+    evidence_excerpt: "Love Cooking? Share Your Talent / Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food."
+    recommendation: "Heading: 'Cook from home. Get paid.' Sub: 'Set your menu, your prices, and the days you cook. We handle orders and payouts.' Functional, vendor-tone-appropriate, removes 'passion'/'talent'/'delicious' filler."
+    depends_on: null
+
+  - finding_id: TW-013
+    surface_id: web-mkt-landing-featured-chefs-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Our community's favorite home chefs' uses the vague 'community's favourite' generic — better to use a concrete signal like 'highest-rated this month' or just drop the subtitle."
+    evidence_excerpt: "Top Rated / Featured Chefs / Our community's favorite home chefs / View All Chefs"
+    recommendation: "Sub: 'Highest-rated this week.' (computed from real ratings) or remove the subtitle entirely. 'Community's favourite' is unverifiable filler."
+    depends_on: null
+
+  - finding_id: TW-014
+    surface_id: web-mkt-landing-cuisines
+    lens: technical-writer
+    severity: P3
+    issue: "'Explore Flavors / Discover authentic dishes from around the world' — 'authentic' again (third occurrence on the same page), 'around the world' is filler. Style guide flags 'authentic' as overused in this codebase."
+    evidence_excerpt: "Cuisines / Explore Flavors / Discover authentic dishes from around the world"
+    recommendation: "Heading: 'Cuisines'. Sub: 'South Indian, Italian, Japanese, and more.' List the actual options instead of hand-waving at 'around the world'."
+    depends_on: null
+
+  - finding_id: TW-015
+    surface_id: web-mkt-landing-catering-cta
+    lens: technical-writer
+    severity: P3
+    issue: "'Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions.' — 'Perfect for' is filler. 'special occasions' is generic."
+    evidence_excerpt: "Catering Services / Planning an Event? / Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions."
+    recommendation: "Sub: 'Tell us the date, headcount, and cuisine. Home chefs send quotes within 24 hours.' Replaces fluff with a concrete user-flow promise the product can actually keep."
+    depends_on: null
+
+  # ============================================================
+  # MICROCOPY FORMULA / BUTTON RULES
+  # ============================================================
+  - finding_id: TW-016
+    surface_id: web-mkt-landing-search-cta
+    lens: technical-writer
+    severity: P2
+    issue: "Primary search CTA 'Find Food' is title-case; style guide Sec 4 button format requires sentence case ('Find food'). Two-word verb-first form is otherwise good."
+    evidence_excerpt: "Find Food"
+    recommendation: "Use sentence case: 'Find food'. Or be more specific: 'Search chefs'."
+    depends_on: null
+
+  - finding_id: TW-017
+    surface_id: web-mkt-hero-search
+    lens: technical-writer
+    severity: P2
+    issue: "Shared HeroSection's CTA 'Find Chefs' is title-case (style guide says sentence case). Also inconsistent with HomePage's 'Find Food' — same surface group ships two different verbs ('Find food' vs 'Find chefs') with no semantic difference."
+    evidence_excerpt: "Find Chefs"
+    recommendation: "Pick one: 'Find chefs' (sentence case) and use it everywhere. Cross-surface inconsistency on a primary CTA is a content-system bug."
+    depends_on: TW-016
+
+  - finding_id: TW-018
+    surface_id: web-mkt-hero-how-it-works-cta
+    lens: technical-writer
+    severity: P3
+    issue: "'How It Works' button is title case; style guide requires sentence case for buttons."
+    evidence_excerpt: "How It Works"
+    recommendation: "Change to 'How it works'. Same fix wherever this label appears."
+    depends_on: null
+
+  - finding_id: TW-019
+    surface_id: web-mkt-landing-catering-cta
+    lens: technical-writer
+    severity: P2
+    issue: "'Request Catering Quote' button is title case (3 words is fine, case is not). Also wordy — 'Request a quote' or 'Get quotes' is shorter and clearer."
+    evidence_excerpt: "Request Catering Quote"
+    recommendation: "Use 'Get quotes' (2 words, sentence case, verb-first). Context already says 'Catering Services'."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: web-mkt-landing-become-chef
+    lens: technical-writer
+    severity: P3
+    issue: "'Become a Chef' and 'Learn More' buttons both title-case; 'Learn More' violates style guide ban on standalone 'Learn more →' without topic context."
+    evidence_excerpt: "Become a Chef / Learn More"
+    recommendation: "'Become a chef' (sentence case). Replace 'Learn More' with a contextual link like 'See chef resources' or 'Read the cook handbook'. Standalone 'Learn more' is banned."
+    depends_on: null
+
+  - finding_id: TW-021
+    surface_id: web-mkt-landing-featured-chefs-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'View All Chefs' is title case (sentence-case rule)."
+    evidence_excerpt: "View All Chefs"
+    recommendation: "'View all chefs' — or just 'See all'. Same fix on the 'View All' link in the Cuisines section."
+    depends_on: TW-020
+
+  # ============================================================
+  # CONSISTENCY / NAMING
+  # ============================================================
+  - finding_id: TW-022
+    surface_id: web-mkt-layout-footer
+    lens: technical-writer
+    severity: P3
+    issue: "Footer brand lead-in 'Connecting you with home chefs for authentic, homemade food delivered to your doorstep.' uses 'authentic' (banned-style filler, recurs on page) and 'delivered to your doorstep' (cliché — second occurrence on home page)."
+    evidence_excerpt: "Connecting you with home chefs for authentic, homemade food delivered to your doorstep."
+    recommendation: "Tighten: 'Order homemade food from chefs near you.' Removes 'authentic' and the doorstep cliché. Single sentence, plain English, matches Rule 2."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: web-mkt-brand-tagline
+    lens: technical-writer
+    severity: P3
+    issue: "Logo tagline 'Homemade Food Delivered' is title case but is meant as a tagline string; usable but inconsistent with hero H1 ('Homemade Food, Delivered Fresh'). Two near-identical taglines is sloppy."
+    evidence_excerpt: "Homemade Food Delivered"
+    recommendation: "Either drop the tagline (logo carries the brand) or align exactly: 'Homemade food, delivered fresh.' — sentence case, comma matches hero. Single source of truth."
+    depends_on: null
+
+  # ============================================================
+  # SENTENCE LENGTH / READING EASE
+  # ============================================================
+  - finding_id: TW-024
+    surface_id: web-mkt-landing-become-chef
+    lens: technical-writer
+    severity: P3
+    issue: "Body paragraph runs 22 words but stuffs two unrelated ideas into one sentence: 'Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food.' The second sentence is 18 words; cut 'delicious' (banned-style filler) and split the join+earn idea."
+    evidence_excerpt: "Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food."
+    recommendation: "Rewrite per TW-012; new copy keeps sentences under 15 words and removes filler. This finding is the length-rule complement to TW-012's voice-drift fix."
+    depends_on: TW-012
+
+  - finding_id: TW-025
+    surface_id: web-mkt-catering-request-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Event Details / Tell us about your event' is acceptable as a step heading but 'Tell us about your event' duplicates the heading meaning — could be a more specific helper telling the user what fields are coming."
+    evidence_excerpt: "Event Details / Tell us about your event"
+    recommendation: "Heading 'Event details' (sentence case). Helper: 'Date, headcount, cuisine, and budget — about 60 seconds.' Sets expectation for length and content."
+    depends_on: null

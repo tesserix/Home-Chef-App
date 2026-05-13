@@ -1,0 +1,347 @@
+findings:
+
+  # ── P0: Fake / unverified trust signals ───────────────────────────────────
+
+  - finding_id: BA-001
+    surface_id: web-mkt-landing-hero-badge
+    lens: business-analyst
+    severity: P0
+    issue: "Hardcoded '500+ Home Chefs Near You' badge is not sourced from live data"
+    evidence_excerpt: "<Badge variant=\"premium\" size=\"lg\">500+ Home Chefs Near You</Badge>"
+    recommendation: >
+      Replace with a live API-driven count from the chefs endpoint (e.g., `{chefCount}+ Home Chefs Near You`).
+      If live count is unavailable at launch, remove the badge entirely rather than ship a fabricated number.
+      Expected impact: removes a trust-destroying signal that sophisticated users will immediately cross-check
+      by searching on the platform itself.
+    metric_hypothesis: "trust score; any visitor who searches and sees fewer than 500 chefs will distrust every other claim on the page and churn"
+    depends_on: null
+
+  - finding_id: BA-002
+    surface_id: web-mkt-landing-trust-badges
+    lens: business-analyst
+    severity: P0
+    issue: "Three hardcoded trust-badge stats ('500+ Home Chefs', '4.8 Average Rating', '30-45 min Delivery') are static strings with no live-data binding"
+    evidence_excerpt: "{ icon: ChefHat, label: '500+ Home Chefs' }, { icon: Star, label: '4.8 Average Rating' }, { icon: Clock, label: '30-45 min Delivery' }"
+    recommendation: >
+      Bind all three values to live API responses: chef count from `/chefs?count=true`, average rating
+      from `/ratings/aggregate`, and actual median delivery time from `/orders/stats`.
+      Until live data is available, replace '4.8 Average Rating' with 'Highly Rated Chefs' (no fabricated
+      numeral), '500+' with 'Growing community of home chefs', and '30-45 min Delivery' with
+      'Fast delivery' (no fabricated SLA).
+    metric_hypothesis: "trust score; signup conversion — a fabricated 4.8 rating shown before any orders exist destroys credibility upon scrutiny"
+    depends_on: null
+
+  - finding_id: BA-003
+    surface_id: web-mkt-hero-variants
+    lens: business-analyst
+    severity: P0
+    issue: "Shared HeroSection Stats component repeats the same hardcoded '500+' chef count and '30min Avg Delivery' on every page variant that renders it"
+    evidence_excerpt: "{ icon: ChefHat, value: '500+', label: 'Home Chefs' }, { icon: Clock, value: '30min', label: 'Avg Delivery' }"
+    recommendation: >
+      Centralise stat values in a single data-fetch hook (e.g., `usePlatformStats()`) shared by HeroSection
+      and HomePage trust badges.  Both surfaces will then update from one source when live data is wired.
+      This also eliminates the dual-maintenance risk where one gets updated and the other doesn't.
+    metric_hypothesis: "trust score — duplicate hardcoded numbers in multiple components doubles exposure to trust erosion"
+    depends_on: BA-002
+
+  - finding_id: BA-004
+    surface_id: web-mkt-register-benefits
+    lens: business-analyst
+    severity: P0
+    issue: "Customer signup page lists 'Access to 500+ home chefs' as a benefit — same unverified hardcoded number shown on the conversion-critical registration page"
+    evidence_excerpt: "const BENEFITS = ['Access to 500+ home chefs', 'Authentic homemade food', 'Fast & reliable delivery', 'Support local home chefs']"
+    recommendation: >
+      Replace 'Access to 500+ home chefs' with a claim that doesn't depend on a specific count,
+      e.g., 'Browse home chefs near you' or 'Home-cooked meals from your neighbourhood'.
+      Additionally, 'Fast & reliable delivery' uses a banned phrase (per style guide: no vague promise
+      language); replace with 'Delivery to your doorstep'.
+    metric_hypothesis: "signup conversion — a false metric on the registration page directly erodes trust at the moment of commitment"
+    depends_on: null
+
+  - finding_id: BA-005
+    surface_id: web-mkt-login-testimonial
+    lens: business-analyst
+    severity: P0
+    issue: "Fake placeholder testimonial from 'Sarah M., Happy Customer' ships in production on the login page"
+    evidence_excerpt: "\"Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!\" — Sarah M., Happy Customer"
+    recommendation: >
+      Either (a) replace with a real, attributed testimonial from an actual beta customer with full name,
+      city, and date, or (b) remove the testimonial entirely and replace with a product benefit statement.
+      The role 'Happy Customer' is a placeholder-level designation that signals the quote is fabricated.
+      Fake testimonials are specifically prohibited under ASCI (India) guidelines and erode trust on the
+      highest-volume entry point (login is visited every session).
+    metric_hypothesis: "trust score; login→signup conversion — users who notice the fabricated testimonial will share screenshots externally, creating reputational damage"
+    depends_on: null
+
+  - finding_id: BA-006
+    surface_id: web-mkt-landing-why-choose
+    lens: business-analyst
+    severity: P0
+    issue: "Subtitle 'Join thousands of happy customers enjoying homemade food' is an unverified claim with no live data source"
+    evidence_excerpt: "Join thousands of happy customers enjoying homemade food"
+    recommendation: >
+      Remove the quantified claim entirely. Replace with a specific, verifiable benefit statement:
+      'Homemade food from chefs who cook the way they cook at home.'
+      'Thousands' is a magnitude claim that cannot be substantiated on a new platform and will fail
+      a consumer-protection challenge.
+    metric_hypothesis: "trust score — unverifiable superlative claims reduce perceived authenticity for comparison-shopping users"
+    depends_on: null
+
+  - finding_id: BA-007
+    surface_id: vp-mkt-register-benefits-list
+    lens: business-analyst
+    severity: P0
+    issue: "'Join thousands of home chefs earning with Fe3dr' on the vendor registration page is an unverified magnitude claim"
+    evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+    recommendation: >
+      Replace with a factual, non-quantified hook: 'Start selling from your kitchen today. Your recipes,
+      your prices, your schedule.' Remove the 'thousands' claim until live chef count data backs it.
+    metric_hypothesis: "chef apply rate — inflated claims raise expectations that the platform is already at scale; new chefs who join and see a sparse marketplace will churn faster"
+    depends_on: null
+
+  # ── P0: "Coming soon" feature advertised to users collecting sensitive data ─
+
+  - finding_id: BA-008
+    surface_id: vp-mkt-register-benefits-list
+    lens: business-analyst
+    severity: P0
+    issue: "'Weekly payouts — Get paid directly to your bank account' is advertised as a live benefit while the payout integration is explicitly marked 'coming soon' in KitchenSetupPage"
+    evidence_excerpt: |
+      RegisterPage.tsx: { title: 'Weekly payouts', desc: 'Get paid directly to your bank account' }
+      KitchenSetupPage.tsx: "Payout integration coming soon. These details are saved locally for now."
+    recommendation: >
+      The 'Weekly payouts' benefit claim on the registration page must be removed or replaced with a
+      truthful status: e.g., 'Payout integration in progress — your bank details will be used when
+      payouts go live.' More critically: if the system collects bank account numbers but the payout
+      integration is not functional, this is a deceptive data collection practice and a regulatory risk.
+      Immediately remove the bank-details form from KitchenSetupPage or add a prominent disclosure:
+      'Payouts are not yet active. We are collecting your bank details for when the feature launches.
+      You will be notified before your first payout is processed.'
+    metric_hypothesis: "chef apply rate; churn; regulatory risk — chefs who submit bank details expecting weekly payouts and receive nothing will churn and file complaints"
+    depends_on: null
+
+  # ── P0: Verified Chefs claim contradicts optional FSSAI onboarding ─────────
+
+  - finding_id: BA-009
+    surface_id: web-mkt-landing-why-choose
+    lens: business-analyst
+    severity: P0
+    issue: "'Verified Chefs — All our home chefs are verified for food safety and quality' contradicts the vendor onboarding flow where FSSAI is marked as Optional"
+    evidence_excerpt: |
+      HomePage.tsx: "All our home chefs are verified for food safety and quality"
+      StepDocuments.tsx: "FSSAI license is optional — many home chefs start without one and add it later."
+    recommendation: >
+      Either (a) make FSSAI mandatory in onboarding and then the verified claim becomes defensible,
+      or (b) soften the customer-facing claim to 'ID-verified home chefs' (reflecting what is actually
+      checked: government ID only). Do not use 'food safety verified' when FSSAI is optional.
+      This is simultaneously a trust, legal, and consumer-protection issue — a customer who gets ill
+      and checks this claim will have grounds for a complaint.
+    metric_hypothesis: "trust score; legal liability — false food-safety verification claim is the highest-magnitude trust risk on the platform"
+    depends_on: null
+
+  # ── P0: Dead CTAs — broken conversion paths ───────────────────────────────
+
+  - finding_id: BA-010
+    surface_id: web-mkt-landing-become-chef
+    lens: business-analyst
+    severity: P0
+    issue: "Both CTAs in the 'Become a Chef' section link to unregistered routes (/become-chef and /chef-resources) that resolve to the homepage (404 → redirect to /)"
+    evidence_excerpt: |
+      <Link to="/become-chef">Become a Chef</Link>
+      <Link to="/chef-resources">Learn More</Link>
+      (Neither route exists in apps/web/src/app/routes/index.tsx)
+    recommendation: >
+      Register the /become-chef route immediately and redirect it to the vendor portal registration page
+      (`https://vendor.fe3dr.com/register` or the equivalent). Remove the 'Learn More' button until
+      a /chef-resources page exists; two dead CTAs is worse than one working CTA.
+      Until fixed: every chef prospect who clicks 'Become a Chef' lands on the homepage with no
+      indication they clicked anything. This is a complete conversion blackhole.
+    metric_hypothesis: "chef apply rate — 100% conversion loss on the primary chef acquisition CTA on the homepage"
+    depends_on: null
+
+  - finding_id: BA-011
+    surface_id: web-mkt-hero-how-it-works-cta
+    lens: business-analyst
+    severity: P0
+    issue: "Secondary hero CTA 'How It Works' links to /how-it-works, a route not registered in the router — visitors are silently redirected to home"
+    evidence_excerpt: "<Link to=\"/how-it-works\">How It Works</Link> (not in routes/index.tsx)"
+    recommendation: >
+      Either register a /how-it-works route pointing to the 'How It Works' section on the homepage
+      (via anchor: /#how-it-works) or change the Link to an anchor scroll: `<a href=\"#how-it-works\">`.
+      The 'How It Works' button is the secondary consideration path for hesitant visitors — losing them
+      here costs a disproportionate share of high-intent signups.
+    metric_hypothesis: "signup conversion — secondary CTA clickthrough from hesitant visitors drops to zero; these are typically higher-quality signups who read before committing"
+    depends_on: null
+
+  # ── P0: Admin analytics dashboard shipping placeholder charts to operators ─
+
+  - finding_id: BA-012
+    surface_id: null
+    lens: business-analyst
+    severity: P0
+    issue: "Admin analytics page ships 'Chart coming soon' placeholder to operators — the feature is not in the marketing inventory but qualifies as a fake analytics surface"
+    evidence_excerpt: "AnalyticsPage.tsx (admin-portal): <p className=\"mt-2 text-sm\">Chart coming soon</p>"
+    recommendation: >
+      Either (a) ship a real chart using the existing data endpoints before releasing this page to
+      operators, or (b) hide the analytics nav item entirely until the feature is complete.
+      Operators who see 'Chart coming soon' for more than one sprint lose confidence in the platform's
+      readiness and escalate with support tickets.
+    metric_hypothesis: "operator trust; operator activation — empty dashboard surfaces are the single fastest way to lose operator confidence post-launch"
+    depends_on: null
+
+  # ── P1: Conversion-critical clarity issues ────────────────────────────────
+
+  - finding_id: BA-013
+    surface_id: web-mkt-landing-hero-title
+    lens: business-analyst
+    severity: P1
+    issue: "Hero search button says 'Find Food' but the search actually routes to /chefs — misalignment between CTA and destination erodes trust"
+    evidence_excerpt: |
+      Button label: "Find Food"
+      Link destination: /chefs (or /chefs?search=...)
+      The user is looking for food; they land on a chef browse page
+    recommendation: >
+      Either change the button label to 'Find Chefs' (matching the destination) or change the
+      destination to a dish/menu search results page if one exists. The search inputs also ask for
+      'dishes or chefs' — the CTA verb must match the most prominent input's expected result.
+      Suggested: 'Search' (neutral, always accurate) or 'Find chefs near you'.
+    metric_hypothesis: "hero search conversion — label/destination mismatch increases bounce rate after click; users who expected a food search result and land on a chef list feel misled"
+    depends_on: null
+
+  - finding_id: BA-014
+    surface_id: web-mkt-landing-become-chef
+    lens: business-analyst
+    severity: P1
+    issue: "'Love Cooking? Share Your Talent' headline in the chef recruitment CTA is weak on differentiation — gives no reason to choose Fe3dr over Swiggy Minis or Zomato Home"
+    evidence_excerpt: |
+      "Love Cooking? Share Your Talent"
+      "Turn your passion into income. Join our community of home chefs and start earning by sharing your delicious homemade food."
+    recommendation: >
+      Lead with the structural advantage: no ghost kitchen required, no delivery fleet to manage, cook
+      your own hours. Suggested headline: 'Cook from home. Set your own menu and hours.'
+      Subtext: 'No restaurant overheads. Customers come to you.' This differentiates from gig platforms
+      where drivers/cooks are managed assets.
+    metric_hypothesis: "chef apply rate — generic passion-economy copy does not differentiate; chefs who compare Fe3dr to Swiggy Minis will not have a reason to prefer it"
+    depends_on: BA-010
+
+  - finding_id: BA-015
+    surface_id: vp-mkt-register-benefits-list
+    lens: business-analyst
+    severity: P1
+    issue: "'Zero commission first month' benefit claim has no terms attached — creates misleading expectations about ongoing commission rates"
+    evidence_excerpt: "{ title: 'Zero commission first month', desc: 'Get started completely risk-free' }"
+    recommendation: >
+      Add the ongoing commission rate immediately adjacent: e.g., 'Zero commission first month,
+      then X% per order.' Without the ongoing rate, chefs who read this feel surprised and misled
+      when they see commission charges in month 2. The StepPolicies copy confirms a commission
+      exists: 'Fe3dr charges a platform commission on each order' — but the rate is never disclosed
+      on the registration marketing surface. Disclose it.
+    metric_hypothesis: "chef D30 retention; chef apply rate — hidden ongoing pricing discovered post-signup is the leading cause of early churn in marketplace supplier acquisition"
+    depends_on: null
+
+  - finding_id: BA-016
+    surface_id: web-mkt-catering-request-heading
+    lens: business-analyst
+    severity: P1
+    issue: "Catering request wizard has no CTA that sets expectations for what happens after submission — 'Request Catering Quotes' is the entry button but the wizard has no completion confirmation copy"
+    evidence_excerpt: |
+      Heading: "Request Catering Quotes"
+      Sub: "Tell us about your event and receive quotes from our home chefs"
+      Progress steps: Event Details / Preferences / Location (no step 4 = 'Review' or 'Submitted')
+    recommendation: >
+      Add a Step 4 confirmation screen: 'Request submitted. Chefs will respond within 24 hours.
+      You'll get a notification for each quote.' Set expectations explicitly on when and how quotes
+      arrive. The current flow ends at Step 3 (Location) with no success state copy visible in
+      the inventory — users will not know if the submission worked.
+    metric_hypothesis: "catering quote completion rate — missing post-submission copy causes re-submission attempts and support tickets, reducing effective conversion"
+    depends_on: null
+
+  # ── P2: Missed opportunity on medium-traffic surfaces ─────────────────────
+
+  - finding_id: BA-017
+    surface_id: web-mkt-browse-heading
+    lens: business-analyst
+    severity: P2
+    issue: "Browse Chefs page heading 'Explore Home Chefs' with sub 'Discover talented home chefs serving authentic homemade food' is generic and adds no browse-aid value"
+    evidence_excerpt: "Explore Home Chefs / Discover talented home chefs serving authentic homemade food"
+    recommendation: >
+      Replace the static sub with a live contextual indicator that helps the user orient:
+      '{chefCount} home chefs in {city}' or 'Showing chefs available for delivery today.'
+      At minimum, 'talented' is a brand-drift adjective that says nothing; drop it.
+      Suggested: 'Home Chefs / Find a home chef near you.'
+    metric_hypothesis: "browse→order conversion — context-setting copy (city, count, availability) reduces time-to-first-click on a chef profile by giving users orientation"
+    depends_on: null
+
+  - finding_id: BA-018
+    surface_id: web-mkt-landing-how-it-works
+    lens: business-analyst
+    severity: P2
+    issue: "'How It Works' step 2 (Order) says only 'Select your favorite dishes and place your order securely' — 'securely' is a hollow reassurance without specifying what payment methods are accepted"
+    evidence_excerpt: "description: 'Select your favorite dishes and place your order securely'"
+    recommendation: >
+      Replace 'securely' with a concrete payment reassurance: 'Pay by UPI, card, or cash on delivery.'
+      This converts a vague trust word into an actionable buying signal. Users who don't know if UPI
+      is accepted will abandon rather than click through to discover it.
+    metric_hypothesis: "how-it-works→signup conversion — specifying payment methods reduces pre-signup payment anxiety, a leading cause of drop-off in Indian food-ordering contexts"
+    depends_on: null
+
+  - finding_id: BA-019
+    surface_id: web-mkt-landing-why-choose
+    lens: business-analyst
+    severity: P2
+    issue: "'Made with Love' card title uses a banned brand-drift phrase per STYLE-GUIDE.md"
+    evidence_excerpt: "{ title: 'Made with Love', description: 'Every meal is prepared fresh with authentic family recipes' }"
+    recommendation: >
+      Replace 'Made with Love' with a specific and differentiated claim: 'Family recipes, fresh daily'
+      or 'Cooked to order, not reheated.' The card description is more compelling than the title —
+      promote the description to the title. 'Made with Love' is listed as a banned artisanal-drift
+      phrase in the style guide.
+    metric_hypothesis: "brand trust; differentiation — generic sentimental language ('love') makes the platform indistinguishable from every restaurant marketing deck"
+    depends_on: null
+
+  - finding_id: BA-020
+    surface_id: web-mkt-landing-catering-cta
+    lens: business-analyst
+    severity: P2
+    issue: "Catering CTA 'Planning an Event?' is a yes/no question that gates a ₹-significant feature — no minimum guest count, no price range, no social proof is shown"
+    evidence_excerpt: |
+      "Planning an Event?"
+      "Get catering quotes from multiple home chefs. Perfect for parties, corporate events, and special occasions."
+      Button: "Request Catering Quote"
+    recommendation: >
+      Add one trust/scale signal to the catering CTA to set expectations: e.g., 'Quotes for 10–500
+      guests. Chefs respond within 24 hours.' This reduces abandonment for users who don't know if
+      the feature applies to their event size, and makes the CTA actionable rather than aspirational.
+    metric_hypothesis: "catering quote request rate — adding minimum guest scope reduces hesitation from users unsure if the feature fits their event scale"
+    depends_on: null
+
+  # ── P3: Minor friction on lower-traffic surfaces ──────────────────────────
+
+  - finding_id: BA-021
+    surface_id: web-mkt-layout-footer
+    lens: business-analyst
+    severity: P3
+    issue: "Footer 'For Chefs' column links to /become-chef and /chef-resources — both dead routes (confirmed by router audit); this is a secondary surface but still creates 404-experience"
+    evidence_excerpt: |
+      MainLayout.tsx footer:
+      <Link to=\"/become-chef\">Become a Chef</Link>
+      <Link to=\"/chef-resources\">Resources</Link>
+    recommendation: >
+      Fix after BA-010 is resolved. Until /chef-resources page is built, remove the 'Resources' footer
+      link. A broken footer link is a lower-priority trust issue than the hero CTA, but it confirms
+      the platform is unfinished to any user who tests links.
+    metric_hypothesis: "brand trust — broken footer links signal an incomplete product to users who are doing due diligence before signing up"
+    depends_on: BA-010
+
+  - finding_id: BA-022
+    surface_id: web-mkt-brand-tagline
+    lens: business-analyst
+    severity: P3
+    issue: "Logo tagline 'Homemade Food Delivered' is shown in the footer but is too generic to differentiate — identical to dozens of food delivery apps"
+    evidence_excerpt: "Logo.tsx:91 — optional tagline: \"Homemade Food Delivered\""
+    recommendation: >
+      If the tagline is shown, sharpen it to something that states the structural differentiator:
+      'Home chefs, not restaurants.' or 'From their kitchen to your door.'
+      Generic taglines cost nothing to sharpen but improve brand recall at the bottom of the funnel.
+    metric_hypothesis: "brand recall — footer tagline is the last impression for users who scrolled without converting; a specific tagline can tip return visits"
+    depends_on: null
