@@ -37,6 +37,18 @@ You are auditing content for conversion, activation, and trust impact. Your lens
 - Chef profile completeness signals
 - Order-tracking transparency
 
+### Fake/unverified trust signals (CRITICAL — flag every instance)
+
+The opposite of trust: hardcoded placeholder metrics that look fabricated. These hurt conversion AND violate consumer-protection norms:
+
+- **Hardcoded metric badges**: `"500+ Home Chefs Near You"`, `"Join thousands of happy customers"`, `value: '500+'` — if not backed by live data, these are false advertising and erode trust the moment a customer realizes
+- **Fake testimonials** — placeholder names/quotes shipping in production
+- **"Coming soon" features** advertised but not built (e.g., "Payout integration coming soon" — chef gives bank details to a feature that doesn't exist yet)
+- **Empty analytics dashboards** — "Chart coming soon" / `--` placeholders shipping to operators
+- **Hardcoded testimonials, hardcoded chef counts, hardcoded order counts, hardcoded city counts** — any number-with-plus-sign that doesn't read from a live source
+
+Flag as P0 with `metric_hypothesis: "trust score; customers/chefs who discover these are fake will churn and post negative reviews"`.
+
 ### Pricing transparency
 - All-in pricing vs hidden delivery fees
 - "Starting at" patterns without ceiling

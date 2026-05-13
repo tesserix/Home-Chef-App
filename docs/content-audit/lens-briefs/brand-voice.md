@@ -32,6 +32,20 @@ You are auditing for **cross-surface and cross-app voice consistency** against `
 - AI-slop maximalism (cyan-on-dark dark-mode headlines, gradient promises)
 - Generic SaaS dashboard ("Hero metrics", "Onboarding journey", "Stakeholder")
 
+### Unverified social-proof / AI-slop placeholders (CRITICAL — flag every instance)
+
+The codebase has multiple hardcoded "trust metric" strings that look AI-generated and almost certainly aren't real data. Flag ALL of these as P0 brand-trust violations:
+
+- **Hardcoded metric badges**: `"500+ Home Chefs Near You"`, `"500+ Home Chefs"`, `value: '500+'` — if the platform genuinely has 500+ chefs, the number should be dynamic (read from API); if it doesn't, it's false advertising
+- **"Join thousands"** / **"thousands of happy customers"** / **"trusted by thousands"** — unverified social proof; either prove it with real numbers or remove
+- **Fake testimonials** — any review/testimonial component with hardcoded names/quotes that aren't real users
+- **Hardcoded placeholder profiles** — "John Doe", "Test Chef", "Sample Restaurant" appearing in production code
+- **Empty placeholder analytics** — dashboards shipping with `--` or `0` when real data should be available
+- **"Coming soon" features in production** — features advertised but disabled (e.g., "Payout integration coming soon")
+- **Marketing claims without proof** — "best in city", "fastest delivery", "freshest food", "highest rated"
+
+These violate "Rule 5 — Restraint over urgency" AND "Rule 1 — Confident, not loud" simultaneously. They're worse than mere voice drift — they erode platform credibility. P0 severity.
+
 ### Voice consistency checks
 - Pronouns: "we"/"you" enforced everywhere (not "the Company"/"the User"/"the Driver Partner")
 - Punctuation: exclamation-mark budget (1 per page customer-facing, 0 vendor/driver)
