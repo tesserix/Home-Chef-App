@@ -182,30 +182,6 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Diagnostic — verify secret reached runner
-        env:
-          DIAG_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
-        run: |
-          set -euo pipefail
-          echo "Length of GH_TOKEN (from job env): ${#GH_TOKEN}"
-          echo "Length of DIAG_TOKEN (re-bound here): ${#DIAG_TOKEN}"
-          echo "GH_TOKEN starts with: ${GH_TOKEN:0:4}..."
-          echo "DIAG_TOKEN starts with: ${DIAG_TOKEN:0:4}..."
-          echo ""
-          echo "=== Direct curl /user with GH_TOKEN ==="
-          curl -sS -o /tmp/u1.json -w "HTTP=%{http_code}\n" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/user || true
-          jq -r '.message // .login // "(no field)"' /tmp/u1.json 2>/dev/null | head -1 || cat /tmp/u1.json | head -c 200
-          echo ""
-          echo "=== Direct curl /user with DIAG_TOKEN ==="
-          curl -sS -o /tmp/u2.json -w "HTTP=%{http_code}\n" \
-            -H "Authorization: Bearer ${DIAG_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/user || true
-          jq -r '.message // .login // "(no field)"' /tmp/u2.json 2>/dev/null | head -1 || cat /tmp/u2.json | head -c 200
-
       - name: Bump image tag and Knative updateTimestamp via API
         env:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
