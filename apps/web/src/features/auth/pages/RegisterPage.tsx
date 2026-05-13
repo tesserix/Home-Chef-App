@@ -89,8 +89,8 @@ export default function RegisterPage() {
                   transition={{ delay: 0.5 + index * 0.1 }}
                   className="flex items-center gap-3 justify-center"
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-bone/20 backdrop-blur-sm">
-                    <Check className="h-4 w-4" />
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-bone/20">
+                    <Check aria-hidden="true" className="h-4 w-4" />
                   </div>
                   <span className="text-paper/95">{benefit}</span>
                 </motion.div>

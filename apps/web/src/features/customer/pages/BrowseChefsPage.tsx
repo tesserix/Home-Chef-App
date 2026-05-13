@@ -421,10 +421,14 @@ function ChefCardItem({ chef }: { chef: Chef }) {
             </Badge>
           )}
           <button
+            type="button"
+            aria-label={favorited ? 'Remove from favorites' : 'Save to favorites'}
+            aria-pressed={favorited}
             onClick={handleFavorite}
-            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-1 backdrop-blur-sm transition-all hover:bg-bone hover:shadow-2"
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-bone shadow-1 transition-all hover:bg-bone hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
           >
             <Heart
+              aria-hidden="true"
               className={`h-4 w-4 transition-colors ${
                 favorited ? 'fill-paprika text-paprika' : 'text-ink-soft'
               }`}

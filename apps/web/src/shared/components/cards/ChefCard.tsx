@@ -88,7 +88,7 @@ export function ChefCard({
             }}
             aria-label={isFavorite ? `Remove ${name} from favorites` : `Save ${name} to favorites`}
             aria-pressed={isFavorite}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-bone/90 shadow-soft-md backdrop-blur-sm transition-all hover:bg-bone hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 active:scale-95"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-bone shadow-2 transition-all hover:bg-bone hover:shadow-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 active:scale-95"
           >
             <Heart
               aria-hidden="true"

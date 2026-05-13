@@ -542,7 +542,7 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
             onClick={handleFavorite}
             aria-label={favorited ? `Remove ${chef.businessName} from favorites` : `Save ${chef.businessName} to favorites`}
             aria-pressed={favorited}
-            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone/90 shadow-1 backdrop-blur-sm transition-all hover:bg-bone hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/40"
+            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone shadow-1 transition-all hover:bg-bone hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
           >
             <Heart
               aria-hidden="true"
