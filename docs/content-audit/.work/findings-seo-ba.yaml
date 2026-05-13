@@ -1,0 +1,350 @@
+findings:
+
+  # ── P0: Broken conversion path / missing OG asset ─────────────────────────
+
+  - finding_id: BA-SEO-001
+    surface_id: web-seo-og-title
+    lens: business-analyst
+    severity: P0
+    issue: "OG and Twitter card images declared but og-image.png is absent from the public directory — all social shares render a blank card"
+    evidence_excerpt: |
+      <meta property="og:image" content="/og-image.png" />
+      <meta name="twitter:image" content="/og-image.png" />
+      # apps/web/public/ contains: favicon.svg, logo-icon.svg, manifest.json, offline.html, sw.js
+      # og-image.png is NOT present
+    recommendation: >
+      Create and commit a 1200×630px OG image at apps/web/public/og-image.png.
+      The image should show an appetising food photograph with the Fe3dr wordmark in Geist 700,
+      no decorative text overlay beyond the tagline. A blank card on social shares means
+      every link shared on WhatsApp, Instagram Stories, Twitter/X, and Slack renders with no
+      visual — this is a top-of-funnel dead-end for the most common word-of-mouth channel.
+    metric_hypothesis: "organic social referral CTR; food-delivery apps are heavily discovery-driven via social shares — a blank OG card drops click-through to near zero"
+    depends_on: null
+
+  - finding_id: BA-SEO-002
+    surface_id: dp-seo-html-title
+    lens: business-analyst
+    severity: P0
+    issue: "Duplicate <title> tag in delivery-portal/index.html — two identical <title>Fe3dr Delivery</title> elements at lines 24 and 32"
+    evidence_excerpt: |
+      line 24: <title>Fe3dr Delivery</title>
+      line 32: <title>Fe3dr Delivery</title>
+    recommendation: >
+      Remove the duplicate <title> at line 32. While browsers display only the last title,
+      duplicate tags are a parsing error that can confuse crawlers and PWA install prompts.
+      Same defect pattern exists in admin-portal/index.html (lines 38 and 43) — fix both together.
+    metric_hypothesis: "driver app install rate via browser PWA prompt — malformed head may suppress install banners on some Android browsers"
+    depends_on: null
+
+  - finding_id: BA-SEO-003
+    surface_id: ap-seo-meta-title
+    lens: business-analyst
+    severity: P0
+    issue: "Duplicate <title> tag in admin-portal/index.html — two identical <title>Fe3dr Admin</title> elements at lines 38 and 43"
+    evidence_excerpt: |
+      line 38: <title>Fe3dr Admin</title>
+      line 43: <title>Fe3dr Admin</title>
+    recommendation: >
+      Remove the duplicate <title> at line 43. Admin portal likely won't be indexed (noindex/nofollow
+      is set correctly), but duplicate tags indicate a copy-paste error pattern that should be caught
+      by an HTML lint step in CI before it reappears on indexed surfaces.
+    metric_hypothesis: "admin operator trust — while low direct SEO impact, the same pattern that creates this bug on admin can corrupt the customer-facing title if the copy-paste migrates there"
+    depends_on: BA-SEO-002
+
+  # ── P1: Conversion-critical clarity / click-through rate ──────────────────
+
+  - finding_id: BA-SEO-004
+    surface_id: web-seo-meta-description
+    lens: business-analyst
+    severity: P1
+    issue: "Primary meta description starts with the brand name prefix 'Fe3dr -' which wastes the first 8 characters Google shows in SERPs — benefit-first copy would increase click-through rate"
+    evidence_excerpt: "Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: >
+      Rewrite to lead with the customer benefit and defer the brand name to the end or omit it
+      (Google shows the page title separately):
+      "Order homemade food from home chefs near you. Fresh, authentic meals delivered to your door."
+      (86 chars — well within the 155-char limit, adds a second action-oriented sentence that
+      the current version lacks). The word 'authentic' is kept but 'doorstep' edges toward
+      lifestyle-copy cliche; 'door' is crisper.
+    metric_hypothesis: "organic search CTR — SERP descriptions that lead with the user benefit rather than the brand name consistently outperform brand-first patterns by 10-25% CTR in A/B tests"
+    depends_on: null
+
+  - finding_id: BA-SEO-005
+    surface_id: web-seo-og-title
+    lens: business-analyst
+    severity: P1
+    issue: "OG title and HTML title are identical strings ('Fe3dr - Homemade Food Delivered') — a missed opportunity to write a social-share-optimised title that differs from the SERP title"
+    evidence_excerpt: |
+      <title>Fe3dr - Homemade Food Delivered</title>
+      <meta property="og:title" content="Fe3dr - Homemade Food Delivered" />
+      <meta name="twitter:title" content="Fe3dr - Homemade Food Delivered" />
+    recommendation: >
+      SERP title can remain 'Fe3dr — Homemade Food Delivered' (good keyword density for search).
+      Social (OG/Twitter) title should be written for human curiosity, not crawlers:
+      "Your neighbourhood has home chefs. Find yours on Fe3dr."
+      This is more likely to generate shares and clicks in social contexts where users are
+      browsing a feed rather than actively searching.
+    metric_hypothesis: "social referral CTR — social titles optimised for curiosity rather than keywords generate more shares and clicks from feed-browsing users"
+    depends_on: BA-SEO-001
+
+  - finding_id: BA-SEO-006
+    surface_id: web-seo-og-description
+    lens: business-analyst
+    severity: P1
+    issue: "OG description is a near-verbatim copy of the meta description but without the brand prefix — all four social tags (OG title, OG desc, Twitter title, Twitter desc) use two interchangeable strings, making the social card feel templated rather than crafted"
+    evidence_excerpt: |
+      og:description — "Connect with home chefs for authentic homemade food delivered to your doorstep"
+      twitter:description — "Connect with home chefs for authentic homemade food delivered to your doorstep"
+      meta description — "Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: >
+      Write a distinct social description that adds information the title doesn't have:
+      "Browse menus, read reviews, and order from home chefs cooking in your city. No restaurants.
+      Just real food from real kitchens."
+      This surfaces differentiating information (menus, reviews, real-kitchens positioning) that
+      would not appear in a SERP snippet, giving a social share more persuasive surface area.
+    metric_hypothesis: "social share conversion — a description that adds new information beyond the title increases social card click-through versus a redundant paraphrase of the title"
+    depends_on: BA-SEO-001
+
+  - finding_id: BA-SEO-007
+    surface_id: md-meta-003
+    lens: business-analyst
+    severity: P1
+    issue: "iOS NSCameraUsageDescription 'Used to take photos' is dangerously terse — iOS may reject the app or reduce permission grant rate; this is shown verbatim on the iOS permission sheet"
+    evidence_excerpt: '"NSCameraUsageDescription": "Used to take photos"'
+    recommendation: >
+      iOS App Review guidelines require camera usage strings to explain the specific use case.
+      A generic 'Used to take photos' will likely trigger App Store rejection or reduced user
+      permission grant rates. Rewrite to:
+      "We use your camera to photograph your pickup location as proof of delivery."
+      This is honest (drivers confirm deliveries), specific, and passes App Review.
+      Impact: camera permission denial means drivers cannot submit delivery proof, breaking
+      the delivery confirmation flow and triggering false dispute rates.
+    metric_hypothesis: "App Store approval rate; driver delivery confirmation completion rate — vague permission strings fail review and lower user grant rates"
+    depends_on: null
+
+  - finding_id: BA-SEO-008
+    surface_id: md-meta-005
+    lens: business-analyst
+    severity: P1
+    issue: "iOS NSLocationAlwaysAndWhenInUseUsageDescription differs from the Android expo-location locationAlwaysAndWhenInUsePermission string — platform permission drift means drivers see inconsistent rationale on iOS vs Android"
+    evidence_excerpt: |
+      iOS:     "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status."
+      Android: "HomeChef Delivery tracks your location during deliveries to keep customers updated."
+    recommendation: >
+      Align both platforms to a single canonical string that satisfies both iOS App Review and
+      Google Play policy:
+      "HomeChef Delivery tracks your location during active deliveries so customers see
+      live updates. Background tracking stops when you end your shift."
+      The added final sentence is critical: Android Play policy requires background-location
+      strings to explain when the background access ends. The current Android string omits this
+      and risks Play Store rejection. The iOS string is more explicit but still lacks the
+      'when it ends' clause.
+    metric_hypothesis: "Play Store approval rate; driver onboarding completion rate — permission rejections block the driver from working, directly reducing supply-side capacity"
+    depends_on: null
+
+  - finding_id: BA-SEO-009
+    surface_id: md-meta-001
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile delivery app display name is 'HomeChef Delivery' while all web/portal surfaces use the 'Fe3dr' brand — a split-brand identity undermines SEO coherence and user recognition when drivers search the App Store"
+    evidence_excerpt: |
+      app.json — "name": "HomeChef Delivery"
+      web/index.html — apple-mobile-web-app-title: "Fe3dr"
+      vendor-portal/index.html — application-name: "Fe3dr Vendor Portal"
+    recommendation: >
+      Decide on one brand name and apply it consistently across all surfaces.
+      If 'Fe3dr' is the go-to-market brand, the mobile app should be 'Fe3dr Delivery' to match.
+      If 'HomeChef' is a distinct product brand for the native app tier, document it as intentional
+      and ensure no crossover leakage in customer-facing copy.
+      Inconsistency between web and App Store brand names reduces word-of-mouth referral
+      effectiveness: a customer saying 'download Fe3dr' sends a driver searching for
+      'HomeChef Delivery' — they won't find it.
+    metric_hypothesis: "driver acquisition from customer referral; App Store search visibility — brand name mismatch between web and app store breaks referral chains"
+    depends_on: null
+
+  - finding_id: BA-SEO-010
+    surface_id: vp-seo-html-title
+    lens: business-analyst
+    severity: P1
+    issue: "Vendor portal has no og:image or Twitter card tags at all — if a chef shares their portal URL (e.g., in a WhatsApp chef group), the share renders with no visual and no social card metadata"
+    evidence_excerpt: |
+      apps/vendor-portal/index.html — no <meta property="og:image">, no <meta name="twitter:card">
+      og:title and og:description are present but og:image is absent
+    recommendation: >
+      Add a chef-oriented OG image and Twitter card tags to vendor-portal/index.html.
+      The image should differ from the customer-facing og-image.png — show a kitchen/chef
+      context rather than a food-delivery context. Also add twitter:card = summary_large_image
+      and twitter:image pointing to the same asset.
+      Chef community word-of-mouth (WhatsApp groups, food blogger communities) is a key
+      chef-acquisition channel — link unfurling with no image kills that channel.
+    metric_hypothesis: "chef acquisition via community word-of-mouth — blank link unfurls in chef WhatsApp groups suppress organic chef referrals"
+    depends_on: null
+
+  # ── P2: Missed opportunity / medium-traffic surface ───────────────────────
+
+  - finding_id: BA-SEO-011
+    surface_id: web-seo-html-title
+    lens: business-analyst
+    severity: P2
+    issue: "HTML title is a static string that never updates per-route — users who deep-link to a chef profile or menu page see 'Fe3dr - Homemade Food Delivered' as the tab title and SERP snippet, losing per-page keyword opportunity"
+    evidence_excerpt: '<title>Fe3dr - Homemade Food Delivered</title> — apps/web/index.html:69 (static, SPA root)'
+    recommendation: >
+      Implement dynamic per-route title updates using React Helmet or the built-in
+      document.title setter in route components. Priority pages to target:
+      - Chef profile: "{Chef Name} | Home Chef in {City} | Fe3dr"
+      - Menu page: "{Chef Name}'s Menu | Fe3dr"
+      - Browse page: "Home Chefs in {City} | Fe3dr"
+      This enables long-tail SEO capture for chef-name searches, which is the most likely
+      search a customer makes after hearing about a specific chef by word of mouth.
+    metric_hypothesis: "organic search traffic for chef-name and city-level queries — static SPA titles mean Google indexes only the root title for all pages"
+    depends_on: null
+
+  - finding_id: BA-SEO-012
+    surface_id: web-seo-meta-description
+    lens: business-analyst
+    severity: P2
+    issue: "No structured data (JSON-LD) for LocalBusiness, FoodService, or Restaurant schema — the platform loses eligibility for Google rich results (star ratings, operating hours, order action) in SERPs"
+    evidence_excerpt: |
+      apps/web/index.html — no <script type="application/ld+json"> found
+      apps/web/public/ — no JSON-LD files found
+    recommendation: >
+      Add JSON-LD structured data for:
+      1. WebSite schema on the root URL (enables Sitelinks Searchbox in Google)
+      2. FoodService or LocalBusiness schema on each chef profile page (enables star ratings
+         and direct-order rich results for 'home chef near me' queries)
+      3. BreadcrumbList on browse/category pages
+      At minimum, implement WebSite schema in the SPA root and FoodService on chef profile
+      pages. This is the highest-leverage unblocked SEO action available.
+    metric_hypothesis: "organic SERP CTR from rich results — sites with FoodService structured data that qualify for rich snippets see 20-30% higher CTR than plain SERP listings"
+    depends_on: BA-SEO-011
+
+  - finding_id: BA-SEO-013
+    surface_id: web-seo-meta-keywords
+    lens: business-analyst
+    severity: P2
+    issue: "Meta keywords tag is present but Google has ignored meta keywords since 2009 — the tag provides zero SEO value and uses engineering budget to maintain a no-op field"
+    evidence_excerpt: '<meta name="keywords" content="home chef, food delivery, homemade food, local chef, catering" />'
+    recommendation: >
+      Remove the meta keywords tag from web/index.html and vendor-portal/index.html.
+      The same engineering effort should be redirected to the structured data gap (BA-SEO-012)
+      which does provide measurable ranking benefit.
+      Note: removing keywords tags has zero negative impact — Google, Bing, and all major
+      crawlers explicitly ignore this tag.
+    metric_hypothesis: "engineering velocity — removing a maintained no-op frees developer time for structured data implementation which has real CTR impact"
+    depends_on: null
+
+  - finding_id: BA-SEO-014
+    surface_id: vp-seo-meta-keywords
+    lens: business-analyst
+    severity: P2
+    issue: "Vendor portal meta keywords tag includes 'vendor portal' and 'food business' — 'Vendor' is a banned term per the style guide vocabulary list; customer-facing copy must use 'Home chef'"
+    evidence_excerpt: '<meta name="keywords" content="vendor portal, home chef, kitchen management, food business, menu management" />'
+    recommendation: >
+      Remove the keywords tag (see BA-SEO-013 for rationale). If a keywords-style content
+      strategy is ever revisited, replace 'vendor portal' with 'chef portal' or 'home chef
+      dashboard' to align with the style guide. 'Food business' is also vague — 'home chef
+      business' would be more specific.
+    metric_hypothesis: "brand vocabulary consistency — 'Vendor' in meta copy leaks into content strategy documentation and training data, normalising a banned term"
+    depends_on: BA-SEO-013
+
+  - finding_id: BA-SEO-015
+    surface_id: web-seo-app-name
+    lens: business-analyst
+    severity: P2
+    issue: "PWA manifest.json sets theme_color to '#f97316' (orange) which conflicts with the brand design system's Herb green accent and Paper/Ink palette — the OS chrome shown on Android home screen will be orange, not brand-consistent"
+    evidence_excerpt: |
+      manifest.json: "theme_color": "#f97316"
+      index.html theme-color: "#fafaf7" (Paper, correct)
+      Design system: primary accent is Herb green oklch(0.48 0.13 145), never orange
+    recommendation: >
+      Update manifest.json theme_color to the Herb green hex equivalent (#3d6b3a or nearest)
+      to match the brand accent used throughout the app.
+      Also update background_color from '#ffffff' to the Paper background '#fafaf7' to
+      prevent a jarring white flash on Android when the PWA splashscreen loads.
+      The manifest and index.html theme-color tags currently disagree — they should use
+      the same value so PWA install banners and OS chrome are consistent.
+    metric_hypothesis: "PWA install rate; brand trust — an orange OS chrome on an app that uses green everywhere creates a 'cheap' first impression that reduces install completion"
+    depends_on: null
+
+  - finding_id: BA-SEO-016
+    surface_id: dp-seo-meta-description
+    lens: business-analyst
+    severity: P2
+    issue: "Delivery portal meta description uses 'Delivery Partner Portal' but the portal title and apple-app-title use 'Fe3dr Delivery' — internal name drift that would confuse a driver googling their portal URL"
+    evidence_excerpt: |
+      meta description: "Fe3dr Delivery Partner Portal - Manage deliveries, track earnings"
+      <title>: "Fe3dr Delivery"
+      apple-mobile-web-app-title: "Fe3dr Delivery"
+    recommendation: >
+      Align meta description to match the title brand:
+      "Fe3dr Delivery — manage your deliveries and track your earnings."
+      Optionally expand to capture driver-acquisition search intent:
+      "Fe3dr Delivery — driver portal for managing pickups, tracking earnings, and navigating
+      to customers."
+      The current description is accurate but the name mismatch ('Partner Portal' vs 'Delivery')
+      is a consistency bug the inventory has already flagged.
+    metric_hypothesis: "driver portal search discoverability — drivers Googling 'Fe3dr driver login' will see a SERP snippet that doesn't match the page title, reducing click confidence"
+    depends_on: null
+
+  - finding_id: BA-SEO-017
+    surface_id: web-seo-twitter-description
+    lens: business-analyst
+    severity: P2
+    issue: "No twitter:site handle declared — Twitter cards will render without an attributed account, reducing the viral coefficient of any shared link because followers cannot click-through to the brand account"
+    evidence_excerpt: |
+      Present tags: twitter:card, twitter:title, twitter:description, twitter:image
+      Missing: twitter:site (e.g., @fe3dr or @homechefapp)
+    recommendation: >
+      Add <meta name="twitter:site" content="@fe3dr" /> (or whichever handle is active).
+      Twitter/X cards with a twitter:site attribution show the account handle below the card,
+      enabling one-tap follow. This is a zero-cost top-of-funnel brand awareness signal.
+    metric_hypothesis: "social brand follower growth; social referral CTR — unattributed cards miss the attribution link that converts a share viewer into a brand follower"
+    depends_on: BA-SEO-001
+
+  # ── P3: Minor / low-traffic surface ──────────────────────────────────────
+
+  - finding_id: BA-SEO-018
+    surface_id: web-seo-og-title
+    lens: business-analyst
+    severity: P3
+    issue: "og:url is hardcoded to 'https://fe3dr.com' in all page variants — for an SPA this means every route's shared URL resolves OG metadata to the root, so deep-linked chef or menu pages show the homepage description when shared"
+    evidence_excerpt: '<meta property="og:url" content="https://fe3dr.com" />'
+    recommendation: >
+      Update og:url dynamically per route in each page component, matching the canonical URL.
+      This requires moving OG tags out of index.html into per-route React Helmet calls.
+      Priority routes: chef profile pages, menu pages, browse-by-city pages.
+      Without this, a customer sharing "Chef Priya's Biryani" shows the generic homepage card.
+    metric_hypothesis: "social referral conversion — a shared chef-profile link that unfurls with chef-specific title/description converts 3-5x better than a generic homepage card"
+    depends_on: BA-SEO-011
+
+  - finding_id: BA-SEO-019
+    surface_id: md-meta-002
+    lens: business-analyst
+    severity: P3
+    issue: "iOS Face ID usage description 'Use Face ID to log in quickly' is technically accurate but misses the opportunity to address driver security concerns — drivers may hesitate to enable biometrics without understanding data handling"
+    evidence_excerpt: '"NSFaceIDUsageDescription": "Use Face ID to log in quickly"'
+    recommendation: >
+      Expand to: "Use Face ID to sign in securely. Your biometric data stays on your device
+      and is never sent to Fe3dr."
+      The second sentence addresses the primary anxiety (data leaving the device) that causes
+      drivers to deny biometric permissions. Higher biometric adoption = lower sign-in friction
+      = faster shift starts.
+    metric_hypothesis: "driver shift start time; biometric permission grant rate — addressing the primary objection in the permission string increases grant rate and reduces sign-in abandonment"
+    depends_on: null
+
+  - finding_id: BA-SEO-020
+    surface_id: ap-seo-meta-description
+    lens: business-analyst
+    severity: P3
+    issue: "Admin portal has a live meta description despite being noindex/nofollow — the description is reachable by operators bookmarking or sharing the URL internally, and 'Manage users, chefs, orders, and platform analytics' uses 'users' which is a banned generic term per the style guide"
+    evidence_excerpt: |
+      <meta name="description" content="Fe3dr Admin Portal - Manage users, chefs, orders, and platform analytics" />
+      <meta name="robots" content="noindex, nofollow" />
+    recommendation: >
+      Update the description to use role-specific language consistent with the style guide:
+      "Fe3dr Admin — manage customers, home chefs, orders, and platform analytics."
+      'users' → 'customers' and 'chefs' (style guide approved terms).
+      Low urgency since noindex suppresses SERP exposure, but internal operator bookmarks
+      and Slack link-unfurls will show this description.
+    metric_hypothesis: "internal operator vocabulary consistency — admin copy that uses banned terms trains internal stakeholders to use those terms in external communications"
+    depends_on: null

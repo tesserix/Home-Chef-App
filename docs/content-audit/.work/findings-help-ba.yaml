@@ -1,0 +1,197 @@
+# BA Lens — HELP category findings
+# Auditor: business-analyst lens
+# Date: 2026-05-13
+# Scope: 12 surfaces across web (OttoChat), delivery-portal (LoginPage, OnboardingStatusPage, SettingsPage), admin-portal (SettingsPage)
+# Focus: support deflection quality, "Need help?" CTAs, FAQ usability, contact pathways
+
+findings:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P1 — CONVERSION-CRITICAL PATHWAY BROKEN
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-HLP-001
+    surface_id: dp-help-new-driver
+    lens: business-analyst
+    severity: P1
+    issue: "\"New Driver?\" sign-up hint has no CTA button — driver activation pathway dead-ends in text"
+    evidence_excerpt: >
+      <p class="text-sm font-medium">New Driver?</p>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Sign up with your email or Google account. You'll go through
+        a quick onboarding process to start delivering.
+      </p>
+    recommendation: >
+      Add a tappable CTA immediately below the body copy: "Sign up to deliver" linking to
+      /register or the onboarding entry point. Without it, a prospective driver who taps
+      "I'm a Driver", reads this panel, and realises they have no account has no forward path
+      — they must guess to use the Google or Email sign-in buttons (which serve existing
+      drivers). Separating sign-in from sign-up with a clear CTA reduces drop-off on driver
+      acquisition, which is a direct supply-side conversion metric.
+    metric_hypothesis: "driver sign-up completion rate; dead-end copy leaves prospective drivers with no forward action and they abandon"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P1 — BRAND CONSISTENCY / WRONG PRODUCT NAME ON HELP SURFACE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-HLP-002
+    surface_id: dp-help-status-contact
+    lens: business-analyst
+    severity: P1
+    issue: "Support email domain \"fe3dr.com\" contradicts HomeChef brand — driver who Googles \"fe3dr\" finds nothing, trust collapses"
+    evidence_excerpt: "Contact us at support@fe3dr.com"
+    recommendation: >
+      Replace with a HomeChef-branded support address (e.g., support@homechef.in or
+      drivers@homechef.in). If Fe3dr is a legitimate sub-brand or white-label, add a one-line
+      explanation: "Fe3dr is HomeChef's delivery partner platform." Without that, a driver
+      already anxious about an approval delay sees an unfamiliar domain and questions whether
+      they submitted documents to the right company. That credibility gap increases abandonment
+      at a critical drop-off point (post-submission wait state).
+    metric_hypothesis: "driver application completion + trust; unrecognised domain on a help surface during high-anxiety wait erodes confidence and increases CS escalations"
+    depends_on: null
+
+  - finding_id: BA-HLP-003
+    surface_id: dp-help-new-driver-body
+    lens: business-analyst
+    severity: P1
+    issue: "\"Login or sign up to deliver with Fe3dr\" on choose-mode screen mixes brand names — drivers signed up for HomeChef, not Fe3dr"
+    evidence_excerpt: "Login or sign up to deliver with Fe3dr"
+    recommendation: >
+      Align to the HomeChef brand: "Sign in or sign up to deliver with HomeChef." Use the
+      vocabulary-correct "Sign in" (not "Login" — banned per Style Guide). If Fe3dr is
+      intentional as the fleet brand, it must be introduced earlier in the driver recruitment
+      funnel; its first appearance cannot be on the authentication screen.
+    metric_hypothesis: "driver login completion; brand-name mismatch at point of authentication triggers distrust and search-engine abandonment"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — MISSED DEFLECTION OPPORTUNITY
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-HLP-004
+    surface_id: dp-help-settings-help
+    lens: business-analyst
+    severity: P2
+    issue: "\"Help & Support\" settings entry is a dead-end button with no destination — tapping it does nothing actionable"
+    evidence_excerpt: >
+      <p class="text-sm font-medium">Help & Support</p>
+      <p class="text-xs text-muted-foreground">Get help with your deliveries</p>
+    recommendation: >
+      Either (a) link this button to a real help destination — FAQ page, in-app chat (Otto
+      equivalent for drivers), or a mailto link — or (b) remove it until that destination
+      exists. A settings entry that does nothing trains drivers to distrust the UI and reach
+      for the phone instead, increasing inbound CS volume. "Get help with your deliveries"
+      is the correct scope framing; the CTA just needs to go somewhere. Minimum viable fix:
+      href="mailto:support@homechef.in" with subject pre-filled "Driver support request".
+    metric_hypothesis: "CS ticket deflection rate; tappable dead ends funnel drivers to phone/email support rather than self-service"
+    depends_on: null
+
+  - finding_id: BA-HLP-005
+    surface_id: web-help-otto-empty
+    lens: business-analyst
+    severity: P2
+    issue: "Otto empty-state prompt mixes four topic categories with no intake routing — customers start typing blind rather than picking a topic"
+    evidence_excerpt: "Ask anything — order status, delivery, refunds, chef availability."
+    recommendation: >
+      Replace the open prompt with 3–4 quick-reply chips: "Track my order", "Request a
+      refund", "Chef availability", "Something else." These map directly to the four topics
+      already listed in the prompt. Structured intake reduces misclassification in the support
+      pipeline, speeds time-to-resolution, and means fewer conversations that bounce to a
+      human agent. The freeform fallback "Something else" preserves the open channel.
+      Expected metric: first-response resolution rate up, avg handle time down.
+    metric_hypothesis: "support deflection rate and CS cost; unstructured intake produces more human-escalated tickets than topic-scoped intake"
+    depends_on: null
+
+  - finding_id: BA-HLP-006
+    surface_id: web-help-otto-chat-header
+    lens: business-analyst
+    severity: P2
+    issue: "Chat header labels bot as \"HomeChef support\" without signalling AI — customers expecting a human agent are surprised on escalation"
+    evidence_excerpt: "HomeChef support chat / HomeChef support / Otto · AI assistant / Support"
+    recommendation: >
+      The sender label correctly says "Otto · AI assistant" (BA-HLP-005 area), but the
+      dialog header reads "HomeChef support" with no AI qualifier. Add a subtitle:
+      "AI assistant — type your question to get started" in the header aria-description or
+      visible subtext. Customers who discover mid-conversation that they were talking to
+      AI feel deceived, which is a trust signal that damages repeat order rate more than
+      any marketing copy can recover. This is especially acute for refund and complaint flows.
+    metric_hypothesis: "customer trust score and chat CSAT; unlabelled AI support inflates complaint escalations when customers realise they were not talking to a human"
+    depends_on: null
+
+  - finding_id: BA-HLP-007
+    surface_id: dp-help-status-contact
+    lens: business-analyst
+    severity: P2
+    issue: "Onboarding status page offers only email contact — no SLA promise, no chat, no phone — during high-anxiety approval-wait state"
+    evidence_excerpt: >
+      Need Help?
+      Contact us at support@fe3dr.com
+    recommendation: >
+      Drivers waiting for approval are the highest-churn moment in the supply funnel. Add:
+      (1) an expected response time — "We respond within 1 business day." — so drivers
+      do not repeatedly email wondering if anyone received their message; (2) a direct link
+      to any available chat (if Otto is extended to drivers) or a WhatsApp number if phone
+      support exists. Even a plain "We respond within 24 hours" reduces inbound repeat
+      contacts by setting expectations. Fix the email domain to HomeChef brand per BA-HLP-002.
+    metric_hypothesis: "driver application abandonment rate during approval wait; no SLA promise + unknown brand email = drivers assume the process is broken and stop waiting"
+    depends_on: BA-HLP-002
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P3 — MINOR FRICTION / INTERNAL SURFACES
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-HLP-008
+    surface_id: dp-help-staff-access-body
+    lens: business-analyst
+    severity: P3
+    issue: "\"Contact an admin for access\" on staff login has no email, link, or next step — locked-out staff must hunt for who \"an admin\" is"
+    evidence_excerpt: >
+      Only pre-authorized fleet managers and delivery operations
+      staff can sign in here. Contact an admin for access.
+    recommendation: >
+      Replace generic "Contact an admin" with a specific escalation path: an email address
+      (e.g., ops@homechef.in), a Slack channel name, or an internal ticket URL. The current
+      copy is only actionable if the locked-out staff already knows who to contact — which
+      defeats the purpose of the help text. Low-traffic surface (internal staff login), so
+      P3, but the fix is one line.
+    metric_hypothesis: "internal ops efficiency; ambiguous access-denial messaging increases IT/admin support load when staff can't self-route"
+    depends_on: null
+
+  - finding_id: BA-HLP-009
+    surface_id: ap-settings-payment-test-cards
+    lens: business-analyst
+    severity: P3
+    issue: "Test-card reference panel in admin settings has no \"test mode only\" warning label — risk that an admin pastes a test card into production config"
+    evidence_excerpt: >
+      Test Cards
+      Visa: 4111 1111 1111 1111
+      Mastercard: 5267 3181 8797 5449
+      UPI: success@razorpay
+    recommendation: >
+      Add a prominent label at the top of the panel: "Test mode only — these cards will
+      decline in live mode." The panel already appears conditionally when mode === 'test',
+      so the information is correct — but the copy does not tell the admin why they are
+      seeing it or what to do when they switch to live. A two-sentence context note reduces
+      accidental misconfiguration. Also: the Razorpay panel shows a 3D-Secure card is
+      missing from its test-card list (Stripe has 4000 0027 6000 3184; Razorpay omits 3DS).
+      Add the Razorpay 3DS test card (5267 3181 8797 5449 with OTP simulation) for
+      completeness.
+    metric_hypothesis: "payment gateway misconfiguration rate; absent mode-context label increases likelihood of admins misapplying test credentials"
+    depends_on: null
+
+  - finding_id: BA-HLP-010
+    surface_id: web-help-otto-launcher
+    lens: business-analyst
+    severity: P3
+    issue: "Floating chat launcher aria-label is \"Open support chat\" — no product name or AI signal, low discoverability for first-time customers"
+    evidence_excerpt: "Open support chat"
+    recommendation: >
+      Upgrade the launcher label or visible tooltip to "Chat with Otto — AI support"
+      (or simply "Need help? Chat with us"). The aria-label is correct for accessibility but
+      the visible floating button (presumably an icon-only FAB) gives no textual cue to
+      first-time visitors that support is available. Adding a visible "Help?" label on the
+      FAB increases chat-open rate and reduces customers abandoning because they could not
+      find support. Low effort, measurable via chat-open click-through.
+    metric_hypothesis: "support chat open rate; icon-only FAB with no label has lower discoverability than labelled trigger, leading customers to email instead"
+    depends_on: null

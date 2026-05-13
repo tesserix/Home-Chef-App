@@ -1,0 +1,184 @@
+---
+# Legal lens findings — seo-meta slice
+# Inventory rows audited: 27
+# All findings flagged depends_on: "needs lawyer review"
+# Lens scope: India jurisdiction (DPDP 2023, ASCI Code, FSSAI Licensing Regs, CP Rules 2020,
+#             Code on Social Security 2020) + jurisdiction-agnostic best-practice.
+# Category note: SEO-META is a lighter-touch category for legal lens. Focus areas
+#                are (a) brand-name accuracy in OG/Twitter cards, (b) substantiation
+#                of marketing-style title/description claims under ASCI, (c) native
+#                permission rationale strings as DPDP §5 notice surfaces, and
+#                (d) data-fiduciary identification on indexable pages.
+
+- finding_id: LEG-001
+  surface_id: md-meta-001
+  lens: legal
+  severity: P0
+  issue: 'Brand-name mismatch between web/portals ("Fe3dr") and mobile-delivery app ("HomeChef Delivery") — same legal entity surfaces under two consumer-facing names across OG tags and app-store listings'
+  evidence_excerpt: 'app.json name "HomeChef Delivery" vs web/vendor/admin meta "Fe3dr"'
+  recommendation: 'Pick one consumer-facing brand and use it consistently across `<title>`, og:site_name, og:title, twitter:title, application-name, apple-mobile-web-app-title, app.json `name`, and store-listing metadata. If "HomeChef Delivery" is a sub-brand of Fe3dr, disclose the parent/operator on app store listings and in privacy policy. Inconsistent identity creates ASCI Ch.I.1 misleading-representation exposure and undermines DPDP §5(i) data-fiduciary identification.'
+  citation: 'ASCI Code Ch.I.1 (truthful representation); DPDP Act 2023 §5(i) (identity of data fiduciary in notice); CP Rules 2020 (misleading advertisement)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-002
+  surface_id: web-seo-meta-description
+  lens: legal
+  severity: P1
+  issue: '"authentic homemade food" — origin/quality claim in indexable meta description with no substantiation pathway; "homemade" has no statutory definition under FSSAI and "authentic" is an absolute marketing claim'
+  evidence_excerpt: '"Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"'
+  recommendation: 'Either (a) define "homemade" / "authentic" on the home page with substantiation (e.g., "prepared in domestic kitchens registered with FSSAI") and link from meta description landing, or (b) soften to a non-claim ("food cooked by home chefs near you"). ASCI Ch.I.1 requires marketing claims to be capable of substantiation; meta description text is indexed and quoted by search engines as a representation.'
+  citation: 'ASCI Code Ch.I.1; CP Rules 2020 §4 (misleading advertisement); FSSAI Labelling & Display Regs 2020 (no statutory definition of "homemade")'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-003
+  surface_id: web-seo-og-description
+  lens: legal
+  severity: P1
+  issue: '"authentic homemade food delivered to your doorstep" — same unsubstantiated origin/quality claim re-emitted in og:description and twitter:description, amplifying reach across social platforms'
+  evidence_excerpt: '"Connect with home chefs for authentic homemade food delivered to your doorstep" (og:description, twitter:description, web-seo-og-description, web-seo-twitter-description)'
+  recommendation: 'Fix once at source per LEG-002 — OG and Twitter descriptions inherit the same risk and are scraped/cached by Facebook, X, LinkedIn, WhatsApp link previews. Single substantiation paragraph on home page can cover all four surfaces.'
+  citation: 'ASCI Code Ch.I.1; CP Rules 2020 §4'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-004
+  surface_id: web-seo-meta-keywords
+  lens: legal
+  severity: P1
+  issue: '"catering" keyword — implies catering service offering; FSSAI Licensing & Registration Regs 2011 Schedule 2 treats catering as a separate license category. If platform/chefs are not catering-licensed, indexing this keyword is a misleading representation.'
+  evidence_excerpt: '"home chef, food delivery, homemade food, local chef, catering"'
+  recommendation: 'Confirm whether platform onboards FSSAI catering-licensed chefs. If not, remove "catering" from keywords and any landing pages. If yes, ensure catering chefs surface a distinct catering license number on their profile (separate from home-kitchen FSSAI registration).'
+  citation: 'FSSAI Licensing & Registration Regs 2011 Sch. 2 (catering license); ASCI Code Ch.I.1'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-005
+  surface_id: web-seo-og-title
+  lens: legal
+  severity: P2
+  issue: '"Homemade Food Delivered" — absolute claim used as standalone tagline in og:title, twitter:title, and `<title>`; reads as a definitive promise rather than a service descriptor'
+  evidence_excerpt: '"Fe3dr - Homemade Food Delivered"'
+  recommendation: 'Reframe as service descriptor ("Home chefs, delivered" or "Order from home chefs near you") to avoid the absolute "homemade" claim. The title appears in browser tabs, search results, and social previews — three high-visibility surfaces of the same representation.'
+  citation: 'ASCI Code Ch.I.1; best-practice (avoid absolute claims in indexed surfaces)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-006
+  surface_id: dp-seo-meta-description
+  lens: legal
+  severity: P1
+  issue: '"Delivery Partner Portal" — "Partner" framing in indexable meta description has gig-worker classification implications; Code on Social Security 2020 distinguishes "gig worker" / "platform worker" from "partner"/"employee" and the public-facing label should align with the binding driver agreement classification'
+  evidence_excerpt: '"Fe3dr Delivery Partner Portal - Manage deliveries, track earnings"'
+  recommendation: 'Confirm driver-agreement classification (independent contractor / platform worker / gig worker). Meta description should use the term that matches the binding contract — "partner" carries quasi-employment connotations in Indian labour law context. Inconsistency with the actual agreement is contractual evidence in disputes.'
+  citation: 'Code on Social Security 2020 §2(35), §2(60) (gig/platform worker definitions); best-practice (contract-public-statement alignment)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-007
+  surface_id: md-meta-003
+  lens: legal
+  severity: P0
+  issue: 'NSCameraUsageDescription "Used to take photos" — fails DPDP §5(a) specific-purpose notice and Apple App Store Review Guideline 5.1.1 (purpose-string clarity). Does not say WHAT photos, for WHAT purpose, WHERE they are sent, or how long retained'
+  evidence_excerpt: '"Used to take photos"'
+  recommendation: 'Rewrite to name (a) the specific in-app action (e.g., "Capture delivery proof-of-handoff photos"), (b) who sees the photo (chef, customer, support), (c) retention duration, and (d) link to privacy policy. The Info.plist string is the DPDP §5 notice moment for camera data collection — terse text is a regulatory gap.'
+  citation: 'DPDP Act 2023 §5(a) and §5(d) (specific purpose, retention notice); Apple App Store Review Guideline 5.1.1; Android Data Safety Section requirements (Play Console policy)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-008
+  surface_id: md-meta-002
+  lens: legal
+  severity: P1
+  issue: 'NSFaceIDUsageDescription "Use Face ID to log in quickly" — biometric purpose string omits DPDP §5(b) processing-detail notice (Face ID template stays on device via Secure Enclave; clarify no biometric data leaves the device)'
+  evidence_excerpt: '"Use Face ID to log in quickly"'
+  recommendation: 'Add the standard "Face ID data stays on your device and is never sent to Fe3dr/HomeChef" reassurance. Biometric data is sensitive personal data under DPDP §2(t) framing; even when Apple keeps it on-device, the data principal needs notice that the platform does not receive it. Reduces consent-quality challenges.'
+  citation: 'DPDP Act 2023 §5(b) (nature/extent of processing); IT(Reasonable Security Practices) Rules 2011 r.3 (sensitive personal data)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-009
+  surface_id: md-meta-004
+  lens: legal
+  severity: P1
+  issue: 'NSLocationWhenInUseUsageDescription names purpose but omits DPDP §5 elements: retention period, third-party sharing (customer app receives driver position in real-time), grievance-officer/right-to-erase reference'
+  evidence_excerpt: '"HomeChef Delivery needs your location to show your position on the delivery map."'
+  recommendation: 'iOS purpose strings have a 175-char practical limit; the standard approach is a short purpose + in-app secondary notice with full DPDP §5 disclosure. Confirm the secondary in-app modal exists, surfaces retention duration, names the customer app as a recipient of the live position, and links to grievance officer contact. If absent, the Info.plist string is the only notice and is insufficient.'
+  citation: 'DPDP Act 2023 §5(a), §5(c) (rights), §5(e) (grievance redressal officer)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-010
+  surface_id: md-meta-005
+  lens: legal
+  severity: P0
+  issue: 'Background-location rationale "tracks your location in the background to keep customers updated on their delivery status" — background tracking is the most sensitive collection moment and the iOS string omits retention period, processing scope (only during active delivery? always?), and DPDP §6 free-revocable-consent reference'
+  evidence_excerpt: '"HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status."'
+  recommendation: 'Resolve four gaps: (1) scope ("only when a delivery is active"), (2) retention ("location pings retained 30/60/90 days for dispute resolution then deleted"), (3) revocation ("you can turn this off in iOS Settings — your active deliveries will pause"), (4) grievance-officer reference for DPDP rights. Background-location processing under DPDP needs §6 free-given, specific, informed consent; the Info.plist string is the consent moment.'
+  citation: 'DPDP Act 2023 §6 (consent quality), §5(a)(d)(e) (purpose, retention, grievance); Apple App Store Review Guideline 5.1.1(iv) (background location justification)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-011
+  surface_id: md-meta-006
+  lens: legal
+  severity: P0
+  issue: 'iOS/Android location-rationale drift — iOS NSLocationAlwaysAndWhenInUseUsageDescription (md-meta-005) and Android locationAlwaysAndWhenInUsePermission (md-meta-006) emit different wording for the same processing activity. DPDP §5 notice must be consistent across the channels through which it is given; divergent wording creates "which notice did the data principal consent to" evidentiary ambiguity'
+  evidence_excerpt: 'iOS: "...tracks your location in the background to keep customers updated on their delivery status." vs Android: "...tracks your location during deliveries to keep customers updated."'
+  recommendation: 'Single canonical purpose string maintained in one config source and synced to both Info.plist and expo-location plugin. Both platforms should read the same text after applying any platform-specific length constraints. Document the canonical version in privacy policy and reference it as the binding notice.'
+  citation: 'DPDP Act 2023 §5 (notice contents) and §6 (consent quality); best-practice (cross-platform notice parity)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-012
+  surface_id: web-seo-app-name
+  lens: legal
+  severity: P2
+  issue: 'No data-fiduciary identification on indexed surfaces — meta `author="Fe3dr"` and og:site_name="Fe3dr" reference a brand name, not the registered legal entity. DPDP §5(i) requires the notice to identify the data fiduciary; the home page is the entry point of the consent journey'
+  evidence_excerpt: 'application-name="Fe3dr", apple-mobile-web-app-title="Fe3dr", og:site_name="Fe3dr"'
+  recommendation: 'Either (a) include legal-entity name in the website footer with a clear "Operated by [Legal Entity Pvt Ltd]" line that DPDP notice can reference, or (b) add the legal entity to og:site_name as "Fe3dr (by [Legal Entity Pvt Ltd])". Meta tags themselves do not need to carry the full entity, but the indexed surface they describe must.'
+  citation: 'DPDP Act 2023 §5(i); CP (E-commerce) Rules 2020 r.5(3) (entity identification)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-013
+  surface_id: ap-seo-meta-description
+  lens: legal
+  severity: P1
+  issue: 'Admin-portal meta description is set even though inventory notes "noindex/nofollow" — if the noindex header/meta is ever misconfigured, the description "Manage users, chefs, orders, and platform analytics" tips off attackers about internal tooling surface'
+  evidence_excerpt: '"Fe3dr Admin Portal - Manage users, chefs, orders, and platform analytics"'
+  recommendation: 'Strip the descriptive meta from the admin portal entirely (set to empty or generic "Restricted"). Combined with noindex this gives defense-in-depth — if noindex fails, the leaked surface still carries no useful signal. Internal-tooling discoverability is best-practice security/legal hygiene under IT Rules 2021 §3 due-diligence.'
+  citation: 'IT Rules 2021 §3 (due diligence); best-practice (defense-in-depth for restricted surfaces)'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-014
+  surface_id: vp-seo-meta-description
+  lens: legal
+  severity: P2
+  issue: '"Manage your kitchen, menus, orders, and earnings" — "earnings" framing in indexable description may set commercial expectation; if vendor portal also surfaces tax obligations (TDS, GST) the public claim should not imply earnings are net'
+  evidence_excerpt: '"Fe3dr Vendor Portal - Manage your kitchen, menus, orders, and earnings"'
+  recommendation: 'Either reframe ("Manage your kitchen, menus, orders, and payouts") or keep "earnings" but ensure the in-app earnings screen clearly states gross-vs-net, TDS deductions, GST handling, and platform fees. Public description sets expectation that the product must meet.'
+  citation: 'CP Rules 2020 §4 (no misleading representation); ASCI Code Ch.I.1; GST Act provisions on supplier disclosure'
+  depends_on: 'needs lawyer review'
+
+- finding_id: LEG-015
+  surface_id: web-seo-og-title
+  lens: legal
+  severity: P2
+  issue: 'OG image `/og-image.png` and Twitter image referenced from indexable meta — if image contains food photography sourced from chefs, ensure consent/license to reuse in marketing surfaces is captured at chef onboarding (image-rights chain)'
+  evidence_excerpt: 'og:image=/og-image.png, twitter:image=/og-image.png'
+  recommendation: 'Confirm whether og-image.png contains photography sourced from onboarded chefs or stock/licensed art. If chef-sourced, chef onboarding T&C must include a marketing-use license; if it is stock, retain license proof. OG image is cached and re-distributed by social platforms — withdrawal is operationally hard, so the up-front license must be solid.'
+  citation: 'Copyright Act 1957 §17, §18 (licensing of works); best-practice (image-rights audit trail)'
+  depends_on: 'needs lawyer review'
+
+# Audit summary
+# - Total findings: 15
+# - P0: 4  (LEG-001 brand-mismatch, LEG-007 camera-string, LEG-010 background-location, LEG-011 iOS/Android drift)
+# - P1: 7  (LEG-002 homemade claim, LEG-003 OG/Twitter echo, LEG-004 catering keyword, LEG-006 partner framing,
+#           LEG-008 Face ID notice, LEG-009 in-use location, LEG-013 admin meta leak)
+# - P2: 4  (LEG-005 absolute tagline, LEG-012 data-fiduciary identification, LEG-014 earnings framing,
+#           LEG-015 og:image rights)
+# - P3: 0
+# - Top surfaces by exposure:
+#     1. md-meta-* (mobile-delivery app.json permission strings) — 5 findings, DPDP §5/§6 notice surface
+#     2. web-seo-* (apps/web/index.html meta tags) — 5 findings, ASCI claim substantiation
+#     3. dp-seo-meta-description, vp-seo-meta-description, ap-seo-meta-description — labour/leak/expectation
+#     4. Cross-app brand-name consistency (Fe3dr vs HomeChef Delivery)
+# - Primary citations relied on:
+#     DPDP Act 2023 §5, §6 (notice + consent quality)
+#     ASCI Code Ch.I.1 (truthful, substantiable claims)
+#     CP Rules 2020 §4 + CP (E-commerce) Rules 2020 r.5 (misleading representation, entity ID)
+#     FSSAI Licensing & Registration Regs 2011 Sch. 2 (catering license)
+#     Code on Social Security 2020 §2(35), §2(60) (gig/platform worker)
+#     Apple App Store Review Guideline 5.1.1 (purpose-string clarity)
+#     IT Rules 2021 §3 (due diligence on restricted surfaces)
+#     Copyright Act 1957 §17, §18 (image-rights chain)

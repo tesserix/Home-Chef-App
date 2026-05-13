@@ -1,0 +1,184 @@
+# Brand Voice findings — help category
+# Lens: brand-voice (cross-app, cross-surface voice consistency)
+# Inputs: STYLE-GUIDE.md, .impeccable.md, CONTENT-INVENTORY.md help slice
+# Surfaces audited: 12 (5 web Otto, 6 delivery-portal, 1 admin-portal)
+
+# ─── P1: Brand-name drift and cross-surface support naming inconsistency ──────
+
+- finding_id: BV-HLP-001
+  surface_id: web-help-otto-launcher
+  lens: brand-voice
+  severity: P1
+  issue: >-
+    Support is exposed under two names on the SAME customer app: the launcher
+    aria-label says 'Open support chat' (generic) while the chat header brands
+    it 'HomeChef support'. The chef-facing message label is 'Otto · AI
+    assistant'. Customers see three names ('support chat', 'HomeChef support',
+    'Otto') for one feature. Brand-voice rule: same concept = one name
+    everywhere.
+  evidence_excerpt: |
+    Launcher: "Open support chat"
+    Header: "HomeChef support chat" / "HomeChef support"
+    Sender label: "Otto · AI assistant"
+  related_surfaces: ["web-help-otto-chat-header", "web-help-otto-sender", "dp-help-status-contact", "dp-help-settings-help"]
+  recommendation: >-
+    Pick one customer-facing name and use it consistently. Recommend dropping
+    'Otto' (internal tool name, not a brand) and using 'Home Chef support'
+    everywhere: launcher 'Open Home Chef support', header 'Home Chef support',
+    sender label 'Home Chef support' or simply 'Support'. Keep 'AI assistant'
+    out of the sender label — it makes the response feel less trustworthy
+    (Rule 1: confident, not loud about being AI).
+  depends_on: null
+
+# ─── P1: Brand-name contradiction across apps (web vs delivery-portal) ────────
+
+- finding_id: BV-HLP-002
+  surface_id: dp-help-status-contact
+  lens: brand-voice
+  severity: P1
+  issue: >-
+    Cross-app brand-name contradiction. The web app brands itself 'HomeChef'
+    in the Otto support chat header, while the delivery-portal footer/support
+    surfaces brand the same platform 'Fe3dr' ('support@fe3dr.com', 'Fe3dr
+    Delivery Portal'). One platform, two names — a driver hitting both apps
+    will not know it is the same company. P1 brand-trust hit on entry surfaces.
+  evidence_excerpt: |
+    web: "HomeChef support"
+    delivery-portal: "Contact us at support@fe3dr.com" + "Fe3dr Delivery Portal"
+  related_surfaces: ["web-help-otto-chat-header", "dp-help-new-driver-body"]
+  recommendation: >-
+    Decide canonical brand name (style guide implies 'Home Chef' two words).
+    Migrate all 'Fe3dr' references — support email, footer labels, body
+    copy — to the canonical brand. If the legal entity is Fe3dr Pvt Ltd,
+    surface it ONLY in legal/footer fine print, never in support copy.
+  depends_on: null
+
+# ─── P2: Title Case banned outside proper nouns (STYLE-GUIDE §5) ──────────────
+
+- finding_id: BV-HLP-003
+  surface_id: dp-help-new-driver
+  lens: brand-voice
+  severity: P2
+  issue: >-
+    'New Driver?' uses Title Case for a non-proper-noun. Style guide enforces
+    sentence case for buttons and labels. Same issue on 'Staff Access', 'Need
+    Help?', 'Help & Support', 'Test Cards'. Five Title Case labels on
+    secondary support surfaces violate the same rule.
+  evidence_excerpt: |
+    "New Driver?"   (LoginPage.tsx:221)
+    "Staff Access"  (LoginPage.tsx:336)
+    "Need Help?"    (OnboardingStatusPage.tsx:169)
+    "Help & Support" + "Get help with your deliveries" (SettingsPage.tsx:38)
+    "Test Cards"    (admin SettingsPage.tsx:362, 652)
+  related_surfaces: ["dp-help-staff-access-title", "dp-help-status-contact", "dp-help-settings-help", "ap-settings-payment-test-cards"]
+  recommendation: >-
+    Rewrite in sentence case: 'New to driving?' / 'Staff access' / 'Need
+    help?' / 'Help and support' / 'Test cards'. Replace the ampersand in
+    'Help & Support' with 'and' to match the style-guide phrasing rules.
+  depends_on: null
+
+# ─── P2: Persona-tone drift — driver copy too verbose (STYLE-GUIDE §2) ────────
+
+- finding_id: BV-HLP-004
+  surface_id: dp-help-new-driver-body
+  lens: brand-voice
+  severity: P2
+  issue: >-
+    Driver-facing help body is 18 words across two sentences. Style-guide
+    persona matrix caps driver copy at ≤4 words where possible, and otherwise
+    crisp telegraphic phrasing. 'You'll go through a quick onboarding process
+    to start delivering' is conversational customer-tone copy living in a
+    driver surface.
+  evidence_excerpt: >-
+    "Sign up with your email or Google account. You'll go through a quick
+    onboarding process to start delivering."
+  related_surfaces: ["dp-help-staff-access-body"]
+  recommendation: >-
+    Rewrite for driver tone: 'Sign up with email or Google. Quick onboarding,
+    then you start delivering.' (15 words → 11 words; two short sentences).
+    Or shorter still: 'Sign up. Quick onboarding. Start delivering.'
+  depends_on: null
+
+- finding_id: BV-HLP-005
+  surface_id: dp-help-staff-access-body
+  lens: brand-voice
+  severity: P2
+  issue: >-
+    Same persona-tone drift as BV-HLP-004 on the staff-access help card. 17
+    words, conversational, with bureaucratic phrasing ('pre-authorized fleet
+    managers and delivery operations staff'). Audience here is admin/staff, so
+    persona is 'precise operator', not delivery driver — but copy is still
+    over-stuffed and breaks Rule 2 (plain English over jargon).
+  evidence_excerpt: >-
+    "Only pre-authorized fleet managers and delivery operations staff can
+    sign in here. Contact an admin for access."
+  related_surfaces: ["dp-help-new-driver-body"]
+  recommendation: >-
+    'Staff sign-in is invite-only. Ask an admin if you need access.' (12
+    words, plain English, no 'pre-authorized'/'delivery operations staff'
+    SaaS-speak).
+  depends_on: null
+
+# ─── P2: Empty / placeholder microcopy ('Connecting...') ───────────────────────
+
+- finding_id: BV-HLP-006
+  surface_id: web-help-otto-input
+  lens: brand-voice
+  severity: P2
+  issue: >-
+    'Connecting...' as the message-input placeholder is bland infrastructure
+    chatter that violates Rule 1 ('confident, not loud' includes 'confident,
+    not whiny about plumbing'). Customers do not need to be told the
+    WebSocket is reconnecting in the input field. Same generic
+    'Connecting...' also appears as the send-button disabled label —
+    duplicated, redundant.
+  evidence_excerpt: |
+    placeholder: "Connecting..."
+    send-button: "Connecting..."
+  related_surfaces: ["web-help-otto-chat-header"]
+  recommendation: >-
+    Use a calm, branded placeholder regardless of socket state ('Ask Home
+    Chef support'). Surface connection state only via the send button being
+    disabled with a small spinner — no copy needed. If a status string is
+    required, use 'Reconnecting' (no ellipsis, the spinner is the affordance).
+  depends_on: null
+
+# ─── P3: Capitalization drift on Otto sender label ────────────────────────────
+
+- finding_id: BV-HLP-007
+  surface_id: web-help-otto-sender
+  lens: brand-voice
+  severity: P3
+  issue: >-
+    Two sender labels appear back-to-back: 'Otto · AI assistant' (humanised
+    bot name) and 'Support' (generic). Same chat thread, two voices. Even if
+    'Otto' is kept (see BV-HLP-001), 'AI assistant' should be sentence-cased
+    only and never paired with a separate 'Support' label — pick one.
+  evidence_excerpt: "Otto · AI assistant / Support"
+  related_surfaces: ["web-help-otto-launcher", "web-help-otto-chat-header"]
+  recommendation: >-
+    Single sender label per side of the conversation: 'Home Chef support' for
+    inbound, 'You' for the customer. Drop 'Otto · AI assistant' entirely or
+    move to a one-time disclosure ('You are chatting with an AI assistant.
+    Type "human" to reach a person.') above the input.
+  depends_on: null
+
+# ─── P3: Punctuation / style on Otto empty-state prompt ───────────────────────
+
+- finding_id: BV-HLP-008
+  surface_id: web-help-otto-empty
+  lens: brand-voice
+  severity: P3
+  issue: >-
+    Em-dash separator + comma-separated topic list ('Ask anything — order
+    status, delivery, refunds, chef availability.') is fine in body copy but
+    feels marketing-y as an empty-state prompt. Style-guide empty-state
+    formula is 'Why it's empty → One action.' The current copy skips the
+    'why' and lists four scopes — closer to a hero subtitle.
+  evidence_excerpt: "Ask anything — order status, delivery, refunds, chef availability."
+  related_surfaces: []
+  recommendation: >-
+    Match the empty-state formula: 'No messages yet. Ask about an order,
+    delivery, refund, or chef.' Two short sentences, no em-dash, action verb
+    leads.
+  depends_on: null

@@ -1,0 +1,163 @@
+# Brand Voice findings — seo-meta category
+# Lens: brand-voice (cross-app, cross-surface voice consistency)
+# Inputs: STYLE-GUIDE.md, .impeccable.md, CONTENT-INVENTORY.md seo-meta slice (27 rows)
+
+# ─── P0: Cross-surface brand-name contradiction (worst breaks platform trust) ──
+
+- finding_id: BV-SEO-001
+  surface_id: md-meta-001
+  lens: brand-voice
+  severity: P0
+  issue: "Brand-name fork between web and mobile: every web surface and OG/Twitter card says 'Fe3dr', the mobile-delivery app store name and all four iOS/Android permission prompts say 'HomeChef Delivery'. Same product, two brands — customers, drivers, and reviewers see different names in the App Store vs the web landing."
+  evidence_excerpt: "\"name\": \"HomeChef Delivery\" (app.json) vs <meta name=\"application-name\" content=\"Fe3dr Delivery\" /> (apps/delivery-portal/index.html)"
+  related_surfaces: ["md-meta-002", "md-meta-003", "md-meta-004", "md-meta-005", "md-meta-006", "dp-seo-apple-title", "dp-seo-app-name", "dp-seo-html-title", "dp-seo-meta-description", "web-seo-app-name", "web-seo-og-title", "web-seo-twitter-title", "web-seo-html-title", "vp-seo-html-title", "vp-seo-og-title", "ap-seo-meta-title"]
+  recommendation: "Pick one brand name and apply it everywhere. If 'Fe3dr' is the live brand (web + portals + production domains fe3dr.com all use it), rename the Expo app to 'Fe3dr Delivery', update slug/scheme to fe3dr-delivery, rewrite all four Info.plist + expo-location rationale strings to start with 'Fe3dr Delivery' instead of 'HomeChef Delivery'. Cross-surface naming consistency is Rule-0 for brand trust."
+  depends_on: null
+
+- finding_id: BV-SEO-002
+  surface_id: md-meta-004
+  lens: brand-voice
+  severity: P0
+  issue: "iOS permission rationale strings hardcode the wrong brand ('HomeChef Delivery') on a safety-critical surface (foreground + background location). The first sentence a driver reads in the iOS permission sheet contradicts the Fe3dr brand they signed up under."
+  evidence_excerpt: "\"HomeChef Delivery needs your location to show your position on the delivery map.\" / \"HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.\""
+  related_surfaces: ["md-meta-005", "md-meta-006", "dp-seo-meta-description"]
+  recommendation: "Rewrite to: 'Fe3dr Delivery shows your position on the delivery map.' / 'Fe3dr Delivery shares your location with the customer so they can track their order in progress.' Same brand name as the rest of the product, plain English, no possessive 'your … your' stacking."
+  depends_on: BV-SEO-001
+
+# ─── P1: Persona-tone violation on entry SEO surfaces ─────────────────────────
+
+- finding_id: BV-SEO-003
+  surface_id: web-seo-meta-description
+  lens: brand-voice
+  severity: P1
+  issue: "Customer landing meta description uses 'authentic homemade food' — a faux-artisanal trigger word the style guide explicitly bans (alongside 'artisanal', 'handcrafted with love'). 'Authentic' on a customer SERP snippet reads like terracotta-era marketing copy that survived the migration."
+  evidence_excerpt: "Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"
+  related_surfaces: ["web-seo-og-description", "web-seo-twitter-description"]
+  recommendation: "Drop 'authentic'. Rewrite: 'Order home-cooked food from chefs near you. Delivered fresh, from kitchens around the corner.' Confident · Appetizing · Quietly modern — no artisanal trigger words."
+  depends_on: null
+
+- finding_id: BV-SEO-004
+  surface_id: web-seo-og-description
+  lens: brand-voice
+  severity: P1
+  issue: "OG/Twitter card description is identical to the meta description and carries the same 'authentic homemade' artisanal trigger. Social-share cards are the highest-leverage brand surface (every share = a brand impression) and they currently read as legacy marketing copy."
+  evidence_excerpt: "Connect with home chefs for authentic homemade food delivered to your doorstep"
+  related_surfaces: ["web-seo-meta-description", "web-seo-twitter-description"]
+  recommendation: "Rewrite OG/Twitter description distinct from meta-description (search vs share is a different read context). Suggested: 'Home-cooked food from chefs near you. Browse menus, order, and track delivery.' Plain, action-led, no 'authentic'."
+  depends_on: BV-SEO-003
+
+- finding_id: BV-SEO-005
+  surface_id: web-seo-og-title
+  lens: brand-voice
+  severity: P1
+  issue: "OG/Twitter/document title uses Title Case ('Fe3dr - Homemade Food Delivered'). Style guide §4 requires sentence case for buttons and labels and bans Title Case 'outside of proper nouns'. Title tag is the loudest brand voice surface on web; Title Case here reads as 2018-era SEO copy, not 2026 confident-restraint."
+  evidence_excerpt: "Fe3dr - Homemade Food Delivered"
+  related_surfaces: ["web-seo-twitter-title", "web-seo-html-title"]
+  recommendation: "Rewrite in sentence case: 'Fe3dr — home-cooked food delivered'. Use em-dash (—), not hyphen, between brand and tagline (typographic convention). Tagline reads as a calm statement, not a SERP keyword stuffing."
+  depends_on: null
+
+# ─── P1: Cross-app voice drift — same product surface, four different tones ───
+
+- finding_id: BV-SEO-006
+  surface_id: vp-seo-meta-description
+  lens: brand-voice
+  severity: P1
+  issue: "The four portal meta descriptions are written in four different voices: customer ('Connect with home chefs for authentic homemade food'), vendor ('Manage your kitchen, menus, orders, and earnings'), delivery ('Manage deliveries, track earnings'), admin ('Manage users, chefs, orders, and platform analytics'). The vendor and admin descriptions read as four-item Oxford-comma lists; the delivery one drops the comma; the customer one is a marketing sentence. No shared sentence template across the brand."
+  evidence_excerpt: "Fe3dr Vendor Portal - Manage your kitchen, menus, orders, and earnings"
+  related_surfaces: ["dp-seo-meta-description", "ap-seo-meta-description", "web-seo-meta-description"]
+  recommendation: "Pick one template per persona surface. Suggested: '{Brand} {Portal}. {Verb-phrase for the persona's primary job}.' e.g., 'Fe3dr for chefs. Run your kitchen — menus, orders, payouts.' / 'Fe3dr for drivers. Pick up, deliver, get paid.' / 'Fe3dr for admins. Users, chefs, orders, analytics.' Period after brand, single primary verb, no Oxford-comma list of unrelated nouns."
+  depends_on: null
+
+- finding_id: BV-SEO-007
+  surface_id: dp-seo-meta-description
+  lens: brand-voice
+  severity: P1
+  issue: "Inventory itself flags drift: meta description says 'Delivery Partner Portal' but the apple-mobile-web-app-title says 'Fe3dr Delivery'. Style guide vocabulary section: customer-facing 'Delivery partner', driver-facing 'Driver'. The delivery portal IS driver-facing, so 'Delivery Partner Portal' is the wrong register entirely — it's the customer-facing euphemism leaking into the driver's own product."
+  evidence_excerpt: "Fe3dr Delivery Partner Portal - Manage deliveries, track earnings"
+  related_surfaces: ["dp-seo-apple-title", "dp-seo-app-name", "dp-seo-html-title"]
+  recommendation: "Pick driver-facing register everywhere on the driver portal: 'Fe3dr for drivers — pick-ups, deliveries, payouts.' Drop 'Partner Portal' (it's both wrong-persona and bureaucratic). Driver tone per style guide §2 = telegraphic, imperative, ≤4 words where possible."
+  depends_on: null
+
+# ─── P2: AI-slop SEO copy patterns ────────────────────────────────────────────
+
+- finding_id: BV-SEO-008
+  surface_id: web-seo-meta-keywords
+  lens: brand-voice
+  severity: P2
+  issue: "The customer meta keywords tag ('home chef, food delivery, homemade food, local chef, catering') is the textbook AI-slop SEO pattern Google has ignored since ~2009. It also lists 'catering' which is not a product surface in the inventory. Keeping it ships a signal that the brand still believes in 2009 SEO theatre."
+  evidence_excerpt: "home chef, food delivery, homemade food, local chef, catering"
+  related_surfaces: ["vp-seo-meta-keywords"]
+  recommendation: "Delete the <meta name=\"keywords\"> tag entirely from web and vendor-portal index.html. Google has ignored it for 15+ years, Bing for nearly as long; keeping it just ships clutter and reads as low-confidence SEO. Style guide Rule 1 — confident, not loud."
+  depends_on: null
+
+- finding_id: BV-SEO-009
+  surface_id: vp-seo-meta-keywords
+  lens: brand-voice
+  severity: P2
+  issue: "Vendor portal keywords ('vendor portal, home chef, kitchen management, food business, menu management') compounds the same AI-slop SEO pattern AND uses 'vendor' as a customer-facing keyword. Style guide explicitly bans 'Vendor' customer-facing ('Home chef' ✅ / 'Vendor' ❌); shipping it as a search keyword publishes the wrong word to crawlers."
+  evidence_excerpt: "vendor portal, home chef, kitchen management, food business, menu management"
+  related_surfaces: ["web-seo-meta-keywords"]
+  recommendation: "Delete the meta keywords tag. If keeping for legacy reasons (don't), at minimum strip 'vendor portal' and 'food business' — both are anti-brand vocabulary from the style-guide banned list / wrong-persona register."
+  depends_on: BV-SEO-008
+
+- finding_id: BV-SEO-010
+  surface_id: md-meta-003
+  lens: brand-voice
+  severity: P2
+  issue: "NSCameraUsageDescription is two words ('Used to take photos') with no subject, no context, no brand. Inventory itself flags as 'VERY terse; P1 candidate'. Two words on a permission sheet reads as a placeholder a developer typed in 30 seconds, not as the brand."
+  evidence_excerpt: "Used to take photos"
+  related_surfaces: ["md-meta-002"]
+  recommendation: "Rewrite consistent with the location strings: 'Fe3dr Delivery uses the camera so you can take a proof-of-delivery photo at drop-off.' Subject + action + reason. Same template across all NS*UsageDescription strings so the four prompts read as one brand voice."
+  depends_on: BV-SEO-001
+
+- finding_id: BV-SEO-011
+  surface_id: md-meta-005
+  lens: brand-voice
+  severity: P2
+  issue: "Background-location rationale is also wordy and possessive-heavy: 'HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.' Three 'your/their' in one sentence, plus 'tracks' (surveillance vocabulary) where 'shares with the customer' is the actual intent. Driver voice per style guide §2 is telegraphic; this is the opposite."
+  evidence_excerpt: "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status."
+  related_surfaces: ["md-meta-004", "md-meta-006"]
+  recommendation: "Rewrite shorter and reframed: 'Fe3dr Delivery shares your location with the customer so they can see when you're nearby.' Reframes from 'tracking' (creepy) to 'sharing with the customer' (consensual + customer-positive). Same Fe3dr brand name as the rest of the product."
+  depends_on: BV-SEO-001
+
+- finding_id: BV-SEO-012
+  surface_id: md-meta-006
+  lens: brand-voice
+  severity: P2
+  issue: "expo-location plugin Android rationale ('tracks your location during deliveries to keep customers updated') differs from the iOS Info.plist string ('tracks your location in the background to keep customers updated on their delivery status'). Inventory flags this drift explicitly. Same permission, same product, two slightly different sentences — Android and iOS users see different brand voices for the same consent."
+  evidence_excerpt: "HomeChef Delivery tracks your location during deliveries to keep customers updated."
+  related_surfaces: ["md-meta-005"]
+  recommendation: "Use the same string across iOS Info.plist and the expo-location plugin Android rationale (the rewritten version from BV-SEO-011): 'Fe3dr Delivery shares your location with the customer so they can see when you're nearby.' Single source of truth for permission rationale across platforms."
+  depends_on: BV-SEO-011
+
+# ─── P3: Duplicate / minor punctuation drift ──────────────────────────────────
+
+- finding_id: BV-SEO-013
+  surface_id: dp-seo-html-title
+  lens: brand-voice
+  severity: P3
+  issue: "<title>Fe3dr Delivery</title> is duplicated twice in apps/delivery-portal/index.html (line 24 and line 32). Browser uses the last one, but search-engine crawlers and HTML validators flag duplicate <title> as malformed head. Inventory notes the duplication."
+  evidence_excerpt: "<title>Fe3dr Delivery</title> ... <title>Fe3dr Delivery</title>"
+  related_surfaces: []
+  recommendation: "Delete the duplicate <title> on line 32 of apps/delivery-portal/index.html. Same drift exists in apps/admin-portal/index.html (lines 38 and 43) — delete the line-43 duplicate there too. Single <title> per document is HTML5 spec."
+  depends_on: null
+
+- finding_id: BV-SEO-014
+  surface_id: ap-seo-meta-title
+  lens: brand-voice
+  severity: P3
+  issue: "Duplicate <title>Fe3dr Admin</title> tag also exists in apps/admin-portal/index.html (lines 38 and 43). Same defect as BV-SEO-013 — appears to be a copy-paste from the no-flash theme bootstrap block accidentally including the title."
+  evidence_excerpt: "<title>Fe3dr Admin</title> (line 38) ... <title>Fe3dr Admin</title> (line 43)"
+  related_surfaces: ["dp-seo-html-title"]
+  recommendation: "Delete the duplicate <title> on line 43 of apps/admin-portal/index.html."
+  depends_on: BV-SEO-013
+
+- finding_id: BV-SEO-015
+  surface_id: web-seo-og-title
+  lens: brand-voice
+  severity: P3
+  issue: "All title-line constructions use ASCII hyphen ' - ' between brand and tagline ('Fe3dr - Homemade Food Delivered', 'Fe3dr Vendor Portal -', 'Fe3dr Delivery Partner Portal -', 'Fe3dr Admin Portal -'). Editorial-luxury brand voice per .impeccable.md and the new design system uses em-dash (—) for typographic separators. Hyphen reads as developer-default; em-dash reads as intentional."
+  evidence_excerpt: "Fe3dr - Homemade Food Delivered"
+  related_surfaces: ["web-seo-meta-description", "web-seo-twitter-title", "web-seo-html-title", "vp-seo-meta-description", "dp-seo-meta-description", "ap-seo-meta-description"]
+  recommendation: "Replace ' - ' with ' — ' (em-dash with hairspaces) in every title and meta-description across all four portal index.html files. Small detail, but the typographic separator is one of the loudest brand-voice signals on web."
+  depends_on: null

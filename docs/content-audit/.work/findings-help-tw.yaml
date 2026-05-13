@@ -1,0 +1,169 @@
+# Technical Writer lens findings — help category
+# Auditor: TW lens agent
+# Date: 2026-05-13
+# Style guide: docs/content-audit/STYLE-GUIDE.md
+# Brief: docs/content-audit/lens-briefs/technical-writer.md
+#
+# Scope note: This category has 12 inventoried rows. Five rows
+# (web-help-otto-*) reference strings that no longer live in this repo —
+# OttoChat.tsx was refactored to a thin wrapper around the canonical
+# @tesserix/otto-widget package (slm-support-platform). Those strings now
+# live in that external widget. We flag this as a cross-cutting issue
+# (TW-001) rather than per-string findings the HomeChef team can't fix in
+# this repo. The remaining 7 rows (delivery-portal + admin-portal) are
+# audited string-by-string.
+
+findings:
+
+  # ===========================================================
+  # WEB — Otto support chat (now external widget)
+  # ===========================================================
+
+  - finding_id: TW-001
+    surface_id: web-help-otto-launcher
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory captures aria-label and chat strings at lines 146-260 of OttoChat.tsx, but the file is now 47 lines — a thin wrapper around @tesserix/otto-widget. All Otto chat copy ('Open support chat', 'HomeChef support chat', 'Connecting...', 'Ask anything — order status, delivery, refunds, chef availability.', 'Otto · AI assistant', 'Type a message...', 'Send message') is owned by the external widget package, not this repo. TW findings on those rows must be filed against slm-support-platform, not HomeChef."
+    evidence_excerpt: "OttoChat.tsx is now 47 lines wrapping <OttoWidget apiBaseUrl=\"/api/otto\" productName=\"HomeChef Support\" .../>"
+    recommendation: "Update CONTENT-INVENTORY.md to mark web-help-otto-* rows as 'external — @tesserix/otto-widget' and route TW review to the widget repo. The only HomeChef-owned string is productName=\"HomeChef Support\" passed as a prop. Style-guide says 'HomeChef' should be one word (already correct) — no rewrite needed here, but confirm widget renders 'HomeChef Support' as a heading vs label."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-help-otto-empty
+    lens: technical-writer
+    severity: P3
+    issue: "Empty-state copy 'Ask anything — order status, delivery, refunds, chef availability.' (owned by external widget, see TW-001) follows style-guide empty-state formula well — concise, plain, action-oriented. Borderline 'Ask anything' could be read as overpromising (the bot is scoped). If/when widget copy is audited, tighten to set realistic scope."
+    evidence_excerpt: "Ask anything — order status, delivery, refunds, chef availability."
+    recommendation: "Forwarded suggestion for widget owner: 'Ask Otto about your order, delivery, refunds, or a chef.' Sets persona name and tightens scope. Non-blocking for HomeChef repo."
+    depends_on: TW-001
+
+  - finding_id: TW-003
+    surface_id: web-help-otto-input
+    lens: technical-writer
+    severity: P3
+    issue: "Loading-state 'Connecting...' uses three ASCII dots, not Unicode ellipsis. Same drift flagged on auth surfaces (TW-003 in findings-auth-tw.yaml). Owned by external widget — track for widget audit."
+    evidence_excerpt: "Connecting..."
+    recommendation: "Forwarded suggestion for widget owner: 'Connecting…' (single Unicode U+2026). Non-blocking for HomeChef repo."
+    depends_on: TW-001
+
+  # ===========================================================
+  # DELIVERY-PORTAL — Login help cards
+  # ===========================================================
+
+  - finding_id: TW-004
+    surface_id: dp-help-new-driver
+    lens: technical-writer
+    severity: P2
+    issue: "Title 'New Driver?' uses Title Case + interrogative tone on what is a labeled info card, not a question prompt. Style guide §4 form labels: 'noun, sentence case, no colons'. Driver tone matrix calls for telegraphic ≤4 words. 'New Driver?' is a teaser pattern (chatty, marketing) — out of voice for the driver persona who skims login. Inconsistent with sibling card 'Staff Access' which uses Title Case noun, no question mark."
+    evidence_excerpt: "New Driver?"
+    recommendation: "'New driver' (sentence case, no question mark) to match the operational label pattern. If a question framing is intentional to invite signup, replace with 'Need to sign up?' — but the simpler label is more on-voice."
+    depends_on: null
+
+  - finding_id: TW-005
+    surface_id: dp-help-new-driver-body
+    lens: technical-writer
+    severity: P2
+    issue: "Body sentence is 18 words — driver persona max is 12 per style-guide §2 tone matrix. Compound construction ('Sign up with your email or Google account. You'll go through a quick onboarding process to start delivering.') buries the call-to-action behind procedural framing. 'Quick onboarding process' is vague filler — what does 'quick' mean to a driver? Banned-list adjacent (urgency-ish without being literal urgency)."
+    evidence_excerpt: "Sign up with your email or Google account. You'll go through a quick onboarding process to start delivering."
+    recommendation: "'Sign up with email or Google. Onboarding takes about 10 minutes.' (15 words, two crisp sentences, concrete time anchor instead of 'quick'). If true onboarding duration is unknown, drop sentence two and stop at 'Sign up with email or Google to start delivering.' (10 words)."
+    depends_on: null
+
+  - finding_id: TW-006
+    surface_id: dp-help-staff-access-title
+    lens: technical-writer
+    severity: P2
+    issue: "Title Case 'Staff Access' violates style-guide §4: 'noun, sentence case'. Same pattern as the customer-facing 'Sign In' / 'Sign Up' Title Case drift flagged elsewhere. Driver/admin audience accepts terse, but sentence case is the system rule."
+    evidence_excerpt: "Staff Access"
+    recommendation: "'Staff access' (sentence case). Apply identically to sibling 'New Driver' card title for consistency."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: dp-help-staff-access-body
+    lens: technical-writer
+    severity: P2
+    issue: "Body is 17 words — over the 12-word ceiling for driver-facing copy. While 'Staff Access' audience is technically admin (per inventory), the surface is rendered inside the driver-portal LoginPage and competes with the driver card for the same scannable space — driver tone applies. 'Pre-authorized' is jargon for a driver-side reader and hyphenated unnecessarily; 'fleet managers and delivery operations staff' is a noun stack that's hard to parse at a glance. 'Contact an admin' is also vague — which admin? How?"
+    evidence_excerpt: "Only pre-authorized fleet managers and delivery operations staff can sign in here. Contact an admin for access."
+    recommendation: "'For approved fleet and ops staff. Ask your manager for access.' (12 words). If contact channel is known (email, Slack), name it: 'For approved fleet and ops staff. Email ops@fe3dr.com for access.'"
+    depends_on: null
+
+  # ===========================================================
+  # DELIVERY-PORTAL — Onboarding status + settings
+  # ===========================================================
+
+  - finding_id: TW-008
+    surface_id: dp-help-status-contact
+    lens: technical-writer
+    severity: P2
+    issue: "Title 'Need Help?' (Title Case + question mark) again breaks sentence-case noun rule. Question framing on a help label is the same chatty pattern flagged in TW-004. Also: 'Contact us at support@fe3dr.com' uses the @fe3dr.com domain, which is inconsistent with HomeChef branding elsewhere in copy ('HomeChef support', etc.). Either the support domain is wrong or HomeChef brand is rendered through fe3dr — flag for product owner."
+    evidence_excerpt: "Need Help? / Contact us at support@fe3dr.com"
+    recommendation: "Title: 'Need help' (sentence case, no question mark) or 'Support' (single-word telegraphic label, matches driver tone). Body: 'Email support@fe3dr.com.' (3 words, period, verb-first). Separately: confirm support@fe3dr.com is the correct customer-facing address vs a HomeChef-branded one — out of TW scope to decide, but flag."
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: dp-help-settings-help
+    lens: technical-writer
+    severity: P2
+    issue: "Title 'Help & Support' uses Title Case (style-guide §4 requires sentence case). Also redundant — 'Help' and 'Support' are synonyms in this context. Body 'Get help with your deliveries' is acceptable but generic; a driver tapping this row already knows it's about deliveries. 6-word ceiling is fine."
+    evidence_excerpt: "Help & Support / Get help with your deliveries"
+    recommendation: "Title: 'Support' (single word, sentence case, telegraphic — matches driver tone). Body: 'Contact the ops team.' or remove body entirely; the icon + label carry it."
+    depends_on: null
+
+  - finding_id: TW-010
+    surface_id: dp-help-settings-help
+    lens: technical-writer
+    severity: P3
+    issue: "Inconsistency: settings row title 'Help & Support' (Title Case, ampersand) vs status-page title 'Need Help?' (Title Case, question, no ampersand) vs the row's own sibling 'Privacy & Security' (also Title Case + ampersand). Same concept ('get help') is named three different ways across the driver portal."
+    evidence_excerpt: "Help & Support / Need Help? / Privacy & Security"
+    recommendation: "Pick one label and apply consistently. Recommended: 'Support' for the row, 'Support' for the contact card on status page. 'Privacy & Security' should also become 'Privacy and security' (sentence case, no ampersand) but that's out of help-category scope — file under settings audit."
+    depends_on: TW-009
+
+  # ===========================================================
+  # ADMIN-PORTAL — Payment sandbox helper labels
+  # ===========================================================
+
+  - finding_id: TW-011
+    surface_id: ap-settings-payment-test-cards
+    lens: technical-writer
+    severity: P2
+    issue: "Section label 'Test Cards' is Title Case (violates §4 sentence-case rule for labels). Brand names (Visa, Mastercard, UPI) are correctly cased — those are proper nouns, exempt. '3D Secure' is a feature/standard name (also proper-noun-ish, retain). The issue is the section header only."
+    evidence_excerpt: "Test Cards"
+    recommendation: "'Test cards' (sentence case). Tiny fix; appears twice in SettingsPage.tsx (line 362 and 652) — change both."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: ap-settings-payment-test-cards
+    lens: technical-writer
+    severity: P3
+    issue: "Missing helper text. 'Test cards' label drops the user into a list of card numbers with no context for what they do, whether to copy them, or which payment mode they apply to. Admin tone allows precision — add one helper line."
+    evidence_excerpt: "Test Cards / Visa 4111 1111 1111 1111 ..."
+    recommendation: "Add helper under the section header: 'Use these card numbers to test payments in sandbox mode. Any future expiry and any 3-digit CVV will work.' (Adjust to match actual gateway behavior — confirm with engineering before shipping.)"
+    depends_on: TW-011
+
+# ===========================================================
+# Summary
+# ===========================================================
+# Total findings: 12
+# By severity:
+#   P0: 0
+#   P1: 0
+#   P2: 8  (TW-004, TW-005, TW-006, TW-007, TW-008, TW-009, TW-011 — plus TW-010 borderline)
+#   P3: 4  (TW-001, TW-002, TW-003, TW-010, TW-012 — adjusted: TW-010/TW-012 are P3, total P3 = 5)
+# Recount:
+#   P2: 7  (TW-004, TW-005, TW-006, TW-007, TW-008, TW-009, TW-011)
+#   P3: 5  (TW-001, TW-002, TW-003, TW-010, TW-012)
+#
+# Top issues:
+#   1. Title Case drift on labels/headings (TW-004, TW-006, TW-008, TW-009, TW-011)
+#      — five separate violations of style-guide §4 'sentence case, no colons'.
+#      Same root cause as Title Case findings in auth/settings categories.
+#   2. Driver-tone length violations (TW-005, TW-007)
+#      — body copy at 17-18 words against a 12-word ceiling. Both are info-card
+#      blurbs on the driver login page.
+#   3. Otto chat copy is now externalized (TW-001/2/3)
+#      — five inventory rows point at strings that no longer live in this repo.
+#      Inventory needs updating; TW review of those strings belongs in
+#      slm-support-platform / @tesserix/otto-widget.
+#   4. Inconsistency in 'support/help' labeling (TW-010)
+#      — three different names for the same concept inside one app.
+#   5. Missing helper text on payment sandbox section (TW-012)
+#      — admin needs context for the test-card numbers.

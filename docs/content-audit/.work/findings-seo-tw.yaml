@@ -1,0 +1,264 @@
+findings:
+  # ============================================================
+  # WITHIN-SURFACE VOICE DRIFT & BANNED VOCABULARY
+  # (Sec 1-3 of style guide)
+  # ============================================================
+  - finding_id: TW-001
+    surface_id: web-seo-meta-description
+    lens: technical-writer
+    severity: P2
+    issue: "Voice drift: 'authentic homemade food delivered to your doorstep' uses two filler/cliché phrases ('authentic', 'delivered to your doorstep') that read as generic food-app boilerplate and violate Rule 3 (chrome-light, supports the photo) and Rule 5 (restraint). 'Authentic' is also adjacent to the banned 'artisanal' family — both signal craft-washing the style guide explicitly avoids."
+    evidence_excerpt: "Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Rewrite to confident-not-loud, customer-warmer voice: 'Order homemade food from chefs cooking near you. Same-day pickup and delivery.' Trims the kitsch, keeps SEO keywords (homemade, chefs, delivery), and uses sensory verbs ('cooking', 'pickup')."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-seo-og-description
+    lens: technical-writer
+    severity: P2
+    issue: "Same 'authentic homemade food delivered to your doorstep' filler as meta description, repeated in OG and Twitter cards. Brand-drift adjacent vocabulary on the surface seen most by social sharers."
+    evidence_excerpt: "Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Match the rewritten meta description so all SEO surfaces share one voice: 'Order homemade food from chefs cooking near you.' Drop 'authentic' and 'doorstep'."
+    depends_on: TW-001
+
+  - finding_id: TW-003
+    surface_id: web-seo-twitter-description
+    lens: technical-writer
+    severity: P2
+    issue: "Identical filler copy as OG and meta description. Same banned-adjacent vocabulary on the Twitter share card."
+    evidence_excerpt: "Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Match unified rewrite from TW-001. One SEO description, used across meta/OG/Twitter, all dynamic from one source string."
+    depends_on: TW-001
+
+  - finding_id: TW-004
+    surface_id: web-seo-meta-description
+    lens: technical-writer
+    severity: P3
+    issue: "Verb 'Connect with' is vague and SaaS-flavoured ('connect' is what dating apps and LinkedIn say). Style guide Customer tone is suggestive/sensory ('Discover', 'Try', 'Order'), not transactional/networking."
+    evidence_excerpt: "Connect with home chefs..."
+    recommendation: "Replace 'Connect with' with a food-verb: 'Order from', 'Discover', 'Eat from'. Customer tone matrix example: 'Discover chefs cooking in your neighborhood.'"
+    depends_on: TW-001
+
+  # ============================================================
+  # SEO LENGTH & FORMAT ISSUES
+  # (50-60 char title, 150-160 char meta description, OG completeness)
+  # ============================================================
+  - finding_id: TW-005
+    surface_id: web-seo-html-title
+    lens: technical-writer
+    severity: P2
+    issue: "<title> is 31 characters — well below the 50-60 char SEO sweet spot. Wastes SERP real estate on the primary customer-facing entry surface."
+    evidence_excerpt: "Fe3dr - Homemade Food Delivered"
+    recommendation: "Lengthen to 50-60 chars while keeping editorial restraint: 'Fe3dr — Homemade Food from Local Chefs, Delivered' (52 chars) or 'Fe3dr — Order Homemade Food from Chefs Near You' (49 chars)."
+    depends_on: null
+
+  - finding_id: TW-006
+    surface_id: web-seo-meta-description
+    lens: technical-writer
+    severity: P2
+    issue: "Meta description is 88 characters — below the 150-160 char SEO target. Truncated value on the highest-traffic public surface; loses keyword density and CTR opportunity."
+    evidence_excerpt: "Fe3dr - Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Extend to 150-160 chars while fixing voice: 'Order homemade food from chefs cooking in your neighborhood. Browse menus, schedule pickup or delivery, and pay securely on Fe3dr.' (~155 chars)."
+    depends_on: TW-001
+
+  - finding_id: TW-007
+    surface_id: web-seo-og-title
+    lens: technical-writer
+    severity: P3
+    issue: "OG title (31 chars) is shorter than the recommended 60-90 char OG sweet spot. Social previews under-utilise the headline slot."
+    evidence_excerpt: "Fe3dr - Homemade Food Delivered"
+    recommendation: "Match the rewritten <title> so both stay in sync: 'Fe3dr — Homemade Food from Local Chefs, Delivered'."
+    depends_on: TW-005
+
+  - finding_id: TW-008
+    surface_id: web-seo-og-description
+    lens: technical-writer
+    severity: P3
+    issue: "OG description is 78 chars; recommended is 100-200 chars for richer social previews. Currently truncated value."
+    evidence_excerpt: "Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Extend to 150-200 chars in parallel with TW-006: 'Order homemade food from chefs cooking in your neighborhood. Browse menus, schedule pickup or delivery, and pay securely on Fe3dr.'"
+    depends_on: TW-006
+
+  - finding_id: TW-009
+    surface_id: web-seo-twitter-title
+    lens: technical-writer
+    severity: P3
+    issue: "Twitter title 31 chars — below 70 char Twitter card limit. Same under-utilisation as OG title."
+    evidence_excerpt: "Fe3dr - Homemade Food Delivered"
+    recommendation: "Match unified rewritten title from TW-005."
+    depends_on: TW-005
+
+  - finding_id: TW-010
+    surface_id: web-seo-twitter-description
+    lens: technical-writer
+    severity: P3
+    issue: "Twitter description 78 chars — Twitter allows up to ~200 chars. Same under-utilisation."
+    evidence_excerpt: "Connect with home chefs for authentic homemade food delivered to your doorstep"
+    recommendation: "Match unified rewritten description from TW-006."
+    depends_on: TW-006
+
+  # ============================================================
+  # CROSS-SURFACE INCONSISTENCY (Sec 3 — same concept, different name)
+  # ============================================================
+  - finding_id: TW-011
+    surface_id: md-meta-001
+    lens: technical-writer
+    severity: P1
+    issue: "Brand-name drift: mobile-delivery app.json displays 'HomeChef Delivery' as the iOS/Android app name, while every other surface (web, vendor, delivery web portal, admin) uses 'Fe3dr'. Customers/drivers installing the app see a different brand than the marketing surfaces."
+    evidence_excerpt: "\"name\": \"HomeChef Delivery\""
+    recommendation: "Rename Expo app to 'Fe3dr Delivery' to match `dp-seo-app-name` and `dp-seo-html-title`. Update bundle identifier in a controlled migration if needed, but the display name must match marketing immediately."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: dp-seo-meta-description
+    lens: technical-writer
+    severity: P2
+    issue: "Term drift: meta description says 'Delivery Partner Portal' while every other delivery surface (html title, app-name, apple title) says 'Delivery'. Pick one — the inventory note already flags this."
+    evidence_excerpt: "Fe3dr Delivery Partner Portal - Manage deliveries, track earnings"
+    recommendation: "Standardise on driver-facing term 'Driver' or 'Delivery' per Sec 3 vocab. Rewrite: 'Fe3dr Driver — Manage your deliveries and earnings.' Decision: pick a single noun for the driver app and apply it across html title, app-name, meta description, OG."
+    depends_on: null
+
+  - finding_id: TW-013
+    surface_id: md-meta-006
+    lens: technical-writer
+    severity: P1
+    issue: "Permission-rationale drift between iOS and Android. iOS Info.plist says 'tracks your location in the background to keep customers updated on their delivery status' (16 words); Android expo-location plugin says 'tracks your location during deliveries to keep customers updated' (10 words). Different copy for the same OS-level prompt creates regulatory ambiguity and review-team friction."
+    evidence_excerpt: "iOS: 'HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.' / Android: 'HomeChef Delivery tracks your location during deliveries to keep customers updated.'"
+    recommendation: "Unify both to one canonical string, defined once in a constants file and injected into both plist + expo-location plugin: 'Fe3dr Delivery tracks your location during active deliveries to share live ETAs with customers. Tracking stops automatically when your shift ends.' Same wording, both stores, both reviewers."
+    depends_on: TW-011
+
+  - finding_id: TW-014
+    surface_id: web-seo-app-name
+    lens: technical-writer
+    severity: P3
+    issue: "`apple-mobile-web-app-title` and `application-name` are both just 'Fe3dr' — no descriptor. When customers add the web app to home screen, the icon label is identical to the vendor and delivery PWAs once installed side-by-side (they'd see 'Fe3dr', 'Fe3dr Vendor Portal', 'Fe3dr Delivery'). The bare 'Fe3dr' loses context."
+    evidence_excerpt: "apple-mobile-web-app-title: 'Fe3dr' / application-name: 'Fe3dr'"
+    recommendation: "Either keep bare 'Fe3dr' as the consumer brand and add descriptors to the other two (already done — vendor + delivery have descriptors), and document that 'Fe3dr' alone always means the consumer app. Style guide: add to Sec 3 vocabulary list 'Fe3dr — consumer storefront; Fe3dr Vendor Portal — chef portal; Fe3dr Delivery — driver portal.'"
+    depends_on: null
+
+  # ============================================================
+  # MISSING / DUPLICATED SEO TAGS
+  # ============================================================
+  - finding_id: TW-015
+    surface_id: dp-seo-html-title
+    lens: technical-writer
+    severity: P1
+    issue: "Duplicated `<title>` tag inside `<head>` (lines 24 and 32 of apps/delivery-portal/index.html). HTML spec disallows multiple titles; browsers/crawlers use the last one. Bug, not a copy issue, but it ships on the driver portal SEO surface."
+    evidence_excerpt: "Line 24: <title>Fe3dr Delivery</title>  / Line 32: <title>Fe3dr Delivery</title>"
+    recommendation: "Delete line 32 (the second `<title>` after the no-flash bootstrap script). Same fix already needed in admin-portal/index.html (lines 38 + 43). File a P1 cleanup for both."
+    depends_on: null
+
+  - finding_id: TW-016
+    surface_id: ap-seo-meta-title
+    lens: technical-writer
+    severity: P1
+    issue: "Duplicated `<title>` tag in apps/admin-portal/index.html (lines 38 and 43). Same bug class as TW-015."
+    evidence_excerpt: "Line 38: <title>Fe3dr Admin</title>  / Line 43: <title>Fe3dr Admin</title>"
+    recommendation: "Delete the second `<title>` tag. Lint rule to forbid >1 `<title>` in `<head>` should be added to the build."
+    depends_on: TW-015
+
+  - finding_id: TW-017
+    surface_id: dp-seo-html-title
+    lens: technical-writer
+    severity: P2
+    issue: "delivery-portal/index.html has no Open Graph or Twitter card meta tags, no `<meta name=\"author\">`, and no `<meta name=\"keywords\">`. While the portal is gated, drivers do share links with each other and ops; preview cards on Slack/WhatsApp will fall back to filename, not brand."
+    evidence_excerpt: "apps/delivery-portal/index.html (lines 1-38) — only meta description, no og:* or twitter:* tags"
+    recommendation: "Add `og:type=website`, `og:title=Fe3dr Delivery`, `og:description=<unified rewrite from TW-012>`, `og:image=/og-image.png`, `og:url=https://delivery.fe3dr.com`, `og:site_name=Fe3dr Delivery`. Also add `<meta name=\"robots\" content=\"noindex, nofollow\">` (matches admin-portal pattern; this is a gated app)."
+    depends_on: TW-012
+
+  - finding_id: TW-018
+    surface_id: ap-seo-meta-title
+    lens: technical-writer
+    severity: P3
+    issue: "admin-portal correctly has `noindex, nofollow`, but the meta description is still verbose and exposed in the HTML source ('Manage users, chefs, orders, and platform analytics'). Anyone viewing source can see the admin scope. Low-risk but unnecessary surface."
+    evidence_excerpt: "Fe3dr Admin Portal - Manage users, chefs, orders, and platform analytics"
+    recommendation: "Either drop meta description on admin-portal (noindex'd anyway, so SEO value = 0) or shorten to 'Fe3dr internal admin.' Don't enumerate capabilities."
+    depends_on: null
+
+  - finding_id: TW-019
+    surface_id: vp-seo-meta-description
+    lens: technical-writer
+    severity: P2
+    issue: "vendor-portal has no `<meta name=\"robots\">` tag. Authenticated portal (gated) should not be indexed — Google indexing login pages leaks the portal's existence and pollutes brand SERPs."
+    evidence_excerpt: "apps/vendor-portal/index.html lines 24-27: meta description + keywords + author, no robots directive"
+    recommendation: "Add `<meta name=\"robots\" content=\"noindex, nofollow\">` matching admin-portal pattern. Same fix required for delivery-portal per TW-017."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: vp-seo-og-title
+    lens: technical-writer
+    severity: P3
+    issue: "vendor-portal OG has no `og:image` and no Twitter card tags. Internal links shared in Slack render as text-only previews."
+    evidence_excerpt: "Lines 30-34: og:type, og:title, og:description, og:url, og:site_name — no og:image, no twitter:*"
+    recommendation: "Add `og:image=/og-image-vendor.png` (or reuse `/og-image.png`) and a minimal `twitter:card=summary` + `twitter:title` + `twitter:description`. Drop og entirely if vendor portal will be `noindex` per TW-019 — but social preview still works for shared links."
+    depends_on: TW-019
+
+  - finding_id: TW-021
+    surface_id: web-seo-og-title
+    lens: technical-writer
+    severity: P3
+    issue: "OG image tag references `/og-image.png` but has no companion `og:image:width`, `og:image:height`, or `og:image:alt`. WhatsApp/Slack/Twitter often skip the image preview without dimensions; screen readers skip without alt."
+    evidence_excerpt: "<meta property=\"og:image\" content=\"/og-image.png\" />"
+    recommendation: "Add `og:image:width`, `og:image:height` (typical 1200×630), `og:image:alt` (e.g., 'Plated homemade meal beside the Fe3dr wordmark'), and an absolute URL (`https://fe3dr.com/og-image.png`) per OG spec — relative URLs sometimes fail in legacy crawlers."
+    depends_on: null
+
+  # ============================================================
+  # KEYWORD-META & LEGACY-SEO HYGIENE
+  # ============================================================
+  - finding_id: TW-022
+    surface_id: web-seo-meta-keywords
+    lens: technical-writer
+    severity: P3
+    issue: "`<meta name=\"keywords\">` is ignored by Google since ~2009 and treated as a spam signal by some crawlers. The string 'home chef, food delivery, homemade food, local chef, catering' adds zero SEO value and bloats HTML."
+    evidence_excerpt: "home chef, food delivery, homemade food, local chef, catering"
+    recommendation: "Delete the `keywords` meta tag. Move keyword intent into the meta description (which Google does read) and into page H1/H2s. Same fix for vendor-portal (vp-seo-meta-keywords)."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: vp-seo-meta-keywords
+    lens: technical-writer
+    severity: P3
+    issue: "Same as TW-022 — `keywords` meta on vendor-portal is deprecated SEO theatre."
+    evidence_excerpt: "vendor portal, home chef, kitchen management, food business, menu management"
+    recommendation: "Delete the tag. Vendor portal is gated and should be noindex anyway (TW-019)."
+    depends_on: TW-022
+
+  # ============================================================
+  # MOBILE PERMISSION RATIONALES (Driver tone: glanceable, imperative,
+  # but Apple-review-safe: must explain purpose specifically)
+  # ============================================================
+  - finding_id: TW-024
+    surface_id: md-meta-003
+    lens: technical-writer
+    severity: P1
+    issue: "NSCameraUsageDescription is 'Used to take photos' — 4 words, no subject, no purpose. Apple App Review consistently rejects vague permission rationales like this; users also can't tell why the app wants camera access. Inventory note already flags this as a P1 candidate."
+    evidence_excerpt: "Used to take photos"
+    recommendation: "Driver-tone rewrite explaining the specific use: 'Fe3dr Delivery uses your camera to photograph proof-of-delivery and document any pickup or drop-off issues.' Satisfies Apple's specificity rule and tells the driver the genuine reason."
+    depends_on: TW-011
+
+  - finding_id: TW-025
+    surface_id: md-meta-002
+    lens: technical-writer
+    severity: P2
+    issue: "NSFaceIDUsageDescription 'Use Face ID to log in quickly' is friendly but uses the banned-adjacent urgency cue 'quickly' (Rule 5 — restraint) and doesn't say what 'log in' protects. Style guide also prefers 'Sign in' over 'log in' (Sec 3 vocabulary)."
+    evidence_excerpt: "Use Face ID to log in quickly"
+    recommendation: "Replace with: 'Use Face ID to sign in to Fe3dr Delivery without entering your password.' Drops the urgency word, swaps the banned 'log in' for 'sign in', explains what Face ID replaces."
+    depends_on: TW-011
+
+  - finding_id: TW-026
+    surface_id: md-meta-004
+    lens: technical-writer
+    severity: P2
+    issue: "NSLocationWhenInUseUsageDescription is acceptable but uses the brand-drift name 'HomeChef Delivery' (see TW-011). Once the app rebrands to Fe3dr Delivery, this string must follow."
+    evidence_excerpt: "HomeChef Delivery needs your location to show your position on the delivery map."
+    recommendation: "Rewrite to: 'Fe3dr Delivery uses your location to show your position on the delivery map and route to pickups.' Keeps Apple-safe specificity, fixes brand drift, and adds the pickup-routing purpose (which is the real second use)."
+    depends_on: TW-011
+
+  - finding_id: TW-027
+    surface_id: md-meta-005
+    lens: technical-writer
+    severity: P0
+    issue: "NSLocationAlwaysAndWhenInUseUsageDescription is the highest-risk permission prompt (background location). Current copy doesn't promise when tracking stops, which Apple explicitly requires for background-location approval per App Store Review Guideline 5.1.5. Inventory note already flags as P0 (drift vs in-app modal)."
+    evidence_excerpt: "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status."
+    recommendation: "Rewrite to App-Review-compliant string: 'Fe3dr Delivery tracks your location in the background only during active deliveries to share live ETAs with customers. Tracking stops automatically when you complete a delivery or end your shift.' Specifies start condition, purpose, AND stop condition. Mirror exactly in Android expo-location plugin (TW-013)."
+    depends_on: TW-011

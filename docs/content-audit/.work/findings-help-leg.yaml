@@ -1,0 +1,156 @@
+# Legal lens findings — HELP category (12 surfaces)
+# Scope: India regulatory exposure (DPDP Act 2023, FSSAI 2011/2018, RBI PA MD 2020/2024,
+# CGST/GST 2017, Consumer Protection Act 2019 + E-Commerce Rules 2020, IT Act 2000 + IT Rules 2021,
+# MV Act 1988 for drivers) + generic best-practice
+# IMPORTANT: Every finding carries depends_on: "needs lawyer review" — this audit is not legal advice.
+# Focus for help: FAQ answers that contradict T&C / Refund policy; misleading help claims;
+# grievance officer access from help surfaces (DPDP §13 + IT Rules 2021 Rule 3(2));
+# support flow disclosures (DPDP §13 acknowledgement / response timelines);
+# AI-assistant ("Otto") disclosures — IT Rules 2021 / Consumer Protection (E-Commerce) Rules 2020
+# §5(3) on grievance redress, plus disclosure that responses come from an automated system
+# (CCPA-style + best-practice under DPDP §6 notice).
+
+findings:
+
+  # ============================================================================
+  # AI ASSISTANT DISCLOSURE — Otto chatbot grievance / accuracy / data-processing
+  # DPDP Act §6 (notice at point of data collection), IT Rules 2021 Rule 3(1)(b)(ii)
+  # (misleading information), Consumer Protection (E-Commerce) Rules 2020 §5(3)
+  # ============================================================================
+
+  - finding_id: LEG-HLP-001
+    surface_id: web-help-otto-empty
+    lens: legal
+    severity: P0
+    issue: "Otto AI chat invites customers to ask about 'order status, delivery, refunds, chef availability' but discloses nothing about (a) the assistant being AI, (b) that conversations may be logged/processed, (c) accuracy limitations, (d) the legally binding fallback to a human grievance officer. Refunds in particular are a binding commitment under RBI PA MD §7 + Consumer Protection (E-Commerce) Rules 2020 §5(4) — if Otto promises a refund and the platform later denies it under T&C, that is misleading information under IT Rules 2021 Rule 3(1)(b)(ii) and an unfair trade practice under CPA 2019 §2(47)."
+    evidence_excerpt: "Ask anything — order status, delivery, refunds, chef availability."
+    recommendation: "Add a one-line disclosure in the empty-state and/or first AI message stating Otto is an AI assistant, that it may not be accurate on refund / payment / legal questions, and a link to the human grievance officer (DPDP §13 / IT Rules 2021). Refund eligibility statements from Otto must be flagged non-binding ('Final eligibility is decided per our Refund Policy'). Conversation-retention disclosure (DPDP §6 notice) must be reachable from the chat surface."
+    citation: "DPDP Act 2023 §6 (Notice); IT Rules 2021 Rule 3(1)(b)(ii) (misleading information); Consumer Protection (E-Commerce) Rules 2020 §5(3)–(4) (grievance redress + accurate information); CPA 2019 §2(47) (unfair trade practice)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-002
+    surface_id: web-help-otto-sender
+    lens: legal
+    severity: P1
+    issue: "Sender label 'Otto · AI assistant / Support' is the only place the user is told this is AI. Per DPDP §6 notice principles and the Consumer Protection (E-Commerce) Rules 2020 §5(3) grievance-redress transparency expectation, AI disclosure should be unmistakable at the conversation entry point — not only in a sender chip mid-thread. Risk of misleading information if a user assumes a human agent responded."
+    evidence_excerpt: "Otto · AI assistant / Support"
+    recommendation: "Promote AI disclosure to a persistent banner or first system message: 'You're chatting with Otto, our AI assistant. For binding decisions on refunds, payments or complaints, ask to be connected to a human or use our Grievance Officer link.' Reinforce in the empty state and in the chat header subtitle."
+    citation: "DPDP Act 2023 §6; Consumer Protection (E-Commerce) Rules 2020 §5(3); IT Rules 2021 Rule 3(1)(b)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-003
+    surface_id: web-help-otto-launcher
+    lens: legal
+    severity: P2
+    issue: "Floating launcher aria-label 'Open support chat' positions the AI chatbot as the primary support channel without exposing a parallel grievance/human-escalation route. Under IT Rules 2021 Rule 3(2) and Consumer Protection (E-Commerce) Rules 2020 §5(3), the grievance officer's contact must be conspicuously displayed and easily accessible — channelling all support through an AI bot risks an inaccessibility claim."
+    evidence_excerpt: "Open support chat"
+    recommendation: "Either rename launcher to 'Open help' and surface both Otto and a 'Contact grievance officer / human support' option in the opened panel, or add a separate 'Grievance' footer/header link visible on every help surface. Document this in the surface's a11y notes alongside the legal requirement."
+    citation: "IT Rules 2021 Rule 3(2) (Grievance Officer publication); Consumer Protection (E-Commerce) Rules 2020 §5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-004
+    surface_id: web-help-otto-chat-header
+    lens: legal
+    severity: P1
+    issue: "Chat header strings ('HomeChef support chat', 'HomeChef support', 'Close support chat', 'Conversation messages', 'Connecting...') brand the AI session as 'HomeChef support' without distinguishing automated vs human support. This conflates the AI assistant with the platform's statutory grievance-redress channel (IT Rules 2021 Rule 3(2)). If a user sends a grievance here expecting the §3(2) timelines (acknowledge ≤24h, resolve ≤15 days), and the AI does not record/escalate it, the platform is exposed."
+    evidence_excerpt: "HomeChef support chat / HomeChef support / Close support chat / Conversation messages / Connecting..."
+    recommendation: "Re-label the dialog to 'Otto — AI support' (or similar) so it is not branded as the platform's grievance channel. Add a footer line inside the dialog: 'Filing a formal grievance? Contact our Grievance Officer at <link>'. Ensure Otto conversation logs are retained and routable to a human within IT Rules timelines."
+    citation: "IT Rules 2021 Rule 3(2)(a)–(b) (Grievance Officer publication + 24h ack / 15-day resolution); DPDP Act 2023 §13 (Grievance redress)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-005
+    surface_id: web-help-otto-input
+    lens: legal
+    severity: P2
+    issue: "Input placeholder 'Type a message...' and send button 'Send message' collect free-text from the customer with zero in-context notice about how the message and any PII inside it will be processed, retained, or whether it leaves the platform (e.g., to an LLM vendor). DPDP §6 requires notice at or before data collection; sending a chat message that may contain order IDs, addresses, payment info, or grievances is a data-collection event."
+    evidence_excerpt: "Message / Type a message... / Connecting... / Send message"
+    recommendation: "Add a single-line disclosure under the input (or as a persistent first-time banner) stating that the message will be processed by an AI system, may be retained for support quality, and linking to the Privacy Policy section on AI/chat. If a third-party LLM provider is used, that must be disclosed per DPDP §8(7) data-processor transparency. Discourage users from typing card numbers / OTPs in the placeholder copy."
+    citation: "DPDP Act 2023 §6 (Notice); DPDP Act 2023 §8(7) (Data Processor transparency); RBI PA MD §8 (handling of payment data)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # GRIEVANCE OFFICER ACCESS FROM HELP SURFACES — DPDP §13, IT Rules 2021 Rule 3(2)
+  # Every help touchpoint must surface a route to the Grievance Officer
+  # ============================================================================
+
+  - finding_id: LEG-HLP-006
+    surface_id: dp-help-status-contact
+    lens: legal
+    severity: P0
+    issue: "Onboarding status help block 'Need Help? Contact us at support@fe3dr.com' is the driver's primary support touchpoint during onboarding but (a) does not name the Grievance Officer required under IT Rules 2021 Rule 3(2) and DPDP §13, (b) does not list response/ack timelines, (c) uses an unfamiliar 'fe3dr.com' domain that contradicts the HomeChef brand identity — a possible misleading-information issue under IT Rules 2021 Rule 3(1)(b)(ii)."
+    evidence_excerpt: "Need Help? + Contact us at support@fe3dr.com"
+    recommendation: "Resolve domain mismatch first (this looks like dev placeholder copy in production; confirm support email is on the registered brand domain or disclose the entity that owns 'fe3dr.com'). Then add: Grievance Officer name + email + acknowledgement timeline (≤24h), resolution timeline (≤15 days) per IT Rules 2021 Rule 3(2). DPDP §13 requires this be readily available — onboarding status is high-stakes (driver income depends on it)."
+    citation: "IT Rules 2021 Rule 3(2); DPDP Act 2023 §13; IT Rules 2021 Rule 3(1)(b)(ii) (misleading information)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-007
+    surface_id: dp-help-settings-help
+    lens: legal
+    severity: P1
+    issue: "Driver settings tile 'Help & Support / Get help with your deliveries' is the steady-state support entry for drivers, but the label scopes help narrowly to 'deliveries'. Driver grievances also cover earnings, deductions, suspensions, KYC and data rights under DPDP §11–§13. The framing risks deterring drivers from raising the very grievances the statute requires the platform to acknowledge."
+    evidence_excerpt: "Help & Support + Get help with your deliveries"
+    recommendation: "Broaden the body line to cover the statutory grievance topics (earnings, account, data, deliveries) and ensure the destination page exposes Grievance Officer name + email + DPDP §13 / IT Rules 2021 Rule 3(2) timelines. Style guide allows e.g. 'Earnings, account, deliveries — and how to raise a complaint.'"
+    citation: "DPDP Act 2023 §11 (Rights of Data Principal), §13 (Grievance Redress); IT Rules 2021 Rule 3(2); Consumer Protection (E-Commerce) Rules 2020 §5(3)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # HELP CLAIMS THAT CONTRADICT T&C / CHEF / DRIVER ONBOARDING TERMS
+  # ============================================================================
+
+  - finding_id: LEG-HLP-008
+    surface_id: dp-help-new-driver-body
+    lens: legal
+    severity: P0
+    issue: "Driver-recruitment help text 'Sign up with your email or Google account. You'll go through a quick onboarding process to start delivering.' makes two factual claims that must be reconciled with the binding driver agreement and the platform's stated KYC obligations: (a) 'quick onboarding' may contradict the real KYC/document-collection flow the driver T&C requires (PAN, Aadhaar, DL, vehicle RC, insurance, bank account) per RBI PA KYC + MV Act 1988 / 2019; (b) 'to start delivering' implies platform-controlled work allocation, which can tilt the independent-contractor vs employee classification analysis under the Code on Social Security 2020 §2(35) (aggregator definition) and the Karnataka/Rajasthan gig-worker bills. Misleading-claim risk under IT Rules 2021 Rule 3(1)(b)(ii)."
+    evidence_excerpt: "Sign up with your email or Google account. You'll go through a quick onboarding process to start delivering."
+    recommendation: "Replace 'quick onboarding' with a neutral, accurate description ('Verify your details, then start delivering once approved'). Reframe to preserve independent-contractor positioning ('Take deliveries on your schedule' rather than 'start delivering' as if employment). Add a sentence that links to the driver agreement summary so the user opts in with notice of what onboarding entails (DPDP §6 notice + Consumer Protection (E-Commerce) Rules 2020 §5(2) seller-information transparency for the platform-driver relationship)."
+    citation: "IT Rules 2021 Rule 3(1)(b)(ii) (misleading info); Code on Social Security 2020 §2(35) + §114 (aggregator/gig-worker classification); Motor Vehicles Act 1988 (driver licensing); RBI PA MD §6 (KYC for merchant onboarding when driver receives payouts); DPDP Act 2023 §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-009
+    surface_id: dp-help-staff-access-body
+    lens: legal
+    severity: P1
+    issue: "'Only pre-authorized fleet managers and delivery operations staff can sign in here. Contact an admin for access.' is a help/access-control disclosure but lacks the audit-trail / authorisation-record commitment required of a Data Fiduciary (DPDP §8(4)–(5)) and the access-control transparency expected under IT Rules 2021 Rule 3(1)(g). 'Contact an admin' is not a grievance channel — staff who are wrongfully denied access have no DPDP §13 redress route on this screen."
+    evidence_excerpt: "Only pre-authorized fleet managers and delivery operations staff can sign in here. Contact an admin for access."
+    recommendation: "Add (or link) a route for staff to escalate access denial to the Grievance Officer per DPDP §13. Specify what 'pre-authorized' means in policy terms (which role list, which approver) so the disclosure is auditable. If admin grant/revoke is logged, say so plainly — closes a §8(4) accountability gap."
+    citation: "DPDP Act 2023 §8(4)–(5), §13; IT Rules 2021 Rule 3(1)(g)–(j)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-HLP-010
+    surface_id: dp-help-staff-access-title
+    lens: legal
+    severity: P3
+    issue: "'Staff Access' heading on a public-facing login page reveals the existence of an internal staff role and entry point without a corresponding privacy/auth disclosure. Low risk on its own but combined with finding LEG-HLP-009 it forms an information-disclosure surface that should either be hidden behind a less obvious affordance or accompanied by an access-control / data-handling note."
+    evidence_excerpt: "Staff Access"
+    recommendation: "Acceptable to keep the label, but pair it (in the body text per LEG-HLP-009) with a privacy/grievance note and ensure access attempts are logged per IT Rules 2021 Rule 3(1)(g)–(j) reasonable security practices."
+    citation: "IT Rules 2021 Rule 3(1)(g)–(j); DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MISLEADING HELP CLAIMS — sandbox/test-mode disclosure to admins (live exposure risk)
+  # ============================================================================
+
+  - finding_id: LEG-HLP-011
+    surface_id: ap-settings-payment-test-cards
+    lens: legal
+    severity: P0
+    issue: "Admin help block 'Test Cards; Visa; Mastercard; UPI; 3D Secure' lists sandbox/test payment credentials inside the admin portal settings page. Two risks: (a) if displayed in production (live merchant onboarding) this is a misleading-information surface and a security/operational lapse — RBI PA MD 2020/2024 §8 prohibits exposure of test artefacts in production payment flows that could be confused with live PAN/UPI; (b) listing 'UPI' as a test card variant alongside Visa/Mastercard mixes RBI-regulated UPI semantics with card-network semantics, risking customer/admin confusion if these strings appear outside a clearly-flagged sandbox UI."
+    evidence_excerpt: "Test Cards; Visa; Mastercard; UPI; 3D Secure"
+    recommendation: "Confine the test-card help block strictly to a sandbox environment behind an explicit 'Sandbox / Test mode' badge. Remove or guard the strings from production builds. Add a one-line disclaimer 'For test transactions only. Never use these in live payment flows.' Verify with RBI PA MD §8 and the payment-aggregator's developer T&C that the credentials listed are permitted to be shown to merchants/admins at all."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §8 (data security); RBI PA Update 31 Jul 2024 (PA-CB & ongoing PA reporting); IT Rules 2021 Rule 3(1)(b)(ii) (misleading information)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SUPPORT FLOW DISCLOSURES — DPDP §13 acknowledgement + response timelines absent
+  # ============================================================================
+
+  - finding_id: LEG-HLP-012
+    surface_id: web-help-otto-chat-header
+    lens: legal
+    severity: P1
+    issue: "'Connecting...' state in the Otto chat header is the only visible signal of support availability but communicates nothing about (a) expected response time, (b) what happens if Otto cannot answer (escalation path), (c) statutory grievance timelines (IT Rules 2021 Rule 3(2): acknowledge ≤24h, resolve ≤15 days; DPDP §13 similar). Without these disclosures the customer cannot tell whether their query has been received as a grievance for §13 purposes."
+    evidence_excerpt: "Connecting..."
+    recommendation: "Add a connection-state disclosure: 'Otto usually replies in a minute. For formal grievances we acknowledge within 24 hours and resolve within 15 days — start a grievance.' Style guide says: empty/loading states should be plain and short; cite the timeline only where the user is filing a complaint, not every loading state."
+    citation: "IT Rules 2021 Rule 3(2)(a)–(b); DPDP Act 2023 §13; Consumer Protection (E-Commerce) Rules 2020 §5(3)"
+    depends_on: "needs lawyer review"
