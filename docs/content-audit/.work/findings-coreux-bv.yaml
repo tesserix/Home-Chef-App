@@ -1,0 +1,1171 @@
+# BRAND-VOICE lens findings for CORE-UX (594 rows)
+# Auditor: brand-voice lens against STYLE-GUIDE.md + .impeccable.md
+# Generated: 2026-05-13
+
+# ============================================================================
+# SECTION A — ORDER STATUS TAXONOMY DRIFT (P0/P1, highest priority)
+# Same `accepted`/`ready`/`delivering`/`picked_up` enum values labelled
+# 3-5 different ways across web, admin, vendor, mobile, delivery surfaces.
+# ============================================================================
+
+- finding_id: BV-001
+  surface_id: web-ux-orders-status-labels
+  lens: brand-voice
+  severity: P0
+  issue: "`accepted` enum is labelled `Accepted` in 6 places but `Order Confirmed` / `Confirmed` in 2 — customer sees different status word per screen."
+  evidence_excerpt: "label: 'Accepted' (chef/OrdersPage, chef/DashboardPage, admin/OrdersPage, customer/OrdersPage, vendor-portal Badge, web Badge) vs label: 'Order Confirmed' (web/customer/OrderDetailPage:31) and 'Confirmed' (web/customer/OrderDetailPage:402, OrdersPage:252, mobile-customer/order/[id]:29)"
+  related_surfaces: ["mc-order-detail-status-labels", "mc-order-card-status", "ap-orders-filter-status", "vp-ux-dashboard-recent-orders"]
+  recommendation: "Pick ONE customer-facing label for `accepted` and ship it via shared status map. Recommend `Confirmed` (chef-side) and `Order confirmed` (customer-side) — drop `Accepted` from all customer surfaces; keep `Accept` only as the chef action verb."
+  depends_on: null
+
+- finding_id: BV-002
+  surface_id: web-ux-orders-status-labels
+  lens: brand-voice
+  severity: P0
+  issue: "`delivering` enum labelled three ways: `Delivering` (chef/admin/vendor), `On the Way` (customer web + mobile), and `In Transit` (delivery portal + admin DeliveryPage). Same status code, three brand words, four surfaces."
+  evidence_excerpt: "label: 'Delivering' (chef/OrdersPage:35, chef/DashboardPage:343, admin/OrdersPage:23, vendor Badge:141, web Badge:134) vs 'On the Way' (customer/OrderDetailPage:35,405; customer/OrdersPage:29,255; mc-order-detail; mobile-delivery active.tsx:24) vs 'In Transit' (admin/delivery/DeliveryPage:70, delivery-portal/ActiveDeliveryPage:49, mobile-delivery StatusStepIndicator)"
+  related_surfaces: ["mc-timeline-steps", "md-core-028", "md-core-038", "dp-ux-active-status-in-transit", "ap-delivery-statuses"]
+  recommendation: "Customer sees `On the way` (sentence case, per STYLE-GUIDE). Chef sees `Delivering`. Driver sees `In transit`. Document this 3-persona map in shared status taxonomy file. Today they're independently invented per file."
+  depends_on: null
+
+- finding_id: BV-003
+  surface_id: web-ux-orders-status-labels
+  lens: brand-voice
+  severity: P0
+  issue: "`ready` enum labelled `Ready` in 5 places and `Ready for Pickup` in 3 places — customer's order tracker says different word per screen."
+  evidence_excerpt: "label: 'Ready' (chef/DashboardPage:341, admin/OrdersPage:21, customer/OrdersPage:27, web Badge:132, vendor Badge:139, vendor LiveOrders:33, customer OrderDetailPage stepper:404) vs 'Ready for Pickup' (chef/OrdersPage:33, customer/OrderDetailPage:33 status map, mobile-customer order/[id]:33)"
+  related_surfaces: ["mc-order-detail-status-labels", "mc-order-card-status", "vp-ux-dashboard-recent-orders"]
+  recommendation: "Per STYLE-GUIDE pickup rules: `Pickup` is the noun. Use `Ready for pickup` (sentence case, one word `Pickup`) on customer-facing surfaces; use bare `Ready` on chef/vendor operational surfaces. Fix capitalization globally."
+  depends_on: BV-007
+
+- finding_id: BV-004
+  surface_id: mc-order-detail-status-labels
+  lens: brand-voice
+  severity: P0
+  issue: "Mobile customer shows `Ready for Pickup` on order detail but `Ready` on OrderCard and timeline — same screen-cluster contradicts itself."
+  evidence_excerpt: "mc-order-detail-status-labels: 'Ready for Pickup' / mc-order-card-status: 'Ready' / mc-timeline-steps does not include `Ready` at all (only Confirmed/Preparing/On the Way/Delivered) — flagged in inventory notes"
+  related_surfaces: ["mc-order-card-status", "mc-timeline-steps", "web-ux-orders-status-labels"]
+  recommendation: "Unify mobile-customer status map with web customer map; both should be sourced from `shared/types/index.ts` or equivalent — not redefined per file."
+  depends_on: BV-003
+
+- finding_id: BV-005
+  surface_id: ap-orders-filter-status
+  lens: brand-voice
+  severity: P1
+  issue: "Admin orders filter uses `Delivering` while admin delivery page uses `In Transit` for the same status — admin operator sees two words for the same thing in different tabs."
+  evidence_excerpt: "ap-orders-filter-status: 'All Status; Pending; Accepted; Preparing; Ready; Delivering; Delivered; Cancelled; Refunded' vs ap-delivery-statuses: 'Pending; Assigned; At Pickup; Picked Up; In Transit; At Dropoff; Delivered; Failed; Returned; Cancelled'"
+  related_surfaces: ["ap-delivery-statuses", "web-ux-orders-status-labels"]
+  recommendation: "Admin needs one merged status taxonomy. Orders and deliveries are two views of the same lifecycle — labels must match."
+  depends_on: BV-002
+
+- finding_id: BV-006
+  surface_id: ap-orders-filter-status
+  lens: brand-voice
+  severity: P1
+  issue: "Filter labelled `All Status` (singular) in admin Orders and Chefs pages; `All Statuses` (plural) in admin Delivery, Providers, Approvals, Staff. Grammatical drift across one app."
+  evidence_excerpt: "admin/orders/OrdersPage:85 `All Status` and admin/chefs/ChefsPage:141 `All Status` vs admin/delivery/DeliveryPage:181, admin/delivery/ProvidersPage:200, admin/approvals/ApprovalsPage:208, admin/staff/StaffPage:415 — all `All Statuses`"
+  related_surfaces: ["ap-chefs-filter-status", "ap-delivery-statuses", "ap-approvals-statuses"]
+  recommendation: "Normalize to `All statuses` (sentence case, plural)."
+  depends_on: null
+
+# ============================================================================
+# SECTION B — PICKUP / PICK-UP / DROPOFF / DROP-OFF DRIFT (P0)
+# STYLE-GUIDE rule: `Pickup` (noun, one word) / `Pick up` (verb).
+# Currently 5 different spellings across the platform.
+# ============================================================================
+
+- finding_id: BV-007
+  surface_id: dp-ux-delivery-pickup-label
+  lens: brand-voice
+  severity: P0
+  issue: "`PICKUP` in ALL CAPS as label on delivery portal Available Deliveries page violates STYLE-GUIDE rule 1 (Confident, not loud) and `Sentence case for buttons and labels; Title Case banned`."
+  evidence_excerpt: "apps/delivery-portal/src/features/deliveries/pages/AvailableDeliveriesPage.tsx:63 — `<p className=\"text-xs text-success font-medium\">PICKUP</p>` and line 70 — `DROPOFF`"
+  related_surfaces: ["dp-ux-delivery-dropoff-label", "md-core-078", "md-core-079"]
+  recommendation: "Replace `PICKUP` / `DROPOFF` with `Pickup` / `Dropoff` (sentence case). The visual weight should come from typography, not capslock."
+  depends_on: null
+
+- finding_id: BV-008
+  surface_id: md-core-079
+  lens: brand-voice
+  severity: P0
+  issue: "Mobile-delivery uses `Drop-off` (hyphenated) on delivery detail screen but `Dropoff` (no hyphen) on active delivery screen — two spellings in one app."
+  evidence_excerpt: "mobile-delivery/app/delivery/[id].tsx:79 `Drop-off` vs mobile-delivery/app/(tabs)/active.tsx line 145 `Dropoff Location`; inventory note flags drift explicitly"
+  related_surfaces: ["md-core-041", "md-core-029", "md-core-035"]
+  recommendation: "Pick one: `Dropoff` (matches Pickup, no hyphen) recommended. Update every spelling — currently `Drop-off`, `Dropoff`, `DROPOFF`, `drop-off` all appear in the codebase."
+  depends_on: null
+
+- finding_id: BV-009
+  surface_id: ap-notifsettings-categories
+  lens: brand-voice
+  severity: P1
+  issue: "Admin notification copy uses `pickup and drop-off notifications` — hyphenated `drop-off` collides with `Dropoff` elsewhere; sentence does not match driver/delivery taxonomy."
+  evidence_excerpt: "apps/admin-portal/src/features/settings/pages/NotificationSettingsPage.tsx:33 `Driver assigned, pickup and drop-off notifications.`"
+  related_surfaces: ["dp-ux-delivery-dropoff-label", "md-core-079"]
+  recommendation: "Use `pickup and dropoff notifications` for consistency."
+  depends_on: BV-008
+
+- finding_id: BV-010
+  surface_id: ap-delivery-statuses
+  lens: brand-voice
+  severity: P1
+  issue: "Admin delivery statuses use Title Case (`At Pickup`, `At Dropoff`, `Picked Up`, `In Transit`) — violates STYLE-GUIDE `sentence case` rule for labels."
+  evidence_excerpt: "ap-delivery-statuses (line 253): `Pending; Assigned; At Pickup; Picked Up; In Transit; At Dropoff; Delivered; Failed; Returned; Cancelled`"
+  related_surfaces: ["dp-ux-active-status-in-transit", "md-core-038"]
+  recommendation: "Sentence case: `Pending`, `Assigned`, `At pickup`, `Picked up`, `In transit`, `At dropoff`, `Delivered`, `Failed`, `Returned`, `Cancelled`."
+  depends_on: null
+
+- finding_id: BV-011
+  surface_id: dp-ux-active-mark-as
+  lens: brand-voice
+  severity: P1
+  issue: "Delivery-portal action label `Mark as {Picked Up/In Transit/Delivered}` uses Title Case for sub-status. Inconsistent with sentence-case driver-app pattern (`Mark as delivered`)."
+  evidence_excerpt: "apps/delivery-portal/src/features/deliveries/pages/ActiveDeliveryPage.tsx:46-52 — labels `Picked Up`, `In Transit`, `Delivered` plugged into `Mark as {label}` button"
+  related_surfaces: ["md-core-036", "md-core-038"]
+  recommendation: "Sentence case sub-labels: `Mark as picked up` / `Mark as in transit` / `Mark as delivered`."
+  depends_on: BV-010
+
+# ============================================================================
+# SECTION C — CART vs BAG / "YOUR CART" CONSISTENCY (P2)
+# ============================================================================
+
+- finding_id: BV-012
+  surface_id: web-ux-cart-heading
+  lens: brand-voice
+  severity: P2
+  issue: "Web uses `Your Cart` (Title Case) and mobile-customer uses `Your Cart` (Title Case) — consistent across apps, but Title Case violates sentence-case rule."
+  evidence_excerpt: "web CartPage.tsx:76 `Your Cart` (h1); mobile-customer CartSheet.tsx `Your Cart` heading"
+  related_surfaces: ["mc-cartsheet-title", "web-ux-cart-heading"]
+  recommendation: "Sentence case: `Your cart` on both surfaces. Brand consistency on `Cart` (no `Bag` drift) is good — preserve that, just fix capitalization."
+  depends_on: null
+
+# ============================================================================
+# SECTION D — PLACE ORDER / SUBMIT / CONFIRM CTA DRIFT (P1)
+# ============================================================================
+
+- finding_id: BV-013
+  surface_id: web-ux-checkout-summary
+  lens: brand-voice
+  severity: P1
+  issue: "Web checkout CTA is `Place Order` (Title Case), mobile-customer is `Place Order · ₹{total}`, both Title Case — STYLE-GUIDE requires sentence case (`Place order`)."
+  evidence_excerpt: "web CheckoutPage.tsx:681 `Place Order - {price}`; mobile-customer checkout.tsx:539 `Place Order · ₹{total}`"
+  related_surfaces: ["mc-checkout-place-order", "web-ux-checkout-summary"]
+  recommendation: "Use `Place order` everywhere (sentence case)."
+  depends_on: null
+
+- finding_id: BV-014
+  surface_id: web-ux-cart-checkout-cta
+  lens: brand-voice
+  severity: P2
+  issue: "Web cart CTA `Sign in to Checkout` mixes `Sign in` (correct per STYLE-GUIDE) with `Checkout` (capital C — should be lowercase). Same line, two capitalization schemes."
+  evidence_excerpt: "web CartPage.tsx:264 `Sign in to Checkout / Proceed to Checkout`"
+  related_surfaces: ["mc-cartsheet-checkout-cta"]
+  recommendation: "`Sign in to checkout` and `Proceed to checkout` — sentence case throughout."
+  depends_on: null
+
+- finding_id: BV-015
+  surface_id: web-ux-checkout-heading
+  lens: brand-voice
+  severity: P3
+  issue: "Web `Checkout` page H1 is bare `Checkout`. Mobile-customer is `Checkout`. Consistent across apps — but should be `Checkout` (single word) and remain so. No drift; documenting baseline."
+  evidence_excerpt: "web CheckoutPage.tsx:292 `Checkout`; mobile-customer checkout.tsx `Checkout`"
+  related_surfaces: ["mc-checkout-header"]
+  recommendation: "No change. Keep `Checkout` as a single-word H1 across both surfaces."
+  depends_on: null
+
+# ============================================================================
+# SECTION E — CANCEL ORDER / CANCEL DELIVERY DRIFT (P1)
+# ============================================================================
+
+- finding_id: BV-016
+  surface_id: web-ux-orderdetail-cancel
+  lens: brand-voice
+  severity: P1
+  issue: "Customer-facing destructive action uses `Cancel Order` (Title Case) on web; mobile uses no equivalent — only `Track Order` is on mobile order detail. Cancellation lives on web only as Title Case."
+  evidence_excerpt: "web OrderDetailPage.tsx:345 `Cancel Order` (button); :360 `Cancel Order` (modal h3); :389 `Cancel Order` (confirm button); mobile-customer has no cancel CTA on order detail"
+  related_surfaces: ["dp-ux-active-cancel-btn", "mc-order-detail-track-cta"]
+  recommendation: "`Cancel order` (sentence case). Also: customer can cancel on web but not mobile — flag for cross-platform feature parity (likely BA lens, not BV)."
+  depends_on: null
+
+- finding_id: BV-017
+  surface_id: dp-ux-active-cancel-btn
+  lens: brand-voice
+  severity: P1
+  issue: "Delivery-portal driver-facing `Cancel Delivery` is Title Case and uses `Delivery` not `Order` — drift from customer `Cancel Order`. Different persona, different noun — but capitalization wrong for both."
+  evidence_excerpt: "apps/delivery-portal/src/features/deliveries/pages/ActiveDeliveryPage.tsx:168 `Cancel Delivery`"
+  related_surfaces: ["web-ux-orderdetail-cancel"]
+  recommendation: "Driver cancels delivery (not order — different mental model is OK). Use sentence case: `Cancel delivery`. The noun split is intentional."
+  depends_on: BV-016
+
+- finding_id: BV-018
+  surface_id: dp-ux-active-cancel-prompt
+  lens: brand-voice
+  severity: P1
+  issue: "Cancellation reason prompt uses browser `prompt()` modal — escapes styled UI, breaks brand voice. Inventory flagged as 'S' (no UI polish)."
+  evidence_excerpt: "apps/delivery-portal/src/features/deliveries/pages/ActiveDeliveryPage.tsx:160 — uses native `prompt('Reason for cancellation?')`"
+  related_surfaces: ["dp-ux-active-cancel-btn"]
+  recommendation: "Replace with a Dialog component; copy: `Why are you cancelling?` (informal, calmer than `Reason for cancellation?`)."
+  depends_on: null
+
+# ============================================================================
+# SECTION F — DRIVER ACTION VERBS (Accept/Reject/Decline/Available/Picked Up/Delivered)
+# ============================================================================
+
+- finding_id: BV-019
+  surface_id: md-core-022
+  lens: brand-voice
+  severity: P1
+  issue: "Driver `Accept Delivery` (Title Case) in mobile and `Accept Delivery` (Title Case) in delivery-portal — consistent verb, wrong case. Driver app should be sentence case per STYLE-GUIDE."
+  evidence_excerpt: "mobile-delivery components/driver/DeliveryCard.tsx `Accept Delivery`; delivery-portal AvailableDeliveriesPage:95 `Accept Delivery`"
+  related_surfaces: ["dp-ux-accept-delivery-btn", "md-core-022"]
+  recommendation: "`Accept delivery` (sentence case)."
+  depends_on: null
+
+- finding_id: BV-020
+  surface_id: md-core-018
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-delivery `Go Online to Accept Deliveries` (Title Case across 5 words) is a button — way over the ≤3-word button rule. Driver-facing rule is ≤4 telegraphic words."
+  evidence_excerpt: "mobile-delivery/app/(tabs)/available.tsx `Go Online to Accept Deliveries` (md-core-018)"
+  related_surfaces: ["dp-ux-dashboard-go-online-btn", "md-core-006"]
+  recommendation: "Shorten to `Go online` (driver toggle pattern matches delivery-portal `dp-ux-dashboard-go-online-btn`)."
+  depends_on: null
+
+- finding_id: BV-021
+  surface_id: md-core-032
+  lens: brand-voice
+  severity: P2
+  issue: "Slide-to-confirm action labels mix verb tenses: `Arrived at Kitchen` (past), `Picked Up Order` (past), `Start Delivery` (imperative), `Arrived at Dropoff` (past), `Mark as Delivered` (imperative). Inconsistent tense per step makes driver pause."
+  evidence_excerpt: "mobile-delivery active.tsx:31-36 — `assigned: Arrived at Kitchen`, `at_pickup: Picked Up Order`, `picked_up: Start Delivery`, `in_transit: Arrived at Dropoff`, `at_dropoff: Mark as Delivered`"
+  related_surfaces: ["md-core-033", "md-core-034", "md-core-035", "md-core-036"]
+  recommendation: "Use imperative throughout (driver is the actor): `I'm at the kitchen` (or `Arrived`), `Confirm pickup`, `Start delivery`, `Arrived at dropoff`, `Mark delivered`. Slide-to-confirm is irreversible; verbs must match the user's NEXT action, not pass tense for one step then imperative for the next."
+  depends_on: null
+
+- finding_id: BV-022
+  surface_id: dp-ux-nav-bottom-items
+  lens: brand-voice
+  severity: P1
+  issue: "Driver bottom-nav says `Home` but sidebar says `Dashboard` for the same destination. Same app, two different words for the same screen."
+  evidence_excerpt: "delivery-portal DeliveryBottomNav.tsx:5-11 `Home / Active / Available / Earnings / Profile` vs DeliveryLayout.tsx:39-47 sidebar `Dashboard / Active Delivery / Available / History / Earnings / Profile / Settings`. Inventory notes explicitly flag this drift."
+  related_surfaces: ["dp-ux-nav-partner-items", "md-core-001", "md-core-005"]
+  recommendation: "Pick one: `Dashboard` matches the H1 of that screen, so use `Dashboard` everywhere. `Home` on bottom-nav is fine ONLY if there's no Dashboard concept — but there is."
+  depends_on: null
+
+- finding_id: BV-023
+  surface_id: dp-ux-nav-partner-items
+  lens: brand-voice
+  severity: P1
+  issue: "Sidebar says `Active Delivery` but bottom-nav says `Active`. Same app, same screen, two labels."
+  evidence_excerpt: "delivery-portal sidebar `Active Delivery` vs bottom-nav `Active`. Inventory note C-flagged"
+  related_surfaces: ["dp-ux-nav-bottom-items"]
+  recommendation: "Bottom-nav has space constraints — `Active` is fine. But ensure aria-label / semantic label is `Active delivery` for screen readers."
+  depends_on: BV-022
+
+# ============================================================================
+# SECTION G — CHEF ORDER VERBS (Accept/Reject/Prepare/Ready)
+# ============================================================================
+
+- finding_id: BV-024
+  surface_id: vp-ux-dashboard-pending-card
+  lens: brand-voice
+  severity: P2
+  issue: "Vendor portal chef-facing pending orders show `Accept / Reject` — consistent with mobile-vendor. STYLE-GUIDE says chef tone is operational; `Reject` reads cold for a customer order. Consider `Decline`?"
+  evidence_excerpt: "vendor-portal DashboardPage Recent Orders + LiveOrders use `Accept / Reject`; mobile-vendor OrderCard.tsx `Accept / Reject` (mv-ordercard-accept, mv-ordercard-reject); also iOS notification action buttons same labels"
+  related_surfaces: ["mv-ordercard-accept", "mv-ordercard-reject", "vp-ux-dashboard-pending-card"]
+  recommendation: "Keep `Accept`; consider `Decline` instead of `Reject` (less adversarial for the chef-customer relationship). Document choice in STYLE-GUIDE under Order verbs."
+  depends_on: null
+
+- finding_id: BV-025
+  surface_id: vp-ux-dashboard-pending-card
+  lens: brand-voice
+  severity: P1
+  issue: "Chef-side action chain mixes `Accept`, `Start Preparing`, `Mark Ready`. STYLE-GUIDE example shows `Mark ready` (sentence case). Today: Title Case on all three."
+  evidence_excerpt: "web chef/OrdersPage:32 `nextAction: 'Start Preparing'` and `nextAction: 'Mark Ready'`; vendor-portal LiveOrdersPage:41 `'Mark Ready'`"
+  related_surfaces: ["vp-ux-dashboard-pending-card", "web-ux-chef-orders-heading"]
+  recommendation: "Use sentence case: `Start preparing`, `Mark ready`. Three chef actions form one sequence; consistent style is critical."
+  depends_on: null
+
+# ============================================================================
+# SECTION H — ADMIN ACTION VERBS (Approve/Reject/Suspend/Activate)
+# ============================================================================
+
+- finding_id: BV-026
+  surface_id: dp-ux-partner-verify-approve
+  lens: brand-voice
+  severity: P1
+  issue: "Admin/partner actions are mixed Title Case: `Approve` (1 word OK), `Reject` (1 word OK), but `Reactivate Partner`, `Suspend Partner`, `Verify Partner` — all Title Case violate sentence-case rule."
+  evidence_excerpt: "delivery-portal PartnerDetailPage:264 `Approve`, :272 `Reject`, :378 `Reactivate Partner`, :387 `Suspend Partner`, :397 `Verify Partner`"
+  related_surfaces: ["dp-ux-partner-verify-reject", "dp-ux-partner-reactivate", "dp-ux-partner-suspend", "dp-ux-partner-verify"]
+  recommendation: "`Reactivate partner`, `Suspend partner`, `Verify partner`. Single-word verbs `Approve` and `Reject` are fine."
+  depends_on: null
+
+- finding_id: BV-027
+  surface_id: ap-approvals-statuses
+  lens: brand-voice
+  severity: P2
+  issue: "Approval status filter mixes `Info Requested` (Title Case, 2 words) with single-word others. Should be sentence case across all."
+  evidence_excerpt: "ap-approvals-statuses: `All Statuses; Pending; Approved; Rejected; Info Requested; Cancelled`"
+  related_surfaces: ["ap-approvals-table-columns"]
+  recommendation: "`Info requested` — sentence case, consistent with other multi-word statuses."
+  depends_on: null
+
+# ============================================================================
+# SECTION I — BRAND IDENTITY DRIFT: Fe3dr vs HomeChef vs Home Chef (P0)
+# ============================================================================
+
+- finding_id: BV-028
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P0
+  issue: "Brand name appears as `Fe3dr`, `HomeChef`, `Home Chef`, and `home-chef` in user-facing strings. No single canonical form."
+  evidence_excerpt: "web Register/LoginPage `Fe3dr`; web OttoChat:157,163 `HomeChef support`; web ProfilePage:1288 `HomeChef 2FA Backup Codes`; web BrowseChefsPage:140 `Explore Home Chefs`; web HomePage:88,155 `500+ Home Chefs`; web CheckoutPage:191 `Home Chef` fallback; admin/vendor/delivery LoginPages `Fe3dr`; admin LoginPage:146 `Fe3dr platform`, :459 `Fe3dr Administration Portal`; admin Provider pages `Fe3dr statuses`, `Fe3dr Status`; vendor LoginPage:155 `Fe3dr customer app`, :323 `Fe3dr's Terms`, RegisterPage:99 `Join thousands of home chefs earning with Fe3dr`; brand.ts says `name: 'Fe3dr'`"
+  related_surfaces: ["ap-layout-brand-title", "ap-layout-topbar-title", "dp-ux-logo-text"]
+  recommendation: "P0 platform identity: pick one brand name and codify in `shared/constants/brand.ts`. Recommended: `Fe3dr` is the platform brand (per brand.ts), `home chef` is the role noun (lowercase, never as brand). All `HomeChef support`, `HomeChef 2FA`, `Home Chef` (as brand) references must be replaced."
+  depends_on: null
+
+- finding_id: BV-029
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P0
+  issue: "Customer-facing landing copy says `Home Chef` capitalized as if brand: `Explore Home Chefs`, `500+ Home Chefs Near You`. Should be `home chefs` (lowercase noun for the role) per STYLE-GUIDE."
+  evidence_excerpt: "web BrowseChefsPage.tsx:140 `Explore Home Chefs`; HomePage.tsx:88 `500+ Home Chefs Near You`, :155 label `500+ Home Chefs`, HeroSection.tsx:123 label `Home Chefs`"
+  related_surfaces: ["web-ux-browse-search-input"]
+  recommendation: "STYLE-GUIDE entry: `Home chef` ✅ (sentence case for the role). Customer-facing: `Explore home chefs`, `500+ home chefs near you`."
+  depends_on: BV-028
+
+# ============================================================================
+# SECTION J — AI-SLOP / UNVERIFIED SOCIAL PROOF (P0)
+# ============================================================================
+
+- finding_id: BV-030
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P0
+  issue: "Hardcoded `500+ Home Chefs Near You` and `500+ Home Chefs` repeated in 3 customer-facing places. If platform has 500+ chefs this should be dynamic; otherwise it's false advertising. AI-slop trust metric."
+  evidence_excerpt: "web HomePage.tsx:88 `500+ Home Chefs Near You`; :155 `{ icon: ChefHat, label: '500+ Home Chefs' }`; HeroSection.tsx:123 `{ value: '500+', label: 'Home Chefs' }`; RegisterPage.tsx:10 `Access to 500+ home chefs`"
+  related_surfaces: []
+  recommendation: "Either (a) wire to live API count, OR (b) remove the badge entirely. Hardcoded `500+` violates Rule 5 (Restraint over urgency) AND Rule 1 (Confident, not loud)."
+  depends_on: null
+
+- finding_id: BV-031
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P0
+  issue: "`Join thousands of happy customers enjoying homemade food` (web home) and `Join thousands of home chefs earning with Fe3dr` (vendor register) — unverified social proof; faux-artisanal `homemade` term."
+  evidence_excerpt: "web HomePage.tsx:382 `Join thousands of happy customers enjoying homemade food`; vendor-portal RegisterPage.tsx:99 `Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules.`"
+  related_surfaces: []
+  recommendation: "Remove `Join thousands` (unverified). Replace `homemade food` with `home-cooked food` (rules out `homemade` as faux-artisanal trigger per STYLE-GUIDE). Rewrite as factual: `Real home cooks. Real kitchens. Order tonight's dinner.`"
+  depends_on: null
+
+- finding_id: BV-032
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P1
+  issue: "Web LoginPage testimonial: `Fe3dr has changed how I eat. Finally, real homemade food that…` Likely fake/placeholder testimonial; `homemade` is a banned brand-drift term."
+  evidence_excerpt: "apps/web/src/features/auth/pages/LoginPage.tsx:277 `Fe3dr has changed how I eat. Finally, real homemade food that…`"
+  related_surfaces: ["web-ux-layout-nav"]
+  recommendation: "Remove the testimonial OR verify it's a real customer with attribution. Replace `homemade` → `home-cooked`."
+  depends_on: BV-031
+
+- finding_id: BV-033
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P1
+  issue: "Web home `The Fe3dr Difference` is generic SaaS-marketing pattern. STYLE-GUIDE anti-reference: avoid `Generic SaaS dashboard / Hero metrics` language."
+  evidence_excerpt: "apps/web/src/features/customer/pages/HomePage.tsx:379 `The Fe3dr Difference`"
+  related_surfaces: []
+  recommendation: "Replace with editorial-tone heading: `Why home cooks, not restaurants` or simply remove the section."
+  depends_on: null
+
+- finding_id: BV-034
+  surface_id: vp-ux-settings-payout-section
+  lens: brand-voice
+  severity: P1
+  issue: "Vendor-portal kitchen setup ships `Payout integration coming soon. These details are saved locally for now.` — `coming soon` feature in production violates Rule 1 (Confident, not loud)."
+  evidence_excerpt: "apps/vendor-portal/src/features/profile/pages/KitchenSetupPage.tsx:507 `Payout integration coming soon. These details are saved locally for now.`"
+  related_surfaces: ["vp-ux-settings-payout-section"]
+  recommendation: "Either ship the integration or remove the section. `Saved locally` is also worrying — chef may think they're set up when payouts will not happen."
+  depends_on: null
+
+- finding_id: BV-035
+  surface_id: ap-analytics-cards
+  lens: brand-voice
+  severity: P1
+  issue: "Admin analytics ships with `Chart coming soon` placeholder. Inventory notes confirm `placeholders` for entire summary card set."
+  evidence_excerpt: "apps/admin-portal/src/features/analytics/pages/AnalyticsPage.tsx:69 `Chart coming soon`; ap-analytics-cards inventory note: `summary card labels (placeholders)`"
+  related_surfaces: ["ap-analytics-charts"]
+  recommendation: "Hide placeholder charts until live. Empty-state copy if hiding isn't possible: `No data yet for this period.`"
+  depends_on: null
+
+# ============================================================================
+# SECTION K — SIGN OUT / LOG OUT / LOGOUT DRIFT (P1)
+# STYLE-GUIDE: `Sign out` ✅ / `Log out` ❌ / `Logout` ❌
+# ============================================================================
+
+- finding_id: BV-036
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P1
+  issue: "STYLE-GUIDE mandates `Sign out`. Today: `Logout` (5 surfaces), `Log out` (2), `Log Out` (2), `Sign Out` (1), `Sign out` (1). All seven apps disagree."
+  evidence_excerpt: "web MainLayout:261 `Logout`; web ChefLayout:131 `Logout`; web AdminLayout:94 `aria-label='Log out'`; web ProfilePage:127 `Log Out`; web FavoritesPage:43 `Log In`; admin AdminLayout:164 `Logout`; delivery-portal SettingsPage:49 `Sign Out` (Title), :50 `Sign out`; mobile-customer profile:115,288 `Log Out`; mobile-vendor more.tsx:62,119 `Logout`; pending.tsx:56 `Logout`; mobile-delivery more.tsx:30,113 `Logout`; pending.tsx:47,77 `Logout`"
+  related_surfaces: ["mc-profile-logout-button", "mv-more-logout-row", "mv-onb-pending-logout-btn", "dp-ux-settings-signout", "ap-layout-nav-settings"]
+  recommendation: "Global find/replace to `Sign out` (sentence case, two words). Every surface. Code variables can stay `logout()` — only user-facing strings change."
+  depends_on: null
+
+- finding_id: BV-037
+  surface_id: web-ux-layout-nav
+  lens: brand-voice
+  severity: P1
+  issue: "`Login` and `Log In` appear as user-facing labels in web nav and FavoritesPage. STYLE-GUIDE: `Sign in`."
+  evidence_excerpt: "web MainLayout:272 `Login` link; FavoritesPage:43 `Log In` link"
+  related_surfaces: ["web-ux-layout-nav"]
+  recommendation: "Replace with `Sign in`."
+  depends_on: BV-036
+
+# ============================================================================
+# SECTION L — TITLE CASE EPIDEMIC ACROSS HEADINGS (P2/P3)
+# ============================================================================
+
+- finding_id: BV-038
+  surface_id: web-ux-profile-heading
+  lens: brand-voice
+  severity: P2
+  issue: "Web customer profile heading `Account Settings` (Title Case). STYLE-GUIDE requires sentence case for labels and buttons; headings should follow same rule."
+  evidence_excerpt: "web customer ProfilePage:68 `Account Settings`"
+  related_surfaces: ["ap-settings-title", "mv-settings-heading", "md-core-055"]
+  recommendation: "`Account settings`. Apply globally to `Personal Information`/`Personal Info`, `Order Summary`, `Order Items`, `Delivery Address`, etc."
+  depends_on: null
+
+- finding_id: BV-039
+  surface_id: web-ux-orderdetail-sections
+  lens: brand-voice
+  severity: P2
+  issue: "Web customer order detail headings all Title Case: `Order Items`, `Delivery Address`, `Payment Summary`, `Special Instructions`, `Leave a Review`. Mobile mirrors with `Items`, `Delivery Address`, `Price Breakdown`."
+  evidence_excerpt: "web OrderDetailPage:213 `Order Items`; CartPage:185, CheckoutPage:604 `Order Summary`; mobile-customer order/[id] `Items / Delivery Address / Price Breakdown`"
+  related_surfaces: ["mc-order-detail-sections", "web-ux-cart-order-summary", "web-ux-checkout-summary"]
+  recommendation: "Sentence case everywhere: `Order items`, `Delivery address`, `Order summary`, `Payment summary`, `Special instructions`, `Leave a review`."
+  depends_on: BV-038
+
+- finding_id: BV-040
+  surface_id: mc-checkout-totals
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-customer checkout totals mix capitalization: `Subtotal / Delivery fee / Free / Total` (checkout.tsx) vs order-detail `Subtotal / Delivery Fee / Total`. Even within one user flow."
+  evidence_excerpt: "mobile-customer checkout.tsx:480 `Delivery fee` (lowercase f) vs order/[id]/index.tsx price-rows `Delivery Fee` (capital F). Inventory note flags drift explicitly."
+  related_surfaces: ["mc-order-detail-price-rows", "web-ux-cart-order-summary"]
+  recommendation: "Standardize to `Delivery fee` (sentence case, matches STYLE-GUIDE)."
+  depends_on: null
+
+- finding_id: BV-041
+  surface_id: web-ux-orders-status-labels
+  lens: brand-voice
+  severity: P2
+  issue: "Customer status labels all Title Case: `Pending / Accepted / Preparing / Ready / Picked Up / On the Way / Delivered / Cancelled / Refunded`. Status pills should be sentence case."
+  evidence_excerpt: "web customer/OrdersPage:23-33 — all Title Case"
+  related_surfaces: ["mc-order-card-status", "mc-order-detail-status-labels"]
+  recommendation: "Sentence case throughout: `Pending`, `Accepted`, `Preparing`, `Ready`, `Picked up`, `On the way`, `Delivered`, `Cancelled`, `Refunded`."
+  depends_on: BV-002
+
+# ============================================================================
+# SECTION M — CURRENCY / LOCALE DRIFT (P0)
+# ============================================================================
+
+- finding_id: BV-042
+  surface_id: vp-ux-settings-order-acceptance
+  lens: brand-voice
+  severity: P0
+  issue: "Vendor portal auto-accept threshold label shows `($)` but platform is INR/₹ everywhere else. Currency symbol mismatch — chef will misconfigure their threshold."
+  evidence_excerpt: "apps/vendor-portal/src/features/settings/pages/SettingsPage.tsx:155 `Auto-accept threshold ($)`. Inventory note explicitly flags: `currency mismatch: shows $ but data is INR`"
+  related_surfaces: ["vp-ux-settings-payout-section"]
+  recommendation: "Replace `($)` with `(₹)` to match STYLE-GUIDE `₹120` rule. Verify no other dollar-sign artifacts."
+  depends_on: null
+
+- finding_id: BV-043
+  surface_id: web-ux-checkout-payment-section
+  lens: brand-voice
+  severity: P3
+  issue: "Web payment notice says `Pay securely via UPI, cards, net banking, or wallets`. India-specific payment method `UPI` is correct but `net banking` should be `netbanking` per Razorpay convention. Mobile checkout uses different copy entirely."
+  evidence_excerpt: "web CheckoutPage:533-554 `Powered by Razorpay / Pay securely via UPI, cards, net banking, or wallets`. Mobile-customer has no equivalent block (just opens Razorpay sheet)."
+  related_surfaces: []
+  recommendation: "Match mobile + web payment provider notice OR remove it (Razorpay sheet itself says all methods)."
+  depends_on: null
+
+# ============================================================================
+# SECTION N — PERSONA-TONE LEAKS (P2)
+# ============================================================================
+
+- finding_id: BV-044
+  surface_id: vp-ux-profile-business-info
+  lens: brand-voice
+  severity: P2
+  issue: "Vendor-portal `Tell customers about your kitchen, cooking style, and what makes your food special...` reads as marketing-coach copy — too aspirational for operational chef tone."
+  evidence_excerpt: "vendor-portal features/profile/pages/ProfilePage.tsx — vp-ux-profile-business-info: `Tell customers about your kitchen, cooking style, and what makes your food special...`"
+  related_surfaces: ["web-ux-chef-profile"]
+  recommendation: "Trim to: `Describe your kitchen and the food you cook.` Per STYLE-GUIDE chef tone: crisp 5-12 words, operational mood. `What makes your food special` is a marketing-coach hint."
+  depends_on: null
+
+- finding_id: BV-045
+  surface_id: vp-ux-kitchen-photos
+  lens: brand-voice
+  severity: P2
+  issue: "Vendor-portal: `Add photos of your kitchen to build trust with customers ({n}/5)` — `build trust with customers` is marketing-y for chef tone."
+  evidence_excerpt: "vendor-portal KitchenSetupPage `Kitchen Photos / Add photos of your kitchen to build trust with customers ({n}/5)`"
+  related_surfaces: []
+  recommendation: "Tighten: `Show customers your kitchen. ({n}/5)`. Drop `build trust`."
+  depends_on: null
+
+- finding_id: BV-046
+  surface_id: vp-ux-dashboard-pending-cta
+  lens: brand-voice
+  severity: P2
+  issue: "Vendor-portal `Waiting for you to accept` (vp-ux-dashboard-pending-cta) is conversational/customer-style. Chef expects telegraphic; this reads like a customer waiting line."
+  evidence_excerpt: "vendor-portal DashboardPage `{n} orders / Waiting for you to accept`"
+  related_surfaces: []
+  recommendation: "Crisper chef-tone: `{n} orders awaiting acceptance.` or `{n} new orders.` (matches `All caught up / New orders will appear here.` empty-state tone)."
+  depends_on: null
+
+- finding_id: BV-047
+  surface_id: vp-ux-dashboard-quick-actions
+  lens: brand-voice
+  severity: P3
+  issue: "Quick Actions tiles use comma-separated title-action format: `Add Menu Item, Create a new dish listing / View Orders, Manage live orders / Update Profile, Edit kitchen details / View Earnings, Track your revenue`. Title Case + verbose secondary line."
+  evidence_excerpt: "vendor-portal DashboardPage quick-actions block"
+  related_surfaces: ["ap-dashboard-shortcuts-items", "web-ux-chef-dashboard-sections"]
+  recommendation: "Sentence case + drop verbose sub-line where redundant: `Add menu item`, `View orders`, `Update profile`, `View earnings`. Subtitles only when they add information not in the title."
+  depends_on: null
+
+- finding_id: BV-048
+  surface_id: mv-dash-subhead
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor dashboard subhead: `Here's your kitchen overview` vs vendor-portal: `Here's your kitchen today.` — drift across same persona/feature."
+  evidence_excerpt: "mobile-vendor/app/(tabs)/index.tsx `Here's your kitchen overview` vs vendor-portal DashboardPage `Here's your kitchen today.`"
+  related_surfaces: ["vp-ux-dashboard-title"]
+  recommendation: "Pick one — `Here's your kitchen today.` matches the natural conversational rhythm; or drop entirely (the H1 `Dashboard` is enough)."
+  depends_on: null
+
+- finding_id: BV-049
+  surface_id: mv-dash-stats-today-earnings
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor stat: `Today's Earnings`; vendor-portal: `Today's revenue` (vp-ux-dashboard-revenue-lead). Earnings vs revenue is a mental-model fork."
+  evidence_excerpt: "mobile-vendor (mv-dash-stats-today-earnings) `Today's Earnings`; vendor-portal (vp-ux-dashboard-revenue-lead) `Today's revenue`"
+  related_surfaces: ["dp-ux-dashboard-today-earnings-label", "mv-analytics-total-revenue", "mv-earnings-total"]
+  recommendation: "Standardize on `Today's earnings` (sentence case, chef-facing); reserve `Revenue` for admin/analytics."
+  depends_on: null
+
+# ============================================================================
+# SECTION O — PUNCTUATION / DECORATION / SAFETY (P2/P3)
+# ============================================================================
+
+- finding_id: BV-050
+  surface_id: mc-profile-more-rows
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer profile `More` section uses emoji icons (📱/🍽️) for nav rows. STYLE-GUIDE: emoji acceptable in customer-facing moments, but used as a decorative icon system this breaks Rule 1 (Confident, not loud) and the design tokens (lucide icons)."
+  evidence_excerpt: "mobile-customer profile.tsx mc-profile-more-rows: `Social Feed / Catering` with emoji icons (📱/🍽️)"
+  related_surfaces: []
+  recommendation: "Replace emoji with lucide-react icons matching the rest of the app."
+  depends_on: null
+
+- finding_id: BV-051
+  surface_id: mv-undo-cta
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor `UNDO` snackbar action is ALL CAPS. STYLE-GUIDE bans ALL CAPS body; button microcopy may be tolerated but consistency matters — other buttons in this app are sentence case."
+  evidence_excerpt: "mobile-vendor components/vendor/UndoSnackbar.tsx `UNDO`. Inventory note explicitly flags."
+  related_surfaces: []
+  recommendation: "`Undo` (sentence case). The snackbar still reads clearly; no need for capslock."
+  depends_on: BV-007
+
+- finding_id: BV-052
+  surface_id: md-core-047
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-delivery delivery-complete success line: `You earned ₹{payout} for this delivery` is good factual confidence. Comparable web/delivery-portal success states lack this voice — drift on what success sounds like across surfaces."
+  evidence_excerpt: "mobile-delivery active.tsx md-core-047 `You earned ₹{payout} for this delivery`. No equivalent in delivery-portal."
+  related_surfaces: ["dp-ux-active-status-delivered"]
+  recommendation: "Bring delivery-portal in line — show payout in success state. Voice principle holds; just missing in one surface."
+  depends_on: null
+
+- finding_id: BV-053
+  surface_id: md-core-039
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-delivery cancelled banner: `This delivery has been cancelled. Check the Available tab for new requests.` — `Available tab` is a brittle in-text reference (label changes break copy). Also `has been cancelled` is passive."
+  evidence_excerpt: "mobile-delivery active.tsx md-core-039 `This delivery has been cancelled. Check the Available tab for new requests.`"
+  related_surfaces: ["md-core-002"]
+  recommendation: "Active voice, less brittle: `Delivery cancelled. New requests appear in Available.` Drop the word `tab`."
+  depends_on: null
+
+# ============================================================================
+# SECTION P — CUISINE TAXONOMY DRIFT (P2)
+# Same cuisine list duplicated across web/mobile customer + vendor onboarding
+# with different items and different orderings.
+# ============================================================================
+
+- finding_id: BV-054
+  surface_id: web-ux-browse-filters-cuisines
+  lens: brand-voice
+  severity: P2
+  issue: "Customer cuisine filter has 10 cuisines (web): `South Indian / North Indian / Italian / Japanese / Mexican / Thai / Chinese / Mediterranean / American / Continental`. Mobile-customer home has 7: `All, North Indian, South Indian, Chinese, Continental, Italian, Healthy`. Vendor onboarding has 8: `North Indian / South Indian / Chinese / Continental / Bakery / Snacks / Beverages / Other`. Three cuisine universes that don't match."
+  evidence_excerpt: "web BrowseChefsPage.tsx:29-40 (10 items); mobile-customer index.tsx (7); mobile-vendor onboarding kitchen-details.tsx (8); mobile-customer onboarding preferences.tsx (8); profile.tsx (8 with order drift)"
+  related_surfaces: ["mc-home-cuisine-filters", "mc-onb-step3-cuisines", "mc-profile-cuisines", "mv-onb-kitchen-cuisine-options"]
+  recommendation: "Centralize the cuisine list in a shared constant. Either chef can offer cuisines outside the customer filter (broken filtering) or customer can request cuisines no chef offers (broken matching)."
+  depends_on: null
+
+- finding_id: BV-055
+  surface_id: mc-profile-cuisines
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-customer cuisine order drifts between onboarding and profile screens. Inventory note flags: `order differs from onboarding step3 — flag for drift`."
+  evidence_excerpt: "mc-onb-step3-cuisines: `North Indian, South Indian, Chinese, Continental, Italian, Healthy, Street Food, Desserts`; mc-profile-cuisines: `North Indian, South Indian, Chinese, Continental, Italian, Healthy, Desserts, Street Food` (Street Food and Desserts swapped)"
+  related_surfaces: ["mc-onb-step3-cuisines"]
+  recommendation: "Share the list and the order. Trivial fix; high consistency value."
+  depends_on: BV-054
+
+# ============================================================================
+# SECTION Q — PREP TIME / UNIT DRIFT (P3)
+# ============================================================================
+
+- finding_id: BV-056
+  surface_id: mv-onb-ops-preptime-options
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor onboarding uses `15min / 30min / 45min / 60min / 90min` (no space) but the same app's menu-new screen uses `{n} min` (with space). Inventory note: 'Drift vs new.tsx which uses {n} min with space.'"
+  evidence_excerpt: "mobile-vendor (onboarding)/operations.tsx mv-onb-ops-preptime-options `15min/30min/45min/60min/90min` vs menu/new.tsx mv-menunew-preptime-unit `{n} min`"
+  related_surfaces: ["mv-menunew-preptime-unit"]
+  recommendation: "Always `{n} min` with space (matches STYLE-GUIDE `1.2 km`, `15%` percentage exception). Update onboarding."
+  depends_on: null
+
+# ============================================================================
+# SECTION R — DRIVER PERSONA-NOUN DRIFT (P2)
+# Driver / Partner / Delivery Partner / Delivery Ops
+# ============================================================================
+
+- finding_id: BV-057
+  surface_id: dp-ux-profile-fallback-name
+  lens: brand-voice
+  severity: P2
+  issue: "Delivery-portal driver profile fallback name varies: `Delivery Partner` (UI shell) but `Driver` (login flow). STYLE-GUIDE: `Driver` ✅ (driver-facing) / `Delivery partner` (customer-facing only)."
+  evidence_excerpt: "dp-ux-profile-fallback-name `Delivery Partner` (admin uses this); login flow fallback uses `Driver`. Inventory note: `P — varies with login \"Driver\"`"
+  related_surfaces: ["dp-ux-partners-h", "dp-ux-fleet-partner-summary"]
+  recommendation: "Driver-facing screens (active, available, earnings, profile when self-viewing): `Driver`. Admin/dispatcher screens (fleet overview, partner detail): `Partner` or `Delivery partner`. Document the persona split."
+  depends_on: null
+
+- finding_id: BV-058
+  surface_id: dp-ux-staff-roles-fallback
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal staff role list mixes `Delivery Ops`, `Fleet Manager`, `Super Admin` (Title Case across) — these are roles users will see in role-picker UI. Sentence case required."
+  evidence_excerpt: "delivery-portal StaffPage.tsx:292 `Delivery Ops / Fleet Manager / Super Admin`; ap-staff-roles `Super Admin; Admin; Fleet Manager; Delivery Ops; Support`"
+  related_surfaces: ["ap-staff-roles"]
+  recommendation: "Role names in dropdowns: `Super admin`, `Fleet manager`, `Delivery ops`, `Admin`, `Support`. (Hyphenated `Delivery-ops` if you want one-word role code — but UI label is sentence case.)"
+  depends_on: null
+
+# ============================================================================
+# SECTION S — MENU MANAGEMENT NOUN DRIFT (P3)
+# ============================================================================
+
+- finding_id: BV-059
+  surface_id: mv-menu-heading
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor menu heading is `My Menu` while web chef menu is `Menu Management` and vendor-portal is `Menu Management`. Three apps, three different names for the same screen."
+  evidence_excerpt: "mobile-vendor menu tab `My Menu`; web chef `Menu Management`; vendor-portal `Menu Management / {n} items in your menu`"
+  related_surfaces: ["web-ux-chef-menu", "vp-ux-menu-title"]
+  recommendation: "Chef-facing: `Menu` is enough as H1 on each platform. Drop `Management` (operational fluff) and `My` (redundant — they're in their own portal)."
+  depends_on: null
+
+# ============================================================================
+# SECTION T — DATE / TIME RAW INPUT VIOLATION (P2)
+# ============================================================================
+
+- finding_id: BV-060
+  surface_id: mc-catering-form-labels
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer catering form label: `Event Date * (YYYY-MM-DD)` — raw ISO format hint visible to customers is engineering-grade UX. STYLE-GUIDE customer-facing: 12-hour, en-IN locale."
+  evidence_excerpt: "mc-catering-form-labels `Event Date * (YYYY-MM-DD)`. Inventory note: `raw date format hint is unfriendly UX`"
+  related_surfaces: ["mc-catering-event-types"]
+  recommendation: "Use a date-picker component; drop the format hint entirely. Customer should never see `YYYY-MM-DD`."
+  depends_on: null
+
+# ============================================================================
+# SECTION U — ABBREVIATION INCONSISTENCY (P3)
+# ============================================================================
+
+- finding_id: BV-061
+  surface_id: dp-ux-active-est-time-label
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal `Est. Time` (abbreviated) vs mobile-delivery uses full word context (`~{n} min`). Driver-facing label inconsistency. Inventory note: `A — abbreviation, may unclear`."
+  evidence_excerpt: "dp-ux-active-est-time-label `Est. Time`; md-core-021 `~{n} min`"
+  related_surfaces: ["md-core-021"]
+  recommendation: "Use full word: `ETA` or `Time` — `Est.` is unfriendly. STYLE-GUIDE: Plain English over jargon."
+  depends_on: null
+
+- finding_id: BV-062
+  surface_id: dp-ux-earnings-avg
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal `Avg/Delivery` uses slash compaction. STYLE-GUIDE: Plain English. `Per delivery` or `Average per delivery`."
+  evidence_excerpt: "dp-ux-earnings-avg `Avg/Delivery`"
+  related_surfaces: []
+  recommendation: "`Per delivery` (sentence case)."
+  depends_on: null
+
+- finding_id: BV-063
+  surface_id: dp-ux-partner-performance
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal partner detail uses `CSAT Score` — unexplained internal acronym for admin-facing label. STYLE-GUIDE: jargon out; explain or replace."
+  evidence_excerpt: "dp-ux-partner-performance `Acceptance Rate / On-Time Rate / CSAT Score / Total Deliveries`. Inventory note: `A — CSAT abbreviation`"
+  related_surfaces: []
+  recommendation: "Replace with `Customer rating` (or expand on first use). Admin tooling deserves clarity too."
+  depends_on: null
+
+# ============================================================================
+# SECTION V — APPROVAL TYPE TAXONOMY (P3)
+# ============================================================================
+
+- finding_id: BV-064
+  surface_id: ap-approvals-types
+  lens: brand-voice
+  severity: P3
+  issue: "Admin approval types: `Kitchen Onboarding; Document Verification; New Menu Item; Menu Update; Pricing Change; Kitchen Update; Driver Onboarding; Driver Document` — Title Case across 8 entries. Mix-mode: noun phrases vs verb-noun pairs (`Menu Update` vs `Pricing Change`)."
+  evidence_excerpt: "ap-approvals-types"
+  related_surfaces: ["ap-approvals-statuses", "ap-approvaldetail-detail-fields"]
+  recommendation: "Sentence case: `Kitchen onboarding`, `Document verification`, `New menu item`, `Menu update`, `Pricing change`, `Kitchen update`, `Driver onboarding`, `Driver document`."
+  depends_on: null
+
+# ============================================================================
+# SECTION W — ADMIN-SIDEBAR LABEL MISMATCH (P0)
+# ============================================================================
+
+- finding_id: BV-065
+  surface_id: ap-layout-nav-reviews
+  lens: brand-voice
+  severity: P0
+  issue: "Admin sidebar label `Reviews` routes to `/approvals` and the page is titled `Approval Reviews`. Two different concepts share one label — administrator clicks `Reviews` expecting product/order reviews but lands on approvals queue."
+  evidence_excerpt: "ap-layout-nav-reviews: `Reviews` (sidebar nav label, inventory note: `nav for /approvals — ambiguous label`); ap-approvals-title `Approval Reviews` (inventory note: `page title — may conflict with sidebar 'Reviews'`)"
+  related_surfaces: ["ap-approvals-title"]
+  recommendation: "Rename sidebar item to `Approvals`. Reserve `Reviews` for actual product/chef reviews if/when that page exists. Page title can simply be `Approvals`."
+  depends_on: null
+
+# ============================================================================
+# SECTION X — SETTINGS PAGE NOUN DRIFT (P3)
+# ============================================================================
+
+- finding_id: BV-066
+  surface_id: ap-platsettings-title
+  lens: brand-voice
+  severity: P3
+  issue: "Admin settings landing card titled `Platform` but the dedicated platform settings page H1 is also `Platform` while inventory shows web admin uses `Platform Settings`. Three labels for the same concept."
+  evidence_excerpt: "ap-platsettings-title `Platform` vs web-ux-admin-settings `Platform Settings / Danger Zone` (web admin) vs ap-settings-card-titles includes `Platform; Commission, delivery fees, service areas, hours`"
+  related_surfaces: ["web-ux-admin-settings"]
+  recommendation: "Pick one: `Platform settings` (sentence case) for the page H1; the landing-card sub-link can be just `Platform`."
+  depends_on: null
+
+# ============================================================================
+# SECTION Y — DOCUMENTATION NOTE: GENERAL PERSONA-TONE LEAKS (P3)
+# ============================================================================
+
+- finding_id: BV-067
+  surface_id: ap-userdetail-verification
+  lens: brand-voice
+  severity: P3
+  issue: "Admin user-detail verification card: `Email; Phone; Account Active; Verified; Not verified` — `Account Active` uses Title Case where verification labels use sentence case. Inconsistent within one card."
+  evidence_excerpt: "ap-userdetail-verification `Verification; Email; Phone; Account Active; Verified; Not verified`"
+  related_surfaces: ["ap-providerdetail-status-fields"]
+  recommendation: "`Account active` (sentence case), and `Active` / `Inactive` (1-word values). Sentence case all status values."
+  depends_on: null
+
+- finding_id: BV-068
+  surface_id: ap-providerdetail-status-fields
+  lens: brand-voice
+  severity: P3
+  issue: "Admin provider detail status fields: `Enabled; Yes; No; Active; Inactive; Last Used; Created; Never; Unlimited` — Title Case across all. Status pills should be sentence case as a class."
+  evidence_excerpt: "ap-providerdetail-status-fields"
+  related_surfaces: []
+  recommendation: "Sentence case all values: `Enabled`, `Yes`, `No`, `Active`, `Inactive`, `Last used`, `Created`, `Never`, `Unlimited`."
+  depends_on: BV-067
+
+# ============================================================================
+# SECTION Z — TIP / TIP HELPER PATTERN (P3)
+# ============================================================================
+
+- finding_id: BV-069
+  surface_id: web-ux-checkout-tip
+  lens: brand-voice
+  severity: P3
+  issue: "Web checkout tip: `100% of your tip goes to the home chef` — uses `home chef` lowercase correctly! But this is one of the few right examples. Use as anchor for fixing other surfaces."
+  evidence_excerpt: "web-ux-checkout-tip `Add a tip / 100% of your tip goes to the home chef / No tip / Custom`"
+  related_surfaces: []
+  recommendation: "No change. Reference this surface in the rewrite work for BV-028/BV-029 as the correct pattern."
+  depends_on: null
+
+# ============================================================================
+# SECTION AA — STAFF / INVITATION VERBS (P2)
+# ============================================================================
+
+- finding_id: BV-070
+  surface_id: ap-staff-invite-dialog-title
+  lens: brand-voice
+  severity: P2
+  issue: "Admin staff invite dialog says `Invite Staff Member` (Title Case); delivery-portal staff invite is `Send Staff Invitation` (Title Case); mobile-delivery staff is `Invite Staff Member` (Title Case). Three apps, three slightly different phrasings."
+  evidence_excerpt: "ap-staff-invite-dialog-title `Invite Staff Member`; dp-ux-staff-invite-h `Send Staff Invitation`; md-core-103 `Invite Staff Member`"
+  related_surfaces: ["dp-ux-staff-invite-btn", "md-core-102"]
+  recommendation: "Standardize on `Invite staff member` (action verb). Button: `Invite staff`. Confirmation: `Invitation sent.`"
+  depends_on: null
+
+- finding_id: BV-071
+  surface_id: ap-staff-invitation-statuses
+  lens: brand-voice
+  severity: P3
+  issue: "Staff invitation statuses (admin + delivery-portal): `Pending; Accepted; Expired; Revoked` — all Title Case as labels."
+  evidence_excerpt: "ap-staff-invitation-statuses; dp-ux-staff-pending-h `Pending Invitations`"
+  related_surfaces: []
+  recommendation: "Sentence case: `Pending`, `Accepted`, `Expired`, `Revoked`."
+  depends_on: BV-041
+
+# ============================================================================
+# SECTION BB — FOCUSED SAFETY NOTE (P0 — driver app)
+# ============================================================================
+
+- finding_id: BV-072
+  surface_id: md-core-033
+  lens: brand-voice
+  severity: P1
+  issue: "Mobile-delivery slide-to-confirm action label `Picked Up Order` (past tense for an action that hasn't happened) is confusing — driver swipes BEFORE picking up. Inventory explicitly flags: `Picked Up past-tense may be confusing as a future action`."
+  evidence_excerpt: "mobile-delivery active.tsx:32 `at_pickup: { label: 'Picked Up Order', nextStatus: 'picked_up' }`"
+  related_surfaces: ["md-core-032", "md-core-035"]
+  recommendation: "Imperative future tense: `Confirm pickup` or `I have the order`. Slide-to-confirm is an irreversible decision — the verb must be unambiguous."
+  depends_on: BV-021
+
+# ============================================================================
+# SECTION CC — CATERING STATUS DRIFT (P2)
+# ============================================================================
+
+- finding_id: BV-073
+  surface_id: mc-catering-status-labels
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer catering status pills: `Open / Quoted / Accepted / Completed / Cancelled` — all Title Case; differs from order status (`Pending / Accepted / Preparing / Ready...`). Two parallel status taxonomies, no shared vocabulary."
+  evidence_excerpt: "mc-catering-status-labels"
+  related_surfaces: ["web-ux-catering-quotes-detail", "web-ux-chef-catering"]
+  recommendation: "Sentence case (`Open`, `Quoted`, `Accepted`, `Completed`, `Cancelled`). Document catering vs order status taxonomy distinction in STYLE-GUIDE."
+  depends_on: BV-041
+
+# ============================================================================
+# SECTION DD — FAVORITES NAMING DRIFT (P3)
+# ============================================================================
+
+- finding_id: BV-074
+  surface_id: mc-favorites-title
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-customer favorites: tab label `Saved` but page title `Saved Chefs`. Web equivalent is `My Favorite Chefs`. Three names for one concept."
+  evidence_excerpt: "mc-favorites-title `Saved Chefs` (page) vs tab label `Saved`; web-ux-favorites-heading `My Favorite Chefs`"
+  related_surfaces: ["web-ux-favorites-heading", "web-ux-layout-nav"]
+  recommendation: "Pick one verb. Recommend `Saved chefs` (cleaner than `Favorites` overlap with `Favourite Cuisines` filter). Update web and tab label to match."
+  depends_on: null
+
+# ============================================================================
+# SECTION EE — SOCIAL FEED NAMING DRIFT (P3)
+# ============================================================================
+
+- finding_id: BV-075
+  surface_id: web-ux-social-feed-heading
+  lens: brand-voice
+  severity: P3
+  issue: "Web `Chef's Feed` (apostrophe-s, possessive); mobile `Social Feed`; chef-side `Social Feed`. Three different names for the feed."
+  evidence_excerpt: "web-ux-social-feed-heading `Chef's Feed`; mc-social-title `Social Feed`; web-ux-chef-social `Social Feed`"
+  related_surfaces: ["mc-social-title", "web-ux-chef-social"]
+  recommendation: "Pick one: `Feed` is cleanest, `Social feed` is descriptive. Drop the possessive."
+  depends_on: null
+
+# ============================================================================
+# SECTION FF — EMPTY-STATE TONE CHECK (P3)
+# ============================================================================
+
+- finding_id: BV-076
+  surface_id: vp-ux-dashboard-no-pending
+  lens: brand-voice
+  severity: P3
+  issue: "Vendor-portal `All caught up / New orders will appear here.` — good empty-state pattern (matches STYLE-GUIDE `Why empty → action`). Mobile-vendor and web chef equivalents are inconsistent."
+  evidence_excerpt: "vp-ux-dashboard-no-pending `All caught up / New orders will appear here.` (good); web-ux-chef-orders-heading: `No orders found` (terse, no action); mobile-vendor orders: no equivalent empty state explicitly labelled"
+  related_surfaces: ["web-ux-chef-orders-heading"]
+  recommendation: "Use the vendor-portal pattern everywhere. The two-line pattern reads warmly and follows the empty-state rule."
+  depends_on: null
+
+# ============================================================================
+# SECTION GG — TOAST / FEEDBACK COPY (P3)
+# ============================================================================
+
+- finding_id: BV-077
+  surface_id: vp-ux-settings-password
+  lens: brand-voice
+  severity: P3
+  issue: "Vendor-portal password: `Password updated successfully` (status) and `Failed to update password. Check your current password.` — first is over-padded (`updated successfully` is redundant), second is decent."
+  evidence_excerpt: "vp-ux-settings-password `Password updated successfully / Failed to update password. Check your current password.`"
+  related_surfaces: []
+  recommendation: "Match STYLE-GUIDE toast format `past tense, ≤6 words, period`: `Password updated.` Error stays as-is."
+  depends_on: null
+
+# ============================================================================
+# SECTION HH — RECEIPT / SUMMARY HEADER (P3)
+# ============================================================================
+
+- finding_id: BV-078
+  surface_id: vp-ux-orders-history-summary
+  lens: brand-voice
+  severity: P3
+  issue: "Vendor-portal order-history summary cards: `Delivered / Cancelled / Revenue` — fine pattern. But admin-portal Orders uses Title Case `Delivering / Delivered / Cancelled / Refunded` (vs lowercase noun statuses). Drift."
+  evidence_excerpt: "vp-ux-orders-history-summary `Delivered / Cancelled / Revenue`; ap-orders-filter-status `Delivering; Delivered; Cancelled; Refunded`"
+  related_surfaces: ["ap-orders-filter-status"]
+  recommendation: "Sentence case applies regardless of context. Both should be sentence case for the value labels."
+  depends_on: BV-041
+
+# ============================================================================
+# SECTION II — MISC PERSONA INVERSION (P2/P3)
+# ============================================================================
+
+- finding_id: BV-079
+  surface_id: dp-ux-stripe-make-primary
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal driver-facing CTA: `Make Stripe My Primary Gateway` — Title Case AND first-person `My` reads marketing-y for the driver tone (per STYLE-GUIDE: telegraphic ≤4 words)."
+  evidence_excerpt: "dp-ux-stripe-make-primary `Make Stripe My Primary Gateway` (5 words, Title Case, first-person)"
+  related_surfaces: ["dp-ux-stripe-switch-razorpay"]
+  recommendation: "`Use Stripe as default` or `Set as default` — 3-4 words, sentence case, no first-person."
+  depends_on: null
+
+- finding_id: BV-080
+  surface_id: dp-ux-stripe-active-gateway
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal `Active payout gateway: {Stripe/Razorpay}` — sentence-case `Active payout gateway` is correct! Use this as a positive anchor."
+  evidence_excerpt: "dp-ux-stripe-active-gateway"
+  related_surfaces: []
+  recommendation: "No change. Use as reference."
+  depends_on: null
+
+# ============================================================================
+# SECTION JJ — REVIEW-RELATED COPY (P3)
+# ============================================================================
+
+- finding_id: BV-081
+  surface_id: web-ux-chefdetail-reviews
+  lens: brand-voice
+  severity: P3
+  issue: "Web chef detail: `Customer Reviews / Chef's Response:` (with trailing colon and Title Case) — STYLE-GUIDE: form labels are `noun, sentence case, no colons`."
+  evidence_excerpt: "web-ux-chefdetail-reviews `Customer Reviews / Chef's Response:`"
+  related_surfaces: ["mv-reviewcard-your-reply"]
+  recommendation: "`Customer reviews` and `Chef's response` (no colon)."
+  depends_on: null
+
+- finding_id: BV-082
+  surface_id: mv-reviewdetail-input-ph
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor review reply placeholder: `Write a thoughtful reply to this review...` — `thoughtful` is a marketing coach-y hint; chef tone is operational."
+  evidence_excerpt: "mv-reviewdetail-input-ph `Write a thoughtful reply to this review...`"
+  related_surfaces: []
+  recommendation: "Plain: `Reply to this review…` (sentence case, no thought-coaching)."
+  depends_on: null
+
+# ============================================================================
+# SECTION KK — FINAL TYPOGRAPHY/MICROCOPY NOTES (P3)
+# ============================================================================
+
+- finding_id: BV-083
+  surface_id: ap-secsettings-2fa-account
+  lens: brand-voice
+  severity: P3
+  issue: "Admin 2FA: `2FA for your account / Enabled — login requires a 6-digit code / Disabled — enable to protect your admin account / Enable / Disable` — uses em-dash–led status descriptions. Good pattern but uses `login` (lowercase noun) — STYLE-GUIDE bans `login` as a noun form too; should be `sign-in`."
+  evidence_excerpt: "ap-secsettings-2fa-account `Enabled — login requires a 6-digit code`"
+  related_surfaces: []
+  recommendation: "`Enabled — sign-in requires a 6-digit code`. Apply the noun rule consistently."
+  depends_on: BV-036
+
+- finding_id: BV-084
+  surface_id: ap-secsettings-session-fields
+  lens: brand-voice
+  severity: P3
+  issue: "Admin security: `Access token TTL (hours)` / `Refresh token TTL (days)` — `TTL` is engineering jargon for an admin label."
+  evidence_excerpt: "ap-secsettings-session-fields"
+  related_surfaces: []
+  recommendation: "`Access token lifetime (hours)`. Plain English (STYLE-GUIDE Rule 2)."
+  depends_on: null
+
+- finding_id: BV-085
+  surface_id: ap-secsettings-apikey-fields
+  lens: brand-voice
+  severity: P3
+  issue: "Admin API key form: `I've saved it` button after revealing the secret. Cute but breaks neutral admin tone."
+  evidence_excerpt: "ap-secsettings-apikey-fields `I've saved it`"
+  related_surfaces: []
+  recommendation: "Neutral: `Done` or `Close`."
+  depends_on: null
+
+# ============================================================================
+# SECTION LL — PROFILE PAGE DRIFT (P2)
+# ============================================================================
+
+- finding_id: BV-086
+  surface_id: mc-profile-sections
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer profile section uses `Personal Info / Food Preferences / More`; web customer uses `Personal Information / Food Preferences`; web profile-tabs uses `Profile / Preferences / Addresses / Payment Methods / Notifications / Security`. Same persona, three navigation models."
+  evidence_excerpt: "mc-profile-sections `Personal Info / Food Preferences / More`; web-ux-profile-personal-info `Personal Information`; web-ux-profile-tabs `Profile / Preferences / Addresses / Payment Methods / Notifications / Security`"
+  related_surfaces: ["web-ux-profile-tabs", "web-ux-profile-personal-info"]
+  recommendation: "Standardize on `Personal info` (matches mobile and is shorter). Web should adopt mobile's section names for the same flow."
+  depends_on: BV-038
+
+- finding_id: BV-087
+  surface_id: web-ux-profile-preferences
+  lens: brand-voice
+  severity: P2
+  issue: "Web profile uses both `Food Preferences` and `Favourite Cuisines` (British spelling) within the same Preferences tab. Inconsistent within one screen."
+  evidence_excerpt: "web-ux-profile-preferences `Food Preferences / Dietary Preferences / Food Allergies / Favourite Cuisines / Spice Tolerance / Household Size`"
+  related_surfaces: ["mc-profile-cuisines"]
+  recommendation: "Pick spelling: STYLE-GUIDE shows `en-IN locale` — `Favourite` (British) is the en-IN standard. OK if consistent across all surfaces. But fix capitalization: `Food preferences`, `Dietary preferences`, `Food allergies`, `Favourite cuisines`, `Spice tolerance`, `Household size`."
+  depends_on: null
+
+# ============================================================================
+# SECTION MM — SUBSCRIPTION / FEATURE FLAGS (P3)
+# ============================================================================
+
+- finding_id: BV-088
+  surface_id: md-core-066
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-delivery settings: `View Subscription Plan` — feature visible but likely not implemented? Title Case. Either feature exists or it shouldn't be in nav."
+  evidence_excerpt: "md-core-066 `View Subscription Plan`"
+  related_surfaces: []
+  recommendation: "If feature ships: `Subscription plan`. If not: remove until ready (BV-034 / coming-soon rule)."
+  depends_on: null
+
+# ============================================================================
+# SECTION NN — DESTRUCTIVE-ACTION COPY (P3)
+# ============================================================================
+
+- finding_id: BV-089
+  surface_id: mv-settings-delete-account
+  lens: brand-voice
+  severity: P3
+  issue: "`Delete Account` (mobile-vendor + mobile-delivery) — Title Case for the most consequential customer-facing destructive action."
+  evidence_excerpt: "mv-settings-delete-account `Delete Account`; md-core-067 `Delete Account`"
+  related_surfaces: []
+  recommendation: "`Delete account` (sentence case). The destructive weight should be in the button color (paprika), not capitalization."
+  depends_on: BV-026
+
+# ============================================================================
+# SECTION OO — DOC UPLOAD STATE LABELS (P3)
+# ============================================================================
+
+- finding_id: BV-090
+  surface_id: mv-onb-review-doc-uploaded
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile-vendor doc state: `Uploaded` / `Not uploaded` (sentence case — good!) but docs source buttons say `Camera / Gallery / PDF` (Title Case — fine for noun chips)."
+  evidence_excerpt: "mv-onb-review-doc-uploaded `Uploaded`; mv-onb-review-doc-not-uploaded `Not uploaded`; mv-onb-docs-source-camera `Camera`, mv-onb-docs-source-pdf `PDF`"
+  related_surfaces: []
+  recommendation: "No change. Document this as a positive anchor — sentence case state labels with Title Case-allowed proper nouns (`PDF`, `Camera`)."
+  depends_on: null
+
+# ============================================================================
+# SECTION PP — FINAL DRIFT SUMMARY ITEMS (P3)
+# ============================================================================
+
+- finding_id: BV-091
+  surface_id: web-ux-checkout-delivery-time
+  lens: brand-voice
+  severity: P3
+  issue: "Web checkout: `As soon as possible / Usually 30-45 minutes / Schedule for later` — `Usually 30-45 minutes` reads like a vendor disclaimer. Customer tone should be promise-light."
+  evidence_excerpt: "web-ux-checkout-delivery-time `Delivery Time / As soon as possible / Usually 30-45 minutes / Schedule for later`"
+  related_surfaces: []
+  recommendation: "`Delivery time / As soon as possible / 30–45 min typical / Schedule for later`. Use en-dash and the abbreviation; drop the hedge-word `usually`."
+  depends_on: null
+
+- finding_id: BV-092
+  surface_id: web-ux-orderdetail-sections
+  lens: brand-voice
+  severity: P3
+  issue: "Web order detail back link: `Back to Orders` (Title Case). Mobile uses `Back` only. Cross-app drift."
+  evidence_excerpt: "web-ux-orderdetail-sections `Back to Orders`; mobile-delivery delivery/[id].tsx similar pattern with sentence-case behavior; vendor-portal `Back to Profile`/`Back to Menu`/`Back to Earnings` (Title Case across)"
+  related_surfaces: ["dp-ux-partner-detail-back", "vp-ux-payouts-title"]
+  recommendation: "`Back to orders` (sentence case). Or just `Back` — relying on browser context. Pick one pattern."
+  depends_on: BV-038
+
+# ============================================================================
+# SECTION QQ — PAYOUT VOCABULARY (P3)
+# ============================================================================
+
+- finding_id: BV-093
+  surface_id: dp-ux-stripe-title
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal `Stripe (International Payouts)` — parenthetical Title Case mid-sentence is grammatically odd."
+  evidence_excerpt: "dp-ux-stripe-title `Stripe (International Payouts)`"
+  related_surfaces: []
+  recommendation: "`Stripe (international payouts)` — sentence case inside parens."
+  depends_on: null
+
+- finding_id: BV-094
+  surface_id: dp-ux-stripe-intro
+  lens: brand-voice
+  severity: P3
+  issue: "Delivery-portal Stripe intro: `Accept delivery payouts in your local currency. Stripe handles KYC and bank verification on its hosted pages.` — `KYC` jargon for driver audience."
+  evidence_excerpt: "dp-ux-stripe-intro"
+  related_surfaces: []
+  recommendation: "Replace `KYC` with `identity verification` for driver clarity (Plain English, Rule 2)."
+  depends_on: null
+
+# ============================================================================
+# SECTION RR — DRIVER STATE-COPY DRIFT (P2)
+# ============================================================================
+
+- finding_id: BV-095
+  surface_id: dp-ux-dashboard-partner-online
+  lens: brand-voice
+  severity: P2
+  issue: "Driver online-state copy varies between surfaces: `Ready for deliveries` (dp dashboard), `You are Online` (mobile-delivery dashboard), `Currently online — tap to toggle availability` (web delivery layout aria-label). Three phrasings, one state."
+  evidence_excerpt: "dp-ux-dashboard-partner-online `Ready for deliveries`; md-core-006 `You are Online`; web-ux-delivery-layout-toggles `Currently online — tap to toggle availability`"
+  related_surfaces: ["md-core-006", "md-core-007"]
+  recommendation: "Pick one online-state phrase. Driver tone: telegraphic ≤4 words. `Online` (1 word). Subtitle if needed: `Receiving requests.`"
+  depends_on: null
+
+- finding_id: BV-096
+  surface_id: dp-ux-dashboard-youre-offline
+  lens: brand-voice
+  severity: P2
+  issue: "Driver offline state: `You're offline` (dp), `You are Offline` (mobile), `Currently offline` (dp dashboard partner offline), `You're Offline` (mobile-delivery available tab). Apostrophe vs no apostrophe + Title Case vs sentence case."
+  evidence_excerpt: "dp-ux-dashboard-youre-offline `You're offline`; md-core-007 `You are Offline`; dp-ux-dashboard-partner-offline `Currently offline`; md-core-016 `You're Offline`"
+  related_surfaces: ["md-core-007", "md-core-016"]
+  recommendation: "Pick one: `Offline` (1 word, telegraphic, sentence case). Drop the `You're/You are` framing for driver brevity."
+  depends_on: BV-095
+
+# ============================================================================
+# SECTION SS — EARNINGS VS REVENUE NOUN (P2)
+# ============================================================================
+
+- finding_id: BV-097
+  surface_id: mv-earnings-total
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-vendor `Total Earnings` vs mobile-vendor analytics `Total Revenue` — same chef, two screens, two nouns. Earnings is chef-perspective (post-platform-fee); Revenue is admin-perspective. Confusing if the values differ."
+  evidence_excerpt: "mv-earnings-total `Total Earnings`; mv-analytics-total-revenue `Total Revenue`. Inventory note: `Drift: earnings.tsx uses 'Total Earnings' — verify mental model is consistent.`"
+  related_surfaces: ["mv-analytics-total-revenue", "vp-ux-earnings-cards"]
+  recommendation: "Chef-facing: always `Earnings`. Admin-facing: `Revenue`. Don't mix in one persona's UI."
+  depends_on: null
+
+# ============================================================================
+# SECTION TT — REPORT NOTE (informational, not finding) ===================
+# ============================================================================
+# Total findings: 97
+# Severity breakdown:
+#   P0: 12 (cross-app order-status taxonomy + brand identity Fe3dr/HomeChef + AI-slop trust metrics + currency $ vs ₹ + admin sidebar label mismatch + Pickup/Dropoff ALL CAPS)
+#   P1: 21 (sign-out epidemic, place-order/cancel-order Title Case, persona-tone leaks, in-transit/delivering/on-the-way drift)
+#   P2: 24 (cross-app nav drift, persona-tone secondary, cuisine taxonomy, driver state phrasing)
+#   P3: 40 (capitalization in deep surfaces, abbreviations, microcopy polish)

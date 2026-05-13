@@ -1,0 +1,1072 @@
+# Legal lens findings — CORE-UX category (594 surfaces)
+# Scope: India regulatory exposure (DPDP Act 2023, FSSAI 2011/2018, RBI PA MD 2020/2024, GST/CGST 2017,
+# Consumer Protection Act 2019, IT Act 2000/IT Rules 2021, MV Act 1988 for drivers) + generic best-practice
+# IMPORTANT: Every finding carries depends_on: "needs lawyer review" — this audit is not legal advice.
+# Focus: transaction-critical surfaces (checkout, cart, order detail, payouts, refunds, audit log,
+# delivery promises, reviews, filters with implied claims, allergens, KYC, driver gig classification).
+
+findings:
+
+  # ============================================================================
+  # CHECKOUT — contract-formation moment (highest exposure)
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-001
+    surface_id: web-ux-checkout-heading
+    lens: legal
+    severity: P0
+    issue: "Checkout page H1 is the entire page contract-formation surface but no inline T&C / Refund Policy / Cancellation Policy acknowledgement is rendered at the 'Place Order' moment in this excerpt"
+    evidence_excerpt: "Checkout"
+    recommendation: "Surface a one-line, lawyer-reviewed disclosure adjacent to Place Order: 'By placing this order you accept our Terms, Refund Policy (refunds in ≤X working days), Cancellation Policy, and confirm you have read allergen info.' Required for enforceable contract under Indian Contract Act §10, and for RBI PA refund-timeline disclosure at point of payment."
+    citation: "Indian Contract Act 1872 §10; RBI Payment Aggregator MD (17 Mar 2020, upd. 2024); Consumer Protection (E-Commerce) Rules 2020 r.5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-002
+    surface_id: web-ux-checkout-payment-section
+    lens: legal
+    severity: P0
+    issue: "Payment section discloses 'Powered by Razorpay' but does not identify the merchant of record, the payment aggregator's role, or the refund timeline before card capture"
+    evidence_excerpt: "Payment / Powered by Razorpay / Pay securely via UPI, cards, net banking, or wallets"
+    recommendation: "RBI PA MD requires merchant-of-record clarity. Add: identity of the merchant (Home Chef platform vs the individual chef), Razorpay's role as licensed PA, refund timeline (≤T+1 instructed, settlement framework), and the chargeback / dispute pathway. Cite RBI PA framework expressly."
+    citation: "RBI Payment Aggregator MD 17 Mar 2020 §6 (Merchant On-boarding) and §8 (Settlement & Escrow)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-003
+    surface_id: web-ux-checkout-summary
+    lens: legal
+    severity: P0
+    issue: "Order Summary surfaces 'Tax' as an opaque line — no GST registration number, no CGST/SGST/IGST split, no HSN/SAC code reference, no statement of whether prices are tax-inclusive or tax-extra"
+    evidence_excerpt: "Subtotal / Delivery fee / Service fee / Tax / Tip / Total / Place Order"
+    recommendation: "Under CGST Rules 2017 r.46, every taxable supply requires a tax invoice with GSTIN, HSN/SAC code, and tax-rate breakup; the checkout summary must at minimum signal that a compliant invoice will be issued and indicate tax-inclusivity. Replace single 'Tax' line with 'GST (X%)' and link to a sample compliant invoice. B2B GST-input claimers need GSTIN capture path."
+    citation: "CGST Act 2017 §31; CGST Rules 2017 r.46; FAQ on E-Commerce Operator (CBIC)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-004
+    surface_id: web-ux-checkout-delivery-time
+    lens: legal
+    severity: P0
+    issue: "Delivery-time selector exposes 'Usually 30-45 minutes' as an implicit time guarantee — creates Consumer Protection Act exposure if not met, because the platform is making a temporal representation at point of sale"
+    evidence_excerpt: "Delivery Time / As soon as possible / Usually 30-45 minutes / Schedule for later"
+    recommendation: "Either (a) qualify as a non-binding estimate ('Estimated — actual time varies with traffic and chef prep') and link to remedy if breached, or (b) make it a binding SLA with explicit refund/discount mechanic if breached. Bald promise without qualifier is a deficiency-of-service claim risk under CPA 2019 §2(11)."
+    citation: "Consumer Protection Act 2019 §2(11), §2(47); CP (E-Commerce) Rules 2020 r.5(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-005
+    surface_id: web-ux-checkout-tip
+    lens: legal
+    severity: P1
+    issue: "Tip language '100% of your tip goes to the home chef' is an absolute representation — if any platform fee, GST, or processing deduction is taken from the tip transit, this becomes a misleading representation"
+    evidence_excerpt: "Add a tip / 100% of your tip goes to the home chef / No tip / Custom"
+    recommendation: "Lawyer review of literal accuracy. If TDS, GST on commission, or any deduction touches the tip flow, replace with 'Tips are passed to the chef (subject to applicable tax withholding)'. Misleading-representation exposure under CPA 2019 §2(28) and CCPA Guidelines on Misleading Ads 2022."
+    citation: "Consumer Protection Act 2019 §2(28); CCPA Guidelines for Prevention of Misleading Ads 2022 r.4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-006
+    surface_id: web-ux-checkout-address-form
+    lens: legal
+    severity: P1
+    issue: "Address form collects PII (street, city, state, postal code) at checkout with no inline DPDP notice of purpose, retention period, or grievance officer reference"
+    evidence_excerpt: "Delivery Address / Add New / Label / Street Address / Apartment, suite, etc. (optional) / City / State / Postal Code / Save Address"
+    recommendation: "DPDP Act §5 requires notice 'at or before' personal-data collection. Add a short notice link near Save Address: 'We use this address to deliver your order. Retention: X months after order. See Privacy Notice and contact our Grievance Officer at <email>.'"
+    citation: "DPDP Act 2023 §5 (Notice), §13 (Grievance Officer)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-007
+    surface_id: mc-checkout-totals
+    lens: legal
+    severity: P0
+    issue: "Mobile checkout totals show only 'Subtotal / Delivery fee / Free / Total' — no tax line at all on the customer mobile app, breaking GST invoice expectations"
+    evidence_excerpt: "Subtotal / Delivery fee / Free / Total"
+    recommendation: "Mobile checkout must display the GST line and tax-inclusivity status before Place Order. Receipts/invoices must comply with CGST Rules r.46. Missing tax line is a P0 compliance gap."
+    citation: "CGST Act 2017 §31; CGST Rules 2017 r.46"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-008
+    surface_id: mc-checkout-place-order
+    lens: legal
+    severity: P0
+    issue: "Mobile 'Place Order · ₹{total}' CTA has no T&C, Refund Policy, or Cancellation Policy acknowledgement adjacent — contract-formation without disclosed terms"
+    evidence_excerpt: "Place Order · ₹{total} / Processing..."
+    recommendation: "Add a one-line disclosure above CTA referencing Terms, Refund Policy, Cancellation Policy. Required for enforceable contract and for RBI PA refund-timeline disclosure at payment."
+    citation: "Indian Contract Act 1872 §10; RBI PA MD 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-009
+    surface_id: mc-checkout-section-address
+    lens: legal
+    severity: P1
+    issue: "Mobile address capture step has no DPDP notice or purpose statement"
+    evidence_excerpt: "Delivery Address"
+    recommendation: "Inline DPDP §5 notice with purpose, retention, and grievance officer reference."
+    citation: "DPDP Act 2023 §5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CART — price display, T&C reference, minimum-order disclosure
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-010
+    surface_id: web-ux-cart-order-summary
+    lens: legal
+    severity: P1
+    issue: "Cart summary lists 'Service fee', 'Delivery fee', 'Tax' as opaque line items without a tooltip or 'What is this?' explanation — Service fee in particular has been flagged in Indian consumer regulator advisories"
+    evidence_excerpt: "Order Summary / Subtotal / Delivery fee / Service fee / Discount / Total"
+    recommendation: "CCPA Aug-2024 guidance on dark patterns flags hidden / unexplained service fees. Add inline disclosure: who collects, what it is for, whether it is refundable. 'Service fee' without explanation may be a 'drip pricing' dark pattern."
+    citation: "CCPA Guidelines for Prevention and Regulation of Dark Patterns 2023 r.3 (Drip Pricing); CPA 2019 §2(47)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-011
+    surface_id: web-ux-cart-checkout-cta
+    lens: legal
+    severity: P2
+    issue: "'Sign in to Checkout' enforces auth gate — but the moment a user starts adding to cart they may be giving consent to cookies/session storage with no banner shown beforehand"
+    evidence_excerpt: "Sign in to Checkout / Proceed to Checkout"
+    recommendation: "Cookie/tracking consent banner before any non-essential storage. DPDP read-with IT Rules 2021 requires informed consent for trackers."
+    citation: "DPDP Act 2023 §6; IT Rules 2021 r.3(1)(b)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-012
+    surface_id: mc-cartsheet-checkout-cta
+    lens: legal
+    severity: P1
+    issue: "Mobile cart 'Proceed to Checkout' has no minimum-order, surge-pricing, or geo-availability disclosure before transition"
+    evidence_excerpt: "Proceed to Checkout"
+    recommendation: "If platform applies minimum order or surge pricing, disclose at cart, not after payment. CCPA dark-patterns guidance treats post-cart surprises as 'sneak into basket' / 'forced action' patterns."
+    citation: "CCPA Dark Patterns Guidelines 2023 r.3, r.7"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ORDER DETAIL / CANCELLATION / REFUND — post-order disclosures
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-013
+    surface_id: web-ux-orderdetail-sections
+    lens: legal
+    severity: P0
+    issue: "Order detail anatomy shows 'Estimated delivery' as a representation but no refund/discount entitlement is shown if estimate is breached, and no GST-compliant invoice link is shown"
+    evidence_excerpt: "Order #{n} / Placed on {date} / Estimated delivery: / Order Items / Delivery Address / Payment Summary / Special Instructions / Leave a Review"
+    recommendation: "Add a 'View invoice' / 'Download GST invoice' link with CGST r.46 compliant tax invoice (GSTIN, HSN/SAC, tax breakup). Add explicit text on whether 'Estimated delivery' is binding or indicative. Add refund-timeline statement adjacent to Payment Summary."
+    citation: "CGST Rules 2017 r.46; RBI PA MD 2020; CPA 2019 §2(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-014
+    surface_id: web-ux-orderdetail-cancel
+    lens: legal
+    severity: P0
+    issue: "Cancel modal asks 'why you're cancelling' but does not state refund eligibility, refund timeline, or who bears non-refundable costs at each order stage"
+    evidence_excerpt: "Cancel Order / Please let us know why you're cancelling..."
+    recommendation: "Show stage-dependent refund matrix BEFORE the cancel confirm: e.g. 'Cancellation before chef acceptance — full refund within 5-7 working days. After chef acceptance — partial refund. After dispatch — no refund.' Refund timeline must be explicit per RBI PA MD."
+    citation: "RBI PA MD 2020; CPA (E-Commerce) Rules 2020 r.5(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-015
+    surface_id: web-ux-orders-status-labels
+    lens: legal
+    severity: P1
+    issue: "Status taxonomy includes 'Refunded' as a public-facing state but no associated refund-completion timestamp, payment-method, or transaction reference is documented in the inventory excerpt"
+    evidence_excerpt: "Pending / Accepted / Preparing / Ready / Picked Up / On the Way / Delivered / Cancelled / Refunded"
+    recommendation: "When showing 'Refunded' state, also surface refund amount, refund instrument (original method), refund initiation date, and expected credit window. RBI PA framework requires audit-trail visibility for refunds."
+    citation: "RBI PA MD 2020 §8 (Settlement); Consumer Protection (E-Commerce) Rules 2020 r.6(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-016
+    surface_id: ap-orders-filter-status
+    lens: legal
+    severity: P2
+    issue: "Admin order filter shows 'Refunded' alongside 'Cancelled' but inventory notes 'refund-adjacent' — admin tooling must support full RBI-PA refund audit trail"
+    evidence_excerpt: "All Status; Pending; Accepted; Preparing; Ready; Delivering; Delivered; Cancelled; Refunded"
+    recommendation: "Lawyer review whether admin refund state captures: refund initiator, RBI PA reference, settlement batch, time-to-credit. Required for RBI PA audit and CCPA dispute pathways."
+    citation: "RBI PA MD 2020 §6, §8"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-017
+    surface_id: mc-order-detail-status-labels
+    lens: legal
+    severity: P1
+    issue: "Mobile customer status labels do not include a 'Refunded' state ('Pending / Confirmed / Preparing / Ready for Pickup / On the Way / Delivered / Cancelled') — customer cannot self-serve refund status visibility"
+    evidence_excerpt: "Pending / Confirmed / Preparing / Ready for Pickup / On the Way / Delivered / Cancelled"
+    recommendation: "Add 'Refunded' state with timestamp and instrument disclosure. RBI PA framework expects customer-visible refund tracking."
+    citation: "RBI PA MD 2020 §8; CP (E-Commerce) Rules 2020 r.6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-018
+    surface_id: mc-order-detail-price-rows
+    lens: legal
+    severity: P0
+    issue: "Mobile order detail price breakdown shows 'Subtotal / Delivery Fee / Total' — no Tax/GST line, no service fee, no convenience fee disclosure"
+    evidence_excerpt: "Subtotal / Delivery Fee / Total"
+    recommendation: "Order detail receipt must comply with CGST r.46 — add GST line with rate, GSTIN, HSN/SAC for B2C food delivery."
+    citation: "CGST Rules 2017 r.46"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-019
+    surface_id: dp-ux-active-cancel-prompt
+    lens: legal
+    severity: P0
+    issue: "Driver cancellation uses native browser prompt() with no terms reference, no audit trail capture by category, no customer-impact disclosure — inventory itself flags 'no UI polish'"
+    evidence_excerpt: "Reason for cancellation?"
+    recommendation: "Driver cancel must capture structured reason (food not ready, customer unreachable, accident, vehicle issue), with attribution stored in audit log, and customer-impact warning. Affects refund attribution and gig-worker performance metrics under any future Code on Social Security gig regulations."
+    citation: "Code on Social Security 2020 (gig-worker provisions, when notified); CPA 2019 §2(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-020
+    surface_id: dp-ux-active-cancel-btn
+    lens: legal
+    severity: P1
+    issue: "Driver 'Cancel Delivery' is a destructive action with consumer-protection implications (refund triggers, chef payout adjustments) but no two-step confirmation flow is referenced in inventory"
+    evidence_excerpt: "Cancel Delivery"
+    recommendation: "Require typed reason + two-step confirm. Capture geolocation + timestamp for audit. Required for CPA / RBI PA chargeback rebuttals."
+    citation: "CPA 2019 §2(11); RBI PA MD 2020 §6"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MENU / DISH LISTINGS — FSSAI allergen and licence disclosure
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-021
+    surface_id: web-ux-chef-menu
+    lens: legal
+    severity: P0
+    issue: "Chef Menu Management page has no field for FSSAI-mandated allergen declaration on individual dishes — only basic name/description shown in inventory"
+    evidence_excerpt: "Menu Management / Search menu items... / No menu items / e.g., 500g"
+    recommendation: "FSSAI Labelling & Display Regulations 2020 require allergen declaration for the eight major allergens on every prepared food item served to consumers. Add a mandatory allergen-tags field (cereals containing gluten, crustaceans, eggs, fish, peanuts, soybeans, milk, tree nuts, plus any other locally relevant). Also require chef's FSSAI registration number capture at kitchen onboarding (covered under chef profile but verify enforcement on menu)."
+    citation: "FSSAI (Labelling and Display) Regulations 2020 r.5; FSS Act 2006 §31"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-022
+    surface_id: vp-ux-menu-form-title
+    lens: legal
+    severity: P0
+    issue: "Menu Item form page title shows 'Edit Menu Item / Add Menu Item' but inventory excerpt shows no allergen-tag field, no ingredient list field, no FSSAI compliance hint"
+    evidence_excerpt: "Edit Menu Item / Add Menu Item / Update the details of your dish / Add a new dish to your menu"
+    recommendation: "Form must enforce allergen-tag capture and ingredient declaration. FSSAI regs require ingredient-and-allergen disclosure on prepared food."
+    citation: "FSSAI (Labelling and Display) Regulations 2020 r.5"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-023
+    surface_id: vp-ux-menu-view-page
+    lens: legal
+    severity: P1
+    issue: "Menu item read-only view shows 'Dietary Information / No dietary information provided' as a tolerated state — but for a regulated food platform, no dietary info shouldn't be a viable published state"
+    evidence_excerpt: "Approved / Under Review / Available / Unavailable / Featured / Edit Item / Description / Dietary Information / No dietary information provided / Pricing / Preparation / Prep Time / Serves / Portion Size / Performance / Orders / Rating / Item ID"
+    recommendation: "Make dietary/allergen information mandatory for publish. 'No dietary information provided' should block 'Approved' status."
+    citation: "FSSAI (Labelling and Display) Regulations 2020 r.5"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-024
+    surface_id: mc-home-cuisine-filters
+    lens: legal
+    severity: P2
+    issue: "Cuisine filter chips do not include a veg/non-veg toggle or visual veg-mark — FSSAI mandates veg/non-veg symbols on every food product in India"
+    evidence_excerpt: "All, North Indian, South Indian, Chinese, Continental, Italian, Healthy"
+    recommendation: "FSSAI Regs r.2.2.2 require green-dot (veg) / brown-dot (non-veg) symbol on every food product. The customer-facing filter should reflect this. Mobile vendor inventory shows Veg/Non-Veg toggle at item level (mv-menunew-type-veg/-nonveg) — verify display compliance on customer-facing detail."
+    citation: "FSS (Packaging and Labelling) Regulations 2011 r.2.2.2; FSSAI (Labelling and Display) Regulations 2020 r.5"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-025
+    surface_id: mv-menunew-name-ph
+    lens: legal
+    severity: P3
+    issue: "Mobile-vendor menu name placeholder 'e.g. Butter Chicken' encourages product naming without ingredient declaration — Butter Chicken contains dairy, an allergen"
+    evidence_excerpt: "e.g. Butter Chicken"
+    recommendation: "Cosmetic — ensure the form below the name field surfaces an allergen warning when dairy/eggs/nuts/gluten are detected by ingredient parser."
+    citation: "FSSAI (Labelling and Display) Regulations 2020 r.5 (best-practice nudge)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-026
+    surface_id: mv-menunew-desc-ph
+    lens: legal
+    severity: P2
+    issue: "Description placeholder 'Describe your dish (at least 20 characters)' does not prompt for allergen / ingredient / spice-level disclosure — relies on free text"
+    evidence_excerpt: "Describe your dish (at least 20 characters)"
+    recommendation: "Replace placeholder with explicit nudge: 'Describe ingredients, spice level, and any allergens (dairy, nuts, gluten, soy, eggs).'"
+    citation: "FSSAI (Labelling and Display) Regulations 2020 r.5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CHEF PROFILE / DETAIL — FSSAI licence display + verified-claim exposure
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-027
+    surface_id: web-ux-chefdetail-status-badges
+    lens: legal
+    severity: P0
+    issue: "Chef detail page shows 'Verified' badge as a claim but inventory does not indicate what verification means (KYC? FSSAI? insurance? hygiene audit?). Implied-claim exposure"
+    evidence_excerpt: "Verified / Open for orders / Currently closed / Min. order: / Delivery: / Price range:"
+    recommendation: "CCPA Misleading Ads Guidelines 2022 require substantiation of objective claims. Add a tooltip/info icon: 'Verified means: government-ID checked, FSSAI registration confirmed, address checked.' Otherwise the badge is a misleading claim. Display chef FSSAI registration number on the profile."
+    citation: "CCPA Guidelines for Prevention of Misleading Ads 2022 r.4, r.7; FSS Act 2006 §31; CPA 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-028
+    surface_id: web-ux-chef-profile
+    lens: legal
+    severity: P0
+    issue: "Chef profile editor includes 'Business Settings' and 'Basic Information' but the inventory does not surface a mandatory FSSAI registration number field at the chef-facing form"
+    evidence_excerpt: "Kitchen Profile / Profile Images / Basic Information / Cuisines / Specialties / Business Settings / Your Stats / Tell customers about your kitchen..."
+    recommendation: "FSS Act §31 requires FBOs (Food Business Operators) to be FSSAI-registered. Home Chef as platform must collect and display each chef's FSSAI registration number publicly. Add mandatory capture + display."
+    citation: "FSS Act 2006 §31; FSS (Licensing and Registration) Regulations 2011"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-029
+    surface_id: vp-ux-profile-docs
+    lens: legal
+    severity: P1
+    issue: "Vendor-portal profile documents section 'Upload required documents for verification' does not enumerate what documents are required (FSSAI, PAN, GST, address proof, bank account, kitchen hygiene certificate)"
+    evidence_excerpt: "Documents & Certificates / Upload required documents for verification"
+    recommendation: "Enumerate required documents explicitly and bind each to a regulation: FSSAI registration (FSS Act §31), PAN (Income Tax), GSTIN if turnover > threshold, address proof. Without enumeration, KYC is non-deterministic."
+    citation: "FSS Act 2006 §31; Income Tax Act 1961; RBI KYC Master Direction 2016"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-030
+    surface_id: ap-approvaldetail-detail-fields
+    lens: legal
+    severity: P1
+    issue: "Admin approval detail captures 'Terms Accepted / Hygiene Policy Accepted' as fields — but inventory shows no link to the actual policy text that was accepted or timestamp/version"
+    evidence_excerpt: "Terms Accepted; Hygiene Policy Accepted; Document Type; File Name; Status; Document Number..."
+    recommendation: "Acceptance records must capture: policy version hash, timestamp, IP, user-agent. Without version pinning, you cannot prove what the chef agreed to. Required for FSS Act enforcement defence and CPA disputes."
+    citation: "Indian Contract Act 1872 §10; IT Act 2000 §65B (electronic evidence); FSS Act 2006"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # BROWSE / FILTERS — implied claims (Verified, Top Rated, Trending)
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-031
+    surface_id: web-ux-browse-sort-options
+    lens: legal
+    severity: P1
+    issue: "Sort dropdown includes 'Top Rated' and 'Most Popular' — these are objective claims that require substantiation methodology disclosure"
+    evidence_excerpt: "Top Rated / Nearest / Most Popular / Price"
+    recommendation: "Add a 'Sort methodology' info icon: 'Top Rated = chefs with average rating ≥ X over last Y orders, min Z reviews. Most Popular = orders in last 30 days.' Otherwise misleading-claim exposure under CCPA."
+    citation: "CCPA Guidelines for Prevention of Misleading Ads 2022 r.4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-032
+    surface_id: web-ux-browse-filters-rating
+    lens: legal
+    severity: P2
+    issue: "Rating filter '4.5+ Stars / 4+ Stars / 3.5+ Stars' relies on rating data — must comply with BIS standard IS 19000:2022 on online consumer reviews (now applicable as voluntary standard)"
+    evidence_excerpt: "Any Rating / 4.5+ Stars / 4+ Stars / 3.5+ Stars"
+    recommendation: "Disclose review-collection process (verified purchases only? anonymity? moderation policy?). BIS IS 19000:2022 sets the framework. Failure to disclose is a CCPA Misleading Ads risk."
+    citation: "BIS IS 19000:2022 (Online Consumer Reviews); CCPA Misleading Ads Guidelines 2022"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-033
+    surface_id: web-ux-social-feed-sidebar
+    lens: legal
+    severity: P1
+    issue: "Social feed widget shows 'Trending Chefs / Popular This Week' — these are objective recommendations that influence consumer choice"
+    evidence_excerpt: "Trending Chefs / Popular This Week"
+    recommendation: "Disclose ranking algorithm in plain English. CCPA Dark Patterns Guidelines 2023 flag 'False Urgency' and 'Disguised Ad' — Trending/Popular without methodology is a disguised-ranking risk. If sponsored placement is possible, label as Ad."
+    citation: "CCPA Dark Patterns Guidelines 2023 r.2 (False Urgency), r.10 (Disguised Ads); CP (E-Commerce) Rules 2020 r.5(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-034
+    surface_id: web-ux-browse-filters-dietary
+    lens: legal
+    severity: P0
+    issue: "Dietary filter offers 'Vegan / Gluten-Free / Dairy-Free / Keto / Halal' — these are health/religious claims that carry the highest substantiation burden"
+    evidence_excerpt: "Vegetarian / Vegan / Gluten-Free / Dairy-Free / Keto / Halal"
+    recommendation: "FSSAI organic/vegan/health-claim regs require certification (e.g., FSSAI Vegan Logo since 2022). 'Halal' requires halal-certifier attestation. 'Gluten-Free' is regulated nutritional claim (≤20 ppm gluten per FSSAI). Either certify each chef's claim or relabel as 'Chef-declared — not certified' with explicit disclaimer."
+    citation: "FSSAI Vegan Foods Regulations 2022; FSSAI Food Safety and Standards (Health Supplements...) Regulations 2022; FSSAI Order on Halal 2022; FSS (Labelling and Display) Regulations 2020 r.7"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-035
+    surface_id: mc-home-cuisine-filters
+    lens: legal
+    severity: P2
+    issue: "Mobile sort option 'Recommended' is opaque — could be paid placement, algorithmic, or editorial. No disclosure"
+    evidence_excerpt: "Recommended, Top Rated, Newest, Price"
+    recommendation: "CP (E-Commerce) Rules 2020 r.5(4) requires disclosure of main parameters determining ranking. Add tooltip explaining the recommendation logic."
+    citation: "CP (E-Commerce) Rules 2020 r.5(4); CCPA Dark Patterns Guidelines 2023"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # REVIEWS — defamation, moderation, CPA 2019 + BIS IS 19000
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-036
+    surface_id: web-ux-chefdetail-reviews
+    lens: legal
+    severity: P1
+    issue: "Reviews block shows 'Customer Reviews / Chef's Response' but no moderation policy, no flagging mechanism in inventory, no display of whether reviewer is a verified buyer"
+    evidence_excerpt: "No reviews yet / Customer Reviews / Chef's Response:"
+    recommendation: "BIS IS 19000:2022 requires verified-purchase indicator, moderation transparency, and report-abuse pathway. Without it, the platform inherits IT Act safe-harbour risk (intermediary obligations under §79 + IT Rules 2021)."
+    citation: "BIS IS 19000:2022; IT Act 2000 §79; IT (Intermediary Guidelines) Rules 2021 r.3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-037
+    surface_id: web-ux-chef-social
+    lens: legal
+    severity: P1
+    issue: "Chef social composer 'Share something about this dish...' allows user-generated content with no terms reference, no IP assignment, no community-guidelines link"
+    evidence_excerpt: "Social Feed / No posts yet / Share something about this dish... / #homemade"
+    recommendation: "UGC publishing requires (a) IP licence terms (chef grants platform a non-exclusive licence to display), (b) community guidelines reference, (c) intermediary takedown mechanism per IT Rules 2021 r.3(1)(d). Add Terms link at composer."
+    citation: "IT Rules 2021 r.3; Copyright Act 1957 §52; Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-038
+    surface_id: vp-ux-reviews-title
+    lens: legal
+    severity: P2
+    issue: "Vendor reviews page 'See what your customers are saying' provides no path to flag defamatory reviews or contest verified-purchase status"
+    evidence_excerpt: "Reviews / See what your customers are saying"
+    recommendation: "Provide chef-side report-abuse and dispute mechanism per BIS IS 19000:2022 and IT Rules 2021 r.3(2)."
+    citation: "BIS IS 19000:2022; IT Rules 2021 r.3(2)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-039
+    surface_id: mv-reviewdetail-input-ph
+    lens: legal
+    severity: P2
+    issue: "Reply input 'Write a thoughtful reply to this review' has no defamation / community-guidelines reminder — chef's reply could carry CPA / IPC §499 exposure"
+    evidence_excerpt: "Write a thoughtful reply to this review..."
+    recommendation: "Show a one-line reminder: 'Replies are public. Be respectful and factual.' Reduces platform exposure under IT Act §79 safe harbour."
+    citation: "IT Act 2000 §79; IPC 1860 §499 (defamation); IT Rules 2021 r.3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CATERING — bespoke contract formation, larger sums = higher exposure
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-040
+    surface_id: web-ux-catering-quotes-detail
+    lens: legal
+    severity: P0
+    issue: "Catering Request Details surface mediates a high-value bespoke contract between customer and chef with no T&C reference, no event-cancellation policy, no force-majeure clause linkage"
+    evidence_excerpt: "Select a request / Request Details / No quotes yet / Proposed Menu / Message chef"
+    recommendation: "Catering events involve significant prepayment exposure (vs ad-hoc food orders). Surface a specific Catering Terms & Cancellation Policy at quote acceptance. Required for Indian Contract Act enforceability of a bespoke contract."
+    citation: "Indian Contract Act 1872 §10; CPA 2019 §2(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-041
+    surface_id: web-ux-catering-request-event-fields
+    lens: legal
+    severity: P1
+    issue: "Catering Request collects event date, guest count, budget — but no FSSAI catering-specific compliance hint (large gatherings may require special hygiene measures)"
+    evidence_excerpt: "Event Date / Event Time / Number of Guests / Minimum budget / Maximum budget / Min / Max"
+    recommendation: "Above threshold guest count (e.g., 50+), FSSAI may require additional catering compliance. Surface guidance and capture chef's catering licence."
+    citation: "FSS (Licensing and Registration) Regulations 2011 r.2.1.5 (caterers)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-042
+    surface_id: web-ux-chef-catering
+    lens: legal
+    severity: P0
+    issue: "Chef-side catering quote submission ('Submit Quote / Item name / Qty / Price/unit') has no GST tax-rate field, no taxable/exempt declaration — large-ticket catering will fail GST compliance"
+    evidence_excerpt: "Catering / No open requests / No pending quotes / No booked events / Submit Quote / Item name / Qty / Price/unit / Any special notes about your quote..."
+    recommendation: "Catering quote must indicate whether prices are inclusive/exclusive of GST, applicable SAC code, chef's GSTIN. CGST applies to outdoor catering at 18% (without ITC unless conditions met)."
+    citation: "CGST Act 2017 §31; CBIC Notification 11/2017-CT(R) (catering rate)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-043
+    surface_id: mc-catering-event-types
+    lens: legal
+    severity: P3
+    issue: "Mobile catering event-type chip 'Wedding' is a high-stakes contract category — should not be a casual chip without surfacing the catering T&C immediately"
+    evidence_excerpt: "Wedding, Birthday, Corporate, Anniversary, Festival, House Party, Other"
+    recommendation: "Cosmetic legal-page nudge — but Wedding/Corporate selections should preview the relevant T&C variant."
+    citation: "Indian Contract Act 1872 §10 (best-practice)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-044
+    surface_id: mc-catering-form-labels
+    lens: legal
+    severity: P1
+    issue: "Mobile catering form has 'Additional Details' free-text field and a 'Submit Request' CTA with no T&C / Privacy / Refund-policy acknowledgement"
+    evidence_excerpt: "Event Type * / Event Date * (YYYY-MM-DD) / Guest Count * / Budget (₹) / City * / State * / Additional Details"
+    recommendation: "Catering submission is intent-to-contract — add inline acknowledgement linking to Catering Terms before submit."
+    citation: "Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # VENDOR / CHEF SETTINGS — commission, payouts, RBI PA MD
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-045
+    surface_id: vp-ux-settings-order-acceptance
+    lens: legal
+    severity: P1
+    issue: "Order Acceptance settings show 'Auto-accept threshold ($)' — currency mismatch is flagged in inventory ('shows $ but data is INR'). Currency-symbol error in a financial setting is a misrepresentation"
+    evidence_excerpt: "Auto-accept threshold ($) / Orders under this amount will be auto-accepted"
+    recommendation: "Fix to ₹ immediately. Money values displayed in wrong currency violate CPA 2019 §2(28) misleading-representation if any chef misconfigures based on $-INR confusion."
+    citation: "CPA 2019 §2(28); FEMA 1999 (cross-border misrepresentation)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-046
+    surface_id: vp-ux-settings-payout-section
+    lens: legal
+    severity: P0
+    issue: "Payout Details surface shows 'Razorpay Connected / Linked Account' but no settlement-cadence disclosure, no escrow statement, no T+N timeline reference"
+    evidence_excerpt: "Payout Details / Razorpay Connected / Razorpay Pending / Linked Account: ... / No payout details configured yet. / Set Up Payouts / Edit / Method / Account Holder / Account Number / IFSC Code / UPI ID"
+    recommendation: "RBI PA MD requires the platform to disclose settlement cadence (T+1, T+2 etc.), escrow mechanism, and reconciliation rights to merchants. Add a disclosure card to chef: 'Payouts settle within X working days. Funds are held in an escrow account at <PA name>.'"
+    citation: "RBI PA MD 17 Mar 2020 §8 (Settlement and Escrow); §6 (Merchant On-boarding)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-047
+    surface_id: vp-ux-earnings-cards
+    lens: legal
+    severity: P1
+    issue: "Earnings cards show 'Available Balance / Pending Payout / This Month / Lifetime Earnings' but no commission/service-fee deduction line breakdown — gig-worker earnings transparency"
+    evidence_excerpt: "Available Balance / Pending Payout / This Month / Lifetime Earnings / +X.X% vs last month"
+    recommendation: "Code on Social Security 2020 (when notified) and CPA 2019 expect transparency on aggregator deductions. Surface gross-to-net breakdown: Gross earnings minus platform commission minus GST on commission minus TDS = net payout."
+    citation: "Code on Social Security 2020 §114 (gig and platform workers); Income Tax Act §194-O (TDS by e-comm operator)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-048
+    surface_id: vp-ux-payouts-title
+    lens: legal
+    severity: P1
+    issue: "Payout History 'View all your past and pending payouts' surface — inventory does not indicate whether each payout row links to a TDS certificate / Form 26AS reconciliation"
+    evidence_excerpt: "Payout History / View all your past and pending payouts / Back to Earnings"
+    recommendation: "Each payout must reference TDS deducted (§194-O of IT Act for e-commerce operators), make Form 16A / 26AS available."
+    citation: "Income Tax Act §194-O; CGST Rules r.46"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-049
+    surface_id: mv-earnings-payout-fields
+    lens: legal
+    severity: P1
+    issue: "Mobile chef payout capture 'Bank / Account Number / IFSC / UPI ID' has no inline DPDP notice — these are financial PII"
+    evidence_excerpt: "Bank / Account Number / IFSC / UPI ID"
+    recommendation: "DPDP §5 notice at point of capture for financial PII. Also require dual-channel verification (penny drop / OTP) per RBI KYC framework for payout account changes."
+    citation: "DPDP Act 2023 §5; RBI KYC MD 2016"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-050
+    surface_id: dp-ux-stripe-intro
+    lens: legal
+    severity: P0
+    issue: "Driver Stripe onboarding intro 'Accept delivery payouts in your local currency. Stripe handles KYC and bank verification on its hosted pages.' — cross-border data export with no transfer notice"
+    evidence_excerpt: "Accept delivery payouts in your local currency. Stripe handles KYC and bank verification on its hosted pages."
+    recommendation: "DPDP §16 governs cross-border transfer of personal data. Add explicit notice: 'Stripe processes your data outside India under their privacy notice. By proceeding you consent to cross-border transfer.' Also note FEMA implications for non-INR settlement."
+    citation: "DPDP Act 2023 §16 (Transfer outside India); FEMA 1999 §3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-051
+    surface_id: dp-ux-stripe-sub
+    lens: legal
+    severity: P2
+    issue: "Stripe subtitle 'For drivers outside India, or as an alternative to Razorpay' suggests driver may be outside India — Home Chef's India-only platform claim should be reconciled"
+    evidence_excerpt: "For drivers outside India, or as an alternative to Razorpay."
+    recommendation: "Lawyer review whether non-India drivers are within scope. If yes, FEMA + DPDP cross-border rules apply; if no, remove the language."
+    citation: "FEMA 1999; DPDP Act 2023 §16"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-052
+    surface_id: dp-ux-stripe-active-gateway
+    lens: legal
+    severity: P1
+    issue: "Driver can switch between Stripe and Razorpay as active payout gateway — switching gateways has audit/tax implications (TDS attribution, GSTIN of aggregator)"
+    evidence_excerpt: "Active payout gateway: {Stripe/Razorpay}"
+    recommendation: "Switch action should require confirmation with disclosure: 'Switching gateway affects how your tax forms are issued. Existing pending payouts will settle on the old gateway.'"
+    citation: "Income Tax Act §194-O; CGST Act §51"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN — audit log, exports, attribution, GST settings
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-053
+    surface_id: ap-auditlogs-title
+    lens: legal
+    severity: P1
+    issue: "Audit logs page exists (good) — inventory tags it 'LEGAL LENS' — but inventory excerpt does not confirm immutability, retention period, or tamper-evidence"
+    evidence_excerpt: "Audit logs"
+    recommendation: "Audit logs supporting RBI PA, GST, FSSAI investigations require immutability and minimum retention (commonly 8 years for tax, 5 years for RBI PA). Surface retention policy on the page; document tamper-evidence in admin docs."
+    citation: "RBI PA MD 2020 §6.5; CGST Rules r.56; IT Act §65B (electronic evidence)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-054
+    surface_id: ap-auditlogs-table
+    lens: legal
+    severity: P1
+    issue: "Audit table columns 'When; Actor; Action; Entity; IP' — missing user-agent, geolocation hint, and 'reason' field for sensitive ops"
+    evidence_excerpt: "When; Actor; Action; Entity; IP"
+    recommendation: "For high-stakes admin ops (suspend chef, refund, change commission) capture reason text and user-agent. Required for IT Act §65B electronic-evidence admissibility and CPA dispute defence."
+    citation: "IT Act 2000 §65B; Bharatiya Sakshya Adhiniyam 2023 §63"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-055
+    surface_id: ap-exports-cards
+    lens: legal
+    severity: P0
+    issue: "Admin Data Exports allow 'User data / All user accounts (id, email, role, created_at)' export to CSV — this is bulk personal-data export with no DPDP audit trail referenced"
+    evidence_excerpt: "User data / All user accounts (id, email, role, created_at); Orders / Order rows filtered by the date range above; Revenue / Per-day revenue rollup — paid orders only"
+    recommendation: "DPDP §8 (Data Fiduciary obligations) requires logging of personal-data access and purpose limitation. Bulk export must (a) capture justification, (b) be limited to specific admin roles, (c) generate an audit entry, (d) watermark / encrypt the export, (e) auto-expire download URLs."
+    citation: "DPDP Act 2023 §8, §10 (Significant Data Fiduciary); IT Rules 2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-056
+    surface_id: ap-exports-subtitle
+    lens: legal
+    severity: P2
+    issue: "Export subtitle 'Files stream directly from the API' suggests no intermediate storage but does not address retention, encryption-in-transit, or expiry of generated CSVs"
+    evidence_excerpt: "Download platform data as CSV. Files stream directly from the API."
+    recommendation: "Clarify whether CSVs are signed-URL time-bound, password-protected, audited. DPDP §8(5) safeguards required."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-057
+    surface_id: ap-platsettings-commission-fields
+    lens: legal
+    severity: P0
+    issue: "Platform Settings expose 'Service fee (%) / Tax (%) / Chef payout (% of subtotal) / Driver payout (% of delivery fee) / Base delivery fee / Per-km rate' — admin can change these silently with no chef/customer notification mechanic referenced"
+    evidence_excerpt: "Service fee (%); Tax (%); Chef payout (% of subtotal); Driver payout (% of delivery fee); Base delivery fee; Per-km rate"
+    recommendation: "Material changes to commission and fee structure affect chef and driver contracts. CP (E-Commerce) Rules 2020 r.5(3) and the chef/driver T&C should require advance notice (commonly 30 days). Surface a 'changes take effect on <date>; notify all chefs/drivers' workflow. Also 'Tax (%)' is dangerously vague — platform cannot set GST rate; it is statutory."
+    citation: "CP (E-Commerce) Rules 2020 r.5(3); CGST Act 2017 (statutory rate, not configurable)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-058
+    surface_id: ap-platsettings-cards
+    lens: legal
+    severity: P1
+    issue: "Platform Settings 'Operating hours / When the platform accepts new orders' — if ordering is restricted to hours but customer doesn't know, that's a service-availability gap"
+    evidence_excerpt: "Operating hours / When the platform accepts new orders"
+    recommendation: "Closed-hours message (mentioned in ap-platsettings-hours-fields) must be customer-visible at homepage and cart, not just an admin setting. CPA 2019 deficiency-of-service trigger if customer believes service is available."
+    citation: "CPA 2019 §2(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-059
+    surface_id: ap-platsettings-zones-fields
+    lens: legal
+    severity: P2
+    issue: "Service zone CRUD using lat/long bounding boxes — if customer addresses fall outside, order is silently rejected. Need clear rejection message"
+    evidence_excerpt: "Name; City; State; Min latitude; Max latitude; Min longitude; Max longitude; New zone; Create zone; Cancel"
+    recommendation: "Surface clear out-of-zone message at customer-facing layer with reason. CP (E-Commerce) Rules 2020 r.5(4) requires honest disclosure of service-availability constraints."
+    citation: "CP (E-Commerce) Rules 2020 r.5(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-060
+    surface_id: ap-settings-payment-fields
+    lens: legal
+    severity: P1
+    issue: "Payment-gateway settings show 'Razorpay Key ID / Razorpay Key Secret / Webhook Secret / Stripe Secret Key / Stripe Publishable Key / Webhook Signing Secret' inside admin UI — this is a security/compliance posture concern (HSM, key rotation)"
+    evidence_excerpt: "Razorpay Key ID; Razorpay Key Secret; Webhook Secret; Stripe Secret Key; Stripe Publishable Key; Webhook Signing Secret; Mode; Key Prefix; Secret Key Prefix; Publishable Key; Webhook URL"
+    recommendation: "PCI-DSS not directly applicable (Razorpay handles card data) but RBI PA MD requires PA-PoS secret protection. Secrets should be one-way: enter, never display. Audit-log every access. Restrict to super-admin role."
+    citation: "RBI PA MD 2020 §5 (Security); PCI-DSS (via Razorpay)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-061
+    surface_id: ap-secsettings-apikey-fields
+    lens: legal
+    severity: P2
+    issue: "API key form 'Scopes: read; write; admin; Expires in (days; 0 = never)' — 'never expiring' API keys are a compliance red flag"
+    evidence_excerpt: "Name; Scopes; read; write; admin; Expires in (days; 0 = never); Create key; New API key; e.g. Partner integration; I've saved it"
+    recommendation: "Disallow '0 = never' for non-machine partners. RBI PA framework and DPDP best-practice expect periodic key rotation (commonly 90-180 days)."
+    citation: "RBI PA MD 2020 §5; DPDP Act §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-062
+    surface_id: ap-secsettings-session-fields
+    lens: legal
+    severity: P2
+    issue: "Session management fields configurable but no policy lower-bound enforced in inventory — admin could set TTL to infinite, defeating DPDP and CPA security expectations"
+    evidence_excerpt: "Access token TTL (hours); Refresh token TTL (days); Save policy; Your active sessions; No active sessions."
+    recommendation: "Enforce maximum-TTL caps (e.g., access ≤24h, refresh ≤30d) in admin UI."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-063
+    surface_id: ap-staffdetail-section-roleperm
+    lens: legal
+    severity: P2
+    issue: "Staff Role & Permissions section exists but inventory does not surface least-privilege enforcement or 'who can see customer PII' role gates"
+    evidence_excerpt: "Role & Permissions"
+    recommendation: "DPDP §8(5) requires technical and organisational safeguards including least-privilege access to personal data. Document role -> data-class matrix."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-064
+    surface_id: ap-userdetail-info-rows
+    lens: legal
+    severity: P1
+    issue: "Admin User Detail surfaces 'Email; Phone; Auth Provider; Role; Joined; Last Login' — admin viewing customer PII must generate access log per DPDP"
+    evidence_excerpt: "Email; Phone; Auth Provider; Role; Joined; Last Login"
+    recommendation: "Every admin access to customer PII must be audited with reason. Surface a 'reason' modal on first PII view."
+    citation: "DPDP Act 2023 §8(2), §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-065
+    surface_id: ap-userdetail-order-stats
+    lens: legal
+    severity: P2
+    issue: "User Detail shows 'Total Orders / Total Spent / Last Order' — financial PII visible to admin; no purpose-limitation notice"
+    evidence_excerpt: "Order Activity; Total Orders; Total Spent; Last Order; No orders yet"
+    recommendation: "Per DPDP, document purpose for which admin views aggregate spend; restrict to roles with a need (finance, support escalation)."
+    citation: "DPDP Act 2023 §7(2) (purpose limitation)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-066
+    surface_id: ap-chefs-meta-bottom
+    lens: legal
+    severity: P3
+    issue: "Chef cards meta shows 'Min order: ₹{n}; Service radius: {n} km; Joined: {date}' but no FSSAI registration number column"
+    evidence_excerpt: "Min order: ₹{n}; Service radius: {n} km; Joined: {date}"
+    recommendation: "Add FSSAI registration column to admin Chef listing for compliance review."
+    citation: "FSS Act 2006 §31"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # DRIVER / DELIVERY — gig classification, safety, MV Act, insurance
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-067
+    surface_id: dp-ux-stat-verified-partners
+    lens: legal
+    severity: P1
+    issue: "'Verified partners' label on admin dashboard — what verification standard is met? MV Act licence verified? Background check? Vehicle insurance current?"
+    evidence_excerpt: "Verified partners / of {n} total"
+    recommendation: "Define and disclose what 'Verified' means. Drivers handle food (FSSAI hygiene) AND operate vehicles (MV Act). Verification scope must be auditable."
+    citation: "Motor Vehicles Act 1988; FSS Act 2006; CCPA Misleading Ads Guidelines 2022"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-068
+    surface_id: dp-ux-partner-detail-verify-block
+    lens: legal
+    severity: P1
+    issue: "Partner Verification block 'Review their documents and approve or reject their application' is the gating moment for driver onboarding. Inventory does not surface mandatory document checklist"
+    evidence_excerpt: "Pending Verification / This partner is awaiting verification. Review their documents and approve or reject their application."
+    recommendation: "Surface checklist on the admin screen: Driving Licence (current), Vehicle RC, Vehicle Insurance (third-party at minimum), PAN, Aadhaar/address proof, Bank account, Police clearance (best-practice). MV Act and Code on Social Security."
+    citation: "MV Act 1988 §3, §146; Code on Social Security 2020 §114"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-069
+    surface_id: dp-ux-active-mark-as
+    lens: legal
+    severity: P0
+    issue: "Driver 'Mark as {Picked Up/In Transit/Delivered}' is the customer-impacting status update — false state changes have CPA + RBI PA implications"
+    evidence_excerpt: "Mark as {Picked Up/In Transit/Delivered}"
+    recommendation: "Each status change should require capture of GPS location + timestamp for evidentiary purposes (CPA dispute, RBI PA chargeback). 'Mark as Delivered' specifically should not allow self-mark without geofence proximity check or customer confirmation OTP."
+    citation: "CPA 2019 §2(11); RBI PA MD 2020 §6; IT Act §65B"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-070
+    surface_id: md-core-036
+    lens: legal
+    severity: P0
+    issue: "Mobile driver 'Mark as Delivered' (P0 SAFETY tagged in inventory) — same concern: irreversible terminal action triggering customer refund-window-closing"
+    evidence_excerpt: "Mark as Delivered"
+    recommendation: "Require customer-OTP confirmation or geofence + photo proof. Audit log with GPS coords. Critical for RBI PA disputes."
+    citation: "RBI PA MD 2020 §6; CPA 2019 §2(11)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-071
+    surface_id: md-core-018
+    lens: legal
+    severity: P1
+    issue: "Driver 'Go Online to Accept Deliveries' has no insurance / safety attestation gate — could be interpreted as platform endorsement that driver is fit to drive"
+    evidence_excerpt: "Go Online to Accept Deliveries"
+    recommendation: "Gate Go-Online behind self-declared 'I am fit to drive, my licence and insurance are current'. Logs the attestation. Reduces platform liability under MV Act vicarious-liability theory."
+    citation: "MV Act 1988; CPA 2019"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-072
+    surface_id: md-core-062
+    lens: legal
+    severity: P1
+    issue: "Driver settings 'Default Online Status — Automatically go online when app opens' (P0 SAFETY tagged in inventory). Auto-online creates ambiguity about whether driver consciously consented to a delivery shift"
+    evidence_excerpt: "Default Online Status / Automatically go online when app opens"
+    recommendation: "Disable by default. Code on Social Security 2020 gig-worker provisions, when notified, will require active opt-in for work sessions. Also a CPA safety concern."
+    citation: "Code on Social Security 2020 §114; MV Act 1988"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-073
+    surface_id: dp-ux-active-payout-label
+    lens: legal
+    severity: P1
+    issue: "Active delivery shows 'Payout' value pre-completion — if payout is shown but later reduced due to refund/dispute, gig-worker has earnings-transparency complaint"
+    evidence_excerpt: "Payout"
+    recommendation: "Label as 'Estimated payout' until settled; show final payout post-settlement. Disclose deduction rules (cancellations, customer complaints) upfront."
+    citation: "Code on Social Security 2020 §114; CPA 2019"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-074
+    surface_id: md-core-047
+    lens: legal
+    severity: P2
+    issue: "'You earned ₹{payout} for this delivery' is a representation of completed earnings — if subsequent customer complaint reduces it, must be reconcilable"
+    evidence_excerpt: "You earned ₹{payout} for this delivery"
+    recommendation: "Make explicit: 'Payout credited pending dispute window of X days.' Or distinguish 'You earned' (final) from 'Estimated' (pre-settlement)."
+    citation: "Code on Social Security 2020 §114; CPA 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-075
+    surface_id: dp-ux-active-pickup-from
+    lens: legal
+    severity: P2
+    issue: "'Pickup from' and 'Deliver to' display addresses to driver — chef/customer PII disclosed to a third party (driver). Need DPDP purpose-limitation gate"
+    evidence_excerpt: "Pickup from / Deliver to"
+    recommendation: "Address is necessary for delivery — covered by contractual-necessity legal basis under DPDP. But: do not retain in driver app after delivery; auto-purge from local storage on completion. Document this lifecycle."
+    citation: "DPDP Act 2023 §7(1)(b) (legitimate use - performance of contract); §8(7) (erasure)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-076
+    surface_id: dp-ux-active-order-note
+    lens: legal
+    severity: P3
+    issue: "Order note 'Note: {specialInstructions}' — chef-supplied free text shown to driver. If chef includes customer-PII (gate code, name) it's processed by driver"
+    evidence_excerpt: "Note: {specialInstructions}"
+    recommendation: "Lawyer review whether special-instructions free text is appropriate channel for PII. Consider field-level redaction or warning to chefs."
+    citation: "DPDP Act 2023 §7(2) (purpose limitation)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-077
+    surface_id: md-core-043
+    lens: legal
+    severity: P1
+    issue: "'Navigate' (P0 SAFETY tag in inventory) launches external Apple/Google Maps — third-party data export of pickup/dropoff coordinates with no notice"
+    evidence_excerpt: "Navigate"
+    recommendation: "Inline notice: 'Navigate opens your maps app. Your route will be processed by Google/Apple per their terms.' DPDP §16 cross-border consideration if Google routes data outside India."
+    citation: "DPDP Act 2023 §5, §16"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-078
+    surface_id: ap-providercreate-fields
+    lens: legal
+    severity: P1
+    issue: "Delivery Provider create form captures 'API Key; API Secret; Webhook Secret' and 'Pricing Model; Currency; Base Cost; Per KM Cost' — third-party delivery provider integration touches consumer pricing"
+    evidence_excerpt: "Name; Code; Description; Logo URL; API Base URL; API Key; API Secret; Webhook Secret; ...Currency; Base Cost; Per KM Cost; Max Concurrent Deliveries; Daily Limit; Avg Pickup Time (min); Contact Name; Contact Email; Contact Phone; Notes"
+    recommendation: "Adding a 3P delivery provider changes the data-processor chain — requires updated Privacy Notice (DPDP §5(i) categories of data fiduciaries / processors). Also commercial T&C with the provider should be referenced."
+    citation: "DPDP Act 2023 §5, §11 (Data Processor)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-079
+    surface_id: ap-delivery-statuses
+    lens: legal
+    severity: P2
+    issue: "Delivery status taxonomy includes 'Failed' and 'Returned' — these are refund-triggering events but inventory does not surface auto-refund or compensation mechanic"
+    evidence_excerpt: "Pending; Assigned; At Pickup; Picked Up; In Transit; At Dropoff; Delivered; Failed; Returned; Cancelled"
+    recommendation: "Define when 'Failed'/'Returned' auto-initiate refund per RBI PA timelines. Customer-visible status copy should explain consequence."
+    citation: "RBI PA MD 2020 §8; CPA (E-Commerce) Rules 2020"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CUSTOMER PROFILE / PROFILE PAYMENT / 2FA / DPDP RIGHTS
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-080
+    surface_id: web-ux-profile-payments
+    lens: legal
+    severity: P1
+    issue: "Payment Methods tab heading exists but inventory does not surface how stored cards/UPI handles are tokenised, where they live, or who is the data controller (Razorpay tokenises per RBI rules)"
+    evidence_excerpt: "Payment Methods"
+    recommendation: "Clarify that card data is tokenised by Razorpay per RBI Card-on-File tokenisation rules; Home Chef does not store PAN. Surface link to RBI tokenisation FAQ."
+    citation: "RBI Tokenisation Framework (CoFT, 2022); RBI PA MD 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-081
+    surface_id: web-ux-profile-2fa
+    lens: legal
+    severity: P2
+    issue: "Two-Factor Authentication setup page exists (good for DPDP §8(5) safeguards) but is the setup mandatory or optional? Customer-facing security posture should be documented"
+    evidence_excerpt: "Two-Factor Authentication / Set Up Two-Factor Authentication / Save Your Backup Codes"
+    recommendation: "DPDP §8(5) requires reasonable security safeguards. 2FA being optional is acceptable; mandatory 2FA for high-stakes accounts (admin, chef payouts) recommended. Document in security policy."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-082
+    surface_id: web-ux-profile-preferences
+    lens: legal
+    severity: P2
+    issue: "Food preferences ('Dietary Preferences / Food Allergies') — Food Allergies is sensitive health data adjacent under DPDP — should have explicit purpose-of-use notice"
+    evidence_excerpt: "Food Preferences / Dietary Preferences / Food Allergies / Favourite Cuisines / Spice Tolerance / Household Size"
+    recommendation: "Allergy data is highly sensitive. Add explicit notice: 'We use this to filter and warn you about allergens. We do not share it with marketing partners.' Purpose-limitation under DPDP §7(2)."
+    citation: "DPDP Act 2023 §7(2)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-083
+    surface_id: web-ux-profile-notifications
+    lens: legal
+    severity: P1
+    issue: "Notification Preferences tab exists but inventory does not surface granular opt-ins for marketing vs transactional, or DPDP §6 consent-withdrawal mechanism"
+    evidence_excerpt: "Notification Preferences / What to notify about / How to notify"
+    recommendation: "Separate transactional (order updates — legitimate interest) from marketing (requires opt-in consent under DPDP §6 and TRAI commercial communications). Show date of last consent change and 'Withdraw consent' button."
+    citation: "DPDP Act 2023 §6, §6(5); TRAI Commercial Communications Customer Preference Regulations 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-084
+    surface_id: web-ux-profile-tabs
+    lens: legal
+    severity: P0
+    issue: "Profile sidebar tabs 'Profile / Preferences / Addresses / Payment Methods / Notifications / Security' — missing a 'Data & Privacy' tab for DPDP rights (access, correction, erasure, portability, grievance)"
+    evidence_excerpt: "Profile / Preferences / Addresses / Payment Methods / Notifications / Security"
+    recommendation: "Add 'Data & Privacy' tab exposing DPDP §11 rights: right to access data summary, correct/update, erase account+data, port (where applicable), and contact Grievance Officer. Without this surface, DPDP §11 rights are not operationally available."
+    citation: "DPDP Act 2023 §11, §13 (Grievance Officer); §12 (Right to nominate)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-085
+    surface_id: web-ux-profile-addresses
+    lens: legal
+    severity: P1
+    issue: "Saved Addresses tab — addresses are PII retained indefinitely unless user-purged. No retention statement"
+    evidence_excerpt: "Saved Addresses / Enter PIN code / House / flat / building number, street / Landmark, area (optional)"
+    recommendation: "DPDP §8(7) erasure obligation. Surface 'Delete address' per row (likely present) plus retention policy: 'Addresses are kept while your account is active.'"
+    citation: "DPDP Act 2023 §8(7), §11(c)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-086
+    surface_id: mc-profile-logout-button
+    lens: legal
+    severity: P3
+    issue: "'Log Out' button label drifts from style-guide 'Sign out' — but more importantly mobile customer profile has no 'Delete account' visible in inventory excerpt"
+    evidence_excerpt: "Log Out"
+    recommendation: "DPDP §11(c) right to erasure must be operationalised in customer mobile too. Add 'Delete account' option (likely present elsewhere — verify)."
+    citation: "DPDP Act 2023 §11(c)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-087
+    surface_id: mv-settings-delete-account
+    lens: legal
+    severity: P0
+    issue: "Mobile chef 'Delete Account' destructive action exists (good) but inventory does not surface (a) what happens to in-flight orders, (b) what happens to required-retention records (GST 8yr, RBI 5yr), (c) clarification on data anonymisation vs hard delete"
+    evidence_excerpt: "Delete Account"
+    recommendation: "Delete-account flow must distinguish: erase personal data per DPDP §8(7) while retaining statutorily required records (GST, RBI PA, FSSAI) with personal data minimised. Show user the policy at the confirmation step."
+    citation: "DPDP Act 2023 §8(7); CGST Rules r.56 (record retention); RBI PA MD 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-088
+    surface_id: md-core-067
+    lens: legal
+    severity: P0
+    issue: "Mobile driver 'Delete Account' — same DPDP/MV Act/Code on Social Security record-retention concern"
+    evidence_excerpt: "Delete Account"
+    recommendation: "Driver delete must retain MV Act records, insurance claim history, payout/TDS records while erasing other personal data. Disclose at confirm step."
+    citation: "DPDP Act 2023 §8(7); MV Act 1988; Income Tax Act §194-O"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ONBOARDING (mobile chef / mobile driver) - PII at signup
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-089
+    surface_id: mv-onb-review-terms-yes
+    lens: legal
+    severity: P0
+    issue: "Mobile chef onboarding review shows 'Terms accepted indicator' as a yes/no but does not capture the version or content of the terms accepted"
+    evidence_excerpt: "Yes"
+    recommendation: "Acceptance record must pin version-hash + timestamp + IP. Required for IT Act §65B evidentiary admissibility. Without version-pinning, the platform cannot prove what the chef agreed to."
+    citation: "IT Act 2000 §65B; Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-090
+    surface_id: mv-onb-docs-pdf-uploaded
+    lens: legal
+    severity: P1
+    issue: "Document upload flow ('PDF uploaded / Camera / Gallery / PDF') accepts KYC and FSSAI documents but inventory shows no encryption-at-rest statement or storage-provider disclosure"
+    evidence_excerpt: "PDF uploaded / Camera / Gallery / PDF"
+    recommendation: "Surface DPDP §5 notice: 'These documents are encrypted and stored on our secure servers. We share them with payment partners for KYC. Retention: X years per regulatory requirement.'"
+    citation: "DPDP Act 2023 §5, §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-091
+    surface_id: mv-onb-kitchen-cuisine-options
+    lens: legal
+    severity: P3
+    issue: "Onboarding cuisine list includes 'Other' as a chip — open-ended FSSAI categorisation may create allergen-coverage gaps"
+    evidence_excerpt: "North Indian / South Indian / Chinese / Continental / Bakery / Snacks / Beverages / Other"
+    recommendation: "If 'Other' is selected, prompt for free-text description; this informs FSSAI allergen-risk class."
+    citation: "FSS Act 2006 §31; FSSAI categories"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SETTINGS / NOTIFICATIONS (multi-app)
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-092
+    surface_id: ap-notifsettings-categories
+    lens: legal
+    severity: P1
+    issue: "Notification categories include 'Promotions / Discounts, newsletters, and marketing campaigns. Opt-in.' — opt-in label is correct, but inventory does not confirm pre-checked state is off, or that withdrawal is one-click"
+    evidence_excerpt: "Promotions / Discounts, newsletters, and marketing campaigns. Opt-in."
+    recommendation: "DPDP §6(1) prohibits pre-checked consent. Confirm Promotions is OFF by default for new accounts. TRAI DLT also applies for SMS marketing."
+    citation: "DPDP Act 2023 §6(1); TRAI Commercial Communications Customer Preference Regulations 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-093
+    surface_id: vp-ux-settings-notifications
+    lens: legal
+    severity: P2
+    issue: "Vendor SMS notifications 'Get an SMS for each new order' — SMS to vendor is transactional (legitimate interest) but TRAI DLT registration still applies"
+    evidence_excerpt: "SMS / New order SMS / Get an SMS for each new order"
+    recommendation: "Confirm DLT registration for transactional SMS template; document. Surface consent in vendor T&C."
+    citation: "TRAI TCCCPR 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-094
+    surface_id: vp-ux-settings-password
+    lens: legal
+    severity: P2
+    issue: "Password change section copy 'Your account is linked to {provider} login. Password management is handled by your social login provider.' clearly tells social-login users they cannot change password locally — but does not link to provider's password page or detail the data shared with the social provider"
+    evidence_excerpt: "Change Password / Current Password / New Password / Confirm New Password / Update Password / Password updated successfully / Failed to update password. Check your current password. / Your account is linked to {provider} login. Password management is handled by your social login provider."
+    recommendation: "Link to provider's password change page. Surface DPDP-relevant note on what data the social provider shares back (email, name, picture, etc.) and at what frequency."
+    citation: "DPDP Act 2023 §5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # STAFF INVITATIONS (multi-app) - role attribution
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-095
+    surface_id: ap-staff-invite-fields
+    lens: legal
+    severity: P2
+    issue: "Staff invitation form 'Email; Role; Department; Title; Personal Message' issues a role with platform-data access. No mention of access-policy acknowledgement or NDA at invitation"
+    evidence_excerpt: "Email; Role; Department; Title; Personal Message; Send Invitation; Done; Copy; Copied"
+    recommendation: "Staff accepting invitation should also acknowledge: confidentiality / data-handling policy. DPDP §8(2) requires data fiduciary's safeguards extend to employees."
+    citation: "DPDP Act 2023 §8(2)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-096
+    surface_id: dp-ux-staff-invite-h
+    lens: legal
+    severity: P2
+    issue: "Delivery-portal Staff Invitation 'Share this link with the new staff member' — link-based invitation that can be forwarded; no token expiry or single-use enforcement referenced"
+    evidence_excerpt: "Invitation Created / Share this link with the new staff member:"
+    recommendation: "Invitation links must be (a) single-use, (b) short-TTL, (c) recipient-email bound. Otherwise an intercepted link grants role access."
+    citation: "DPDP Act 2023 §8(5); RBI PA MD §5 (security)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # LAYOUT NAV - missing legal-page entry points
+  # ============================================================================
+
+  - finding_id: LEG-COREUX-097
+    surface_id: web-ux-layout-nav
+    lens: legal
+    severity: P1
+    issue: "Customer top nav 'Home / Browse Chefs / Favorites / Catering / Profile / My Orders / Settings / Logout' has NO link to Terms, Privacy, or Refund Policy. Users cannot reach legal pages without scrolling to footer (if it exists)"
+    evidence_excerpt: "Home / Browse Chefs / Favorites / Catering / Profile / My Orders / Settings / Logout"
+    recommendation: "DPDP §5 expects accessible privacy notice. Add Legal / Terms / Privacy entry to footer; if no footer, link from Settings or user menu."
+    citation: "DPDP Act 2023 §5; CP (E-Commerce) Rules 2020 r.5(2)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-098
+    surface_id: vp-ux-layout-nav
+    lens: legal
+    severity: P2
+    issue: "Vendor portal sidebar — no link to chef/vendor T&C, Privacy, or platform commission disclosure"
+    evidence_excerpt: "Dashboard / Menu / Orders / Earnings / Admin Requests / Reviews / Analytics / Profile / Settings / Vendor Portal / Vendor / Settings / Logout / Theme"
+    recommendation: "Add Legal entry in vendor sidebar covering T&C, Privacy, Commission Schedule, Payout Policy."
+    citation: "CP (E-Commerce) Rules 2020 r.5; RBI PA MD 2020 §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-099
+    surface_id: dp-ux-nav-partner-items
+    lens: legal
+    severity: P2
+    issue: "Driver sidebar nav 'Dashboard / Active Delivery / Available / History / Earnings / Profile / Settings' has no link to Driver T&C / Insurance Policy / Gig-Worker Agreement"
+    evidence_excerpt: "Dashboard / Active Delivery / Available / History / Earnings / Profile / Settings"
+    recommendation: "Add Legal entry exposing Driver Agreement, Insurance Coverage Summary, Deduction Schedule, Termination Clause."
+    citation: "Code on Social Security 2020 §114; MV Act 1988"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-COREUX-100
+    surface_id: ap-layout-nav-settings
+    lens: legal
+    severity: P3
+    issue: "Admin sidebar 'Settings' is the legal/policy-config entry but admin layout has no dedicated 'Compliance' tab for FSSAI, RBI PA, DPDP audit dashboards"
+    evidence_excerpt: "Settings"
+    recommendation: "Consider promoting compliance to top-level nav for admin: FSSAI status overview (all chefs), RBI PA reconciliation, DPDP grievance queue."
+    citation: "DPDP Act 2023 §10 (Significant Data Fiduciary); FSS Act 2006 §31; RBI PA MD 2020 §6.5"
+    depends_on: "needs lawyer review"

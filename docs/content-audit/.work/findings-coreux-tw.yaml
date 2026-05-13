@@ -1,0 +1,1825 @@
+# Technical Writer lens findings — core-ux category
+# Auditor: TW lens agent
+# Date: 2026-05-13
+# Style guide: docs/content-audit/STYLE-GUIDE.md
+# Brief: docs/content-audit/lens-briefs/technical-writer.md
+# Slice size: 594 rows. Approach: P0/P1 per-row; P2/P3 grouped by pattern.
+
+findings:
+
+  # =====================================================================
+  # P0 — Cross-app verb / status drift that risks operational confusion
+  # =====================================================================
+
+  - finding_id: TW-001
+    surface_id: mc-order-detail-status-labels
+    lens: technical-writer
+    severity: P0
+    issue: "Order status taxonomy drifts across customer screens: detail uses 'Ready for Pickup' / 'On the Way'; OrderCard uses 'Ready' / 'Picked Up'; OrderTimeline uses 'On the Way'. Same order shows different status names depending on the screen the customer opens."
+    evidence_excerpt: "Pending / Confirmed / Preparing / Ready for Pickup / On the Way / Delivered / Cancelled  (detail)  vs  Pending / Confirmed / Preparing / Ready / Picked Up / Delivered / Cancelled  (card)"
+    recommendation: "Lock one canonical customer-facing status set in i18n: Pending / Confirmed / Preparing / Ready / Picked up / On the way / Delivered / Cancelled. Use the same keys in OrderCard.tsx, OrderTimeline.tsx, and order/[id]/index.tsx. Style guide preference: 'Pickup' is a noun, 'Pick up' is the verb — status labels are nouns, so 'Picked up' (past tense state)."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-ux-orders-status-labels
+    lens: technical-writer
+    severity: P0
+    issue: "Web customer order status enum exposes 'Picked Up' and 'On the Way' as separate states alongside 'Ready' — but customer-facing wording differs from mobile-customer order detail screen ('Ready for Pickup'). Same order, two different status names across web vs mobile."
+    evidence_excerpt: "Pending / Accepted / Preparing / Ready / Picked Up / On the Way / Delivered / Cancelled / Refunded"
+    recommendation: "Pick one set of customer status strings and reuse across web + mobile. Recommend: 'Accepted' on web is fine, but mobile uses 'Confirmed' — pick one (style guide doesn't decide; chef-portal uses 'Accept', so 'Accepted' is consistent). Replace 'Picked Up' with sentence-case 'Picked up'."
+    depends_on: null
+
+  - finding_id: TW-003
+    surface_id: ap-delivery-statuses
+    lens: technical-writer
+    severity: P0
+    issue: "Admin delivery status taxonomy uses 10 states with title-case styling ('At Pickup', 'At Dropoff', 'In Transit') that drift from customer-facing labels ('On the Way') and driver-facing labels ('In Transit'). Admin operators reading 'At Dropoff' cannot quickly map to customer's 'On the Way'."
+    evidence_excerpt: "Pending; Assigned; At Pickup; Picked Up; In Transit; At Dropoff; Delivered; Failed; Returned; Cancelled"
+    recommendation: "Document a canonical status enum in a single TS module (e.g., shared/types/order-status.ts). Customer labels stay friendly ('On the way'); admin labels stay operational ('In transit'). Use sentence case ('At pickup', 'At dropoff'). Add a mapping table in the audit fix plan."
+    depends_on: TW-001
+
+  - finding_id: TW-004
+    surface_id: md-core-033
+    lens: technical-writer
+    severity: P0
+    issue: "Driver action label 'Picked Up Order' is past tense used as a future action button. The driver hasn't picked it up yet — they're about to. Confusing for a safety-critical state transition."
+    evidence_excerpt: "Picked Up Order  (slide-to-confirm verb, assigned → at_pickup)"
+    recommendation: "Use imperative future-tense: 'Confirm pickup' or 'Pick up order'. Past tense ('Picked up') belongs on the status badge after the transition, not on the action that causes it."
+    depends_on: null
+
+  - finding_id: TW-005
+    surface_id: dp-ux-active-mark-as
+    lens: technical-writer
+    severity: P0
+    issue: "Driver-facing action button reads 'Mark as {Picked Up/In Transit/Delivered}' — telegraphic style says 'Mark delivered', not 'Mark as Delivered'. Title case + 'as' filler breaks driver-glanceability rule (≤4 words, imperative)."
+    evidence_excerpt: "Mark as {Picked Up/In Transit/Delivered}"
+    recommendation: "Use imperative verbs only: 'Pick up' / 'Start trip' / 'Mark delivered'. Drop 'as'. Sentence case. ≤2 words where possible."
+    depends_on: TW-004
+
+  - finding_id: TW-006
+    surface_id: dp-ux-delivery-pickup-label
+    lens: technical-writer
+    severity: P0
+    issue: "Driver row labels 'PICKUP' / 'DROPOFF' are ALL CAPS, which the style guide bans for body content. Glanceability does not require ALL CAPS; weight + size handle that. Also drifts from mobile-delivery which uses sentence case 'Pickup' / 'Dropoff'."
+    evidence_excerpt: "PICKUP / DROPOFF"
+    recommendation: "Sentence case: 'Pickup' / 'Dropoff'. Use type weight/size for emphasis instead of caps."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: md-core-079
+    lens: technical-writer
+    severity: P0
+    issue: "'Drop-off' (hyphenated) appears alongside 'Dropoff' (unhyphenated) in the same delivery screen set. Same concept, two spellings, both reach drivers."
+    evidence_excerpt: "Drop-off  (delivery/[id].tsx)  vs  Dropoff  (active.tsx, dp-ux-delivery-dropoff-label, mobile-delivery elsewhere)"
+    recommendation: "Pick one: 'Dropoff' (no hyphen, parallel with 'Pickup' per style guide §3). Replace all 'Drop-off' / 'Drop off' instances except where 'drop off' is used as a verb."
+    depends_on: TW-006
+
+  - finding_id: TW-008
+    surface_id: dp-ux-active-cancel-prompt
+    lens: technical-writer
+    severity: P0
+    issue: "Driver cancellation reason uses browser `prompt()` ('Reason for cancellation?') — no field structure, no required-reason taxonomy, no friendly copy. Critical for ops because cancellations affect chef and customer."
+    evidence_excerpt: "Reason for cancellation?  (browser prompt())"
+    recommendation: "Replace with a structured modal: 'Cancel this delivery?' subtitle 'Tell us why — the chef and customer will be notified.' Provide a 4-5 option radio (Customer unreachable / Address wrong / Bike issue / Other) + optional notes."
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: vp-ux-settings-order-acceptance
+    lens: technical-writer
+    severity: P0
+    issue: "Vendor settings auto-accept threshold label reads 'Auto-accept threshold ($)' — dollar symbol shown but currency is INR. Customer-facing money everywhere else uses ₹. Risk: chef sets threshold believing it's $, but the system applies it as ₹."
+    evidence_excerpt: "Auto-accept threshold ($) / Orders under this amount will be auto-accepted"
+    recommendation: "Replace '$' with '₹'. Add helper text: 'Orders below this amount accept automatically.' Audit for any other $ leaks in chef + admin portals."
+    depends_on: null
+
+  - finding_id: TW-010
+    surface_id: mv-settings-change-password
+    lens: technical-writer
+    severity: P0
+    issue: "Vendor 'Change Password' setting row routes to the forgot-password flow, not a real password change. Label promises a different action than what happens. Vendor follows a reset link to their email instead of entering current → new password in-app."
+    evidence_excerpt: "Change Password  (routes to forgot-password screen)"
+    recommendation: "Either: (a) rename to 'Reset password (email link)' to match what actually happens; or (b) build a real change-password screen with current/new fields. Style guide preference: do (b) and keep the label 'Change password'."
+    depends_on: null
+
+  - finding_id: TW-011
+    surface_id: dp-ux-nav-bottom-items
+    lens: technical-writer
+    severity: P1
+    issue: "Driver bottom-nav 'Home' but sidebar 'Dashboard' — same destination, two labels. Drivers switching between phone and tablet view see different words for the same page."
+    evidence_excerpt: "Home (bottom nav)  vs  Dashboard (sidebar nav)"
+    recommendation: "Pick one. Recommend 'Dashboard' across both — matches admin + chef portals."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: dp-ux-nav-partner-items
+    lens: technical-writer
+    severity: P1
+    issue: "Driver nav 'Active Delivery' (sidebar) vs 'Active' (bottom nav) — same destination, different labels. Telegraphic style preferred for nav."
+    evidence_excerpt: "Active Delivery (sidebar)  vs  Active (bottom nav)"
+    recommendation: "Use 'Active' across both nav surfaces (driver style: ≤4 words, imperative/noun). 'Active delivery' acceptable on the destination page itself."
+    depends_on: TW-011
+
+  - finding_id: TW-013
+    surface_id: md-core-052
+    lens: technical-writer
+    severity: P1
+    issue: "Driver-mobile More menu exposes admin-only 'Fleet' and 'Staff' nav items to all drivers per the surface inventory (audience: driver). If exposed to regular partners this is access-control drift; if labels are role-gated, label is fine but inventory misclassifies. Either way, ambiguous from copy alone."
+    evidence_excerpt: "Fleet / Staff (driver More tab)"
+    recommendation: "Confirm role-gating: rename to 'Fleet management' / 'Staff management' when shown to fleet managers, hide for partner drivers entirely. Don't rely on context to disambiguate single-word nav items."
+    depends_on: null
+
+  # =====================================================================
+  # P1 — Voice / consistency on conversion-critical surfaces
+  # =====================================================================
+
+  - finding_id: TW-014
+    surface_id: web-ux-cart-checkout-cta
+    lens: technical-writer
+    severity: P1
+    issue: "Checkout CTA 'Sign in to Checkout' uses title-case on 'Checkout' but sentence case on 'Sign in'. The other state, 'Proceed to Checkout', is verbose and also title-cased."
+    evidence_excerpt: "Sign in to Checkout / Proceed to Checkout"
+    recommendation: "Logged-in: 'Checkout'. Logged-out: 'Sign in to checkout'. Sentence case. Drop 'Proceed to' — wastes a word and adds no info."
+    depends_on: null
+
+  - finding_id: TW-015
+    surface_id: web-ux-checkout-summary
+    lens: technical-writer
+    severity: P1
+    issue: "Checkout primary CTA 'Place Order' is title case. Style guide §4 requires sentence case on buttons. This is the conversion-critical CTA, so cross-app consistency matters."
+    evidence_excerpt: "Place Order"
+    recommendation: "'Place order' (sentence case). Apply to web checkout + mobile-customer 'Place Order · ₹{total}' (mc-checkout-place-order)."
+    depends_on: null
+
+  - finding_id: TW-016
+    surface_id: mc-checkout-place-order
+    lens: technical-writer
+    severity: P1
+    issue: "Mobile checkout CTA 'Place Order · ₹{total}' uses title case and middle-dot separator. CTA microcopy rule: verb-first, sentence case, ≤3 words. Currency in the button is fine but should follow shape rules."
+    evidence_excerpt: "Place Order · ₹{total} / Processing..."
+    recommendation: "'Place order — ₹{total}'. Sentence case. Em-dash or bullet · acceptable but be consistent across mobile + web. Loading state 'Placing order…' (single Unicode ellipsis)."
+    depends_on: TW-015
+
+  - finding_id: TW-017
+    surface_id: web-ux-cart-heading
+    lens: technical-writer
+    severity: P1
+    issue: "Cart heading uses 'Your Cart' on web but mobile uses 'Your Cart' on the sheet (mc-cartsheet-title) AND 'View Cart' on the floating bar (mc-cartbar-cta). Style guide prefers descriptive, non-possessive nouns ('Cart' is sufficient — owner is implicit)."
+    evidence_excerpt: "Your Cart  (web)  /  Your Cart  (mobile sheet)  /  View Cart  (mobile bar)"
+    recommendation: "Use 'Cart' as the heading on both web + mobile. CTA on mobile bar: 'View cart' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-018
+    surface_id: web-ux-checkout-payment-section
+    lens: technical-writer
+    severity: P1
+    issue: "Payment section copy 'Pay securely via UPI, cards, net banking, or wallets' uses 'net banking' (two words) but Indian payment UIs commonly write 'Netbanking'. Style guide prefers plain English; 'Net banking' (capitalized) is also common. Need one form."
+    evidence_excerpt: "Pay securely via UPI, cards, net banking, or wallets"
+    recommendation: "'Pay with UPI, cards, netbanking, or wallets.' Drop 'securely' (claims trust without earning it; trust comes from the Razorpay badge below). Use 'netbanking' one word, lowercase."
+    depends_on: null
+
+  - finding_id: TW-019
+    surface_id: web-ux-checkout-delivery-time
+    lens: technical-writer
+    severity: P1
+    issue: "'As soon as possible / Usually 30-45 minutes' — 'As soon as possible' is wordy (4 words for a radio label). Style guide §2 customer-facing 10-18 words conversational, but radio labels should be ≤3 words."
+    evidence_excerpt: "Delivery Time / As soon as possible / Usually 30-45 minutes / Schedule for later"
+    recommendation: "Radio 1: 'ASAP' with helper 'Ready in 30–45 min.' Radio 2: 'Schedule later'. Use en-dash (–) not hyphen in number ranges. Use 'min' not 'minutes' for brevity in the helper line."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: web-ux-checkout-tip
+    lens: technical-writer
+    severity: P1
+    issue: "Tip helper '100% of your tip goes to the home chef' — the percent sign is fine but the sentence is unnecessarily marketing. Could read as boastful (we're a marketplace; this should be table stakes)."
+    evidence_excerpt: "Add a tip / 100% of your tip goes to the home chef / No tip / Custom"
+    recommendation: "'Your tip goes directly to the chef.' Drop '100%' (implied). 'No tip' option fine as 'Skip'."
+    depends_on: null
+
+  - finding_id: TW-021
+    surface_id: mc-catering-form-labels
+    lens: technical-writer
+    severity: P1
+    issue: "Catering date field exposes 'Event Date * (YYYY-MM-DD)' — raw date format hint shown to customer. Style guide §6 routes date formatting through Intl.DateTimeFormat, never hand-rolled. Customer should see a date picker, not be told to type ISO."
+    evidence_excerpt: "Event Type * / Event Date * (YYYY-MM-DD) / Guest Count * / Budget (₹) / City * / State * / Additional Details"
+    recommendation: "Replace text input with native date picker. Remove '(YYYY-MM-DD)' hint. Drop asterisks from labels — required indicator goes on the field, not the label (style guide §4). Use sentence case: 'Event type', 'Event date', 'Guest count', 'Budget', 'City', 'State', 'Additional details'."
+    depends_on: null
+
+  - finding_id: TW-022
+    surface_id: web-ux-catering-request-event-fields
+    lens: technical-writer
+    severity: P1
+    issue: "Web catering form uses title case throughout ('Event Date', 'Event Time', 'Number of Guests', 'Minimum budget', 'Maximum budget'). Style guide §4 requires sentence case form labels. Also 'Min' and 'Max' as standalone labels are too cryptic."
+    evidence_excerpt: "Event Date / Event Time / Number of Guests / Minimum budget / Maximum budget / Min / Max"
+    recommendation: "Sentence case throughout: 'Event date', 'Event time', 'Number of guests', 'Minimum budget', 'Maximum budget'. Replace standalone 'Min'/'Max' with helper text or aria-labels — they're meaningless out of context."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: web-ux-browse-filters-rating
+    lens: technical-writer
+    severity: P1
+    issue: "Rating filter options 'Any Rating / 4.5+ Stars / 4+ Stars / 3.5+ Stars' use title case. Style guide §4 sentence case."
+    evidence_excerpt: "Any Rating / 4.5+ Stars / 4+ Stars / 3.5+ Stars"
+    recommendation: "'Any rating', '4.5+ stars', '4+ stars', '3.5+ stars'. Or compact: 'All', '4.5+', '4+', '3.5+' (filter chips don't need 'stars' suffix if a star icon is present)."
+    depends_on: null
+
+  - finding_id: TW-024
+    surface_id: web-ux-browse-sort-options
+    lens: technical-writer
+    severity: P1
+    issue: "Sort options 'Top Rated / Nearest / Most Popular / Price' title-case + 'Most Popular' is wordy. Drift with mc-home-sort-options ('Recommended, Top Rated, Newest, Price')."
+    evidence_excerpt: "Top Rated / Nearest / Most Popular / Price"
+    recommendation: "'Top rated', 'Nearest', 'Popular', 'Price'. Align with mobile: pick one canonical sort menu and reuse — currently 'Nearest' (web) vs 'Newest' (mobile) is suspicious — these are different criteria. Verify both apps actually sort the same way for each option."
+    depends_on: null
+
+  - finding_id: TW-025
+    surface_id: mc-home-sort-options
+    lens: technical-writer
+    severity: P1
+    issue: "Inventory note flags 'two map to same value rating — likely UX bug'. Sort options reduce to fewer distinct sorts than visible options. Either copy lies, or implementation does."
+    evidence_excerpt: "Recommended, Top Rated, Newest, Price  (two options map to 'rating')"
+    recommendation: "Audit which sort options actually produce different results. Either merge duplicates ('Top rated' = 'Recommended'?) or wire 'Newest' / 'Recommended' to distinct sort criteria. Fix copy after fixing logic."
+    depends_on: null
+
+  - finding_id: TW-026
+    surface_id: dp-ux-stripe-make-primary
+    lens: technical-writer
+    severity: P1
+    issue: "'Make Stripe My Primary Gateway' is 5 words, title case, possessive ('My'). Style guide §4 buttons: verb-first, ≤3 words, sentence case."
+    evidence_excerpt: "Make Stripe My Primary Gateway"
+    recommendation: "'Set as primary' (3 words). Or, given the context already says 'gateway': 'Make primary'."
+    depends_on: null
+
+  - finding_id: TW-027
+    surface_id: dp-ux-stripe-active-gateway
+    lens: technical-writer
+    severity: P1
+    issue: "'Active payout gateway: {Stripe/Razorpay}' uses colon-then-value pattern. Style guide §4 forbids colons on form labels — same principle applies to status rows. Inconsistent with rest of app."
+    evidence_excerpt: "Active payout gateway: {Stripe/Razorpay}"
+    recommendation: "Two lines: small caption 'Active payout gateway' above bold value '{Stripe/Razorpay}'. Or single line: 'Payouts via {Stripe/Razorpay}.'"
+    depends_on: null
+
+  - finding_id: TW-028
+    surface_id: dp-ux-staff-form-labels
+    lens: technical-writer
+    severity: P1
+    issue: "Staff invite labels use 'Email *', 'Role *' with asterisks in label text and email placeholder 'staff@example.com'. Style guide §4 asterisk goes on the field, not on the label."
+    evidence_excerpt: "Email * + staff@example.com / Role * / Department + e.g. Operations / Title + e.g. Fleet Coordinator"
+    recommendation: "Drop asterisks from labels. Add required indicator via UI (red dot or '*' next to the field, not in the text). Replace 'e.g.' helper with explicit placeholder or helper-text pattern."
+    depends_on: null
+
+  - finding_id: TW-029
+    surface_id: mc-catering-status-labels
+    lens: technical-writer
+    severity: P1
+    issue: "Catering request status pills 'Open / Quoted / Accepted / Completed / Cancelled' have no observable drift WITHIN this surface, but compare to web catering surfaces which use full nouns like 'No open requests' / 'No pending quotes' / 'No booked events' — 'Booked' vs 'Accepted' is the same state in two words."
+    evidence_excerpt: "Open / Quoted / Accepted / Completed / Cancelled  (mobile)  vs  open / pending quotes / booked  (web chef)"
+    recommendation: "Sync vocabulary: 'open', 'quoted', 'booked', 'completed', 'cancelled'. 'Booked' is more natural than 'Accepted' for catering context (events are booked, not orders)."
+    depends_on: null
+
+  - finding_id: TW-030
+    surface_id: web-ux-chefdetail-status-badges
+    lens: technical-writer
+    severity: P1
+    issue: "Chef detail page mixes 'Open for orders' (good) with 'Currently closed' (filler word 'Currently') and abbreviated stats 'Min. order:' / 'Delivery:' / 'Price range:'. Trailing colons violate §4 form-label rule; 'Min.' abbreviation reads as typographic clutter."
+    evidence_excerpt: "Verified / Open for orders / Currently closed / Min. order: / Delivery: / Price range:"
+    recommendation: "'Open' / 'Closed' for badges (one word). For stats: drop the colon, use caption-then-value layout. 'Min. order' → 'Minimum order'. 'Delivery' → 'Delivery fee'. 'Price range' stays."
+    depends_on: null
+
+  # =====================================================================
+  # P2 patterns — grouped findings across many surfaces
+  # =====================================================================
+
+  - finding_id: TW-031
+    surface_id: pattern-title-case-headings-web
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Web app uses title case on most page H1s and section headings; style guide §4 sentence case for microcopy is silent on H1s but design context (.impeccable.md, Source Sans 3 UI body) reads cleaner in sentence case. Title case headings are AI-slop tell."
+    evidence_excerpt: "Affected surface_ids (web): web-ux-orders-heading 'My Orders'; web-ux-favorites-heading 'My Favorite Chefs'; web-ux-profile-heading 'Account Settings'; web-ux-profile-personal-info 'Personal Information'; web-ux-profile-payments 'Payment Methods'; web-ux-profile-2fa 'Two-Factor Authentication' / 'Set Up Two-Factor Authentication' / 'Save Your Backup Codes'; web-ux-profile-preferences 'Food Preferences' / 'Dietary Preferences' / 'Food Allergies' / 'Favourite Cuisines' / 'Spice Tolerance' / 'Household Size'; web-ux-profile-addresses 'Saved Addresses'; web-ux-checkout-address-form 'Delivery Address' / 'Add New' / 'Street Address' / 'Postal Code'; web-ux-orderdetail-sections 'Back to Orders' / 'Order Items' / 'Delivery Address' / 'Payment Summary' / 'Special Instructions' / 'Leave a Review'; web-ux-cart-order-summary 'Order Summary' / 'Delivery fee' / 'Service fee'; web-ux-chefdetail-reviews 'Customer Reviews'; web-ux-chefdetail-categories 'Categories' / 'All Items' / 'Reviews'; web-ux-admin-analytics 'Revenue Overview' / 'Orders by Status' / 'Top Performing Chefs' / 'Popular Cuisines'; web-ux-admin-chefs 'Chef Management'; web-ux-admin-orders 'Order' / 'Delivery Address'; web-ux-admin-settings 'Platform Settings' / 'Danger Zone'; web-ux-chef-menu 'Menu Management'; web-ux-chef-orders-heading 'Delivery Information' / 'Order Items' / 'Special Instructions' / 'Payment Summary'; web-ux-chef-profile 'Kitchen Profile' / 'Profile Images' / 'Basic Information' / 'Cuisines' / 'Specialties' / 'Business Settings' / 'Your Stats'; web-ux-chef-social 'Social Feed'; web-ux-chef-earnings 'Earnings Overview' / 'Top Selling Items' / 'Recent Payouts' / 'Payment Settings'."
+    recommendation: "One pass: switch all H1s and section headings to sentence case across apps/web/src/features/**. Keep proper nouns capitalized (Razorpay, UPI, etc.). Preserves brand 'quietly modern' aesthetic, satisfies §4 microcopy formula by default."
+    depends_on: null
+
+  - finding_id: TW-032
+    surface_id: pattern-title-case-headings-admin-portal
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Admin portal uses title case for all section headings; style guide allows admin neutrality but the §4 microcopy formula and overall brand direction in .impeccable.md prefer sentence case."
+    evidence_excerpt: "Affected: ap-approvaldetail-sections 'Chef Information' / 'Submitted Data' / 'Documents' / 'Admin Notes'; ap-approvaldetail-detail-fields many ('Request ID' / 'Business Name' / 'Kitchen Type' / 'Document Number' / 'Item Name' / 'Compare Price' / 'Portion Size' / 'Dietary Tags' / 'Operating Hours' / 'Terms Accepted' / 'Hygiene Policy Accepted'); ap-approvals-statuses 'All Statuses' / 'Info Requested'; ap-approvals-table-columns 'Type' / 'Title' / 'Requester' / 'Priority' / 'Submitted' / 'Actions'; ap-chefs-stat-labels 'Menu Items' / 'Prep Time'; ap-chefs-filter-status 'All Status' / 'Pending Verification'; ap-dashboard-stat-labels 'Total users' / 'Active chefs' / 'Orders today' / 'Total revenue' (already sentence — keep); ap-delivery-statuses (see TW-003); ap-delivery-table-columns 'Order' / 'Driver' / 'From / To' / 'Status' / 'Payout' / 'Time'; ap-providercreate-sections 'Basic Info' / 'API Configuration' / 'Status Mapping' / 'Coverage' / 'Pricing' / 'Rate Limits' / 'Contact'; ap-providercreate-fields 'API Base URL' / 'Webhook Secret' / 'Supported Countries' / 'Max Distance (km)' / 'Pricing Model' / 'Base Cost' / 'Per KM Cost' / 'Max Concurrent Deliveries' / 'Daily Limit' / 'Avg Pickup Time (min)' / 'Contact Name'; ap-providerdetail-stats 'Total Deliveries' / 'Success Rate' / 'Avg Delivery Time' / 'Active Deliveries'; ap-providerdetail-sections 'API Configuration' / 'Rate Limits & Config' / 'Performance (Last 30 Days)' / 'Contact Info'; ap-providers-table-columns 'API Status' / 'Success Rate'; ap-orders-filter-status 'All Status'; ap-orders-table-columns; ap-auditlogs-table 'When' / 'Actor' / 'Action' / 'Entity' / 'IP'; ap-exports-title 'Data & Exports'; ap-exports-range-card 'Date range' (good); ap-secsettings-cards 'Password policy' / 'Session management' / 'Two-factor authentication' / 'API keys' (already sentence — keep); ap-secsettings-password-fields 'Minimum length' / 'Require uppercase letter' (already sentence — keep); ap-secsettings-session-fields 'Access token TTL (hours)' / 'Refresh token TTL (days)' / 'Save policy' / 'Your active sessions' (mostly sentence); ap-secsettings-2fa-account; ap-settings-card-titles 'Payment Gateway' / 'Stripe Gateway'; ap-settings-payment-fields 'Razorpay Key ID' / 'Stripe Secret Key' / 'Webhook Signing Secret' / 'Key Prefix' (title case); ap-staffdetail-section-profile 'Profile Information'; ap-staffdetail-info-rows 'Email' / 'Phone' / 'Department' / 'Title' / 'Joined' / 'Last Login'; ap-staffdetail-section-roleperm 'Role & Permissions'; ap-staffdetail-section-system 'System Details'; ap-staff-tabs 'Staff Members'; ap-staff-table-columns 'Staff Member' / 'Last Login'; ap-staff-invite-fields 'Personal Message'; ap-userdetail-info-rows 'Auth Provider' / 'Last Login'; ap-userdetail-system 'System Details' / 'User ID' / 'Created At' / 'Updated At'; ap-userdetail-order-stats 'Order Activity' / 'Total Orders' / 'Total Spent' / 'Last Order'; ap-userdetail-verification 'Account Active' / 'Not verified'; ap-users-filter-roles 'All Roles' / 'Customer' / 'Chef' / 'Delivery' / 'Admin'; ap-users-table-columns 'User' / 'Contact' / 'Role' / 'Orders' / 'Total Spent' / 'Joined' / 'Actions'."
+    recommendation: "Sweep apps/admin-portal/src/features/**: section headings, table column headers, filter labels, info-row labels — all sentence case. Keep acronyms (API, IP, TTL, IFSC, UPI, CSAT, SMS). Keep proper nouns. Keep 'ID' as 'ID' in 'User ID' / 'Request ID' (uppercase initialism is acceptable)."
+    depends_on: TW-031
+
+  - finding_id: TW-033
+    surface_id: pattern-title-case-headings-delivery-portal
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Delivery portal (web) uses title case for stat labels, section headers, and CTAs. Per persona tone matrix admin gets neutral precise voice — sentence case is the production-grade default."
+    evidence_excerpt: "Affected: dp-ux-active-distance-label 'Distance'; dp-ux-active-est-time-label 'Est. Time'; dp-ux-active-payout-label 'Payout'; dp-ux-active-status-* 'Picked Up' / 'In Transit' / 'Delivered'; dp-ux-active-h1 'Active Delivery'; dp-ux-available-h1 'Available Deliveries'; dp-ux-accept-delivery-btn 'Accept Delivery'; dp-ux-history-h1 'Delivery History'; dp-ux-earnings-total 'Total Earnings'; dp-ux-earnings-daily-breakdown 'Daily Breakdown'; dp-ux-fleet-partner-summary 'Partner Summary'; dp-ux-fleet-today-earnings \"Today's Fleet Earnings\"; dp-ux-fleet-quick-pending 'Pending Verifications'; dp-ux-fleet-livestats 'Online Partners' / 'Active Deliveries' / 'Unassigned Orders' / \"Today's Completed\"; dp-ux-fleet-partnerstats 'Total Partners' / 'Verified' / 'Pending Verification'; dp-ux-fleet-h 'Fleet Overview'; dp-ux-fleet-view-partners 'View Partners'; dp-ux-partner-detail-back 'Back to Partners'; dp-ux-partner-performance 'Acceptance Rate' / 'On-Time Rate' / 'CSAT Score' / 'Total Deliveries'; dp-ux-partner-detail-verify-block 'Pending Verification'; dp-ux-partner-docs-h 'Documents'; dp-ux-partner-active-deliveries 'Active Deliveries'; dp-ux-partner-suspend 'Suspend Partner'; dp-ux-partner-reactivate 'Reactivate Partner'; dp-ux-partners-card-labels 'Vehicle' / 'Rating' / 'Deliveries' (single nouns OK); dp-ux-partners-h 'Delivery Partners'; dp-ux-stripe-title 'Stripe (International Payouts)'; dp-ux-stripe-resume-onboarding 'Resume Onboarding'; dp-ux-stripe-switch-razorpay 'Switch to Razorpay'; dp-ux-settings-privacy 'Privacy & Security'; dp-ux-settings-signout 'Sign Out'; dp-ux-staff-h 'Staff Management'; dp-ux-staff-invite-btn 'Invite Staff'; dp-ux-staff-invite-h 'Send Staff Invitation'; dp-ux-staff-invite-created 'Invitation Created'; dp-ux-staff-list-h 'Current Staff'; dp-ux-staff-pending-h 'Pending Invitations'."
+    recommendation: "Sentence case across apps/delivery-portal/src/features/**. Driver-facing telegraphic style favours short sentence-case labels. Note: 'Sign Out' → 'Sign out' (also fixes style guide §3 'Sign out' preferred over 'Logout')."
+    depends_on: TW-031
+
+  - finding_id: TW-034
+    surface_id: pattern-title-case-headings-vendor-portal
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Vendor portal title-cases section headings, card titles, and stat labels. Chef-facing tone matrix is 'crisp 5-12 words operational' — sentence case is the cleaner default."
+    evidence_excerpt: "Affected: vp-ux-dashboard-revenue-lead \"Today's revenue\" (already sentence — keep); vp-ux-dashboard-pending-cta 'orders' / 'Waiting for you to accept' (good); vp-ux-dashboard-chart 'Weekly Revenue' / 'Last 7 days performance'; vp-ux-dashboard-recent-orders 'Recent Orders' / 'Your latest order activity' / 'View all' / 'Order' / 'Customer' / 'Items' / 'Amount' / 'Status' / 'Time'; vp-ux-dashboard-pending-card 'Pending Orders' / 'New' / 'Accept' / 'Reject'; vp-ux-dashboard-quick-actions 'Quick Actions' / 'Add Menu Item' / 'Create a new dish listing' / 'View Orders' / 'Manage live orders' / 'Update Profile' / 'Edit kitchen details' / 'View Earnings' / 'Track your revenue'; vp-ux-earnings-cards 'Available Balance' / 'Pending Payout' / 'This Month' / 'Lifetime Earnings'; vp-ux-payouts-title 'Payout History' / 'Back to Earnings'; vp-ux-menu-form-title 'Edit Menu Item' / 'Add Menu Item'; vp-ux-menu-view-page 'Menu item not found' (good) / 'Back to Menu' / 'Under Review' / 'Edit Item' / 'Dietary Information' / 'No dietary information provided' / 'Pricing' / 'Preparation' / 'Prep Time' / 'Serves' / 'Portion Size' / 'Performance' / 'Orders' / 'Rating' / 'Item ID'; vp-ux-menu-title 'Menu Management'; vp-ux-menu-bulk-actions 'Mark Available' / 'Mark Unavailable' / 'Delete Selected'; vp-ux-notifs-title 'Admin Requests' / 'Mark all read' (good); vp-ux-orders-live-title 'Live Orders'; vp-ux-orders-history-title 'Order History' / 'Live Orders'; vp-ux-orders-history-summary 'Delivered' / 'Cancelled' / 'Revenue' (good); vp-ux-kitchen-title 'Kitchen Setup' / 'Save Changes' / 'Back to Profile'; vp-ux-kitchen-hours 'Operating Hours' / 'Closed'; vp-ux-kitchen-photos 'Kitchen Photos' / 'Add Photo'; vp-ux-profile-title 'Kitchen Profile' / 'Save Changes'; vp-ux-profile-business-info 'Business Information' / 'Business Name' / 'Description'; vp-ux-profile-cuisines 'Cuisines'; vp-ux-profile-specialties 'Specialties' / 'No specialties added yet'; vp-ux-profile-settings 'Business Settings' / 'Average Prep Time' / 'Delivery Radius (km)' / 'Minimum Order' / 'Delivery Fee'; vp-ux-profile-docs 'Documents & Certificates'; vp-ux-reviews-title 'Reviews'; vp-ux-settings-title 'Settings' / 'Save Settings'; vp-ux-settings-order-acceptance 'Order Acceptance' / 'Accepting Orders' / 'Auto-accept Orders' / 'Auto-accept threshold' (good); vp-ux-settings-notifications 'Push Notifications' / 'New order alerts' / 'Order updates' / 'Daily summary' / 'Weekly report' / 'New order SMS'; vp-ux-settings-payout-section 'Payout Details' / 'Razorpay Connected' / 'Linked Account' / 'Set Up Payouts' / 'Account Holder' / 'Account Number' / 'IFSC Code' / 'UPI ID'; vp-ux-settings-password 'Change Password' / 'Current Password' / 'New Password' / 'Confirm New Password' / 'Update Password'."
+    recommendation: "Sentence case throughout apps/vendor-portal/src/features/**. Special cases: 'Razorpay Connected' → 'Razorpay connected'. 'IFSC Code' → 'IFSC code'. 'UPI ID' → 'UPI ID' (acronym stays caps)."
+    depends_on: TW-031
+
+  - finding_id: TW-035
+    surface_id: pattern-title-case-headings-mobile-customer
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Mobile customer screen titles use title case. Style guide §4 sentence case is the default; mobile follows web."
+    evidence_excerpt: "Affected: mc-favorites-title 'Saved Chefs' (also bottom-tab is 'Saved' — drift noted); mc-orders-title 'My Orders'; mc-profile-sections 'Personal Info' / 'Food Preferences'; mc-profile-field-labels 'First Name' / 'Last Name' / 'Phone'; mc-profile-save-ctas 'Save Changes' / 'Save Preferences'; mc-catering-tabs 'Request Catering' / 'My Requests'; mc-catering-submit-cta 'Submit Request' (drift: web uses 'Place Order' for the verbal cousin; catering uses 'Submit'); mc-checkout-section-address 'Delivery Address'; mc-checkout-add-address 'Add New Address'; mc-checkout-save-address 'Save Address'; mc-checkout-summary-section 'Order Summary'; mc-order-detail-sections 'Items' / 'Delivery Address' / 'Price Breakdown'; mc-order-detail-price-rows 'Subtotal' / 'Delivery Fee' / 'Total' (drift with checkout's 'Delivery fee' lower-f — inconsistency, see TW-049); mc-order-detail-track-cta 'Track Order'; mc-social-title 'Social Feed'; mc-cartbar-cta 'View Cart'; mc-cartsheet-title 'Your Cart'; mc-cartsheet-checkout-cta 'Proceed to Checkout'."
+    recommendation: "Sentence case sweep across apps/mobile-customer/app/**. Special: 'Saved Chefs' page heading should match bottom-tab — pick 'Saved'."
+    depends_on: TW-031
+
+  - finding_id: TW-036
+    surface_id: pattern-title-case-headings-mobile-vendor
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Mobile vendor uses title case section headings, stats, field labels, CTAs. Sentence case throughout matches chef-facing tone and reduces visual noise."
+    evidence_excerpt: "Affected: mv-dash-stats-today-orders \"Today's Orders\"; mv-dash-stats-today-earnings \"Today's Earnings\"; mv-dash-accepting-title 'Accepting Orders'; mv-dash-recent-orders 'Recent Orders'; mv-menu-heading 'My Menu'; mv-more-account-title 'My Account'; mv-orders-tab-live 'Live Queue'; mv-analytics-total-orders 'Total Orders'; mv-analytics-total-revenue 'Total Revenue' (drift with mv-earnings-total 'Total Earnings'); mv-analytics-popular 'Popular Items'; mv-analytics-revenue-trend 'Revenue Trend'; mv-earnings-total 'Total Earnings'; mv-earnings-pending-payout 'Pending Payout'; mv-earnings-last-payout 'Last Payout'; mv-earnings-payout-account 'Payout Account'; mv-earnings-payout-fields 'Bank' / 'Account Number' / 'IFSC' / 'UPI ID'; mv-earnings-weekly 'Weekly Earnings'; mv-menuedit-heading 'Edit Menu Item'; mv-menuedit-photos-section 'Photos'; mv-menuedit-save-cta 'Save Changes'; mv-menunew-heading 'Add Menu Item'; mv-menunew-photo-section 'Food Photo'; mv-menunew-photo-empty 'No photo selected' (good); mv-menunew-photo-take 'Take Photo'; mv-menunew-section-details 'Item Details'; mv-menunew-name-label 'Item Name *'; mv-menunew-price-label 'Price (₹) *'; mv-menunew-preptime-label 'Preparation Time'; mv-menunew-cta 'Add Item'; mv-profile-section-personal 'Personal Info'; mv-profile-field-display-name 'Display Name'; mv-profile-field-kitchen-name 'Kitchen Name'; mv-profile-field-cuisine-types 'Cuisine Types'; mv-profile-section-photos 'Kitchen Photos'; mv-reviewdetail-heading 'Reply to Review'; mv-reviewdetail-form-label 'Your Reply'; mv-reviewdetail-send-cta 'Send Reply'; mv-reviews-heading 'Customer Reviews'; mv-reviewcard-your-reply 'Your Reply'; mv-settings-section-notifs 'Notification Preferences'; mv-settings-notif-neworders 'New Order Notifications'; mv-settings-notif-payouts 'Payout Notifications'; mv-settings-notif-reviews 'Review Notifications'; mv-settings-change-password 'Change Password'; mv-settings-delete-account 'Delete Account'."
+    recommendation: "Sweep apps/mobile-vendor/app/**. Sentence case throughout. Note: 'Total Revenue' / 'Total Earnings' / 'Pending Payout' all live as KPI tiles — pick one verb ('Earnings' or 'Revenue') across all chef screens (see TW-051)."
+    depends_on: TW-031
+
+  - finding_id: TW-037
+    surface_id: pattern-title-case-headings-mobile-delivery
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Mobile delivery screen titles and status badges use title case. Driver tone matrix accepts telegraphic, but sentence case still applies to multi-word labels."
+    evidence_excerpt: "Affected: md-core-005 'Dashboard' (one word, fine); md-core-006 'You are Online' (capital O on Online); md-core-007 'You are Offline'; md-core-014 'Total Deliveries'; md-core-015 'Available'; md-core-016 \"You're Offline\"; md-core-018 'Go Online to Accept Deliveries'; md-core-023 'Active Delivery'; md-core-025 'Head to Kitchen'; md-core-026 'Waiting for Order'; md-core-027 'Order Picked Up'; md-core-028 'On the Way' (good — sentence already); md-core-029 'At Dropoff Location'; md-core-030 'Delivery Complete'; md-core-031 'Delivery Cancelled'; md-core-032 'Arrived at Kitchen'; md-core-033 'Picked Up Order' (see TW-004); md-core-034 'Start Delivery'; md-core-035 'Arrived at Dropoff'; md-core-036 'Mark as Delivered'; md-core-040 'Pickup Location'; md-core-041 'Dropoff Location'; md-core-044 'Order Summary'; md-core-046 'Special instructions:' (good apart from colon); md-core-049-054 nav items single nouns; md-core-056 'Notifications'; md-core-057 'New Delivery Notifications'; md-core-059 'Earnings Payout Notifications'; md-core-062 'Default Online Status'; md-core-065 'Change Password'; md-core-066 'View Subscription Plan'; md-core-067 'Delete Account'; md-core-070 '{Period} Earnings'; md-core-071 'Total Earned'; md-core-072 'Pending Payout'; md-core-073 'Last Payout'; md-core-074 'Weekly History'; md-core-075 'Delivery History'; md-core-076 'Delivery Detail'; md-core-080 'Distance' / 'Completed' / 'Payout' (single nouns, fine); md-core-082 'Personal Info'; md-core-083 'Full Name'; md-core-085 'Vehicle Details'; md-core-086 'Vehicle Type'; md-core-087 'Registration Number'; md-core-089 'Save Changes'; md-core-091 '✓ Verified' / 'Pending' (check sym OK but inconsistent — flag separately); md-core-092 'Fleet Overview'; md-core-093 'Total Drivers'; md-core-094 'Online Now'; md-core-095 \"Today's Deliveries\"; md-core-096 \"Today's Earnings\"; md-core-100 'Partner Detail'; md-core-103 'Invite Staff Member'; md-core-108 'Send Invitation'."
+    recommendation: "Sweep apps/mobile-delivery/app/**. Sentence case multi-word labels. Status badges already sentence case ('On the way') in some places — apply consistently."
+    depends_on: TW-031
+
+  - finding_id: TW-038
+    surface_id: pattern-asterisk-on-form-labels
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Required-field asterisks embedded in label text across multiple forms. Style guide §4: required indicator on the field, label stays clean."
+    evidence_excerpt: "Affected: mc-catering-form-labels 'Event Type *' / 'Event Date *' / 'Guest Count *' / 'City *' / 'State *'; mv-menunew-name-label 'Item Name *'; mv-menunew-price-label 'Price (₹) *'; dp-ux-staff-form-labels 'Email *' / 'Role *'."
+    recommendation: "Drop asterisks from label strings. Implement required indicator via UI (red dot, '*' marker outside label text, or aria-required attribute styled). Update all flagged surfaces."
+    depends_on: null
+
+  - finding_id: TW-039
+    surface_id: pattern-trailing-colon-form-labels
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Trailing colons on labels and section captions. Style guide §4 form labels: no colons."
+    evidence_excerpt: "Affected: web-ux-chefdetail-status-badges 'Min. order:' / 'Delivery:' / 'Price range:'; web-ux-chefdetail-reviews \"Chef's Response:\"; web-ux-orderdetail-sections 'Placed on {date}' / 'Estimated delivery:'; md-core-042 'Note:'; md-core-046 'Special instructions:'; dp-ux-stripe-active-gateway 'Active payout gateway:'; dp-ux-staff-invite-created 'Share this link with the new staff member:'; vp-ux-settings-payout-section 'Linked Account: ...'."
+    recommendation: "Remove all trailing colons from label-style strings. Use layout (caption above value, line break) to convey label/value relationship."
+    depends_on: null
+
+  - finding_id: TW-040
+    surface_id: pattern-loading-ellipsis-three-dots
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Loading states use three dots '...' instead of Unicode ellipsis '…'. Typographic polish; consistency with brand 'quietly modern'."
+    evidence_excerpt: "Affected: web-ux-browse-search-input 'Search chefs, dishes, cuisines...'; web-ux-admin-chefs 'Search chefs...'; web-ux-admin-orders 'Search order number...'; web-ux-admin-users 'Search by name or email...'; web-ux-chef-menu 'Search menu items...'; web-ux-chef-orders-heading 'Search by order number...'; web-ux-delivery-orders 'Search orders...'; web-ux-social-feed-search 'Search posts, chefs, or dishes...'; web-ux-chef-catering 'Any special notes about your quote...'; web-ux-chef-profile 'Tell customers about your kitchen...'; web-ux-chef-social 'Share something about this dish...'; vp-ux-kitchen-photos 'Uploading...'; vp-ux-profile-business-info 'Tell customers about your kitchen, cooking style, and what makes your food special...'; vp-ux-profile-specialties 'Add a specialty...'; dp-ux-staff-form-labels 'Add a personal message to the invitation email...'; dp-ux-staff-send-btn 'Sending...'; dp-ux-stripe-connect-btn 'Starting…' (correct already — use as model); dp-ux-partner-verify-approve 'Verifying...'; dp-ux-partner-reactivate 'Processing...'; mc-checkout-place-order 'Processing...'; mv-reviewdetail-input-ph 'Write a thoughtful reply to this review...'."
+    recommendation: "Replace '...' with '…' (Unicode U+2026) in all placeholder strings, loading states, and 'Tell us more' textarea placeholders. dp-ux-stripe-connect-btn 'Starting…' already uses correct ellipsis — propagate that style."
+    depends_on: null
+
+  - finding_id: TW-041
+    surface_id: pattern-multi-word-buttons
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Button labels exceed style guide §4 cap of 3 words."
+    evidence_excerpt: "Affected (>3 words): web-ux-cart-checkout-cta 'Sign in to Checkout' (4); web-ux-cart-checkout-cta 'Proceed to Checkout' (3 — borderline); mc-cartsheet-checkout-cta 'Proceed to Checkout' (3 — borderline, prefer 'Checkout'); mc-checkout-add-address 'Add New Address' (3 — borderline, prefer 'Add address'); md-core-018 'Go Online to Accept Deliveries' (5 — should be 'Go online'); dp-ux-stripe-make-primary 'Make Stripe My Primary Gateway' (5 — see TW-026); dp-ux-staff-invite-h 'Send Staff Invitation' (3 — borderline); ap-staff-invite-dialog-title 'Invite Staff Member' (3 — borderline); md-core-066 'View Subscription Plan' (3 — borderline); md-core-036 'Mark as Delivered' (3 — borderline, prefer 'Mark delivered'); web-ux-orderdetail-cancel 'Please let us know why you're cancelling...' (8 — modal subtitle, not button, but borderline informal); mv-onb-review-cta 'Submit Application' (2 — fine)."
+    recommendation: "Tighten to ≤3 words: 'Sign in' / 'Checkout' / 'Add address' / 'Go online' / 'Set as primary' / 'Send invite' / 'Invite staff' / 'View plan' / 'Mark delivered'."
+    depends_on: null
+
+  - finding_id: TW-042
+    surface_id: pattern-uppercase-eyebrows
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — ALL CAPS or shouting eyebrows on driver/customer surfaces. Style guide §1/§3 bans 'ALL CAPS body'. Eyebrows can use small-caps via CSS letter-spacing instead."
+    evidence_excerpt: "Affected: dp-ux-active-pickup-from 'Pickup from' (note: 'uppercase eyebrow' style — CSS, not string); dp-ux-delivery-pickup-label 'PICKUP'; dp-ux-delivery-dropoff-label 'DROPOFF'; mv-undo-cta 'UNDO' (snackbar action — marginal, but inconsistent with mobile-customer)."
+    recommendation: "Keep strings in sentence case ('Pickup', 'Dropoff', 'Undo'). Apply uppercase via CSS text-transform if visual eyebrow style is desired — strings stay translation-safe."
+    depends_on: TW-006
+
+  - finding_id: TW-043
+    surface_id: pattern-banned-vocabulary-logout
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — 'Logout' (one word) and 'Log out' (two words) used across apps. Style guide §3: 'Sign out' is the preferred term; 'Log out' / 'Logout' banned."
+    evidence_excerpt: "Affected: web-ux-admin-layout-nav 'Log out'; web-ux-layout-nav 'Logout'; vp-ux-layout-nav 'Logout'; mv-onb-pending-logout-btn 'Logout'; mv-more-logout-row 'Logout'; mc-profile-logout-button 'Log Out'; dp-ux-settings-signout 'Sign Out' (closer — needs sentence case)."
+    recommendation: "Replace all 'Logout' / 'Log out' / 'Sign Out' instances with 'Sign out'. Singular term across all 5 apps."
+    depends_on: null
+
+  - finding_id: TW-044
+    surface_id: pattern-banned-vocabulary-login-signup
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Within core-ux surfaces, 'login' / 'Login' appears as a noun. Style guide §3: 'Sign in' verb form is preferred even when used as a noun ('Use your sign-in details')."
+    evidence_excerpt: "Affected: vp-ux-settings-password 'Your account is linked to {provider} login. Password management is handled by your social login provider.'"
+    recommendation: "Rewrite: 'Your {provider} account manages your password — open {provider} to change it.' Drop 'login' noun usage."
+    depends_on: TW-043
+
+  - finding_id: TW-045
+    surface_id: pattern-customer-noun-user
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Admin / chef-facing surfaces refer to customers as 'User' / 'Users'. Style guide §3: 'Customer' is the chef/admin-facing preferred term; 'User' is banned (too generic)."
+    evidence_excerpt: "Affected (admin/chef-facing 'User' references): web-ux-admin-users 'Users / Search by name or email... / No users found'; ap-userdetail-system 'User ID'; ap-users-title 'Users'; ap-users-subtitle 'Manage all registered users on the platform'; ap-users-table-columns 'User'; ap-dashboard-stat-labels 'Total users'; ap-analytics-cards 'Total Users'; ap-userdetail-* sections; ap-exports-cards 'User data / All user accounts (id, email, role, created_at)'."
+    recommendation: "When the entity is a customer specifically, use 'Customer'. When the entity could be any role (chef, customer, driver, admin), keep 'User' for system-level admin views (User ID is fine; user accounts is fine). Audit which 'Users' surfaces are actually 'Customers'. Recommend: ap-users-title stays 'Users' (mixed roles per ap-users-filter-roles), but ap-userdetail customer-only views become 'Customer Details'."
+    depends_on: null
+
+  - finding_id: TW-046
+    surface_id: pattern-banned-vocabulary-driver-vs-delivery-partner
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Customer/admin surfaces alternate 'Driver' and 'Delivery Partner' / 'Partner'. Style guide §3: 'Driver' driver-facing, 'Delivery partner' customer-facing."
+    evidence_excerpt: "Affected: dp-ux-profile-fallback-name 'Delivery Partner' (driver-facing — should be 'Driver'); dp-ux-partners-h 'Delivery Partners' (admin-facing 'Partners' is fine, but cards call them 'Partners' below — drift); dp-ux-partner-detail-verify-block 'This partner is awaiting verification' (admin-facing — OK); dp-ux-partner-readonly-notice 'fleet manager to approve' (mention of role — fine); mc-checkout-totals (no mention); ap-users-filter-roles 'Delivery' (one word — confusing alone)."
+    recommendation: "Driver-facing surfaces (delivery-portal, mobile-delivery): 'Driver'. Admin-facing surfaces (admin-portal, delivery-portal staff views): 'Driver' or 'Partner' but pick one — recommend 'Driver' across admin. Customer-facing: 'Delivery partner'. Rename dp-ux-profile-fallback-name to 'Driver'. Rename ap-users-filter-roles 'Delivery' to 'Driver'."
+    depends_on: TW-013
+
+  - finding_id: TW-047
+    surface_id: pattern-money-formatting
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Money symbol usage drifts. Style guide §6: '₹120' (no space, symbol first). Most surfaces follow, but inventory shows '$' leak (TW-009), and 'Min. order: ₹{n}' (TW-030) ends in colon."
+    evidence_excerpt: "Affected: vp-ux-settings-order-acceptance 'Auto-accept threshold ($)' — see TW-009; ap-chefs-meta-bottom 'Min order: ₹{n}'; web-ux-checkout-summary 'Subtotal / Delivery fee / Service fee / Tax / Tip / Total'; mv-menunew-price-label 'Price (₹) *' (currency in parens fine, asterisk separate issue); mc-checkout-place-order 'Place Order · ₹{total}'; md-core-047 'You earned ₹{payout} for this delivery' (good)."
+    recommendation: "Standardise to '₹{amount}' no space, no 'Rs.', no '$' anywhere in INR contexts. Format via Intl.NumberFormat({ style: 'currency', currency: 'INR' })."
+    depends_on: TW-009
+
+  - finding_id: TW-048
+    surface_id: pattern-prep-time-unit-formatting
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Prep time unit drifts: '15min' (no space) vs '15 min' (with space) for the same data point across vendor onboarding and menu creation."
+    evidence_excerpt: "Affected: mv-onb-ops-preptime-options '15min / 30min / 45min / 60min / 90min' (no space); mv-menunew-preptime-unit '{n} min' (with space)."
+    recommendation: "Standardise on '{n} min' (space + abbreviation). Replace '15min' chips with '15 min'. Numeric + unit conforms to Intl-style number-unit formatting."
+    depends_on: null
+
+  - finding_id: TW-049
+    surface_id: pattern-row-label-case-drift-checkout-orderdetail
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — 'Delivery fee' (sentence) on checkout drifts to 'Delivery Fee' (title) on order detail screen of the same app. Same line item, two cases."
+    evidence_excerpt: "Affected: mc-checkout-totals 'Subtotal / Delivery fee / Free / Total'; mc-order-detail-price-rows 'Subtotal / Delivery Fee / Total'; web-ux-cart-order-summary 'Order Summary / Subtotal / Delivery fee / Service fee / Discount / Total'; web-ux-checkout-summary 'Subtotal / Delivery fee / Service fee / Tax / Tip / Total / Place Order'."
+    recommendation: "All price-row labels sentence case: 'Subtotal', 'Delivery fee', 'Service fee', 'Discount', 'Tax', 'Tip', 'Total'. Update mc-order-detail-price-rows to match."
+    depends_on: TW-031
+
+  - finding_id: TW-050
+    supports_revenue_drift: true
+    surface_id: pattern-stat-card-label-drift-chef
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Chef KPI tile labels drift: 'Today's Earnings' (mobile dash) vs 'Total Revenue' (mobile analytics) vs 'Total Earnings' (mobile earnings) vs 'Available Balance' / 'Lifetime Earnings' (vendor portal). Same chef, four words for the money line."
+    evidence_excerpt: "Affected: mv-dash-stats-today-earnings \"Today's Earnings\"; mv-analytics-total-revenue 'Total Revenue'; mv-earnings-total 'Total Earnings'; vp-ux-dashboard-revenue-lead \"Today's revenue\"; vp-ux-earnings-cards 'Available Balance' / 'Pending Payout' / 'This Month' / 'Lifetime Earnings'; vp-ux-orders-history-summary 'Revenue'."
+    recommendation: "Pick one verb for chef-facing money: 'Earnings'. Replace 'Revenue' wherever it refers to chef's take-home. Reserve 'Revenue' for admin/platform-level views. Tiles: \"Today's earnings\" / 'Pending payout' / 'This month' / 'Lifetime earnings'."
+    depends_on: null
+
+  - finding_id: TW-051
+    surface_id: pattern-empty-state-formula
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Empty states omit the §4 formula 'Why it's empty → One action'. Most state only why, no CTA."
+    evidence_excerpt: "Affected: web-ux-admin-chefs 'No chefs found'; web-ux-admin-orders 'No orders found'; web-ux-admin-users 'No users found'; web-ux-catering-quotes-detail 'No quotes yet'; web-ux-catering-quotes-heading 'No requests yet'; web-ux-chef-catering 'No open requests' / 'No pending quotes' / 'No booked events'; web-ux-chef-menu 'No menu items'; web-ux-chef-orders-heading 'No orders found'; web-ux-chef-social 'No posts yet'; web-ux-chefdetail-reviews 'No reviews yet'; web-ux-delivery-dashboard 'No deliveries available'; web-ux-delivery-orders 'No deliveries found'; dp-ux-dashboard-all-clear 'No unassigned orders or pending partners' (good — has context); dp-ux-dashboard-no-deliveries-hint 'New deliveries will appear here.' (decent); mv-menunew-photo-empty 'No photo selected'; ap-userdetail-order-stats 'No orders yet'; ap-secsettings-session-fields 'No active sessions.'; vp-ux-profile-specialties 'No specialties added yet'; vp-ux-menu-view-page 'Menu item not found' (good — but missing action)."
+    recommendation: "Add a one-line action to every empty state. Examples: 'No chefs found. Try a different search.' / 'No menu items. Add your first dish.' / 'No reviews yet. Order something to leave one.' / 'No quotes yet. Adjust your event and resubmit.' Reference style guide §4 empty-state pattern."
+    depends_on: null
+
+  - finding_id: TW-052
+    surface_id: pattern-section-headers-possessive-my
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — 'My X' possessive headings throughout. Style guide §3 prefers descriptive nouns; 'My' adds no info when the page is already in the user's account."
+    evidence_excerpt: "Affected: web-ux-favorites-heading 'My Favorite Chefs'; web-ux-orders-heading 'My Orders'; mc-favorites-title 'Saved Chefs' (no 'My' — good); mc-orders-title 'My Orders'; mc-catering-tabs 'Request Catering / My Requests'; mc-cartsheet-title 'Your Cart' (also possessive); mv-menu-heading 'My Menu'; mv-more-account-title 'My Account'; web-ux-cart-heading 'Your Cart'; web-ux-catering-quotes-heading 'My Catering Requests' / 'Your Requests'."
+    recommendation: "Drop 'My' / 'Your' from page headings: 'Favourites' / 'Orders' / 'Cart' / 'Menu' / 'Account' / 'Requests'. Owner context is implicit because the user is signed in."
+    depends_on: null
+
+  - finding_id: TW-053
+    surface_id: pattern-success-toast-non-past
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Success messaging doesn't follow §4 'past tense, ≤6 words, period'."
+    evidence_excerpt: "Affected: vp-ux-settings-password 'Password updated successfully' (good past tense, drop 'successfully'); md-core-091 '✓ Verified' (good); md-core-047 'You earned ₹{payout} for this delivery' (good past tense but not a toast — celebration card OK); ap-staff-invite-fields 'Copied' (good); dp-ux-staff-invite-created 'Invitation Created' (title case + non-past — should be 'Invitation sent.'); vp-ux-menu-bulk-actions / vp-ux-settings-payout-section 'Razorpay Connected' (good past tense but title case)."
+    recommendation: "Sweep success states: 'Password updated.' / 'Invitation sent.' / 'Connected.' / 'Saved.' Drop 'successfully' (redundant). Trailing period (style guide §4)."
+    depends_on: null
+
+  - finding_id: TW-054
+    surface_id: pattern-modal-subtitle-formula
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Modal subtitles violate §4 'explain consequence in one sentence' formula."
+    evidence_excerpt: "Affected: web-ux-orderdetail-cancel 'Please let us know why you're cancelling...' (vague — explain refund, doesn't); dp-ux-active-cancel-prompt 'Reason for cancellation?' (browser prompt — see TW-008); dp-ux-partner-detail-verify-block 'This partner is awaiting verification. Review their documents and approve or reject their application.' (close but two sentences); ap-providers-dialog-delete-title 'Delete Provider' (title only — needs subtitle explaining consequence); ap-providers-dialog-disable-title 'Disable Provider' (title only — same)."
+    recommendation: "Add consequence-first subtitle to every confirmation dialog. Examples: 'Cancel this order? Refund returns to the customer immediately.' / 'Delete this provider? Active deliveries on this provider will fail.' / 'Disable this provider? Routing will skip this provider until you re-enable it.'"
+    depends_on: null
+
+  - finding_id: TW-055
+    surface_id: pattern-add-new-redundant
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — 'Add New X' wording is redundant: 'Add' implies new. Style guide §2 plain English."
+    evidence_excerpt: "Affected: web-ux-checkout-address-form 'Add New'; mc-checkout-add-address 'Add New Address'; mv-menunew-heading 'Add Menu Item' (good — 'new' implicit); ap-providercreate-title 'Add Delivery Provider' (good); ap-staff-invite-btn 'Invite Staff' (good); dp-ux-staff-invite-btn 'Invite Staff' (good)."
+    recommendation: "Drop 'New': 'Add address' / 'Add menu item' / 'Add zone' / 'Add specialty'."
+    depends_on: null
+
+  - finding_id: TW-056
+    surface_id: pattern-cuisine-list-drift
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Cuisine option lists drift across apps and even within a single app. Same data, different sets."
+    evidence_excerpt: "Affected: web-ux-browse-filters-cuisines 'South Indian / North Indian / Italian / Japanese / Mexican / Thai / Chinese / Mediterranean / American / Continental' (10); mc-onb-step3-cuisines 'North Indian, South Indian, Chinese, Continental, Italian, Healthy, Street Food, Desserts' (8); mc-home-cuisine-filters 'All, North Indian, South Indian, Chinese, Continental, Italian, Healthy' (7); mc-profile-cuisines 'North Indian, South Indian, Chinese, Continental, Italian, Healthy, Desserts, Street Food' (8 — order differs from onboarding); mv-onb-kitchen-cuisine-options 'North Indian / South Indian / Chinese / Continental / Bakery / Snacks / Beverages / Other' (8 — entirely different set: includes 'Bakery'/'Snacks'/'Beverages')."
+    recommendation: "Define a canonical cuisine taxonomy in shared/types/cuisines.ts (or API). All apps consume same source. Decision: are 'Healthy' / 'Street Food' / 'Desserts' / 'Bakery' / 'Snacks' / 'Beverages' cuisines or categories? Likely a second taxonomy ('Dish category') is needed."
+    depends_on: null
+
+  - finding_id: TW-057
+    surface_id: pattern-driver-app-status-vs-action-drift
+    lens: technical-writer
+    severity: P2
+    issue: "PATTERN — Driver status labels and action labels overlap in confusing ways: 'Picked Up' status, 'Picked Up Order' action, 'Pick up' (verb). 'In Transit' status, 'Start Delivery' action — different verbs for the same state transition."
+    evidence_excerpt: "Affected: md-core-027 'Order Picked Up' (status); md-core-033 'Picked Up Order' (action — see TW-004); md-core-038 'Picked Up / In Transit / At Dropoff / Delivered' (step indicator); md-core-028 'On the Way' (status); md-core-034 'Start Delivery' (action — transitions to 'in_transit' which displays as 'On the Way'); dp-ux-active-mark-as 'Mark as {Picked Up/In Transit/Delivered}' (web, see TW-005)."
+    recommendation: "Standardise driver state machine vocabulary. Statuses (past-tense): 'Picked up' / 'On the way' / 'At dropoff' / 'Delivered'. Actions (imperative): 'Pick up' / 'Start trip' / 'Arrive at dropoff' / 'Mark delivered'. Step indicator labels = status labels (past tense). Document in a state-machine table."
+    depends_on: TW-001
+
+  - finding_id: TW-058
+    surface_id: pattern-favorite-spelling
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — 'Favorite' (US) vs 'Favourite' (UK/IN) drift. en-IN locale should prefer 'Favourite' per style guide §6 implicit locale."
+    evidence_excerpt: "Affected: web-ux-favorites-heading 'My Favorite Chefs'; mc-favorites-title 'Saved Chefs' (avoids issue); web-ux-profile-preferences 'Favourite Cuisines' (UK spelling — flag for consistency); web-ux-layout-nav 'Favorites' (US)."
+    recommendation: "Pick one spelling. Recommend 'Favourite' / 'Favourites' per en-IN locale. Replace 'Favorites' → 'Favourites' in web nav and heading."
+    depends_on: null
+
+  - finding_id: TW-059
+    surface_id: pattern-bottom-tab-page-heading-drift
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Mobile bottom-tab label differs from the page heading you land on."
+    evidence_excerpt: "Affected: mc-favorites-title 'Saved Chefs' (page) — tab is 'Saved'; md-core-002 'Available' (tab) / md-core-015 'Available' (page — match, good); md-core-001 'Dashboard' (tab) / md-core-005 'Dashboard' (page — match, good); dp-ux-nav-bottom-items 'Home' / dp-ux-dashboard-h1 'Dashboard' (mismatch — see TW-011)."
+    recommendation: "Tab label = page heading where possible. Mobile-customer: rename tab to 'Saved' AND page to 'Saved'. Delivery-portal: rename bottom-nav to 'Dashboard'."
+    depends_on: TW-011
+
+  - finding_id: TW-060
+    surface_id: pattern-jargon-est-time
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Abbreviated labels on driver-facing time fields. Style guide §2 plain English; driver audience is glanceable but 'Est. Time' is awkward (period inside abbreviation breaks scan)."
+    evidence_excerpt: "Affected: dp-ux-active-est-time-label 'Est. Time'; dp-ux-earnings-avg 'Avg/Delivery' (slash compaction); md-core-021 '~{n} min' (tilde — acceptable on mobile but flag); md-core-019 '{n} km away'."
+    recommendation: "'Est. Time' → 'ETA' (3 letters, glanceable, no period). 'Avg/Delivery' → 'Per delivery'. Keep '~{n} min' if used consistently; otherwise prefer 'ETA {n} min'."
+    depends_on: null
+
+  - finding_id: TW-061
+    surface_id: pattern-uppercase-fields-acronyms
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Acronyms in field labels are inconsistent: 'IFSC Code' (vendor-portal) vs 'IFSC' (mobile-vendor) vs 'IANA' (admin) vs 'TTL' (admin). Acronyms by definition expand — adding 'Code' to 'IFSC Code' is redundant (Indian Financial System Code Code)."
+    evidence_excerpt: "Affected: vp-ux-settings-payout-section 'IFSC Code' / 'UPI ID'; mv-earnings-payout-fields 'IFSC' (no 'Code' — better); ap-platsettings-hours-fields 'Timezone (IANA)'; ap-secsettings-session-fields 'Access token TTL (hours)' / 'Refresh token TTL (days)'."
+    recommendation: "Drop trailing 'Code' / 'ID' when acronym already encodes the noun: 'IFSC' / 'UPI ID' (keep — 'ID' is the noun here, not redundant). Keep '(IANA)' clarifier — most users won't know which timezone format is expected. Keep 'TTL (hours)' — TTL alone is ambiguous to non-engineers; consider 'Session timeout (hours)' instead for admin clarity."
+    depends_on: null
+
+  - finding_id: TW-062
+    surface_id: pattern-section-headers-double-noun
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Section headings use double-noun stacking ('Order Items', 'Order Summary', 'Order Activity'). Acceptable but inconsistent — some screens use just the second noun. Drop the 'Order' prefix when context makes it obvious."
+    evidence_excerpt: "Affected: web-ux-orderdetail-sections 'Order Items'; mc-order-detail-sections 'Items'; md-core-044 'Order Summary'; mc-checkout-summary-section 'Order Summary'; web-ux-checkout-summary 'Order Summary'; ap-userdetail-order-stats 'Order Activity'."
+    recommendation: "Drop 'Order' prefix when on an order detail page. 'Items', 'Summary', 'Activity'. Keep prefix on dashboards where multiple objects share a page."
+    depends_on: null
+
+  - finding_id: TW-063
+    surface_id: pattern-section-headers-vague-actions
+    lens: technical-writer
+    severity: P3
+    issue: "PATTERN — Section header 'Actions' is so vague it adds nothing — every section page has actions."
+    evidence_excerpt: "Affected: dp-ux-partner-actions-h 'Actions'; ap-approvaldetail-detail-fields includes 'Actions'; ap-approvals-table-columns 'Actions'; ap-delivery-table-columns 'Actions' (table column header — acceptable); ap-orders-table-columns 'Actions'; ap-providers-table-columns 'Actions'; ap-staff-table-columns 'Actions'; ap-staff-invite-table-columns 'Actions'; ap-users-table-columns 'Actions'."
+    recommendation: "Tables: replace 'Actions' header with no header text (icon column) or '' (empty). Detail pages: use specific labels: 'Partner controls' / 'Approval controls' / 'Order controls'."
+    depends_on: null
+
+  # =====================================================================
+  # P3 — Sampled polish findings (representative)
+  # =====================================================================
+
+  - finding_id: TW-064
+    surface_id: web-ux-admin-dashboard
+    lens: technical-writer
+    severity: P3
+    issue: "'Platform at a glance' is fine but 'Recent activity / Shortcuts' as section headings — 'Shortcuts' is functional but uninspired. Brand voice is 'quietly modern' — consider 'Quick links' or just 'Quick actions'."
+    evidence_excerpt: "Platform at a glance / Recent activity / Shortcuts"
+    recommendation: "Replace 'Shortcuts' with 'Quick actions' (matches vp-ux-dashboard-quick-actions wording, fixes cross-app drift)."
+    depends_on: null
+
+  - finding_id: TW-065
+    surface_id: web-ux-admin-orders
+    lens: technical-writer
+    severity: P3
+    issue: "Search placeholder 'Search order number...' is awkward. Search-by patterns work better with 'Search by X' or simply '#'."
+    evidence_excerpt: "Search order number..."
+    recommendation: "'Search by order number' (no trailing dots — placeholder, not loading) or just 'Order number'. Match web-ux-chef-orders-heading 'Search by order number...' style."
+    depends_on: TW-040
+
+  - finding_id: TW-066
+    surface_id: web-ux-chef-menu
+    lens: technical-writer
+    severity: P3
+    issue: "'e.g., 500g' — comma after 'e.g.' is correct US/UK style but inconsistent with rest of audit. Style guide silent. Most other e.g. helpers in the inventory omit the comma."
+    evidence_excerpt: "e.g., 500g"
+    recommendation: "Standardise: 'e.g. 500g' (no comma) for compactness. Apply across all e.g. helpers (vp-ux-profile-business-info 'e.g. Meena's Kitchen' already follows this)."
+    depends_on: null
+
+  - finding_id: TW-067
+    surface_id: web-ux-chef-social
+    lens: technical-writer
+    severity: P3
+    issue: "'#homemade' hashtag suggestion shown as a default — placeholder hashtag promotes one tag over others. Risks looking like AI-generated filler."
+    evidence_excerpt: "Social Feed / No posts yet / Share something about this dish... / #homemade"
+    recommendation: "Drop the '#homemade' suggestion. Empty placeholder for the hashtag input, or rotate a list of relevant tags drawn from the chef's menu."
+    depends_on: null
+
+  - finding_id: TW-068
+    surface_id: web-ux-browse-filters-dietary
+    lens: technical-writer
+    severity: P3
+    issue: "'Gluten-Free / Dairy-Free' use hyphen + title case. Style guide silent on hyphenated compounds but 'Gluten free' (open compound, sentence case) is cleaner and equally clear."
+    evidence_excerpt: "Vegetarian / Vegan / Gluten-Free / Dairy-Free / Keto / Halal"
+    recommendation: "'Vegetarian / Vegan / Gluten free / Dairy free / Keto / Halal' — sentence case, open compounds."
+    depends_on: TW-031
+
+  - finding_id: TW-069
+    surface_id: web-ux-catering-request-food
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Tell us more about your event, special requests, theme, etc.' uses 'etc.' which is filler. Style guide §2 plain English."
+    evidence_excerpt: "Food Preferences / Tell us more about your event, special requests, theme, etc."
+    recommendation: "Drop 'etc.' Rewrite: 'Anything else? Special requests, theme, dietary needs.'"
+    depends_on: null
+
+  - finding_id: TW-070
+    surface_id: web-ux-catering-request-location
+    lens: technical-writer
+    severity: P3
+    issue: "Address placeholder '123 Main Street / Suite 100' is US-style, but app is en-IN. Indian addresses don't use 'Suite'."
+    evidence_excerpt: "Event Location / 123 Main Street / Suite 100"
+    recommendation: "'123 MG Road / Apartment, floor, landmark (optional)' — Indian-style examples."
+    depends_on: null
+
+  - finding_id: TW-071
+    surface_id: web-ux-profile-addresses
+    lens: technical-writer
+    severity: P3
+    issue: "Address form helpers use 'House / flat / building number, street' and 'Landmark, area (optional)' — slashes work as separators but make the helper hard to scan."
+    evidence_excerpt: "Saved Addresses / Enter PIN code / House / flat / building number, street / Landmark, area (optional)"
+    recommendation: "'House or flat number, street' / 'Landmark, area (optional)'. Replace slash separators with 'or' for plain English."
+    depends_on: null
+
+  - finding_id: TW-072
+    surface_id: web-ux-delivery-dashboard
+    lens: technical-writer
+    severity: P3
+    issue: "'You're currently offline' — 'currently' is filler. 'You're offline' suffices."
+    evidence_excerpt: "Performance at a glance / Current Delivery / Available Deliveries / No deliveries available / You're currently offline"
+    recommendation: "'You're offline.' Drop 'currently'."
+    depends_on: null
+
+  - finding_id: TW-073
+    surface_id: dp-ux-dashboard-partner-offline
+    lens: technical-writer
+    severity: P3
+    issue: "'Currently offline' — 'Currently' filler word."
+    evidence_excerpt: "Currently offline"
+    recommendation: "'Offline'."
+    depends_on: TW-072
+
+  - finding_id: TW-074
+    surface_id: dp-ux-dashboard-no-deliveries-hint
+    lens: technical-writer
+    severity: P3
+    issue: "'New deliveries will appear here.' — passive 'will appear here' is fine but generic. Could pair with 'Go online' CTA for empty-state formula §4."
+    evidence_excerpt: "New deliveries will appear here."
+    recommendation: "'No deliveries right now. Stay online.' Combines empty-state formula 'why → action' more directly."
+    depends_on: TW-051
+
+  - finding_id: TW-075
+    surface_id: dp-ux-stripe-sub
+    lens: technical-writer
+    severity: P3
+    issue: "Subtitle 'For drivers outside India, or as an alternative to Razorpay.' — sentence fragment. Style guide §1 plain English short sentences."
+    evidence_excerpt: "For drivers outside India, or as an alternative to Razorpay."
+    recommendation: "'For drivers outside India, or instead of Razorpay.' Or full sentence: 'Use Stripe if you're outside India, or instead of Razorpay.'"
+    depends_on: null
+
+  - finding_id: TW-076
+    surface_id: dp-ux-stripe-intro
+    lens: technical-writer
+    severity: P3
+    issue: "'Stripe handles KYC and bank verification on its hosted pages.' — 'KYC' is industry jargon; admins/drivers may not know the expansion. Style guide §2 plain English."
+    evidence_excerpt: "Accept delivery payouts in your local currency. Stripe handles KYC and bank verification on its hosted pages."
+    recommendation: "'Stripe handles identity and bank verification on its own pages.' Or expand once: 'KYC (know-your-customer) checks and bank verification happen on Stripe's site.'"
+    depends_on: null
+
+  - finding_id: TW-077
+    surface_id: dp-ux-partner-readonly-notice
+    lens: technical-writer
+    severity: P3
+    issue: "'This partner is pending verification. Contact a fleet manager to approve.' — 'a fleet manager' is impersonal; reader may not know who to contact."
+    evidence_excerpt: "This partner is pending verification. Contact a fleet manager to approve."
+    recommendation: "'This partner is pending verification. Your fleet manager must approve it.' Replaces vague 'a' with 'your', clarifies who acts."
+    depends_on: null
+
+  - finding_id: TW-078
+    surface_id: dp-ux-partner-doc-meta
+    lens: technical-writer
+    severity: P3
+    issue: "'{type} · Uploaded {date}' — middle dot fine but '{date}' should be relative for recent / absolute for older per style guide §6."
+    evidence_excerpt: "{type} · Uploaded {date}"
+    recommendation: "'{type} · Uploaded {relativeOrAbsoluteDate}' — format via Intl.RelativeTimeFormat under 24h, Intl.DateTimeFormat thereafter."
+    depends_on: null
+
+  - finding_id: TW-079
+    surface_id: dp-ux-staff-invite-meta
+    lens: technical-writer
+    severity: P3
+    issue: "'{role} · Sent {date}' — same date formatting concern as TW-078."
+    evidence_excerpt: "{role} · Sent {date}"
+    recommendation: "Same — relative time under 24h, absolute thereafter, via Intl APIs."
+    depends_on: TW-078
+
+  - finding_id: TW-080
+    surface_id: dp-ux-staff-roles-fallback
+    lens: technical-writer
+    severity: P3
+    issue: "Hardcoded role-list fallback ('Delivery Ops / Fleet Manager / Super Admin') means roles will drift from server-driven roles in ap-staff-roles ('Super Admin; Admin; Fleet Manager; Delivery Ops; Support')."
+    evidence_excerpt: "Delivery Ops / Fleet Manager / Super Admin"
+    recommendation: "Sync role taxonomy with admin-portal. Either drop the fallback (let the server be the source) or keep all 5 roles in the fallback set."
+    depends_on: TW-046
+
+  - finding_id: TW-081
+    surface_id: dp-ux-active-status-delivered
+    lens: technical-writer
+    severity: P3
+    issue: "Driver-facing status 'Delivered' is sentence case (good). But neighbour 'Picked Up' / 'In Transit' use title case (per dp-ux-active-status-* surfaces) — within-set inconsistency."
+    evidence_excerpt: "Picked Up / In Transit / Delivered"
+    recommendation: "All sentence case: 'Picked up' / 'In transit' / 'Delivered'."
+    depends_on: TW-033
+
+  - finding_id: TW-082
+    surface_id: vp-ux-dashboard-pending-card
+    lens: technical-writer
+    severity: P3
+    issue: "'+N more items' — concatenation with prefix '+' can break translation (some languages put 'more' before the number)."
+    evidence_excerpt: "Pending Orders / New / +N more items / Accept / Reject"
+    recommendation: "Use ICU MessageFormat pattern: '{n, plural, one {1 more item} other {# more items}}'. Avoid '+' prefix in source string."
+    depends_on: null
+
+  - finding_id: TW-083
+    surface_id: vp-ux-dashboard-no-pending
+    lens: technical-writer
+    severity: P3
+    issue: "'All caught up / New orders will appear here.' — good empty-state pattern (why → what next), minor: 'will appear here' is generic."
+    evidence_excerpt: "All caught up / New orders will appear here."
+    recommendation: "Acceptable as-is. Optional polish: 'All caught up. New orders show up here.' (active voice)."
+    depends_on: null
+
+  - finding_id: TW-084
+    surface_id: vp-ux-dashboard-quick-actions
+    lens: technical-writer
+    severity: P3
+    issue: "Tile copy uses comma-separator ('Add Menu Item, Create a new dish listing') which makes title and subtitle blur. Layout issue mostly, but title case + comma + sentence case creates messy rhythm."
+    evidence_excerpt: "Quick Actions / Add Menu Item, Create a new dish listing / View Orders, Manage live orders / Update Profile, Edit kitchen details / View Earnings, Track your revenue"
+    recommendation: "Title and subtitle in separate strings. Sentence case throughout: 'Add menu item' / 'Create a new dish'. 'View orders' / 'Manage live orders'. 'Update profile' / 'Edit kitchen details'. 'View earnings' / 'Track your revenue'."
+    depends_on: TW-034
+
+  - finding_id: TW-085
+    surface_id: vp-ux-kitchen-photos
+    lens: technical-writer
+    severity: P3
+    issue: "Helper text 'JPEG, PNG, or WebP. Max 5 MB each. Up to 5 photos.' — three sentences crammed together. Style guide §2 short sentences; one constraint per sentence."
+    evidence_excerpt: "JPEG, PNG, or WebP. Max 5 MB each. Up to 5 photos."
+    recommendation: "Bullets or three lines: 'JPEG, PNG, or WebP · Max 5 MB · Up to 5 photos'."
+    depends_on: null
+
+  - finding_id: TW-086
+    surface_id: vp-ux-profile-business-info
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Tell customers about your kitchen, cooking style, and what makes your food special...' — 14 words exceeds vendor sentence cap (5-12). Also banned vocabulary: 'special' is filler-marketing."
+    evidence_excerpt: "Tell customers about your kitchen, cooking style, and what makes your food special..."
+    recommendation: "'Tell customers about your kitchen and what you cook.' 9 words, no filler."
+    depends_on: null
+
+  - finding_id: TW-087
+    surface_id: vp-ux-settings-notifications
+    lens: technical-writer
+    severity: P3
+    issue: "Long stack of notification descriptions ('Get notified when a new order comes in' / 'Notifications for order status changes' / 'Receive a daily email with order and earnings summary') — mix of verbs (get / receive / notifications). Pick one verb form."
+    evidence_excerpt: "Get notified when a new order comes in / Notifications for order status changes / Receive a daily email with order and earnings summary / Weekly performance report with analytics / Get an SMS for each new order"
+    recommendation: "Use noun-phrase descriptions, consistent: 'Alerts when new orders arrive.' / 'Updates on order status changes.' / 'Daily email summary of orders and earnings.' / 'Weekly performance report.' / 'SMS for every new order.' Vendor tone matrix: crisp 5-12 words."
+    depends_on: null
+
+  - finding_id: TW-088
+    surface_id: vp-ux-settings-password
+    lens: technical-writer
+    severity: P3
+    issue: "Error 'Failed to update password. Check your current password.' — formula 'what happened → what to do' satisfied. Polish: 'Check' could be 'Try' or 'Re-enter'. 'Update Password' → 'Update password' (case)."
+    evidence_excerpt: "Update Password / Password updated successfully / Failed to update password. Check your current password."
+    recommendation: "'Password didn't update. Re-enter your current password.' Past-tense success: 'Password updated.' (drop 'successfully' per TW-053)."
+    depends_on: TW-053
+
+  - finding_id: TW-089
+    surface_id: mc-orders-filters
+    lens: technical-writer
+    severity: P3
+    issue: "'All, Active, Delivered, Cancelled' filter chips — drift with web-ux-orders-filters 'All Orders / Active / Completed / Cancelled'. 'All' alone (mobile) vs 'All Orders' (web). 'Delivered' (mobile) vs 'Completed' (web)."
+    evidence_excerpt: "All, Active, Delivered, Cancelled"
+    recommendation: "Sync filter sets across web + mobile. Recommend: 'All' / 'Active' / 'Delivered' / 'Cancelled' on both (since 'Completed' is ambiguous; an order can be 'completed and cancelled')."
+    depends_on: null
+
+  - finding_id: TW-090
+    surface_id: mc-profile-cuisines
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory note: order of cuisines differs from onboarding step 3. Adds cognitive friction for users who set preferences during onboarding and revisit later."
+    evidence_excerpt: "North Indian, South Indian, Chinese, Continental, Italian, Healthy, Desserts, Street Food  (profile, 8)  vs  ...Healthy, Street Food, Desserts  (onboarding, 8)"
+    recommendation: "Same canonical cuisine list (TW-056) AND same order across all surfaces."
+    depends_on: TW-056
+
+  - finding_id: TW-091
+    surface_id: mc-profile-more-rows
+    lens: technical-writer
+    severity: P3
+    issue: "'Social Feed / Catering' rows shown with emoji icons (📱/🍽️). Brand 'quietly modern' avoids emoji in production UI; design system uses Lucide icons. Mixed icon styles."
+    evidence_excerpt: "Social Feed / Catering  (with emoji 📱/🍽️)"
+    recommendation: "Replace emoji with design-system icons (Lucide / @tesserix/native equivalents). 'Social' label fine if Catering tile uses a fork-and-knife icon vs emoji."
+    depends_on: null
+
+  - finding_id: TW-092
+    surface_id: mv-onb-pending-rejected-cta
+    lens: technical-writer
+    severity: P3
+    issue: "'Reapply' single-word CTA after rejection. Friendly, but could be 'Apply again' (two words, plainer English) or 'Update application'."
+    evidence_excerpt: "Reapply"
+    recommendation: "'Apply again' or 'Update application' (clearer about what happens — the chef edits the existing app)."
+    depends_on: null
+
+  - finding_id: TW-093
+    surface_id: mv-menunew-desc-ph
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Describe your dish (at least 20 characters)' — character count in placeholder is dev-leak. Helper text below the field is the right place."
+    evidence_excerpt: "Describe your dish (at least 20 characters)"
+    recommendation: "Placeholder: 'Describe your dish'. Helper text below: 'At least 20 characters.' Or live counter '0/200'."
+    depends_on: null
+
+  - finding_id: TW-094
+    surface_id: mv-menunew-type-veg
+    lens: technical-writer
+    severity: P3
+    issue: "'Veg / Non-Veg' toggle — India-specific but inconsistent hyphenation: 'Non-Veg' with hyphen and capital V. Inventory notes flag this. Style guide §2 plain English."
+    evidence_excerpt: "Veg / Non-Veg"
+    recommendation: "Stay India-specific but standardise: 'Veg' / 'Non-veg' (sentence case, hyphenated). Or full words: 'Vegetarian' / 'Non-vegetarian'."
+    depends_on: null
+
+  - finding_id: TW-095
+    surface_id: md-core-009
+    lens: technical-writer
+    severity: P3
+    issue: "'Toggle to start receiving requests' — driver tone matrix is ≤4 words telegraphic. Sentence is 6 words and explains a mechanism the driver already sees (toggle is right there)."
+    evidence_excerpt: "Toggle to start receiving requests"
+    recommendation: "'Go online to receive requests' (5 words, names the state) or 'Tap to go online' (4 words)."
+    depends_on: null
+
+  - finding_id: TW-096
+    surface_id: md-core-018
+    lens: technical-writer
+    severity: P3
+    issue: "'Go Online to Accept Deliveries' — 5 words, title case, on a driver-facing CTA. Title style + length violates driver telegraphic rule."
+    evidence_excerpt: "Go Online to Accept Deliveries"
+    recommendation: "'Go online' (2 words). Or as banner+CTA: 'Offline — Tap to go online'."
+    depends_on: TW-041
+
+  - finding_id: TW-097
+    surface_id: md-core-031
+    lens: technical-writer
+    severity: P3
+    issue: "'Delivery Cancelled' terminal status uses British spelling 'Cancelled' (good for en-IN). md-core-007 has no spelling concern. Confirm consistency across all surfaces."
+    evidence_excerpt: "Delivery Cancelled"
+    recommendation: "Keep 'Cancelled' (UK/IN double-l). Audit for any 'Canceled' (US single-l) leaks across all apps."
+    depends_on: null
+
+  - finding_id: TW-098
+    surface_id: md-core-039
+    lens: technical-writer
+    severity: P3
+    issue: "Banner copy 'This delivery has been cancelled. Check the Available tab for new requests.' is 12 words — exceeds driver sentence cap (≤12 words). Acceptable for this surface (terminal state), but 'Available tab' may not exist after future redesign — over-specific."
+    evidence_excerpt: "This delivery has been cancelled. Check the Available tab for new requests."
+    recommendation: "'Cancelled. Find new requests under Available.' 7 words. Or: 'Cancelled. New requests appear under Available.'"
+    depends_on: null
+
+  - finding_id: TW-099
+    surface_id: md-core-044
+    lens: technical-writer
+    severity: P3
+    issue: "'Order Summary ({n} item(s))' — uses 'item(s)' notation. Style guide §6: never 'item(s)'."
+    evidence_excerpt: "Order Summary ({n} item(s))"
+    recommendation: "ICU plural: 'Summary · {n, plural, one {# item} other {# items}}'. Drop 'Order' prefix per TW-062."
+    depends_on: TW-062
+
+  - finding_id: TW-100
+    surface_id: md-core-099
+    lens: technical-writer
+    severity: P3
+    issue: "'Today: {n} deliveries' — colon + concatenation, will break in some languages (number-first locales)."
+    evidence_excerpt: "Today: {n} deliveries"
+    recommendation: "ICU pattern: \"Today · {n, plural, one {# delivery} other {# deliveries}}\". Drop colon."
+    depends_on: TW-039
+
+  - finding_id: TW-101
+    surface_id: md-core-109
+    lens: technical-writer
+    severity: P3
+    issue: "'Joined {date}' — relative date pattern; same issue as TW-078."
+    evidence_excerpt: "Joined {date}"
+    recommendation: "Relative under 24h ('Joined 35 min ago'), absolute thereafter ('Joined 3 May'). Format via Intl.RelativeTimeFormat."
+    depends_on: TW-078
+
+  - finding_id: TW-102
+    surface_id: md-core-046
+    lens: technical-writer
+    severity: P3
+    issue: "'Special instructions:' — trailing colon (see TW-039 pattern). Driver surface."
+    evidence_excerpt: "Special instructions:"
+    recommendation: "Drop colon. Use layout (caption above body)."
+    depends_on: TW-039
+
+  - finding_id: TW-103
+    surface_id: dp-ux-stripe-resume-onboarding
+    lens: technical-writer
+    severity: P3
+    issue: "'Resume Onboarding' — title case + 'onboarding' is dev jargon to a driver. Style guide §2 plain English."
+    evidence_excerpt: "Resume Onboarding"
+    recommendation: "'Continue setup' or 'Finish setup'. Sentence case."
+    depends_on: null
+
+  - finding_id: TW-104
+    surface_id: ap-approvals-types
+    lens: technical-writer
+    severity: P3
+    issue: "Approval-type taxonomy uses title case ('Kitchen Onboarding', 'Document Verification', 'New Menu Item', 'Pricing Change'). Sentence case across the board, plus 'onboarding' jargon could be 'application'."
+    evidence_excerpt: "Kitchen Onboarding; Document Verification; New Menu Item; Menu Update; Pricing Change; Kitchen Update; Driver Onboarding; Driver Document"
+    recommendation: "'Kitchen application; Document verification; New menu item; Menu update; Pricing change; Kitchen update; Driver application; Driver document.' Replace 'Onboarding' with 'application' (plain English)."
+    depends_on: TW-032
+
+  - finding_id: TW-105
+    surface_id: ap-providerdetail-status-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Enabled / Yes / No / Active / Inactive / Last Used / Created / Never / Unlimited' — mix of states and yes/no values shown together. Could read as confusing depending on layout."
+    evidence_excerpt: "Enabled; Yes; No; Active; Inactive; Last Used; Created; Never; Unlimited"
+    recommendation: "Audit layout. Group: status row ('Status: Active / Inactive'), enabled row ('Enabled: Yes / No'), audit timestamps ('Last used · Created'). Avoid showing 'Yes/No' beside 'Active/Inactive' without context."
+    depends_on: null
+
+  - finding_id: TW-106
+    surface_id: ap-secsettings-2fa-account
+    lens: technical-writer
+    severity: P3
+    issue: "'Enabled — login requires a 6-digit code' / 'Disabled — enable to protect your admin account' — 'login' noun banned per §3."
+    evidence_excerpt: "Enabled — login requires a 6-digit code; Disabled — enable to protect your admin account"
+    recommendation: "'Enabled — sign-in requires a 6-digit code.' / 'Disabled — enable to protect your account.' Drop 'admin' (it's already your admin account)."
+    depends_on: TW-044
+
+  - finding_id: TW-107
+    surface_id: ap-secsettings-apikey-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'I've saved it' button label is unusual — first-person voice on a button. Style guide §4 buttons verb-first."
+    evidence_excerpt: "Expires in (days; 0 = never); Create key; New API key; e.g. Partner integration; I've saved it"
+    recommendation: "'Done' or 'Got it'. Drop first-person."
+    depends_on: null
+
+  - finding_id: TW-108
+    surface_id: ap-settings-card-titles
+    lens: technical-writer
+    severity: P3
+    issue: "Settings card titles 'Payment Gateway' / 'Stripe Gateway' — 'gateway' is jargon. 'Payment processor' is plainer."
+    evidence_excerpt: "Payment Gateway; Razorpay integration status; Stripe Gateway; International payouts"
+    recommendation: "'Payments' / 'Stripe payments' / 'International payouts'. Drop 'Gateway' jargon."
+    depends_on: null
+
+  - finding_id: TW-109
+    surface_id: ap-exports-cards
+    lens: technical-writer
+    severity: P3
+    issue: "Export card descriptions leak database column names: 'All user accounts (id, email, role, created_at)' — 'id, role, created_at' are SQL identifiers, not user-facing labels."
+    evidence_excerpt: "User data / All user accounts (id, email, role, created_at); Orders / Order rows filtered by the date range above; Revenue / Per-day revenue rollup — paid orders only"
+    recommendation: "'User data — name, email, role, join date.' / 'Orders — within date range above.' / 'Revenue — per day, paid orders only.'"
+    depends_on: null
+
+  - finding_id: TW-110
+    surface_id: ap-platsettings-zones-fields
+    lens: technical-writer
+    severity: P3
+    issue: "Zone CRUD labels 'Min latitude / Max latitude / Min longitude / Max longitude' use 'Min' / 'Max' abbreviations. Style guide §2 plain English."
+    evidence_excerpt: "Name; City; State; Min latitude; Max latitude; Min longitude; Max longitude; New zone; Create zone; Cancel"
+    recommendation: "'Minimum latitude' / 'Maximum latitude' (and same for longitude). Or, if space is tight, group: 'Latitude (min, max)' with two adjacent fields."
+    depends_on: null
+
+  - finding_id: TW-111
+    surface_id: vp-ux-orders-history-title
+    lens: technical-writer
+    severity: P3
+    issue: "Page header 'Order History / {n} orders found / Live Orders / Back' — 'Back' as a heading element is misplaced; usually a navigation control. 'Live Orders' as part of the header is confusing — it's a sibling page."
+    evidence_excerpt: "Order History / {n} orders found / Live Orders / Back"
+    recommendation: "Confirm IA. If 'Live Orders' is a tab beside 'Order History', that's fine. 'Back' should be an icon-button or 'Back to live orders' link, not part of the page title."
+    depends_on: null
+
+  - finding_id: TW-112
+    surface_id: vp-ux-kitchen-photos
+    lens: technical-writer
+    severity: P3
+    issue: "Drop-zone copy 'Click or drag photos here' / 'Drop your photo here' — two distinct messages for empty vs drag-hover state, both work, but 'Click' is mouse-centric. Touch devices have no click."
+    evidence_excerpt: "Click or drag photos here / Drop your photo here / Uploading..."
+    recommendation: "'Tap or drag photos here' (mobile + desktop). Or 'Drop or browse photos'. Aligns with brand 'quietly modern' across input modalities."
+    depends_on: null
+
+  - finding_id: TW-113
+    surface_id: vp-ux-menu-view-page
+    lens: technical-writer
+    severity: P3
+    issue: "Long mixed-content surface includes 'Item ID' — exposing internal IDs is fine for admin debugging but should be clearly labelled as such (not just a stat tile)."
+    evidence_excerpt: "Item ID  (alongside 'Orders' / 'Rating')"
+    recommendation: "Group 'Item ID' under a 'System' or 'Debug' subhead, distinct from performance stats. Or use shorter 'ID' label with copy icon."
+    depends_on: null
+
+  - finding_id: TW-114
+    surface_id: dp-ux-active-order-note
+    lens: technical-writer
+    severity: P3
+    issue: "'Note: {specialInstructions}' — colon + concatenation issue per TW-039 / TW-082."
+    evidence_excerpt: "Note: {specialInstructions}"
+    recommendation: "Display as quoted note with caption above: 'Chef's note' on one line, '{instructions}' below. Drop 'Note:' prefix."
+    depends_on: TW-039
+
+  - finding_id: TW-115
+    surface_id: ap-layout-nav-reviews
+    lens: technical-writer
+    severity: P2
+    issue: "Sidebar nav label 'Reviews' routes to /approvals — label says 'Reviews' but the page is 'Approval Reviews' (ap-approvals-title). Two different concepts (product reviews vs approval reviews). Customer-facing 'Reviews' (product feedback) exists elsewhere; admin label is misleading."
+    evidence_excerpt: "Reviews  (nav)  →  Approval Reviews  (page)"
+    recommendation: "Rename nav to 'Approvals'. Page title becomes 'Approvals' too. Reserve 'Reviews' for customer feedback management if/when that admin page exists."
+    depends_on: null
+
+  - finding_id: TW-116
+    surface_id: dp-ux-active-cancel-btn
+    lens: technical-writer
+    severity: P3
+    issue: "'Cancel Delivery' destructive button — title case. Driver telegraphic + sentence case."
+    evidence_excerpt: "Cancel Delivery"
+    recommendation: "'Cancel delivery' (sentence case)."
+    depends_on: TW-033
+
+  - finding_id: TW-117
+    surface_id: dp-ux-staff-invite-h
+    lens: technical-writer
+    severity: P3
+    issue: "Heading 'Send Staff Invitation' — title case + redundant ('staff invitation' on the staff invite page is obvious)."
+    evidence_excerpt: "Send Staff Invitation"
+    recommendation: "'Invite a teammate' or 'New invite'. Sentence case. Page is already on staff-management — drop 'staff'."
+    depends_on: TW-033
+
+  - finding_id: TW-118
+    surface_id: ap-staff-invite-dialog-title
+    lens: technical-writer
+    severity: P3
+    issue: "Dialog title 'Invite Staff Member' — title case, 3 words. 'Staff member' is redundant on the staff page."
+    evidence_excerpt: "Invite Staff Member"
+    recommendation: "'Invite teammate' (2 words, sentence case)."
+    depends_on: TW-032
+
+  - finding_id: TW-119
+    surface_id: ap-staffdetail-info-rows
+    lens: technical-writer
+    severity: P3
+    issue: "'Joined' / 'Last Login' info rows — 'Login' (noun) banned per §3 + title case."
+    evidence_excerpt: "Email; Phone; Department; Title; Joined; Last Login"
+    recommendation: "'Email / Phone / Department / Title / Joined / Last sign-in' (sentence case, 'sign-in' replacing 'login')."
+    depends_on: TW-044
+
+  - finding_id: TW-120
+    surface_id: ap-userdetail-info-rows
+    lens: technical-writer
+    severity: P3
+    issue: "'Auth Provider' / 'Last Login' — 'Login' (noun) banned + 'Auth' jargon."
+    evidence_excerpt: "Email; Phone; Auth Provider; Role; Joined; Last Login"
+    recommendation: "'Email / Phone / Sign-in method / Role / Joined / Last sign-in'."
+    depends_on: TW-044
+
+  - finding_id: TW-121
+    surface_id: ap-userdetail-verification
+    lens: technical-writer
+    severity: P3
+    issue: "'Account Active' / 'Not verified' verification labels mix tense and concept (active vs verified). Single concept per label."
+    evidence_excerpt: "Verification; Email; Phone; Account Active; Verified; Not verified"
+    recommendation: "Group: 'Email verified · Yes/No', 'Phone verified · Yes/No', 'Account · Active/Suspended'. Don't mix verified/active in one row."
+    depends_on: null
+
+  - finding_id: TW-122
+    surface_id: web-ux-orderdetail-cancel
+    lens: technical-writer
+    severity: P3
+    issue: "Modal subtitle 'Please let us know why you're cancelling...' starts with 'Please' (overly polite) and ends with '...' instead of explaining refund consequence."
+    evidence_excerpt: "Cancel Order / Please let us know why you're cancelling..."
+    recommendation: "Title: 'Cancel order?' Subtitle: 'Tell us why. We'll refund you within 5–7 business days.' Drops 'please'; states the consequence per §4."
+    depends_on: TW-054
+
+  - finding_id: TW-123
+    surface_id: web-ux-chef-profile
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Tell customers about your kitchen...' — ellipsis suggests open-ended. Different from vp-ux-profile-business-info (TW-086) which is longer."
+    evidence_excerpt: "Tell customers about your kitchen..."
+    recommendation: "'Tell customers about your kitchen and what you cook.' Drop ellipsis; full sentence. Match vp-ux-profile-business-info rewrite."
+    depends_on: TW-086
+
+  - finding_id: TW-124
+    surface_id: web-ux-chefdetail-reviews
+    lens: technical-writer
+    severity: P3
+    issue: "'Chef's Response:' (trailing colon) — see TW-039 pattern. Also possessive 'Chef's' fine, but customer-facing should consider 'Chef' (no possessive — the response is shown right below)."
+    evidence_excerpt: "Chef's Response:"
+    recommendation: "'Reply from chef' or 'Chef replied' (caption above quoted text). Drop colon."
+    depends_on: TW-039
+
+  - finding_id: TW-125
+    surface_id: web-ux-orderdetail-sections
+    lens: technical-writer
+    severity: P3
+    issue: "'Placed on {date} / Estimated delivery:' — colon + 'Estimated delivery' is wordy. 'ETA' or 'Arriving' is shorter."
+    evidence_excerpt: "Back to Orders / Order #{n} / Placed on {date} / Estimated delivery: / Order Items / Delivery Address / Payment Summary / Special Instructions / Leave a Review"
+    recommendation: "'Placed {date}' (drop 'on'; use Intl). 'ETA · {time}' or 'Arriving · {time}'. Sentence case everywhere. 'Order Items' → 'Items' per TW-062."
+    depends_on: null
+
+  - finding_id: TW-126
+    surface_id: ap-staff-roles
+    lens: technical-writer
+    severity: P3
+    issue: "Role taxonomy 'Super Admin / Admin / Fleet Manager / Delivery Ops / Support' — 'Delivery Ops' is short for 'Operations' (industry jargon). Drift with dp-ux-staff-roles-fallback (which orders them differently)."
+    evidence_excerpt: "Super Admin; Admin; Fleet Manager; Delivery Ops; Support"
+    recommendation: "Sentence case + plain: 'Super admin', 'Admin', 'Fleet manager', 'Delivery operations', 'Support'. Keep order consistent with dp-ux-staff-roles-fallback (TW-080)."
+    depends_on: TW-080
+
+  - finding_id: TW-127
+    surface_id: dp-ux-active-pickup-from
+    lens: technical-writer
+    severity: P3
+    issue: "Eyebrow 'Pickup from' (uppercase via CSS — inventory notes). Sentence-case string is fine; ALL CAPS only via CSS. Verify CSS not changing the underlying string."
+    evidence_excerpt: "Pickup from  (uppercase eyebrow)"
+    recommendation: "Keep string 'Pickup from'. Apply text-transform: uppercase via CSS if desired. Don't shout in the source string."
+    depends_on: TW-042
+
+  - finding_id: TW-128
+    surface_id: dp-ux-active-deliver-to
+    lens: technical-writer
+    severity: P3
+    issue: "Eyebrow 'Deliver to' — sister to TW-127. Same treatment."
+    evidence_excerpt: "Deliver to"
+    recommendation: "Keep string 'Deliver to'. CSS-only uppercase."
+    depends_on: TW-127
+
+  - finding_id: TW-129
+    surface_id: web-ux-checkout-address-form
+    lens: technical-writer
+    severity: P3
+    issue: "'Apartment, suite, etc. (optional)' — US 'suite' + 'etc.' filler in a placeholder. India-friendly version preferred."
+    evidence_excerpt: "Delivery Address / Add New / Label / Street Address / Apartment, suite, etc. (optional) / City / State / Postal Code / Save Address"
+    recommendation: "'Apartment, floor, landmark (optional)'. Match web-ux-catering-request-location and web-ux-profile-addresses Indian-style examples."
+    depends_on: TW-070
+
+  - finding_id: TW-130
+    surface_id: dp-ux-fleet-h
+    lens: technical-writer
+    severity: P3
+    issue: "Subtitle 'Monitor your delivery fleet in real time' — 'real time' (two words) vs 'real-time' (hyphenated adjective) — verify usage; here it's adverbial so two words is correct."
+    evidence_excerpt: "Fleet Overview + Monitor your delivery fleet in real time"
+    recommendation: "OK as-is (adverbial 'in real time' two words). Apply title fix: 'Fleet overview' (sentence case)."
+    depends_on: TW-033
+
+  - finding_id: TW-131
+    surface_id: dp-ux-partner-detail-verify-block
+    lens: technical-writer
+    severity: P3
+    issue: "'Pending Verification' eyebrow + 'This partner is awaiting verification. Review their documents and approve or reject their application.' — 2 sentences, 16 words. Decent voice. Could be tightened."
+    evidence_excerpt: "Pending Verification + This partner is awaiting verification. Review their documents and approve or reject their application."
+    recommendation: "Eyebrow 'Pending verification'. Body: 'Review their documents and approve or reject.' (drop redundant 'awaiting verification' — eyebrow already says it)."
+    depends_on: null
+
+  - finding_id: TW-132
+    surface_id: mc-cartsheet-checkout-cta
+    lens: technical-writer
+    severity: P3
+    issue: "'Proceed to Checkout' — 3 words, title case, redundant verb ('proceed to' = 'go to' = nothing)."
+    evidence_excerpt: "Proceed to Checkout"
+    recommendation: "'Checkout' (1 word). Sentence case."
+    depends_on: TW-014
+
+  - finding_id: TW-133
+    surface_id: ap-notifsettings-categories
+    lens: technical-writer
+    severity: P3
+    issue: "Category descriptions vary in tone: 'Promotions / Discounts, newsletters, and marketing campaigns. Opt-in.' — 'Opt-in' fragment without context implies legal requirement but reads informally."
+    evidence_excerpt: "Promotions / Discounts, newsletters, and marketing campaigns. Opt-in."
+    recommendation: "'Promotions — Discounts, newsletters, marketing campaigns. Off by default.' Clarifies the opt-in for the user."
+    depends_on: null
+
+  - finding_id: TW-134
+    surface_id: dp-ux-stripe-title
+    lens: technical-writer
+    severity: P3
+    issue: "'Stripe (International Payouts)' — parenthetical title case. Sentence case throughout."
+    evidence_excerpt: "Stripe (International Payouts)"
+    recommendation: "'Stripe — international payouts'. Em-dash beats parens; sentence case."
+    depends_on: TW-033
+
+  - finding_id: TW-135
+    surface_id: mv-onb-docs-pdf-uploaded
+    lens: technical-writer
+    severity: P3
+    issue: "'PDF uploaded' — past-tense success, good. Mobile shows 'Uploaded' on mv-onb-review-doc-uploaded for the same concept — drift."
+    evidence_excerpt: "PDF uploaded  (docs.tsx)  vs  Uploaded  (review.tsx)"
+    recommendation: "Consistent: 'Uploaded' for the status badge. 'PDF uploaded' if you want format-specific feedback in the upload widget — keep both BUT they convey different things."
+    depends_on: null
+
+  - finding_id: TW-136
+    surface_id: mv-onb-review-doc-not-uploaded
+    lens: technical-writer
+    severity: P3
+    issue: "'Not uploaded' — two words, fine. Could pair with action: 'Not uploaded — Upload now' for empty-state formula §4."
+    evidence_excerpt: "Not uploaded"
+    recommendation: "Optional polish: 'Not uploaded' as the badge; pair with an inline 'Upload' button."
+    depends_on: TW-051
+
+  - finding_id: TW-137
+    surface_id: mv-tabs-orders-label
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory note: matches vendor-portal. Just verifying — no issue here. Including for completeness."
+    evidence_excerpt: "Orders"
+    recommendation: "OK as-is. No change."
+    depends_on: null
+
+  - finding_id: TW-138
+    surface_id: mv-undo-cta
+    lens: technical-writer
+    severity: P3
+    issue: "Snackbar action 'UNDO' is ALL CAPS. Inventory notes Material-style convention; brand prefers sentence case microcopy."
+    evidence_excerpt: "UNDO"
+    recommendation: "'Undo' (sentence case). CSS text-transform if visual uppercase desired."
+    depends_on: TW-042
+
+  - finding_id: TW-139
+    surface_id: md-core-091
+    lens: technical-writer
+    severity: P3
+    issue: "Verification badge uses '✓ Verified' (with checkmark glyph) vs 'Pending' (no glyph). Asymmetric visual treatment; one has icon-in-string, other doesn't."
+    evidence_excerpt: "✓ Verified / Pending"
+    recommendation: "Use icon component (CheckCircle / Clock) for both states. Strings stay icon-free for i18n safety."
+    depends_on: null
+
+  - finding_id: TW-140
+    surface_id: md-core-006
+    lens: technical-writer
+    severity: P3
+    issue: "Status banner 'You are Online' — capital O on second word (title case for one word). 'You're online' is friendlier and sentence case."
+    evidence_excerpt: "You are Online"
+    recommendation: "'You're online.' Single sentence, contraction allowed per warm tone."
+    depends_on: TW-037
+
+  - finding_id: TW-141
+    surface_id: md-core-016
+    lens: technical-writer
+    severity: P3
+    issue: "'You're Offline' — title case 'Offline'. Drift with md-core-006 ('You are Online'). Same screen group should agree."
+    evidence_excerpt: "You're Offline"
+    recommendation: "'You're offline.' Lowercase 'offline' in both. Pair with md-core-007."
+    depends_on: TW-140
+
+  - finding_id: TW-142
+    surface_id: dp-ux-dashboard-partner-online
+    lens: technical-writer
+    severity: P3
+    issue: "'Ready for deliveries' — 3 words, good driver tone. 'Standing by' / 'Waiting nearby' (other dashboard states) drift — should pick a single 'available' phrase."
+    evidence_excerpt: "Ready for deliveries  (online)  vs  Standing by  (waiting)  vs  Waiting nearby  (no-deliveries)"
+    recommendation: "Pick one state-vocab: 'Online · ready' / 'Online · no deliveries' / 'Offline'. Don't introduce three near-synonyms for the same idea."
+    depends_on: null
+
+  - finding_id: TW-143
+    surface_id: dp-ux-dashboard-available-waiting
+    lens: technical-writer
+    severity: P3
+    issue: "'Waiting nearby' — relates to TW-142. Two-word phrase suggests 'partners are nearby' but the actual state is 'available deliveries are nearby'."
+    evidence_excerpt: "Waiting nearby"
+    recommendation: "'Deliveries nearby' or merge into one status line with count."
+    depends_on: TW-142
+
+  - finding_id: TW-144
+    surface_id: dp-ux-dashboard-standing-by
+    lens: technical-writer
+    severity: P3
+    issue: "'Standing by' — driver-facing but ambiguous (military-ish phrase). 'Online' or 'Waiting for orders' clearer."
+    evidence_excerpt: "Standing by"
+    recommendation: "Pick one. 'Waiting for orders' (3 words) is plain English."
+    depends_on: TW-142
+
+  - finding_id: TW-145
+    surface_id: dp-ux-staff-invite-created
+    lens: technical-writer
+    severity: P3
+    issue: "'Invitation Created' / 'Share this link with the new staff member:' — title case + trailing colon. Both flagged elsewhere."
+    evidence_excerpt: "Invitation Created + Share this link with the new staff member:"
+    recommendation: "'Invitation sent. Share this link with the teammate.' Drops colon, past tense, drops 'new' (implicit)."
+    depends_on: TW-039
+
+  - finding_id: TW-146
+    surface_id: ap-secsettings-session-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Access token TTL (hours)' / 'Refresh token TTL (days)' — TTL is dev jargon. Style guide §2 plain English."
+    evidence_excerpt: "Access token TTL (hours); Refresh token TTL (days); Save policy; Your active sessions; No active sessions."
+    recommendation: "'Session timeout (hours)' / 'Refresh window (days)'. Even on admin surface, plainer is better."
+    depends_on: TW-061
+
+  - finding_id: TW-147
+    surface_id: ap-secsettings-apikey-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Expires in (days; 0 = never)' — inline programming convention 'use 0 to mean never' is dev jargon. Replace with a checkbox 'Never expires'."
+    evidence_excerpt: "Expires in (days; 0 = never)"
+    recommendation: "Field: 'Expires in (days)' + adjacent checkbox 'Never expires'. Don't embed sentinel values in the helper."
+    depends_on: null
+
+  - finding_id: TW-148
+    surface_id: ap-platsettings-hours-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Opening time (HH:MM)' / 'Closing time (HH:MM)' — format hint in label, dev style. Style guide §6 routes time formatting via Intl, not hand-rolled hints."
+    evidence_excerpt: "Timezone (IANA); Opening time (HH:MM); Closing time (HH:MM); Operating days; Closed message"
+    recommendation: "Use a time-picker UI. Label stays 'Opens at' / 'Closes at'. Drop '(HH:MM)' hint."
+    depends_on: null
+
+  - finding_id: TW-149
+    surface_id: ap-providercreate-fields
+    lens: technical-writer
+    severity: P3
+    issue: "Long field list mixes plain ('Name') with jargon ('API Base URL', 'Pricing Model', 'Max Concurrent Deliveries', 'Avg Pickup Time (min)'). Admin tone is OK with jargon, but 'Max Concurrent Deliveries' could be 'Concurrent delivery limit' (parallel with 'Daily limit' below)."
+    evidence_excerpt: "Max Concurrent Deliveries; Daily Limit; Avg Pickup Time (min)"
+    recommendation: "'Concurrent delivery limit' / 'Daily limit' / 'Average pickup time (min)'. Drop 'Max' / 'Avg' abbreviations. Sentence case."
+    depends_on: null
+
+  - finding_id: TW-150
+    surface_id: dp-ux-partner-performance
+    lens: technical-writer
+    severity: P3
+    issue: "'CSAT Score' uses CSAT acronym without definition; admin reader may not know."
+    evidence_excerpt: "Acceptance Rate / On-Time Rate / CSAT Score / Total Deliveries"
+    recommendation: "'Customer satisfaction (CSAT)' or simply 'Satisfaction score'. Sentence case."
+    depends_on: null
+
+  - finding_id: TW-151
+    surface_id: ap-notifsettings-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "'Control which channels deliver each notification category for your account. Transactional order updates stay on by default.' — 21 words, two sentences. Style guide §1 short sentences, §5 plain language."
+    evidence_excerpt: "Control which channels deliver each notification category for your account. Transactional order updates stay on by default."
+    recommendation: "'Choose which channels deliver each notification. Order updates stay on by default.' (15 words)."
+    depends_on: null
+
+  - finding_id: TW-152
+    surface_id: ap-notifsettings-categories
+    lens: technical-writer
+    severity: P3
+    issue: "Category descriptions use parenthetical aside '(chef accounts only)' which is admin-internal detail. Audit if this is needed in the UI label or belongs in a tooltip."
+    evidence_excerpt: "Chef activity / New orders and verification outcomes (chef accounts only)."
+    recommendation: "Move '(chef accounts only)' to a tooltip or section caption — don't pollute the row label."
+    depends_on: null
+
+  - finding_id: TW-153
+    surface_id: mv-onb-personal-cta-next
+    lens: technical-writer
+    severity: P3
+    issue: "Primary CTA 'Next' across onboarding steps 1-5 — fine for navigation, but final step uses 'Submit Application' (mv-onb-review-cta). Inconsistent ending could be 'Continue' across all, then 'Submit application' as the final step."
+    evidence_excerpt: "Next  (steps 1-5)  vs  Submit Application  (review step)"
+    recommendation: "Onboarding navigation: 'Continue' (steps 1-5), 'Submit application' (final). Replaces 'Next' which feels mechanical."
+    depends_on: null
+
+  - finding_id: TW-154
+    surface_id: web-ux-admin-layout-nav
+    lens: technical-writer
+    severity: P3
+    issue: "Aria labels 'Main navigation / Close navigation / Open navigation / Search... / Notifications, 3 unread' — hardcoded '3 unread' count is not safe for state changes; should be parameterised."
+    evidence_excerpt: "Log out / Main navigation / Close navigation / Open navigation / Search... / Notifications, 3 unread"
+    recommendation: "Parameterise count: 'Notifications, {n} unread' via ICU plural. Apply across all aria-labels."
+    depends_on: null
+
+  - finding_id: TW-155
+    surface_id: web-ux-chef-layout-nav
+    lens: technical-writer
+    severity: P3
+    issue: "Aria labels 'Notifications, unread' — no count or pluralisation. Less useful for screen-reader users than the admin equivalent."
+    evidence_excerpt: "Main navigation / Close navigation / Open navigation / Notifications, unread"
+    recommendation: "'Notifications, {n} unread' parameterised. Or simply 'Notifications · {n} unread'."
+    depends_on: TW-154
+
+  - finding_id: TW-156
+    surface_id: web-ux-delivery-layout-toggles
+    lens: technical-writer
+    severity: P3
+    issue: "Aria-label 'Currently online — tap to toggle availability' — 'Currently' filler; 'tap' is mobile-centric (web has clicks)."
+    evidence_excerpt: "Currently online — tap to toggle availability / Notifications, unread"
+    recommendation: "'Online — toggle availability'. Drops 'currently' and mobile-only verb."
+    depends_on: null
+
+  - finding_id: TW-157
+    surface_id: web-ux-layout-nav
+    lens: technical-writer
+    severity: P3
+    issue: "Top-nav primary destinations 'Home / Browse Chefs / Favorites / Catering / Profile / My Orders / Settings / Logout' — mixed case + 'Home' is the home page, but 'Browse Chefs' and 'Catering' compete for top-level slot. 'My Orders' possessive 'My' (TW-052). 'Logout' banned (TW-043)."
+    evidence_excerpt: "Home / Browse Chefs / Favorites / Catering / Profile / My Orders / Settings / Logout"
+    recommendation: "'Home / Browse / Favourites / Catering / Profile / Orders / Settings / Sign out'. Sentence case, no possessive, banned-vocab fix, US→UK spelling for en-IN."
+    depends_on: TW-058
+
+  - finding_id: TW-158
+    surface_id: vp-ux-layout-nav
+    lens: technical-writer
+    severity: P3
+    issue: "Sidebar nav 'Dashboard / Menu / Orders / Earnings / Admin Requests / Reviews / Analytics / Profile / Settings / Vendor Portal / Vendor / Settings / Logout / Theme' — duplicated 'Settings'? Mixed levels? 'Vendor Portal' and 'Vendor' suggest brand vs role labels mixed."
+    evidence_excerpt: "Dashboard / Menu / Orders / Earnings / Admin Requests / Reviews / Analytics / Profile / Settings / Vendor Portal / Vendor / Settings / Logout / Theme"
+    recommendation: "Audit nav hierarchy. 'Settings' should appear once. 'Vendor Portal' should be the brand mark (separate from nav). Apply 'Sign out' fix. Sentence case throughout."
+    depends_on: TW-043
+
+  - finding_id: TW-159
+    surface_id: ap-layout-topbar-title
+    lens: technical-writer
+    severity: P3
+    issue: "'Fe3dr Administration' — brand 'Fe3dr' next to 'Administration' is the wrong product name? Inventory notes brand mark 'Fe3dr'. Audit if this is Home Chef admin or a different product."
+    evidence_excerpt: "Fe3dr Administration"
+    recommendation: "Audit brand name across products. If 'Fe3dr' is correct, title becomes 'Fe3dr admin' (drop 'Administration' verbose noun)."
+    depends_on: null
+
+  - finding_id: TW-160
+    surface_id: dp-ux-logo-text
+    lens: technical-writer
+    severity: P3
+    issue: "Logo text 'Fe3dr + Delivery (tagline)' — same brand drift question as TW-159."
+    evidence_excerpt: "Fe3dr + Delivery"
+    recommendation: "Verify brand. Tagline 'Delivery' is too generic — consider 'Delivery operations' or product subline."
+    depends_on: TW-159
+
+  - finding_id: TW-161
+    surface_id: web-ux-chef-dashboard-sections
+    lens: technical-writer
+    severity: P3
+    issue: "'Today at a glance / Pending orders / Shortcuts / Recent orders' — mostly sentence case (good). 'Shortcuts' generic (TW-064 pattern)."
+    evidence_excerpt: "Today at a glance / Pending orders / Shortcuts / Recent orders"
+    recommendation: "Replace 'Shortcuts' with 'Quick actions' for cross-app consistency. Rest is fine."
+    depends_on: TW-064
+
+  - finding_id: TW-162
+    surface_id: web-ux-chef-orders-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Delivery Information / Order Items / Special Instructions / Payment Summary' — title case + 'Order Items' redundant per TW-062."
+    evidence_excerpt: "Orders / Search by order number... / No orders found / Delivery Information / Order Items / Special Instructions / Payment Summary"
+    recommendation: "'Delivery / Items / Special instructions / Payment summary'."
+    depends_on: TW-062
+
+  - finding_id: TW-163
+    surface_id: dp-ux-active-h1
+    lens: technical-writer
+    severity: P3
+    issue: "Page H1 'Active Delivery' — title case. Single-word sufficient ('Active') for driver tone."
+    evidence_excerpt: "Active Delivery"
+    recommendation: "'Active delivery' (sentence case) or 'Active' (single word, telegraphic)."
+    depends_on: TW-033
+
+  - finding_id: TW-164
+    surface_id: dp-ux-available-h1
+    lens: technical-writer
+    severity: P3
+    issue: "Page H1 'Available Deliveries' — title case + plural. Match driver tab label 'Available'."
+    evidence_excerpt: "Available Deliveries"
+    recommendation: "'Available deliveries' (sentence case) or 'Available' to match tab."
+    depends_on: TW-033
+
+  - finding_id: TW-165
+    surface_id: dp-ux-available-count
+    lens: technical-writer
+    severity: P3
+    issue: "'{n} orders waiting for pickup' — 5 words, plural-aware concatenation. ICU plural recommended."
+    evidence_excerpt: "{n} orders waiting for pickup"
+    recommendation: "'{n, plural, one {# order} other {# orders}} waiting for pickup.' Trailing period for sentence."
+    depends_on: null
+
+  - finding_id: TW-166
+    surface_id: dp-ux-accept-delivery-btn
+    lens: technical-writer
+    severity: P3
+    issue: "'Accept Delivery / Accepting...' — title case + three-dot ellipsis (TW-040). 'Accept' alone might work but specificity helps."
+    evidence_excerpt: "Accept Delivery / Accepting..."
+    recommendation: "'Accept' (1 word) idle / 'Accepting…' (Unicode ellipsis) loading. Or full 'Accept delivery' sentence case if word count tolerated."
+    depends_on: TW-040
+
+  - finding_id: TW-167
+    surface_id: md-core-022
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile driver 'Accept Delivery' — title case. Matches dp-ux-accept-delivery-btn drift."
+    evidence_excerpt: "Accept Delivery"
+    recommendation: "'Accept' (1 word) or 'Accept delivery' (sentence case)."
+    depends_on: TW-166
+
+  - finding_id: TW-168
+    surface_id: md-core-008
+    lens: technical-writer
+    severity: P3
+    issue: "'Receiving delivery requests' — 3 words, OK as online subtitle. Compare md-core-009 'Toggle to start receiving requests' (TW-095) for offline. Parallel structure preferred."
+    evidence_excerpt: "Receiving delivery requests  (online)"
+    recommendation: "Match offline sibling structure: 'Online · ready for requests' / 'Offline · tap to go online'."
+    depends_on: TW-095
+
+  - finding_id: TW-169
+    surface_id: dp-ux-staff-invite-btn
+    lens: technical-writer
+    severity: P3
+    issue: "'Invite Staff' — title case. 2 words, acceptable length."
+    evidence_excerpt: "Invite Staff"
+    recommendation: "'Invite staff' (sentence case)."
+    depends_on: TW-033
+
+  - finding_id: TW-170
+    surface_id: ap-staff-invite-fields
+    lens: technical-writer
+    severity: P3
+    issue: "Form labels 'Email; Role; Department; Title; Personal Message; Send Invitation; Done; Copy; Copied' — buttons 'Send Invitation' / 'Done' / 'Copy' / 'Copied' mixed in same surface as form labels (Email, Role). Title case throughout."
+    evidence_excerpt: "Email; Role; Department; Title; Personal Message; Send Invitation; Done; Copy; Copied"
+    recommendation: "Sentence case all. 'Personal message' / 'Send invitation' / 'Copied.' (period for past-tense success per TW-053)."
+    depends_on: TW-032
+
+  - finding_id: TW-171
+    surface_id: ap-providerdetail-status-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Never' / 'Unlimited' — single-word status fillers. Need context."
+    evidence_excerpt: "Enabled; Yes; No; Active; Inactive; Last Used; Created; Never; Unlimited"
+    recommendation: "Pair with field label: 'Last used · Never' / 'Daily limit · Unlimited'. Don't show 'Never' / 'Unlimited' as bare values."
+    depends_on: TW-105
+
+  - finding_id: TW-172
+    surface_id: vp-ux-menu-view-page
+    lens: technical-writer
+    severity: P3
+    issue: "Long status-and-data surface includes 'Under Review' / 'Available' / 'Unavailable' / 'Featured' / 'Approved' — five state values mixed without grouping. Approval status (Approved / Under Review) and availability (Available / Unavailable / Featured) are different axes."
+    evidence_excerpt: "Approved / Under Review / Available / Unavailable / Featured / Edit Item"
+    recommendation: "Group: 'Approval · Approved / Under review' AND 'Availability · Available / Unavailable / Featured'. Two distinct axes, two distinct labels."
+    depends_on: null
+
+  - finding_id: TW-173
+    surface_id: mv-orders-tab-live
+    lens: technical-writer
+    severity: P3
+    issue: "Tab label 'Live Queue' — 'queue' is internal jargon. Most chef apps say 'Live orders' (matches vp-ux-orders-live-title)."
+    evidence_excerpt: "Live Queue"
+    recommendation: "'Live' (single word matching companion 'History') or 'Live orders' (matches vendor-portal)."
+    depends_on: null
+
+  - finding_id: TW-174
+    surface_id: vp-ux-bottom-nav
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile bottom nav 'Dashboard / Menu / Orders / Earnings / Profile / Vendor navigation' — last item 'Vendor navigation' is an aria-label inside the visible-text list, looks like a label leak."
+    evidence_excerpt: "Dashboard / Menu / Orders / Earnings / Profile / Vendor navigation"
+    recommendation: "Verify 'Vendor navigation' is aria-label only, not visible. If it's accidentally visible, hide. If it's a 5th tab label, rename."
+    depends_on: null
+
+  - finding_id: TW-175
+    surface_id: dp-ux-history-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "'Your past deliveries' — 3 words, fine. Marginal: 'Past deliveries' (drop 'Your', possessive implicit on driver portal)."
+    evidence_excerpt: "Your past deliveries"
+    recommendation: "'Past deliveries' (2 words)."
+    depends_on: TW-052
+
+  - finding_id: TW-176
+    surface_id: dp-ux-earnings-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "'Track your delivery income' — 4 words, 'Your' filler (TW-052). 'Income' fine but 'earnings' / 'payouts' more common."
+    evidence_excerpt: "Track your delivery income"
+    recommendation: "'Earnings and payouts' (3 words) or drop subtitle entirely on driver surface."
+    depends_on: TW-052
+
+  - finding_id: TW-177
+    surface_id: dp-ux-stat-rating
+    lens: technical-writer
+    severity: P3
+    issue: "'Rating' + '{n} reviews' / 'No reviews yet' — empty state pattern OK. Consider pairing CTA 'Order to leave a review' (customer-facing)."
+    evidence_excerpt: "Rating + {n} reviews / No reviews yet"
+    recommendation: "Keep. Acceptable. Minor: 'No reviews yet.' (period for sentence ending)."
+    depends_on: TW-051
+
+  - finding_id: TW-178
+    surface_id: ap-secsettings-2fa-account
+    lens: technical-writer
+    severity: P3
+    issue: "Inline state copy '— login requires...' / '— enable to protect...' uses 'login' noun (banned, TW-044). Also em-dash style — verify it's the typographic em-dash, not hyphen-minus."
+    evidence_excerpt: "Enabled — login requires a 6-digit code; Disabled — enable to protect your admin account"
+    recommendation: "See TW-106. Replace 'login' with 'sign-in'."
+    depends_on: TW-106
+
+  - finding_id: TW-179
+    surface_id: ap-platsettings-cards
+    lens: technical-writer
+    severity: P3
+    issue: "Card subtitles 'Service fee, tax, and payout percentages' / 'Base fee + per-km rate applied at checkout' / 'When the platform accepts new orders' / 'Delivery zones — orders outside a zone are rejected' — mixed sentence-fragment vs full-sentence. Pick one."
+    evidence_excerpt: "Commission rates / Service fee, tax, and payout percentages; Delivery fees / Base fee + per-km rate applied at checkout; Operating hours / When the platform accepts new orders; Service areas / Delivery zones — orders outside a zone are rejected"
+    recommendation: "Fragments OK as subtitles (more scannable). Standardise: 'Service fee, tax, and payout percentages.' / 'Base fee plus per-km rate at checkout.' / 'When the platform accepts new orders.' / 'Delivery zones · orders outside a zone are rejected.' Trailing periods on full subtitles."
+    depends_on: null
+
+  - finding_id: TW-180
+    surface_id: mc-checkout-totals
+    lens: technical-writer
+    severity: P3
+    issue: "'Free' as a row value alongside 'Subtotal / Delivery fee / Total' — when delivery is free, the row should show '₹0' or 'Free' but the standalone 'Free' in the inventory excerpt suggests inconsistent UI placement."
+    evidence_excerpt: "Subtotal / Delivery fee / Free / Total"
+    recommendation: "When delivery free: row 'Delivery fee · Free' (right-aligned, on same line as label). Don't show 'Free' as a standalone row."
+    depends_on: null
+
+  - finding_id: TW-181
+    surface_id: md-core-080
+    lens: technical-writer
+    severity: P3
+    issue: "Detail rows 'Distance / Completed / Payout' — single-word labels OK. No issue."
+    evidence_excerpt: "Distance / Completed / Payout"
+    recommendation: "Keep as-is."
+    depends_on: null
+
+  - finding_id: TW-182
+    surface_id: md-core-084
+    lens: technical-writer
+    severity: P3
+    issue: "'Phone / City / Email' — single-word field labels, fine. No issue."
+    evidence_excerpt: "Phone / City / Email"
+    recommendation: "Keep as-is."
+    depends_on: null
+
+  - finding_id: TW-183
+    surface_id: md-core-090
+    lens: technical-writer
+    severity: P3
+    issue: "'Edit / Cancel' action set — single words, fine."
+    evidence_excerpt: "Edit / Cancel"
+    recommendation: "Keep as-is. (Note: 'Cancel' is overloaded across the app — sometimes 'Cancel order', sometimes form-cancel. Verify aria-labels disambiguate.)"
+    depends_on: null
+
+  - finding_id: TW-184
+    surface_id: vp-ux-payouts-title
+    lens: technical-writer
+    severity: P3
+    issue: "Back-link 'Back to Earnings' — title case. Sentence case."
+    evidence_excerpt: "Payout History / View all your past and pending payouts / Back to Earnings"
+    recommendation: "'Back to earnings'. Lowercase. Or icon-only arrow with aria-label."
+    depends_on: TW-034
+
+  - finding_id: TW-185
+    surface_id: vp-ux-menu-view-page
+    lens: technical-writer
+    severity: P3
+    issue: "'Back to Menu' — title case (TW-034 pattern)."
+    evidence_excerpt: "Back to Menu"
+    recommendation: "'Back to menu' (sentence case)."
+    depends_on: TW-034
+
+  - finding_id: TW-186
+    surface_id: dp-ux-partner-detail-back
+    lens: technical-writer
+    severity: P3
+    issue: "'Back to Partners' — title case + plural noun."
+    evidence_excerpt: "Back to Partners"
+    recommendation: "'Back to partners' or 'Back' (icon + aria-label)."
+    depends_on: TW-033
+
+  - finding_id: TW-187
+    surface_id: vp-ux-kitchen-title
+    lens: technical-writer
+    severity: P3
+    issue: "'Back to Profile' — title case (TW-034 pattern). Combined into the header with multiple actions ('Kitchen Setup / Save Changes / Back to Profile')."
+    evidence_excerpt: "Kitchen Setup / Operating hours, photos, and payout details / Save Changes / Back to Profile"
+    recommendation: "'Back to profile' / 'Save changes' / 'Kitchen setup'. Sentence case across the header."
+    depends_on: TW-034
+
+  - finding_id: TW-188
+    surface_id: ap-platsettings-zones-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'New zone / Create zone / Cancel' — 'Create zone' acceptable but 'New zone' as label/heading + 'Create zone' as button is redundant."
+    evidence_excerpt: "Name; City; State; Min latitude; Max latitude; Min longitude; Max longitude; New zone; Create zone; Cancel"
+    recommendation: "Modal title 'Add zone'. Submit button 'Create zone' OR drop 'New zone' if it's a section heading next to a 'Create zone' button."
+    depends_on: TW-055
+
+  - finding_id: TW-189
+    surface_id: ap-providercreate-fields
+    lens: technical-writer
+    severity: P3
+    issue: "'Logo URL' / 'API Base URL' / 'Webhook Secret' — admin jargon acceptable but title case is inconsistent with other admin fields. Apply TW-032 fix."
+    evidence_excerpt: "Logo URL; API Base URL; API Key; API Secret; Webhook Secret"
+    recommendation: "Sentence case (TW-032): 'Logo URL' (stays acronym-cap) / 'API base URL' / 'API key' / 'API secret' / 'Webhook secret'."
+    depends_on: TW-032
+
+  - finding_id: TW-190
+    surface_id: ap-delivery-stats
+    lens: technical-writer
+    severity: P3
+    issue: "'{n} online now; Active deliveries; Delivered today; Today's payouts' — mix of inline-numeral pattern ('{n} online now') and noun-only ('Active deliveries'). Pair structure throughout: count + noun."
+    evidence_excerpt: "{n} online now; Active deliveries; Delivered today; Today's payouts"
+    recommendation: "All four use count + noun: '{n} online' / '{n} active' / '{n} delivered today' / '₹{n} payouts today'."
+    depends_on: null
+
+  - finding_id: TW-191
+    surface_id: ap-dashboard-shortcuts-items
+    lens: technical-writer
+    severity: P3
+    issue: "'Manage users / View all users; Chef verification / Review applications; Order management / Track all orders; Analytics / View reports' — title + subtitle pairs with slash separators. Confusing format unless layout makes it clear."
+    evidence_excerpt: "Manage users / View all users; Chef verification / Review applications; Order management / Track all orders; Analytics / View reports"
+    recommendation: "Verify UI uses separate title and subtitle. Strings should not concatenate via '/'. 'Chef verification' + 'Review applications' as two strings."
+    depends_on: null
+
+  - finding_id: TW-192
+    surface_id: ap-userdetail-order-stats
+    lens: technical-writer
+    severity: P3
+    issue: "'Total Orders / Total Spent / Last Order / No orders yet' — title case + 'No orders yet' empty-state without CTA per TW-051."
+    evidence_excerpt: "Order Activity; Total Orders; Total Spent; Last Order; No orders yet"
+    recommendation: "Sentence case. Empty state: 'No orders yet.' (terminal period; this is a user detail page so no CTA needed for admin)."
+    depends_on: TW-032
+
+  - finding_id: TW-193
+    surface_id: vp-ux-orders-history-summary
+    lens: technical-writer
+    severity: P3
+    issue: "Summary cards 'Delivered / Cancelled / Revenue' — single nouns, fine. 'Revenue' refers to chef's earnings (see TW-050)."
+    evidence_excerpt: "Delivered / Cancelled / Revenue"
+    recommendation: "'Delivered / Cancelled / Earnings' (replace 'Revenue' for chef-facing — TW-050)."
+    depends_on: TW-050
+
+  - finding_id: TW-194
+    surface_id: web-ux-chef-earnings
+    lens: technical-writer
+    severity: P3
+    issue: "'Earnings / Earnings Overview / Top Selling Items / Recent Payouts / Payment Settings' — title case + 'Earnings Overview' redundant ('Overview' under 'Earnings' page is implicit)."
+    evidence_excerpt: "Earnings / Earnings Overview / Top Selling Items / Recent Payouts / Payment Settings"
+    recommendation: "'Earnings / Overview / Top sellers / Recent payouts / Payment settings'. Drop redundant 'Earnings' prefix on first section."
+    depends_on: TW-031
+
+  - finding_id: TW-195
+    surface_id: web-ux-admin-analytics
+    lens: technical-writer
+    severity: P3
+    issue: "'Analytics / Revenue Overview / Orders by Status / Top Performing Chefs / Popular Cuisines' — title case throughout. 'Top Performing Chefs' wordy ('Top chefs' suffices)."
+    evidence_excerpt: "Analytics / Revenue Overview / Orders by Status / Top Performing Chefs / Popular Cuisines"
+    recommendation: "'Analytics / Revenue overview / Orders by status / Top chefs / Popular cuisines'. Sentence case."
+    depends_on: TW-031
+
+  - finding_id: TW-196
+    surface_id: mv-orders-tab-history
+    lens: technical-writer
+    severity: P3
+    issue: "Tab 'History' — single word, fine. Pair label 'Live Queue' (TW-173) should match — recommend 'Live' single word."
+    evidence_excerpt: "History"
+    recommendation: "Keep 'History'. Update sibling tab to 'Live' (TW-173)."
+    depends_on: TW-173
+
+  - finding_id: TW-197
+    surface_id: md-core-068
+    lens: technical-writer
+    severity: P3
+    issue: "'App Version' footer label — title case (TW-037 pattern). One-time fix."
+    evidence_excerpt: "App Version"
+    recommendation: "'App version' (sentence case)."
+    depends_on: TW-037
+
+  - finding_id: TW-198
+    surface_id: dp-ux-active-order-note
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory notes 'chef-supplied instructions' — content from another role can include strings the app doesn't control. Display chef notes verbatim, but consider character limit + escape rendering."
+    evidence_excerpt: "Note: {specialInstructions}"
+    recommendation: "Add character cap (e.g., 500 chars) on chef-supplied notes. Render as plain text (no markdown / HTML). Out of scope for TW, but flag for engineering."
+    depends_on: TW-114
+
+  - finding_id: TW-199
+    surface_id: dp-ux-active-status-picked-up
+    lens: technical-writer
+    severity: P3
+    issue: "'Picked Up' status — title case 'Picked Up' (TW-033 + TW-081)."
+    evidence_excerpt: "Picked Up"
+    recommendation: "'Picked up' (sentence case)."
+    depends_on: TW-081
+
+  - finding_id: TW-200
+    surface_id: dp-ux-active-status-in-transit
+    lens: technical-writer
+    severity: P3
+    issue: "'In Transit' — title case."
+    evidence_excerpt: "In Transit"
+    recommendation: "'In transit'."
+    depends_on: TW-081

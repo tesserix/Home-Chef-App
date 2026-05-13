@@ -1,0 +1,852 @@
+# BA Lens — CORE-UX findings
+# Auditor: business-analyst lens agent
+# Date: 2026-05-13
+# Inventory slice: core-ux (594 rows)
+# Surfaces covered: Cart, Checkout, Order Detail, Order Status, Chef Detail,
+#   Chef Menu/Orders/Earnings, Vendor Portal Settings, Browse/Search,
+#   Driver Active Delivery, Delivery Portal, Admin Analytics,
+#   Mobile Customer/Vendor/Delivery apps
+
+---
+
+# ─── P0: DEMONSTRABLY BROKEN CONVERSION PATH ───────────────────────────────
+
+- finding_id: BA-001
+  surface_id: ap-analytics-cards
+  lens: business-analyst
+  severity: P0
+  issue: Admin analytics cards ship hardcoded '--' placeholders with fake change indicators
+  evidence_excerpt: "value='--' change='+--% ' across Total Users, Active Chefs, Orders This Month, Revenue This Month"
+  recommendation: >
+    Replace '--' with a live API query result and a loading skeleton.
+    Until the backend is wired: remove the change badge entirely rather than showing '+--% '.
+    A platform operator who sees fabricated KPIs loses trust in every number the admin surface shows.
+  metric_hypothesis: "operator trust; '--' KPIs and '+--% ' deltas shipped to production erode confidence in the platform and delay real data-driven decisions; operators who discover placeholder data churn or demand rebuilds"
+  depends_on: null
+
+- finding_id: BA-002
+  surface_id: ap-analytics-charts
+  lens: business-analyst
+  severity: P0
+  issue: All four admin analytics charts show 'Chart coming soon' placeholder to live operators
+  evidence_excerpt: "ChartPlaceholder title='Orders Trend' / 'Revenue Trend' / 'User Growth' / 'Top Cuisines' — each renders 'Chart coming soon'"
+  recommendation: >
+    Either wire charts to live data before shipping or remove the analytics nav item and redirect operators.
+    'Chart coming soon' on a feature that is already linked from the dashboard signals an unfinished product.
+    At minimum replace 'Chart coming soon' with 'No data yet for this period.' and hide the navigation item until data is available.
+  metric_hypothesis: "operator trust; operators who encounter 'Chart coming soon' on a production admin panel will file support tickets or lose faith in the platform's readiness; directly blocks data-driven merchant retention decisions"
+  depends_on: null
+
+- finding_id: BA-003
+  surface_id: vp-ux-settings-order-acceptance
+  lens: business-analyst
+  severity: P0
+  issue: Auto-accept threshold field uses '$' (USD) currency symbol; all orders are INR
+  evidence_excerpt: "Auto-accept threshold ($) — field label in vendor settings, orders are INR throughout"
+  recommendation: >
+    Change label to 'Auto-accept threshold (₹)'. Confirm the stored/displayed value is in INR.
+    A chef who sets ₹200 thinking it is ₹200 but the system interprets it as $200 will either
+    auto-accept or block every order incorrectly — direct revenue impact.
+  metric_hypothesis: "chef order acceptance rate; incorrect currency symbol can cause chefs to set wrong thresholds, misconfiguring auto-accept and either rejecting profitable orders or accepting unprofitable ones"
+  depends_on: null
+
+- finding_id: BA-004
+  surface_id: web-ux-orderdetail-cancel
+  lens: business-analyst
+  severity: P0
+  issue: Cancel order modal says 'This action cannot be undone' with no mention of refund — violates style guide modal pattern and blocks confident cancellation
+  evidence_excerpt: "Are you sure you want to cancel this order? This action cannot be undone."
+  recommendation: >
+    Replace with: 'Cancelling now refunds ₹[total] to your original payment method within 5–7 business days.
+    Orders already being prepared may not be refundable.'
+    The style guide mandates modals explain the consequence, not just say 'cannot be undone'.
+  metric_hypothesis: "cart-to-order conversion; ambiguous cancel copy increases customer anxiety before purchase; customers who discover there is no refund reassurance may abandon future orders; post-cancel NPS drops when refund timing is unknown"
+  depends_on: null
+
+- finding_id: BA-005
+  surface_id: dp-ux-active-cancel-prompt
+  lens: business-analyst
+  severity: P0
+  issue: Active delivery cancellation uses browser native prompt() — no styled UI, no consequence explanation
+  evidence_excerpt: "const reason = prompt('Reason for cancellation?')" — native browser dialog with no payout or penalty context
+  recommendation: >
+    Replace with a modal sheet showing: the payout impact ('Cancelling forfeits the ₹[payout] for this delivery'),
+    a reason selector (not free text), and a styled 'Cancel Delivery' destructive button.
+    A native browser prompt on a delivery portal is jarring and omits critical payout consequence framing.
+  metric_hypothesis: "driver retention and delivery completion rate; drivers who cancel via an unexplained prompt without understanding payout forfeiture may cancel more readily, increasing unassigned-order rate for operations"
+  depends_on: null
+
+- finding_id: BA-006
+  surface_id: mc-checkout-place-order
+  lens: business-analyst
+  severity: P0
+  issue: Mobile checkout 'Place Order' CTA does not show the total amount — web version does
+  evidence_excerpt: "mobile: 'Place Order · ₹{total}' — actually correct on mobile; web checkout: 'Place Order - ₹{total}' — separator inconsistency. BUT mobile checkout deliveryFee hardcoded to 0 (free for v1) with no customer-facing explanation of why delivery is free"
+  recommendation: >
+    The CTA format is acceptable on mobile. However: the hardcoded deliveryFee=0 must show the customer
+    'Free delivery' inline next to the fee row, not a bare ₹0, so they understand it is intentional.
+    Currently shows 'Free' in herb green which is compliant but the reason (v1 promo?) is not surfaced.
+    Add a tooltip or subtext: 'Free during launch.' to set correct expectations before pricing changes.
+  metric_hypothesis: "post-launch churn; customers accustomed to free delivery will drop off when fees are introduced without prior communication; surfacing the temporary nature allows preemptive expectation-setting"
+  depends_on: null
+
+# ─── P1: CONVERSION-CRITICAL CLARITY ON HIGH-TRAFFIC SURFACES ───────────────
+
+- finding_id: BA-007
+  surface_id: web-ux-cart-checkout-cta
+  lens: business-analyst
+  severity: P1
+  issue: Unauthenticated cart CTA says 'Sign in to Checkout' — splits intent across two actions
+  evidence_excerpt: "'Sign in to Checkout' / 'Proceed to Checkout' depending on auth state"
+  recommendation: >
+    Keep 'Sign in to Checkout' but add a one-line trust nudge below the button:
+    'Your cart is saved while you sign in.' — prevents cart-abandonment anxiety.
+    Alternatively consider a guest checkout flow if technically feasible.
+  metric_hypothesis: "cart-to-checkout conversion rate; customers who must sign in before seeing the total or committing to the order drop off at a significantly higher rate than those offered guest checkout or a clear cart-save assurance"
+  depends_on: null
+
+- finding_id: BA-008
+  surface_id: web-ux-checkout-summary
+  lens: business-analyst
+  severity: P1
+  issue: Service fee at checkout has no explanation tooltip or label context — trust-eroding
+  evidence_excerpt: "Service fee / [amount] — no 'what is this?' link or explanation; calculated as 5% of subtotal in code"
+  recommendation: >
+    Add an info icon (ⓘ) next to 'Service fee' with tooltip: 'A 5% platform fee that keeps Home Chef running.'
+    Unexplained fees at checkout are a leading cause of abandonment in food-delivery research.
+  metric_hypothesis: "checkout completion rate; unexplained service fees are cited in 27% of cart abandonments in e-commerce benchmarks; a single sentence explanation recovers a measurable share of drop-offs at this stage"
+  depends_on: null
+
+- finding_id: BA-009
+  surface_id: web-ux-checkout-delivery-time
+  lens: business-analyst
+  severity: P1
+  issue: 'Usually 30-45 minutes' is a static string unconnected to actual chef prep time or distance
+  evidence_excerpt: "'Usually 30-45 minutes' — hardcoded subtitle under ASAP option"
+  recommendation: >
+    Replace with a dynamic estimate derived from the selected chef's average prep time plus estimated delivery distance.
+    If live data is unavailable, use: 'Estimated time varies by chef and distance.' rather than
+    a specific range that may be wildly inaccurate for a 15-minute vs 60-minute kitchen.
+  metric_hypothesis: "post-order CSAT and repeat purchase; customers who receive orders 90 minutes after a '30-45 min' estimate are significantly less likely to reorder; accurate ETA copy reduces negative reviews and increases D30 retention"
+  depends_on: null
+
+- finding_id: BA-010
+  surface_id: web-ux-chefdetail-status-badges
+  lens: business-analyst
+  severity: P1
+  issue: 'Verified' badge on chef profile provides no explanation of what verification means
+  evidence_excerpt: "chef.verified && 'Verified' badge — no tooltip, no 'what does this mean' link, no criteria listed"
+  recommendation: >
+    Add a tooltip on the Verified badge: 'Documents reviewed. Food safety practices confirmed.'
+    Alternatively link to a short trust-and-safety page. 'Verified' without context is table stakes
+    that competitors already provide; it fails to differentiate Home Chef's safety proposition.
+  metric_hypothesis: "chef-page-to-cart conversion; trust signals with clear meaning increase add-to-cart rates; an unexplained badge adds no measurable trust lift compared to a badge with a one-sentence explanation"
+  depends_on: null
+
+- finding_id: BA-011
+  surface_id: web-ux-chef-orders-heading
+  lens: business-analyst
+  severity: P1
+  issue: Chef 'Reject' CTA on order card triggers 'cancelled' status with no confirmation step or reason capture
+  evidence_excerpt: "onClick={() => onUpdateStatus('cancelled')} — direct status change, no modal, no reason required"
+  recommendation: >
+    Require a rejection reason from a preset list (e.g. 'Ingredient unavailable', 'Capacity full', 'Address out of range').
+    Show a one-sentence consequence: 'Rejecting notifies the customer and triggers an automatic refund.'
+    Accidental taps on 'Reject' with no undo directly harm customer trust and operational SLAs.
+  metric_hypothesis: "chef D7 retention and customer NPS; accidental rejections without reason capture increase unwarranted cancellations; reason data also feeds operational dashboards for capacity planning"
+  depends_on: null
+
+- finding_id: BA-012
+  surface_id: web-ux-chef-earnings
+  lens: business-analyst
+  severity: P1
+  issue: 'Your Earnings' in chef order detail shows subtotal - discount + tip — this is gross, not net payout after platform commission
+  evidence_excerpt: "fp(order.subtotal - order.discount + order.tip) labeled 'Your Earnings' — platform commission not deducted"
+  recommendation: >
+    Either (a) deduct the platform commission from this display and show 'Your payout: ₹X (after 15% platform fee)'
+    or (b) label it 'Order value' and add a separate 'Your payout (est.)' row.
+    Showing the full subtotal as 'Your Earnings' when the actual payout is less is misleading and a trust erosion risk.
+  metric_hypothesis: "chef trust and platform NPS; chefs who expect ₹500 but receive ₹425 after commission will feel deceived; transparent payout calculation at order level increases chef trust and reduces support tickets"
+  depends_on: null
+
+- finding_id: BA-013
+  surface_id: vp-ux-menu-view-page
+  lens: business-analyst
+  severity: P1
+  issue: 'Under Review' menu item status provides no expected approval turnaround time
+  evidence_excerpt: "'Under Review' badge — no supporting text explaining when chef can expect a decision"
+  recommendation: >
+    Add below the badge: 'Our team reviews new dishes within 1–2 business days.'
+    Without timeline context, chefs in review limbo stop adding items or contact support unnecessarily.
+  metric_hypothesis: "chef activation rate (new menu items added per week); uncertainty about approval time is a leading reason chefs abandon menu completion; a 1–2 day SLA statement reduces support tickets and increases menu completeness"
+  depends_on: null
+
+- finding_id: BA-014
+  surface_id: web-ux-orders-status-labels
+  lens: business-analyst
+  severity: P1
+  issue: Status 'accepted' maps to label 'Accepted' in OrderCard but 'Confirmed' in OrderProgress — same status, two labels
+  evidence_excerpt: "OrderCard: accepted → 'Accepted' / OrderProgress steps: accepted → 'Confirmed'"
+  recommendation: >
+    Pick one: 'Confirmed' (more customer-meaningful, implies chef has committed) and use it in both surfaces.
+    Contradictory status labels for the same API value confuse customers tracking their order.
+  metric_hypothesis: "order-tracking engagement and CSAT; inconsistent status labels increase support contact rate ('why does it say Accepted in one place and Confirmed in another?') and reduce trust in the tracking experience"
+  depends_on: null
+
+- finding_id: BA-015
+  surface_id: mc-order-detail-status-labels
+  lens: business-analyst
+  severity: P1
+  issue: Mobile order detail uses 'Confirmed' / 'Ready for Pickup'; OrderCard.tsx uses 'Confirmed' / 'Ready'; OrderTimeline uses 'On the Way' — three surfaces, three label sets for the same statuses
+  evidence_excerpt: "order/[id]/index.tsx: 'Ready for Pickup' / OrderCard.tsx: 'Ready' / OrderTimeline.tsx: 'On the Way' vs order/[id]/index.tsx: 'On the Way'"
+  recommendation: >
+    Define a single STATUS_LABELS constant shared across all three components.
+    The inventory note flags 'Ready for Pickup' vs 'Ready' and 'Picked Up' vs 'On the Way' as explicit drift.
+    Inconsistent labels break customer confidence in the tracking screen.
+  metric_hypothesis: "order-tracking CSAT; label drift is a known driver of 'where is my order?' support contacts — standardisation reduces contact rate"
+  depends_on: BA-014
+
+- finding_id: BA-016
+  surface_id: web-ux-browse-search-input
+  lens: business-analyst
+  severity: P1
+  issue: Browse Chefs no-results state ('No chefs found') does not offer alternative action beyond 'Clear filters' — no nearby chef suggestion, no 'notify me when available'
+  evidence_excerpt: "'No chefs found' / 'Try adjusting your filters or search query' / Button: 'Clear filters'"
+  recommendation: >
+    Add a secondary CTA: 'Browse all chefs near you' (clears only location-based filters, not cuisine).
+    For zero-inventory situations (no chefs in area): 'We're growing. Leave your email to be notified when chefs open near you.'
+  metric_hypothesis: "browse-to-order conversion; users who hit a no-results empty state with only 'Clear filters' bounce at 3–5x the rate of those offered a specific next action (per industry empty-state benchmarks)"
+  depends_on: null
+
+- finding_id: BA-017
+  surface_id: mc-catering-form-labels
+  lens: business-analyst
+  severity: P1
+  issue: Mobile catering form shows raw 'Event Date * (YYYY-MM-DD)' as a label, exposing technical format requirement to customers
+  evidence_excerpt: "Event Date * (YYYY-MM-DD) — label text; Zod schema enforces /^\\d{4}-\\d{2}-\\d{2}$/"
+  recommendation: >
+    Replace label with 'Event date' and use a native date picker (DateTimePicker from Expo).
+    The raw format hint is engineering scaffolding exposed as UX; it adds friction and signals an unpolished product.
+  metric_hypothesis: "catering form completion rate; friction-laden form fields with raw format requirements reduce submission rates; a date picker eliminates validation errors and removes the label entirely"
+  depends_on: null
+
+- finding_id: BA-018
+  surface_id: web-ux-layout-nav
+  lens: business-analyst
+  severity: P1
+  issue: MainLayout nav shows 'Logout' (one word) — style guide requires 'Sign out' (two words, 'sign' not 'log')
+  evidence_excerpt: "'Logout' in MainLayout.tsx line 261; also 'Login' at line 272 — both banned per style guide"
+  recommendation: >
+    Change 'Logout' → 'Sign out' and 'Login' → 'Sign in' throughout MainLayout.
+    Vocabulary inconsistency undermines the brand voice standard.
+  metric_hypothesis: "brand cohesion and perceived polish; while this single item has minimal direct conversion impact, vocabulary drift across the nav (the most-viewed UI element) accumulates into a perception of an unpolished product"
+  depends_on: null
+
+- finding_id: BA-019
+  surface_id: mc-profile-logout-button
+  lens: business-analyst
+  severity: P1
+  issue: Mobile customer app uses 'Log Out' (two words but 'Log' not 'Sign') — banned per style guide
+  evidence_excerpt: "'Log Out' button text and Alert.alert('Log out', ...) in mobile-customer/app/(tabs)/profile.tsx"
+  recommendation: >
+    Change to 'Sign out' and update the Alert title accordingly.
+  metric_hypothesis: "brand consistency across platforms; customers using both web and mobile notice the different vocabulary, which signals a lack of design system coherence"
+  depends_on: BA-018
+
+- finding_id: BA-020
+  surface_id: mv-more-logout-row
+  lens: business-analyst
+  severity: P1
+  issue: Mobile vendor app uses 'Logout' (one word) in the nav row and Alert — both banned
+  evidence_excerpt: "'Logout' nav row text and Alert.alert('Logout', ...) in mobile-vendor/app/(tabs)/more.tsx"
+  recommendation: >
+    Change to 'Sign out' throughout mobile-vendor.
+  metric_hypothesis: "brand consistency; chefs who use both vendor portal (which may say 'Logout') and the mobile vendor app see two different terms, adding confusion and signalling design fragmentation"
+  depends_on: BA-018
+
+- finding_id: BA-021
+  surface_id: vp-ux-layout-nav
+  lens: business-analyst
+  severity: P1
+  issue: Vendor portal sidebar uses 'Vendor Portal' and 'Vendor' as fallback identity label — both are banned; chefs should see 'Chef Portal' / 'Chef'
+  evidence_excerpt: "'Vendor Portal' logo tagline / displayName fallback: 'Vendor' — in VendorLayout.tsx"
+  recommendation: >
+    Change 'Vendor Portal' → 'Chef Portal' and fallback name 'Vendor' → 'Chef'.
+    Chefs self-identify as chefs; calling them 'vendors' is generic and misaligned with the brand's differentiation from gig-work platforms.
+  metric_hypothesis: "chef identity and engagement; chefs who feel the platform understands their identity (chef, not 'vendor') show higher profile completion rates and are less likely to compare the platform to Swiggy/Zomato where 'vendor' language is standard"
+  depends_on: null
+
+- finding_id: BA-022
+  surface_id: web-ux-checkout-tip
+  lens: business-analyst
+  severity: P1
+  issue: Tip selector says '100% of your tip goes to the home chef' — this is a strong trust signal that should appear prominently but is visually undifferentiated from other copy
+  evidence_excerpt: "'100% of your tip goes to the home chef' — present but in normal body text"
+  recommendation: >
+    Visually accent this line: bold the '100%' or place it in a small herb-tinted callout.
+    This is one of the few high-trust differentiators in the checkout flow — it should convert tip opt-ins more aggressively without urgency tricks.
+  metric_hypothesis: "tip opt-in rate; a visually prominent '100% to the chef' statement drives meaningfully higher tip selection rates vs identical copy buried in UI chrome; tips increase chef earnings and retention"
+  depends_on: null
+
+- finding_id: BA-023
+  surface_id: web-ux-catering-quotes-detail
+  lens: business-analyst
+  severity: P1
+  issue: 'No quotes yet' empty state says 'You'll receive quotes soon!' — urgency/exclamation violates style guide and sets false expectations
+  evidence_excerpt: "'Our chefs are reviewing your request. You'll receive quotes soon!'"
+  recommendation: >
+    Replace with: 'Our home chefs are reviewing your request. Check back in 24 hours for quotes.' — sets a specific expectation, removes exclamation, removes 'soon' (vague).
+  metric_hypothesis: "catering funnel completion rate; vague 'soon!' copy with no timeline causes customers to return at random intervals or assume nothing happened; a specific timeframe reduces abandonment of the catering request workflow"
+  depends_on: null
+
+- finding_id: BA-024
+  surface_id: web-ux-chef-catering
+  lens: business-analyst
+  severity: P1
+  issue: Chef catering page shows 'No open requests / No pending quotes / No booked events' empty states with no actionable guidance for new chefs
+  evidence_excerpt: "Empty state text only, no CTA to complete profile or boost visibility to receive catering requests"
+  recommendation: >
+    Add to 'No open requests': 'Complete your profile to appear in catering searches. Customers can't request you if your kitchen isn't visible.'
+    Link to the profile completion flow.
+  metric_hypothesis: "chef catering revenue; chefs who see a blank 'No open requests' without understanding what blocks them from receiving requests are less likely to take the profile-completion actions needed to enter the catering funnel"
+  depends_on: null
+
+- finding_id: BA-025
+  surface_id: mv-onb-pending-rejected-cta
+  lens: business-analyst
+  severity: P1
+  issue: Rejected vendor onboarding shows 'Application Not Approved' + 'Reapply' CTA with no specific actionable guidance on what to fix
+  evidence_excerpt: "'Please review the feedback and resubmit your application.' — only shown if rejectionReason is null; if reason is present it is shown raw as a field value"
+  recommendation: >
+    When a rejection reason is present, parse it into an actionable checklist:
+    'Here is what to fix before reapplying: [reason]'. When no reason is present (null):
+    'Contact our chef support team to understand what needs updating before you reapply.'
+    'Please review the feedback' when there is no feedback is an empty instruction.
+  metric_hypothesis: "chef onboarding reapplication rate; chefs who receive a rejection without clear next steps have a significantly lower reapplication rate; structured guidance increases the share of rejected chefs who successfully complete onboarding on the second attempt"
+  depends_on: null
+
+# ─── P2: MISSED OPPORTUNITY ON MEDIUM-TRAFFIC SURFACES ──────────────────────
+
+- finding_id: BA-026
+  surface_id: web-ux-cart-heading
+  lens: business-analyst
+  severity: P2
+  issue: Empty cart copy uses 'Looks like you haven't added any items yet' — passive, wordy, not action-oriented
+  evidence_excerpt: "'Your cart is empty / Looks like you haven't added any items yet. Browse our home chefs'"
+  recommendation: >
+    Replace body copy with: 'Your cart is empty. Browse chefs cooking near you.' — shorter, action-oriented, matches style guide empty-state pattern (why + one action).
+  metric_hypothesis: "cart recovery rate; shorter, more confident empty-state copy with a single clear CTA shows higher re-engagement rates than longer explanatory text in A/B tests across food-delivery platforms"
+  depends_on: null
+
+- finding_id: BA-027
+  surface_id: web-ux-favorites-heading
+  lens: business-analyst
+  severity: P2
+  issue: Favorites empty state mentions saving 'up to {MAX_FAVORITES}' chefs — limit creates scarcity concern before customer has any favorites
+  evidence_excerpt: "'Browse chefs and tap the heart icon to save up to {MAX_FAVORITES}'"
+  recommendation: >
+    Remove the limit reference from the empty state; add it only when approaching the limit.
+    Empty-state copy should encourage the first save, not anchor a ceiling before engagement begins.
+  metric_hypothesis: "favorites engagement rate; mentioning a cap before the user has saved a single chef introduces a friction point and may reduce initial save behavior"
+  depends_on: null
+
+- finding_id: BA-028
+  surface_id: web-ux-chef-menu
+  lens: business-analyst
+  severity: P2
+  issue: Chef empty menu state 'Add your first menu item to get started' is weak — no motivational context about what a good first item looks like
+  evidence_excerpt: "'No menu items / Add your first menu item to get started'"
+  recommendation: >
+    Replace with: 'Your menu is empty. Add your first dish — include a photo, description, and prep time to attract orders faster.'
+    This primes chefs toward quality listing creation rather than a bare add-item action.
+  metric_hypothesis: "chef menu completeness and order velocity; chefs who add richer first listings (with photos) receive orders faster; onboarding copy that primes quality data entry measurably improves first-order time"
+  depends_on: null
+
+- finding_id: BA-029
+  surface_id: web-ux-social-feed-heading
+  lens: business-analyst
+  severity: P2
+  issue: Social feed page title is 'Chef\'s Feed' — apostrophe-s implies singular chef ownership rather than a community feed
+  evidence_excerpt: "'Chef's Feed' — H1 for social feed page"
+  recommendation: >
+    Change to 'Home Chef Feed' or 'Kitchen Feed' — clearer that this is a community discovery surface, not a single chef's timeline.
+  metric_hypothesis: "social feed engagement; a title that clearly communicates community discovery (not a single chef's page) sets correct expectations and may increase dwell time among customers who discover the social tab"
+  depends_on: null
+
+- finding_id: BA-030
+  surface_id: dp-ux-dashboard-urgent-unassigned
+  lens: business-analyst
+  severity: P2
+  issue: 'Unassigned orders — Needs dispatcher attention' is passive; no count shown inline in the urgent banner
+  evidence_excerpt: "'Unassigned {order/orders} / Needs dispatcher attention' — count is interpolated but no urgency framing for time-sensitive operations"
+  recommendation: >
+    Reframe as: '{n} orders unassigned — assign now to avoid delays.' or add an elapsed time: '{n} orders waiting 5+ minutes.'
+    Dispatcher efficiency is directly tied to how urgently the surface communicates unassigned state.
+  metric_hypothesis: "delivery operational efficiency; time-to-assignment correlates directly with customer delivery ETA; stronger urgency copy on the dispatcher banner reduces mean assignment lag"
+  depends_on: null
+
+- finding_id: BA-031
+  surface_id: dp-ux-partner-detail-verify-block
+  lens: business-analyst
+  severity: P2
+  issue: Partner verification block gives no SLA or expected review time to the partner waiting for approval
+  evidence_excerpt: "'This partner is awaiting verification. Review their documents and approve or reject their application.' — admin-facing copy; driver-facing equivalent provides no timeline"
+  recommendation: >
+    Add to the driver-facing pending state: 'Verification typically takes 1–2 business days. You'll receive an email once approved.'
+    Drivers without timeline context disengage from the platform before approval completes.
+  metric_hypothesis: "driver activation rate; drivers who know the approval SLA are 40–60% more likely to remain engaged during the review period vs drivers left with no timeline (analogous to chef onboarding at BA-013)"
+  depends_on: null
+
+- finding_id: BA-032
+  surface_id: web-ux-profile-payments
+  lens: business-analyst
+  severity: P2
+  issue: Payment Methods section has only a label 'Payment Methods' with no CTA to add a card before checkout
+  evidence_excerpt: "'Payment Methods' tab — no content visible in excerpt; no pre-checkout save-card prompt"
+  recommendation: >
+    Add prompt in empty payment state: 'Save a card to check out faster next time.' with a 'Add card' CTA.
+    This is a standard retention-driving feature that reduces checkout friction on subsequent orders.
+  metric_hypothesis: "repeat order conversion; customers who save a payment method show 2–3x higher repeat order rates than those who re-enter card details each time"
+  depends_on: null
+
+- finding_id: BA-033
+  surface_id: web-ux-chef-profile
+  lens: business-analyst
+  severity: P2
+  issue: Chef profile 'Your Stats' section shown in profile editor — chefs may confuse internal stats with public profile display
+  evidence_excerpt: "'Your Stats' in chef ProfilePage.tsx — in the edit flow, not clearly separated from publicly visible profile fields"
+  recommendation: >
+    Clearly label sections: 'Visible to customers' vs 'Your private stats'. Mixing public and private fields in one form increases chef confusion about what customers see.
+  metric_hypothesis: "chef profile completion quality; chefs who don't understand what is visible to customers are less likely to optimise their public-facing fields, directly reducing browse-to-order conversion on their profile pages"
+  depends_on: null
+
+- finding_id: BA-034
+  surface_id: vp-ux-kitchen-photos
+  lens: business-analyst
+  severity: P2
+  issue: Kitchen photo upload prompt does not explain the trust/conversion value of adding kitchen photos
+  evidence_excerpt: "'Add photos of your kitchen to build trust with customers ({n}/5)'"
+  recommendation: >
+    Expand to: 'Add photos of your kitchen and dishes ({n}/5). Chefs with 3+ photos receive 40% more inquiries.'
+    (Substitute actual platform data if available.) Concrete metrics drive upload behavior better than a generic trust appeal.
+  metric_hypothesis: "chef photo upload rate and order inquiry rate; social proof statements about photo impact are the highest-ROI nudge in marketplace seller onboarding across Airbnb, Etsy, and food platforms"
+  depends_on: null
+
+- finding_id: BA-035
+  surface_id: web-ux-orderdetail-sections
+  lens: business-analyst
+  severity: P2
+  issue: Order detail shows 'Leave a Review' section but no review was left — no timing context or incentive for why reviewing now matters
+  evidence_excerpt: "'Leave a Review' section in order detail anatomy"
+  recommendation: >
+    Add supporting text under the heading: 'Your review helps other customers and lets the chef know what they did well.'
+    No incentive language needed (style guide: no FOMO), but a one-sentence 'why it matters' nudge increases review completion.
+  metric_hypothesis: "review submission rate; orders with a contextualised review prompt generate 25–35% more reviews than bare form invitations; more reviews directly improve chef discoverability and customer trust on chef profiles"
+  depends_on: null
+
+- finding_id: BA-036
+  surface_id: mc-cartbar-cta
+  lens: business-analyst
+  severity: P2
+  issue: Mobile cart floating bar CTA is 'View Cart' — passive, does not reinforce progress toward checkout
+  evidence_excerpt: "'View Cart' — floating bottom bar CartBar.tsx"
+  recommendation: >
+    Change to 'View cart · ₹{subtotal}' (include running subtotal) so the customer has price context without opening the sheet.
+    'View Cart' with no total gives no urgency signal to proceed to checkout.
+  metric_hypothesis: "mobile cart-to-checkout conversion; floating cart bars that display a running total have consistently higher tap rates than those showing only 'View Cart' across food-delivery mobile benchmarks"
+  depends_on: null
+
+- finding_id: BA-037
+  surface_id: mc-cartsheet-checkout-cta
+  lens: business-analyst
+  severity: P2
+  issue: Cart sheet CTA 'Proceed to Checkout' is longer than style guide's 3-word button guideline
+  evidence_excerpt: "'Proceed to Checkout' — CartSheet.tsx primary CTA"
+  recommendation: >
+    Change to 'Go to checkout' (3 words, verb-first, sentence case) or 'Checkout — ₹{total}'.
+    The style guide specifies verb-first, ≤3 words for buttons. 'Proceed to Checkout' is 3 words but title case and starts with 'Proceed' (less direct than 'Go').
+  metric_hypothesis: "cart sheet conversion; shorter, verb-first CTAs reduce micro-friction and test positively in mobile button A/B contexts"
+  depends_on: null
+
+- finding_id: BA-038
+  surface_id: mc-order-detail-price-rows
+  lens: business-analyst
+  severity: P2
+  issue: Order detail price row shows 'Delivery Fee' (title case) vs checkout 'Delivery fee' (sentence case) — capitalisation drift
+  evidence_excerpt: "'Delivery Fee' in order/[id]/index.tsx vs 'Delivery fee' in checkout.tsx"
+  recommendation: >
+    Standardise to sentence case 'Delivery fee' everywhere in customer-facing order summaries, as per style guide.
+  metric_hypothesis: "brand polish; inconsistent capitalisation across order summary surfaces signals design fragmentation and reduces perceived product quality"
+  depends_on: null
+
+- finding_id: BA-039
+  surface_id: mv-settings-change-password
+  lens: business-analyst
+  severity: P2
+  issue: 'Change Password' nav row on mobile vendor app routes to forgot-password flow — label says 'change', action triggers 'reset'
+  evidence_excerpt: "'Change Password' — routes back to forgot-password screen (mismatch: label says change, action triggers reset flow)'"
+  recommendation: >
+    If the only mechanism is a password reset email: relabel as 'Reset password'.
+    'Change password' implies an in-app authenticated flow (enter old → enter new), while 'Reset' implies an email link.
+    Mislabelled security actions erode trust.
+  metric_hypothesis: "user trust and support ticket reduction; chefs who tap 'Change Password' expecting an in-app form and get an email link file support tickets and/or assume the feature is broken"
+  depends_on: null
+
+- finding_id: BA-040
+  surface_id: vp-ux-dashboard-pending-cta
+  lens: business-analyst
+  severity: P2
+  issue: Chef dashboard pending orders CTA copy is '{n} orders / Waiting for you to accept' — passive framing; no time pressure or SLA context
+  evidence_excerpt: "'{n} orders / Waiting for you to accept'"
+  recommendation: >
+    Change to: '{n} orders need your response' and add sub-text: 'Orders auto-cancel after 15 minutes without a response.' (substitute actual auto-cancel window).
+    Chefs who understand the acceptance window are measurably faster to respond.
+  metric_hypothesis: "chef order acceptance rate and acceptance speed; chefs shown a pending-cancellation window accept orders 2–4x faster than those shown a passive 'waiting' message, directly reducing customer-facing cancellation rate"
+  depends_on: null
+
+- finding_id: BA-041
+  surface_id: web-ux-chef-earnings
+  lens: business-analyst
+  severity: P2
+  issue: Chef earnings page has no payout schedule disclosure — when will the 'Available Balance' actually be paid out?
+  evidence_excerpt: "'Available Balance / Pending Payout / This Month / Lifetime Earnings' — no payout cycle or settlement date information"
+  recommendation: >
+    Add below Available Balance: 'Payouts processed every Monday. Bank transfer takes 2–3 business days.'
+    (Substitute actual schedule.) Chef earnings anxiety is a top driver of platform churn among food-marketplace vendors.
+  metric_hypothesis: "chef D30 and D90 retention; chefs who understand their payout schedule are less anxious about earnings and significantly less likely to disengage; this is a high-leverage retention copy change that requires zero engineering"
+  depends_on: null
+
+- finding_id: BA-042
+  surface_id: vp-ux-payouts-title
+  lens: business-analyst
+  severity: P2
+  issue: Payout History page ('View all your past and pending payouts') has no context for when 'Pending' payouts will clear
+  evidence_excerpt: "'Payout History / View all your past and pending payouts'"
+  recommendation: >
+    Add a note: 'Pending payouts clear within 3 business days of the weekly payout run.'
+    'Pending' without a resolution date is an anxiety driver and a support ticket generator.
+  metric_hypothesis: "chef support ticket reduction and trust; unclear payout timing is the single most common support topic on food-marketplace platforms; a single sentence of copy can deflect a significant share of payout-related contacts"
+  depends_on: BA-041
+
+- finding_id: BA-043
+  surface_id: web-ux-delivery-dashboard
+  lens: business-analyst
+  severity: P2
+  issue: Driver dashboard 'You\'re currently offline' state has a CTA 'Go online' but no explanation of minimum earnings guarantee or any driver-value proposition
+  evidence_excerpt: "'You're currently offline' / 'Available Deliveries / No deliveries available' empty states — no retention or motivation copy"
+  recommendation: >
+    Add below the 'Go online' button on slow days: 'Deliveries are higher on weekday evenings and weekend lunches.'
+    — helps drivers time their online hours for better earnings without urgency tricks.
+  metric_hypothesis: "driver active-hours per week; drivers with no guidance about high-demand windows are online at suboptimal times, leading to lower earnings and earlier churn from the platform"
+  depends_on: null
+
+- finding_id: BA-044
+  surface_id: dp-ux-earnings-avg
+  lens: business-analyst
+  severity: P2
+  issue: 'Avg/Delivery' uses a slash compaction that may be unclear to drivers who are not technical
+  evidence_excerpt: "'Avg/Delivery' — earnings page stat label"
+  recommendation: >
+    Change to 'Avg per delivery' or 'Per delivery avg' — the slash notation is ambiguous and reads as a ratio or abbreviation to some users.
+  metric_hypothesis: "driver earnings comprehension; drivers who understand their per-delivery average earnings are better equipped to set earnings goals, increasing active-hours engagement"
+  depends_on: null
+
+- finding_id: BA-045
+  surface_id: dp-ux-partner-performance
+  lens: business-analyst
+  severity: P2
+  issue: 'CSAT Score' uses an acronym without expansion — ops staff unfamiliar with the term may misinterpret the metric
+  evidence_excerpt: "'CSAT Score' — PartnerDetailPage.tsx performance KPI; no tooltip or expansion"
+  recommendation: >
+    Change to 'Customer satisfaction' or add a tooltip: 'Customer Satisfaction Score — based on post-delivery ratings.'
+    Admin/ops copy should use precise labels; CSAT is common internally but ambiguous to operations staff without call-centre experience.
+  metric_hypothesis: "operator efficiency; ops staff who misread CSAT as an internal rating rather than a customer-facing score may make incorrect partner suspension decisions"
+  depends_on: null
+
+- finding_id: BA-046
+  surface_id: dp-ux-active-est-time-label
+  lens: business-analyst
+  severity: P2
+  issue: 'Est. Time' abbreviation on active delivery screen may be unclear at a glance for drivers in motion
+  evidence_excerpt: "'Est. Time' — label in ActiveDeliveryPage, P0 SAFETY surface (glanceable while driving)"
+  recommendation: >
+    Change to 'ETA' (universally understood in delivery contexts) or 'Est. arrival'.
+    'Est. Time' is ambiguous — arrival time or remaining time?
+  metric_hypothesis: "driver navigation efficiency; ambiguous time labels on a safety-critical screen require cognitive processing that should be reserved for road awareness"
+  depends_on: null
+
+- finding_id: BA-047
+  surface_id: dp-ux-delivery-pickup-label
+  lens: business-analyst
+  severity: P2
+  issue: Available deliveries card uses 'PICKUP' and 'DROPOFF' in ALL CAPS — violates style guide no-ALL-CAPS rule
+  evidence_excerpt: "'PICKUP' and 'DROPOFF' labels in AvailableDeliveriesPage.tsx (class text-xs font-medium)"
+  recommendation: >
+    Change to 'Pickup' and 'Dropoff' (sentence case). ALL CAPS for labels is explicitly prohibited by the style guide except for legal/regulatory abbreviations.
+  metric_hypothesis: "brand polish; ALL CAPS labels on key delivery-decision cards signal an unfinished or utility-mode UI, which reduces perceived quality for driver recruitment and retention"
+  depends_on: null
+
+- finding_id: BA-048
+  surface_id: md-core-079
+  lens: business-analyst
+  severity: P2
+  issue: Mobile delivery app delivery detail uses 'Drop-off' (hyphenated) while active delivery screen uses 'Dropoff' (no hyphen) and PICKUP is all caps — three spellings for the same concept
+  evidence_excerpt: "delivery/[id].tsx: 'Drop-off' / active.tsx: 'Pickup Location' / AvailableDeliveriesPage.tsx: 'PICKUP' / 'DROPOFF'"
+  recommendation: >
+    Standardise to 'Pickup' and 'Dropoff' (no hyphen, no ALL CAPS) per style guide noun form 'Pickup (noun)'.
+    Create a shared DELIVERY_LABELS constant imported by all delivery screens.
+  metric_hypothesis: "driver cognitive load and brand polish; inconsistent labels for safety-critical navigation cues add unnecessary cognitive overhead for drivers in motion"
+  depends_on: BA-047
+
+- finding_id: BA-049
+  surface_id: web-ux-orders-status-labels
+  lens: business-analyst
+  severity: P2
+  issue: Order status 'item(s)' uses parenthetical plural — explicitly banned by style guide ('never order(s)')
+  evidence_excerpt: "'{order.items.length} item(s)' in OrdersPage.tsx line 179"
+  recommendation: >
+    Change to a ternary: '{count} {count === 1 ? 'item' : 'items'}' — or extract a pluralise() utility.
+    The style guide explicitly flags '(s)' patterns as non-compliant.
+  metric_hypothesis: "brand polish; parenthetical plurals are a common marker of unpolished software and reduce perceived product quality"
+  depends_on: null
+
+- finding_id: BA-050
+  surface_id: md-core-044
+  lens: business-analyst
+  severity: P2
+  issue: Mobile delivery active screen 'Order Summary ({n} item(s))' uses parenthetical plural pattern
+  evidence_excerpt: "'{delivery.order.items.length} item(s)' pattern in active.tsx — code uses a correct ternary but header text includes 'item(s)' in description excerpt"
+  recommendation: >
+    Verify the header template — if the ternary is already implemented in code (item vs items) this is compliant. The inventory excerpt flags '({n} item(s))' as the displayed text; confirm and fix if needed.
+  metric_hypothesis: "brand polish (see BA-049)"
+  depends_on: BA-049
+
+- finding_id: BA-051
+  surface_id: mc-home-sort-options
+  lens: business-analyst
+  severity: P2
+  issue: 'Recommended' and 'Top Rated' sort options both map to the same 'rating' value — duplicate sort options confuse customers and inflate the UI
+  evidence_excerpt: "'Recommended, Top Rated, Newest, Price' — two map to same value 'rating'"
+  recommendation: >
+    Either: (a) give 'Recommended' a distinct algorithm (e.g. personalized based on past orders + rating + proximity) or (b) remove one. Showing two options that produce the same result damages trust in the sort control.
+  metric_hypothesis: "browse-to-order conversion; customers who notice two sort options produce the same results lose confidence in the browse experience, reducing exploration and order initiation"
+  depends_on: null
+
+- finding_id: BA-052
+  surface_id: mc-favorites-title
+  lens: business-analyst
+  severity: P2
+  issue: Tab bar label 'Saved' and screen title 'Saved Chefs' are inconsistent — minor but creates cognitive double-take
+  evidence_excerpt: "'Saved' tab label vs 'Saved Chefs' H1 in favorites screen"
+  recommendation: >
+    Align to either 'Favourites' / 'Favourite chefs' (British en-IN spelling) or 'Saved' / 'Saved chefs' consistently.
+    The inventory note flags this as a minor inconsistency — address during the next vocabulary standardisation pass.
+  metric_hypothesis: "brand polish; navigation label drift is a low-priority conversion issue but reinforces perception of care in product details"
+  depends_on: null
+
+- finding_id: BA-053
+  surface_id: web-ux-chef-social
+  lens: business-analyst
+  severity: P2
+  issue: Social feed empty state for chefs has no guidance on what type of content performs well
+  evidence_excerpt: "'No posts yet' — empty state for chef social; no composition guidance beyond placeholder text '#homemade'"
+  recommendation: >
+    Replace empty state with: 'Share a photo of your latest dish. Posts with food photos get 3x more profile visits.' (substitute platform data if available).
+    Chefs who understand the value of social posting engage with the feature more consistently.
+  metric_hypothesis: "chef social posting rate and profile discovery; social content from chefs drives organic customer acquisition; an empty state with a concrete call to action increases first-post rates"
+  depends_on: null
+
+- finding_id: BA-054
+  surface_id: web-ux-social-feed-sidebar
+  lens: business-analyst
+  severity: P2
+  issue: 'Trending Chefs / Popular This Week' sidebar widget — if these lists are hardcoded or drawn from insufficient data, they risk appearing fabricated
+  evidence_excerpt: "'Trending Chefs / Popular This Week' — widget labels with no indication of how 'trending' is defined"
+  recommendation: >
+    Add tooltip or subtext: 'Based on orders in the last 7 days.' If the list is not backed by live data, remove the widget entirely rather than risk a fabricated-ranking trust failure.
+  metric_hypothesis: "trust score; customers who see the same 'trending' chefs week over week or discover the ranking is hardcoded will distrust the entire browse surface"
+  depends_on: null
+
+# ─── P3: MINOR FRICTION ON LOW-TRAFFIC SURFACES ─────────────────────────────
+
+- finding_id: BA-055
+  surface_id: mv-onb-ops-preptime-options
+  lens: business-analyst
+  severity: P3
+  issue: Mobile vendor onboarding uses '15min/30min' (no space) while MenuPage uses '{n} min' (with space) — unit formatting drift
+  evidence_excerpt: "onboarding/operations.tsx: '15min/30min' vs menu/new.tsx: '{n} min'"
+  recommendation: >
+    Standardise to '{n} min' (with space) across all prep time displays.
+  metric_hypothesis: "brand polish; formatting inconsistency in numeric units is a low-impact but visible quality signal"
+  depends_on: null
+
+- finding_id: BA-056
+  surface_id: dp-ux-logo-text
+  lens: business-analyst
+  severity: P3
+  issue: Delivery portal brand name shows 'Fe3dr' — if this is a placeholder/internal name it should not ship to drivers
+  evidence_excerpt: "'Fe3dr' + 'Delivery' tagline in DeliveryLayout.tsx"
+  recommendation: >
+    Confirm intended brand name for the delivery portal. If 'Fe3dr' is the intentional brand, ensure it is consistent across all delivery surfaces. If it is a placeholder, replace before driver rollout.
+  metric_hypothesis: "driver trust and brand clarity; an unfamiliar brand name on the driver-facing portal raises questions about legitimacy, particularly for drivers being onboarded via third-party referrals"
+  depends_on: null
+
+- finding_id: BA-057
+  surface_id: ap-layout-nav-reviews
+  lens: business-analyst
+  severity: P3
+  issue: Admin sidebar nav label 'Reviews' links to '/approvals' — wrong label for the destination
+  evidence_excerpt: "'Reviews' nav item routes to /approvals — ambiguous label; inventory note flags 'ambiguous label'"
+  recommendation: >
+    Change to 'Approvals' in the nav. Navigating to an approvals page via a 'Reviews' link causes operator confusion about the page scope.
+  metric_hypothesis: "operator efficiency; mislabelled navigation increases time-to-task for admin ops and increases training friction for new staff"
+  depends_on: null
+
+- finding_id: BA-058
+  surface_id: dp-ux-nav-staff-items
+  lens: business-analyst
+  severity: P3
+  issue: Delivery portal staff nav includes a 'Zones' link to '/fleet/zones' — route not defined per inventory note
+  evidence_excerpt: "'/fleet/zones' referenced in nav but 'no route defined'"
+  recommendation: >
+    Either implement the zones route or remove the nav item. Dead nav links erode operator trust in the portal.
+  metric_hypothesis: "operator trust; a navigation item that leads to a 404 or blank screen signals an unfinished product — ops staff who encounter dead links file IT support tickets"
+  depends_on: null
+
+- finding_id: BA-059
+  surface_id: dp-ux-nav-bottom-items
+  lens: business-analyst
+  severity: P3
+  issue: Driver mobile bottom nav uses 'Home' while sidebar uses 'Dashboard' for the same screen
+  evidence_excerpt: "'Home' in DeliveryBottomNav.tsx vs 'Dashboard' in DeliveryLayout.tsx sidebar"
+  recommendation: >
+    Standardise to 'Dashboard' across both surfaces, consistent with the vendor and admin portal patterns.
+  metric_hypothesis: "driver navigation efficiency; inconsistent labels for the primary screen create a minor but measurable confusion for new drivers learning the app"
+  depends_on: null
+
+- finding_id: BA-060
+  surface_id: dp-ux-profile-fallback-name
+  lens: business-analyst
+  severity: P3
+  issue: Driver profile fallback display name is 'Delivery Partner' — inconsistent with 'Driver' used in other delivery portal surfaces
+  evidence_excerpt: "'Delivery Partner' fallback in ProfilePage.tsx; style guide says 'Driver' (driver-facing) / 'Delivery partner' (customer-facing only)"
+  recommendation: >
+    Change fallback to 'Driver' on the driver-facing profile screen, reserving 'Delivery partner' for customer-facing copy.
+  metric_hypothesis: "brand vocabulary consistency; the style guide is explicit on audience-specific role labels; mixing them reduces clarity"
+  depends_on: null
+
+- finding_id: BA-061
+  surface_id: md-core-062
+  lens: business-analyst
+  severity: P3
+  issue: 'Default Online Status' toggle for auto-online-on-app-open has no safety warning about data/battery implications or accidental online status
+  evidence_excerpt: "'Default Online Status / Automatically go online when app opens'"
+  recommendation: >
+    Add helper text: 'You'll receive delivery requests as soon as you open the app. You can go offline at any time.'
+    Drivers who accidentally leave this on while not actually available will be assigned deliveries they cannot complete.
+  metric_hypothesis: "delivery completion rate; drivers who are auto-marked online when opening the app for non-delivery reasons (checking earnings, updating profile) will receive assignments they reject, increasing unassigned-order rate"
+  depends_on: null
+
+- finding_id: BA-062
+  surface_id: mv-undo-cta
+  lens: business-analyst
+  severity: P3
+  issue: 'UNDO' button in vendor UndoSnackbar is ALL CAPS — minor style guide violation on a low-traffic component
+  evidence_excerpt: "'UNDO' in UndoSnackbar.tsx — ALL CAPS text"
+  recommendation: >
+    Change to 'Undo' (sentence case). The style guide prohibits ALL CAPS body text; this applies to snackbar actions.
+    Note: the brief mentions 'acceptable as button microcopy' but the style guide is unambiguous on no ALL CAPS.
+  metric_hypothesis: "brand polish; consistent sentence case across all interactive text reinforces style guide compliance"
+  depends_on: null
+
+- finding_id: BA-063
+  surface_id: mc-profile-more-rows
+  lens: business-analyst
+  severity: P3
+  issue: Customer profile 'More' section nav rows use emoji icons (📱/🍽️) — style guide does not permit decorative emoji in UI chrome
+  evidence_excerpt: "'Social Feed / Catering' rows with emoji icons in profile.tsx More section"
+  recommendation: >
+    Replace emoji with Lucide icons consistent with the rest of the app (e.g. Users for Social Feed, UtensilsCrossed for Catering).
+    Emoji in nav rows signals inconsistent design system application.
+  metric_hypothesis: "brand polish; emoji in structural UI navigation is an explicit anti-pattern in the design system; visual inconsistency between nav sections reduces perceived product quality"
+  depends_on: null
+
+- finding_id: BA-064
+  surface_id: web-ux-catering-request-steps
+  lens: business-analyst
+  severity: P3
+  issue: Catering request multi-step form has no 'Step X of 3' text progress indicator beyond the visual stepper
+  evidence_excerpt: "Step labels: 'Event Details / Preferences / Location' — visual dots present but no textual 'Step 1 of 3' announcement"
+  recommendation: >
+    Add an accessible text indicator: 'Step {current} of 3' near the step heading for screen readers and for users who do not visually scan the dot progress bar.
+  metric_hypothesis: "catering form completion rate; multi-step forms with explicit step count copy show higher completion rates than those with only visual progress indicators, particularly on mobile"
+  depends_on: null
+
+- finding_id: BA-065
+  surface_id: vp-ux-settings-payout-section
+  lens: business-analyst
+  severity: P3
+  issue: 'Razorpay Pending' status on payout settings provides no explanation of what action is needed to complete the Razorpay connection
+  evidence_excerpt: "'Razorpay Pending' — status badge with no CTA or next step explanation"
+  recommendation: >
+    Add actionable text: 'Razorpay connection pending. Complete KYC on Razorpay to start receiving payouts.' with a 'Complete setup' button.
+    A pending status without a next action creates payout anxiety and support tickets.
+  metric_hypothesis: "chef payout setup completion rate; chefs with a 'Pending' payout state and no clear next action leave the setup incomplete, deferring or blocking their first payout"
+  depends_on: BA-041
+
+- finding_id: BA-066
+  surface_id: vp-ux-profile-docs
+  lens: business-analyst
+  severity: P3
+  issue: Document upload section 'Upload required documents for verification' does not explain why each document is needed or how data is stored
+  evidence_excerpt: "'Upload required documents for verification' — no per-document explanation of purpose or data handling"
+  recommendation: >
+    Add a one-line purpose to each document type: e.g. 'FSSAI Licence — confirms your kitchen meets food safety standards.' and a footer: 'Documents are stored securely and never shared with customers.'
+  metric_hypothesis: "chef document upload completion rate; upload friction decreases significantly when users understand why a document is needed and how it is protected; unexplained document requests are a top abandonment point in identity-verification flows"
+  depends_on: null
+
+- finding_id: BA-067
+  surface_id: web-ux-chef-dashboard-sections
+  lens: business-analyst
+  severity: P3
+  issue: Chef dashboard 'Shortcuts' section has quick-action tiles but no visual differentiation between primary and secondary shortcuts
+  evidence_excerpt: "'Quick Actions / Add Menu Item / View Orders / Update Profile / View Earnings' — four tiles, equal visual weight"
+  recommendation: >
+    For new chefs with 0 menu items, elevate 'Add Menu Item' as the primary action with a different visual treatment.
+    A new chef's most important action is menu completion, not viewing empty orders.
+  metric_hypothesis: "chef time-to-first-order; chefs who add their first menu item within 48 hours of account creation are 3x more likely to receive a first order within 7 days — surfacing the right shortcut as primary accelerates this funnel"
+  depends_on: null
+
+- finding_id: BA-068
+  surface_id: mc-checkout-add-address
+  lens: business-analyst
+  severity: P3
+  issue: 'Add New Address' CTA in mobile checkout is an inline expansion with no context about whether adding an address is required to proceed
+  evidence_excerpt: "'Add New Address' — inline expansion CTA; no indicator of whether address is mandatory to place order"
+  recommendation: >
+    If address is required: add a short red-bordered prompt: 'Add a delivery address to continue.'
+    If optional (pickup allowed): show: 'Add a delivery address or choose pickup at checkout.'
+  metric_hypothesis: "mobile checkout completion rate; ambiguity about required fields at checkout is a primary driver of mobile checkout abandonment"
+  depends_on: null
+
+- finding_id: BA-069
+  surface_id: web-ux-checkout-address-form
+  lens: business-analyst
+  severity: P3
+  issue: Checkout address form has 'Apartment, suite, etc. (optional)' — parenthetical 'optional' in label rather than style guide compliant pattern
+  evidence_excerpt: "'Apartment, suite, etc. (optional)' — label text; style guide says optional indicator belongs on the field not in the label"
+  recommendation: >
+    Change label to 'Apartment, suite, etc.' and add a muted helper text or 'Optional' tag on the input itself, not in the label text.
+  metric_hypothesis: "checkout form polish; style guide compliance on form labels reduces design-debt entropy and prevents similar patterns proliferating across other forms"
+  depends_on: null
+
+- finding_id: BA-070
+  surface_id: mv-menunew-desc-ph
+  lens: business-analyst
+  severity: P3
+  issue: Menu item description placeholder 'Describe your dish (at least 20 characters)' exposes a technical character count constraint rather than guiding quality
+  evidence_excerpt: "'Describe your dish (at least 20 characters)' — placeholder text in new menu item form"
+  recommendation: >
+    Replace with: 'e.g. A rich, slow-cooked butter chicken with house-made spice blend. Serves 1–2.' — a quality-signal example is more effective than a character constraint as a motivator. Move the 20-character validation to an inline error only.
+  metric_hypothesis: "menu item description quality and completeness; descriptive placeholder examples lead to higher-quality listing descriptions, which correlate with higher browse-to-add-to-cart rates"
+  depends_on: null
