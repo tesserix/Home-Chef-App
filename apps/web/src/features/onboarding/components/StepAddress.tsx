@@ -58,31 +58,38 @@ export function StepAddress() {
 
       <div className="space-y-4">
         {/* Address Label */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Address type</label>
+        <div role="radiogroup" aria-labelledby="onboarding-address-type-label">
+          <span id="onboarding-address-type-label" className="mb-1.5 block text-sm font-medium text-foreground">Address type</span>
           <div className="flex gap-2">
-            {ADDRESS_LABELS.map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => updateData({ addressLabel: label })}
-                className={cn(
-                  'rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all',
-                  data.addressLabel === label
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border hover:border-primary/30'
-                )}
-              >
-                {label}
-              </button>
-            ))}
+            {ADDRESS_LABELS.map((label) => {
+              const isSelected = data.addressLabel === label;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => updateData({ addressLabel: label })}
+                  className={cn(
+                    'rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                    isSelected
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border hover:border-primary/30'
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Country */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Country</label>
+          <label htmlFor="onboarding-address-country" className="mb-1.5 block text-sm font-medium text-foreground">Country</label>
           <select
+            id="onboarding-address-country"
+            autoComplete="country"
             value={data.addressCountry}
             onChange={(e) => {
               updateData({ addressCountry: e.target.value, addressState: '', addressCity: '', addressPostalCode: '' });
@@ -98,8 +105,10 @@ export function StepAddress() {
 
         {/* State */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">State</label>
+          <label htmlFor="onboarding-address-state" className="mb-1.5 block text-sm font-medium text-foreground">State</label>
           <select
+            id="onboarding-address-state"
+            autoComplete="address-level1"
             value={data.addressState}
             onChange={(e) => {
               updateData({ addressState: e.target.value, addressCity: '', addressPostalCode: '' });
@@ -116,8 +125,10 @@ export function StepAddress() {
 
         {/* City */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">City</label>
+          <label htmlFor="onboarding-address-city" className="mb-1.5 block text-sm font-medium text-foreground">City</label>
           <select
+            id="onboarding-address-city"
+            autoComplete="address-level2"
             value={data.addressCity}
             onChange={(e) => {
               updateData({ addressCity: e.target.value, addressPostalCode: '' });

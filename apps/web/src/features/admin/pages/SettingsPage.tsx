@@ -80,29 +80,34 @@ export default function AdminSettingsPage() {
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-platform-fee" className="block text-sm font-medium text-ink-muted">
               Platform Fee (%)
             </label>
             <div className="relative mt-1">
               <input
+                id="admin-platform-fee"
                 type="number"
+                inputMode="decimal"
+                aria-describedby="admin-platform-fee-help"
                 value={settings.platformFee}
                 onChange={(e) => setSettings({ ...settings, platformFee: Number(e.target.value) })}
                 className="w-full rounded-lg bg-ink-soft border-ink-soft text-paper pr-8"
               />
-              <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
+              <Percent aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
             </div>
-            <p className="mt-1 text-xs text-ink-muted">Fee charged on each order</p>
+            <p id="admin-platform-fee-help" className="mt-1 text-xs text-ink-muted">Fee charged on each order</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-delivery-fee-base" className="block text-sm font-medium text-ink-muted">
               Base Delivery Fee ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
+              <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
+                id="admin-delivery-fee-base"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 value={settings.deliveryFeeBase}
                 onChange={(e) =>
@@ -114,13 +119,15 @@ export default function AdminSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-delivery-fee-per-km" className="block text-sm font-medium text-ink-muted">
               Delivery Fee per km ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
+              <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
+                id="admin-delivery-fee-per-km"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 value={settings.deliveryFeePerKm}
                 onChange={(e) =>
@@ -132,13 +139,15 @@ export default function AdminSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-minimum-order-default" className="block text-sm font-medium text-ink-muted">
               Default Minimum Order ($)
             </label>
             <div className="relative mt-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
+              <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">$</span>
               <input
+                id="admin-minimum-order-default"
                 type="number"
+                inputMode="decimal"
                 value={settings.minimumOrderDefault}
                 onChange={(e) =>
                   setSettings({ ...settings, minimumOrderDefault: Number(e.target.value) })
@@ -159,11 +168,13 @@ export default function AdminSettingsPage() {
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-max-delivery-radius" className="block text-sm font-medium text-ink-muted">
               Max Delivery Radius (km)
             </label>
             <input
+              id="admin-max-delivery-radius"
               type="number"
+              inputMode="numeric"
               value={settings.maxDeliveryRadius}
               onChange={(e) =>
                 setSettings({ ...settings, maxDeliveryRadius: Number(e.target.value) })
@@ -173,35 +184,41 @@ export default function AdminSettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-cancellation-window" className="block text-sm font-medium text-ink-muted">
               Cancellation Window (minutes)
             </label>
             <input
+              id="admin-cancellation-window"
               type="number"
+              inputMode="numeric"
+              aria-describedby="admin-cancellation-window-help"
               value={settings.orderCancellationWindow}
               onChange={(e) =>
                 setSettings({ ...settings, orderCancellationWindow: Number(e.target.value) })
               }
               className="mt-1 w-full rounded-lg bg-ink-soft border-ink-soft text-paper"
             />
-            <p className="mt-1 text-xs text-ink-muted">
+            <p id="admin-cancellation-window-help" className="mt-1 text-xs text-ink-muted">
               Time window for customers to cancel without penalty
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-muted">
+            <label htmlFor="admin-auto-accept-timeout" className="block text-sm font-medium text-ink-muted">
               Auto-Accept Timeout (minutes)
             </label>
             <input
+              id="admin-auto-accept-timeout"
               type="number"
+              inputMode="numeric"
+              aria-describedby="admin-auto-accept-timeout-help"
               value={settings.autoAcceptTimeout}
               onChange={(e) =>
                 setSettings({ ...settings, autoAcceptTimeout: Number(e.target.value) })
               }
               className="mt-1 w-full rounded-lg bg-ink-soft border-ink-soft text-paper"
             />
-            <p className="mt-1 text-xs text-ink-muted">
+            <p id="admin-auto-accept-timeout-help" className="mt-1 text-xs text-ink-muted">
               Time before order auto-cancels if not accepted
             </p>
           </div>

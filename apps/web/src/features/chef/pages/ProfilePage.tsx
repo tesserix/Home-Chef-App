@@ -181,10 +181,10 @@ export default function ChefProfilePage() {
 
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             {/* Profile Picture */}
-            <div>
-              <label className="block text-sm font-medium text-ink-soft mb-2">
+            <div role="group" aria-labelledby="chef-profile-picture-label">
+              <span id="chef-profile-picture-label" className="block text-sm font-medium text-ink-soft mb-2">
                 Profile Picture
-              </label>
+              </span>
               <div className="relative inline-block">
                 <div className="h-32 w-32 rounded-xl bg-mist overflow-hidden">
                   {profile?.profileImage ? (
@@ -214,10 +214,10 @@ export default function ChefProfilePage() {
             </div>
 
             {/* Banner Image */}
-            <div>
-              <label className="block text-sm font-medium text-ink-soft mb-2">
+            <div role="group" aria-labelledby="chef-banner-image-label">
+              <span id="chef-banner-image-label" className="block text-sm font-medium text-ink-soft mb-2">
                 Banner Image
-              </label>
+              </span>
               <div className="relative">
                 <div className="h-32 w-full rounded-xl bg-mist overflow-hidden">
                   {profile?.bannerImage ? (

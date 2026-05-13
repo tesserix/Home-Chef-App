@@ -862,8 +862,13 @@ function AddressesTab() {
 
             {/* City dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-soft">City *</label>
+              <label htmlFor="address-city" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                City <span aria-hidden="true" className="text-ink-muted">*</span>
+              </label>
               <select
+                id="address-city"
+                autoComplete="address-level2"
+                aria-required="true"
                 value={formData.city}
                 onChange={(e) => updateField('city', e.target.value)}
                 disabled={cities.length === 0}

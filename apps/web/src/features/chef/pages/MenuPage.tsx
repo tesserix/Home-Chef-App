@@ -423,10 +423,10 @@ function MenuItemForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Image Upload */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-ink-soft">
+        <span id="menu-item-photo-label" className="mb-2 block text-sm font-medium text-ink-soft">
           Photo
-        </label>
-        <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-mist-strong p-8 hover:border-herb transition-colors cursor-pointer">
+        </span>
+        <div role="group" aria-labelledby="menu-item-photo-label" className="flex items-center justify-center rounded-xl border-2 border-dashed border-mist-strong p-8 hover:border-herb transition-colors cursor-pointer">
           <div className="text-center">
             <Upload className="mx-auto h-8 w-8 text-ink-muted"  aria-hidden="true" />
             <p className="mt-2 text-sm text-ink-soft">
@@ -448,8 +448,9 @@ function MenuItemForm({
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-ink-soft">Description</label>
+          <label htmlFor="menu-item-description" className="mb-1.5 block text-sm font-medium text-ink-soft">Description</label>
           <textarea
+            id="menu-item-description"
             {...register('description')}
             rows={3}
             className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/20 transition-all"
@@ -474,8 +475,9 @@ function MenuItemForm({
         />
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-ink-soft">Category</label>
+          <label htmlFor="menu-item-category" className="mb-1.5 block text-sm font-medium text-ink-soft">Category</label>
           <select
+            id="menu-item-category"
             {...register('categoryId')}
             className="w-full rounded-xl border border-mist-strong px-4 py-3 text-ink focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/20 transition-all"
           >
@@ -509,38 +511,46 @@ function MenuItemForm({
       </div>
 
       {/* Dietary Tags */}
-      <div>
-        <label className="mb-2 block text-sm font-medium text-ink-soft">Dietary Tags</label>
+      <div role="group" aria-labelledby="menu-item-dietary-label">
+        <span id="menu-item-dietary-label" className="mb-2 block text-sm font-medium text-ink-soft">Dietary Tags</span>
         <div className="flex flex-wrap gap-2">
-          {DIETARY_TAGS.map((tag) => (
-            <Button
-              key={tag}
-              type="button"
-              variant={dietaryTags.includes(tag) ? 'success' : 'outline'}
-              size="sm"
-              onClick={() => toggleTag(tag, 'dietaryTags')}
-            >
-              {tag}
-            </Button>
-          ))}
+          {DIETARY_TAGS.map((tag) => {
+            const isPressed = dietaryTags.includes(tag);
+            return (
+              <Button
+                key={tag}
+                type="button"
+                aria-pressed={isPressed}
+                variant={isPressed ? 'success' : 'outline'}
+                size="sm"
+                onClick={() => toggleTag(tag, 'dietaryTags')}
+              >
+                {tag}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
       {/* Allergens */}
-      <div>
-        <label className="mb-2 block text-sm font-medium text-ink-soft">Contains Allergens</label>
+      <div role="group" aria-labelledby="menu-item-allergens-label">
+        <span id="menu-item-allergens-label" className="mb-2 block text-sm font-medium text-ink-soft">Contains Allergens</span>
         <div className="flex flex-wrap gap-2">
-          {ALLERGENS.map((allergen) => (
-            <Button
-              key={allergen}
-              type="button"
-              variant={allergens.includes(allergen) ? 'danger' : 'outline'}
-              size="sm"
-              onClick={() => toggleTag(allergen, 'allergens')}
-            >
-              {allergen}
-            </Button>
-          ))}
+          {ALLERGENS.map((allergen) => {
+            const isPressed = allergens.includes(allergen);
+            return (
+              <Button
+                key={allergen}
+                type="button"
+                aria-pressed={isPressed}
+                variant={isPressed ? 'danger' : 'outline'}
+                size="sm"
+                onClick={() => toggleTag(allergen, 'allergens')}
+              >
+                {allergen}
+              </Button>
+            );
+          })}
         </div>
       </div>
 

@@ -424,10 +424,10 @@ function QuoteFormModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Menu Items */}
-          <div>
-            <label className="block text-sm font-medium text-ink-soft mb-3">
+          <div role="group" aria-labelledby="catering-quote-menu-items-label">
+            <span id="catering-quote-menu-items-label" className="block text-sm font-medium text-ink-soft mb-3">
               Menu Items
-            </label>
+            </span>
             <div className="space-y-3">
               {menuItems.map((item, index) => (
                 <div key={index} className="flex gap-3 items-start">
@@ -507,10 +507,11 @@ function QuoteFormModal({
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">
+            <label htmlFor="catering-quote-notes" className="block text-sm font-medium text-ink-soft mb-2">
               Notes for Customer (Optional)
             </label>
             <textarea
+              id="catering-quote-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
@@ -521,10 +522,11 @@ function QuoteFormModal({
 
           {/* Valid Days */}
           <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">
+            <label htmlFor="catering-quote-valid-days" className="block text-sm font-medium text-ink-soft mb-2">
               Quote Valid For
             </label>
             <select
+              id="catering-quote-valid-days"
               value={validDays}
               onChange={(e) => setValidDays(Number(e.target.value))}
               className="input-base"

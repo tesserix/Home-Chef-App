@@ -295,8 +295,8 @@ function CreatePostModal({
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-4 space-y-4">
           {/* Image Upload */}
-          <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">Photos</label>
+          <div role="group" aria-labelledby="social-photos-label">
+            <span id="social-photos-label" className="block text-sm font-medium text-ink-soft mb-2">Photos</span>
             <div className="flex gap-2 flex-wrap">
               {images.map((img, i) => (
                 <div key={i} className="relative h-20 w-20">
@@ -326,22 +326,26 @@ function CreatePostModal({
 
           {/* Content */}
           <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">Caption</label>
+            <label htmlFor="social-caption" className="block text-sm font-medium text-ink-soft mb-2">Caption</label>
             <textarea
+              id="social-caption"
               {...register('content', { required: 'Caption is required' })}
               rows={4}
               placeholder="Share something about this dish..."
+              aria-required="true"
+              aria-invalid={Boolean(errors.content)}
+              aria-describedby={errors.content ? 'social-caption-error' : undefined}
               className="input-base"
             />
             {errors.content && (
-              <p className="mt-1 text-xs text-paprika">{errors.content.message}</p>
+              <p id="social-caption-error" className="mt-1 text-xs text-paprika">{errors.content.message}</p>
             )}
           </div>
 
           {/* Hashtags */}
           <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">
-              <Hash className="mr-1 inline h-4 w-4" />
+            <label htmlFor="social-hashtag-input" className="block text-sm font-medium text-ink-soft mb-2">
+              <Hash aria-hidden="true" className="mr-1 inline h-4 w-4" />
               Hashtags
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -364,6 +368,7 @@ function CreatePostModal({
             </div>
             <div className="flex gap-2">
               <input
+                id="social-hashtag-input"
                 type="text"
                 value={newHashtag}
                 onChange={(e) => setNewHashtag(e.target.value.replace(/\s/g, ''))}
@@ -379,10 +384,10 @@ function CreatePostModal({
 
           {/* Tag Menu Items */}
           <div>
-            <label className="block text-sm font-medium text-ink-soft mb-2">
+            <label htmlFor="social-tagged-menu-items" className="block text-sm font-medium text-ink-soft mb-2">
               Tag Menu Items (Optional)
             </label>
-            <select {...register('taggedMenuItems')} multiple className="input-base h-24">
+            <select id="social-tagged-menu-items" {...register('taggedMenuItems')} multiple className="input-base h-24">
               {menuItems?.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}

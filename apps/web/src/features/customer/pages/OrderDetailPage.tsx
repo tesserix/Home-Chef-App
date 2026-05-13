@@ -363,10 +363,11 @@ export default function OrderDetailPage() {
               </p>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-ink-soft">
+                <label htmlFor="order-cancel-reason" className="block text-sm font-medium text-ink-soft">
                   Reason for cancellation
                 </label>
                 <textarea
+                  id="order-cancel-reason"
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   placeholder="Please let us know why you're cancelling..."
