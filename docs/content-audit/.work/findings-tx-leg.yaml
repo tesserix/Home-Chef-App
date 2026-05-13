@@ -1,0 +1,1665 @@
+# Legal lens findings — Home Chef Content Audit — TRANSACTIONAL slice
+# Scope: India regulatory exposure (DPDP Act 2023, FSSAI, RBI Payment Aggregator, GST, TRAI/DLT) + generic best-practice
+# IMPORTANT: All findings carry depends_on: "needs lawyer review" — this audit is not legal advice.
+# Slice rows: 154 transactional inventory entries (web, vendor-portal, delivery-portal, admin-portal, mobile-customer, mobile-vendor, mobile-delivery, api).
+
+findings:
+  # ============================================================================
+  # ORDER CONFIRMATION EMAILS — GST INVOICE REQUIREMENTS (CGST Act §31, Rule 46)
+  # ============================================================================
+
+  - finding_id: LEG-TX-001
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P0
+    issue: "Order confirmation email is missing every element of a GST tax invoice — no GSTIN, no HSN/SAC code (SAC 996331 for restaurant/food supply), no rate-wise tax breakup, no place-of-supply, no invoice serial number, no chef's legal name/address"
+    evidence_excerpt: "\"Order Confirmed! Your order #%s has been placed successfully. Your home chef is preparing your meal!\" — total formatted %.2f with no tax breakdown"
+    recommendation: "Where the platform or chef is registered under GST, the order confirmation acts as the tax invoice and must contain every Rule 46 particular. Where the chef is a composition or unregistered supplier, the email must clearly state 'Bill of Supply — no GST charged' and the platform (as e-commerce operator under §52) may still owe TCS disclosures. Split the email template to support: (a) registered-chef invoice, (b) composition/unregistered bill of supply, (c) platform-issued service-fee invoice."
+    citation: "CGST Act 2017 §31; CGST Rule 46; §52 (TCS by e-commerce operator); SAC 996331"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-002
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P0
+    issue: "Currency rendered as raw ₹%.2f with no rounding rule or breakup; no indication of whether price is 'tax inclusive' or 'tax extra'"
+    evidence_excerpt: "Currency hardcoded ₹. Total formatted %.2f."
+    recommendation: "CGST Rule 46 requires the invoice to disclose taxable value, applicable rate, and tax amount separately. Even on a B2C food order, the customer email should show Subtotal / GST 5% (or 18% if applicable) / Total. Also state 'inclusive of GST' or 'exclusive of GST' on every price line to satisfy the Legal Metrology (Packaged Commodities) and Consumer Protection (E-Commerce) Rules 2020 Rule 6 disclosure duties."
+    citation: "CGST Rule 46; Consumer Protection (E-Commerce) Rules 2020 Rule 6(5); Legal Metrology Act 2009"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-003
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P0
+    issue: "Order confirmation email does not display chef's FSSAI licence number — FSSAI mandates display of the FSSAI licence/registration number on all e-commerce food order communications"
+    evidence_excerpt: "MISSING: tax/GST line, chef name, delivery address, ETA, refund/cancellation policy, allergen disclaimer"
+    recommendation: "FSSAI Direction dated 8 Feb 2021 (E-Commerce FBO Guidelines) requires the FSSAI licence number of the food business operator to be displayed on bills/receipts/invoices and on the e-commerce platform. Embed the chef's FSSAI number in every order confirmation and order-status email, plus the platform's own FSSAI registration as an e-commerce FBO."
+    citation: "FSSAI Direction F. No. 15(31)2020/FoSCoRIS/RCD/FSSAI dated 8 Feb 2021; Food Safety and Standards (Licensing and Registration of Food Businesses) Regulations 2011"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-004
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P0
+    issue: "No allergen disclosure or 'check label before consuming' callout on the order confirmation — for prepared food sold via e-commerce FBOs, FSSAI requires allergen information to be communicated with the food/order"
+    evidence_excerpt: "MISSING: ...allergen disclaimer"
+    recommendation: "Append a per-item allergen line (or a standardised allergen footer linking to dish-level disclosure) and a 'If you have allergies, contact the chef before consuming' notice. Track which of the 8 statutorily-recognised allergens (FSSAI Labelling Regulation 2.2.2.4) each item contains."
+    citation: "FSS (Labelling and Display) Regulations 2020 Reg. 5(1)(d); FSSAI E-Commerce Direction 2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-005
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P0
+    issue: "No refund/cancellation policy summary on the order confirmation — RBI Payment Aggregator Master Direction and Consumer Protection (E-Commerce) Rules require refund timeline disclosure at the transaction touchpoint"
+    evidence_excerpt: "MISSING: ...refund/cancellation policy"
+    recommendation: "Add a one-line summary at the bottom of the order confirmation: 'Cancellations before the chef accepts: full refund within 7 working days. After acceptance: see Cancellation Policy.' Link to the full policy. RBI PA framework expects refund timelines stated up-front; CPER 2020 Rule 5(3)(g) requires the e-commerce entity to display its return/refund policy."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 (updated 2024); Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-006
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P1
+    issue: "Order confirmation does not include the delivery address or estimated time — increases dispute exposure when delivery is contested and weakens the audit trail required by CPER 2020"
+    evidence_excerpt: "MISSING: ...delivery address, ETA"
+    recommendation: "Echo the delivery address and the committed delivery/pickup window into the order confirmation. CPER 2020 Rule 5(3)(h) requires display of an effective grievance redressal mechanism and shipment/delivery details; without the captured address, disputes about misdelivery default against the platform."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(h)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-007
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P1
+    issue: "No grievance-officer contact (name, email, phone, address) in the transactional email footer"
+    evidence_excerpt: "MISSING — no footer disclosure observed in template"
+    recommendation: "Add a footer block with the grievance officer's name, email, and phone, and the platform's registered address. Required by Consumer Protection (E-Commerce) Rules 2020 Rule 4(5) (grievance officer display) and IT Rules 2021 Rule 3(2). DPDP Act §10 will also require Data Protection Officer contact once the Act fully operationalises."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); IT (Intermediary Guidelines) Rules 2021 Rule 3(2); DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-008
+    surface_id: api-email-order-confirm
+    lens: legal
+    severity: P1
+    issue: "Email does not state the seller of record (chef name) — under CPER 2020 a marketplace must clearly disclose seller details to the buyer"
+    evidence_excerpt: "MISSING: ...chef name"
+    recommendation: "Inject the chef's legal/display name and registered business address into the confirmation. CPER 2020 Rule 6(5) requires the marketplace to display 'details about the sellers offering goods and services, including the name of their business, geographic address, customer care contact and a ticket number for grievance redressal'."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 6(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ORDER STATUS EMAILS — CONSISTENCY + FSSAI/RBI CARRY-THROUGH
+  # ============================================================================
+
+  - finding_id: LEG-TX-009
+    surface_id: api-email-order-status-cancelled
+    lens: legal
+    severity: P0
+    issue: "Cancellation email omits refund timeline, refund channel, and grievance pathway — RBI PA rules require explicit refund timeline communicated to the customer at cancellation"
+    evidence_excerpt: "Subject: \"Order #%s — Your order has been cancelled\" — NO refund timeline, NO who-to-contact line"
+    recommendation: "Cancellation emails MUST state: (a) whether a refund is initiated, (b) the refund timeline (RBI PA framework expects refunds processed within agreed timelines, typically T+7 working days for digital refunds), (c) the refund channel (original payment method), (d) a grievance contact if the refund does not arrive."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §8; Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-010
+    surface_id: api-push-order-cancelled-both
+    lens: legal
+    severity: P1
+    issue: "Cancellation push notification body 'Order has been cancelled' is identical for customer and chef and sets no refund expectation"
+    evidence_excerpt: "Title: \"Order Cancelled\" — Body: \"Order has been cancelled\". Same body sent to BOTH customer and chef. No refund expectation set."
+    recommendation: "Differentiate customer push ('Order cancelled. Refund initiated — typically T+7 days.') from chef push ('Order cancelled by customer.'). Single shared body violates CPER 2020 disclosure duty toward the customer specifically."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g); RBI Payment Aggregator Master Direction"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-011
+    surface_id: api-inapp-order-cancelled-both
+    lens: legal
+    severity: P1
+    issue: "In-app cancellation notification has same generic body as push and omits refund/grievance info"
+    evidence_excerpt: "Title: \"Order Cancelled\" — Message: \"Order has been cancelled\""
+    recommendation: "In-app cancellation notification must include the refund status and link to grievance contact (Consumer Protection (E-Commerce) Rules 2020 Rule 4(5))."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-012
+    surface_id: api-email-order-status-confirmed
+    lens: legal
+    severity: P1
+    issue: "Status emails (confirmed/preparing/ready/picked up/on way/delivered) use one templated wrapper with no FSSAI/grievance footer or invoice link back to the order"
+    evidence_excerpt: "OrderStatusUpdateHTML — generic emoji-prefixed bodies"
+    recommendation: "Every transactional status email should retain the grievance-officer footer (CPER 2020 Rule 4(5)), an unsubscribe-not-applicable-for-transactional notice (TRAI TCCCPR distinction), and a link to the underlying order/invoice. Currently the wrapper omits these. Also re-confirm the email is correctly classified as 'service/transactional' for DLT purposes if forwarded via SMS."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); TRAI TCCCPR 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-013
+    surface_id: api-email-order-status-delivered
+    lens: legal
+    severity: P1
+    issue: "Delivery confirmation email does not prompt rating/complaint pathway or restate the 7-day refund/dispute window — material for FSSAI food-safety complaint window and consumer-redress timelines"
+    evidence_excerpt: "Subject: \"Order #%s — Your order has been delivered. Enjoy your meal!\""
+    recommendation: "Add a 'Something wrong with your order? Report it within 24 hours' line that opens a complaints flow. Required to operationalise CPER 2020 Rule 4(5) grievance access and FSSAI food-safety reporting (Food Safety Connect 1800-112-100)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); FSSAI Food Safety Connect"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-014
+    surface_id: api-push-order-update-customer-deeplink
+    lens: legal
+    severity: P2
+    issue: "Push and email statuses use three different sets of wording for the same lifecycle event ('Your order is being prepared' vs 'Your chef is preparing your meal' vs 'Your order is now being prepared') — inconsistency between channels can be used by counterparties to contest the status timeline"
+    evidence_excerpt: "THIRD set of status labels in the codebase, distinct from email's statusLabels map and from getOrderStatusMessage"
+    recommendation: "Unify status copy in a single source of truth. From a contract-evidence standpoint, mismatched wording between push/email/in-app can be cited as ambiguity in a dispute; consistent strings strengthen the platform's defence on order timeline."
+    citation: "Indian Contract Act 1872 §29 (certainty of terms); evidentiary best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # PUSH/SMS — TRAI TCCCPR + DLT REGISTRATION
+  # ============================================================================
+
+  - finding_id: LEG-TX-015
+    surface_id: api-push-order-created-chef
+    lens: legal
+    severity: P1
+    issue: "Push notifications are not tagged with their TCCCPR classification (transactional / service / promotional) in the codebase; risk of misclassifying promotional content as transactional"
+    evidence_excerpt: "Title: \"New Order Received\" — Body: \"You have a new order waiting to be prepared!\""
+    recommendation: "Annotate every push template with its TCCCPR header category. While push notifications themselves are not directly covered by TRAI TCCCPR (which targets SMS/voice), any fallback to SMS through DLT must use a registered template under the correct header category. Mis-categorisation (e.g. sending a promo as transactional) risks DLT scrubbing and operator fines."
+    citation: "TRAI Telecom Commercial Communications Customer Preference Regulations 2018; DLT framework"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-016
+    surface_id: api-push-user-welcome
+    lens: legal
+    severity: P0
+    issue: "Welcome push ('Welcome to HomeChef!') and welcome email ('Welcome to Fe3dr!') are sent without an explicit consent record for marketing-style messaging — DPDP Act §6 requires consent to be specific, informed, unambiguous; bundling welcome with marketing CTAs ('Discover amazing home-cooked meals near you!') needs separate opt-in"
+    evidence_excerpt: "Title: \"Welcome to HomeChef!\" — Message: \"Thank you for joining HomeChef. Discover amazing home-cooked meals near you!\""
+    recommendation: "Capture an explicit marketing-comms opt-in at signup (DPDP §6 + TCCCPR 2018 commercial-comms distinction). If the welcome message contains a marketing CTA, it is not purely transactional and must respect the user's preference. Split welcome (transactional, allowed) from any 'discover' nudges (promotional, opt-in only)."
+    citation: "DPDP Act 2023 §6(1); TRAI TCCCPR 2018"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-017
+    surface_id: api-email-welcome
+    lens: legal
+    severity: P0
+    issue: "Welcome email lacks a DPDP §5 notice of data processing — required to be served at or before consent is sought"
+    evidence_excerpt: "\"Welcome to Fe3dr, %s! We're thrilled to have you. Discover amazing home-cooked meals from talented local chefs...\""
+    recommendation: "DPDP Act §5 requires a Notice at the time of consent (signup), describing personal data being processed, purposes, the manner of withdrawal, complaint mechanism with the Board, and grievance officer. Either ship this notice during signup (preferred) or attach a summary block at the foot of the welcome email referencing the full Privacy Notice."
+    citation: "DPDP Act 2023 §5; §6(3) (withdrawal of consent)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-018
+    surface_id: api-email-welcome
+    lens: legal
+    severity: P1
+    issue: "Welcome email contains marketing copy and a 'Start Exploring' CTA but no unsubscribe/preferences link"
+    evidence_excerpt: "Lists 4 capabilities (browse, order, track, rate). CTA \"Start Exploring\" → https://fe3dr.com"
+    recommendation: "Marketing-tinged emails must include a one-click unsubscribe and a preferences link (DPDP §6(4) withdrawal of consent must be as easy as giving consent). If treated as 'purely transactional', remove the marketing CTAs."
+    citation: "DPDP Act 2023 §6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-019
+    surface_id: api-push-user-welcome
+    lens: legal
+    severity: P1
+    issue: "Brand drift between welcome push ('HomeChef') and welcome email ('Fe3dr') — exposes the platform to a 'misleading representation' claim under Consumer Protection Act 2019 §2(28)"
+    evidence_excerpt: "BRAND DRIFT: says \"HomeChef\", but email welcome says \"Welcome to Fe3dr!\". Two products to a new user"
+    recommendation: "Pick one legal trade name. Two brand names appearing to the same customer in transactional channels can be argued as 'misleading representation' under CPA 2019 §2(28); even short of that, it undermines the platform's identification under CPER 2020 Rule 4(1) (e-commerce entity must publish its legal name)."
+    citation: "Consumer Protection Act 2019 §2(28); Consumer Protection (E-Commerce) Rules 2020 Rule 4(1)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-020
+    surface_id: api-email-account-reminder
+    lens: legal
+    severity: P1
+    issue: "Account-reminder email subject mixes brand names ('Fe3dr HomeChef') — brand drift in transactional security communication"
+    evidence_excerpt: "Subject: \"You already have a Fe3dr HomeChef account\" — Brand drift: subject says \"Fe3dr HomeChef\" but other emails just say \"Fe3dr\""
+    recommendation: "Standardise sender brand. Security-relevant emails referencing a confused brand reduce phishing-resistance: users cannot distinguish legitimate platform mail from spoof. Pick the legal trade name."
+    citation: "Consumer Protection Act 2019 §2(28); IT Act 2000 §43A (reasonable security practices)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # PASSWORD RESET — SECURITY BEST-PRACTICE + DPDP §8 SECURITY SAFEGUARDS
+  # ============================================================================
+
+  - finding_id: LEG-TX-021
+    surface_id: api-email-password-reset
+    lens: legal
+    severity: P1
+    issue: "Password reset email content not visible in inventory excerpt — verify token expiry stated, link single-use, no plaintext credentials in body"
+    evidence_excerpt: "Subject: \"Reset your password — Fe3dr\" — \"...your account is secure\". 1-hour expiry stated."
+    recommendation: "Good — 1-hour expiry is stated. Verify the link is single-use (invalidated after first click), the email never contains the new password in plaintext, and the email includes a 'If this wasn't you, please contact security@...' callout. DPDP §8 imposes 'reasonable security safeguards' on Data Fiduciaries; IT Act §43A reinforces."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A; IT (Reasonable Security Practices) Rules 2011"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-022
+    surface_id: api-email-password-reset
+    lens: legal
+    severity: P2
+    issue: "Password reset email must not leak whether the account exists — verify wording does not differ between 'account exists' and 'account does not exist' paths"
+    evidence_excerpt: "API success-message-generic includes \"If the email exists, a reset link has been sent\" — implies the email path uses neutral phrasing, but verify"
+    recommendation: "Keep the API confirmation neutral (already good). Ensure the actual email is only sent if the account exists, and the API response is identical whether or not it does, to avoid account-enumeration attacks. Best-practice security control."
+    citation: "OWASP ASVS V2.2; DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-023
+    surface_id: api-email-verify
+    lens: legal
+    severity: P2
+    issue: "Email verification link 24-hour expiry is stated, but verify single-use semantics and that the link does not authenticate the user (only verifies the email)"
+    evidence_excerpt: "Subject: \"Verify your email — Fe3dr\" — \"...24-hour expiry stated. Fallback URL copy-paste block included.\""
+    recommendation: "Verify the verification link does not double as an authentication bypass. DPDP §8 reasonable-security expectations + IT Rules 2011."
+    citation: "DPDP Act 2023 §8(5); IT (Reasonable Security Practices) Rules 2011"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # STAFF INVITES — CONSENT + LIABILITY CHAIN
+  # ============================================================================
+
+  - finding_id: LEG-TX-024
+    surface_id: api-email-staff-invite
+    lens: legal
+    severity: P1
+    issue: "Staff invitation email contains 'role injected as string' — risk of admin-authored role label not matching the actual permission set; ambiguous role description creates contract-ambiguity for the invitee"
+    evidence_excerpt: "\"You've been invited! %s has invited you to join the Fe3dr team as %s...\". Role injected as string. 7-day invitation expiry stated."
+    recommendation: "Render the role from a controlled enum, not free text. Append a one-line plain-English description of the role's powers (e.g. 'as Operations Manager — can view orders and chat with chefs'). Ambiguous role grants under §10 Indian Contract Act + create downstream liability exposure when staff act under unclear authority."
+    citation: "Indian Contract Act 1872 §10 + §227 (authority of agents)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-025
+    surface_id: api-inapp-staff-invite
+    lens: legal
+    severity: P1
+    issue: "Staff invitation in-app notification title/message are admin-authored fields with no length or format validation — risk of injection of misleading content, profanity, or PII into a notification surface visible to invitees"
+    evidence_excerpt: "Title/Message are admin-authored fields — copy is admin-provided, not platform copy. Risk: no length/format validation on admin input"
+    recommendation: "Apply a length cap (≤120 chars title, ≤500 chars body), strip HTML, and run admin-authored notification fields through a profanity/PII filter before fanout. The platform is an intermediary under IT Act §79 — admin-injected content is platform-published from the recipient's view, increasing the platform's exposure if the content is defamatory or violates the IT Rules 2021 Rule 3."
+    citation: "IT Act 2000 §79; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-026
+    surface_id: ap-staff-toasts
+    lens: legal
+    severity: P3
+    issue: "'Invitation revoked' toast is silent on whether prior actions taken by the invitee remain valid — operational ambiguity"
+    evidence_excerpt: "Invitation revoked; Failed to revoke invitation; Invitation resent; ..."
+    recommendation: "Cosmetic/legal-adjacent: a follow-up flow should confirm that revoking an unaccepted invitation does NOT affect any actions taken (none, since it was unaccepted). Helpful for audit trail."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SUPPORT TICKET EMAILS — UNBRANDED, NO GRIEVANCE FOOTER
+  # ============================================================================
+
+  - finding_id: LEG-TX-027
+    surface_id: api-email-support-created
+    lens: legal
+    severity: P1
+    issue: "Support ticket created email is inline HTML with no branded wrapper, no grievance officer footer, no platform identification — leaves no audit trail of who is responsible to act on the ticket"
+    evidence_excerpt: "INLINE in email.go (not in email_templates.go) — does not use emailBase wrapper, so no branded header/footer/privacy links"
+    recommendation: "Move support-ticket emails into the branded wrapper. Required so the support communication carries the grievance-officer contact (CPER 2020 Rule 4(5)) and the platform's legal identification (CPER 2020 Rule 4(1)). Currently a ticket email looks indistinguishable from any other system mail."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rules 4(1) and 4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-028
+    surface_id: api-email-support-update
+    lens: legal
+    severity: P1
+    issue: "Support ticket update email is unbranded, no footer/privacy links — same gap as ticket-created email"
+    evidence_excerpt: "Same: inline HTML, unbranded, no footer/privacy links"
+    recommendation: "Route through emailBase wrapper. Embed grievance-officer + DPDP rights footer. CPER 2020 Rule 4(5)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CHEF VERIFICATION + ADMIN-ACTION NOTIFICATIONS — DUE PROCESS
+  # ============================================================================
+
+  - finding_id: LEG-TX-029
+    surface_id: api-email-chef-verified
+    lens: legal
+    severity: P2
+    issue: "Chef verification email differs in wording from in-app notification ('kitchen' vs 'chef profile') — contract-evidence ambiguity about what exactly is verified"
+    evidence_excerpt: "Email subject: \"Your kitchen is verified\" — in-app: \"Your chef profile has been verified\""
+    recommendation: "Pick one. From an FSSAI standpoint, 'kitchen' implies premises verification; 'chef profile' implies identity verification. They are not the same regulatory artefact. The email and in-app must describe identical scope of verification, or differentiate clearly."
+    citation: "FSSAI Licensing Regulations 2011; Consumer Protection Act 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-030
+    surface_id: api-inapp-chef-verified
+    lens: legal
+    severity: P2
+    issue: "Chef-verified in-app notification says 'You can now start accepting orders!' — confirm FSSAI licence is verified before this notification fires"
+    evidence_excerpt: "Title: \"Congratulations!\" — Message: \"Your chef profile has been verified. You can now start accepting orders!\""
+    recommendation: "The 'accept orders' nudge presupposes the chef has a valid FSSAI registration/licence. Verify the verification flow checks FSSAI document validity and licence number authenticity (not just file-uploaded). If the platform allows orders before FSSAI verification, the platform becomes a knowing intermediary for unlicensed food sale (FSS Act §31 — penalty up to ₹5 lakh)."
+    citation: "Food Safety and Standards Act 2006 §31; FSSAI E-Commerce FBO Guidelines 2017/2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-031
+    surface_id: ap-chefs-toast-rejected
+    lens: legal
+    severity: P1
+    issue: "'Chef rejected' admin toast — no record of reason, no notice to chef about appeal/re-application pathway"
+    evidence_excerpt: "Chef rejected — 2 words, no context"
+    recommendation: "Rejection of a chef application is an adverse action. Even short of statutory due-process duty, best-practice + Consumer Protection (E-Commerce) Rules 2020 Rule 6(4) (treatment of sellers fairly) require: (a) reason captured, (b) notice sent to the chef with reason + appeal pathway. The current toast only confirms the admin action."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 6(4); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-032
+    surface_id: ap-chefs-toast-suspended
+    lens: legal
+    severity: P0
+    issue: "'Chef suspended' toast confirms admin action but does not surface that the chef was notified, given a reason, or offered appeal — gig-worker / platform-worker fairness exposure"
+    evidence_excerpt: "Chef suspended — 2 words"
+    recommendation: "Suspension is the most serious adverse action available on the chef. Capture a reason code, notify the chef with: (a) reason, (b) effective date, (c) duration, (d) appeal contact, (e) financial impact (pending payouts). Without these, the suspension is challengeable under Indian Contract Act, IT Rules 2021 Rule 4 (grievance redressal), and emerging platform-worker jurisprudence (Code on Social Security 2020 ss. 2(35) + 113-114)."
+    citation: "Indian Contract Act 1872; IT (Intermediary Guidelines) Rules 2021 Rule 3-4; Code on Social Security 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-033
+    surface_id: ap-users-toast-suspended
+    lens: legal
+    severity: P1
+    issue: "'User suspended' admin toast — DPDP-relevant action (suspension affects access to personal data); needs notice + grievance pathway to the user"
+    evidence_excerpt: "User suspended — 2 words, legal-adjacent (suspension)"
+    recommendation: "User suspension restricts access to the user's own personal data; under DPDP §11 (right to access/correction) the Data Principal must be able to challenge the restriction. Send a notice to the user with reason, duration, and appeal contact. Toast alone is insufficient evidence of due process."
+    citation: "DPDP Act 2023 §11, §13 (grievance redressal); IT Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-034
+    surface_id: ap-users-toast-activated
+    lens: legal
+    severity: P3
+    issue: "'User activated' toast — no record of who activated, when, or why; reversal of suspension should be auditable"
+    evidence_excerpt: "User activated — 2 words"
+    recommendation: "Audit trail best-practice: capture reactivation reason + admin actor + timestamp. Not directly statutory but DPDP §8(6) requires Data Fiduciaries to 'maintain accuracy and completeness' of records of processing."
+    citation: "DPDP Act 2023 §8(6); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-035
+    surface_id: api-inapp-approval-rejected-chef
+    lens: legal
+    severity: P1
+    issue: "Approval rejection in-app notification appends raw admin notes verbatim — admin-authored content surfaces to chef without moderation, including potentially defamatory or PII-revealing notes"
+    evidence_excerpt: "Title: \"Request Rejected\" — Message: \"Your %s has been rejected. Notes: %s\" — Raw admin notes verbatim — potential PII / raw admin language leak"
+    recommendation: "Validate / sanitise admin notes before surfacing. The platform is liable as the publisher of these notes vis-à-vis the chef. Apply length cap, PII redaction, and an admin-side prompt 'These notes will be shown to the chef — keep professional'. IT Rules 2021 Rule 3 due-diligence obligations bite here."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3; IT Act 2000 §79 (intermediary safe harbour)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-036
+    surface_id: api-push-approval-rejected-chef
+    lens: legal
+    severity: P1
+    issue: "Approval rejection push notification carries the same raw admin notes — broadcast outside the app via OS-level notification, potentially visible on lock screen"
+    evidence_excerpt: "Body: same as in-app message — Same risk"
+    recommendation: "Push notifications surface on the OS lock screen and are stored by FCM/APNs. Raw admin notes containing names, contact info, or sharp wording therefore appear on the device's notification shade. Strip notes from the push body; deliver only 'Tap to view details'."
+    citation: "DPDP Act 2023 §4 + §6 (lawful processing); IT Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-037
+    surface_id: api-inapp-approval-info-chef
+    lens: legal
+    severity: P2
+    issue: "'More Information Needed' notification surfaces admin-authored notes verbatim — same raw-injection issue as rejection"
+    evidence_excerpt: "Message: \"Admin needs more info about your %s. Notes: %s\" — Raw slug + admin notes verbatim"
+    recommendation: "Sanitise + length-cap admin notes; replace raw type slug ('menu_item') with a translated label ('menu item')."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-038
+    surface_id: api-inapp-approval-approved-chef
+    lens: legal
+    severity: P3
+    issue: "Approval notifications surface raw enum slugs ('Your menu_item has been approved') — undermines the platform's representation that it communicates clearly with chefs/drivers"
+    evidence_excerpt: "%s placeholders: approval type (e.g. \"menu_item\"), title (e.g. \"Add Spicy Aloo\"). Raw type slug may surface to user"
+    recommendation: "Translate the slug to user-readable form before fanout. Plain-language failure under CPA 2019 §2(28) misleading-representation lens (low risk, but the platform claims to communicate in plain English)."
+    citation: "Consumer Protection Act 2019 §2(28); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-039
+    surface_id: api-inapp-chef-responded
+    lens: legal
+    severity: P1
+    issue: "Chef-authored response message is surfaced to ALL admins with no profanity filter, no length cap, no defamation guardrail"
+    evidence_excerpt: "Title: \"Chef Responded: \" + approval.Title — Message: req.Response (chef-authored). Surfaces to all admins. Potential abuse vector — no profanity filter, no length cap visible"
+    recommendation: "Apply length cap (≤500 chars), strip HTML, and run through a profanity/PII filter. The platform fans the chef's words to multiple admins; if the words are defamatory, the platform's intermediary safe harbour under IT Act §79 weakens if it fails to 'observe due diligence' (IT Rules 2021 Rule 3)."
+    citation: "IT Act 2000 §79; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # DELIVERY ASSIGNMENT — INSURANCE + GIG-WORKER NOTICE
+  # ============================================================================
+
+  - finding_id: LEG-TX-040
+    surface_id: api-email-delivery-assigned
+    lens: legal
+    severity: P0
+    issue: "DeliveryAssigned email template is used for BOTH driver and customer (routing bug per inventory note) — customer would receive '🚗 New Delivery! You've been assigned order #...' which makes no sense and misrepresents who has the delivery duty"
+    evidence_excerpt: "function is called by SendDeliveryAssigned and used for driver, but services/notifications.go sends the same template via `delivery_assigned` event to the CUSTOMER — likely a routing bug"
+    recommendation: "URGENT. A customer receiving a driver-targeted message is misleading representation under CPA 2019 §2(28). Worse, it creates ambiguity in the chain of custody for the order. Fix routing so customers receive only the customer-targeted 'Your delivery partner has been assigned' template."
+    citation: "Consumer Protection Act 2019 §2(28); Consumer Protection (E-Commerce) Rules 2020 Rule 4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-041
+    surface_id: api-push-delivery-assigned-driver
+    lens: legal
+    severity: P1
+    issue: "Driver delivery-assigned push contains no insurance/liability reminder, no acceptance-deadline, no terms reference"
+    evidence_excerpt: "Title: \"New Delivery Available\" — Body: \"A delivery near you is ready for pickup\""
+    recommendation: "Drivers are gig workers under Code on Social Security 2020. Each assignment is effectively a micro-contract. The notification should reference the platform's driver agreement, the insurance status of the trip (if any), and the acceptance window. Without this, the platform's gig-worker disclosure duties under Section 113 (registration of platform workers) read thinly."
+    citation: "Code on Social Security 2020 ss. 2(35), 113-114; Motor Vehicles Act 1988 (insurance disclosures)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-042
+    surface_id: api-email-delivery-assigned
+    lens: legal
+    severity: P1
+    issue: "Driver-side delivery-assigned email contains no rate breakdown for the trip — gig-worker earnings transparency gap"
+    evidence_excerpt: "\"🚗 New Delivery! You've been assigned order #%s. Pickup location: %s\""
+    recommendation: "Show the trip fee, base + distance + surge components, and the platform deduction in the assignment notification. Code on Social Security 2020 + emerging gig-worker fairness expectations (e.g. Rajasthan Platform-Based Gig Workers (Registration and Welfare) Act 2023) push toward earnings transparency at every assignment touchpoint."
+    citation: "Code on Social Security 2020 §113-114; Rajasthan Platform-Based Gig Workers Act 2023 (state benchmark)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-043
+    surface_id: api-push-delivery-assigned-customer
+    lens: legal
+    severity: P2
+    issue: "Customer 'Delivery Partner Assigned' push does not include the driver's first name, vehicle, or contact — undermines the platform's CPER 2020 Rule 6(5) seller-details disclosure spirit, even though strictly that rule applies to sellers, not delivery partners"
+    evidence_excerpt: "Driver name NOT included in push body though available in event.Data. Missed personalization"
+    recommendation: "Display the driver's first name and vehicle number in the customer notification. Even short of regulatory requirement, this strengthens the platform's safety story, aids dispute resolution, and is consumer-trust best-practice."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(h); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-044
+    surface_id: md-trx-001
+    lens: legal
+    severity: P0
+    issue: "Background-location rationale modal title 'Background Location Needed' — IMPORTANT but the modal copy and the iOS Info.plist string DRIFT (modal is longer per inventory note)"
+    evidence_excerpt: "P0 SAFETY: pre-OS-prompt rationale modal title; explains why background location needed; longer than iOS Info.plist string (drift)"
+    recommendation: "Sync modal copy with Info.plist NSLocationAlwaysAndWhenInUseUsageDescription and Android's manifest permission rationale. Apple's Human Interface Guidelines + DPDP §5 require the purpose stated at consent to match what is actually done with the data. Mismatched strings can be cited as misrepresentation of processing purpose under DPDP §5."
+    citation: "DPDP Act 2023 §5(b) (purpose specification); Apple HIG; Google Play Location Policy"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-045
+    surface_id: md-trx-002
+    lens: legal
+    severity: P0
+    issue: "Background-location rationale body does not name the driver as Data Principal, does not state retention period, does not state the data fiduciary"
+    evidence_excerpt: "\"To keep customers updated on their delivery, HomeChef Delivery needs to track your location while you are on an active delivery — even when the app is in the background.\""
+    recommendation: "Add: (a) name of the data fiduciary, (b) retention period for location data, (c) downstream processors (e.g. Google Maps, GCS), (d) the driver's right to withdraw, with practical effect (delivery acceptance disabled). DPDP §5 + §6 require all of this at the consent moment."
+    citation: "DPDP Act 2023 §5, §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-046
+    surface_id: md-trx-003
+    lens: legal
+    severity: P1
+    issue: "Battery / privacy reassurance ('Battery usage is minimised by only tracking every 15 seconds') — operational claim that must be verifiable; if frequency changes silently, this becomes misrepresentation"
+    evidence_excerpt: "\"Location tracking stops automatically when the delivery is completed. Battery usage is minimised by only tracking every 15 seconds.\""
+    recommendation: "Bind this string to a config constant and document it in the engineering README. If the polling frequency changes for any reason, the rationale string must be updated in the same commit. Misrepresentation of processing facts is a DPDP §5 + Consumer Protection misleading-representation risk."
+    citation: "DPDP Act 2023 §5; Consumer Protection Act 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # PAYMENT / RAZORPAY / STRIPE TOASTS — RBI PA + CONSUMER PROTECTION
+  # ============================================================================
+
+  - finding_id: LEG-TX-047
+    surface_id: web-tx-checkout-payment-toasts
+    lens: legal
+    severity: P1
+    issue: "Razorpay/Stripe success/error/cancel toasts (8 strings) — none state the merchant of record, refund timeline, or grievance contact"
+    evidence_excerpt: "\"Failed to initiate payment / Payment gateway is loading / Payment successful! / Payment verification failed...\""
+    recommendation: "On payment success, the toast is a critical moment of trust — capture the order/transaction ID, the amount, and one-line refund expectation ('Refunds, if needed, take T+7 days.'). On payment verification failure, link to grievance pathway and state 'Amount, if debited, will be auto-reversed within 5-7 working days' (RBI PA framework). Current bare strings leave the customer uncertain about state and recourse."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020; Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-048
+    surface_id: web-tx-orderdetail-toasts
+    lens: legal
+    severity: P1
+    issue: "'Payment verification failed — please contact support' toast does not provide a direct support route or order context"
+    evidence_excerpt: "\"Payment confirmed / Payment verification failed — please contact support / Order cancelled successfully / Failed to cancel order / Order number copied\""
+    recommendation: "Show the order ID + a 'Contact support' button (deeplink to support flow), not a bare 'please contact support' instruction. Required to satisfy CPER 2020 Rule 4(5) effective grievance redressal."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-049
+    surface_id: web-tx-orderdetail-toasts
+    lens: legal
+    severity: P0
+    issue: "'Order cancelled successfully' toast is silent on refund timeline and refund channel — RBI PA-relevant"
+    evidence_excerpt: "\"Order cancelled successfully\""
+    recommendation: "Customer-initiated cancellation MUST surface refund expectation: 'Order cancelled. Refund of ₹X to your original payment method within 7 working days.' Bare success without refund info violates RBI PA framework + CPER 2020."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §8; Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-050
+    surface_id: ap-settings-payment-feedback
+    lens: legal
+    severity: P2
+    issue: "Admin payment-gateway toasts surface raw vendor error messages ('Saved, but Razorpay rejected the keys: {err}') — internal-only path, low risk; verify {err} cannot contain secret material"
+    evidence_excerpt: "Payment gateway keys saved and verified; Stripe keys saved and verified; Saved, but Razorpay rejected the keys: {err}"
+    recommendation: "Audit {err} contents to ensure no API key, signing secret, or PII leaks into the admin toast. Even an admin-only surface that logs to the browser console (and any browser-side error tracker) can persist secrets."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-051
+    surface_id: ap-secsettings-toasts
+    lens: legal
+    severity: P1
+    issue: "'All other sessions revoked. You may need to sign in again.' — admin-facing security-action toast; ensure user-facing equivalent fires for the affected users"
+    evidence_excerpt: "Password rules updated; Session policy updated; Session revoked; All other sessions revoked..."
+    recommendation: "Revoking sessions is a DPDP-relevant security action against the affected user. Confirm the corresponding user is notified out-of-band (email/push) of the session revocation, per DPDP §8(5) reasonable security safeguards + good security practice. Toast alone is insufficient evidence of user notice."
+    citation: "DPDP Act 2023 §8(5); IT (Reasonable Security Practices) Rules 2011"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # 2FA — STRONG-AUTHN UX
+  # ============================================================================
+
+  - finding_id: LEG-TX-052
+    surface_id: web-tx-profile-2fa
+    lens: legal
+    severity: P2
+    issue: "2FA toasts ('Backup codes copied to clipboard', 'Key copied') — copying TOTP secret to clipboard surfaces a sensitive credential; verify the clipboard auto-clears and that the user is warned"
+    evidence_excerpt: "\"Key copied / Backup codes copied to clipboard\""
+    recommendation: "Clipboard write of TOTP seed / backup codes is a high-sensitivity action. Auto-clear after 30 seconds (best-practice) and warn the user ('Codes copied — paste into your authenticator now; clipboard will clear in 30s.'). DPDP §8(5) reasonable security safeguards."
+    citation: "DPDP Act 2023 §8(5); OWASP ASVS V2.8"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-053
+    surface_id: web-tx-profile-2fa
+    lens: legal
+    severity: P1
+    issue: "'Two-factor authentication disabled' toast — confirm a corresponding email is sent to the registered address as a security-action notification"
+    evidence_excerpt: "\"Two-factor authentication enabled / ... / Two-factor authentication disabled / ...\""
+    recommendation: "Disabling 2FA is a major security event. Send an out-of-band email to the user ('2FA was disabled on your account at {time}. If this wasn't you, secure your account now.') Best-practice + DPDP §8(5) reasonable security."
+    citation: "DPDP Act 2023 §8(5); OWASP ASVS V2.6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-054
+    surface_id: ap-secsettings-toasts
+    lens: legal
+    severity: P1
+    issue: "Admin 2FA toasts include '2FA disabled' — confirm admin-side 2FA-off action triggers a corresponding security email to the affected admin"
+    evidence_excerpt: "2FA enabled successfully; 2FA disabled; Enforcement setting updated; Invalid code; ..."
+    recommendation: "Admin accounts have higher privilege. 2FA-disable on an admin account is a privileged security event and must trigger out-of-band notification + audit log entry. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MOBILE — DPDP NOTICE + DATA-DELETION PATHWAY
+  # ============================================================================
+
+  - finding_id: LEG-TX-055
+    surface_id: md-trx-010
+    lens: legal
+    severity: P0
+    issue: "Account-deletion path is 'Contact support at support@homechef.in' — DPDP §6(4) requires consent withdrawal / right to erasure (§12) to be as easy as giving consent"
+    evidence_excerpt: "\"Contact support at support@homechef.in to request account deletion.\" Support email hardcoded — India domain"
+    recommendation: "Replace the contact-support pattern with an in-app 'Delete my account' flow. DPDP §12 (right to erasure) + §6(4) require the withdrawal/erasure path to be at least as easy as the signup path. Email-only is not 'as easy as' a one-tap signup. Also Apple App Store Guideline 5.1.1(v) requires in-app account deletion for apps that allow account creation."
+    citation: "DPDP Act 2023 §6(4), §12; Apple App Store Review Guidelines §5.1.1(v); Google Play Data Deletion Policy 2024"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-056
+    surface_id: md-trx-009
+    lens: legal
+    severity: P2
+    issue: "Subscription management deferred to web ('Visit the web portal to manage your subscription.') — confirm this is acceptable under Apple/Google subscription rules and Indian Auto-Debit framework"
+    evidence_excerpt: "\"Visit the web portal to manage your subscription.\""
+    recommendation: "If subscription was sold inside the iOS app, it MUST be cancellable inside iOS (Apple Guidelines 3.1.2). If sold via web checkout, web-cancel is OK. Either way, RBI e-Mandate framework requires cancellation as easy as enrolment. Confirm the subscription channel and cancellation path align."
+    citation: "RBI e-Mandate framework (2019, updated 2021); Apple App Store Review Guidelines §3.1.2; Google Play Subscriptions Policy"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-057
+    surface_id: mv-onb-pending-rejected-reason-prefix
+    lens: legal
+    severity: P1
+    issue: "Driver/chef rejection screens show 'Reason: ...' with admin-authored content — same raw-injection issue as approval-rejected notifications"
+    evidence_excerpt: "\"Reason: ...\""
+    recommendation: "Sanitise admin-authored rejection reason. Display the reason in a callout box with structure ('What needs to change' / 'How to resubmit') rather than free-text dump. IT Rules 2021 Rule 3 + best-practice."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-058
+    surface_id: mv-onb-pending-rejected-body
+    lens: legal
+    severity: P2
+    issue: "'Please review the feedback and resubmit your application' — does not surface appeal contact if the chef disagrees with the rejection"
+    evidence_excerpt: "\"Please review the feedback and resubmit your application.\""
+    recommendation: "Add a 'Disagree with this decision? Contact appeals@...' line. Captures CPER 2020 Rule 6(4) fair-treatment-of-sellers expectation and reduces social-media-as-grievance-channel risk."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-059
+    surface_id: vp-onb-submit-success
+    lens: legal
+    severity: P3
+    issue: "'Application submitted! We'll review and get back to you within 24-48 hours' — sets a 24-48h SLA in a transactional toast; if not met, chef may invoke as broken promise"
+    evidence_excerpt: "\"Application submitted! We'll review and get back to you within 24-48 hours.\""
+    recommendation: "Either honour the SLA operationally or soften wording ('We aim to respond within 24-48 hours'). Transactional copy is evidence of platform commitments — under Consumer Protection Act 2019 §2(28), a non-honoured SLA stated in transactional channel can be argued as misleading representation."
+    citation: "Consumer Protection Act 2019 §2(28); Indian Contract Act 1872 §29"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-060
+    surface_id: vp-onb-policies-ready-banner
+    lens: legal
+    severity: P2
+    issue: "'You're all set to submit your application!' banner does not summarise what the chef is consenting to — DPDP §5 notice gap at the moment of submission"
+    evidence_excerpt: "\"You're all set to submit your application! / Our team will review your details and you'll be notified within 24-48 hours.\""
+    recommendation: "Before submission, show a final-consent summary: what personal documents were uploaded, who can access them, retention period, withdrawal pathway. DPDP §5 requires Notice at or before consent."
+    citation: "DPDP Act 2023 §5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CROSS-CHANNEL CONSISTENCY — CONTRACT-EVIDENCE INTEGRITY
+  # ============================================================================
+
+  - finding_id: LEG-TX-061
+    surface_id: api-push-chef-new-order-actionable
+    lens: legal
+    severity: P2
+    issue: "Chef receives TWO pushes with slightly different wording for the same 'new order' event (different queue groups) — duplicate transactional fanout is annoying but legally also undermines the platform's record of the notification"
+    evidence_excerpt: "DIFFERENT from services/notifications.go::handleOrderCreated push — Both fire on the same NATS event (different queue groups), so the chef gets TWO pushes with slightly different copy"
+    recommendation: "De-duplicate the fanout. Two pushes for one event creates ambiguity about 'when did we notify the chef' if a delivery SLA dispute arises later. Pick one path."
+    citation: "Indian Contract Act 1872 §29 (certainty); evidentiary best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-062
+    surface_id: api-inapp-order-status-customer
+    lens: legal
+    severity: P2
+    issue: "In-app order-status title 'Order Status Updated' vs push title 'Order Update' — minor inconsistency, captured for completeness"
+    evidence_excerpt: "Title differs from push (\"Updated\" vs \"Update\"). Map of 7 statuses"
+    recommendation: "Unify title strings. Minor on its own but compounding across channels weakens the platform's 'we communicate consistently' representation."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-063
+    surface_id: api-inapp-delivery-pickedup-customer
+    lens: legal
+    severity: P2
+    issue: "Customer in-app + push titles for the same event differ ('Order Picked Up' vs 'Order On The Way!')"
+    evidence_excerpt: "Title differs from push title (which says \"Order On The Way!\")"
+    recommendation: "Pick one event title. Two-channel drift makes timeline reconstruction harder in a dispute (when did the customer know the order was picked up?)."
+    citation: "Indian Contract Act 1872 §29; best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # GENERIC SUCCESS / FAILURE TOASTS — DPDP + GRIEVANCE PATHWAY
+  # ============================================================================
+
+  - finding_id: LEG-TX-064
+    surface_id: api-success-message-generic
+    lens: legal
+    severity: P1
+    issue: "Generic API success strings — 'Chef rejected', 'Chef suspended', 'User suspended', 'Delivery partner suspended', 'Staff member deactivated', 'Key revoked' — all serious access-removal actions surfaced as 2-3 word confirmations with no audit trail visible in code"
+    evidence_excerpt: "43 unique success message strings. Inconsistent 'successfully' suffix"
+    recommendation: "For each adverse-action message (suspend, reject, revoke, deactivate, delete), confirm a server-side audit log captures: actor, target, reason code, timestamp, IP. Bare success strings without audit trail expose the platform if a suspended chef/driver/user litigates. DPDP §8(6) requires accuracy & completeness of records; IT Rules 2021 require audit trails for grievance handling."
+    citation: "DPDP Act 2023 §8(6); IT (Intermediary Guidelines) Rules 2021 Rule 3-4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-065
+    surface_id: api-success-message-generic
+    lens: legal
+    severity: P2
+    issue: "'Removed from favorites' / 'Address deleted' / 'Image deleted' — DPDP §12 (right to erasure) operations confirmed in 2-3 words; verify hard-delete vs soft-delete semantics align with the platform's stated retention policy"
+    evidence_excerpt: "\"Address deleted\" / \"Image deleted\" / \"Removed from favorites\""
+    recommendation: "Confirm what 'deleted' actually means downstream — hard delete from DB? Soft delete with retention window? Backup retention? DPDP §12 requires erasure 'unless retention is necessary for the specified purpose or for compliance with any law'. If 'deleted' is soft-delete, the Privacy Notice must say so."
+    citation: "DPDP Act 2023 §12; §8(8) (erasure on withdrawal)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-066
+    surface_id: web-tx-profile-update
+    lens: legal
+    severity: P2
+    issue: "Profile photo upload error 'Invalid file type. Use JPEG, PNG or WebP.' — confirm uploaded photos are scanned for malware and that EXIF metadata is stripped before storage to avoid PII leakage (GPS coords)"
+    evidence_excerpt: "\"File too large. Maximum 5 MB. / Invalid file type. Use JPEG, PNG or WebP. / Profile photo updated\""
+    recommendation: "DPDP §8(5) reasonable security safeguards + best-practice. Photos uploaded from mobile commonly contain GPS EXIF metadata; storing this without notice or stripping is excessive data processing under DPDP §4 lawful-purpose limitation."
+    citation: "DPDP Act 2023 §4, §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-067
+    surface_id: vp-ux-profile-doc-toasts
+    lens: legal
+    severity: P1
+    issue: "Chef document upload toast '{label} uploaded' is generic — chef KYC documents (Aadhaar, PAN, FSSAI licence) carry sensitive-personal-data handling obligations and the toast does not surface what was uploaded or to where"
+    evidence_excerpt: "{label} uploaded / Upload failed"
+    recommendation: "Documents uploaded as part of chef onboarding likely include Aadhaar, PAN, FSSAI licence — these are sensitive-class identifiers. The upload toast should reference the privacy notice and confirm the storage location/encryption status. DPDP §5 + §8(5) require purpose-specific consent + reasonable security for sensitive data. Aadhaar Act §29 + UIDAI regulations impose additional duties if the document is an Aadhaar."
+    citation: "DPDP Act 2023 §5, §8(5); Aadhaar Act 2016 §29; UIDAI Aadhaar (Authentication & Offline Verification) Regulations"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-068
+    surface_id: dp-tx-toast-step3-uploaded
+    lens: legal
+    severity: P1
+    issue: "Driver document upload toast '{label} uploaded' — same KYC sensitivity as chef; drivers upload DL, RC, Aadhaar/PAN; toast does not state where the data goes or retention"
+    evidence_excerpt: "\"{label} uploaded\""
+    recommendation: "Same as LEG-TX-067. Driver KYC includes Driving Licence (Motor Vehicles Act validation) + Aadhaar/PAN. Surface a privacy-notice link on the upload screen. Aadhaar Act §29 + DPDP §5 + §8(5)."
+    citation: "DPDP Act 2023 §5, §8(5); Aadhaar Act 2016 §29; Motor Vehicles Act 1988"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-069
+    surface_id: vp-ux-settings-payout-toasts
+    lens: legal
+    severity: P1
+    issue: "Chef payout-details toast 'Payout details saved' — bank account / UPI / IFSC entry is financial-sensitive data with RBI KYC implications"
+    evidence_excerpt: "Payout details saved / Failed to save payout details / Settings saved / Failed to save settings"
+    recommendation: "Capturing bank/UPI details makes the chef a beneficiary in a payout flow regulated under RBI PA framework. Confirm KYC of the chef is complete before saving payout details (RBI PA Master Direction §9.1). Surface a one-line privacy notice on the payout screen referencing how the bank data is stored and shared with the payment aggregator."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §9; DPDP Act 2023 §5, §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-070
+    surface_id: dp-tx-toast-payout-saved
+    lens: legal
+    severity: P1
+    issue: "Driver payout-details toast 'Payout details saved' — same RBI PA + DPDP concerns as chef payout"
+    evidence_excerpt: "\"Payout details saved\""
+    recommendation: "Same as LEG-TX-069 for drivers. RBI PA framework KYC."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §9; DPDP Act 2023 §5"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CATERING, FAVORITES, CART — MISC TRANSACTIONAL EXPOSURE
+  # ============================================================================
+
+  - finding_id: LEG-TX-071
+    surface_id: web-tx-catering-quotes
+    lens: legal
+    severity: P1
+    issue: "'Quote accepted!' toast does not surface the legal effect of acceptance — accepting a catering quote likely forms a binding contract under Indian Contract Act §7"
+    evidence_excerpt: "\"Quote accepted! The chef has been notified. / Failed to accept quote. Please try again. / Quote declined.\""
+    recommendation: "On quote acceptance, surface a modal/confirmation step stating 'By accepting, you agree to the catering terms (price ₹X, date Y, refund policy Z).' Toast-only confirmation is thin evidence of contract formation. Indian Contract Act §7 (acceptance must be absolute & unqualified, communicated)."
+    citation: "Indian Contract Act 1872 §§4, 7, 10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-072
+    surface_id: web-tx-catering-request-submit
+    lens: legal
+    severity: P2
+    issue: "'Catering request submitted successfully!' — no consent capture for the chef to receive/process the customer's catering brief (which can include guest count, dietary needs, address)"
+    evidence_excerpt: "\"Catering request submitted successfully!\""
+    recommendation: "DPDP §5 + §6: the customer is consenting at submission that the brief is shared with chefs. Surface a one-line notice. Also if the brief includes special dietary / health information (allergies), that is sensitive personal data warranting purpose-specific consent."
+    citation: "DPDP Act 2023 §5, §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-073
+    surface_id: web-tx-chefdetail-add-to-cart
+    lens: legal
+    severity: P3
+    issue: "'Your cart has items from another chef. Clear cart first.' — operational message, no legal exposure on its own; flagged for completeness because the prior-cart state may include items the customer would prefer to keep"
+    evidence_excerpt: "\"Added {item.name} to cart / Your cart has items from another chef. Clear cart first.\""
+    recommendation: "Cosmetic legal-adjacent: confirm 'clearing' does not delete a saved-for-later record that would have ongoing personal-data implications under DPDP §12 erasure. Low priority."
+    citation: "DPDP Act 2023 §12; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-074
+    surface_id: mc-menuitem-cross-chef
+    lens: legal
+    severity: P3
+    issue: "Mobile cross-chef cart replacement 'Replace Cart? / You have items from another chef. Replace cart?' — same as web; informational only"
+    evidence_excerpt: "\"Replace Cart? / You have items from another chef. Replace cart? / Cancel / Replace\""
+    recommendation: "Same as LEG-TX-073."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-075
+    surface_id: web-tx-favorites-remove
+    lens: legal
+    severity: P3
+    issue: "'Removed {name} from favorites' — DPDP §12 erasure on user-initiated removal; ensure removal is effective not soft-deleted"
+    evidence_excerpt: "\"Removed {name} from favorites\""
+    recommendation: "Verify the favorite is removed from underlying storage, not just hidden client-side. DPDP §12."
+    citation: "DPDP Act 2023 §12"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # DRIVER ONLINE/OFFLINE + ACTIVE DELIVERY — GIG-WORKER STATUS RECORDS
+  # ============================================================================
+
+  - finding_id: LEG-TX-076
+    surface_id: dp-tx-toast-online
+    lens: legal
+    severity: P2
+    issue: "'You are now online' / 'You are now offline' — driver-status change is a Code-on-Social-Security 'work spell' marker; no audit trail visible from copy alone"
+    evidence_excerpt: "\"You are now online / You are now offline\""
+    recommendation: "Confirm a server-side log captures every online/offline transition with timestamp + location (if consented). Gig-worker hours-of-work data may become statutorily relevant under Code on Social Security 2020 ss. 113-114 implementation."
+    citation: "Code on Social Security 2020 §§113-114"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-077
+    surface_id: dp-tx-toast-accept-success
+    lens: legal
+    severity: P2
+    issue: "'Delivery accepted!' — driver accepts a trip-level micro-contract; toast is thin evidence of that contract; reference to terms missing"
+    evidence_excerpt: "\"Delivery accepted!\""
+    recommendation: "Capture, server-side, the exact trip parameters the driver accepted (fee, distance, ETA, pickup, drop). Surface trip details on acceptance screen, not just a celebratory toast. Indian Contract Act §7 + Code on Social Security gig-worker earnings transparency."
+    citation: "Indian Contract Act 1872 §7; Code on Social Security 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-078
+    surface_id: web-tx-delivery-actions
+    lens: legal
+    severity: P2
+    issue: "Web driver dashboard toasts 'Delivery completed! Great job!' — celebratory tone but no trip-summary or earnings confirmation"
+    evidence_excerpt: "\"Delivery accepted! / Delivery completed! Great job! / Status updated / You are now offline / You are now online\""
+    recommendation: "On delivery completion, surface earnings for the trip (base + tip + bonus) and the running daily total. Code on Social Security 2020 + gig-worker earnings transparency expectations."
+    citation: "Code on Social Security 2020 §§113-114"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-079
+    surface_id: dp-tx-toast-partner-suspend
+    lens: legal
+    severity: P0
+    issue: "'Partner suspended' admin toast — gig-worker adverse-action; same severe due-process gap as chef suspension"
+    evidence_excerpt: "\"Partner reactivated / Partner suspended\""
+    recommendation: "Same as LEG-TX-032 for chefs. Driver suspension impacts livelihood; must include reason code, written notice, appeal pathway, treatment of pending payouts. Code on Social Security 2020 + emerging platform-worker fairness norms."
+    citation: "Code on Social Security 2020 §§113-114; Indian Contract Act 1872; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-080
+    surface_id: dp-tx-toast-partner-verified
+    lens: legal
+    severity: P1
+    issue: "'Partner verified successfully' admin toast — confirm verification includes background check, DL validity, motor insurance status; toast says nothing about scope"
+    evidence_excerpt: "\"Partner verified successfully\""
+    recommendation: "'Verified' must map to a defined set of checks. Document those checks server-side; if a verified driver is later involved in an incident, the platform's defence depends on showing what the verification consisted of. Motor Vehicles Act 1988 driver-licensing + insurance disclosure."
+    citation: "Motor Vehicles Act 1988; Code on Social Security 2020 §113"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN ACTIONS — INVITES, ROLES, ZONES
+  # ============================================================================
+
+  - finding_id: LEG-TX-081
+    surface_id: ap-staffdetail-toasts
+    lens: legal
+    severity: P1
+    issue: "'Staff member deactivated' / 'Staff member reactivated' — access-removal actions; no surfaced audit trail or notice to the affected staff"
+    evidence_excerpt: "Role updated successfully; Failed to update role; Staff member deactivated; Failed to deactivate staff member; Staff member reactivated"
+    recommendation: "Deactivation removes access to platform data — DPDP §11 right-of-access of the affected staff must continue to function. Confirm out-of-band notification to deactivated staff with reason + appeal pathway."
+    citation: "DPDP Act 2023 §11, §13; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-082
+    surface_id: dp-tx-toast-invite-copied
+    lens: legal
+    severity: P2
+    issue: "'Invite URL copied to clipboard' — invite URL is a credential-equivalent token; copying to clipboard is a sensitive moment that should warn the admin not to share over insecure channels"
+    evidence_excerpt: "\"Invite URL copied to clipboard\""
+    recommendation: "Surface a one-line warning ('Send this link only over a secure channel') or use a more secure invite delivery (email-only)."
+    citation: "DPDP Act 2023 §8(5); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-083
+    surface_id: ap-providercreate-toasts
+    lens: legal
+    severity: P3
+    issue: "'Provider created successfully' admin toast — admin-only path, low exposure; flagged for completeness"
+    evidence_excerpt: "Provider created successfully; Failed to create provider"
+    recommendation: "No legal exposure on its own. Confirm audit log captures the action."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-084
+    surface_id: ap-platsettings-feedback
+    lens: legal
+    severity: P2
+    issue: "'Commission rates updated' / 'Delivery fees updated' — pricing-policy changes; do not surface customer/chef notice from this admin path"
+    evidence_excerpt: "Commission rates updated; Delivery fees updated; Operating hours updated; Zone created; Zone deleted"
+    recommendation: "Pricing/commission changes impact chefs (revenue share) and customers (final price). Confirm there is a separate flow that notifies affected chefs of commission changes with reasonable advance notice. Indian Contract Act §62 (novation) implications + CPER 2020 Rule 6(4) seller-fairness."
+    citation: "Indian Contract Act 1872 §62; Consumer Protection (E-Commerce) Rules 2020 Rule 6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-085
+    surface_id: ap-notifsettings-toasts
+    lens: legal
+    severity: P3
+    issue: "Admin notification settings 'Preference saved' — operational, low risk; verify any setting that disables transactional alerts to customers is gated to avoid breaking statutory notice duties"
+    evidence_excerpt: "Preference saved; Failed to save"
+    recommendation: "Confirm an admin cannot, via this surface, disable a transactional alert that is statutorily required (e.g. cancellation notice, refund initiation). Mark such alerts as non-configurable."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CHEF MENU / SOCIAL — FSSAI ALLERGEN + IT INTERMEDIARY DUTY
+  # ============================================================================
+
+  - finding_id: LEG-TX-086
+    surface_id: web-tx-chef-menu
+    lens: legal
+    severity: P1
+    issue: "Menu CRUD toasts 'Menu item created successfully' — toast says nothing about FSSAI allergen disclosure being mandatory on the menu item; chef can publish without filling allergens"
+    evidence_excerpt: "\"Menu item created successfully / Menu item updated successfully / Menu item deleted / Failed to create menu item / Failed to update menu item\""
+    recommendation: "FSSAI Labelling Regulation 2.2.2.4 requires the 8 statutory allergens (cereals containing gluten, crustaceans, eggs, fish, peanuts, soybean, milk, tree nuts) to be declared. The menu-item form must require allergen selection before save; the success toast confirms the chef has met that disclosure."
+    citation: "FSS (Labelling and Display) Regulations 2020 Reg. 5(1)(d); FSSAI E-Commerce FBO Guidelines 2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-087
+    surface_id: vp-ux-menu-form-toasts
+    lens: legal
+    severity: P1
+    issue: "Vendor portal menu form toasts — same allergen-disclosure gap as web; 'At least one image is required' but no analogous 'At least one allergen confirmation is required'"
+    evidence_excerpt: "Menu item created successfully / Failed to create menu item / Menu item updated successfully / ... / At least one image is required"
+    recommendation: "Add 'Confirm allergens' as a required step before menu publish. FSSAI E-Commerce FBO Guidelines + Labelling Regulations."
+    citation: "FSS (Labelling and Display) Regulations 2020 Reg. 5(1)(d)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-088
+    surface_id: web-tx-chef-social
+    lens: legal
+    severity: P1
+    issue: "Chef social post toasts 'Post created / Post updated / Post deleted' — chef social posts are user-generated content; the platform's IT Act §79 intermediary safe harbour depends on due-diligence; no moderation pathway visible from copy"
+    evidence_excerpt: "\"Post deleted / Post created / Post updated / Failed to save post\""
+    recommendation: "Surface a 'Posting Guidelines' link near the create-post action. Apply server-side moderation for prohibited content (CSAM, defamation, FSSAI-violating health claims). IT Rules 2021 Rule 3 prescribes specific categories that must be removed within 24-36h of complaint."
+    citation: "IT Act 2000 §79; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MOBILE — DPDP & APP-STORE COMPLIANCE
+  # ============================================================================
+
+  - finding_id: LEG-TX-089
+    surface_id: mc-profile-logout-confirm
+    lens: legal
+    severity: P3
+    issue: "Mobile customer logout confirmation 'Log out / Are you sure you want to log out?' uses banned variant — Style guide says 'Sign out' not 'Log out'"
+    evidence_excerpt: "\"Log out / Are you sure you want to log out? / Cancel / Log Out\" — title-case inconsistency"
+    recommendation: "Outside Legal lens scope (voice rule). Flag passes through to TW lens. Legal-relevant only: case inconsistency 'Log out' vs button 'Log Out' is a minor consistency issue."
+    citation: "STYLE-GUIDE.md §3 (Identity & roles)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-090
+    surface_id: mc-profile-save-success
+    lens: legal
+    severity: P3
+    issue: "'Profile updated successfully. / Cuisine preferences updated.' — DPDP §11 right-to-correction surface; verify updates propagate to all systems"
+    evidence_excerpt: "\"Saved / Profile updated successfully. / Cuisine preferences updated.\""
+    recommendation: "Confirm profile edits propagate to all downstream systems (analytics, marketing lists, payment provider). DPDP §11 right-to-correction requires changes to be reflected wherever the data is held."
+    citation: "DPDP Act 2023 §11"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-091
+    surface_id: mv-onb-pending-submitted-body
+    lens: legal
+    severity: P3
+    issue: "Mobile vendor pending screen 'Our team will review your application within 24-48 hours' — same SLA commitment as LEG-TX-059"
+    evidence_excerpt: "\"Our team will review your application within 24-48 hours. We will notify you once the review is complete.\""
+    recommendation: "Same as LEG-TX-059 — either honour the SLA or soften wording."
+    citation: "Consumer Protection Act 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-092
+    surface_id: mv-undo-rejected
+    lens: legal
+    severity: P1
+    issue: "Mobile vendor 'Order rejected' undo snackbar — order rejection by chef triggers customer refund obligation; undo window must be tight + customer must not be misled about state"
+    evidence_excerpt: "\"Order rejected\""
+    recommendation: "Confirm the undo window does not exceed a few seconds and that no customer-facing notification fires during the undo window. If undo expires, customer must be promptly notified per CPER 2020 + RBI PA refund timeline."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); RBI PA Master Direction"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-093
+    surface_id: mv-reviewdetail-success-body
+    lens: legal
+    severity: P2
+    issue: "'Your reply has been posted.' — chef reply to a customer review is platform-published content; IT Act intermediary duty applies"
+    evidence_excerpt: "\"Your reply has been posted.\""
+    recommendation: "Apply moderation guardrails on chef replies (no PII about the customer, no defamatory content). IT Rules 2021 Rule 3."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-094
+    surface_id: vp-ux-kitchen-photo-toasts
+    lens: legal
+    severity: P2
+    issue: "Kitchen photo upload toasts — kitchen photographs may incidentally show people (cooks, family) who are not the chef; consent for inclusion of third-party identifiable persons not captured at upload"
+    evidence_excerpt: "Kitchen photo uploaded / Failed to upload photo / Photo removed / ... / Kitchen setup saved successfully"
+    recommendation: "DPDP §6 + §10 (children) require consent for processing personal data of identifiable individuals. Surface a one-line notice 'Only upload photos of your kitchen and personnel who have consented to being shown.' Strip EXIF GPS metadata server-side."
+    citation: "DPDP Act 2023 §6, §10"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SOCIAL FEED + UNAUTH INTERACTIONS
+  # ============================================================================
+
+  - finding_id: LEG-TX-095
+    surface_id: web-tx-social-feed-actions
+    lens: legal
+    severity: P3
+    issue: "'Please log in to like posts / Please log in to save posts' — uses banned variant 'log in' (style guide says 'Sign in')"
+    evidence_excerpt: "\"Please log in to like posts / Please log in to save posts\""
+    recommendation: "Outside Legal lens — flagged for completeness. Use 'Sign in'."
+    citation: "STYLE-GUIDE.md §3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-096
+    surface_id: vp-ux-notifs-respond-toasts
+    lens: legal
+    severity: P2
+    issue: "Chef response 'Response sent to admin' — chef-authored response visible to admins; no length/format guard surfaced from copy"
+    evidence_excerpt: "Please enter a response / Response sent to admin / Failed to send response"
+    recommendation: "Apply length cap + PII filter on chef responses. Same as LEG-TX-039 chef-responded notification pathway."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # GENERIC PROFILE / PREFERENCES UPDATES — DPDP §11 PROPAGATION
+  # ============================================================================
+
+  - finding_id: LEG-TX-097
+    surface_id: web-tx-profile-update
+    lens: legal
+    severity: P2
+    issue: "Profile update toasts include avatar/file-size errors — confirm rejected files are not retained/logged anywhere with PII (e.g. server-side rejection logging may capture filename or metadata)"
+    evidence_excerpt: "\"File too large. Maximum 5 MB. / Invalid file type. Use JPEG, PNG or WebP. / Profile photo updated\""
+    recommendation: "DPDP §4 lawful-purpose limitation: rejected files should not be retained beyond the request, and any error log should not capture file metadata containing PII. Verify server-side log scrubbing."
+    citation: "DPDP Act 2023 §4, §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-098
+    surface_id: web-tx-profile-preferences-save
+    lens: legal
+    severity: P2
+    issue: "'Preferences updated' — preferences may include marketing/comms opt-in; confirm DPDP §6(4) withdrawal-as-easy-as-consent semantics"
+    evidence_excerpt: "\"Preferences updated / Failed to save preferences\""
+    recommendation: "If preferences include marketing comms opt-out, confirm the toast confirms the new state ('Marketing emails: off') rather than a generic 'updated'. DPDP §6(4)."
+    citation: "DPDP Act 2023 §6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-099
+    surface_id: web-tx-profile-addresses
+    lens: legal
+    severity: P2
+    issue: "Address CRUD toasts — addresses are personal data + may include delivery instructions revealing health/lifestyle (e.g. 'ring extra long, I have hearing impairment'); confirm purpose-limited processing"
+    evidence_excerpt: "Please fill in all required fields / Address added / Address updated / Address deleted / Failed to save address / Failed to delete address"
+    recommendation: "DPDP §4 + §11: address data must only be used for the stated purpose (delivery). If used for marketing geo-segmentation, separate consent required. Confirm 'Address deleted' is hard-delete from all systems."
+    citation: "DPDP Act 2023 §4, §11, §12"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-100
+    surface_id: web-tx-onboarding-save
+    lens: legal
+    severity: P2
+    issue: "Customer onboarding 'Your preferences have been saved!' — preferences captured at onboarding may include dietary restrictions (sensitive health-related data)"
+    evidence_excerpt: "\"Please fill in the required fields / Your preferences have been saved! / Failed to save. Please try again.\""
+    recommendation: "Dietary preferences (allergies, religious diet, medical diet) are sensitive personal data under DPDP §10 implications. Capture purpose-specific consent ('We use these to filter chefs and dishes for you — not for marketing.') and document retention. DPDP §5, §6."
+    citation: "DPDP Act 2023 §5, §6"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # GENERIC ALERT TITLES / WORDING DRIFT (MOBILE)
+  # ============================================================================
+
+  - finding_id: LEG-TX-101
+    surface_id: md-trx-011
+    lens: legal
+    severity: P3
+    issue: "Driver app validation alert title 'Validation' — non-descriptive title; offers no user-actionable signal"
+    evidence_excerpt: "\"Validation\""
+    recommendation: "Replace with descriptive title ('Missing details'). Plain-language failure under STYLE-GUIDE; legal-relevance is minor."
+    citation: "STYLE-GUIDE.md §4 (Errors); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-102
+    surface_id: md-trx-013
+    lens: legal
+    severity: P3
+    issue: "Driver app success alert title 'Success' — non-descriptive"
+    evidence_excerpt: "\"Success\""
+    recommendation: "Use action-specific title ('Profile saved'). Cosmetic; legal-relevance minor."
+    citation: "STYLE-GUIDE.md §4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-103
+    surface_id: md-trx-006
+    lens: legal
+    severity: P3
+    issue: "Driver app 'Logout' confirmation uses banned variant — style guide requires 'Sign out'"
+    evidence_excerpt: "\"Logout\""
+    recommendation: "Outside Legal lens — captured for completeness. Use 'Sign out'."
+    citation: "STYLE-GUIDE.md §3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-104
+    surface_id: md-trx-015
+    lens: legal
+    severity: P3
+    issue: "Generic failure body 'Failed to update profile. Please try again.' — leaks no info but provides no diagnostic, no support contact"
+    evidence_excerpt: "\"Failed to update profile. Please try again.\""
+    recommendation: "Add a 'Contact support' fallback if retry fails — CPER 2020 Rule 4(5) grievance access. Low priority."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-105
+    surface_id: md-trx-018
+    lens: legal
+    severity: P2
+    issue: "'You do not have permission to invite staff.' — 403 error; ensure rejected action is logged for audit (especially if attempted by a previously-privileged user)"
+    evidence_excerpt: "\"You do not have permission to invite staff.\""
+    recommendation: "Confirm 403 events are server-side audit-logged. DPDP §8(6) records-of-processing accuracy + IT Rules 2021 audit-trail."
+    citation: "DPDP Act 2023 §8(6); IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-106
+    surface_id: api-success-message-generic
+    lens: legal
+    severity: P2
+    issue: "API success string 'If the email exists, a reset link has been sent' — already neutral (good) — but verify rate-limiting on reset endpoint to prevent enumeration via timing"
+    evidence_excerpt: "\"If the email exists, a reset link has been sent\""
+    recommendation: "Wording is correct. Add rate-limiting (per-IP + per-email) to defeat timing-based enumeration. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); OWASP ASVS V2.2"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-107
+    surface_id: api-success-message-generic
+    lens: legal
+    severity: P2
+    issue: "API success string 'Email verified successfully' — confirm the verification action carries audit-trail entry tying email to user/session/IP"
+    evidence_excerpt: "\"Email verified successfully\""
+    recommendation: "DPDP §8(6). Audit-log every identity-event (email verified, phone verified, 2FA enrol/disenrol)."
+    citation: "DPDP Act 2023 §8(6); IT (Reasonable Security Practices) Rules 2011"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-108
+    surface_id: api-success-message-generic
+    lens: legal
+    severity: P2
+    issue: "API success string 'Logged out successfully' — uses banned 'logged out' (style says 'signed out'); legal-relevance: ensure server-side session is invalidated, not just client-side cookie cleared"
+    evidence_excerpt: "\"Logged out successfully\""
+    recommendation: "Verify server-side session invalidation (DPDP §8(5) reasonable security). Update copy to 'Signed out'."
+    citation: "DPDP Act 2023 §8(5); STYLE-GUIDE.md §3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # IN-APP NOTIFICATIONS / DRIVER ONBOARDING ADMIN FANOUT
+  # ============================================================================
+
+  - finding_id: LEG-TX-109
+    surface_id: api-inapp-driver-onboarding-admins
+    lens: legal
+    severity: P1
+    issue: "Driver onboarding submitted notification fanned to ALL admins with city of driver — operational visibility for staff; verify all those admins have role/legitimate-interest to see driver location"
+    evidence_excerpt: "Title: \"New Driver Application\" — Message: \"A new driver from %s has submitted their onboarding application for review.\" Fanned out to all admins. City substituted"
+    recommendation: "DPDP §4 lawful-purpose limitation: not every admin role needs to know about every driver application. Scope the fanout to onboarding-team admins only. Cross-cutting access reduces principle of data-minimisation."
+    citation: "DPDP Act 2023 §4, §8"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-110
+    surface_id: api-inapp-approval-created-admin
+    lens: legal
+    severity: P2
+    issue: "Approval created notification fanned to all admins with raw 'Approval title injected verbatim' — chef-authored or system-authored content broadcast to all admins"
+    evidence_excerpt: "Title: \"New Approval Request\" — Message: \"New approval request pending: %s\". Fanned to all admins. Approval title injected verbatim"
+    recommendation: "Sanitise approval-title before fanout. Scope fanout to admins with approvals role. DPDP §4."
+    citation: "DPDP Act 2023 §4; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CATCH-ALL — TRANSACTIONAL COPY THAT REFERENCES OUT-OF-APP ACTION
+  # ============================================================================
+
+  - finding_id: LEG-TX-111
+    surface_id: md-trx-009
+    lens: legal
+    severity: P2
+    issue: "'Visit the web portal to manage your subscription' — driver app deflects subscription mgmt to web; if driver subscription was sold via Google Play, this violates Play Subscriptions Policy"
+    evidence_excerpt: "\"Visit the web portal to manage your subscription.\""
+    recommendation: "Confirm driver subscriptions are NOT sold via in-app purchase. If they are, Play Billing requires in-app cancellation. If web-only, current copy is fine. RBI e-Mandate framework also requires easy cancellation."
+    citation: "Google Play Subscriptions Policy 2024; RBI e-Mandate framework 2019/2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-112
+    surface_id: dp-tx-toast-step5-submitted
+    lens: legal
+    severity: P3
+    issue: "'Application submitted successfully!' — completion toast; verify a server-side confirmation email is also sent (DPDP §5 notice carryover, evidentiary best-practice)"
+    evidence_excerpt: "\"Application submitted successfully!\""
+    recommendation: "Send a follow-up confirmation email with: (a) what was submitted, (b) when, (c) when next contact expected, (d) data-rights summary. Toast-only is thin evidence the driver was notified."
+    citation: "DPDP Act 2023 §5; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-113
+    surface_id: md-trx-020
+    lens: legal
+    severity: P3
+    issue: "Shared OfflineBanner — copy lives in mobile-shared; cannot inspect content from inventory alone"
+    evidence_excerpt: "(shared origin) OfflineBanner imported — copy lives in mobile-shared"
+    recommendation: "Fetch the actual copy and verify it does not promise functionality that the offline state cannot deliver (e.g. 'Your location is still being tracked' when in fact it is not). Misrepresentation under DPDP §5 / CPA 2019."
+    citation: "DPDP Act 2023 §5; Consumer Protection Act 2019 §2(28)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CHEF NEW-ORDER EMAIL — SLA + INVOICE CARRY-THROUGH
+  # ============================================================================
+
+  - finding_id: LEG-TX-114
+    surface_id: api-email-chef-new-order
+    lens: legal
+    severity: P2
+    issue: "Chef new-order email subject contains decorative emoji '🔔 New Order!' — flagged for completeness; substantively the email sets a 'Customers expect a response within 5 minutes' SLA expectation"
+    evidence_excerpt: "Subject: \"New order #%s — Fe3dr\" — \"🔔 New Order! You have a new order #%s worth ₹%.2f. Please review and accept the order from your dashboard.\" — \"Customers expect a response within 5 minutes\" SLA expectation"
+    recommendation: "If the 'within 5 minutes' SLA is the platform's own promise to the chef, ensure it is also reflected in the chef agreement. If broken, CPA 2019 §2(28) and chef agreement become exposure points. Also the currency is hardcoded ₹ — confirm chef can be paid in INR only / clarify FEMA if not."
+    citation: "Consumer Protection Act 2019 §2(28); Indian Contract Act 1872 §29"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-115
+    surface_id: api-email-chef-new-order
+    lens: legal
+    severity: P1
+    issue: "Chef new-order email body shows order total ₹%.2f but no GST breakdown or chef payout component — chef has no way to know payout from the email alone"
+    evidence_excerpt: "\"You have a new order #%s worth ₹%.2f.\""
+    recommendation: "Surface payout-to-chef separately from order total. If the order is ₹500 but the chef nets ₹400 after platform commission + tax, both numbers should appear. Code on Social Security 2020 gig-worker earnings transparency + Consumer Protection (E-Commerce) Rules 2020 Rule 6(4) seller-fairness."
+    citation: "Code on Social Security 2020 §113; Consumer Protection (E-Commerce) Rules 2020 Rule 6(4)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MISC — REVIEWS, COMMENTS, REPLIES
+  # ============================================================================
+
+  - finding_id: LEG-TX-116
+    surface_id: mv-reviewdetail-success-title
+    lens: legal
+    severity: P3
+    issue: "'Reply Sent' title — chef reply published as platform content; same intermediary moderation gap as LEG-TX-093"
+    evidence_excerpt: "\"Reply Sent\""
+    recommendation: "Apply moderation guardrails on chef replies (no PII about the customer)."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN INVITATION SUCCESS BODY
+  # ============================================================================
+
+  - finding_id: LEG-TX-117
+    surface_id: ap-staff-invite-success-body
+    lens: legal
+    severity: P2
+    issue: "'Share this link with the invitee to complete their registration.' — admin instruction to share an invitation URL; URL is credential-equivalent and should not be shared over insecure channels"
+    evidence_excerpt: "\"Share this link with the invitee to complete their registration.\""
+    recommendation: "Add a caveat: 'Send only via secure channel (verified email or signed message).' Or default to email-only delivery. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-118
+    surface_id: ap-staff-invite-success-title
+    lens: legal
+    severity: P3
+    issue: "'Invitation created successfully!' — exclamation mark in admin transactional surface; style-guide says ≤1 exclamation per page in genuine celebration. Legal-relevance minor."
+    evidence_excerpt: "\"Invitation created successfully!\""
+    recommendation: "Cosmetic — flagged for completeness. Use 'Invitation created.' STYLE-GUIDE §1 Rule 1."
+    citation: "STYLE-GUIDE.md §1"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN PROVIDER ACTIONS
+  # ============================================================================
+
+  - finding_id: LEG-TX-119
+    surface_id: ap-providerdetail-toasts
+    lens: legal
+    severity: P2
+    issue: "'Connection successful ({ms}ms); Connection failed: {err}' — admin diagnostic; ensure {err} from provider does not leak provider-side secrets or PII"
+    evidence_excerpt: "Connection successful ({ms}ms); Connection failed: {err}; Failed to test connection; Provider status updated; Provider deleted; Failed to toggle provider"
+    recommendation: "Audit {err} pass-through. Provider error strings sometimes contain auth tokens, account IDs, or other sensitive fragments. DPDP §8(5)."
+    citation: "DPDP Act 2023 §8(5); IT Act 2000 §43A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-120
+    surface_id: ap-providers-toasts
+    lens: legal
+    severity: P3
+    issue: "'Provider deleted' admin toast — deleting a provider may affect in-flight orders; ensure UX warns admin before destructive action"
+    evidence_excerpt: "Provider status updated; Failed to toggle provider; Provider deleted; Failed to delete provider"
+    recommendation: "Apply confirmation modal with consequence statement (style guide §4 'Modal subtitles' — 'explain consequence in one sentence'). Legal-relevance: failure to warn admin about in-flight orders could result in stranded orders + customer harm."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5); best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN APPROVAL DETAIL
+  # ============================================================================
+
+  - finding_id: LEG-TX-121
+    surface_id: ap-approvaldetail-toasts
+    lens: legal
+    severity: P1
+    issue: "'Approval request approved / Approval request rejected / More information requested from chef' — adverse-action confirmations to admin; verify the chef-side notification fires for each + the reason is captured"
+    evidence_excerpt: "Approval request approved; Approval request rejected; More information requested from chef; Failed to approve request; Failed to reject request; Failed to request information"
+    recommendation: "Confirm each admin action triggers the corresponding chef-side notification with reason (LEG-TX-035, LEG-TX-037, LEG-TX-038 cover the chef-side issues). Admin success toast is fine on its own provided chef-side flow is complete."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 6(4); IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CATCH — REMAINING MOBILE / VENDOR / DRIVER SUCCESS TOASTS
+  # ============================================================================
+
+  - finding_id: LEG-TX-122
+    surface_id: vp-onb-personal-avatar-success
+    lens: legal
+    severity: P3
+    issue: "'Profile photo uploaded' — confirm EXIF stripping + storage location notice"
+    evidence_excerpt: "\"Profile photo uploaded\""
+    recommendation: "Same as LEG-TX-066. Strip EXIF, surface privacy notice."
+    citation: "DPDP Act 2023 §4, §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-123
+    surface_id: dp-tx-toast-step1-saved
+    lens: legal
+    severity: P3
+    issue: "'Personal info saved' — driver onboarding step; confirm DPDP §5 notice was shown before this step"
+    evidence_excerpt: "\"Personal info saved\""
+    recommendation: "Verify the DPDP §5 notice (purposes, retention, data fiduciary, withdrawal) is presented before personal info is captured."
+    citation: "DPDP Act 2023 §5"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-124
+    surface_id: dp-tx-toast-step2-saved
+    lens: legal
+    severity: P3
+    issue: "'Vehicle details saved' — confirm Motor Vehicles Act compliance (DL number, RC, insurance) verification linkage"
+    evidence_excerpt: "\"Vehicle details saved\""
+    recommendation: "Vehicle details + DL form the basis of the platform's claim that drivers are legally able to deliver. Verify each is checked against authoritative source (Vahan/Sarathi APIs) before driver goes live. Motor Vehicles Act 1988 §3 (driving licence)."
+    citation: "Motor Vehicles Act 1988 §3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-125
+    surface_id: dp-tx-toast-step4-saved
+    lens: legal
+    severity: P2
+    issue: "'Plan selected successfully' — driver subscription plan; if plan implies revenue-sharing or fee, RBI e-Mandate + clear-disclosure rules apply"
+    evidence_excerpt: "\"Plan selected successfully\""
+    recommendation: "Surface plan price + recurring schedule + cancellation pathway on the selection screen, not just a success toast. RBI e-Mandate 2019/2021 + CPA 2019."
+    citation: "RBI e-Mandate framework 2019/2021; Consumer Protection Act 2019"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # SUMMARY-LEVEL FINDINGS — CROSS-CUTTING CONCERNS
+  # ============================================================================
+
+  - finding_id: LEG-TX-126
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P0
+    issue: "Cross-cutting: brand identity drift across transactional channels — 'Fe3dr', 'HomeChef', 'Fe3dr HomeChef' all surface to the same user across email/push/in-app — material risk of confusion + misrepresentation"
+    evidence_excerpt: "Multiple inventory rows confirm divergence: api-push-user-welcome (HomeChef), api-email-welcome (Fe3dr!), api-email-chef-new-order (Fe3dr), api-email-account-reminder (Fe3dr HomeChef)"
+    recommendation: "Choose one legal trade name and standardise everywhere. Until then, customer cannot distinguish phishing from legitimate brand mail (DPDP §8(5) security implication), and the platform's CPER 2020 Rule 4(1) duty to publish its legal name in a unified manner is weakened."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(1); Consumer Protection Act 2019 §2(28); DPDP Act 2023 §8(5)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-127
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P0
+    issue: "Cross-cutting: NO transactional email contains the grievance officer footer, DPDP §5 notice summary, or unsubscribe/preferences link"
+    evidence_excerpt: "OrderConfirmationHTML, PasswordResetHTML, WelcomeEmailHTML, ChefNewOrderHTML, ChefVerificationApprovedHTML, EmailVerificationHTML, StaffInvitationHTML, OrderStatusUpdateHTML, DeliveryAssignedHTML — none reference grievance officer or DPDP rights"
+    recommendation: "Add a standard email footer block applied via emailBase wrapper containing: (a) grievance officer name+email+phone, (b) platform legal name + address, (c) link to Privacy Notice, (d) link to manage preferences, (e) link to in-app support, (f) one-line 'You're receiving this because you have an account with [brand]'. Required by Consumer Protection (E-Commerce) Rules 2020 Rule 4(5) + IT Rules 2021 Rule 3(2) + DPDP §5/§6(4)."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rules 4(5), 6(5); IT (Intermediary Guidelines) Rules 2021 Rule 3(2); DPDP Act 2023 §5, §6(4), §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-128
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P0
+    issue: "Cross-cutting: NO transactional email or SMS surface shows the chef's FSSAI licence number — recurring FSSAI E-Commerce FBO Guidelines violation across the entire transactional surface"
+    evidence_excerpt: "Across api-email-order-confirm, api-email-order-status-*, api-push-order-update-*, no FSSAI number observed"
+    recommendation: "Inject the chef's FSSAI licence number into every transactional surface tied to an order (confirmation, status, delivery, complaint). Required by FSSAI Direction 8 Feb 2021 (E-Commerce FBO Guidelines)."
+    citation: "FSSAI Direction F. No. 15(31)2020/FoSCoRIS/RCD/FSSAI dated 8 Feb 2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-129
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P0
+    issue: "Cross-cutting: refund timeline disclosure absent across cancellation, refund-initiation, and verification-failed transactional surfaces"
+    evidence_excerpt: "api-email-order-status-cancelled, api-push-order-cancelled-both, api-inapp-order-cancelled-both, web-tx-orderdetail-toasts, web-tx-checkout-payment-toasts — none state refund timeline"
+    recommendation: "Add a uniform refund-timeline disclosure ('Refunds, when applicable, complete within T+7 working days to your original payment method') to every cancellation, failed-payment, and refund-initiation surface. RBI PA Master Direction + CPER 2020 Rule 5(3)(g) require this disclosure."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §8; Consumer Protection (E-Commerce) Rules 2020 Rule 5(3)(g)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-130
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: SMS path not visible in inventory — confirm DLT registration, header/template registration, and consent capture for every SMS sent"
+    evidence_excerpt: "No SMS templates surfaced in transactional inventory excerpt — verify via separate SMS code-path audit"
+    recommendation: "Conduct a separate audit of SMS dispatch code. Every SMS to Indian numbers requires (a) a registered Sender ID, (b) a registered template, (c) correct category (transactional/service/promotional), and (d) consent record. Carrier scrubbing rejects unregistered traffic. TRAI TCCCPR 2018."
+    citation: "TRAI Telecom Commercial Communications Customer Preference Regulations 2018; DLT framework"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-131
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: every transactional channel reaches a user but no central record visible of consent capture for those channels (push, email, SMS, in-app)"
+    evidence_excerpt: "Welcome push + welcome email + transactional pushes — captured at signup as part of bundled consent (per LEG-001/LEG-002)"
+    recommendation: "Maintain a per-user, per-channel, per-purpose consent ledger. DPDP §6(2) requires the Data Fiduciary to be able to demonstrate that consent has been obtained. A bundled signup checkbox does not satisfy this for cross-channel transactional + marketing comms."
+    citation: "DPDP Act 2023 §6(2)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-132
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: emoji-prefixed status emails (🔔 / 👨‍🍳 / ✅ / 🚗 / 🎉 / ❌) — legally neutral, but voice-guide says 'no exclamation tricks'; emojis act as visual exclamations. Legal-relevance: low; brand-consistency: medium"
+    evidence_excerpt: "Across api-email-order-status-* — all use emoji prefixes"
+    recommendation: "Out of legal scope per se — captured for completeness. Style-guide consistency."
+    citation: "STYLE-GUIDE.md §1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-133
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: 'log in / login / logout' banned variants appear in mobile alerts (mc-profile-logout-confirm, md-trx-006, md-trx-007, api-success-message-generic 'Logged out successfully', web-tx-social-feed-actions)"
+    evidence_excerpt: "Multiple rows use 'log in' / 'log out' / 'logout' instead of style-guide 'sign in' / 'sign out'"
+    recommendation: "Outside Legal lens per se. Brand-consistency duty under CPER 2020 Rule 4(1)."
+    citation: "STYLE-GUIDE.md §3; Consumer Protection (E-Commerce) Rules 2020 Rule 4(1)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-134
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: every chef-action and driver-action notification confirms platform-side execution but few surface the corresponding payout/financial impact — gig-worker earnings transparency gap"
+    evidence_excerpt: "api-email-chef-new-order, api-push-chef-new-order-actionable, dp-tx-toast-accept-success, web-tx-delivery-actions"
+    recommendation: "Surface trip-level / order-level payout estimate in every chef/driver acceptance + completion notification. Code on Social Security 2020 + emerging state platform-worker laws push toward earnings transparency at the work-spell level."
+    citation: "Code on Social Security 2020 §113-114; Rajasthan Platform-Based Gig Workers Act 2023 (state benchmark)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-135
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: no transactional surface references the platform's IT Rules 2021 grievance officer or appellate-grievance committee (AGC) for content/intermediary disputes"
+    evidence_excerpt: "Across all transactional inventory rows — no IT Rules grievance officer reference observed"
+    recommendation: "Add the IT Rules 2021 grievance officer contact to email footer and a 'Report content' / 'Appeal' link to the in-app footer. IT (Intermediary Guidelines and Digital Media Ethics Code) Rules 2021 Rule 3(2)(b) requires display of grievance officer details. Rule 3A introduces Grievance Appellate Committees."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rules 3(2)(b), 3A"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-136
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: no per-channel preference centre referenced from any transactional surface — DPDP §6(4) requires withdrawal of consent to be as easy as giving consent"
+    evidence_excerpt: "No 'manage notifications' / 'unsubscribe' link observed in transactional copy"
+    recommendation: "Build and link a notification preference centre (per-channel: email/push/SMS; per-purpose: transactional/account/marketing). Link from every email footer. DPDP §6(4)."
+    citation: "DPDP Act 2023 §6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-137
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: free-text injection from admins / chefs into notifications visible to other parties — multiple findings (LEG-TX-025, LEG-TX-035, LEG-TX-036, LEG-TX-037, LEG-TX-039, LEG-TX-057, LEG-TX-096, LEG-TX-110) — needs a single mitigation"
+    evidence_excerpt: "Admin-authored fields: api-inapp-staff-invite, ap-secsettings-toasts; admin-authored notes: api-inapp-approval-rejected-chef, api-inapp-approval-info-chef; chef-authored: api-inapp-chef-responded"
+    recommendation: "Implement a single notification-sanitisation middleware: HTML strip, length cap, profanity filter, PII detection. Apply to every user-authored field before fanout. IT Rules 2021 Rule 3 + IT Act §79 due-diligence."
+    citation: "IT Act 2000 §79; IT (Intermediary Guidelines) Rules 2021 Rule 3"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-138
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: order status copy diverges across three code paths (statusLabels map in email_templates.go, getOrderStatusMessage in notifications.go, RegisterPushConsumers humanReadableOrderStatus) — three sources of truth for the same lifecycle states"
+    evidence_excerpt: "Inventory notes recurring drift between email, in-app, push wording for the same status"
+    recommendation: "Consolidate to a single source-of-truth status-string registry (e.g. enum -> localised string map in shared package). Inconsistent status copy is a contract-evidence weakness (Indian Contract Act §29 certainty)."
+    citation: "Indian Contract Act 1872 §29"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-139
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P3
+    issue: "Cross-cutting: exclamation-mark inflation in transactional copy ('Welcome to Fe3dr!', 'Application submitted!', 'New Order!', 'Order Delivered!', 'Reset your password — Fe3dr', 'Delivery accepted!') — every transactional surface uses celebratory punctuation"
+    evidence_excerpt: "Multiple inventory rows"
+    recommendation: "Out of Legal lens scope per se. Brand-voice consistency."
+    citation: "STYLE-GUIDE.md §1 Rule 1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-140
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: ratios of duplicate notifications — chef gets two pushes for new orders (LEG-TX-061), customer gets two pushes for status updates (per inventory notes on three sets of status labels) — DPDP §4 'reasonable' purpose-limited processing is undermined when duplicate notifications are fired"
+    evidence_excerpt: "Inventory notes: chef receives TWO pushes / customer can receive two pushes with different status wording"
+    recommendation: "Deduplicate at the dispatcher level. Each lifecycle event should produce exactly one push + one in-app + one email (where applicable), with consistent copy."
+    citation: "DPDP Act 2023 §4; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-141
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: 'verified' / 'approved' / 'rejected' / 'suspended' actions throughout the platform have NO single record (per inventory excerpt) of: (a) reason code, (b) actor, (c) timestamp, (d) appeal path"
+    evidence_excerpt: "ap-chefs-toast-verified, ap-chefs-toast-rejected, ap-chefs-toast-suspended, dp-tx-toast-partner-suspend, dp-tx-toast-partner-verified, ap-users-toast-suspended, ap-staffdetail-toasts"
+    recommendation: "Build a server-side adverse-action audit table that captures, for every suspend/reject/revoke/deactivate, the actor, target, reason code, timestamp, IP. Surface the action's record to the affected user via a 'Why?' link. Required by IT Rules 2021 Rule 3 + DPDP §8(6) + CPER 2020 Rule 6(4)."
+    citation: "IT (Intermediary Guidelines) Rules 2021 Rules 3-4; DPDP Act 2023 §8(6); Consumer Protection (E-Commerce) Rules 2020 Rule 6(4)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-142
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: no reference in any transactional surface to the platform's role classification (intermediary under IT Act §79 / e-commerce entity under CPER 2020 / data fiduciary under DPDP §2(i))"
+    evidence_excerpt: "Inventory excerpt shows no role-disclosure in transactional copy"
+    recommendation: "Add a one-line role disclosure in the email footer: '[Brand] operates as an e-commerce entity facilitating sales between independent home chefs and customers. We are an intermediary under IT Act 2000 §79.' Strengthens intermediary safe-harbour position when content disputes arise."
+    citation: "IT Act 2000 §79; Consumer Protection (E-Commerce) Rules 2020 Rule 4; DPDP Act 2023 §2(i)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-143
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: no transactional surface references the customer's right to file complaint with the Food Safety Connect toll-free 1800-112-100 / FSSAI App for food-quality issues"
+    evidence_excerpt: "No FSSAI complaint pathway observed in transactional copy"
+    recommendation: "Add an FSSAI complaint reference to delivery-confirmation and complaint-flow surfaces. Practical effect: customer's ability to invoke FSSAI complaint channels independently of the platform demonstrates the platform's good-faith intermediary status."
+    citation: "Food Safety and Standards Act 2006; FSSAI Food Safety Connect"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-144
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: chef-side FSSAI compliance is recurrence-blind — no transactional surface reminds chef before order acceptance that their FSSAI must be valid and the kitchen FSSAI-compliant"
+    evidence_excerpt: "Chef-new-order copy assumes verification is current; no in-flow check surfaced"
+    recommendation: "Add a 'FSSAI valid until {date}' line in the chef new-order email + push if within 30 days of expiry. If expired, block order acceptance and notify chef immediately. FSS Act §31 makes it an offence to sell food without a valid FSSAI registration."
+    citation: "Food Safety and Standards Act 2006 §31; FSS (Licensing and Registration of Food Businesses) Regulations 2011"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-145
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P3
+    issue: "Cross-cutting: time/date formatting in transactional surfaces inconsistent — emails use chef timezone? Customer timezone? Server UTC? Affects when 'within 24-48 hours' SLA actually expires"
+    evidence_excerpt: "Inventory shows '24-48 hours' SLA stated but no timezone discipline observed"
+    recommendation: "Standardise all customer-facing time as IST with explicit 'IST' suffix. Avoid ambiguity that an Indian customer or chef might infer their local time when the system stamps UTC. CPA 2019 §2(28) misleading-representation lens."
+    citation: "Consumer Protection Act 2019 §2(28); STYLE-GUIDE.md §6"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-146
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: no transactional surface references age verification — DPDP §10 prohibits behavioural tracking, targeted advertising, and undertaking of children's data without verifiable parental consent"
+    evidence_excerpt: "No age-related copy in transactional inventory"
+    recommendation: "Add an age-verification flow during signup (out of scope for transactional inventory but flagged here because welcome email is the carryover surface). Welcome email should reference 'For users 18+' if signup is age-gated, or describe parental-consent path if not. DPDP §10."
+    citation: "DPDP Act 2023 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-147
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: customer addresses are stored permanently (no surfaced retention statement); DPDP §8(7) limits retention to purpose-necessary period"
+    evidence_excerpt: "Address CRUD toasts (web-tx-profile-addresses); no retention reference"
+    recommendation: "Define and surface an address-retention policy. If a customer has been inactive for N years, addresses should be purged absent contractual or statutory retention need. DPDP §8(7) + §12."
+    citation: "DPDP Act 2023 §8(7), §12"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-148
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: order data retention — order confirmation emails set up an expectation that order history persists; verify retention aligns with §31 CGST Act (tax invoice retention 6 years) and DPDP §8(7) (purpose-necessary period)"
+    evidence_excerpt: "No retention reference in order emails or order-detail toasts"
+    recommendation: "Order invoices must be retained for at least 6 years under CGST §36 + Rule 56 + §31. Surface this in privacy notice; ensure DPDP §12 erasure requests do not delete records that GST law requires the platform to retain. Need to reconcile §8(7) + GST retention."
+    citation: "CGST Act 2017 §31, §36, Rule 56; DPDP Act 2023 §8(7), §12"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-149
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P1
+    issue: "Cross-cutting: payment-related surfaces (success, failure, refund, cancel) do not name the payment aggregator (Razorpay / Stripe) — RBI PA framework requires customer to know who is processing the payment"
+    evidence_excerpt: "web-tx-checkout-payment-toasts, web-tx-orderdetail-toasts — Razorpay/Stripe paths unnamed in user-facing copy"
+    recommendation: "Surface 'Payment processed securely by [Razorpay/Stripe]' on the success surface. RBI PA Master Direction §4 (information disclosure)."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §4"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-150
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P3
+    issue: "Cross-cutting: 'Profile updated successfully' / 'Settings saved' etc. — DPDP §11 right-to-correction; consider a brief confirmation summary ('Name changed from X to Y') for sensitive fields"
+    evidence_excerpt: "web-tx-profile-update, vp-ux-profile-toasts, ap-notifsettings-toasts, ap-platsettings-feedback, ap-secsettings-toasts, mv-profile-update-success-body, md-trx-014"
+    recommendation: "For sensitive-field changes (email, phone, bank, address), echo the changed value back in the toast or send a confirmation email. DPDP §8(5) + §11."
+    citation: "DPDP Act 2023 §8(5), §11"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-151
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: NO reference in any transactional surface to data fiduciary identity or contact — DPDP §5(1)(a) requires the notice at consent to identify the Data Fiduciary"
+    evidence_excerpt: "No emails or push notifications surface the legal entity that operates the platform"
+    recommendation: "Add the legal entity name (e.g. 'Fe3dr Foods Pvt Ltd') and registered office address to email footer. DPDP §5(1)(a) requires Notice to identify Data Fiduciary; CPER 2020 Rule 4(1) requires e-commerce entity to publish legal name."
+    citation: "DPDP Act 2023 §5(1)(a); Consumer Protection (E-Commerce) Rules 2020 Rule 4(1)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-152
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: cross-border data transfer — Razorpay, Stripe, Google Cloud Storage may move data outside India; transactional copy does not reference this"
+    evidence_excerpt: "Payment provider Stripe + storage on GCS (per CLAUDE.md); no user-facing notice"
+    recommendation: "DPDP §16 allows cross-border transfer except to negative-listed countries; once those rules operationalise, the platform must update its Notice. Privacy notice must list categories of cross-border processors. Transactional emails not the right surface, but the email footer's privacy-notice link must lead to the right content."
+    citation: "DPDP Act 2023 §16"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-153
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: no breach-notification copy/template visible — DPDP §8(6) requires Data Fiduciary to notify the Data Protection Board and affected Data Principals of a 'personal data breach' in such form and manner as prescribed"
+    evidence_excerpt: "No breach-notification transactional template observed in inventory"
+    recommendation: "Build a breach-notification email template + push template in advance. DPDP §8(6) imposes the notification duty; templating now ensures the platform can respond within the prescribed timeframe (expected to be tight under upcoming Rules)."
+    citation: "DPDP Act 2023 §8(6); DPDP Rules (forthcoming)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-TX-154
+    surface_id: cross-cutting-transactional
+    lens: legal
+    severity: P2
+    issue: "Cross-cutting: no transactional surface references chef/driver KYC re-verification cadence — RBI PA Master Direction requires periodic merchant KYC refresh"
+    evidence_excerpt: "Chef/driver onboarding success surfaces (vp-onb-submit-success, dp-tx-toast-step5-submitted) — no mention of refresh cadence"
+    recommendation: "Define a KYC-refresh cadence (typically every 2 years for low-risk, more frequent for higher-risk). Surface a reminder notification template ('Refresh your KYC by {date}') and a periodic chef/driver email. RBI PA Master Direction §9 + Master Direction on KYC."
+    citation: "RBI Payment Aggregator Master Direction 17 Mar 2020 §9; RBI Master Direction on KYC 2016 (updated)"
+    depends_on: "needs lawyer review"

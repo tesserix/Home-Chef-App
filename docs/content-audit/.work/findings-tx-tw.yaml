@@ -1,0 +1,1499 @@
+# Technical Writer lens — TRANSACTIONAL category findings
+# Audited 154 rows from CONTENT-INVENTORY.md (transactional section).
+# Focus: backend-generated copy (email templates, push, SMS, in-app), plus front-end toast/alert content.
+
+# ============================================================================
+# API — BRAND DRIFT & SHARED INFRASTRUCTURE (highest blast radius)
+# ============================================================================
+
+- finding_id: TW-001
+  surface_id: api-email-account-reminder
+  lens: technical-writer
+  severity: P0
+  issue: "Brand drift inside email subject — 'Fe3dr HomeChef' compound name contradicts the single-brand voice used everywhere else"
+  evidence_excerpt: "Subject: 'You already have a Fe3dr HomeChef account' / signoff: '— Fe3dr HomeChef'"
+  recommendation: "Pick one brand name and use it consistently across every email surface. STYLE-GUIDE.md uses 'Home Chef'; production code uses 'Fe3dr'. Resolve to one and apply repo-wide. As a pure TW fix: replace with 'You already have a Home Chef account' and signoff '— Home Chef'."
+  depends_on: null
+
+- finding_id: TW-002
+  surface_id: api-push-user-welcome
+  lens: technical-writer
+  severity: P0
+  issue: "Brand name inside welcome push contradicts welcome email — push says 'HomeChef', email says 'Fe3dr'. A new user receives two products in two minutes"
+  evidence_excerpt: "Push title: 'Welcome to HomeChef!' / Email subject: 'Welcome to Fe3dr!'"
+  recommendation: "Standardize on 'Home Chef' (per STYLE-GUIDE) in both push title and email subject. Update services/notifications.go::handleUserRegistered and services/email_templates.go::WelcomeEmailHTML in lockstep."
+  depends_on: null
+
+- finding_id: TW-003
+  surface_id: api-email-welcome
+  lens: technical-writer
+  severity: P1
+  issue: "Welcome email opens with marketing hype banned by Rule 5 (Restraint over urgency) and Rule 3 (Photo-forward, chrome-light) — 'thrilled', 'amazing', 'talented' stack in one paragraph"
+  evidence_excerpt: "We're thrilled to have you. Discover amazing home-cooked meals from talented local chefs right in your neighbourhood."
+  recommendation: "Rewrite as: 'Welcome, %s. Discover home chefs cooking in your neighbourhood — order what's available today, track your delivery, and rate the meal when it arrives.' Remove 'thrilled' / 'amazing' / 'talented'."
+  depends_on: null
+
+- finding_id: TW-004
+  surface_id: api-email-welcome
+  lens: technical-writer
+  severity: P2
+  issue: "Welcome CTA button uses title-case 'Start Exploring' violating sentence-case rule (Sec 4 Buttons)"
+  evidence_excerpt: "<a href='https://fe3dr.com' class='btn'>Start Exploring</a>"
+  recommendation: "Change to 'Start exploring' (sentence case)."
+  depends_on: null
+
+- finding_id: TW-005
+  surface_id: api-email-welcome
+  lens: technical-writer
+  severity: P2
+  issue: "Exclamation in subject 'Welcome to Fe3dr!' is a Rule 1 violation when the same recipient already gets an exclamation push and an in-app banner — exclamations stack across surfaces"
+  evidence_excerpt: "Subject: 'Welcome to Fe3dr!'"
+  recommendation: "Drop the exclamation: 'Welcome to Home Chef'."
+  depends_on: null
+
+- finding_id: TW-006
+  surface_id: api-email-verify
+  lens: technical-writer
+  severity: P2
+  issue: "Verify-email CTA uses title-case 'Verify Email Address' (3 words is fine; case is wrong)"
+  evidence_excerpt: "<a ... class='btn'>Verify Email Address</a>"
+  recommendation: "Change to 'Verify email' (also tightens to 2 words)."
+  depends_on: null
+
+- finding_id: TW-007
+  surface_id: api-email-verify
+  lens: technical-writer
+  severity: P3
+  issue: "Helper sentence 'Thanks for signing up! Please verify your email address to activate your account and start ordering.' contains an exclamation in transactional context (Rule 1) and is 17 words"
+  evidence_excerpt: "Thanks for signing up! Please verify your email address to activate your account and start ordering."
+  recommendation: "Rewrite: 'Thanks for signing up. Verify your email to activate your account.' Single sentence, no exclamation."
+  depends_on: null
+
+- finding_id: TW-008
+  surface_id: api-email-password-reset
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'Reset Password' is title-case; should be sentence case per Sec 4"
+  evidence_excerpt: "<a ... class='btn'>Reset Password</a>"
+  recommendation: "Change to 'Reset password'."
+  depends_on: null
+
+- finding_id: TW-009
+  surface_id: api-email-staff-invite
+  lens: technical-writer
+  severity: P2
+  issue: "H2 'You've been invited!' uses exclamation in a transactional admin email (Rule 1)"
+  evidence_excerpt: "<h2>You've been invited!</h2>"
+  recommendation: "Change to 'You've been invited' — no exclamation."
+  depends_on: null
+
+- finding_id: TW-010
+  surface_id: api-email-staff-invite
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'Accept Invitation' is title-case; should be sentence case"
+  evidence_excerpt: "<a ... class='btn'>Accept Invitation</a>"
+  recommendation: "Change to 'Accept invitation'."
+  depends_on: null
+
+- finding_id: TW-011
+  surface_id: api-email-staff-invite
+  lens: technical-writer
+  severity: P3
+  issue: "Role injected as raw string into body — if role enum is 'fleet_manager' user reads 'has invited you to join the Fe3dr team as fleet_manager' (raw slug leak)"
+  evidence_excerpt: "<strong>%s</strong> has invited you to join the Fe3dr team as <strong>%s</strong>"
+  recommendation: "Wrap role with a label lookup (e.g. 'a Fleet Manager') and ensure the caller never passes raw enum slugs."
+  depends_on: null
+
+- finding_id: TW-012
+  surface_id: api-email-order-confirm
+  lens: technical-writer
+  severity: P2
+  issue: "H2 'Order Confirmed!' uses exclamation against Rule 1; H2 also uses title case while body uses sentence case (within-surface voice drift)"
+  evidence_excerpt: "<h2>Order Confirmed!</h2>"
+  recommendation: "Change to 'Order confirmed' (no exclamation, sentence case)."
+  depends_on: null
+
+- finding_id: TW-013
+  surface_id: api-email-order-confirm
+  lens: technical-writer
+  severity: P2
+  issue: "'Your home chef is preparing your meal!' adds an exclamation and assumes work has started — but order may still be in confirmation queue. Mixes commitment and excitement"
+  evidence_excerpt: "Your order #%s has been placed successfully. Your home chef is preparing your meal!"
+  recommendation: "Rewrite: 'Your order #%s is placed. Your home chef will start preparing it shortly.' No exclamation, accurate state."
+  depends_on: null
+
+- finding_id: TW-014
+  surface_id: api-email-order-confirm
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'Track Your Order' is title-case and 3 words including possessive — sentence case rule + tighter form"
+  evidence_excerpt: "<a ... class='btn'>Track Your Order</a>"
+  recommendation: "Change to 'Track order'."
+  depends_on: null
+
+- finding_id: TW-015
+  surface_id: api-email-order-confirm
+  lens: technical-writer
+  severity: P3
+  issue: "Total label is plain 'Total' (correct per Sec 3) but column header 'Price' is ambiguous when items have quantity — should be 'Line total' or 'Amount'"
+  evidence_excerpt: "<th ...>Price</th> ... ₹%.2f"
+  recommendation: "Rename column to 'Amount' so the price row reads as the calculated line total, not a unit price."
+  depends_on: null
+
+- finding_id: TW-016
+  surface_id: api-email-order-status-confirmed
+  lens: technical-writer
+  severity: P2
+  issue: "Within-surface voice drift: H2 still says generic 'Order Update' across all 7 statuses while subject is custom, leaving the body bland"
+  evidence_excerpt: "<h2>%s Order Update</h2><p>Order <strong>#%s</strong>: %s</p>"
+  recommendation: "Make the H2 use the same status label as the subject (e.g. 'Your chef is preparing your meal'). The redundant 'Order #X: ...' line can then be removed."
+  depends_on: null
+
+- finding_id: TW-017
+  surface_id: api-email-order-status-preparing
+  lens: technical-writer
+  severity: P2
+  issue: "Status label 'Your chef is preparing your meal' (email) does not match push label 'Your order is being prepared' (notifications.go:1034) or handlers/notifications label 'being prepared'"
+  evidence_excerpt: "preparing → 'Your chef is preparing your meal'"
+  recommendation: "Consolidate all 3 status-label maps (services/email_templates.go::statusLabels, services/notifications.go::getOrderStatusMessage, handlers/notifications.go::humanReadableOrderStatus) into one canonical map exported from a single package. Use 'Your chef is preparing your meal' as the canonical preparing label (the strongest emotionally-anchored variant)."
+  depends_on: null
+
+- finding_id: TW-018
+  surface_id: api-email-order-status-ready
+  lens: technical-writer
+  severity: P2
+  issue: "Label 'Your order is ready for pickup' contradicts customer-facing push 'Your order is ready for pickup/delivery'. A delivery order receives a 'ready for pickup' email"
+  evidence_excerpt: "ready → 'Your order is ready for pickup'"
+  recommendation: "Split into two labels keyed by order mode: 'Your order is ready for pickup' (pickup orders) and 'Your order is ready for delivery' (delivery orders). The mode is already on the OrderEvent."
+  depends_on: null
+
+- finding_id: TW-019
+  surface_id: api-email-order-status-pickedup
+  lens: technical-writer
+  severity: P2
+  issue: "Label uses 'delivery partner' (customer-facing term — good) while push (api-push-order-update-customer-deeplink) says 'picked up by the driver' (banned customer-facing term per Sec 3)"
+  evidence_excerpt: "picked_up → 'Your delivery partner has picked up your order'"
+  recommendation: "Adopt 'delivery partner' consistently in customer-facing copy. Update handlers/notifications.go::humanReadableOrderStatus 'picked_up' label from 'picked up by the driver' to 'picked up by the delivery partner'."
+  depends_on: null
+
+- finding_id: TW-020
+  surface_id: api-email-order-status-onway
+  lens: technical-writer
+  severity: P2
+  issue: "Subject has exclamation 'Your order is on the way!' against Rule 1; sister surface (in-app/push) says 'on its way!' — inconsistent possessive + exclamation in both"
+  evidence_excerpt: "Subject: 'Order #%s — Your order is on the way!'"
+  recommendation: "Rewrite both surfaces to 'Your order is on its way' (no exclamation, idiomatic possessive). Update the email label and push body together."
+  depends_on: null
+
+- finding_id: TW-021
+  surface_id: api-email-order-status-delivered
+  lens: technical-writer
+  severity: P2
+  issue: "Subject 'Your order has been delivered. Enjoy your meal!' compresses two thoughts; exclamation in transactional subject violates Rule 1"
+  evidence_excerpt: "Subject: 'Order #%s — Your order has been delivered. Enjoy your meal!'"
+  recommendation: "Subject: 'Order #%s — Delivered'. Body H2: 'Order delivered'. Closing paragraph: 'Enjoy your meal.'"
+  depends_on: null
+
+- finding_id: TW-022
+  surface_id: api-email-order-status-delivered
+  lens: technical-writer
+  severity: P2
+  issue: "Three different 'enjoy' phrasings across surfaces: email 'Enjoy your meal!', push 'Enjoy your meal!', in-app status 'Enjoy!' (notifications.go:1038). Same product, three voices"
+  evidence_excerpt: "email: 'Enjoy your meal!' / push: 'Enjoy your meal!' / in-app status: 'Enjoy!'"
+  recommendation: "Use 'Enjoy your meal.' (period, no exclamation) on every surface."
+  depends_on: null
+
+- finding_id: TW-023
+  surface_id: api-email-order-status-cancelled
+  lens: technical-writer
+  severity: P0
+  issue: "Cancellation email omits refund timeline and who-to-contact — a P0 transactional gap for a paid order. Body reduces to one sentence with no next step"
+  evidence_excerpt: "Subject: 'Order #%s — Your order has been cancelled' / Body: just 'Order #X: Your order has been cancelled' + CTA 'View Order Details'"
+  recommendation: "Add: 'Your refund of ₹X has been issued to your original payment method and will appear in 5–7 business days.' Plus contact line: 'Need help? Contact support at support@homechef.in.' (Legal lens owns refund-period accuracy.)"
+  depends_on: null
+
+- finding_id: TW-024
+  surface_id: api-email-chef-new-order
+  lens: technical-writer
+  severity: P1
+  issue: "Subject and H2 'New order' fine, but body opens with '🔔 New Order!' violating Rule 1 (exclamation + emoji in transactional). Chef-facing tone should be functional, time-aware (5-12 words crisp)"
+  evidence_excerpt: "<h2>🔔 New Order!</h2><p>You have a new order #%s worth ₹%.2f.</p>"
+  recommendation: "Rewrite H2 as 'New order #%s' and body as 'A new order worth ₹%.2f is waiting. Accept or decline from your dashboard.' Drop bell emoji."
+  depends_on: null
+
+- finding_id: TW-025
+  surface_id: api-email-chef-new-order
+  lens: technical-writer
+  severity: P0
+  issue: "SLA commitment in info-box ('Customers expect a response within 5 minutes') is a factual claim the product may not enforce — no chef-facing timer is exposed on web/mobile vendor portals. False promise to chef"
+  evidence_excerpt: "Customers expect a response within 5 minutes. Please accept or decline promptly."
+  recommendation: "Either expose the 5-minute auto-reject timer in the vendor portal (BA lens scope) or weaken the email line to 'Accept or decline as soon as you can — customers see real-time chef response times.'"
+  depends_on: null
+
+- finding_id: TW-026
+  surface_id: api-email-chef-new-order
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'View Order' is fine in length but title-case violates Sec 4"
+  evidence_excerpt: "<a ... class='btn'>View Order</a>"
+  recommendation: "Change to 'View order'."
+  depends_on: null
+
+- finding_id: TW-027
+  surface_id: api-email-chef-verified
+  lens: technical-writer
+  severity: P2
+  issue: "Body uses 'Congratulations, %s!' — exclamation in transactional; H2 is also title-case-style ('Your kitchen is verified — Fe3dr')"
+  evidence_excerpt: "<h2>Congratulations, %s!</h2>"
+  recommendation: "Change H2 to 'Your kitchen is verified, %s' — keeps personalization, removes exclamation, mirrors subject."
+  depends_on: null
+
+- finding_id: TW-028
+  surface_id: api-email-chef-verified
+  lens: technical-writer
+  severity: P2
+  issue: "Bulleted next-steps list ends with exclamation 'Start accepting orders!' — third exclamation in this email"
+  evidence_excerpt: "<li>Start accepting orders!</li>"
+  recommendation: "Change to 'Start accepting orders.' Strip all exclamations from this email per Rule 1 (≤1 per page, none in transactional)."
+  depends_on: null
+
+- finding_id: TW-029
+  surface_id: api-email-chef-verified
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'Go to Your Dashboard' is title-case, contains possessive, 4 words — violates Sec 4 (verb-first, ≤3 words, sentence case)"
+  evidence_excerpt: "<a ... class='btn'>Go to Your Dashboard</a>"
+  recommendation: "Change to 'Open dashboard'."
+  depends_on: null
+
+- finding_id: TW-030
+  surface_id: api-email-chef-verified
+  lens: technical-writer
+  severity: P2
+  issue: "Within-product naming drift: this email says 'kitchen', but the in-app notification (api-inapp-chef-verified) says 'chef profile'. Same event, two nouns"
+  evidence_excerpt: "Email: 'Your kitchen has been verified' / In-app: 'Your chef profile has been verified'"
+  recommendation: "Pick one term. Recommend 'chef profile' for both because the verification is of the chef record, not the physical kitchen. Update the email and message body together."
+  depends_on: null
+
+- finding_id: TW-031
+  surface_id: api-email-delivery-assigned
+  lens: technical-writer
+  severity: P0
+  issue: "Routing bug: function returns driver-oriented copy ('You've been assigned order #...') but is dispatched to the CUSTOMER in services/notifications.go::handleDeliveryAssigned (line 569-581). Customer reads driver copy"
+  evidence_excerpt: "Subject: 'Delivery assigned — Order #%s' / Body: '🚗 New Delivery! You\\'ve been assigned order #%s.'"
+  recommendation: "Split into two templates: DeliveryAssignedDriverHTML (existing copy, sent to driver) and DeliveryAssignedCustomerHTML ('Your delivery partner %s is on the way to pick up order #%s'). Update sendEmailNotification routing in services/notifications.go:910-914 to dispatch the customer template for the customer-facing event."
+  depends_on: null
+
+- finding_id: TW-032
+  surface_id: api-email-delivery-assigned
+  lens: technical-writer
+  severity: P2
+  issue: "H2 '🚗 New Delivery!' uses emoji + exclamation in transactional driver email"
+  evidence_excerpt: "<h2>🚗 New Delivery!</h2>"
+  recommendation: "Change to 'New delivery — order #%s'. Driver tone per Sec 2 should be telegraphic and imperative; emoji and exclamation undermine that."
+  depends_on: null
+
+- finding_id: TW-033
+  surface_id: api-email-delivery-assigned
+  lens: technical-writer
+  severity: P2
+  issue: "CTA 'View Delivery Details' is title-case and 3 words — sentence-case violation"
+  evidence_excerpt: "<a ... class='btn'>View Delivery Details</a>"
+  recommendation: "Change to 'Open delivery'."
+  depends_on: null
+
+- finding_id: TW-034
+  surface_id: api-email-support-created
+  lens: technical-writer
+  severity: P0
+  issue: "Inline HTML bypasses emailBase wrapper — recipient gets no header, no footer, no privacy/terms links, no brand presence. Voice drift vs every other branded email"
+  evidence_excerpt: "html := fmt.Sprintf(`<h2>Support Ticket Created</h2><p>Your support ticket <strong>#%s</strong> has been created.</p>...`)"
+  recommendation: "Refactor SendSupportTicketCreated to use the emailBase wrapper. Create a SupportTicketCreatedHTML template in email_templates.go that follows the same H2/body/CTA pattern."
+  depends_on: null
+
+- finding_id: TW-035
+  surface_id: api-email-support-created
+  lens: technical-writer
+  severity: P2
+  issue: "H2 'Support Ticket Created' uses title case; subject 'Support Ticket #%s — %s' also title case — two voice rules broken in one surface"
+  evidence_excerpt: "<h2>Support Ticket Created</h2>"
+  recommendation: "After moving into emailBase, change H2 to 'Support ticket created' (sentence case). Subject 'Support ticket #%s — %s'."
+  depends_on: null
+
+- finding_id: TW-036
+  surface_id: api-email-support-created
+  lens: technical-writer
+  severity: P2
+  issue: "'Our team will get back to you shortly' is vague — sets no SLA and uses 'get back to you' (filler phrase) instead of a concrete commitment"
+  evidence_excerpt: "Our team will get back to you shortly."
+  recommendation: "Replace with concrete SLA: 'We respond to most tickets within 24 hours.' If 24h is wrong, use the actual SLA from settings."
+  depends_on: null
+
+- finding_id: TW-037
+  surface_id: api-email-support-update
+  lens: technical-writer
+  severity: P0
+  issue: "Same unbranded-email bug as TW-034 — inline HTML, no emailBase wrapper, no privacy/terms footer"
+  evidence_excerpt: "html := fmt.Sprintf(`<h2>Support Ticket Update</h2><p>...has been updated to: <strong>%s</strong></p>`)"
+  recommendation: "Refactor SendSupportTicketUpdate to use emailBase via a new SupportTicketUpdateHTML template."
+  depends_on: null
+
+- finding_id: TW-038
+  surface_id: api-email-support-update
+  lens: technical-writer
+  severity: P2
+  issue: "Status field injected verbatim — if backend uses raw enums (e.g. 'in_progress', 'awaiting_user') the customer sees the slug"
+  evidence_excerpt: "Your support ticket #%s has been updated to: %s"
+  recommendation: "Map status enum to human-readable labels in the same lookup pattern as the email status labels."
+  depends_on: null
+
+- finding_id: TW-039
+  surface_id: api-email-account-reminder
+  lens: technical-writer
+  severity: P2
+  issue: "Inline HTML — no emailBase wrapper, so footer/privacy/terms missing. Same brand drift as support emails"
+  evidence_excerpt: "html := fmt.Sprintf(`<p>Hi %s,</p>...<p>— Fe3dr HomeChef</p>`)"
+  recommendation: "Move into emailBase with an AccountReminderHTML template."
+  depends_on: null
+
+# ============================================================================
+# API — PUSH / IN-APP STATUS-LABEL DUPLICATION (the 3-map bug)
+# ============================================================================
+
+- finding_id: TW-040
+  surface_id: api-push-order-update-customer-deeplink
+  lens: technical-writer
+  severity: P0
+  issue: "Customer receives TWO pushes for the same status change with different copy. Push-workers queue group sends 'Your order is now picked up by the driver' (handlers/notifications.go:382) while notification-workers sends 'Your order has been picked up by the delivery partner' (services/notifications.go:1031). Both fire on the same NATS event"
+  evidence_excerpt: "handlers: 'Your order is now %s' (picked_up → 'picked up by the driver') / services: 'Your order has been picked up by the delivery partner'"
+  recommendation: "Either (a) move all push notification dispatch into one queue group with one consumer, or (b) make the push-worker the canonical sender and remove the duplicate path in services/notifications.go::handleOrderUpdated. Then collapse the three status-label maps into one shared lookup. This is the highest-priority TW fix in the audit."
+  depends_on: null
+
+- finding_id: TW-041
+  surface_id: api-push-order-update-customer-deeplink
+  lens: technical-writer
+  severity: P2
+  issue: "Driver-facing label 'picked up by the driver' uses banned customer-facing term 'driver' (Sec 3: use 'delivery partner' customer-facing)"
+  evidence_excerpt: "labels['picked_up'] = 'picked up by the driver'"
+  recommendation: "Change to 'picked up by your delivery partner'. Personalized via possessive."
+  depends_on: null
+
+- finding_id: TW-042
+  surface_id: api-push-order-update-customer-deeplink
+  lens: technical-writer
+  severity: P2
+  issue: "'delivering' status mapped to 'on the way to you' but other surfaces use 'on its way' or 'on its way!' — same-word drift across three places"
+  evidence_excerpt: "labels['delivering'] = 'on the way to you'"
+  recommendation: "Standardize on 'on its way' for all three maps."
+  depends_on: null
+
+- finding_id: TW-043
+  surface_id: api-push-order-update-customer
+  lens: technical-writer
+  severity: P1
+  issue: "Push body 'Your order has been confirmed by the chef!' (services/notifications.go:1033) ends in exclamation in transactional push — Rule 1"
+  evidence_excerpt: "confirmed → 'Your order has been confirmed by the chef!'"
+  recommendation: "Drop the exclamation across all 7 status labels in getOrderStatusMessage."
+  depends_on: null
+
+- finding_id: TW-044
+  surface_id: api-push-order-update-customer
+  lens: technical-writer
+  severity: P2
+  issue: "'Your order is on its way!' label keeps an exclamation while sibling labels are flat — within-map tone drift"
+  evidence_excerpt: "on_the_way → 'Your order is on its way!'"
+  recommendation: "Make all 7 labels declarative with periods. No exclamations."
+  depends_on: null
+
+- finding_id: TW-045
+  surface_id: api-inapp-order-status-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Order Status Updated' differs from push title 'Order Update' for the same event (within-event drift)"
+  evidence_excerpt: "In-app title: 'Order Status Updated' / Push title: 'Order Update'"
+  recommendation: "Use 'Order update' on both. Title case → sentence case."
+  depends_on: null
+
+- finding_id: TW-046
+  surface_id: api-push-order-update-customer-deeplink
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Order Update' is title-case; should be 'Order update' (sentence case rule applies to push titles too)"
+  evidence_excerpt: "Title: 'Order Update'"
+  recommendation: "Change push title to 'Order update'."
+  depends_on: null
+
+- finding_id: TW-047
+  surface_id: api-push-chef-new-order-actionable
+  lens: technical-writer
+  severity: P1
+  issue: "Chef receives TWO pushes for the same NATS event: 'New Order' + 'You have a new order waiting for your confirmation' (handlers) and 'New Order Received' + 'You have a new order waiting to be prepared!' (services). Two queue groups duplicate copy"
+  evidence_excerpt: "handlers: 'New Order' / 'You have a new order waiting for your confirmation' — services: 'New Order Received' / 'You have a new order waiting to be prepared!'"
+  recommendation: "Decide which queue group owns the chef push. Suggest the handlers/notifications.go::RegisterPushConsumers path (it's actionable with Accept/Reject buttons) and remove the services push in handleOrderCreated lines 346-352. Then standardize copy: title 'New order', body 'A new order is waiting. Accept or decline.'"
+  depends_on: null
+
+- finding_id: TW-048
+  surface_id: api-push-chef-new-order-actionable
+  lens: technical-writer
+  severity: P2
+  issue: "Push title 'New Order' is title-case (Sec 4 says sentence case for buttons; push titles follow the same convention in modern style guides)"
+  evidence_excerpt: "Title: 'New Order'"
+  recommendation: "Change to 'New order'."
+  depends_on: null
+
+- finding_id: TW-049
+  surface_id: api-push-chef-new-order-actionable
+  lens: technical-writer
+  severity: P3
+  issue: "Body 'You have a new order waiting for your confirmation' is 9 words — fine for length but contains weasel-phrasing 'waiting for your confirmation' instead of an action"
+  evidence_excerpt: "You have a new order waiting for your confirmation"
+  recommendation: "Change to 'A new order is waiting. Accept or decline.' — clearer action."
+  depends_on: null
+
+- finding_id: TW-050
+  surface_id: api-inapp-chef-new-order
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'New Order!' with exclamation; sibling in-app/push titles for same event use 'New Order Received' (no exclamation). Three variants of 'new order' copy in three places"
+  evidence_excerpt: "Title: 'New Order!' — Message: 'You have a new order to prepare'"
+  recommendation: "Consolidate to one title 'New order' across all three surfaces. Drop exclamation."
+  depends_on: null
+
+- finding_id: TW-051
+  surface_id: api-inapp-order-created-chef
+  lens: technical-writer
+  severity: P2
+  issue: "Within-event copy drift: DB row saved as 'You have received a new order!' but push body says 'You have a new order waiting to be prepared!' — same event, two messages"
+  evidence_excerpt: "DB: 'You have received a new order!' / Push: 'You have a new order waiting to be prepared!'"
+  recommendation: "Use one canonical body: 'A new order is waiting. Accept or decline.'"
+  depends_on: null
+
+- finding_id: TW-052
+  surface_id: api-inapp-order-delivered-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Customer-facing delivered title 'Order Delivered' is title-case + push body has double exclamation 'Your order has been delivered! Enjoy your meal!' — two exclamations in one push"
+  evidence_excerpt: "Title: 'Order Delivered' — Body: 'Your order has been delivered! Enjoy your meal!'"
+  recommendation: "Title: 'Order delivered'. Body: 'Your order has been delivered. Enjoy your meal.' No exclamations."
+  depends_on: null
+
+- finding_id: TW-053
+  surface_id: api-push-order-delivered-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Same double-exclamation issue as TW-052 on the push variant"
+  evidence_excerpt: "Body: 'Your order has been delivered! Enjoy your meal!'"
+  recommendation: "Rewrite per TW-052."
+  depends_on: null
+
+- finding_id: TW-054
+  surface_id: api-push-delivery-pickedup-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Order On The Way!' uses title case for prepositions ('On The Way' is wrong even in title case — 'on the' should be lowercase). Also exclamation in transactional"
+  evidence_excerpt: "Title: 'Order On The Way!'"
+  recommendation: "Change to 'On its way'."
+  depends_on: null
+
+- finding_id: TW-055
+  surface_id: api-inapp-delivery-pickedup-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Order Picked Up' (in-app) does not match push title 'Order On The Way!' (push). Same event, two titles"
+  evidence_excerpt: "In-app: 'Order Picked Up' / Push: 'Order On The Way!'"
+  recommendation: "Use one title 'On its way' on both surfaces."
+  depends_on: null
+
+- finding_id: TW-056
+  surface_id: api-push-delivery-assigned-customer
+  lens: technical-writer
+  severity: P2
+  issue: "Body 'A delivery partner has been assigned to your order and will pick it up soon!' is 15 words (within 25-word customer limit) but ends in exclamation and is passive throughout"
+  evidence_excerpt: "A delivery partner has been assigned to your order and will pick it up soon!"
+  recommendation: "Rewrite active and short: 'Your delivery partner is on the way to pick up your order.' Use driver name when available (already in event.Data but unused)."
+  depends_on: null
+
+- finding_id: TW-057
+  surface_id: api-inapp-delivery-assigned-customer
+  lens: technical-writer
+  severity: P2
+  issue: "In-app body 'A delivery partner has been assigned to your order' is shorter than the push variant (TW-056) — within-event drift"
+  evidence_excerpt: "In-app body: 'A delivery partner has been assigned to your order' / Push body: '... and will pick it up soon!'"
+  recommendation: "Match TW-056. One canonical body."
+  depends_on: null
+
+- finding_id: TW-058
+  surface_id: api-push-delivery-assigned-driver
+  lens: technical-writer
+  severity: P2
+  issue: "Driver push title 'New Delivery Available' is 3 words but title case + driver tone should be telegraphic"
+  evidence_excerpt: "Title: 'New Delivery Available' — Body: 'A delivery near you is ready for pickup'"
+  recommendation: "Title: 'Delivery available'. Body: 'New delivery ready for pickup nearby.' Driver per Sec 2 = telegraphic ≤4 words where possible."
+  depends_on: null
+
+- finding_id: TW-059
+  surface_id: api-push-order-cancelled-both
+  lens: technical-writer
+  severity: P0
+  issue: "Cancellation push body 'Order has been cancelled' is the SAME for both customer and chef despite very different next steps (customer needs refund info, chef needs nothing). Bare wording, no refund window"
+  evidence_excerpt: "Title: 'Order Cancelled' — Body: 'Order has been cancelled'"
+  recommendation: "Split into customer body ('Your order was cancelled. Refund issued.') and chef body ('Order cancelled. No action needed.'). The Title 'Order cancelled' (sentence case) is fine for both."
+  depends_on: null
+
+- finding_id: TW-060
+  surface_id: api-inapp-order-cancelled-both
+  lens: technical-writer
+  severity: P0
+  issue: "Same dual-audience body problem as TW-059 on the in-app side"
+  evidence_excerpt: "Title: 'Order Cancelled' — Message: 'Order has been cancelled'"
+  recommendation: "Same as TW-059 — split per audience."
+  depends_on: null
+
+- finding_id: TW-061
+  surface_id: api-inapp-chef-verified
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Congratulations!' is bare emoji-replacement-style copy with exclamation in transactional context"
+  evidence_excerpt: "Title: 'Congratulations!' — Message: 'Your chef profile has been verified. You can now start accepting orders!'"
+  recommendation: "Title: 'Profile verified'. Message: 'Your chef profile is verified. You can start accepting orders.' Drops two exclamations and gives the bell a more useful glance-state."
+  depends_on: null
+
+- finding_id: TW-062
+  surface_id: api-email-chef-verified-publish
+  lens: technical-writer
+  severity: P3
+  issue: "Shadowed email title 'Your Chef Profile is Verified!' surfaces only if template lookup fails — but it's title-case with exclamation, so the fallback path leaks bad copy"
+  evidence_excerpt: "Email Title: 'Your Chef Profile is Verified!'"
+  recommendation: "Even though shadowed, fix the fallback title to 'Your chef profile is verified' for safety."
+  depends_on: null
+
+- finding_id: TW-063
+  surface_id: api-inapp-driver-onboarding-admins
+  lens: technical-writer
+  severity: P2
+  issue: "Message 'A new driver from %s has submitted their onboarding application for review.' is 16 words — fine for admin tone but uses gerund 'submitted their onboarding application' (wordy)"
+  evidence_excerpt: "A new driver from %s has submitted their onboarding application for review."
+  recommendation: "Tighten to: 'New driver application from %s — review pending.' (9 words, admin-direct per Sec 2.)"
+  depends_on: null
+
+# ============================================================================
+# API — APPROVAL FLOW (raw slug exposure)
+# ============================================================================
+
+- finding_id: TW-064
+  surface_id: api-inapp-approval-approved-chef
+  lens: technical-writer
+  severity: P1
+  issue: "Raw enum slug exposed to user: 'Your menu_item has been approved' because approvalType is interpolated verbatim. Banned per Rule 2 (plain English)"
+  evidence_excerpt: "Message: 'Your %s has been approved: %s' where %s is 'menu_item' / 'driver_document'"
+  recommendation: "Add a label map: approvalTypeLabel['menu_item'] = 'menu item', approvalTypeLabel['driver_document'] = 'document', etc. Apply across all four approval handlers (approved, rejected, info_requested, created)."
+  depends_on: null
+
+- finding_id: TW-065
+  surface_id: api-push-approval-approved-chef
+  lens: technical-writer
+  severity: P1
+  issue: "Same raw-slug bug on push body 'Your %s has been approved'. Title also has exclamation 'Request Approved!' while in-app title is bare 'Request Approved'"
+  evidence_excerpt: "Title: 'Request Approved!' — Body: 'Your %s has been approved'"
+  recommendation: "Fix slug via shared label map (TW-064). Drop exclamation. Title 'Request approved' across both surfaces."
+  depends_on: null
+
+- finding_id: TW-066
+  surface_id: api-inapp-approval-info-chef
+  lens: technical-writer
+  severity: P1
+  issue: "Same raw-slug bug; in addition, admin notes appended verbatim — chef sees raw admin language with no scrubbing"
+  evidence_excerpt: "Message: 'Admin needs more info about your %s. Notes: %s'"
+  recommendation: "Fix slug via shared label map. Wrap notes in a delimiter ('Admin note: …') so the chef knows it's quoted text, not platform copy."
+  depends_on: null
+
+- finding_id: TW-067
+  surface_id: api-push-approval-info-chef
+  lens: technical-writer
+  severity: P2
+  issue: "Push body uses same admin notes verbatim — push notifications truncate at ~200 chars on Android and ~178 chars on iOS, so long admin notes will be cut mid-sentence"
+  evidence_excerpt: "Body: same as in-app message"
+  recommendation: "Push body should be a short template ('Admin needs more info about your menu item.') with notes shown only in the deep-linked in-app screen."
+  depends_on: null
+
+- finding_id: TW-068
+  surface_id: api-inapp-approval-rejected-chef
+  lens: technical-writer
+  severity: P0
+  issue: "Triple problem: raw slug, verbatim admin notes, and 'Your menu_item has been rejected. Notes: not good enough' is unprofessional + potential PII leak if admin types names. Title 'Request Rejected' also reads harsh"
+  evidence_excerpt: "Title: 'Request Rejected' — Message: 'Your %s has been rejected. Notes: %s'"
+  recommendation: "Title: 'Resubmission needed' (softer + actionable, matches mobile-vendor pattern). Message: 'Your %s wasn't approved. Admin note: \"%s\".' Apply slug fix from TW-064."
+  depends_on: null
+
+- finding_id: TW-069
+  surface_id: api-push-approval-rejected-chef
+  lens: technical-writer
+  severity: P0
+  issue: "Same as TW-068 on the push path. Title 'Request Rejected' is also a banned harsh-tone match — admin-portal already uses 'Application Not Approved' (mv-onb-pending-rejected-title) which is softer"
+  evidence_excerpt: "Title: 'Request Rejected' — Body: same as in-app"
+  recommendation: "Align with mobile-vendor pattern: 'Resubmission needed' title, softer body. Slug fix from TW-064."
+  depends_on: null
+
+- finding_id: TW-070
+  surface_id: api-inapp-approval-created-admin
+  lens: technical-writer
+  severity: P3
+  issue: "Approval title injected verbatim — if chef-authored title contains profanity or HTML, it flows to all admins unfiltered"
+  evidence_excerpt: "Message: 'New approval request pending: %s'"
+  recommendation: "Sanitize the title server-side and cap length at 80 chars. Admin notifications are not the place for unmoderated chef-authored text."
+  depends_on: null
+
+# ============================================================================
+# API — GENERIC SUCCESS MESSAGES (43 strings in handlers/*)
+# ============================================================================
+
+- finding_id: TW-071
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P2
+  issue: "Inconsistent 'successfully' suffix — 16 of 43 messages end with 'successfully', 27 don't. Same domain, two patterns: 'Password changed successfully' vs 'Password has been reset successfully' vs '2FA enabled'"
+  evidence_excerpt: "'Password changed successfully' / '2FA disabled' / 'Provider deleted successfully' / 'Promo code deactivated'"
+  recommendation: "Strip 'successfully' from every message — the 200 OK status already implies success. Use past-tense bare verb: 'Password changed', 'Provider deleted', 'Promo code deactivated'. Apply repo-wide across handlers/*.go."
+  depends_on: null
+
+- finding_id: TW-072
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P2
+  issue: "Logout message 'Logged out successfully' uses banned 'Log out' compound (per Sec 3 'Sign out' is preferred, 'Log out' is banned)"
+  evidence_excerpt: "'Logged out successfully'"
+  recommendation: "Change to 'Signed out'."
+  depends_on: null
+
+- finding_id: TW-073
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P3
+  issue: "'If the email exists, a reset link has been sent' is a security-pattern string (intentional) but uses passive 'has been sent' — could be tightened to 'If that email exists, we sent a reset link.'"
+  evidence_excerpt: "'If the email exists, a reset link has been sent'"
+  recommendation: "Rewrite: 'If that email is registered, we sent a reset link.' Active voice + clearer 'registered' over 'exists'."
+  depends_on: null
+
+- finding_id: TW-074
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P3
+  issue: "Domain inconsistency: 'Chef suspended' (no successfully) / 'Delivery partner suspended' (matches) / 'User suspended' (matches) / 'Staff member deactivated' (uses 'deactivated' not 'suspended'). Four near-synonyms for the same action"
+  evidence_excerpt: "'Chef suspended' / 'Staff member deactivated' / 'User suspended'"
+  recommendation: "Pick one verb pair per object: chef/user/driver = 'suspended' (account-level), staff = 'deactivated' (access-level — already differentiated). Document in style guide."
+  depends_on: null
+
+- finding_id: TW-075
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P3
+  issue: "'All notifications marked as read' duplicates singular 'Marked as read' and 'Message marked as read' — three near-identical phrasings"
+  evidence_excerpt: "'All notifications marked as read' / 'Marked as read' / 'Message marked as read'"
+  recommendation: "Consolidate: 'All notifications read' (bulk) and 'Notification read' (single). Drop 'marked as' — implied by the verb."
+  depends_on: null
+
+# ============================================================================
+# API — STRIPE / PAYMENT ERROR LEAKS (referenced in brief)
+# ============================================================================
+
+- finding_id: TW-076
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P0
+  issue: "API path leak in error message: 'No Stripe account — call /chef/stripe/connect first' (handlers/stripe_connect.go:197) exposes internal route to end-user error UI. Pure ops jargon"
+  evidence_excerpt: "{\"error\": \"No Stripe account — call /chef/stripe/connect first\"}"
+  recommendation: "Rewrite as user-facing message: 'Connect a Stripe account before requesting a dashboard link.' Move the path-level guidance into developer docs."
+  depends_on: null
+
+# ============================================================================
+# API — INAPP STAFF / CHEF RESPONDED (user-authored content)
+# ============================================================================
+
+- finding_id: TW-077
+  surface_id: api-inapp-chef-responded
+  lens: technical-writer
+  severity: P3
+  issue: "Title built by concatenation 'Chef Responded: ' + approval.Title — title case + colon + verbatim approval title. No length cap visible. Could blow past notification limits"
+  evidence_excerpt: "Title: 'Chef Responded: ' + approval.Title"
+  recommendation: "Title: 'Chef response' (fixed). Move approval.Title into message body, length-capped at 80 chars."
+  depends_on: null
+
+- finding_id: TW-078
+  surface_id: api-inapp-staff-invite
+  lens: technical-writer
+  severity: P3
+  issue: "Title and message are admin-authored strings with no length cap or format validation — risk of poorly-formatted text appearing on the recipient's bell"
+  evidence_excerpt: "Title: <invitation.Title> — Message: <req.Message>"
+  recommendation: "Provide a default template 'Staff invitation' / 'You're invited to join the team as %role.' Allow admin override but cap length and strip HTML."
+  depends_on: null
+
+# ============================================================================
+# WEB — CUSTOMER & CHEF TOASTS
+# ============================================================================
+
+- finding_id: TW-079
+  surface_id: web-tx-admin-settings
+  lens: technical-writer
+  severity: P2
+  issue: "'Settings saved successfully' / 'Failed to save settings' — 'successfully' redundant on success toast (Sec 4: past tense, ≤6 words, period)"
+  evidence_excerpt: "Settings saved successfully / Failed to save settings"
+  recommendation: "Success: 'Settings saved.' Error: 'Couldn\\'t save settings. Try again.'"
+  depends_on: null
+
+- finding_id: TW-080
+  surface_id: web-tx-admin-user-update
+  lens: technical-writer
+  severity: P2
+  issue: "'User updated successfully' — 'successfully' redundant; also 'User' is banned per Sec 3 (too generic)"
+  evidence_excerpt: "User updated successfully"
+  recommendation: "Use specific object: 'Member updated' or 'Customer updated' depending on object type. Drop 'successfully'."
+  depends_on: null
+
+- finding_id: TW-081
+  surface_id: web-tx-catering-quotes
+  lens: technical-writer
+  severity: P2
+  issue: "'Quote accepted! The chef has been notified.' — 8 words with exclamation in transactional toast (Rule 1 + Sec 4 ≤6 words)"
+  evidence_excerpt: "Quote accepted! The chef has been notified."
+  recommendation: "Split: success toast 'Quote accepted.' Body shown elsewhere if 'chef notified' needs surfacing."
+  depends_on: null
+
+- finding_id: TW-082
+  surface_id: web-tx-catering-quotes
+  lens: technical-writer
+  severity: P2
+  issue: "Error 'Failed to accept quote. Please try again.' uses 'Please try again' filler; doesn't follow what-happened → what-to-do formula"
+  evidence_excerpt: "Failed to accept quote. Please try again."
+  recommendation: "Rewrite: 'Couldn\\'t accept quote. Retry, or reload the page.' Concrete next action."
+  depends_on: null
+
+- finding_id: TW-083
+  surface_id: web-tx-catering-request-submit
+  lens: technical-writer
+  severity: P2
+  issue: "'Catering request submitted successfully!' has exclamation + 'successfully' + 5 words ok but tone wrong for transactional"
+  evidence_excerpt: "Catering request submitted successfully!"
+  recommendation: "Change to 'Request submitted.'"
+  depends_on: null
+
+- finding_id: TW-084
+  surface_id: web-tx-chef-catering
+  lens: technical-writer
+  severity: P2
+  issue: "'Quote submitted successfully' / 'Failed to submit quote' — same 'successfully' redundancy"
+  evidence_excerpt: "Quote submitted successfully / Failed to submit quote"
+  recommendation: "'Quote sent.' / 'Couldn\\'t send quote. Try again.'"
+  depends_on: null
+
+- finding_id: TW-085
+  surface_id: web-tx-chef-menu
+  lens: technical-writer
+  severity: P2
+  issue: "Three 'successfully' violations in the menu CRUD toast set; 'Menu item deleted' (good, no successfully) is the lone consistent variant"
+  evidence_excerpt: "Menu item created successfully / Menu item updated successfully / Menu item deleted"
+  recommendation: "Drop 'successfully': 'Menu item added.' / 'Menu item updated.' / 'Menu item deleted.' Use 'added' over 'created' (Sec 3 plain English)."
+  depends_on: null
+
+- finding_id: TW-086
+  surface_id: web-tx-chef-order-status
+  lens: technical-writer
+  severity: P3
+  issue: "'Order status updated' is fine, but error 'Failed to update order status' is wordy"
+  evidence_excerpt: "Order status updated / Failed to update order status"
+  recommendation: "Success: 'Status changed.' Error: 'Couldn\\'t change status. Retry.'"
+  depends_on: null
+
+- finding_id: TW-087
+  surface_id: web-tx-chef-profile
+  lens: technical-writer
+  severity: P2
+  issue: "'Profile updated successfully' / 'Failed to update profile' — 'successfully' redundancy"
+  evidence_excerpt: "Profile updated successfully / Failed to update profile"
+  recommendation: "'Profile saved.' / 'Couldn\\'t save profile.'"
+  depends_on: null
+
+- finding_id: TW-088
+  surface_id: web-tx-chef-social
+  lens: technical-writer
+  severity: P3
+  issue: "Mixed tense and pattern: 'Post deleted' / 'Post created' / 'Post updated' (past-tense, good) but 'Failed to save post' breaks formula — should be what-happened → what-to-do"
+  evidence_excerpt: "Post deleted / Post created / Post updated / Failed to save post"
+  recommendation: "Success batch fine; replace 'created' with 'added' for plain English. Error: 'Couldn\\'t save post. Retry.'"
+  depends_on: null
+
+- finding_id: TW-089
+  surface_id: web-tx-checkout-payment-toasts
+  lens: technical-writer
+  severity: P1
+  issue: "Payment toast set has voice drift: 'Payment successful!' (exclamation) vs 'Payment gateway is loading' (passive) vs 'Failed to initiate payment' (verb-heavy). Checkout is conversion-critical"
+  evidence_excerpt: "Failed to initiate payment / Payment gateway is loading / Payment successful! / Payment verification failed..."
+  recommendation: "Standardize: 'Couldn\\'t start payment. Try again.' / 'Loading payment...' / 'Payment received.' / 'Payment couldn\\'t be verified. Contact support.' Drop exclamations."
+  depends_on: null
+
+- finding_id: TW-090
+  surface_id: web-tx-chefdetail-add-to-cart
+  lens: technical-writer
+  severity: P2
+  issue: "'Your cart has items from another chef. Clear cart first.' is 11 words across two sentences — close to the limit; 'Clear cart first' implies user must take action via toast, but toast is not actionable"
+  evidence_excerpt: "Your cart has items from another chef. Clear cart first."
+  recommendation: "Make this a modal (already handled by mc-menuitem-cross-chef on mobile). Toast variant: 'Cart belongs to another chef — open cart to switch.'"
+  depends_on: null
+
+- finding_id: TW-091
+  surface_id: web-tx-orderdetail-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Payment verification failed — please contact support' uses em-dash + 'please' filler. 6 words good but tone passive"
+  evidence_excerpt: "Payment verification failed — please contact support"
+  recommendation: "Rewrite: 'Payment couldn\\'t be verified. Contact support.'"
+  depends_on: null
+
+- finding_id: TW-092
+  surface_id: web-tx-orderdetail-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Order cancelled successfully' redundancy; sibling 'Order number copied' (good) drops successfully — inconsistent within same file"
+  evidence_excerpt: "Order cancelled successfully / Order number copied"
+  recommendation: "'Order cancelled.' Drop successfully."
+  depends_on: null
+
+- finding_id: TW-093
+  surface_id: web-tx-profile-2fa
+  lens: technical-writer
+  severity: P2
+  issue: "Mixed voice in 2FA toast set: 'Two-factor authentication enabled' (formal noun) vs 'Backup codes regenerated' (verb) vs 'Key copied' (terse). 'Backup codes copied to clipboard' is 5 words OK, sibling 'Key copied' is 2 — within-set drift"
+  evidence_excerpt: "Two-factor authentication enabled / Two-factor authentication disabled / Backup codes regenerated / Key copied / Backup codes copied to clipboard"
+  recommendation: "Standardize on noun-form: 'Two-factor enabled.' / 'Two-factor disabled.' / 'Backup codes regenerated.' / 'Key copied.' / 'Backup codes copied.'"
+  depends_on: null
+
+- finding_id: TW-094
+  surface_id: web-tx-profile-password
+  lens: technical-writer
+  severity: P2
+  issue: "Validation 'Passwords do not match' is good; 'Password must be at least 8 characters' could be tightened. Success 'Password updated successfully' has 'successfully' redundancy"
+  evidence_excerpt: "Password must be at least 8 characters / Password updated successfully"
+  recommendation: "'Password must be 8 characters or more.' / 'Password updated.'"
+  depends_on: null
+
+- finding_id: TW-095
+  surface_id: web-tx-profile-update
+  lens: technical-writer
+  severity: P2
+  issue: "Avatar upload errors well-formatted ('File too large. Maximum 5 MB.') — but 'Invalid file type. Use JPEG, PNG or WebP.' is close to 25-word limit and follows what-happened → what-to-do correctly. Sibling 'Profile photo updated' drops 'successfully' while 'Profile updated successfully' keeps it — internal drift"
+  evidence_excerpt: "Profile updated successfully / Profile photo updated"
+  recommendation: "Make both consistent: 'Profile updated.' / 'Profile photo updated.'"
+  depends_on: null
+
+- finding_id: TW-096
+  surface_id: web-tx-profile-preferences-save
+  lens: technical-writer
+  severity: P3
+  issue: "Toast 'Preferences updated' is good; error 'Failed to save preferences' uses 'failed to' filler"
+  evidence_excerpt: "Preferences updated / Failed to save preferences"
+  recommendation: "'Preferences updated.' / 'Couldn\\'t save preferences.'"
+  depends_on: null
+
+- finding_id: TW-097
+  surface_id: web-tx-profile-addresses
+  lens: technical-writer
+  severity: P2
+  issue: "'Please fill in all required fields' uses 'please' filler; toast is not the right surface for field-level validation (should be inline on the field)"
+  evidence_excerpt: "Please fill in all required fields"
+  recommendation: "Move to inline field-level errors. If toast must exist, use: 'Fill in required fields.' (drop 'please', drop 'all').'"
+  depends_on: null
+
+- finding_id: TW-098
+  surface_id: web-tx-delivery-actions
+  lens: technical-writer
+  severity: P2
+  issue: "Driver toasts violate Sec 2 driver tone (telegraphic ≤4 words): 'Delivery accepted!' (exclamation) / 'Delivery completed! Great job!' (8 words, two exclamations, congratulatory)"
+  evidence_excerpt: "Delivery accepted! / Delivery completed! Great job!"
+  recommendation: "'Accepted.' / 'Delivered.' Telegraphic, no praise — driver tone is operational."
+  depends_on: null
+
+- finding_id: TW-099
+  surface_id: web-tx-onboarding-save
+  lens: technical-writer
+  severity: P2
+  issue: "'Your preferences have been saved!' uses possessive + exclamation; 8 words. Validation 'Please fill in the required fields' has 'please' filler and 'the required fields' should be 'required fields'"
+  evidence_excerpt: "Please fill in the required fields / Your preferences have been saved! / Failed to save. Please try again."
+  recommendation: "Validation: 'Fill in required fields.' Success: 'Preferences saved.' Error: 'Couldn\\'t save. Retry.'"
+  depends_on: null
+
+- finding_id: TW-100
+  surface_id: web-tx-social-feed-actions
+  lens: technical-writer
+  severity: P2
+  issue: "'Please log in to like posts' uses banned 'log in' (Sec 3: 'sign in') + 'please' filler"
+  evidence_excerpt: "Please log in to like posts / Please log in to save posts"
+  recommendation: "'Sign in to like posts.' / 'Sign in to save posts.' Drops 'please'."
+  depends_on: null
+
+# ============================================================================
+# VENDOR PORTAL — CHEF-FACING TOASTS
+# ============================================================================
+
+- finding_id: TW-101
+  surface_id: vp-ux-menu-form-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Menu item created successfully' / 'Menu item updated successfully' — 'successfully' redundancy. Also 'At least one image is required' should be inline validation not a toast"
+  evidence_excerpt: "Menu item created successfully / Failed to create menu item / At least one image is required / Restored your unsaved draft / Image deleted / Failed to delete image / Some images failed to upload"
+  recommendation: "'Menu item added.' / 'Couldn\\'t add menu item.' / 'Add at least one image.' (move to inline) / 'Unsaved draft restored.' / 'Image deleted.' / 'Couldn\\'t delete image.' / 'Some images failed to upload — retry.'"
+  depends_on: null
+
+- finding_id: TW-102
+  surface_id: vp-ux-menu-form-category-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'A category with this name already exists' is 8 words; 'A' opener is filler"
+  evidence_excerpt: "Category \"{name}\" created / A category with this name already exists / Failed to create category"
+  recommendation: "'Category \"{name}\" added.' / 'Category name already exists.' / 'Couldn\\'t add category.'"
+  depends_on: null
+
+- finding_id: TW-103
+  surface_id: vp-ux-menu-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'N items marked available/unavailable' uses slash for two states — readers will see one or the other but copy must pick. Also 'Failed to update some items' is vague"
+  evidence_excerpt: "Availability updated / Failed to update availability / Menu item deleted / Failed to delete item / N items marked available/unavailable / Failed to update some items"
+  recommendation: "Use conditional: '{n} items marked available' OR '{n} items marked unavailable' based on action. Generic error: 'Couldn\\'t update {n} items.'"
+  depends_on: null
+
+- finding_id: TW-104
+  surface_id: vp-ux-notifs-respond-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'Please enter a response' is field-validation in a toast — should be inline. 'Response sent to admin' is fine (specific recipient)"
+  evidence_excerpt: "Please enter a response / Response sent to admin / Failed to send response"
+  recommendation: "Move 'enter a response' to inline. Toasts: 'Response sent.' / 'Couldn\\'t send response.'"
+  depends_on: null
+
+- finding_id: TW-105
+  surface_id: vp-onb-personal-avatar-success
+  lens: technical-writer
+  severity: P3
+  issue: "'Profile photo uploaded' is fine — 3 words, past tense, period implied"
+  evidence_excerpt: "Profile photo uploaded"
+  recommendation: "Keep as-is. (No change needed; flagged for completeness.)"
+  depends_on: null
+
+- finding_id: TW-106
+  surface_id: vp-onb-policies-ready-banner
+  lens: technical-writer
+  severity: P0
+  issue: "Banner sets an SLA commitment '24-48 hours' the platform may not honour (admin-portal has no SLA enforcement visible). 28 words across two sentences exceeds vendor sentence limit (20 words)"
+  evidence_excerpt: "You're all set to submit your application! / Our team will review your details and you'll be notified within 24-48 hours."
+  recommendation: "If 24-48h SLA is enforced via process, keep. Otherwise: 'Our team will review your details and notify you when complete. Most reviews finish within 2 days.' (Removes hard SLA; gives soft guidance.)"
+  depends_on: null
+
+- finding_id: TW-107
+  surface_id: vp-onb-policies-ready-banner
+  lens: technical-writer
+  severity: P2
+  issue: "'You're all set to submit your application!' has exclamation in transactional banner"
+  evidence_excerpt: "You're all set to submit your application!"
+  recommendation: "'You're ready to submit.' (4 words, no exclamation, accurate.)"
+  depends_on: null
+
+- finding_id: TW-108
+  surface_id: vp-onb-submit-success
+  lens: technical-writer
+  severity: P0
+  issue: "Same 24-48h SLA in submission toast — duplicates TW-106 risk + lives in two places (single source of truth violation)"
+  evidence_excerpt: "Application submitted! We'll review and get back to you within 24-48 hours."
+  recommendation: "Centralize SLA text into a single constant. Then rewrite per TW-106."
+  depends_on: null
+
+- finding_id: TW-109
+  surface_id: vp-ux-orders-live-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "Same 'Failed to update order status' pattern as web-tx-chef-order-status — duplicated copy across two apps"
+  evidence_excerpt: "Order status updated / Failed to update order status"
+  recommendation: "Standardize: 'Status changed.' / 'Couldn\\'t change status.' Use shared toast helper."
+  depends_on: null
+
+- finding_id: TW-110
+  surface_id: vp-ux-kitchen-photo-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "9-toast set has internal drift: 'Kitchen photo uploaded' (past-tense good) / 'Kitchen setup saved successfully' (successfully redundant) / 'Maximum 5 photos allowed. Remove one first.' (10 words, two sentences ok)"
+  evidence_excerpt: "Kitchen photo uploaded / Failed to upload photo / Photo removed / Failed to remove photo / Maximum 5 photos allowed. Remove one first. / File too large. Maximum 5 MB. / Invalid file type. Allowed: JPEG, PNG, WebP. / Kitchen setup saved successfully / Failed to save kitchen setup"
+  recommendation: "'Kitchen photo uploaded.' / 'Couldn\\'t upload photo.' / 'Photo removed.' / 'Couldn\\'t remove photo.' / 'Max 5 photos. Remove one to add another.' / 'File too large — max 5 MB.' / 'Use JPEG, PNG, or WebP.' / 'Kitchen setup saved.' / 'Couldn\\'t save kitchen setup.'"
+  depends_on: null
+
+- finding_id: TW-111
+  surface_id: vp-ux-profile-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'Profile photo updated' vs 'Profile updated successfully' — successfully suffix inconsistent within same file (parallels web-tx-profile-update bug)"
+  evidence_excerpt: "Profile updated successfully / Profile photo updated / Cover photo updated"
+  recommendation: "Drop successfully. 'Profile updated.' / 'Profile photo updated.' / 'Cover photo updated.'"
+  depends_on: null
+
+- finding_id: TW-112
+  surface_id: vp-ux-profile-doc-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'{label} uploaded' is good; 'Upload failed' is bare — doesn't follow what-happened → what-to-do"
+  evidence_excerpt: "{label} uploaded / Upload failed"
+  recommendation: "'{label} uploaded.' / 'Couldn\\'t upload {label}. Retry.'"
+  depends_on: null
+
+- finding_id: TW-113
+  surface_id: vp-ux-settings-payout-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "Same 'successfully' inconsistency: 'Payout details saved' vs 'Settings saved' — actually consistent here, all four drop 'successfully' (good). Errors use 'Failed to' filler"
+  evidence_excerpt: "Payout details saved / Failed to save payout details / Settings saved / Failed to save settings"
+  recommendation: "Keep success. Errors: 'Couldn\\'t save payout details.' / 'Couldn\\'t save settings.'"
+  depends_on: null
+
+- finding_id: TW-114
+  surface_id: vp-ux-settings-stripe-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Failed to start Stripe onboarding' uses 'failed to' filler; 'Failed to resume onboarding' is similar. 'Payment provider updated' good"
+  evidence_excerpt: "Failed to start Stripe onboarding / Failed to resume onboarding / Payment provider updated / Failed to update provider"
+  recommendation: "'Couldn\\'t start Stripe setup.' / 'Couldn\\'t resume setup.' / 'Provider updated.' / 'Couldn\\'t update provider.'"
+  depends_on: null
+
+# ============================================================================
+# DELIVERY PORTAL — DRIVER TOASTS
+# ============================================================================
+
+- finding_id: TW-115
+  surface_id: dp-tx-toast-online
+  lens: technical-writer
+  severity: P3
+  issue: "'You are now online' / 'You are now offline' — 4 words OK for driver (telegraphic limit) but 'You are now' is filler. Driver tone wants 'Online.' / 'Offline.'"
+  evidence_excerpt: "You are now online / You are now offline"
+  recommendation: "'Online.' / 'Offline.' (1 word, per driver telegraphic rule)"
+  depends_on: null
+
+- finding_id: TW-116
+  surface_id: dp-tx-toast-status-updated
+  lens: technical-writer
+  severity: P3
+  issue: "'Status updated' is fine for driver — meets telegraphic rule"
+  evidence_excerpt: "Status updated"
+  recommendation: "Keep."
+  depends_on: null
+
+- finding_id: TW-117
+  surface_id: dp-tx-toast-accept-success
+  lens: technical-writer
+  severity: P2
+  issue: "'Delivery accepted!' exclamation in driver toast — Rule 1 + driver tone is operational"
+  evidence_excerpt: "Delivery accepted!"
+  recommendation: "'Accepted.' (1 word, no exclamation)"
+  depends_on: null
+
+- finding_id: TW-118
+  surface_id: dp-tx-toast-partner-verified
+  lens: technical-writer
+  severity: P2
+  issue: "'Partner verified successfully' — 'successfully' redundancy on admin toast"
+  evidence_excerpt: "Partner verified successfully"
+  recommendation: "'Partner verified.'"
+  depends_on: null
+
+- finding_id: TW-119
+  surface_id: dp-tx-toast-step5-submitted
+  lens: technical-writer
+  severity: P2
+  issue: "'Application submitted successfully!' — exclamation + successfully on driver onboarding"
+  evidence_excerpt: "Application submitted successfully!"
+  recommendation: "'Application submitted.'"
+  depends_on: null
+
+- finding_id: TW-120
+  surface_id: dp-tx-toast-step4-saved
+  lens: technical-writer
+  severity: P3
+  issue: "'Plan selected successfully' — 'successfully' redundancy"
+  evidence_excerpt: "Plan selected successfully"
+  recommendation: "'Plan selected.'"
+  depends_on: null
+
+- finding_id: TW-121
+  surface_id: dp-tx-toast-invite-created
+  lens: technical-writer
+  severity: P2
+  issue: "'Invitation created successfully' — successfully redundancy in admin toast"
+  evidence_excerpt: "Invitation created successfully"
+  recommendation: "'Invitation created.'"
+  depends_on: null
+
+- finding_id: TW-122
+  surface_id: dp-tx-toast-invite-copied
+  lens: technical-writer
+  severity: P3
+  issue: "'Invite URL copied to clipboard' — 'to clipboard' is filler (always to clipboard); 5 words could be 3"
+  evidence_excerpt: "Invite URL copied to clipboard"
+  recommendation: "'Invite link copied.' (use 'link' for end-user friendliness)"
+  depends_on: null
+
+# ============================================================================
+# ADMIN PORTAL — ADMIN TOASTS
+# ============================================================================
+
+- finding_id: TW-123
+  surface_id: ap-approvaldetail-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'More information requested from chef' — admin tone says direct ('Direct: Approve, Suspend, Audit'). 'requested from' is passive"
+  evidence_excerpt: "More information requested from chef"
+  recommendation: "'Info requested from chef.' (4 words, direct, admin tone)"
+  depends_on: null
+
+- finding_id: TW-124
+  surface_id: ap-providercreate-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Provider created successfully' — successfully redundancy"
+  evidence_excerpt: "Provider created successfully / Failed to create provider"
+  recommendation: "'Provider added.' / 'Couldn\\'t add provider.'"
+  depends_on: null
+
+- finding_id: TW-125
+  surface_id: ap-providerdetail-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'Connection successful ({ms}ms)' good with metric; 'Connection failed: {err}' raw error injection — admin can see raw stack messages"
+  evidence_excerpt: "Connection successful ({ms}ms) / Connection failed: {err}"
+  recommendation: "'Connected ({ms}ms).' / 'Connection failed: {err}.' Sanitize err to first sentence only."
+  depends_on: null
+
+- finding_id: TW-126
+  surface_id: ap-notifsettings-toasts
+  lens: technical-writer
+  severity: P3
+  issue: "'Preference saved' / 'Failed to save' — error too generic (what preference?)"
+  evidence_excerpt: "Preference saved / Failed to save"
+  recommendation: "'Preference saved.' / 'Couldn\\'t save preference.'"
+  depends_on: null
+
+- finding_id: TW-127
+  surface_id: ap-secsettings-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "Long mixed set: '2FA enabled successfully' (redundancy) / 'Session policy updated' (good) / 'All other sessions revoked. You may need to sign in again.' (12 words two sentences, fine) / 'Invalid code' (good) / 'Enroll failed' (bare)"
+  evidence_excerpt: "2FA enabled successfully / 2FA disabled / Enforcement setting updated / Invalid code / Enroll failed"
+  recommendation: "'Two-factor enabled.' / 'Two-factor disabled.' / 'Enforcement updated.' / 'Invalid code.' / 'Enrollment failed. Retry.'"
+  depends_on: null
+
+- finding_id: TW-128
+  surface_id: ap-settings-payment-feedback
+  lens: technical-writer
+  severity: P2
+  issue: "'Saved, but Razorpay rejected the keys: {err}' injects raw gateway error — admin sees vendor terminology verbatim. Same for Stripe variant"
+  evidence_excerpt: "Saved, but Razorpay rejected the keys: {err} / Saved, but Stripe rejected the keys: {err}"
+  recommendation: "Wrap err in a label: 'Keys saved but Razorpay rejected them. Reason: {err}.' If err has technical jargon, log it and surface a human summary."
+  depends_on: null
+
+- finding_id: TW-129
+  surface_id: ap-staffdetail-toasts
+  lens: technical-writer
+  severity: P2
+  issue: "'Role updated successfully' has redundancy; 'Staff member deactivated' uses 'member' which is fine; 'Failed to deactivate staff member' is wordy"
+  evidence_excerpt: "Role updated successfully / Staff member deactivated / Failed to deactivate staff member"
+  recommendation: "'Role updated.' / 'Member deactivated.' / 'Couldn\\'t deactivate member.'"
+  depends_on: null
+
+- finding_id: TW-130
+  surface_id: ap-staff-invite-success-title
+  lens: technical-writer
+  severity: P2
+  issue: "'Invitation created successfully!' — exclamation + successfully in admin success title"
+  evidence_excerpt: "Invitation created successfully!"
+  recommendation: "'Invitation created.'"
+  depends_on: null
+
+- finding_id: TW-131
+  surface_id: ap-staff-invite-success-body
+  lens: technical-writer
+  severity: P3
+  issue: "'Share this link with the invitee to complete their registration.' — 'invitee' is jargon; 'their registration' is corporate-speak"
+  evidence_excerpt: "Share this link with the invitee to complete their registration."
+  recommendation: "'Share this link so they can finish signing up.' (Plain English per Rule 2.)"
+  depends_on: null
+
+# ============================================================================
+# MOBILE CUSTOMER — ALERTS
+# ============================================================================
+
+- finding_id: TW-132
+  surface_id: mc-profile-save-success
+  lens: technical-writer
+  severity: P3
+  issue: "Three near-identical save toasts in one component: 'Saved' / 'Profile updated successfully.' / 'Cuisine preferences updated.' — sample size for internal drift"
+  evidence_excerpt: "Saved / Profile updated successfully. / Cuisine preferences updated."
+  recommendation: "'Saved.' / 'Profile saved.' / 'Cuisines saved.' Three terse, parallel forms."
+  depends_on: null
+
+- finding_id: TW-133
+  surface_id: mc-profile-logout-confirm
+  lens: technical-writer
+  severity: P0
+  issue: "Title 'Log out' uses banned compound 'Log out' (Sec 3: 'Sign out'). Button 'Log Out' also has title-case inconsistency"
+  evidence_excerpt: "Log out / Are you sure you want to log out? / Cancel / Log Out"
+  recommendation: "Title 'Sign out'. Body 'Sign out of Home Chef on this device?' Buttons 'Cancel' / 'Sign out'. Fix both Sec 3 (verb) and case mismatch."
+  depends_on: null
+
+- finding_id: TW-134
+  surface_id: mc-catering-submit-success
+  lens: technical-writer
+  severity: P2
+  issue: "'Request Submitted!' — exclamation + title case in transactional alert"
+  evidence_excerpt: "Request Submitted! / Chefs will review and send quotes."
+  recommendation: "'Request submitted.' / 'Chefs will review and send quotes.'"
+  depends_on: null
+
+- finding_id: TW-135
+  surface_id: mc-menuitem-cross-chef
+  lens: technical-writer
+  severity: P2
+  issue: "Title 'Replace Cart?' is title case + question; modal body 'You have items from another chef. Replace cart?' duplicates the question. Modal subtitle should explain consequence (Sec 4)"
+  evidence_excerpt: "Replace Cart? / You have items from another chef. Replace cart? / Cancel / Replace"
+  recommendation: "Title: 'Replace cart?' Body: 'Your cart belongs to another chef. Adding this item will clear it.' Buttons 'Cancel' / 'Replace cart'."
+  depends_on: null
+
+# ============================================================================
+# MOBILE VENDOR — ALERTS
+# ============================================================================
+
+- finding_id: TW-136
+  surface_id: mv-onb-pending-submitted-title
+  lens: technical-writer
+  severity: P2
+  issue: "'Application Submitted!' uses title case + exclamation as a display title"
+  evidence_excerpt: "Application Submitted!"
+  recommendation: "'Application submitted'. Drop exclamation; sentence case."
+  depends_on: null
+
+- finding_id: TW-137
+  surface_id: mv-onb-pending-submitted-body
+  lens: technical-writer
+  severity: P1
+  issue: "17 words across two sentences — exceeds vendor 20-word limit only marginally, BUT 'within 24-48 hours' duplicates the SLA promise from TW-106/TW-108. Three sources of truth for one SLA"
+  evidence_excerpt: "Our team will review your application within 24-48 hours. We will notify you once the review is complete."
+  recommendation: "'Our team will review your application and notify you when complete.' (Drop hard SLA; centralize in one place.)"
+  depends_on: null
+
+- finding_id: TW-138
+  surface_id: mv-onb-pending-rejected-title
+  lens: technical-writer
+  severity: P3
+  issue: "'Application Not Approved' is title case but the soft phrasing is good — already softer than 'Rejected'"
+  evidence_excerpt: "Application Not Approved"
+  recommendation: "Sentence case: 'Application not approved'. Keep softer phrasing."
+  depends_on: null
+
+- finding_id: TW-139
+  surface_id: mv-onb-pending-rejected-body
+  lens: technical-writer
+  severity: P3
+  issue: "'Please review the feedback and resubmit your application.' uses 'please' filler; 8 words OK"
+  evidence_excerpt: "Please review the feedback and resubmit your application."
+  recommendation: "'Review the feedback and resubmit.' (5 words, no filler)"
+  depends_on: null
+
+- finding_id: TW-140
+  surface_id: mv-reviewdetail-success-title
+  lens: technical-writer
+  severity: P3
+  issue: "'Reply Sent' — title case in alert title"
+  evidence_excerpt: "Reply Sent"
+  recommendation: "'Reply sent'."
+  depends_on: null
+
+- finding_id: TW-141
+  surface_id: mv-undo-accepted
+  lens: technical-writer
+  severity: P3
+  issue: "'Order accepted' / 'Order rejected' good 2-word snackbars — keep"
+  evidence_excerpt: "Order accepted / Order rejected"
+  recommendation: "Keep."
+  depends_on: null
+
+# ============================================================================
+# MOBILE DELIVERY — DRIVER ALERTS
+# ============================================================================
+
+- finding_id: TW-142
+  surface_id: md-trx-006
+  lens: technical-writer
+  severity: P0
+  issue: "'Logout' as alert title uses banned 'Logout' (one-word) per Sec 3 — should be 'Sign out'"
+  evidence_excerpt: "Logout"
+  recommendation: "'Sign out'."
+  depends_on: null
+
+- finding_id: TW-143
+  surface_id: md-trx-007
+  lens: technical-writer
+  severity: P0
+  issue: "'Are you sure you want to logout?' uses banned compound 'logout' and weak modal subtitle (Sec 4: explain consequence, not 'are you sure')"
+  evidence_excerpt: "Are you sure you want to logout?"
+  recommendation: "'Sign out of Home Chef Delivery? You'll need to sign in again to receive deliveries.' (Explains consequence.)"
+  depends_on: null
+
+- finding_id: TW-144
+  surface_id: md-trx-011
+  lens: technical-writer
+  severity: P2
+  issue: "'Validation' as an alert title is meaningless to a driver — internal dev label leaked to UI"
+  evidence_excerpt: "Validation"
+  recommendation: "'Missing info' or use no title and put the message body 'Name, phone, and city are required.' directly."
+  depends_on: null
+
+- finding_id: TW-145
+  surface_id: md-trx-013
+  lens: technical-writer
+  severity: P2
+  issue: "'Success' as alert title is generic and content-free; same problem as 'Validation'"
+  evidence_excerpt: "Success"
+  recommendation: "Replace with specific verb: 'Saved' or omit title and use just the body 'Profile updated.'"
+  depends_on: null
+
+- finding_id: TW-146
+  surface_id: md-trx-014
+  lens: technical-writer
+  severity: P3
+  issue: "'Profile updated successfully.' — 'successfully' redundancy on driver alert body"
+  evidence_excerpt: "Profile updated successfully."
+  recommendation: "'Profile updated.'"
+  depends_on: null
+
+- finding_id: TW-147
+  surface_id: md-trx-015
+  lens: technical-writer
+  severity: P3
+  issue: "'Failed to update profile. Please try again.' — 'please' filler; matches the same anti-pattern in web/vp"
+  evidence_excerpt: "Failed to update profile. Please try again."
+  recommendation: "'Couldn\\'t update profile. Retry.'"
+  depends_on: null
+
+- finding_id: TW-148
+  surface_id: md-trx-009
+  lens: technical-writer
+  severity: P2
+  issue: "'Visit the web portal to manage your subscription.' is 8 words OK but cross-app dependency is a UX smell — pushes driver out of app for billing"
+  evidence_excerpt: "Visit the web portal to manage your subscription."
+  recommendation: "Either build native subscription view (BA scope) or rewrite for clarity: 'Manage subscription at fleet.homechef.in.' (Includes the actual URL; drops vague 'web portal'.)"
+  depends_on: null
+
+- finding_id: TW-149
+  surface_id: md-trx-010
+  lens: technical-writer
+  severity: P3
+  issue: "'Contact support at support@homechef.in to request account deletion.' is 9 words OK but support email hardcoded in client — single source of truth"
+  evidence_excerpt: "Contact support at support@homechef.in to request account deletion."
+  recommendation: "Centralize support email in config. Copy itself OK as-is."
+  depends_on: null
+
+- finding_id: TW-150
+  surface_id: md-trx-002
+  lens: technical-writer
+  severity: P0
+  issue: "Background location rationale is 31 words — far exceeds driver 12-word telegraphic limit. This is a critical pre-OS-prompt P0 safety string; needs care but also tightening"
+  evidence_excerpt: "To keep customers updated on their delivery, HomeChef Delivery needs to track your location while you are on an active delivery — even when the app is in the background."
+  recommendation: "Two-line rewrite preserving meaning: 'We track your location during active deliveries so customers see live ETA. Tracking stops automatically when you complete the delivery.' (~22 words combined.) Coordinate with Legal lens — this string must match the iOS Info.plist NSLocationAlwaysAndWhenInUseUsageDescription."
+  depends_on: null
+
+- finding_id: TW-151
+  surface_id: md-trx-003
+  lens: technical-writer
+  severity: P2
+  issue: "'Battery usage is minimised by only tracking every 15 seconds.' is 10 words but mixes UK/US spelling ('minimised') — repo otherwise uses US English"
+  evidence_excerpt: "Location tracking stops automatically when the delivery is completed. Battery usage is minimised by only tracking every 15 seconds."
+  recommendation: "Pick one English variant repo-wide (recommend en-IN aligns with UK 'minimised'). If en-US, change to 'minimized'."
+  depends_on: null
+
+- finding_id: TW-152
+  surface_id: md-trx-004
+  lens: technical-writer
+  severity: P2
+  issue: "'Allow Background Location' is title case 3 words — should be sentence case 'Allow background location'"
+  evidence_excerpt: "Allow Background Location"
+  recommendation: "'Allow background location'."
+  depends_on: null
+
+- finding_id: TW-153
+  surface_id: md-trx-005
+  lens: technical-writer
+  severity: P3
+  issue: "'Not Now' is title case — should be sentence case 'Not now'"
+  evidence_excerpt: "Not Now"
+  recommendation: "'Not now'."
+  depends_on: null
+
+- finding_id: TW-154
+  surface_id: md-trx-019
+  lens: technical-writer
+  severity: P3
+  issue: "'Failed to send invitation. Please try again.' uses 'please' filler — same anti-pattern across apps"
+  evidence_excerpt: "Failed to send invitation. Please try again."
+  recommendation: "'Couldn\\'t send invitation. Retry.'"
+  depends_on: null
+
+- finding_id: TW-155
+  surface_id: md-trx-018
+  lens: technical-writer
+  severity: P2
+  issue: "'You do not have permission to invite staff.' is 8 words OK but 'You do not have permission' is jargon-heavy. Driver-friendly form needs simpler phrasing"
+  evidence_excerpt: "You do not have permission to invite staff."
+  recommendation: "'Only the partner owner can invite staff.' (Explains who can.)"
+  depends_on: null
+
+- finding_id: TW-156
+  surface_id: md-trx-016
+  lens: technical-writer
+  severity: P3
+  issue: "'Failed to upload photo. Please try again.' — same 'please' filler pattern"
+  evidence_excerpt: "Failed to upload photo. Please try again."
+  recommendation: "'Couldn\\'t upload photo. Retry.'"
+  depends_on: null
+
+- finding_id: TW-157
+  surface_id: md-trx-008
+  lens: technical-writer
+  severity: P3
+  issue: "Alert title 'Subscription' is bare noun — works as a context label but feels lifeless. Pairs with TW-148 body"
+  evidence_excerpt: "Subscription"
+  recommendation: "'Manage subscription' or align with body fix from TW-148."
+  depends_on: null
+
+# ============================================================================
+# CROSS-SURFACE: SYSTEMIC PATTERNS (not tied to one surface_id)
+# ============================================================================
+
+- finding_id: TW-158
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P2
+  issue: "Repository-wide pattern: 27 API success messages and 25+ frontend toasts spell 'successfully' at the end of a past-tense verb — pure redundancy, ~52 places to fix"
+  evidence_excerpt: "Across handlers/*.go and apps/*/features/*/pages/*.tsx — count of 'successfully' as toast/api suffix"
+  recommendation: "One-time sweep: 'X-ed successfully' → 'X-ed' across the repo. Add a lint rule (custom ESLint + a Go vet script) to catch future additions."
+  depends_on: null
+
+- finding_id: TW-159
+  surface_id: api-success-message-generic
+  lens: technical-writer
+  severity: P2
+  issue: "Repository-wide pattern: ~40+ instances of 'Failed to X. Please try again.' frontend toasts — 'please' filler + non-actionable 'try again'"
+  evidence_excerpt: "Across vendor/admin/delivery/web apps — count of 'Failed to'/'Please try again' as toast text"
+  recommendation: "Sweep: 'Failed to X. Please try again.' → 'Couldn\\'t X. Retry.' Same lint-rule recommendation as TW-158."
+  depends_on: null
+
+- finding_id: TW-160
+  surface_id: api-email-order-confirm
+  lens: technical-writer
+  severity: P1
+  issue: "All 8 branded emails hardcode the brand name 'Fe3dr' in subject + footer + URLs. No single source of truth for the brand string. Switching brand requires touching every template"
+  evidence_excerpt: "Subject: 'Welcome to Fe3dr!' / 'Verify your email — Fe3dr' / 'Reset your password — Fe3dr' / footer 'Fe3dr by HomeChef' / URLs 'https://fe3dr.com'"
+  recommendation: "Extract brand name + URLs into a config struct (BrandName, BrandURL, BrandVendorURL, BrandDeliveryURL). Reference in all templates. Aligns with TW-001/TW-002 single-brand recommendation."
+  depends_on: null

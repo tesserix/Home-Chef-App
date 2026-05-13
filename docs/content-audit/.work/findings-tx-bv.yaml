@@ -1,0 +1,721 @@
+# Brand-Voice lens findings — TRANSACTIONAL category
+# Lens: cross-surface and cross-app voice consistency
+# Source brief: docs/content-audit/lens-briefs/brand-voice.md
+# Style guide: docs/content-audit/STYLE-GUIDE.md
+# Brand-personality reference: .impeccable.md ("Confident · Appetizing · Quietly modern")
+# Inventory rows audited: 154 (transactional)
+#
+# Headline drift patterns surfaced:
+#   1. Brand-identity triple-name leak: "Fe3dr" / "Fe3dr HomeChef" / "HomeChef" co-exist in user-facing strings
+#   2. Order-status enum drift: 3+ status-label maps (email subjects, in-app messages, push bodies) — same event, different words
+#   3. Subject/in-app/push wording mismatch per event (chef, customer, driver all affected)
+#   4. Exclamation-mark budget blown across vendor/driver/admin surfaces (style-guide budget = 0 for these personas)
+#   5. Emoji leaking into chef/driver/admin emails ("🔔", "🚗", "✅", "❌", "🎉", "👨‍🍳", "📦", "🍽️") — style-guide allows customer-only
+#   6. Title Case vs sentence case inconsistency in alert titles ("Log out" header / "Log Out" button on same screen)
+#   7. Raw enum slug leaks ("Your menu_item has been approved", "%s" interpolated with snake_case)
+#   8. Unbranded inline-HTML emails (support, account-reminder) bypass emailBase wrapper — breaks brand
+#   9. "successfully" suffix toggles on/off across siblings ("Profile updated" vs "Profile updated successfully")
+#  10. "Log out" vs "Logout" vs "Sign out" — style-guide requires "Sign out"; all three exist
+#  11. Same NATS event fires duplicate pushes with different copy (two different chef "new order" pushes)
+#  12. Generic alert titles "Success" / "Validation" — non-brand, sounds like default RN Alert
+#  13. CTA tone drift: "Start Exploring" (welcome email) vs sentence-case button rules
+
+- finding_id: BV-001
+  surface_id: api-push-user-welcome
+  lens: brand-voice
+  severity: P0
+  issue: "Brand identity contradiction: push says 'HomeChef', welcome email says 'Fe3dr', account-reminder email says 'Fe3dr HomeChef' — new user receives three different brand names in their first hour"
+  evidence_excerpt: "Title: 'Welcome to HomeChef!' — Message: 'Thank you for joining HomeChef. Discover amazing home-cooked meals near you!'"
+  related_surfaces: ["api-email-welcome", "api-email-account-reminder", "api-email-chef-verified", "md-trx-010"]
+  recommendation: "Pick one canonical brand name and apply globally. If 'Fe3dr' is the legal brand, push must say 'Welcome to Fe3dr.' (sentence-period, no exclamation per Rule 1). HomeChef-as-brand strings must be removed."
+  depends_on: null
+
+- finding_id: BV-002
+  surface_id: api-email-account-reminder
+  lens: brand-voice
+  severity: P0
+  issue: "Brand-name compound 'Fe3dr HomeChef' appears in subject line and body — neither standalone brand is consistent across the system. This is the most visible drift surface (security-related email)."
+  evidence_excerpt: "Subject: 'You already have a Fe3dr HomeChef account' — body: 'Someone (possibly you) just tried to create a Fe3dr HomeChef account...'"
+  related_surfaces: ["api-email-welcome", "api-push-user-welcome", "md-trx-010"]
+  recommendation: "Replace 'Fe3dr HomeChef' with the single canonical brand. Pick one — same name on signup, login, this reminder, the welcome email, and the push."
+  depends_on: null
+
+- finding_id: BV-003
+  surface_id: md-trx-002
+  lens: brand-voice
+  severity: P0
+  issue: "Driver-facing safety modal uses 'HomeChef Delivery' brand name while all chef/customer emails say 'Fe3dr'. Driver app does not know the brand."
+  evidence_excerpt: "'To keep customers updated on their delivery, HomeChef Delivery needs to track your location while you are on an active delivery...'"
+  related_surfaces: ["api-email-welcome", "api-push-user-welcome", "md-trx-010"]
+  recommendation: "Replace 'HomeChef Delivery' with the canonical brand. Driver consent strings are legal-adjacent — brand drift here also creates an iOS App Store review risk (the Info.plist string likely uses a different name again)."
+  depends_on: null
+
+- finding_id: BV-004
+  surface_id: md-trx-010
+  lens: brand-voice
+  severity: P0
+  issue: "Support email hardcoded as 'support@homechef.in' in driver-facing account-deletion path — domain says HomeChef India, emails say Fe3dr, push says HomeChef. Three brand identities. Driver who emails support sees yet another."
+  evidence_excerpt: "'Contact support at support@homechef.in to request account deletion.'"
+  related_surfaces: ["api-email-welcome", "api-push-user-welcome", "md-trx-002"]
+  recommendation: "Make support email a config token tied to the canonical brand domain. Do not hardcode."
+  depends_on: null
+
+- finding_id: BV-005
+  surface_id: api-push-order-update-customer
+  lens: brand-voice
+  severity: P0
+  issue: "Order-status enum drift: three independent label maps for the same 7 statuses (email subject map at email_templates.go, push body via getOrderStatusMessage, and the second push variant via humanReadableOrderStatus). Same status, three different sentences."
+  evidence_excerpt: "Email subject: 'Your chef is preparing your meal' / Push: 'Your order is being prepared' / Push alt: 'Your order is now being prepared'"
+  related_surfaces: ["api-email-order-status-preparing", "api-email-order-status-confirmed", "api-email-order-status-ready", "api-email-order-status-pickedup", "api-email-order-status-onway", "api-email-order-status-delivered", "api-email-order-status-cancelled", "api-push-order-update-customer-deeplink", "api-inapp-order-status-customer"]
+  recommendation: "Single status-label map per status. One sentence per status. Email subject, in-app message, push body all pull from the same map. Suggested phrasing per status: confirmed='Your chef has confirmed the order.' / preparing='Your chef is preparing your meal.' / ready='Your order is ready for pickup.' / pickedup='Your driver has picked up the order.' / onway='Your order is on the way.' / delivered='Delivered. Enjoy your meal.' / cancelled='Your order was cancelled.'"
+  depends_on: null
+
+- finding_id: BV-006
+  surface_id: api-push-chef-new-order-actionable
+  lens: brand-voice
+  severity: P0
+  issue: "Chef receives TWO push notifications with different copy on the same NATS event — handlers/notifications.go uses 'New Order / You have a new order waiting for your confirmation' and services/notifications.go::handleOrderCreated uses 'New Order Received / You have a new order waiting to be prepared!'. Two queue groups, two voices."
+  evidence_excerpt: "Push A: 'New Order — You have a new order waiting for your confirmation' / Push B: 'New Order Received — You have a new order waiting to be prepared!'"
+  related_surfaces: ["api-push-order-created-chef", "api-inapp-chef-new-order", "api-inapp-order-created-chef"]
+  recommendation: "One consumer wins. Pick the single canonical chef new-order push and delete the other. Suggested phrasing: 'New order — please confirm.' (sentence-case, period, no exclamation per Rule 1 for chef tone)."
+  depends_on: null
+
+- finding_id: BV-007
+  surface_id: api-inapp-chef-new-order
+  lens: brand-voice
+  severity: P1
+  issue: "Three distinct in-app 'new order' notification titles in the codebase: 'New Order!', 'New Order Received', 'New Order'. Same event, three voices."
+  evidence_excerpt: "'New Order!' (services/notifications.go::handleChefNewOrder) vs 'New Order Received' (handleOrderCreated) vs 'New Order' (RegisterPushConsumers)"
+  related_surfaces: ["api-push-order-created-chef", "api-inapp-order-created-chef", "api-push-chef-new-order-actionable"]
+  recommendation: "Consolidate to one: 'New order' (sentence case, no exclamation — chef tone per Style Guide §2 has 0 exclamation budget)."
+  depends_on: BV-006
+
+- finding_id: BV-008
+  surface_id: api-email-chef-verified
+  lens: brand-voice
+  severity: P1
+  issue: "Cross-surface noun drift for the same event: email says 'kitchen is verified', in-app says 'chef profile has been verified'. Customer/chef sees two different concepts for one approval."
+  evidence_excerpt: "Email subject: 'Your kitchen is verified — Fe3dr' / In-app: 'Your chef profile has been verified.'"
+  related_surfaces: ["api-inapp-chef-verified", "api-email-chef-verified-publish", "ap-chefs-toast-verified"]
+  recommendation: "Pick one noun. Style Guide §3 prefers 'Chef' chef-facing — recommend 'Your chef profile is verified.' across email subject, in-app title, push, and admin-facing toast."
+  depends_on: null
+
+- finding_id: BV-009
+  surface_id: api-email-chef-verified-publish
+  lens: brand-voice
+  severity: P2
+  issue: "NATS-published email title 'Your Chef Profile is Verified!' uses Title Case (banned outside proper nouns per Style Guide §3) and exclamation (Rule 1 / chef tone budget = 0)."
+  evidence_excerpt: "Email Title: 'Your Chef Profile is Verified!' — Message: 'Congratulations! Your chef profile has been verified. You can now start accepting orders!'"
+  related_surfaces: ["api-email-chef-verified", "api-inapp-chef-verified"]
+  recommendation: "'Your chef profile is verified.' Drop the exclamation, sentence-case the title."
+  depends_on: BV-008
+
+- finding_id: BV-010
+  surface_id: api-inapp-chef-verified
+  lens: brand-voice
+  severity: P2
+  issue: "Title 'Congratulations!' is loud — Style Guide Rule 1 prohibits urgency/celebration punctuation in chef-facing copy. 'Congratulations' as a body word is fine; as a title it overdoes it."
+  evidence_excerpt: "Title: 'Congratulations!' — Message: 'Your chef profile has been verified. You can now start accepting orders!'"
+  related_surfaces: ["api-email-chef-verified-publish", "api-email-chef-verified"]
+  recommendation: "Title: 'You're verified.' Message: 'Your chef profile is live. You can start accepting orders.' Two periods, zero exclamations."
+  depends_on: BV-008
+
+- finding_id: BV-011
+  surface_id: api-email-chef-new-order
+  lens: brand-voice
+  severity: P1
+  issue: "Emoji '🔔' and exclamation 'New Order!' in chef-facing email — style guide chef tone allows zero exclamations and zero decorative emoji. Plus 'New Order!' Title-Cases what should be sentence case."
+  evidence_excerpt: "Subject: 'New order #%s — Fe3dr' — body: '🔔 New Order! You have a new order #%s worth ₹%.2f. Please review and accept the order from your dashboard.'"
+  related_surfaces: ["api-push-order-created-chef", "api-inapp-chef-new-order", "api-push-chef-new-order-actionable"]
+  recommendation: "Drop the bell emoji. Sentence case body heading 'New order' (no exclamation). Subject already sentence-case — keep."
+  depends_on: BV-006
+
+- finding_id: BV-012
+  surface_id: api-email-delivery-assigned
+  lens: brand-voice
+  severity: P1
+  issue: "Emoji '🚗' and 'New Delivery!' in driver-facing email — driver tone budget = 0 emoji, 0 exclamations. Worse, this exact template is also sent to the CUSTOMER per the inventory note — customer would see 'You've been assigned order #...' which is wrong-persona copy."
+  evidence_excerpt: "Subject: 'Delivery assigned — Order #%s' — body: '🚗 New Delivery! You've been assigned order #%s. Pickup location: %s'"
+  related_surfaces: ["api-push-delivery-assigned-driver", "api-push-delivery-assigned-customer", "api-inapp-delivery-assigned-customer"]
+  recommendation: "Drop emoji. Driver body: 'New delivery — Order #%s. Pickup: %s.' (telegraphic, sentence case, period). Fix the routing so customer gets the customer template, not this one."
+  depends_on: null
+
+- finding_id: BV-013
+  surface_id: api-email-order-status-preparing
+  lens: brand-voice
+  severity: P2
+  issue: "Decorative emoji '👨‍🍳' in customer email — Style Guide allows occasional customer-facing emoji but not as a chrome decoration on every status email. Seven status emails carry seven different emojis; emoji becomes a system, not a moment."
+  evidence_excerpt: "Subject: 'Order #%s — Your chef is preparing your meal' — body uses 👨‍🍳 emoji"
+  related_surfaces: ["api-email-order-status-confirmed", "api-email-order-status-ready", "api-email-order-status-pickedup", "api-email-order-status-onway", "api-email-order-status-delivered", "api-email-order-status-cancelled"]
+  recommendation: "Remove emoji from status emails. The status label and the photo of the dish (where present) do the emotional work. Reserve emoji for the delivered email only — and only one (🎉 is fine on delivery as the celebratory moment, in line with Rule 1's 'genuine celebration' carve-out)."
+  depends_on: null
+
+- finding_id: BV-014
+  surface_id: api-email-order-status-onway
+  lens: brand-voice
+  severity: P2
+  issue: "Exclamation 'Your order is on the way!' in customer email subject — Style Guide Rule 1 allows ≤1 exclamation per page customer-facing; this single email has potentially two (subject + body). Plus tracking emoji '🚗' decorative."
+  evidence_excerpt: "Subject: 'Order #%s — Your order is on the way!' — 🚗 emoji"
+  related_surfaces: ["api-push-order-update-customer", "api-push-delivery-pickedup-customer"]
+  recommendation: "Subject: 'Order #%s — On the way.' Body: 'Your driver is on the way. Track in the app.' Period not exclamation."
+  depends_on: BV-005
+
+- finding_id: BV-015
+  surface_id: api-email-order-status-delivered
+  lens: brand-voice
+  severity: P2
+  issue: "'Enjoy your meal!' co-exists with in-app push 'Enjoy!' and another in-app status message variant — three sign-offs for one delivery moment. Pick the celebration, not three of them."
+  evidence_excerpt: "Subject: 'Order #%s — Your order has been delivered. Enjoy your meal!' — 🎉 emoji"
+  related_surfaces: ["api-push-order-delivered-customer", "api-inapp-order-delivered-customer", "api-push-order-update-customer", "web-tx-orderdetail-toasts"]
+  recommendation: "Canonical delivered copy across email/push/in-app: 'Delivered. Enjoy your meal.' Period. One emoji 🎉 reserved here only (genuine celebration carve-out from Rule 1)."
+  depends_on: BV-005
+
+- finding_id: BV-016
+  surface_id: api-email-order-status-cancelled
+  lens: brand-voice
+  severity: P1
+  issue: "Decorative ❌ emoji on a sensitive event (cancellation) — feels like a Slack reaction, not a brand voice. Plus no refund timeline, no support contact. Voice and content both wrong."
+  evidence_excerpt: "Subject: 'Order #%s — Your order has been cancelled' — ❌ emoji"
+  related_surfaces: ["api-push-order-cancelled-both", "api-inapp-order-cancelled-both", "web-tx-orderdetail-toasts"]
+  recommendation: "Drop emoji. Subject: 'Order #%s — cancelled.' Body must include refund window and contact link (legal-adjacent — see legal lens). Voice should be calm and informative, not decorative."
+  depends_on: null
+
+- finding_id: BV-017
+  surface_id: api-email-order-confirm
+  lens: brand-voice
+  severity: P1
+  issue: "'Order Confirmed!' uses Title Case + exclamation; customer-facing budget allows one celebration per page, but the email also has 'Your home chef is preparing your meal!' — two exclamations in one short email."
+  evidence_excerpt: "'Order Confirmed! Your order #%s has been placed successfully. Your home chef is preparing your meal!'"
+  related_surfaces: ["api-push-order-update-customer-deeplink", "web-tx-orderdetail-toasts", "web-tx-checkout-payment-toasts"]
+  recommendation: "Heading: 'Order confirmed.' Body: 'Your order #%s is placed. Your chef is preparing your meal.' Two periods, zero exclamations."
+  depends_on: BV-005
+
+- finding_id: BV-018
+  surface_id: api-email-welcome
+  lens: brand-voice
+  severity: P1
+  issue: "Welcome email mixes hype tone with brand drift: 'Welcome to Fe3dr!' subject + 'We're thrilled to have you. Discover amazing home-cooked meals from talented local chefs...' — 'thrilled', 'amazing', 'talented' are bland-marketing tells per brief Anti-references."
+  evidence_excerpt: "Subject: 'Welcome to Fe3dr!' — 'Welcome to Fe3dr, %s! We're thrilled to have you. Discover amazing home-cooked meals from talented local chefs...'"
+  related_surfaces: ["api-push-user-welcome"]
+  recommendation: "Subject: 'Welcome to Fe3dr.' (period). Body: 'Welcome, %s. Discover home chefs cooking near you.' Drop 'thrilled', 'amazing', 'talented' — they read as bland marketing, not the calm-confident voice per .impeccable.md."
+  depends_on: BV-001
+
+- finding_id: BV-019
+  surface_id: api-email-welcome
+  lens: brand-voice
+  severity: P2
+  issue: "'Start Exploring' CTA is Title Case — Style Guide §4 requires sentence case for buttons."
+  evidence_excerpt: "CTA 'Start Exploring' → https://fe3dr.com"
+  related_surfaces: ["api-email-staff-invite", "api-email-chef-verified"]
+  recommendation: "'Browse chefs' or 'Get started' (sentence case, ≤3 words, verb-first per Style Guide §4)."
+  depends_on: null
+
+- finding_id: BV-020
+  surface_id: api-email-staff-invite
+  lens: brand-voice
+  severity: P2
+  issue: "'You're invited to join Fe3dr' + body 'You've been invited!' — two invitation announcements with two punctuation styles in the same email. Subject is period-less statement, body has exclamation."
+  evidence_excerpt: "Subject: 'You're invited to join Fe3dr' — 'You've been invited! %s has invited you to join the Fe3dr team as %s...'"
+  related_surfaces: ["ap-staff-invite-success-title", "dp-tx-toast-invite-created", "ap-staff-toasts"]
+  recommendation: "Body lead: 'You've been invited.' (period, not exclamation). Match the subject's calm tone."
+  depends_on: null
+
+- finding_id: BV-021
+  surface_id: api-email-support-created
+  lens: brand-voice
+  severity: P0
+  issue: "Support emails (created + update) are inline HTML in services/email.go — bypass the emailBase wrapper, so they have no branded header/footer/privacy/unsubscribe. Customer receives an email with no clear sender brand identity."
+  evidence_excerpt: "Subject: 'Support Ticket #%s — %s' — 'Support Ticket Created. Your support ticket #%s has been created. Subject: %s. Our team will get back to you shortly.'"
+  related_surfaces: ["api-email-support-update", "api-email-account-reminder"]
+  recommendation: "Migrate to emailBase template. Match brand header/footer with other transactional emails. The brand-name drift on the rest of the system is compounded when these specific emails arrive unbranded — recipient cannot tell who sent them."
+  depends_on: null
+
+- finding_id: BV-022
+  surface_id: api-email-support-update
+  lens: brand-voice
+  severity: P1
+  issue: "Same as BV-021: unbranded inline HTML. Plus 'Support Ticket Update.' as a sentence is sub-grammatical (label, not sentence) — voice reads like an internal ticket dump, not a customer-trust moment."
+  evidence_excerpt: "Subject: 'Ticket Update — #%s' — 'Support Ticket Update. Your support ticket #%s has been updated to: %s'"
+  related_surfaces: ["api-email-support-created"]
+  recommendation: "Use emailBase. Body: 'Your support ticket #%s is now %s.' One sentence, period."
+  depends_on: BV-021
+
+- finding_id: BV-023
+  surface_id: api-email-verify
+  lens: brand-voice
+  severity: P2
+  issue: "'Verify your email, %s. Thanks for signing up!' — exclamation again on entry surface (welcome flow). Same as welcome email pattern."
+  evidence_excerpt: "Subject: 'Verify your email — Fe3dr' — 'Verify your email, %s. Thanks for signing up! Please verify your email address to activate your account...'"
+  related_surfaces: ["api-email-welcome", "api-push-user-welcome"]
+  recommendation: "'Thanks for signing up.' Period. Single exclamation budget customer-facing — reserve it for the moment that earns it (Rule 1)."
+  depends_on: null
+
+- finding_id: BV-024
+  surface_id: api-email-password-reset
+  lens: brand-voice
+  severity: P2
+  issue: "Subject 'Reset your password — Fe3dr' + body 'We received a request to reset the password for your Fe3dr account...' — repeats brand. Voice is OK but the 'your account is secure' reassurance reads slightly customer-service-script. Acceptable as P3-level note."
+  evidence_excerpt: "Subject: 'Reset your password — Fe3dr' — 'Reset your password. We received a request to reset the password for your Fe3dr account...'"
+  related_surfaces: ["api-email-verify"]
+  recommendation: "'Reset your password. If this wasn't you, your account stays safe — just ignore this email.' (plain English over 'your account is secure' reassurance jargon)."
+  depends_on: null
+
+- finding_id: BV-025
+  surface_id: api-inapp-approval-approved-chef
+  lens: brand-voice
+  severity: P0
+  issue: "Raw snake_case enum slug surfaces to chef: 'Your menu_item has been approved' / 'Your delivery_zone has been approved'. Technical leak, not brand voice."
+  evidence_excerpt: "Title: 'Request Approved' — Message: 'Your %s has been approved: %s' where %s = 'menu_item' / 'delivery_zone' etc."
+  related_surfaces: ["api-push-approval-approved-chef", "api-inapp-approval-info-chef", "api-push-approval-info-chef", "api-inapp-approval-rejected-chef", "api-push-approval-rejected-chef"]
+  recommendation: "Add a humanReadable map for approval types: menu_item → 'menu item', delivery_zone → 'delivery zone', kitchen_photo → 'kitchen photo'. Apply before substitution."
+  depends_on: null
+
+- finding_id: BV-026
+  surface_id: api-push-approval-approved-chef
+  lens: brand-voice
+  severity: P1
+  issue: "Title 'Request Approved!' has exclamation; in-app 'Request Approved' does not. Same event, two voices. Plus chef-tone budget = 0 exclamations."
+  evidence_excerpt: "Push Title: 'Request Approved!' — Body: 'Your %s has been approved'"
+  related_surfaces: ["api-inapp-approval-approved-chef"]
+  recommendation: "Match in-app: 'Request approved' (sentence case, no exclamation)."
+  depends_on: BV-025
+
+- finding_id: BV-027
+  surface_id: api-inapp-approval-rejected-chef
+  lens: brand-voice
+  severity: P1
+  issue: "'Your %s has been rejected. Notes: %s' — appends raw admin notes verbatim. Risks leaking internal language, profanity, or shorthand into a chef notification. Brand voice gets hijacked by whatever the admin typed."
+  evidence_excerpt: "Title: 'Request Rejected' — Message: 'Your %s has been rejected. Notes: %s'"
+  related_surfaces: ["api-push-approval-rejected-chef", "api-inapp-approval-info-chef", "api-push-approval-info-chef"]
+  recommendation: "Either (a) wrap admin notes in a separate field with a label like 'Reviewer comment:' and bound to a sane length, or (b) require admin notes be reviewed/templated before they surface in a transactional notification. Brand voice can't be 'whatever admin wrote'."
+  depends_on: BV-025
+
+- finding_id: BV-028
+  surface_id: api-inapp-chef-responded
+  lens: brand-voice
+  severity: P1
+  issue: "'Chef Responded: ' + chef-authored message — admins receive chef text verbatim in a notification title/body. Brand voice cannot guarantee tone consistency. No profanity filter, no length cap per inventory."
+  evidence_excerpt: "Title: 'Chef Responded: ' + approval.Title — Message: req.Response (chef-authored)"
+  related_surfaces: ["api-inapp-staff-invite", "api-inapp-approval-rejected-chef"]
+  recommendation: "Bound chef message to 280 chars in notification, full message visible on click-through. Title: 'Chef replied — %s' (where %s = approval.Title only, not 'Chef Responded:' colon dump). Same applies to staff-invite where admin authors copy."
+  depends_on: null
+
+- finding_id: BV-029
+  surface_id: api-push-order-cancelled-both
+  lens: brand-voice
+  severity: P0
+  issue: "Identical push body 'Order has been cancelled' sent to BOTH customer and chef. Two personas with completely different needs (customer: when's my refund? chef: do I keep the prep?) receive the same generic line. Brand voice fails persona matrix entirely."
+  evidence_excerpt: "Title: 'Order Cancelled' — Body: 'Order has been cancelled' (same to customer AND chef)"
+  related_surfaces: ["api-inapp-order-cancelled-both", "api-email-order-status-cancelled"]
+  recommendation: "Persona-split bodies. Customer: 'Your order was cancelled. Refund in 5-7 days.' Chef: 'Order #%s cancelled — no further action needed.' Two routes, two voices, one event."
+  depends_on: null
+
+- finding_id: BV-030
+  surface_id: api-push-delivery-pickedup-customer
+  lens: brand-voice
+  severity: P1
+  issue: "Push title 'Order On The Way!' uses Title Case (every word capitalized) + exclamation. Style Guide §3 bans Title Case outside proper nouns. Plus in-app variant title is 'Order Picked Up' — different tense, different voice."
+  evidence_excerpt: "Push Title: 'Order On The Way!' — Body: 'Your order has been picked up and is on its way to you!'"
+  related_surfaces: ["api-inapp-delivery-pickedup-customer", "api-email-order-status-pickedup", "api-email-order-status-onway"]
+  recommendation: "Title: 'On the way' (sentence case). Body: 'Your driver has picked up your order.' One sentence, no exclamation."
+  depends_on: BV-005
+
+- finding_id: BV-031
+  surface_id: api-inapp-delivery-pickedup-customer
+  lens: brand-voice
+  severity: P2
+  issue: "In-app title 'Order Picked Up' uses Title Case. Style Guide §3 sentence case for everything except proper nouns."
+  evidence_excerpt: "Title: 'Order Picked Up' — Message: 'Your order has been picked up and is on its way!'"
+  related_surfaces: ["api-push-delivery-pickedup-customer"]
+  recommendation: "'Order picked up' (sentence case)."
+  depends_on: BV-030
+
+- finding_id: BV-032
+  surface_id: api-inapp-order-status-customer
+  lens: brand-voice
+  severity: P2
+  issue: "In-app title 'Order Status Updated' vs push title 'Order Update' for the same event. Tense and word count differ — voice drift."
+  evidence_excerpt: "In-app title: 'Order Status Updated' vs push title: 'Order Update'"
+  related_surfaces: ["api-push-order-update-customer", "api-push-order-update-customer-deeplink"]
+  recommendation: "Both: 'Order update' (sentence case, two words). Body carries the specific status."
+  depends_on: BV-005
+
+- finding_id: BV-033
+  surface_id: api-push-delivery-assigned-customer
+  lens: brand-voice
+  severity: P2
+  issue: "Push 'A delivery partner has been assigned to your order and will pick it up soon!' is wordy (16 words) and ends with exclamation. In-app variant is 9 words. Two voices for one event."
+  evidence_excerpt: "Push: 'Delivery Partner Assigned' / 'A delivery partner has been assigned to your order and will pick it up soon!' vs In-app: 'A delivery partner has been assigned to your order'"
+  related_surfaces: ["api-inapp-delivery-assigned-customer", "api-email-delivery-assigned"]
+  recommendation: "Push body: 'Your delivery partner is on the way.' (period). Title sentence-case: 'Delivery partner assigned'."
+  depends_on: null
+
+- finding_id: BV-034
+  surface_id: api-push-delivery-assigned-driver
+  lens: brand-voice
+  severity: P2
+  issue: "Driver push title 'New Delivery Available' is Title Case; body 'A delivery near you is ready for pickup' is 8 words — Style Guide driver tone targets ≤4 words where possible."
+  evidence_excerpt: "Title: 'New Delivery Available' — Body: 'A delivery near you is ready for pickup'"
+  related_surfaces: ["api-email-delivery-assigned", "dp-tx-toast-accept-success"]
+  recommendation: "Title: 'New delivery' (sentence case, telegraphic). Body: 'Pickup nearby.' (≤4 words per driver matrix)."
+  depends_on: null
+
+- finding_id: BV-035
+  surface_id: api-inapp-driver-onboarding-admins
+  lens: brand-voice
+  severity: P3
+  issue: "'A new driver from %s has submitted their onboarding application for review.' — 16 words. Admin tone is precise but this reads slightly verbose."
+  evidence_excerpt: "Title: 'New Driver Application' — Message: 'A new driver from %s has submitted their onboarding application for review.'"
+  related_surfaces: ["api-inapp-approval-created-admin"]
+  recommendation: "Title: 'New driver application' (sentence case). Message: 'A driver from %s submitted for review.' Tighter, admin-direct."
+  depends_on: null
+
+- finding_id: BV-036
+  surface_id: api-inapp-approval-created-admin
+  lens: brand-voice
+  severity: P2
+  issue: "Title 'New Approval Request' Title Case. Body 'New approval request pending: %s' duplicates the title word-for-word — title and body should not repeat."
+  evidence_excerpt: "Title: 'New Approval Request' — Message: 'New approval request pending: %s'"
+  related_surfaces: ["api-inapp-driver-onboarding-admins"]
+  recommendation: "Title: 'New approval request'. Body: 'Pending: %s' — short, admin-functional."
+  depends_on: null
+
+- finding_id: BV-037
+  surface_id: api-success-message-generic
+  lens: brand-voice
+  severity: P1
+  issue: "43 API success-message strings have inconsistent 'successfully' suffix — some have it ('Password changed successfully'), some don't ('2FA disabled'). Sibling strings on the same handler family drift in shape, breaking systematic voice."
+  evidence_excerpt: "'2FA disabled' vs 'Password changed successfully' vs 'Email verified successfully' vs 'Image deleted' vs 'Provider deleted successfully' vs 'Address deleted'"
+  related_surfaces: ["web-tx-admin-settings", "vp-ux-profile-toasts", "ap-staffdetail-toasts", "vp-ux-menu-form-toasts"]
+  recommendation: "Style Guide §4 success toast: past tense, ≤6 words, period. Drop 'successfully' across all 43 — it's filler. 'Password changed.' 'Email verified.' 'Provider deleted.' Apply same to the frontend toasts that mirror these (web/vp/ap)."
+  depends_on: null
+
+- finding_id: BV-038
+  surface_id: web-tx-catering-quotes
+  lens: brand-voice
+  severity: P2
+  issue: "'Quote accepted! The chef has been notified.' — exclamation on a routine action. Style Guide Rule 1: only genuine celebration. Plus 'The chef has been notified' is passive; voice should be active."
+  evidence_excerpt: "'Quote accepted! The chef has been notified.'"
+  related_surfaces: ["web-tx-catering-request-submit", "web-tx-chef-catering"]
+  recommendation: "'Quote accepted. We told the chef.' Period. Active. Tighter."
+  depends_on: null
+
+- finding_id: BV-039
+  surface_id: web-tx-catering-request-submit
+  lens: brand-voice
+  severity: P2
+  issue: "'Catering request submitted successfully!' — exclamation + 'successfully' filler. Two voice violations."
+  evidence_excerpt: "'Catering request submitted successfully! / Failed to submit request. Please try again.'"
+  related_surfaces: ["web-tx-catering-quotes", "vp-onb-submit-success", "dp-tx-toast-step5-submitted"]
+  recommendation: "'Request submitted.' Period, ≤6 words."
+  depends_on: BV-037
+
+- finding_id: BV-040
+  surface_id: web-tx-checkout-payment-toasts
+  lens: brand-voice
+  severity: P1
+  issue: "'Payment successful!' on a routine customer payment — exclamation budget should be reserved. Plus 'Payment successful' is fine as a status; the bang reads consumer-grade-hype."
+  evidence_excerpt: "'Failed to initiate payment / Payment gateway is loading / Payment successful! / Payment verification failed...'"
+  related_surfaces: ["web-tx-orderdetail-toasts", "api-email-order-confirm"]
+  recommendation: "'Payment confirmed.' (Style Guide §3 prefers 'Paid' / 'Payment successful' but picks one per surface. Pick 'Payment confirmed' across web checkout + order detail + email — consistent verb, no exclamation)."
+  depends_on: null
+
+- finding_id: BV-041
+  surface_id: web-tx-delivery-actions
+  lens: brand-voice
+  severity: P1
+  issue: "Driver-portal toasts 'Delivery accepted!' and 'Delivery completed! Great job!' — driver tone budget = 0 exclamations + 0 emoji + ≤4 words. 'Great job!' is gamification cheer (anti-reference: 2018 indie ecommerce / DTC hype)."
+  evidence_excerpt: "'Delivery accepted! / Delivery completed! Great job! / Status updated / You are now offline / You are now online'"
+  related_surfaces: ["dp-tx-toast-online", "dp-tx-toast-accept-success", "dp-tx-toast-status-updated"]
+  recommendation: "'Delivery accepted.' 'Delivery complete.' Drop 'Great job!'. Telegraphic, calm, dignified — driver is at work, not playing a game."
+  depends_on: null
+
+- finding_id: BV-042
+  surface_id: dp-tx-toast-accept-success
+  lens: brand-voice
+  severity: P2
+  issue: "'Delivery accepted!' (delivery-portal driver web) duplicates the same exclamation pattern flagged in BV-041. Same string, different file — confirms consistent drift."
+  evidence_excerpt: "`Delivery accepted!`"
+  related_surfaces: ["web-tx-delivery-actions", "mv-undo-accepted"]
+  recommendation: "'Delivery accepted.' Period."
+  depends_on: BV-041
+
+- finding_id: BV-043
+  surface_id: dp-tx-toast-step5-submitted
+  lens: brand-voice
+  severity: P2
+  issue: "Driver onboarding submit toast 'Application submitted successfully!' — driver tone, exclamation + 'successfully' filler."
+  evidence_excerpt: "`Application submitted successfully!`"
+  related_surfaces: ["mv-onb-pending-submitted-title", "vp-onb-submit-success", "web-tx-catering-request-submit"]
+  recommendation: "'Application submitted.' Period, ≤6 words."
+  depends_on: BV-037
+
+- finding_id: BV-044
+  surface_id: vp-onb-submit-success
+  lens: brand-voice
+  severity: P2
+  issue: "Chef onboarding submit 'Application submitted! We'll review and get back to you within 24-48 hours.' — chef tone, 0-exclamation budget. The SLA line is useful; the exclamation is not."
+  evidence_excerpt: "'Application submitted! We'll review and get back to you within 24-48 hours.'"
+  related_surfaces: ["vp-onb-policies-ready-banner", "mv-onb-pending-submitted-title", "dp-tx-toast-step5-submitted"]
+  recommendation: "'Application submitted. We'll review and reply within 24–48 hours.' (period + en-dash on hour range)."
+  depends_on: null
+
+- finding_id: BV-045
+  surface_id: vp-onb-policies-ready-banner
+  lens: brand-voice
+  severity: P2
+  issue: "'You're all set to submit your application!' — exclamation on chef-facing onboarding step. Plus 'You're all set' is generic SaaS-onboarding voice (anti-reference)."
+  evidence_excerpt: "'You're all set to submit your application! / Our team will review your details and you'll be notified within 24-48 hours.'"
+  related_surfaces: ["vp-onb-submit-success", "vp-onb-personal-avatar-success"]
+  recommendation: "'Ready to submit.' Period. Tighter chef tone. Body second sentence is good — keep."
+  depends_on: BV-044
+
+- finding_id: BV-046
+  surface_id: mv-onb-pending-submitted-title
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-vendor 'Application Submitted!' — Title Case + exclamation in chef-facing serif display title. Inventory notes this is a 'lone exclamation in app' — confirms it's a stylistic outlier."
+  evidence_excerpt: "'Application Submitted!'"
+  related_surfaces: ["vp-onb-submit-success", "dp-tx-toast-step5-submitted"]
+  recommendation: "'Application submitted' (sentence case, no exclamation)."
+  depends_on: BV-044
+
+- finding_id: BV-047
+  surface_id: mc-catering-submit-success
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer 'Request Submitted! / Chefs will review and send quotes.' — Title Case + exclamation on alert title."
+  evidence_excerpt: "'Request Submitted! / Chefs will review and send quotes.'"
+  related_surfaces: ["web-tx-catering-request-submit", "vp-onb-submit-success"]
+  recommendation: "'Request submitted' (sentence case, no exclamation). Body OK."
+  depends_on: BV-044
+
+- finding_id: BV-048
+  surface_id: mc-profile-logout-confirm
+  lens: brand-voice
+  severity: P1
+  issue: "Customer mobile alert: title 'Log out' (sentence case, two words) but button label 'Log Out' (Title Case). Same screen, two casings of the same verb. Plus Style Guide §3 mandates 'Sign out' not 'Log out'."
+  evidence_excerpt: "'Log out / Are you sure you want to log out? / Cancel / Log Out'"
+  related_surfaces: ["md-trx-006", "md-trx-007"]
+  recommendation: "Title: 'Sign out'. Body: 'Sign out of your account?' Button: 'Sign out' (sentence case). One verb, one casing, three matching tokens."
+  depends_on: null
+
+- finding_id: BV-049
+  surface_id: md-trx-006
+  lens: brand-voice
+  severity: P1
+  issue: "Driver mobile alert title 'Logout' — single word + wrong verb. Style Guide bans both 'Logout' (one word) and 'Log out' (verb form); requires 'Sign out'."
+  evidence_excerpt: "'Logout'"
+  related_surfaces: ["md-trx-007", "mc-profile-logout-confirm"]
+  recommendation: "'Sign out'. Same on the body 'Are you sure you want to sign out?'."
+  depends_on: BV-048
+
+- finding_id: BV-050
+  surface_id: md-trx-007
+  lens: brand-voice
+  severity: P2
+  issue: "Driver mobile alert body 'Are you sure you want to logout?' — uses 'logout' as a verb (banned per Style Guide §3, plus single-word form is wrong)."
+  evidence_excerpt: "'Are you sure you want to logout?'"
+  related_surfaces: ["md-trx-006", "mc-profile-logout-confirm"]
+  recommendation: "'Sign out of your account?' (drops the 'Are you sure' hedge per Style Guide §4 modal-subtitles — explain consequence, not ask permission)."
+  depends_on: BV-049
+
+- finding_id: BV-051
+  surface_id: md-trx-011
+  lens: brand-voice
+  severity: P2
+  issue: "Driver alert title 'Validation' — generic system label, not brand voice. Reads like default RN Alert title."
+  evidence_excerpt: "'Validation'"
+  related_surfaces: ["md-trx-013", "mv-profile-update-success-body"]
+  recommendation: "Use a descriptive title: 'Missing details' (matches body 'Name, phone, and city are required.')."
+  depends_on: null
+
+- finding_id: BV-052
+  surface_id: md-trx-013
+  lens: brand-voice
+  severity: P2
+  issue: "Driver alert title 'Success' — generic non-brand label. Drop the title entirely or replace with the actual outcome."
+  evidence_excerpt: "'Success'"
+  related_surfaces: ["md-trx-011", "mv-profile-update-success-body"]
+  recommendation: "Drop. Or 'Profile saved' (matches body)."
+  depends_on: BV-051
+
+- finding_id: BV-053
+  surface_id: md-trx-008
+  lens: brand-voice
+  severity: P2
+  issue: "Driver alert title 'Subscription' — generic label, not voice."
+  evidence_excerpt: "'Subscription'"
+  related_surfaces: ["md-trx-009", "md-trx-013"]
+  recommendation: "'Manage on web' (matches the body which says 'Visit the web portal to manage your subscription')."
+  depends_on: null
+
+- finding_id: BV-054
+  surface_id: mv-profile-update-success-body
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-vendor alert: title 'Success' (generic) + body 'Profile updated successfully.' — title is non-brand, body has 'successfully' filler."
+  evidence_excerpt: "Title: 'Success' / Body: 'Profile updated successfully.'"
+  related_surfaces: ["md-trx-013", "md-trx-014", "vp-ux-profile-toasts"]
+  recommendation: "Replace alert with a toast: 'Profile updated.' One toast, no generic 'Success' title."
+  depends_on: null
+
+- finding_id: BV-055
+  surface_id: mv-reviewdetail-success-title
+  lens: brand-voice
+  severity: P3
+  issue: "'Reply Sent' alert title — Title Case in chef-facing app."
+  evidence_excerpt: "Title: 'Reply Sent' / Body: 'Your reply has been posted.'"
+  related_surfaces: ["mv-profile-update-success-body"]
+  recommendation: "'Reply posted' (sentence case, past tense, matches body verb)."
+  depends_on: null
+
+- finding_id: BV-056
+  surface_id: mc-profile-save-success
+  lens: brand-voice
+  severity: P3
+  issue: "Customer mobile: 'Saved / Profile updated successfully. / Cuisine preferences updated.' — sibling toasts inconsistent: one has 'successfully', one doesn't."
+  evidence_excerpt: "'Saved / Profile updated successfully. / Cuisine preferences updated.'"
+  related_surfaces: ["vp-ux-profile-toasts", "web-tx-profile-update"]
+  recommendation: "All three follow Style Guide §4: past tense, ≤6 words, period. 'Saved.' / 'Profile updated.' / 'Preferences updated.'."
+  depends_on: BV-037
+
+- finding_id: BV-057
+  surface_id: mc-menuitem-cross-chef
+  lens: brand-voice
+  severity: P2
+  issue: "Cross-chef cart conflict: mobile says 'Replace Cart? / You have items from another chef. Replace cart? / Cancel / Replace'. Web says 'Your cart has items from another chef. Clear cart first.' Two different verbs (Replace / Clear), two different phrasings."
+  evidence_excerpt: "Mobile: 'Replace Cart? ... Replace cart? ... Replace' vs Web: 'Your cart has items from another chef. Clear cart first.'"
+  related_surfaces: ["web-tx-chefdetail-add-to-cart"]
+  recommendation: "Pick one verb across web + mobile. Suggested: 'Replace cart? Your cart has items from another chef.' (active question, 9 words). Buttons: 'Cancel' / 'Replace'. Web rewrites to same. Plus drop 'Replace Cart?' Title Case."
+  depends_on: null
+
+- finding_id: BV-058
+  surface_id: web-tx-chef-order-status
+  lens: brand-voice
+  severity: P3
+  issue: "Web chef portal: 'Order status updated' vs vendor-portal: 'Order status updated' (matches) but mobile-vendor uses 'Order accepted' / 'Order rejected' (different shape). Same domain, three different message families."
+  evidence_excerpt: "Web chef: 'Order status updated' / VP: 'Order status updated' / MV: 'Order accepted' / 'Order rejected'"
+  related_surfaces: ["vp-ux-orders-live-toasts", "mv-undo-accepted", "mv-undo-rejected"]
+  recommendation: "On chef-facing toasts, prefer the specific state ('Order accepted' / 'Order rejected' / 'Order marked ready') over generic 'Order status updated'. Migrate web + VP to match MV's specificity."
+  depends_on: null
+
+- finding_id: BV-059
+  surface_id: ap-staff-invite-success-title
+  lens: brand-voice
+  severity: P2
+  issue: "Admin-portal 'Invitation created successfully!' — admin tone budget = 0 exclamations + 'successfully' filler. Twice over."
+  evidence_excerpt: "'Invitation created successfully!'"
+  related_surfaces: ["dp-tx-toast-invite-created", "ap-staff-toasts", "api-success-message-generic"]
+  recommendation: "'Invitation created.' Period, no filler. Style Guide §4 admin tone is direct."
+  depends_on: BV-037
+
+- finding_id: BV-060
+  surface_id: ap-staff-toasts
+  lens: brand-voice
+  severity: P3
+  issue: "Sibling admin toasts oscillate: 'Invitation sent successfully' / 'Invitation resent' / 'Invitation revoked' — same verb family, inconsistent suffix discipline."
+  evidence_excerpt: "'Invitation revoked / Invitation resent / Invitation sent successfully / Invitation created successfully!'"
+  related_surfaces: ["ap-staff-invite-success-title", "dp-tx-toast-invite-created", "dp-tx-toast-invite-revoked", "dp-tx-toast-invite-resent"]
+  recommendation: "Apply systematically: 'Invitation sent.' / 'Invitation resent.' / 'Invitation revoked.' / 'Invitation created.' All past tense, all period, no 'successfully'."
+  depends_on: BV-037
+
+- finding_id: BV-061
+  surface_id: ap-providerdetail-toasts
+  lens: brand-voice
+  severity: P2
+  issue: "'Connection successful ({ms}ms)' uses 'successful' as adjective in admin context; sibling 'Provider deleted' is past tense. Two grammatical shapes for admin operational outcomes."
+  evidence_excerpt: "'Connection successful ({ms}ms); Connection failed: {err}; ... Provider status updated; Provider deleted'"
+  related_surfaces: ["ap-providers-toasts", "ap-secsettings-toasts"]
+  recommendation: "Normalize to past tense + outcome noun: 'Connected ({ms}ms).' / 'Connection failed: {err}.' / 'Provider deleted.' / 'Provider status updated.'."
+  depends_on: null
+
+- finding_id: BV-062
+  surface_id: ap-secsettings-toasts
+  lens: brand-voice
+  severity: P2
+  issue: "'2FA enabled successfully' but '2FA disabled' (no suffix) — same handler family, two different shapes. Plus 'All other sessions revoked. You may need to sign in again.' is good voice; rest is inconsistent."
+  evidence_excerpt: "'... 2FA enabled successfully; 2FA disabled; Enforcement setting updated; Invalid code; Enroll failed; ...'"
+  related_surfaces: ["web-tx-profile-2fa", "api-success-message-generic"]
+  recommendation: "'2FA enabled.' / '2FA disabled.' Symmetric. Apply to all paired enable/disable verbs."
+  depends_on: BV-037
+
+- finding_id: BV-063
+  surface_id: ap-platsettings-feedback
+  lens: brand-voice
+  severity: P3
+  issue: "Sibling settings-save banners follow consistent past-tense shape ('Commission rates updated', 'Delivery fees updated', 'Operating hours updated', 'Zone created', 'Zone deleted') — but failure pair is generic ('Failed to save', 'Failed to create'). Failure should match the specific noun."
+  evidence_excerpt: "Success: 'Commission rates updated; Delivery fees updated; ...' Failure: 'Failed to save; Failed to create'"
+  related_surfaces: ["ap-providers-toasts", "ap-staff-toasts"]
+  recommendation: "Pair-match failure verbs: 'Failed to update commission rates.' / 'Failed to create zone.' Generic 'Failed to save' loses context."
+  depends_on: null
+
+- finding_id: BV-064
+  surface_id: vp-ux-menu-form-category-toasts
+  lens: brand-voice
+  severity: P3
+  issue: "'A category with this name already exists' is fine; sibling 'Category \"{name}\" created' uses quotes around name. Inconsistent — most other VP toasts don't quote interpolated values."
+  evidence_excerpt: "'Category \"{name}\" created / A category with this name already exists / Failed to create category'"
+  related_surfaces: ["web-tx-favorites-remove", "web-tx-chefdetail-add-to-cart"]
+  recommendation: "Drop the quotes: 'Category {name} created.' Or apply quoting systematically across all toast interpolations."
+  depends_on: null
+
+- finding_id: BV-065
+  surface_id: dp-tx-toast-partner-suspend
+  lens: brand-voice
+  severity: P3
+  issue: "Cross-app verb drift on a sensitive admin action: delivery-portal admin uses 'Partner suspended'; admin-portal uses 'Chef suspended' / 'User suspended' / 'Delivery partner suspended'. Four different objects ('Partner', 'Chef', 'User', 'Delivery partner') for the same suspend verb."
+  evidence_excerpt: "DP: 'Partner reactivated / Partner suspended' vs AP: 'Chef suspended / User suspended' vs API: 'Delivery partner suspended'"
+  related_surfaces: ["ap-chefs-toast-suspended", "ap-users-toast-suspended", "api-success-message-generic"]
+  recommendation: "Apply the Style Guide noun policy. 'Chef', 'Driver', 'Customer' are the canonical roles. Toasts: 'Chef suspended.' / 'Driver suspended.' / 'Customer suspended.' — never 'Partner' or 'User' (banned in §3)."
+  depends_on: null
+
+- finding_id: BV-066
+  surface_id: web-tx-profile-update
+  lens: brand-voice
+  severity: P3
+  issue: "Sibling toasts on the same profile page: 'Profile updated successfully' (with filler) and 'Profile photo updated' (no filler). Same handler family."
+  evidence_excerpt: "'Profile updated successfully / Failed to update profile / File too large. Maximum 5 MB. / Invalid file type. Use JPEG, PNG or WebP. / Profile photo updated'"
+  related_surfaces: ["vp-ux-profile-toasts", "mc-profile-save-success", "vp-onb-personal-avatar-success"]
+  recommendation: "'Profile updated.' (drop 'successfully' — Style Guide §4). Match the photo toast pattern."
+  depends_on: BV-037
+
+- finding_id: BV-067
+  surface_id: web-tx-profile-2fa
+  lens: brand-voice
+  severity: P2
+  issue: "2FA toasts mix grand-statement and tiny-detail: 'Two-factor authentication enabled' / 'Two-factor authentication disabled' (verbose) vs 'Key copied' / 'Backup codes copied to clipboard' (one verbose, one telegraphic). Voice rhythm fails."
+  evidence_excerpt: "'Failed to initiate 2FA setup / Two-factor authentication enabled / ... / Backup codes regenerated / Key copied / Backup codes copied to clipboard'"
+  related_surfaces: ["ap-secsettings-toasts"]
+  recommendation: "Pick one length per category. Title abbrev acceptable for known concept: '2FA enabled.' / '2FA disabled.' / 'Backup codes regenerated.' / 'Key copied.' / 'Backup codes copied.'."
+  depends_on: BV-066
+
+- finding_id: BV-068
+  surface_id: web-tx-orderdetail-toasts
+  lens: brand-voice
+  severity: P2
+  issue: "'Payment confirmed' (this surface) vs 'Payment successful!' (checkout, BV-040) — same payment outcome, two different verbs in two surfaces the same customer hits within seconds."
+  evidence_excerpt: "'Payment confirmed / Payment verification failed — please contact support / Order cancelled successfully / Failed to cancel order / Order number copied'"
+  related_surfaces: ["web-tx-checkout-payment-toasts", "api-success-message-generic"]
+  recommendation: "Canonical: 'Payment confirmed.' across checkout + order detail + API + email. 'Order cancelled.' (drop 'successfully')."
+  depends_on: BV-040
+
+- finding_id: BV-069
+  surface_id: api-inapp-staff-invite
+  lens: brand-voice
+  severity: P2
+  issue: "Title/Message are admin-authored (per inventory note). Brand voice cannot guarantee consistency. Same risk pattern as BV-027 / BV-028."
+  evidence_excerpt: "Title: <invitation.Title> e.g. 'Staff Invitation' — Message: <req.Message> (admin-authored)"
+  related_surfaces: ["api-inapp-chef-responded", "api-inapp-approval-rejected-chef"]
+  recommendation: "Wrap admin-authored copy with a platform-controlled prefix: 'From admin: <message>'. Cap length to 280 chars. Strip newlines and HTML. Brand-voice escape hatch becomes platform liability otherwise."
+  depends_on: BV-028
+
+- finding_id: BV-070
+  surface_id: vp-ux-kitchen-photo-toasts
+  lens: brand-voice
+  severity: P3
+  issue: "'Kitchen setup saved successfully' (with filler) alongside sibling 'Photo removed' (no filler). Same family inconsistent."
+  evidence_excerpt: "'Kitchen photo uploaded / ... / Kitchen setup saved successfully / Failed to save kitchen setup'"
+  related_surfaces: ["vp-ux-profile-toasts", "vp-ux-settings-payout-toasts", "web-tx-profile-update"]
+  recommendation: "'Kitchen setup saved.' Drop 'successfully'. Consistent past tense across the file."
+  depends_on: BV-037

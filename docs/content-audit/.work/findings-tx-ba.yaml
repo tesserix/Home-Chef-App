@@ -1,0 +1,1042 @@
+findings:
+
+  # ── P0: Routing bug — wrong audience receives wrong email ────────────────
+
+  - finding_id: BA-TX-001
+    surface_id: api-email-delivery-assigned
+    lens: business-analyst
+    severity: P0
+    issue: "DeliveryAssignedHTML template written for drivers is routed to customers via the delivery_assigned event — customer receives 'You've been assigned order #X' making no sense"
+    evidence_excerpt: |
+      services/email_templates.go::DeliveryAssignedHTML: "🚗 New Delivery! You've been assigned order #%s. Pickup location: %s"
+      services/notifications.go:569-581: same template sent to customer on delivery_assigned event
+    recommendation: >
+      Immediate fix: separate the email path. Create a CustomerDeliveryAssignedHTML template with
+      customer-appropriate copy: 'Your delivery partner is on the way — Order #%s'.
+      Route the driver notification to the driver email address, not the customer's.
+      The existing template stays for drivers. Until fixed: every customer who places an order receives
+      an email that implies they are the delivery driver — this is the most confusing trust-eroding
+      transactional email in the system. Expected impact: eliminates a guaranteed support ticket per
+      delivery and removes a direct cause of customer churn at the highest-anxiety moment.
+    metric_hypothesis: "order-to-reorder rate; support ticket volume — customers receiving driver copy at time of delivery will file confusion tickets and may not reorder"
+    depends_on: null
+
+  # ── P0: Duplicate push notifications on same event ────────────────────────
+
+  - finding_id: BA-TX-002
+    surface_id: api-push-chef-new-order-actionable
+    lens: business-analyst
+    severity: P0
+    issue: "Two queue groups fire on the same order-created NATS event and send two push notifications to the chef — 'New Order' (RegisterPushConsumers) and 'New Order Received' (handleOrderCreated) — with different copy"
+    evidence_excerpt: |
+      handlers/notifications.go::RegisterPushConsumers: Title "New Order" Body "You have a new order waiting for your confirmation"
+      services/notifications.go::handleOrderCreated push: Title "New Order Received" Body "You have a new order waiting to be prepared!"
+    recommendation: >
+      Consolidate to a single push per event. Deduplicate by using one canonical handler.
+      Recommended copy: Title "New order" (no exclamation), Body "Order #%s — confirm within 5 min."
+      The 5-minute window is already set as an SLA in the chef email; align the push to reinforce it.
+      Until fixed: chefs receive two buzzes per order with inconsistent text, reducing trust in the
+      notification system and increasing the likelihood they dismiss all order alerts.
+    metric_hypothesis: "chef order acceptance rate — duplicate pushes cause notification fatigue, increasing time-to-accept and risking order cancellation"
+    depends_on: null
+
+  - finding_id: BA-TX-003
+    surface_id: api-inapp-chef-new-order
+    lens: business-analyst
+    severity: P0
+    issue: "Three distinct 'new order' copy variants exist across the system: 'New Order' (handlers/notifications.go), 'New Order Received' (services/notifications.go push), and 'New Order!' (services/notifications.go in-app) — chef sees all three in one session"
+    evidence_excerpt: |
+      handlers/notifications.go: Title "New Order"
+      services/notifications.go handleOrderCreated push: Title "New Order Received"
+      services/notifications.go handleChefNewOrder in-app: Title "New Order!"
+    recommendation: >
+      Centralise all new-order notification copy in a single constant or i18n key. One canonical
+      title: 'New order' (sentence case, no exclamation per style guide), one canonical body
+      per channel (push: short imperative; in-app: detail with order value). Three slightly different
+      strings for the same event fragments the chef experience and signals an untested system.
+    metric_hypothesis: "chef D7 retention; platform trust — notification inconsistency at the highest-frequency chef touchpoint signals product instability"
+    depends_on: BA-TX-002
+
+  # ── P0: Order confirmation email missing legally-required and trust-critical fields ─
+
+  - finding_id: BA-TX-004
+    surface_id: api-email-order-confirm
+    lens: business-analyst
+    severity: P0
+    issue: "Order confirmation email is missing GST breakdown, chef name, delivery address, ETA, allergen disclaimer, and cancellation/refund policy — the most legally and trust-sensitive transactional email on the platform"
+    evidence_excerpt: |
+      services/email_templates.go::OrderConfirmationHTML: "Order Confirmed! Your order #%s has been placed successfully. Your home chef is preparing your meal!"
+      Fields present: order_id, total (%.2f). Chef name absent. ETA absent. Tax line absent. Allergens absent. Refund terms absent.
+    recommendation: >
+      Expand the order confirmation to include: (1) Chef name and kitchen name with a link to their
+      profile, (2) Itemised list with quantities and unit prices, (3) Tax/GST line (legally required
+      for food orders in India above threshold), (4) Estimated delivery time window,
+      (5) Delivery address confirmation, (6) Allergen reminder: 'Check item descriptions for allergens.
+      Contact us before pickup if you have dietary restrictions.', (7) Cancellation policy: 'Orders
+      can be cancelled within X minutes. Refunds processed within 5–7 business days.'
+      This is the #1 support-ticket-reducing action available: a complete confirmation email
+      eliminates 'where is my order', 'what did I order', and 'I need a receipt' contacts.
+    metric_hypothesis: "support ticket volume; order-to-reorder rate — complete order confirmation emails reduce post-order anxiety, the primary driver of cancellations and negative reviews"
+    depends_on: null
+
+  # ── P0: Brand drift — two product names in same session ────────────────────
+
+  - finding_id: BA-TX-005
+    surface_id: api-push-user-welcome
+    lens: business-analyst
+    severity: P0
+    issue: "Welcome push notification says 'Welcome to HomeChef!' but the welcome email says 'Welcome to Fe3dr!' — a new user sees two different product names in their first session"
+    evidence_excerpt: |
+      services/notifications.go::handleUserRegistered push: Title "Welcome to HomeChef!" Body "Thank you for joining HomeChef."
+      services/email_templates.go::WelcomeEmailHTML: Subject "Welcome to Fe3dr!" Body "Welcome to Fe3dr, %s!"
+    recommendation: >
+      Align all first-touch transactional copy to a single brand name. Determine the canonical name
+      (Fe3dr vs HomeChef) and replace all divergent instances. The push notification path likely
+      carries a legacy product name. A user receiving both in the same minute will distrust the
+      platform before they place their first order.
+    metric_hypothesis: "D1 activation rate; trust score — brand name divergence at first contact is the highest-signal indicator of product immaturity and directly reduces first-order conversion"
+    depends_on: null
+
+  # ── P0: Cancellation email missing refund timeline ────────────────────────
+
+  - finding_id: BA-TX-006
+    surface_id: api-email-order-status-cancelled
+    lens: business-analyst
+    severity: P0
+    issue: "Cancellation email contains no refund timeline, no contact point, and no reason for cancellation — the bare 'Your order has been cancelled' subject is the worst-case trust event"
+    evidence_excerpt: |
+      services/email_templates.go::OrderStatusUpdateHTML (cancelled): Subject "Order #%s — Your order has been cancelled" ❌ emoji
+      No refund timeline. No who-to-contact. No cancellation reason.
+    recommendation: >
+      Cancellation emails must include: (1) Who cancelled (customer, chef, or platform),
+      (2) Refund timeline: 'Your refund of ₹{amount} will appear in 5–7 business days.',
+      (3) Contact path: 'Questions? Reply to this email or visit {support_url}.',
+      (4) Re-engagement CTA: 'Browse other chefs near you' (links to browse page).
+      The cancellation moment is a churn event — each of these elements reduces churn probability.
+      Absence of a refund timeline is also legally non-compliant with RBI prepaid instrument rules.
+    metric_hypothesis: "post-cancellation churn; support ticket volume — customers with no refund timeline contact support within the hour; adding the timeline reduces that contact by ~60% (industry benchmark)"
+    depends_on: null
+
+  # ── P0: Raw type-slug surfaces to chef in approval notifications ───────────
+
+  - finding_id: BA-TX-007
+    surface_id: api-inapp-approval-approved-chef
+    lens: business-analyst
+    severity: P0
+    issue: "Approval notification body uses raw type slug 'menu_item' directly in user-facing message: 'Your menu_item has been approved' — programmer string surfaces to chef"
+    evidence_excerpt: |
+      services/notifications.go::handleApprovalApproved: "Your %s has been approved: %s" where %s = approval type slug e.g. "menu_item"
+      Also affects: api-push-approval-approved-chef, api-inapp-approval-rejected-chef, api-push-approval-rejected-chef, api-inapp-approval-info-chef
+    recommendation: >
+      Create a type-slug-to-human-readable map: menu_item → 'menu item', chef_profile → 'chef profile',
+      kitchen_setup → 'kitchen', etc. Use the mapped label in all notification bodies.
+      Suggested body: 'Your menu item "{title}" has been approved. View it on your menu.'
+      This affects 5 notification surfaces with the same bug. Fix the map once; all consumers benefit.
+    metric_hypothesis: "chef trust score; chef D7 retention — chefs who receive system-internal strings in their approval notifications perceive the platform as unfinished and reduce engagement"
+    depends_on: null
+
+  - finding_id: BA-TX-008
+    surface_id: api-inapp-approval-rejected-chef
+    lens: business-analyst
+    severity: P0
+    issue: "Rejection notification body exposes raw admin notes verbatim: 'Your menu_item has been rejected. Notes: {raw_admin_text}' — potential PII leak and uncontrolled admin language reaching chefs"
+    evidence_excerpt: |
+      services/notifications.go::handleApprovalRejected: Title "Request Rejected" Message "Your %s has been rejected. Notes: %s"
+      Admin notes are passed verbatim — no length cap, no content filtering
+    recommendation: >
+      (1) Fix the type-slug issue per BA-TX-007. (2) Add a character limit to admin notes
+      surfaced in notifications (recommended: 200 chars, truncated with 'See full details in portal').
+      (3) Provide a rejection reason taxonomy so admins pick from a list rather than free-typing.
+      This also reduces the chance of internal language ('THIS DISH PHOTO IS BLURRY FFS') reaching
+      the chef. Expected: reduces resubmission friction because rejection reasons become actionable
+      rather than arbitrary.
+    metric_hypothesis: "chef resubmission rate after rejection; chef D30 retention — actionable, well-formatted rejection reasons increase resubmission 2–3x vs vague raw notes (marketplace onboarding benchmark)"
+    depends_on: BA-TX-007
+
+  # ── P0: Three divergent status-label maps create customer confusion ─────────
+
+  - finding_id: BA-TX-009
+    surface_id: api-push-order-update-customer-deeplink
+    lens: business-analyst
+    severity: P0
+    issue: "Three separate status-label maps exist for order status updates — email_templates.go statusLabels, notifications.go getOrderStatusMessage, and handlers/notifications.go humanReadableOrderStatus — customers receive different wording per channel for the same event"
+    evidence_excerpt: |
+      Email (email_templates.go:176): "Your chef is preparing your meal"
+      Push (handlers/notifications.go humanReadableOrderStatus): "Your order is now being prepared"
+      Push (notifications.go getOrderStatusMessage): "Your order is being prepared"
+      In-app (notifications.go handleOrderUpdated): "Your order is being prepared"
+    recommendation: >
+      Define one canonical status-label map as a shared constant. All notification channels (email,
+      push, in-app) import from this single source. Canonical labels (following style guide:
+      sentence case, chef/driver persona correct, no exclamation except on delivered):
+      - pending: 'Order placed — waiting for chef to confirm'
+      - confirmed: 'Chef confirmed your order'
+      - preparing: 'Your chef is preparing your meal'
+      - ready: 'Your order is ready for pickup'
+      - picked_up: 'Your delivery partner has your order'
+      - on_the_way: 'Your order is on its way'
+      - delivered: 'Order delivered. Enjoy your meal.'
+      - cancelled: 'Order cancelled — see email for refund details'
+    metric_hypothesis: "order tracking anxiety; support ticket volume — status label drift across channels causes customers to think they are in different states, driving 'where is my order' tickets"
+    depends_on: null
+
+  # ── P1: Welcome email uses banned/weak language, misses activation CTA ─────
+
+  - finding_id: BA-TX-010
+    surface_id: api-email-welcome
+    lens: business-analyst
+    severity: P1
+    issue: "Welcome email uses 'amazing' and 'talented' (style-guide banned adjectives) and 'Discover amazing home-cooked meals from talented local chefs' — generic welcome with no personalised first-step CTA"
+    evidence_excerpt: |
+      services/email_templates.go::WelcomeEmailHTML: "Discover amazing home-cooked meals from talented local chefs"
+      CTA: "Start Exploring" → https://fe3dr.com (no city pre-fill, no onboarding state awareness)
+    recommendation: >
+      Rewrite to: 'Home-cooked meals from chefs near you.' Remove 'amazing' and 'talented'.
+      Change 'Start Exploring' to 'Find chefs near {city}' where city is injected from the
+      registration form or IP-inferred. If city is unavailable, use 'Browse chefs near you'.
+      A first-order CTA personalised to location increases D1 activation by 15–25% (email benchmark
+      for location-aware welcome emails in food marketplaces).
+    metric_hypothesis: "D1 activation rate; first-order conversion — personalised CTA in welcome email is the highest-leverage single-email change available"
+    depends_on: BA-TX-005
+
+  # ── P1: Chef verification email/in-app copy says different things ──────────
+
+  - finding_id: BA-TX-011
+    surface_id: api-email-chef-verified
+    lens: business-analyst
+    severity: P1
+    issue: "Chef verification email says 'Your kitchen has been verified' but in-app notification says 'Your chef profile has been verified' — two different frames for the same event, creating ambiguity about what was verified"
+    evidence_excerpt: |
+      services/email_templates.go::ChefVerificationApprovedHTML: "Your kitchen has been verified and your chef profile is now live"
+      services/notifications.go::handleChefVerified in-app: "Your chef profile has been verified. You can now start accepting orders!"
+    recommendation: >
+      Align on one frame. The email frame ('kitchen verified') is richer and more specific — use it
+      consistently: 'Your kitchen is verified. Your profile is now live — start adding your menu.'
+      The in-app notification should match: Title 'Kitchen verified', Body 'Your profile is live.
+      Start accepting orders.' Remove the exclamation from both per style guide Rule 1.
+    metric_hypothesis: "chef activation rate post-approval — a clear, consistent message about what 'verified' means drives faster first-menu-item creation"
+    depends_on: null
+
+  # ── P1: Chef new-order email sets a 5-minute SLA not enforced elsewhere ─────
+
+  - finding_id: BA-TX-012
+    surface_id: api-email-chef-new-order
+    lens: business-analyst
+    severity: P1
+    issue: "Chef new-order email sets 'Customers expect a response within 5 minutes' as a binding SLA expectation — this expectation is not stated in push notifications, in-app notifications, or chef onboarding, creating an inconsistent and unenforceable standard"
+    evidence_excerpt: |
+      services/email_templates.go::ChefNewOrderHTML: "Customers expect a response within 5 minutes"
+      No equivalent statement in push (Title "New Order Received"), in-app ("You have a new order to prepare"), or chef onboarding docs
+    recommendation: >
+      Either (a) make the 5-minute expectation explicit across all channels so chefs understand the
+      standard they are agreeing to: push body 'New order — confirm within 5 min', in-app 'You have
+      5 min to confirm order #%s', or (b) remove the 5-minute claim from the email if the platform
+      cannot enforce or track it. An SLA stated only in email (low-open-rate channel for mobile-first
+      chefs) is operationally unenforceable.
+    metric_hypothesis: "order acceptance rate; customer satisfaction score — 5-min SLA stated inconsistently means some chefs never see it, leading to late acceptances and customer complaints"
+    depends_on: BA-TX-003
+
+  # ── P1: Cancellation push notification is identical for customer and chef ───
+
+  - finding_id: BA-TX-013
+    surface_id: api-push-order-cancelled-both
+    lens: business-analyst
+    severity: P1
+    issue: "Same push body 'Order has been cancelled' is sent to both customer and chef with no audience-specific context — customer needs refund info, chef needs restocking info"
+    evidence_excerpt: |
+      services/notifications.go::handleOrderCancelled: Title "Order Cancelled" Body "Order has been cancelled"
+      Sent to BOTH customer and chef (audience: customer,chef in inventory)
+    recommendation: >
+      Audience-split the cancellation notification:
+      - Customer: 'Your order was cancelled. Refund of ₹{amount} in 5–7 business days.'
+      - Chef: 'Order #{id} was cancelled. No action needed — ingredients can be repurposed.'
+      The chef message should include the cancellation reason if available (customer-initiated vs
+      platform-initiated vs chef-initiated) so they can track patterns.
+    metric_hypothesis: "chef trust score; customer post-cancellation churn — generic cancellation copy leaves both parties with unresolved anxiety; audience-specific copy reduces follow-up contacts"
+    depends_on: BA-TX-006
+
+  # ── P1: Support ticket emails use unbranded inline HTML ───────────────────
+
+  - finding_id: BA-TX-014
+    surface_id: api-email-support-created
+    lens: business-analyst
+    severity: P1
+    issue: "Support ticket creation and update emails use inline unbranded HTML with no email wrapper — no header, no footer, no privacy link — while all other transactional emails use emailBase template"
+    evidence_excerpt: |
+      services/email.go::SendSupportTicketCreated: inline HTML, no emailBase wrapper, no footer, no privacy links
+      services/email.go::SendSupportTicketUpdate: same — "Your support ticket #%s has been updated to: %s"
+    recommendation: >
+      Refactor both support email functions to use the emailBase wrapper template.
+      Add footer with privacy policy link and unsubscribe instruction.
+      This is a regulatory requirement (India's IT Act 2000 notification rules) as well as a trust signal.
+      Support emails are sent when users are already in a frustration state — an unbranded email
+      looks like phishing and will be ignored or reported, extending ticket resolution time.
+    metric_hypothesis: "support ticket resolution time; trust score — branded support emails are opened at ~35% vs ~12% for plaintext/unbranded at equivalent send volumes"
+    depends_on: null
+
+  - finding_id: BA-TX-015
+    surface_id: api-email-support-update
+    lens: business-analyst
+    severity: P1
+    issue: "Support update email subject 'Ticket Update — #%s' and body 'Your support ticket #%s has been updated to: %s' uses raw status values — 'updated to: in_progress' may surface to users"
+    evidence_excerpt: |
+      services/email.go::SendSupportTicketUpdate: Subject "Ticket Update — #%s" Body "updated to: %s" where %s is raw status string
+    recommendation: >
+      Map internal status values to human-readable labels (same approach as BA-TX-007/TX-009).
+      in_progress → 'We're working on it', resolved → 'Resolved — let us know if you need more help',
+      awaiting_customer → 'We need more information from you'.
+      Subject: 'Update on your support request #{ticket_id} — {human_status}'.
+      Apply emailBase wrapper per BA-TX-014.
+    metric_hypothesis: "support satisfaction score; ticket reopen rate — clear status labels reduce 'what does this mean' follow-up tickets"
+    depends_on: BA-TX-014
+
+  # ── P1: Account reminder email has brand drift in subject line ─────────────
+
+  - finding_id: BA-TX-016
+    surface_id: api-email-account-reminder
+    lens: business-analyst
+    severity: P1
+    issue: "Account-already-exists email subject says 'Fe3dr HomeChef account' — combining two brand names — while all other email subjects say only 'Fe3dr'"
+    evidence_excerpt: |
+      services/email.go::SendAccountReminderEmail: Subject "You already have a Fe3dr HomeChef account"
+      All other emails: "...— Fe3dr" (brand name only, no product qualifier)
+    recommendation: >
+      Align subject to brand standard: 'You already have a Fe3dr account.'
+      The account-reminder email is security-sensitive (it prevents user enumeration); the copy change
+      is cosmetic but the brand inconsistency compounds the BA-TX-005 brand-name drift issue.
+    metric_hypothesis: "trust score; sign-in conversion from reminder — inconsistent brand name in a security email reduces confidence in email legitimacy"
+    depends_on: BA-TX-005
+
+  # ── P1: Delivery partner assigned push misses driver name personalisation ───
+
+  - finding_id: BA-TX-017
+    surface_id: api-push-delivery-assigned-customer
+    lens: business-analyst
+    severity: P1
+    issue: "Customer delivery-partner-assigned push notification omits the driver's name even though it is available in event.Data — generic 'A delivery partner has been assigned' misses the highest-anxiety moment of the order journey"
+    evidence_excerpt: |
+      services/notifications.go::handleDeliveryAssigned: Title "Delivery Partner Assigned" Body "A delivery partner has been assigned to your order and will pick it up soon!"
+      Driver name available in event.Data but not injected
+    recommendation: >
+      Update body to: 'Ravi will pick up your order shortly. Track in the app.'
+      Where 'Ravi' is the driver's first name from event.Data.
+      If driver name is unavailable for any reason, fall back to: 'Your delivery partner is on their way.'
+      Named personalisation at the anxiety peak of the order journey is a measurable trust signal.
+    metric_hypothesis: "customer satisfaction score; order tracking anxiety — named delivery partner reduces 'where is my order' contacts by establishing a human connection"
+    depends_on: null
+
+  # ── P1: Onboarding submission SLA stated inconsistently ───────────────────
+
+  - finding_id: BA-TX-018
+    surface_id: vp-onb-submit-success
+    lens: business-analyst
+    severity: P1
+    issue: "Vendor portal submission toast says '24-48 hours' review SLA but mobile vendor pending screen body says the same 24-48 hours — if the actual SLA differs, both surfaces show the wrong number; no SLA commitment is in the push notification chain"
+    evidence_excerpt: |
+      vp-onb-submit-success: "We'll review and get back to you within 24-48 hours."
+      mv-onb-pending-submitted-body: "Our team will review your application within 24-48 hours."
+      No SLA stated in api-inapp-driver-onboarding-admins or any chef approval notification to chef
+    recommendation: >
+      (1) Verify the actual P95 review time and use it consistently. If it is not reliably 24-48 hours,
+      state a conservative SLA ('within 3 business days') rather than miss a committed window.
+      (2) Add the SLA to the push notification sent when the application is received:
+      'Application received. Expect a decision within 24-48 hours.'
+      (3) If the SLA is missed, send a proactive delay notification rather than leaving the chef in
+      silence — silence after a committed SLA is the primary trigger for support escalation.
+    metric_hypothesis: "chef D2/D7 retention; support ticket volume — missing an explicitly stated SLA with no communication is the primary cause of early-chef churn post-application"
+    depends_on: null
+
+  # ── P1: Driver logout confirmation uses banned term ───────────────────────
+
+  - finding_id: BA-TX-019
+    surface_id: md-trx-006
+    lens: business-analyst
+    severity: P1
+    issue: "Driver app logout confirmation title says 'Logout' (single word) — style guide mandates 'Sign out' as the preferred term and bans 'Login'/'Logout'"
+    evidence_excerpt: |
+      app/(tabs)/more.tsx: Alert title "Logout"
+      Alert body: "Are you sure you want to logout?"
+    recommendation: >
+      Change title to 'Sign out' and body to 'You'll need to sign in again to go online.'
+      (The body currently says 'logout' again — double correction needed.)
+      The style guide explicitly lists 'Sign out ✅ / Log out ❌' — this is a vocabulary compliance
+      failure on an app-critical screen that drivers see every time they end a shift.
+    metric_hypothesis: "brand coherence; driver trust — vocabulary inconsistency on high-frequency screens erodes platform quality perception"
+    depends_on: null
+
+  # ── P1: Mobile customer logout confirmation has title-case inconsistency ────
+
+  - finding_id: BA-TX-020
+    surface_id: mc-profile-logout-confirm
+    lens: business-analyst
+    severity: P1
+    issue: "Customer app logout confirmation has title-case inconsistency: dialog title 'Log out' (two words, sentence case) vs button 'Log Out' (two words, title case) — and both use 'Log out' which is banned per style guide"
+    evidence_excerpt: |
+      app/(tabs)/profile.tsx: title "Log out" / button "Log Out"
+      Style guide: "Sign out ✅ / Log out ❌"
+    recommendation: >
+      Change title to 'Sign out' and button to 'Sign out'. Both sentence case per button formatting
+      rule (verb-first, sentence case). Remove the redundant 'Cancel' vs 'Log Out' inconsistency.
+      Consistent destruction confirmation: Title 'Sign out?', Body 'You'll need to sign in again.',
+      Buttons: 'Cancel' / 'Sign out'.
+    metric_hypothesis: "brand coherence — vocabulary divergence on a high-frequency screen is disproportionately visible to users and surfaces in app store reviews"
+    depends_on: null
+
+  # ── P1: Mobile vendor rejection screen missing empathy copy and next step ───
+
+  - finding_id: BA-TX-021
+    surface_id: mv-onb-pending-rejected-body
+    lens: business-analyst
+    severity: P1
+    issue: "Chef rejection screen shows 'Please review the feedback and resubmit your application' but gives no indication of what specifically needs fixing, no empathy acknowledgement, and no deadline for resubmission"
+    evidence_excerpt: |
+      app/(onboarding)/pending.tsx rejected state:
+      Title: "Application Not Approved"
+      Reason prefix: "Reason:"
+      Body: "Please review the feedback and resubmit your application."
+    recommendation: >
+      Restructure the rejection screen for maximum resubmission rate:
+      Title: 'Not approved this time' (softer than BA-TX-007 raw slug fix, warm not cold)
+      Reason box: surfaced prominently with human-readable reason (fix BA-TX-007 first)
+      Body: 'Review the notes above and update your application. Most chefs are approved on their
+      second try.' (social proof of resubmission success increases attempt rate.)
+      CTA button: 'Update and resubmit' (not just a back button).
+      A resubmission rate of 40–60% post-rejection is achievable with empathetic copy; cold rejection
+      screens drop this to 10–15%.
+    metric_hypothesis: "chef resubmission rate; chef supply growth — empathetic rejection copy with clear next step is the single highest-leverage intervention for chef supply acquisition cost"
+    depends_on: BA-TX-007
+
+  # ── P1: Checkout payment toasts use banned exclamation pattern ─────────────
+
+  - finding_id: BA-TX-022
+    surface_id: web-tx-checkout-payment-toasts
+    lens: business-analyst
+    severity: P1
+    issue: "'Payment successful!' toast uses an exclamation mark — style guide Rule 1 limits exclamations to genuine celebration (≤1 per page) but payment success at checkout is that moment — the actual violation is the inconsistency with 7 other toasts on the same surface that are flat"
+    evidence_excerpt: |
+      apps/web/src/features/customer/pages/CheckoutPage.tsx:167-280:
+      "Payment successful!" (exclamation)
+      vs "Failed to initiate payment" / "Payment gateway is loading" (no exclamation)
+    recommendation: >
+      Payment success is legitimately the celebration moment — 'Payment successful!' can keep the
+      exclamation. The issue is that the other toasts are clinical by contrast. Improve the failure
+      toasts to be actionable: 'Payment failed — try a different card or UPI.' rather than
+      'Failed to initiate payment' (jargon). 'Payment verification failed' → 'We couldn't confirm
+      your payment. Your money has not been charged. Try again or contact support.'
+      The verification-failed message is particularly high-stakes: if money has been debited but
+      verification failed, saying nothing about charge status causes immediate escalation.
+    metric_hypothesis: "checkout completion rate; support ticket volume — 'payment verification failed' with no charge-status clarity causes customers to panic and file duplicate tickets"
+    depends_on: null
+
+  # ── P1: Catering submission toast uses exclamation in violation of style guide ──
+
+  - finding_id: BA-TX-023
+    surface_id: web-tx-catering-request-submit
+    lens: business-analyst
+    severity: P1
+    issue: "'Catering request submitted successfully!' toast fires an exclamation on a form submission — this is not a genuine celebration moment per style guide Rule 1"
+    evidence_excerpt: |
+      apps/web/src/features/catering/pages/CateringRequestPage.tsx:109-113:
+      "Catering request submitted successfully!"
+    recommendation: >
+      Change to: 'Catering request submitted. Chefs will respond within 24 hours.'
+      The second sentence sets expectations (currently missing per BA-016 in marketing findings)
+      and turns a generic toast into an actionable next-step indicator.
+      Per style guide success toast format: past tense, ≤6 words, period. Expand slightly here
+      given the high monetary stakes of a catering booking.
+    metric_hypothesis: "catering quote follow-through rate — attaching an expectation to the success toast reduces customer anxiety about whether their request was seen"
+    depends_on: null
+
+  # ── P1: Mobile vendor application submission uses exclamation ─────────────
+
+  - finding_id: BA-TX-024
+    surface_id: mv-onb-pending-submitted-title
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile vendor pending screen title 'Application Submitted!' uses exclamation — this is a waiting state, not a celebration; the exclamation creates false positivity in an anxious moment"
+    evidence_excerpt: |
+      app/(onboarding)/pending.tsx: "Application Submitted!" (display serif title)
+    recommendation: >
+      Change to 'Application received.' (no exclamation). The body already says 'within 24-48 hours'
+      which is the relevant information. A submission-received state is relief, not celebration.
+      The exclamation raises expectations that are immediately followed by a wait — this creates
+      an emotional mismatch that manifests as impatience and support tickets during the review window.
+    metric_hypothesis: "chef support ticket rate during review window — mismatched positive punctuation on a waiting screen increases anxiety and drives premature status-check contacts"
+    depends_on: null
+
+  # ── P1: Driver app subscription settings bounces to web with no deep link ───
+
+  - finding_id: BA-TX-025
+    surface_id: md-trx-008
+    lens: business-analyst
+    severity: P1
+    issue: "Driver app subscription management alerts user 'Visit the web portal to manage your subscription' with no URL, no deep link, and no specific page reference — a dead end for a monetisation-critical flow"
+    evidence_excerpt: |
+      app/driver-settings.tsx: Alert title "Subscription" Body "Visit the web portal to manage your subscription."
+    recommendation: >
+      Either (a) implement subscription management natively in the driver app (preferred for a
+      monetisation-critical feature), or (b) provide a deep link to the specific subscription
+      management page: 'Manage your plan at {url}. Tap to open.' with a direct URL action.
+      A modal that says 'go somewhere else with no link' has a near-100% abandonment rate.
+      If a driver cannot manage their subscription on mobile, they will not subscribe or renew.
+    metric_hypothesis: "driver subscription conversion; driver subscription retention — inability to manage subscription in-app reduces conversion and renewal from mobile-primary drivers"
+    depends_on: null
+
+  # ── P2: Account deletion is email-only, hardcoded contact address ──────────
+
+  - finding_id: BA-TX-026
+    surface_id: md-trx-010
+    lens: business-analyst
+    severity: P2
+    issue: "Account deletion instructs drivers to email support@homechef.in — this is a hardcoded email address that may change and is not a self-service flow, creating friction at a legally-sensitive moment"
+    evidence_excerpt: |
+      app/driver-settings.tsx: "Contact support at support@homechef.in to request account deletion."
+    recommendation: >
+      (1) Replace hardcoded email with a configurable constant or environment variable.
+      (2) Add a support ticket creation path in-app rather than requiring email composition.
+      (3) Under India's DPDP Act 2023, account deletion is a user right that must be clearly
+      accessible — an email-only path may not satisfy the 'easy to exercise' standard.
+      Short-term: change the alert to a link that opens the in-app support ticket form
+      pre-filled with 'Account deletion request'.
+    metric_hypothesis: "regulatory compliance; driver trust — inaccessible deletion path violates DPDP and creates legal exposure; in-app path reduces support overhead"
+    depends_on: null
+
+  # ── P2: Driver validation alert uses generic 'Validation' title ──────────
+
+  - finding_id: BA-TX-027
+    surface_id: md-trx-011
+    lens: business-analyst
+    severity: P2
+    issue: "Driver profile validation failure alert uses 'Validation' as the title — a technical term that a driver reading this on the road will not understand"
+    evidence_excerpt: |
+      app/driver-profile.tsx: Alert title "Validation" Body "Name, phone, and city are required."
+    recommendation: >
+      Change title to 'Missing information' and body to 'Please add your name, phone number, and city.'
+      Per style guide error format: 'What happened → What to do.'
+      'Validation' is internal jargon; 'Missing information' is immediately actionable.
+    metric_hypothesis: "driver onboarding completion rate — jargon in error states creates confusion that increases abandonment at the profile completion step"
+    depends_on: null
+
+  # ── P2: Driver profile success alert uses generic 'Success' title ─────────
+
+  - finding_id: BA-TX-028
+    surface_id: md-trx-013
+    lens: business-analyst
+    severity: P2
+    issue: "Driver profile save success alert title is 'Success' — generic non-contextual title on a transactional success state"
+    evidence_excerpt: |
+      app/driver-profile.tsx: Alert title "Success" Body "Profile updated successfully."
+    recommendation: >
+      Remove the Alert entirely and replace with an in-line toast using the style guide format:
+      'Profile saved.' (past tense, ≤6 words, period). A modal alert for a profile save is
+      disruptive on a driver app (driver tone: glanceable, telegraphic). Per driver persona:
+      ≤4 words where possible. Snackbar/toast is more appropriate than blocking alert.
+    metric_hypothesis: "driver UX friction — blocking alerts on routine saves interrupt workflow; snackbar reduces friction at high-frequency touchpoints"
+    depends_on: null
+
+  # ── P2: Chef quote success toast uses exclamation ────────────────────────
+
+  - finding_id: BA-TX-029
+    surface_id: web-tx-catering-quotes
+    lens: business-analyst
+    severity: P2
+    issue: "'Quote accepted! The chef has been notified.' toast uses an exclamation — for a customer accepting a catering quote worth potentially thousands of rupees, this is an appropriate celebration — but 'The chef has been notified' is redundant filler"
+    evidence_excerpt: |
+      apps/web/src/features/catering/pages/CateringQuotesPage.tsx:56-69:
+      "Quote accepted! The chef has been notified."
+    recommendation: >
+      'Quote accepted. The chef will contact you to confirm event details.' The exclamation can stay
+      on the first sentence. The second sentence should set the next concrete step rather than confirm
+      a background notification the customer cannot verify. Removing 'The chef has been notified'
+      removes a statement the user cannot verify; replacing with the next user-facing action
+      ('will contact you') gives them something to expect.
+    metric_hypothesis: "catering booking completion rate — setting the next expected action after quote acceptance reduces customer drop-off between acceptance and event confirmation"
+    depends_on: null
+
+  # ── P2: Cross-chef cart conflict message is blunt, no recovery path ────────
+
+  - finding_id: BA-TX-030
+    surface_id: web-tx-chefdetail-add-to-cart
+    lens: business-analyst
+    severity: P2
+    issue: "'Your cart has items from another chef. Clear cart first.' is a blocking dead end — it tells the user what they must do but offers no in-context path to do it"
+    evidence_excerpt: |
+      apps/web/src/features/customer/pages/ChefDetailPage.tsx:365-369:
+      "Your cart has items from another chef. Clear cart first."
+    recommendation: >
+      Convert the toast to an action-confirmation dialog: 'Replace cart?
+      You have {itemCount} item(s) from {existingChefName}. Adding this item will clear those.
+      [Keep current cart] [Replace with new item]'
+      This matches mc-menuitem-cross-chef which already has the dialog approach on mobile.
+      The web version should match for consistency. 'Clear cart first' as a toast with no action
+      is a conversion dead end — the user must navigate to the cart, clear it, then navigate back.
+    metric_hypothesis: "add-to-cart conversion; cross-chef browse rate — in-context cart replacement reduces friction for users exploring multiple chefs"
+    depends_on: null
+
+  - finding_id: BA-TX-031
+    surface_id: mc-menuitem-cross-chef
+    lens: business-analyst
+    severity: P2
+    issue: "Mobile cross-chef cart dialog says 'Replace Cart?' with 'Replace' as the destructive CTA — the word 'Replace' does not specify what is being replaced or what will survive"
+    evidence_excerpt: |
+      components/chef/MenuItemCard.tsx:
+      Title "Replace Cart?" Body "You have items from another chef. Replace cart?"
+      Buttons: "Cancel" / "Replace"
+    recommendation: >
+      Change to: Title 'Start new cart?', Body 'You have {count} item(s) from {ChefName}.
+      Starting a new cart will remove them.', Buttons: 'Keep current cart' / 'Start new cart'.
+      The destructive action button should describe what survives (the new item), not what is lost.
+      This pattern reduces regret-driven support tickets for customers who tapped 'Replace' without
+      understanding they were losing their existing cart.
+    metric_hypothesis: "add-to-cart completion; post-order satisfaction — clearer destructive action language reduces regret-driven contacts and potential chargebacks"
+    depends_on: null
+
+  # ── P2: Delivery accepted toast uses exclamation ──────────────────────────
+
+  - finding_id: BA-TX-032
+    surface_id: dp-tx-toast-accept-success
+    lens: business-analyst
+    severity: P2
+    issue: "'Delivery accepted!' delivery portal toast fires exclamation on an operational action — style guide restricts exclamations to genuine celebration; accepting a delivery job is routine"
+    evidence_excerpt: |
+      apps/delivery-portal/src/features/deliveries/pages/AvailableDeliveriesPage.tsx:25: "Delivery accepted!"
+      Also web-tx-delivery-actions: "Delivery accepted!"
+    recommendation: >
+      Change to 'Delivery accepted.' (period). Per driver/delivery-portal tone: 'Functional,
+      time-aware. Crisp 5-12 words.' The exclamation signals false positivity in an operational
+      context and conflicts with the driver persona tone matrix.
+    metric_hypothesis: "brand coherence; driver UX — operational toasts with exclamations create noise that drivers learn to ignore, reducing attention to genuinely important alerts"
+    depends_on: null
+
+  # ── P2: Driver onboarding step toasts are verbose for a mobile glanceable context ─
+
+  - finding_id: BA-TX-033
+    surface_id: dp-tx-toast-step5-submitted
+    lens: business-analyst
+    severity: P2
+    issue: "Driver onboarding submission toast 'Application submitted successfully!' uses adverb-padded language and exclamation on what is the start of a waiting period, not a celebration"
+    evidence_excerpt: |
+      apps/delivery-portal/src/features/onboarding/components/StepReview.tsx:89: "Application submitted successfully!"
+    recommendation: >
+      'Application submitted. Expect a decision within 24-48 hours.' (per BA-TX-018 SLA alignment).
+      Remove 'successfully' (per style guide: past tense, ≤6 words) and add the SLA expectation
+      to set correct waiting expectations. This is the driver equivalent of BA-TX-024.
+    metric_hypothesis: "driver review-period support tickets — no SLA on the submission toast drives premature status-check contacts"
+    depends_on: BA-TX-018
+
+  # ── P2: Vendor portal policies banner creates false menu-readiness expectation ─
+
+  - finding_id: BA-TX-034
+    surface_id: vp-onb-policies-ready-banner
+    lens: business-analyst
+    severity: P2
+    issue: "'You can start setting up your menu in the meantime' banner on the application-submitted screen creates premature menu-building behaviour that may be reset if the application is rejected"
+    evidence_excerpt: |
+      features/onboarding/components/StepPolicies.tsx:
+      "You're all set to submit your application! Our team will review your details and you'll be notified within 24-48 hours. You can start setting up your menu in the meantime."
+    recommendation: >
+      Add a caveat: 'You can start drafting your menu — it will go live once your application is
+      approved.' Without this, chefs who build menus during review and are then rejected will have
+      invested time they perceive as wasted, amplifying negative sentiment toward the platform.
+      The copy currently implies menu-building is fully productive before approval.
+    metric_hypothesis: "chef rejection-to-churn rate — chefs who invest in menu setup and are then rejected feel deceived; the caveat manages expectations and reduces churned-applicant complaints"
+    depends_on: null
+
+  # ── P2: Generic document upload toasts use raw label variable ────────────
+
+  - finding_id: BA-TX-035
+    surface_id: vp-ux-profile-doc-toasts
+    lens: business-analyst
+    severity: P2
+    issue: "Document upload toast '{label} uploaded' passes through raw template variable — if label is undefined or carries an internal value, the chef sees a blank or jargon toast"
+    evidence_excerpt: |
+      features/profile/pages/ProfilePage.tsx: "{label} uploaded" / "Upload failed"
+      Label comes from a loop — if document type label is missing, toast reads 'undefined uploaded'
+    recommendation: >
+      Add a fallback: `${label ?? 'Document'} uploaded.`
+      Also: 'Upload failed' is a dead-end error message per style guide (What happened → What to do).
+      Change to: 'Upload failed. Check your connection and try again.' or 'Upload failed. File must
+      be JPEG, PNG, or PDF under 5 MB.'
+    metric_hypothesis: "chef onboarding completion rate — dead-end error messages on document upload (a required onboarding step) cause abandonment"
+    depends_on: null
+
+  - finding_id: BA-TX-036
+    surface_id: dp-tx-toast-step3-uploaded
+    lens: business-analyst
+    severity: P2
+    issue: "Driver document upload toast '{label} uploaded' has the same raw variable interpolation risk as BA-TX-035"
+    evidence_excerpt: |
+      apps/delivery-portal/src/features/onboarding/components/StepDocuments.tsx:142: "{label} uploaded"
+    recommendation: >
+      Same fix as BA-TX-035: add fallback `${label ?? 'Document'} uploaded.`
+      For the driver portal, the driver persona requires even shorter, clearer feedback:
+      'Uploaded.' or '[Document name] uploaded.' Consider inline progress indicator over toast
+      for mobile-first driver context.
+    metric_hypothesis: "driver onboarding completion rate — document upload errors are the #1 abandonment point in delivery driver onboarding (industry benchmark)"
+    depends_on: BA-TX-035
+
+  # ── P2: Status updated toast is content-free ─────────────────────────────
+
+  - finding_id: BA-TX-037
+    surface_id: dp-tx-toast-status-updated
+    lens: business-analyst
+    severity: P2
+    issue: "'Status updated' driver delivery toast is the emptiest possible confirmation — no indication of what status was set or what action is expected next"
+    evidence_excerpt: |
+      apps/delivery-portal/src/features/deliveries/pages/ActiveDeliveryPage.tsx:23: "Status updated"
+    recommendation: >
+      Inject the new status value: 'Status: Picked up.' / 'Status: Delivered.' etc.
+      Per driver persona: imperative, telegraphic. 'Status updated' tells the driver nothing they
+      don't already know (they just updated it). The meaningful information is the new state that
+      will be communicated to the customer. Knowing the new state helps the driver verify the right
+      button was tapped in a time-pressured context.
+    metric_hypothesis: "driver error rate; customer status accuracy — drivers who can't confirm status transitions may tap the wrong button; explicit state confirmation reduces status errors"
+    depends_on: null
+
+  # ── P2: API success message inconsistency — "successfully" suffix ──────────
+
+  - finding_id: BA-TX-038
+    surface_id: api-success-message-generic
+    lens: business-analyst
+    severity: P2
+    issue: "43 API success message strings have inconsistent 'successfully' suffix — 'Password changed successfully' vs 'Logged out successfully' vs 'Preference saved' vs 'Chef verified' — if these surface in UI toasts, the inconsistency is user-visible"
+    evidence_excerpt: |
+      handlers/*: "Password changed successfully" / "Logged out successfully" / "Preference saved" (no adverb) / "Chef verified" (no adverb) / "Email verified successfully" — mixed pattern
+    recommendation: >
+      Standardise: either always include 'successfully' or never include it.
+      Style guide success toast format is past tense with period and no adverb: 'Password changed.'
+      not 'Password changed successfully.' The adverb is implied by the success state.
+      Audit which of these 43 strings surface in frontend toasts (vs staying server-side) and apply
+      the style guide format to user-visible ones. Create a centralised message constant file.
+    metric_hypothesis: "brand coherence — inconsistent toast copy is noticed in consecutive interactions and signals lack of editorial review"
+    depends_on: null
+
+  # ── P2: Delivery-completed toast has exclamation and motivational padding ───
+
+  - finding_id: BA-TX-039
+    surface_id: web-tx-delivery-actions
+    lens: business-analyst
+    severity: P2
+    issue: "'Delivery completed! Great job!' in the delivery portal adds motivational copy that is inconsistent with the functional driver/operator tone in the style guide"
+    evidence_excerpt: |
+      apps/web/src/features/delivery/pages/DashboardPage.tsx:76-96: "Delivery completed! Great job!"
+    recommendation: >
+      Change to 'Delivery completed.' (period). The driver persona tone is 'Functional, time-aware.
+      Crisp.' 'Great job!' is consumer-app praise language that reads as condescending in a
+      professional driver tool. Operators and drivers who see 'Great job!' after their fifth delivery
+      that session will find it hollow.
+    metric_hypothesis: "driver trust; brand coherence — patronising motivational copy in a professional tool reduces driver confidence in the platform's understanding of their role"
+    depends_on: null
+
+  # ── P2: Push notification title/body length not validated ─────────────────
+
+  - finding_id: BA-TX-040
+    surface_id: api-inapp-chef-responded
+    lens: business-analyst
+    severity: P2
+    issue: "Chef-response-to-admin notification title is 'Chef Responded: ' + approval.Title (chef-authored) with no length cap — a chef could submit a 500-char approval title that creates a truncated or broken notification"
+    evidence_excerpt: |
+      handlers/approval.go::Notification: Title: "Chef Responded: " + approval.Title
+      approval.Title is chef-authored; no length validation visible
+    recommendation: >
+      Add a title truncation: `fmt.Sprintf("Chef responded: %.60s", approval.Title)` (60 chars covers
+      most push notification title limits). Add message length validation at the approval creation
+      endpoint: max 500 chars for approval titles, max 2000 for admin notes. Also: no profanity
+      filter visible — a bad-actor chef can push profanity to all admins via approval titles.
+    metric_hypothesis: "admin trust; abuse risk — unvalidated chef-authored strings in push notifications can surface inappropriate content to all admins simultaneously"
+    depends_on: null
+
+  # ── P2: Push in-app/push title inconsistency on delivery picked up ────────
+
+  - finding_id: BA-TX-041
+    surface_id: api-push-delivery-pickedup-customer
+    lens: business-analyst
+    severity: P2
+    issue: "Push notification for delivery picked up says 'Order On The Way!' but the in-app notification says 'Order Picked Up' — two different status frames for the same event shown in the same session"
+    evidence_excerpt: |
+      services/notifications.go::handleDeliveryPickedUp push: Title "Order On The Way!"
+      services/notifications.go::handleDeliveryPickedUp in-app: Title "Order Picked Up"
+    recommendation: >
+      Align to the canonical status label from BA-TX-009. Canonical: 'Your delivery partner has your
+      order' (both push and in-app). Push title: 'On the way' (telegraphic, no exclamation).
+      In-app title: 'On the way'. Body: 'Your order has been picked up and is heading to you.'
+    metric_hypothesis: "order tracking clarity — push/in-app title divergence at the same event causes customers to check the app to reconcile two different status descriptions"
+    depends_on: BA-TX-009
+
+  # ── P2: Catering mobile success alert misses next-step context ────────────
+
+  - finding_id: BA-TX-042
+    surface_id: mc-catering-submit-success
+    lens: business-analyst
+    severity: P2
+    issue: "'Request Submitted! / Chefs will review and send quotes.' mobile catering success alert uses exclamation and vague timing — 'will' without a window is an open-ended commitment"
+    evidence_excerpt: |
+      app/catering.tsx: Alert title "Request Submitted!" body "Chefs will review and send quotes."
+    recommendation: >
+      Title: 'Request submitted.' (no exclamation), Body: 'Chefs typically respond within 2-4 hours.
+      You'll get a notification for each quote.' This matches the intent of BA-TX-023 (web catering)
+      and adds the timing expectation that reduces anxiety post-submission.
+    metric_hypothesis: "catering quote follow-through rate — timing expectation reduces 'did my request go through' contacts"
+    depends_on: BA-TX-023
+
+  # ── P2: Vendor onboarding document upload success is under-confirmed ────────
+
+  - finding_id: BA-TX-043
+    surface_id: mv-onb-docs-upload-success
+    lens: business-analyst
+    severity: P2
+    issue: "'Uploaded successfully' under document preview on mobile vendor onboarding is the only confirmation a chef gets — no summary of which documents are still required, no overall completion progress"
+    evidence_excerpt: |
+      app/(onboarding)/documents.tsx: "Uploaded successfully" shown under preview
+    recommendation: >
+      Add an overall progress indicator: 'Government ID uploaded. 1 of 3 documents complete.'
+      This turns an isolated success toast into an orientation signal that shows progress toward
+      completion. Document upload abandonment in onboarding flows drops significantly when users
+      know how many steps remain (standard UX benchmark: ~20% reduction in abandonment).
+    metric_hypothesis: "chef onboarding completion rate — progress visibility at each document upload reduces abandonment at the most friction-heavy onboarding step"
+    depends_on: null
+
+  # ── P2: Order status push/in-app title inconsistency ─────────────────────
+
+  - finding_id: BA-TX-044
+    surface_id: api-inapp-order-status-customer
+    lens: business-analyst
+    severity: P2
+    issue: "In-app order status notification title is 'Order Status Updated' while the push notification title is 'Order Update' — customers who receive both in quick succession see inconsistent status references"
+    evidence_excerpt: |
+      services/notifications.go::handleOrderUpdated in-app: Title "Order Status Updated"
+      services/notifications.go::handleOrderUpdated push: Title "Order Update"
+    recommendation: >
+      Align both to 'Order update' (sentence case). Refer to BA-TX-009 canonical map.
+      The word 'Status' in the in-app title is redundant — 'Updated' already implies status change.
+    metric_hypothesis: "notification clarity; support ticket volume — title drift between push and in-app for the same event trains customers to distrust notification accuracy"
+    depends_on: BA-TX-009
+
+  # ── P2: Approval title has exclamation inconsistency between push and in-app ─
+
+  - finding_id: BA-TX-045
+    surface_id: api-push-approval-approved-chef
+    lens: business-analyst
+    severity: P2
+    issue: "Approval-approved push title says 'Request Approved!' (with exclamation) but in-app notification title says 'Request Approved' (no exclamation) — inconsistency on a high-stakes chef milestone"
+    evidence_excerpt: |
+      services/notifications.go::handleApprovalApproved push: Title "Request Approved!"
+      services/notifications.go::handleApprovalApproved in-app: Title "Request Approved"
+    recommendation: >
+      Approval of a menu item or profile update is a genuine positive moment — the exclamation is
+      appropriate here. Add it consistently to both: 'Approved!' (push, very short) and
+      'Request approved' (in-app body, no exclamation per style guide limit of ≤1 per page).
+      Per style guide: limit exclamations to genuine celebration; a push title can carry the
+      exclamation as the headline moment. In-app should be calm.
+    metric_hypothesis: "chef satisfaction at approval milestone — consistent positive confirmation reinforces the effort chefs put into submissions"
+    depends_on: BA-TX-007
+
+  # ── P3: Chef profile saved toasts are generic across apps ─────────────────
+
+  - finding_id: BA-TX-046
+    surface_id: web-tx-chef-profile
+    lens: business-analyst
+    severity: P3
+    issue: "'Profile updated successfully' toast is the exact same string used by both chef and customer profiles across web and mobile — misses an opportunity to provide context-specific feedback"
+    evidence_excerpt: |
+      web-tx-chef-profile: "Profile updated successfully"
+      web-tx-profile-update: "Profile updated successfully"
+      mv-profile-update-success-body: "Profile updated successfully."
+      md-trx-014: "Profile updated successfully."
+    recommendation: >
+      Not a critical change but a quick win: differentiate on high-intent saves.
+      Chef profile: 'Profile saved. Customers can see your updates.' — adds value.
+      Customer profile: 'Profile saved.' (no need for context, shorter is better).
+      The driver profile (md-trx-014) is the highest-priority per persona: 'Saved.' (telegraphic).
+    metric_hypothesis: "chef profile completion rate — contextualising saves for chefs ('customers can see your updates') reinforces the value of profile completeness"
+    depends_on: null
+
+  # ── P3: Order detail payment confirmation toast is technically ambiguous ────
+
+  - finding_id: BA-TX-047
+    surface_id: web-tx-orderdetail-toasts
+    lens: business-analyst
+    severity: P3
+    issue: "'Payment confirmed' toast on OrderDetailPage could refer to the customer confirming payment status manually or to the system confirming payment receipt — ambiguous in a high-money-anxiety context"
+    evidence_excerpt: |
+      apps/web/src/features/customer/pages/OrderDetailPage.tsx:61-108: "Payment confirmed"
+    recommendation: >
+      Change to 'Payment verified.' (system action confirmed) or 'We've confirmed your payment.'
+      (warmer, clearer actor). The customer is confirming the payment happened — this is the system
+      responding that it agrees. 'Payment confirmed' could mean the customer is the one confirming,
+      creating ambiguity when there is a payment dispute.
+    metric_hypothesis: "payment dispute rate — ambiguous payment confirmation language increases contested chargeback attempts when customers are uncertain about payment status"
+    depends_on: null
+
+  # ── P3: 2FA enabled/disabled toasts are cold for a security trust moment ───
+
+  - finding_id: BA-TX-048
+    surface_id: web-tx-profile-2fa
+    lens: business-analyst
+    severity: P3
+    issue: "'Two-factor authentication enabled' toast confirms a security upgrade with no follow-up context — no mention of what changed, no backup-codes reminder, no test suggestion"
+    evidence_excerpt: |
+      apps/web/src/features/customer/pages/ProfilePage.tsx:1200-1284: "Two-factor authentication enabled"
+    recommendation: >
+      Change to: 'Two-step sign-in enabled. Save your backup codes — you'll need them if you lose
+      your phone.' The backup codes are generated at 2FA setup and the toast is the moment to remind
+      the user to store them. Users who enable 2FA and are not reminded to save backup codes are the
+      #1 source of 'I'm locked out' support tickets.
+    metric_hypothesis: "2FA-lockout support ticket volume — backup codes reminder at enable-time reduces lockout contacts by ~40% (auth support benchmark)"
+    depends_on: null
+
+  # ── P3: Staff invitation success title uses exclamation on admin surface ────
+
+  - finding_id: BA-TX-049
+    surface_id: ap-staff-invite-success-title
+    lens: business-analyst
+    severity: P3
+    issue: "'Invitation created successfully!' uses exclamation on an admin operational surface — style guide Rule 1 restricts exclamations to genuine celebration; admin staff invitations are routine operations"
+    evidence_excerpt: |
+      apps/admin-portal/src/features/staff/pages/StaffPage.tsx: "Invitation created successfully!"
+    recommendation: >
+      Change to 'Invitation sent.' Per admin persona tone: 'Neutral operator. Precise. No fluff.'
+      The body 'Share this link with the invitee to complete their registration.' is well-written
+      and functional — keep it.
+    metric_hypothesis: "brand coherence — exclamations on admin operational surfaces signal inconsistent editorial review and reduce admin trust in the tool"
+    depends_on: null
+
+  # ── P3: Vendor settings payout 'Payout details saved' with no status feedback ─
+
+  - finding_id: BA-TX-050
+    surface_id: vp-ux-settings-payout-toasts
+    lens: business-analyst
+    severity: P3
+    issue: "'Payout details saved' toast confirms bank detail storage but gives no indication of when payouts will be activated or whether the details have been verified — creates false expectation that payouts will start imminently"
+    evidence_excerpt: |
+      features/settings/pages/SettingsPage.tsx: "Payout details saved"
+      Cross-reference: BA-008 from marketing findings — payout integration is 'coming soon'
+    recommendation: >
+      If payouts are not yet active, the toast must reflect this: 'Bank details saved. Payouts will
+      begin once the integration goes live — we'll notify you.' If payouts are active, add
+      verification status: 'Bank details saved. First payout scheduled for {next_payout_date}.'
+      This connects directly to BA-008 which flags the 'coming soon' payout deception.
+    metric_hypothesis: "chef D30 retention; regulatory risk — chefs who save bank details and expect payouts that never arrive will churn and may report deceptive practices"
+    depends_on: null
+
+  # ── P3: Vendor portal Stripe onboarding error messages are developer-facing ─
+
+  - finding_id: BA-TX-051
+    surface_id: vp-ux-settings-stripe-toasts
+    lens: business-analyst
+    severity: P3
+    issue: "'Failed to start Stripe onboarding' and 'Failed to resume onboarding' are developer-facing error labels surfaced to chefs — a chef does not know what 'Stripe onboarding' means"
+    evidence_excerpt: |
+      features/settings/pages/SettingsPage.tsx: "Failed to start Stripe onboarding" / "Failed to resume onboarding"
+    recommendation: >
+      Change to customer-facing language: 'Couldn't start payment setup — try again or contact
+      support.' and 'Couldn't resume payment setup. Your progress is saved — try again.'
+      'Stripe onboarding' is a technical term from the Stripe API; chefs should hear 'payment setup'
+      or 'payment account'. This is especially important post-payment-provider-switch from Razorpay.
+    metric_hypothesis: "chef payment setup completion rate — incomprehensible error messages on the payment setup flow cause abandonment of a monetisation-critical step"
+    depends_on: null
+
+  # ── P3: Admin approval feedback toasts are terse but legally significant ───
+
+  - finding_id: BA-TX-052
+    surface_id: ap-approvaldetail-toasts
+    lens: business-analyst
+    severity: P3
+    issue: "'Approval request approved' and 'Approval request rejected' are passive-tense toasts that confirm admin actions — grammatically they read as if someone else approved/rejected the request the admin is looking at"
+    evidence_excerpt: |
+      apps/admin-portal/src/features/approvals/pages/ApprovalDetailPage.tsx:
+      "Approval request approved" / "Approval request rejected" / "More information requested from chef"
+    recommendation: >
+      Change to active voice per style guide: 'Request approved.' / 'Request rejected.' /
+      'Requested more info from chef.' Per admin persona: 'Direct. Approve, Suspend, Audit.'
+      Active voice removes ambiguity about who performed the action in an audit context.
+    metric_hypothesis: "admin operational clarity — passive-voice action confirmations create ambiguity in audit trails and reduce admin confidence in system state"
+    depends_on: null
+
+  # ── P3: Admin security settings session-revocation toast is technically incomplete ─
+
+  - finding_id: BA-TX-053
+    surface_id: ap-secsettings-toasts
+    lens: business-analyst
+    severity: P3
+    issue: "'All other sessions revoked. You may need to sign in again.' uses hedged language 'may need' for a definitive security action — all other sessions ARE revoked, sign-in IS required"
+    evidence_excerpt: |
+      apps/admin-portal/src/features/settings/pages/SecuritySettingsPage.tsx:
+      "All other sessions revoked. You may need to sign in again."
+    recommendation: >
+      Change to: 'All other sessions ended. Other devices will need to sign in again.'
+      'You may need to sign in again' is confusing when the action is 'revoke all OTHER sessions'
+      — the current user is not affected. Clarify that it is other devices that need to sign in.
+    metric_hypothesis: "admin trust; support ticket volume — 'you may need to sign in again' after a security action causes admins to panic and file tickets expecting to lose their own session"
+    depends_on: null
+
+  # ── P3: Chef review reply success uses title-cased alert title ────────────
+
+  - finding_id: BA-TX-054
+    surface_id: mv-reviewdetail-success-title
+    lens: business-analyst
+    severity: P3
+    issue: "Mobile vendor review reply success alert title 'Reply Sent' uses title case — style guide button/label convention is sentence case; inconsistent with other success states in the same app"
+    evidence_excerpt: |
+      app/review/[reviewId].tsx: Alert title "Reply Sent"
+    recommendation: >
+      Change to 'Reply sent.' (sentence case, period). Replace blocking Alert with a non-blocking
+      toast for better mobile UX: 'Reply posted.' (past tense, ≤6 words, period per style guide).
+    metric_hypothesis: "brand coherence — title-case inconsistency across alerts and toasts signals copy was written by multiple authors without a shared review"
+    depends_on: null
+
+  # ── P3: Driver staff permission error is misplaced in the driver app ────────
+
+  - finding_id: BA-TX-055
+    surface_id: md-trx-018
+    lens: business-analyst
+    severity: P3
+    issue: "'You do not have permission to invite staff.' surfaces in the driver app — this is an admin function that should not be reachable by drivers in the first place"
+    evidence_excerpt: |
+      app/staff.tsx (mobile-delivery): "You do not have permission to invite staff."
+    recommendation: >
+      The staff invitation UI should not render for users without invite permission.
+      The permission error should be caught at the route/component level and hide the UI,
+      not display an error on interaction. If the screen must remain reachable, change the copy to:
+      'Staff invitations are managed by your fleet administrator.'
+      The current message implies the driver attempted something they should not — better UX is
+      to never show the action.
+    metric_hypothesis: "driver trust; admin security — showing permission-denied errors for hidden features signals incomplete role-based access control implementation"
+    depends_on: null
+
+  # ── P3: Mobile customer payment confirming screen has no next-step guidance ─
+
+  - finding_id: BA-TX-056
+    surface_id: mc-payment-confirming
+    lens: business-analyst
+    severity: P3
+    issue: "'Confirming payment...' is the entire content of the Razorpay deep-link callback screen — no estimated wait time, no fallback instruction if it hangs"
+    evidence_excerpt: |
+      app/payment/result.tsx: "Confirming payment..."
+    recommendation: >
+      Add a timeout handler and fallback copy: 'Confirming payment — this takes a few seconds.'
+      After 10 seconds without response: 'Taking longer than expected. If your payment went through,
+      you'll receive a confirmation email. Otherwise, nothing was charged.'
+      The 'payment confirming' screen is the highest-anxiety moment in the customer journey;
+      leaving it as a bare spinner with no guidance on what to do if it freezes causes abandonment
+      and duplicate payment attempts.
+    metric_hypothesis: "payment completion rate; duplicate payment rate — bare payment-confirming screen with no timeout guidance drives customers to retry payments that were already charged"
+    depends_on: null
+
+  # ── P3: Vendor onboarding personal info save toast duplicates subject ────────
+
+  - finding_id: BA-TX-057
+    surface_id: vp-onb-personal-avatar-success
+    lens: business-analyst
+    severity: P3
+    issue: "'Profile photo uploaded' vendor onboarding toast is correctly formatted (past tense, no exclamation, period implied) — no copy issue but the inconsistency with dp-tx-toast-step3-uploaded ('{label} uploaded') creates a divergent pattern across onboarding portals"
+    evidence_excerpt: |
+      features/onboarding/components/StepPersonalInfo.tsx: "Profile photo uploaded"
+      vs dp-tx-toast-step3-uploaded: "{label} uploaded" (parametric, no "successfully")
+    recommendation: >
+      This finding is primarily a consistency flag. The vendor portal version ('Profile photo
+      uploaded') is better — adopt it as the canonical pattern for all document/media upload toasts
+      across onboarding portals: '{Human-readable document type} uploaded.' No 'successfully'.
+      No exclamation. Aligns with style guide success toast format.
+    metric_hypothesis: "brand coherence — inconsistent upload confirmation copy across three onboarding portals signals fragmented development"
+    depends_on: BA-TX-035
