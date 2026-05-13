@@ -43,7 +43,7 @@ export default function AvailableDeliveriesPage() {
 
       {(deliveries as AvailableDelivery[]).length === 0 ? (
         <div className="empty-state">
-          <Package className="empty-state-icon" />
+          <Package className="empty-state-icon" aria-hidden="true" />
           <h2 className="empty-state-title">No Available Deliveries</h2>
           <p className="empty-state-description">New orders will appear here when they're ready for pickup.</p>
         </div>
@@ -58,14 +58,14 @@ export default function AvailableDeliveriesPage() {
 
               <div className="space-y-2 mb-4">
                 <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                  <MapPin className="h-4 w-4 text-success mt-0.5 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="text-xs text-success font-medium">PICKUP</p>
                     <p className="text-sm text-muted-foreground">{d.pickupAddress}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                  <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="text-xs text-primary font-medium">DROPOFF</p>
                     <p className="text-sm text-muted-foreground">{d.dropoffAddress}</p>
@@ -75,19 +75,19 @@ export default function AvailableDeliveriesPage() {
 
               <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
                 <span className="flex items-center gap-1">
-                  <Package className="h-3.5 w-3.5" /> {d.itemCount} items
+                  <Package className="h-3.5 w-3.5" aria-hidden="true" /> {d.itemCount} items
                 </span>
                 {d.distance > 0 && (
                   <span className="flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5" /> {d.distance.toFixed(1)} km
+                    <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {d.distance.toFixed(1)} km
                   </span>
                 )}
                 <span className="flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" /> {formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}
+                  <Clock className="h-3.5 w-3.5" aria-hidden="true" /> {formatDistanceToNow(new Date(d.createdAt), { addSuffix: true })}
                 </span>
               </div>
 
-              <button
+              <button type="button"
                 onClick={() => acceptDelivery.mutate(d.orderId)}
                 disabled={acceptDelivery.isPending}
                 className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"

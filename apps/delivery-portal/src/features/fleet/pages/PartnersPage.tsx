@@ -125,7 +125,7 @@ export default function PartnersPage() {
       {/* Partner Cards */}
       {partners.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-12 text-center">
-          <Truck className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+          <Truck className="mx-auto h-10 w-10 text-muted-foreground mb-3" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
             No partners found matching your criteria.
           </p>
@@ -133,7 +133,7 @@ export default function PartnersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {partners.map((partner) => (
-            <button
+            <button type="button"
               key={partner.id}
               onClick={() => navigate(`/fleet/partners/${partner.id}`)}
               className="rounded-xl border border-border bg-card p-5 text-left transition-colors hover:bg-secondary"
@@ -175,7 +175,7 @@ export default function PartnersPage() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Rating</span>
                   <span className="flex items-center gap-1 font-medium text-foreground">
-                    <Star className="h-3.5 w-3.5 text-warning fill-warning" />
+                    <Star className="h-3.5 w-3.5 text-warning fill-warning" aria-hidden="true" />
                     {(partner.rating ?? 0).toFixed(1)}
                   </span>
                 </div>
@@ -206,7 +206,7 @@ export default function PartnersPage() {
             Page {page} of {totalPages}
           </p>
           <div className="flex gap-2">
-            <button
+            <button type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
               className="flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
@@ -214,13 +214,13 @@ export default function PartnersPage() {
               <ChevronLeft className="h-4 w-4" />
               Previous
             </button>
-            <button
+            <button type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
               className="flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>

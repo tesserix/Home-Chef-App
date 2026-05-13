@@ -98,7 +98,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
@@ -170,7 +170,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Truck className="h-4 w-4 text-primary" />
+            <Truck className="h-4 w-4 text-primary" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">Vehicle Details</h3>
           </div>
           <button
@@ -227,7 +227,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-primary" />
+            <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">
               Documents ({docs.length} uploaded)
             </h3>
@@ -246,14 +246,14 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
             <div key={doc.id} className="flex items-center justify-between text-sm">
               <span className="text-foreground">{docTypeLabels[doc.type] || doc.type}</span>
               <span className="flex items-center gap-1 text-herb">
-                <CheckCircle className="h-3 w-3" />
+                <CheckCircle className="h-3 w-3" aria-hidden="true" />
                 {doc.status === 'verified' ? 'Verified' : 'Uploaded'}
               </span>
             </div>
           ))}
           {docs.length === 0 && (
             <div className="flex items-center gap-2 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               No documents uploaded
             </div>
           )}
@@ -264,7 +264,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-primary" />
+            <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">Subscription Plan</h3>
           </div>
           <button

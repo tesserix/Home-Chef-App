@@ -31,7 +31,7 @@ export function StepProgress({ currentStep }: StepProgressProps) {
                       : 'border-2 border-border bg-background text-muted-foreground'
                 }`}
               >
-                {isCompleted ? <Check className="h-4 w-4" /> : step.number}
+                {isCompleted ? <Check className="h-4 w-4" aria-hidden="true" /> : step.number}
               </div>
               <span
                 className={`mt-1.5 text-[10px] font-medium whitespace-nowrap ${

@@ -171,7 +171,7 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
@@ -256,11 +256,11 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
               <div className="flex items-center gap-3">
                 {uploaded ? (
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-herb-tint">
-                    <CheckCircle className="h-5 w-5 text-herb" />
+                    <CheckCircle className="h-5 w-5 text-herb" aria-hidden="true" />
                   </div>
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
+                    <FileText className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                   </div>
                 )}
                 <div>
@@ -294,12 +294,12 @@ export function StepDocuments({ vehicleType, onComplete, onBack }: StepDocuments
                   className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
                 >
                   {isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : uploaded ? (
                     'Replace'
                   ) : (
                     <span className="flex items-center gap-1">
-                      <Upload className="h-3 w-3" />
+                      <Upload className="h-3 w-3" aria-hidden="true" />
                       Upload
                     </span>
                   )}

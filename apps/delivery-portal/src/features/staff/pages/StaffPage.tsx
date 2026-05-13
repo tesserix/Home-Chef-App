@@ -181,11 +181,11 @@ export default function StaffPage() {
           <p className="page-description">Manage delivery portal staff members</p>
         </div>
         {canInvite && (
-          <button
+          <button type="button"
             onClick={() => setShowInviteForm(!showInviteForm)}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            <UserPlus className="h-4 w-4" />
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
             Invite Staff
           </button>
         )}
@@ -202,7 +202,7 @@ export default function StaffPage() {
             <div className="space-y-4">
               <div className="rounded-lg border border-success/30 bg-success/10 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle2 className="h-5 w-5 text-success" />
+                  <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
                   <p className="text-sm font-medium text-success">
                     Invitation Created
                   </p>
@@ -217,20 +217,20 @@ export default function StaffPage() {
                     value={inviteUrl}
                     className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                   />
-                  <button
+                  <button type="button"
                     onClick={() => handleCopyUrl(inviteUrl)}
                     className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                   >
                     {copiedUrl === inviteUrl ? (
-                      <Check className="h-4 w-4 text-success" />
+                      <Check className="h-4 w-4 text-success" aria-hidden="true" />
                     ) : (
-                      <Copy className="h-4 w-4" />
+                      <Copy className="h-4 w-4" aria-hidden="true" />
                     )}
                     {copiedUrl === inviteUrl ? 'Copied' : 'Copy'}
                   </button>
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={resetForm}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary"
               >
@@ -350,7 +350,7 @@ export default function StaffPage() {
                   disabled={createInvitation.isPending}
                   className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
-                  <Mail className="h-4 w-4" />
+                  <Mail className="h-4 w-4" aria-hidden="true" />
                   {createInvitation.isPending
                     ? 'Sending...'
                     : 'Send Invitation'}
@@ -386,7 +386,7 @@ export default function StaffPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Shield className="h-5 w-5 text-primary" />
+                    <Shield className="h-5 w-5 text-primary" aria-hidden="true" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
@@ -423,7 +423,7 @@ export default function StaffPage() {
         </h2>
         {invitationsLoading ? (
           <div className="flex justify-center py-8">
-            <RotateCw className="h-5 w-5 animate-spin text-muted-foreground" />
+            <RotateCw className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
           </div>
         ) : pendingInvitations.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
@@ -438,7 +438,7 @@ export default function StaffPage() {
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10">
-                    <Clock className="h-5 w-5 text-warning" />
+                    <Clock className="h-5 w-5 text-warning" aria-hidden="true" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
@@ -451,20 +451,20 @@ export default function StaffPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
+                  <button type="button"
                     onClick={() => resendInvitation.mutate(inv.id)}
                     disabled={resendInvitation.isPending}
                     className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
                   >
-                    <RotateCw className="h-3.5 w-3.5" />
+                    <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
                     Resend
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => revokeInvitation.mutate(inv.id)}
                     disabled={revokeInvitation.isPending}
                     className="flex items-center gap-1.5 rounded-lg border border-destructive/30 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
                   >
-                    <XCircle className="h-3.5 w-3.5" />
+                    <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                     Revoke
                   </button>
                 </div>

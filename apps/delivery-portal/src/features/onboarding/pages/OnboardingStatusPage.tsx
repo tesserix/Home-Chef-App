@@ -46,7 +46,7 @@ export default function OnboardingStatusPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
@@ -61,7 +61,7 @@ export default function OnboardingStatusPage() {
       <header className="border-b border-border bg-card px-4 py-4">
         <div className="mx-auto flex max-w-lg items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <Truck className="h-5 w-5 text-primary-foreground" />
+            <Truck className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-lg font-medium text-foreground">Application Status</h1>
@@ -78,15 +78,15 @@ export default function OnboardingStatusPage() {
           <div className="mx-auto mb-4">
             {isRejected ? (
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
-                <XCircle className="h-10 w-10 text-destructive" />
+                <XCircle className="h-10 w-10 text-destructive" aria-hidden="true" />
               </div>
             ) : isInReview ? (
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-tint">
-                <RefreshCw className="h-10 w-10 text-amber animate-spin" style={{ animationDuration: '3s' }} />
+                <RefreshCw className="h-10 w-10 text-amber animate-spin" style={{ animationDuration: '3s' }} aria-hidden="true" />
               </div>
             ) : (
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                <CheckCircle className="h-10 w-10 text-primary" />
+                <CheckCircle className="h-10 w-10 text-primary" aria-hidden="true" />
               </div>
             )}
           </div>
@@ -124,7 +124,7 @@ export default function OnboardingStatusPage() {
                   : 'rgb(21 128 61)',
             }}
           >
-            <Clock className="h-3 w-3" />
+            <Clock className="h-3 w-3" aria-hidden="true" />
             {isRejected ? 'Rejected' : isInReview ? 'In Review' : 'Submitted'}
           </div>
 
@@ -151,7 +151,7 @@ export default function OnboardingStatusPage() {
             {(isSubmitted || isInReview) && (
               <div className="rounded-xl border border-border bg-muted/30 p-4">
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   Auto-refreshing every 30 seconds
                 </div>
               </div>
@@ -163,7 +163,7 @@ export default function OnboardingStatusPage() {
         <div className="mt-6 rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Mail className="h-5 w-5 text-muted-foreground" />
+              <Mail className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">Need Help?</p>

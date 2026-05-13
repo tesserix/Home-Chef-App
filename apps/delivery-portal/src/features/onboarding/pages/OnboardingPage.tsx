@@ -106,7 +106,7 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
@@ -119,7 +119,7 @@ export default function OnboardingPage() {
       <header className="border-b border-border bg-card px-4 py-4">
         <div className="mx-auto flex max-w-2xl items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <Truck className="h-5 w-5 text-primary-foreground" />
+            <Truck className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-lg font-medium text-foreground">Become a Delivery Partner</h1>

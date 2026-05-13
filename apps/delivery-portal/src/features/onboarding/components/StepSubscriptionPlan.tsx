@@ -103,7 +103,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
@@ -125,7 +125,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
       <div className="rounded-xl bg-success/5 border border-success/20 p-5">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 shrink-0">
-            <Heart className="h-5 w-5 text-success" />
+            <Heart className="h-5 w-5 text-success" aria-hidden="true" />
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">
@@ -210,7 +210,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
                   }`}
                 >
                   {selectedInterval === plan.interval && (
-                    <Check className="h-3 w-3 text-primary-foreground" />
+                    <Check className="h-3 w-3 text-primary-foreground" aria-hidden="true" />
                   )}
                 </div>
                 <div>
@@ -241,7 +241,7 @@ export function StepSubscriptionPlan({ onComplete, onBack }: StepSubscriptionPla
       {/* Secure Payment */}
       <div className="rounded-xl border border-border bg-muted/30 p-4">
         <div className="flex items-start gap-3">
-          <Shield className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+          <Shield className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" aria-hidden="true" />
           <p className="text-xs text-muted-foreground">
             Payments are securely processed via <span className="font-medium text-foreground">{gatewayLabel}</span>.
             You can change your plan or cancel anytime from your dashboard.

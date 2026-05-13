@@ -30,7 +30,7 @@ export default function ProfilePage() {
             <div className="mt-1 flex items-center gap-2">
               {profile?.verified ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-                  <Shield className="h-3 w-3" /> Verified
+                  <Shield className="h-3 w-3" aria-hidden="true" /> Verified
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
@@ -45,7 +45,7 @@ export default function ProfilePage() {
       {/* Vehicle Info */}
       <div className="rounded-xl border border-border bg-card p-6">
         <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Truck className="h-5 w-5" /> Vehicle Details
+          <Truck className="h-5 w-5" aria-hidden="true" /> Vehicle Details
         </h3>
         <div className="space-y-3">
           <div className="flex justify-between">
@@ -66,7 +66,7 @@ export default function ProfilePage() {
       {/* Stats */}
       <div className="rounded-xl border border-border bg-card p-6">
         <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Award className="h-5 w-5" /> Performance
+          <Award className="h-5 w-5" aria-hidden="true" /> Performance
         </h3>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
@@ -75,7 +75,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <div className="flex items-center justify-center gap-1">
-              <Star className="h-4 w-4 text-warning fill-warning" />
+              <Star className="h-4 w-4 text-warning fill-warning" aria-hidden="true" />
               <p className="font-display text-2xl font-semibold text-foreground">{(profile?.rating ?? 0).toFixed(1)}</p>
             </div>
             <p className="text-xs text-muted-foreground">Rating</p>

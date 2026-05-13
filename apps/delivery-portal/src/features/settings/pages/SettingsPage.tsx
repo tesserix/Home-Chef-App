@@ -16,35 +16,35 @@ export default function SettingsPage() {
       <StripeConnectCard />
 
       <div className="space-y-2">
-        <button className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
-          <Bell className="h-5 w-5 text-muted-foreground" />
+        <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
+          <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-foreground">Notifications</p>
             <p className="text-xs text-muted-foreground">Manage push & email notifications</p>
           </div>
         </button>
 
-        <button className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
-          <Shield className="h-5 w-5 text-muted-foreground" />
+        <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
+          <Shield className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-foreground">Privacy & Security</p>
             <p className="text-xs text-muted-foreground">Manage your account security</p>
           </div>
         </button>
 
-        <button className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
-          <HelpCircle className="h-5 w-5 text-muted-foreground" />
+        <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary">
+          <HelpCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-foreground">Help & Support</p>
             <p className="text-xs text-muted-foreground">Get help with your deliveries</p>
           </div>
         </button>
 
-        <button
+        <button type="button"
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-xl border border-destructive/30 bg-card p-4 text-left transition-colors hover:bg-destructive/5"
         >
-          <LogOut className="h-5 w-5 text-destructive" />
+          <LogOut className="h-5 w-5 text-destructive" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-destructive">Sign Out</p>
             <p className="text-xs text-muted-foreground">Sign out of your account</p>
@@ -149,7 +149,7 @@ function StripeConnectCard() {
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Globe className="h-5 w-5 text-primary" />
+          <Globe className="h-5 w-5 text-primary" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-foreground">Stripe (International Payouts)</p>
             <p className="text-xs text-muted-foreground">
@@ -160,11 +160,11 @@ function StripeConnectCard() {
         {data?.connected ? (
           ready ? (
             <span className="flex items-center gap-1 rounded-full bg-herb-tint px-2 py-0.5 text-xs text-herb">
-              <CheckCircle2 className="h-3 w-3" /> Connected
+              <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Connected
             </span>
           ) : (
             <span className="flex items-center gap-1 rounded-full bg-amber-tint px-2 py-0.5 text-xs text-amber">
-              <XCircle className="h-3 w-3" /> Action Required
+              <XCircle className="h-3 w-3" aria-hidden="true" /> Action Required
             </span>
           )
         ) : null}
@@ -193,13 +193,13 @@ function StripeConnectCard() {
               ))}
             </select>
           </div>
-          <button
+          <button type="button"
             onClick={() => connect.mutate(country)}
             disabled={connect.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {connect.isPending ? 'Starting…' : 'Connect with Stripe'}
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       ) : (
@@ -219,17 +219,17 @@ function StripeConnectCard() {
 
           <div className="flex flex-wrap gap-2">
             {!ready && (
-              <button
+              <button type="button"
                 onClick={() => resume.mutate()}
                 disabled={resume.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 Resume Onboarding
-                <ExternalLink className="h-3.5 w-3.5" />
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
             {ready && activeProvider !== 'stripe' && (
-              <button
+              <button type="button"
                 onClick={() => switchProvider.mutate('stripe')}
                 disabled={switchProvider.isPending}
                 className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary disabled:opacity-50"
@@ -238,7 +238,7 @@ function StripeConnectCard() {
               </button>
             )}
             {activeProvider === 'stripe' && (
-              <button
+              <button type="button"
                 onClick={() => switchProvider.mutate('razorpay')}
                 disabled={switchProvider.isPending}
                 className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary disabled:opacity-50"

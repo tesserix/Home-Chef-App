@@ -32,7 +32,7 @@ export default function ActiveDeliveryPage() {
   if (!delivery) {
     return (
       <div className="empty-state">
-        <Navigation className="empty-state-icon" />
+        <Navigation className="empty-state-icon" aria-hidden="true" />
         <h2 className="empty-state-title">No Active Delivery</h2>
         <p className="empty-state-description">
           Check available deliveries to pick up a new order.
@@ -95,7 +95,7 @@ export default function ActiveDeliveryPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10">
-              <MapPin className="h-4 w-4 text-success" />
+              <MapPin className="h-4 w-4 text-success" aria-hidden="true" />
             </div>
             <div>
               <p className="text-xs font-medium text-success uppercase">Pickup from</p>
@@ -108,7 +108,7 @@ export default function ActiveDeliveryPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-              <MapPin className="h-4 w-4 text-primary" />
+              <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
             </div>
             <div>
               <p className="text-xs font-medium text-primary uppercase">Deliver to</p>
@@ -142,7 +142,7 @@ export default function ActiveDeliveryPage() {
         {actions.map((action) => {
           const Icon = action.icon;
           return (
-            <button
+            <button type="button"
               key={action.nextStatus}
               onClick={() => updateStatus.mutate({ id: delivery.id, status: action.nextStatus })}
               disabled={updateStatus.isPending}
@@ -155,7 +155,7 @@ export default function ActiveDeliveryPage() {
         })}
 
         {delivery.status !== 'delivered' && (
-          <button
+          <button type="button"
             onClick={() => {
               const reason = prompt('Reason for cancellation?');
               if (reason) {
@@ -164,7 +164,7 @@ export default function ActiveDeliveryPage() {
             }}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 px-4 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/5"
           >
-            <XCircle className="h-5 w-5" />
+            <XCircle className="h-5 w-5" aria-hidden="true" />
             Cancel Delivery
           </button>
         )}

@@ -218,7 +218,7 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
               className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
             >
               {referralStatus === 'validating' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
                 'Validate'
               )}
@@ -226,13 +226,13 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
           </div>
           {referralStatus === 'valid' && (
             <p className="mt-1.5 flex items-center gap-1 text-sm text-herb">
-              <CheckCircle className="h-4 w-4" />
+              <CheckCircle className="h-4 w-4" aria-hidden="true" />
               Referred by {referrerName}
             </p>
           )}
           {referralStatus === 'invalid' && (
             <p className="mt-1.5 flex items-center gap-1 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               Invalid referral code
             </p>
           )}

@@ -117,11 +117,11 @@ export default function PartnerDetailPage() {
   if (!partner) {
     return (
       <div className="space-y-6">
-        <button
+        <button type="button"
           onClick={() => navigate('/fleet/partners')}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back to Partners
         </button>
         <div className="rounded-xl border border-border bg-card p-12 text-center">
@@ -137,11 +137,11 @@ export default function PartnerDetailPage() {
   const docStatusIcon = (status: string) => {
     switch (status) {
       case 'verified':
-        return <CheckCircle2 className="h-4 w-4 text-success" />;
+        return <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />;
       case 'rejected':
-        return <XCircle className="h-4 w-4 text-destructive" />;
+        return <XCircle className="h-4 w-4 text-destructive" aria-hidden="true" />;
       default:
-        return <Clock className="h-4 w-4 text-warning" />;
+        return <Clock className="h-4 w-4 text-warning" aria-hidden="true" />;
     }
   };
 
@@ -171,11 +171,11 @@ export default function PartnerDetailPage() {
   return (
     <div className="space-y-6">
       {/* Back Button */}
-      <button
+      <button type="button"
         onClick={() => navigate('/fleet/partners')}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back to Partners
       </button>
 
@@ -204,18 +204,18 @@ export default function PartnerDetailPage() {
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <Mail className="h-3.5 w-3.5" />
+                  <Mail className="h-3.5 w-3.5" aria-hidden="true" />
                   {partner.email}
                 </span>
                 {partner.phone && (
                   <span className="flex items-center gap-1">
-                    <Phone className="h-3.5 w-3.5" />
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
                     {partner.phone}
                   </span>
                 )}
               </div>
               <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                <Truck className="h-3.5 w-3.5" />
+                <Truck className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>
                   {partner.vehicleType}
                   {partner.vehicleNumber ? ` - ${partner.vehicleNumber}` : ''}
@@ -232,7 +232,7 @@ export default function PartnerDetailPage() {
               </span>
             )}
             <div className="flex items-center gap-1 rounded-full bg-warning/10 px-3 py-1">
-              <Star className="h-3.5 w-3.5 text-warning fill-warning" />
+              <Star className="h-3.5 w-3.5 text-warning fill-warning" aria-hidden="true" />
               <span className="text-xs font-medium text-foreground">
                 {(partner.rating ?? 0).toFixed(1)}
               </span>
@@ -255,20 +255,20 @@ export default function PartnerDetailPage() {
             approve or reject their application.
           </p>
           <div className="flex gap-3">
-            <button
+            <button type="button"
               onClick={() => verifyPartner.mutate()}
               disabled={verifyPartner.isPending}
               className="flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-medium text-success-foreground hover:bg-success/90 disabled:opacity-50"
             >
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               {verifyPartner.isPending ? 'Verifying...' : 'Approve'}
             </button>
-            <button
+            <button type="button"
               onClick={() => suspendPartner.mutate()}
               disabled={suspendPartner.isPending}
               className="flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
             >
-              <XCircle className="h-4 w-4" />
+              <XCircle className="h-4 w-4" aria-hidden="true" />
               Reject
             </button>
           </div>
@@ -302,7 +302,7 @@ export default function PartnerDetailPage() {
                 className="flex items-center justify-between rounded-lg border border-border p-4"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <FileText className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                   <div>
                     <p className="text-sm font-medium text-foreground">
                       {doc.fileName}
@@ -369,7 +369,7 @@ export default function PartnerDetailPage() {
           <h3 className="text-lg font-semibold text-foreground mb-4">Actions</h3>
           <div className="flex flex-wrap gap-3">
             {isSuspended ? (
-              <button
+              <button type="button"
                 onClick={() => suspendPartner.mutate()}
                 disabled={suspendPartner.isPending}
                 className="flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-medium text-success-foreground hover:bg-success/90 disabled:opacity-50"
@@ -378,7 +378,7 @@ export default function PartnerDetailPage() {
                 {suspendPartner.isPending ? 'Processing...' : 'Reactivate Partner'}
               </button>
             ) : (
-              <button
+              <button type="button"
                 onClick={() => suspendPartner.mutate()}
                 disabled={suspendPartner.isPending}
                 className="flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
@@ -388,7 +388,7 @@ export default function PartnerDetailPage() {
               </button>
             )}
             {!partner.verified && canVerify && (
-              <button
+              <button type="button"
                 onClick={() => verifyPartner.mutate()}
                 disabled={verifyPartner.isPending}
                 className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"

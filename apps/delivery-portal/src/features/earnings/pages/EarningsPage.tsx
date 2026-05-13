@@ -49,7 +49,7 @@ export default function EarningsPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <DollarSign className="h-4 w-4" />
+            <DollarSign className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs font-medium">Total Earnings</span>
           </div>
           <p className="font-display text-2xl font-semibold text-foreground">
@@ -58,14 +58,14 @@ export default function EarningsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Truck className="h-4 w-4" />
+            <Truck className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs font-medium">Deliveries</span>
           </div>
           <p className="font-display text-2xl font-semibold text-foreground">{earnings?.totalDeliveries ?? 0}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Banknote className="h-4 w-4" />
+            <Banknote className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs font-medium">Tips</span>
           </div>
           <p className="font-display text-2xl font-semibold text-foreground">
@@ -74,7 +74,7 @@ export default function EarningsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs font-medium">Avg/Delivery</span>
           </div>
           <p className="font-display text-2xl font-semibold text-foreground">

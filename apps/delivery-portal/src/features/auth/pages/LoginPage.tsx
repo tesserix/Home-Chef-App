@@ -52,7 +52,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <Truck className="h-8 w-8 text-primary-foreground" />
+            <Truck className="h-8 w-8 text-primary-foreground" aria-hidden="true" />
           </div>
           <h1 className="mt-6 font-display text-3xl font-semibold tabular-nums text-foreground">Fe3dr Delivery</h1>
           <p className="mt-2 text-muted-foreground">
@@ -82,12 +82,12 @@ export default function LoginPage() {
         {/* Mode: Choose */}
         {mode === 'choose' && (
           <div className="space-y-4">
-            <button
+            <button type="button"
               onClick={() => setMode('driver')}
               className="flex w-full items-center gap-4 rounded-xl border-2 border-primary bg-primary/5 p-5 text-left transition-all hover:bg-primary/10"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Truck className="h-6 w-6 text-primary" />
+                <Truck className="h-6 w-6 text-primary" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-base font-semibold text-foreground">I'm a Driver</p>
@@ -97,12 +97,12 @@ export default function LoginPage() {
               </div>
             </button>
 
-            <button
+            <button type="button"
               onClick={() => setMode('staff')}
               className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-5 text-left transition-all hover:bg-secondary"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <Shield className="h-6 w-6 text-muted-foreground" />
+                <Shield className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-base font-semibold text-foreground">I'm Staff</p>
@@ -117,16 +117,16 @@ export default function LoginPage() {
         {/* Mode: Driver Login */}
         {mode === 'driver' && (
           <div className="space-y-4">
-            <button
+            <button type="button"
               onClick={() => { setMode('choose'); resetEmailForm(); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back
             </button>
 
             <div className="space-y-3">
-              <button
+              <button type="button"
                 onClick={() => loginDriver('google')}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-secondary"
               >
@@ -140,7 +140,7 @@ export default function LoginPage() {
               </button>
 
               {!showEmailForm ? (
-                <button
+                <button type="button"
                   onClick={() => setShowEmailForm(true)}
                   className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
@@ -203,7 +203,7 @@ export default function LoginPage() {
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                         Signing in...
                       </>
                     ) : (
@@ -216,7 +216,7 @@ export default function LoginPage() {
 
             <div className="rounded-xl border border-border bg-muted/50 p-4">
               <div className="flex items-start gap-3">
-                <UserPlus className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <UserPlus className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-medium text-foreground">New Driver?</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -232,16 +232,16 @@ export default function LoginPage() {
         {/* Mode: Staff Login */}
         {mode === 'staff' && (
           <div className="space-y-4">
-            <button
+            <button type="button"
               onClick={() => { setMode('choose'); resetEmailForm(); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back
             </button>
 
             <div className="space-y-3">
-              <button
+              <button type="button"
                 onClick={() => loginStaff('google')}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-secondary"
               >
@@ -255,7 +255,7 @@ export default function LoginPage() {
               </button>
 
               {!showEmailForm ? (
-                <button
+                <button type="button"
                   onClick={() => setShowEmailForm(true)}
                   className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
@@ -318,7 +318,7 @@ export default function LoginPage() {
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                         Signing in...
                       </>
                     ) : (
@@ -331,7 +331,7 @@ export default function LoginPage() {
 
             <div className="rounded-xl border border-border bg-muted/50 p-4">
               <div className="flex items-start gap-3">
-                <Shield className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <Shield className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Staff Access</p>
                   <p className="mt-1 text-xs text-muted-foreground">

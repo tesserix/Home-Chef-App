@@ -40,7 +40,7 @@ export default function DeliveryHistoryPage() {
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                     d.status === 'delivered' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
                   }`}>
-                    {d.status === 'delivered' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    {d.status === 'delivered' ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : <XCircle className="h-3 w-3" aria-hidden="true" />}
                     {(d.status as string).replace('_', ' ')}
                   </span>
                 </div>

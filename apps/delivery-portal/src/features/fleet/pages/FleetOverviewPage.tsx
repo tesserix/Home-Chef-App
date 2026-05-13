@@ -145,7 +145,7 @@ export default function FleetOverviewPage() {
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <DollarSign className="h-6 w-6 text-primary" />
+            <DollarSign className="h-6 w-6 text-primary" aria-hidden="true" />
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Today's Fleet Earnings</p>
@@ -163,7 +163,7 @@ export default function FleetOverviewPage() {
           className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:bg-secondary"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Users className="h-6 w-6 text-primary" />
+            <Users className="h-6 w-6 text-primary" aria-hidden="true" />
           </div>
           <div>
             <p className="font-semibold text-foreground">Manage Partners</p>
@@ -178,7 +178,7 @@ export default function FleetOverviewPage() {
             className="flex items-center gap-4 rounded-xl border-2 border-warning bg-warning/5 p-5 transition-colors hover:bg-warning/10"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
-              <Clock className="h-6 w-6 text-warning" />
+              <Clock className="h-6 w-6 text-warning" aria-hidden="true" />
             </div>
             <div>
               <p className="font-semibold text-foreground">

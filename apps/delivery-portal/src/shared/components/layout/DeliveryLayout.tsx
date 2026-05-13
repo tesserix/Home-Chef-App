@@ -117,7 +117,7 @@ export function DeliveryLayout() {
         <div className="flex h-full flex-col">
           <div className="flex h-16 items-center gap-2 border-b border-border px-6">
             <div className="logo-icon">
-              <span><Truck className="h-5 w-5" /></span>
+              <span><Truck className="h-5 w-5" aria-hidden="true" /></span>
             </div>
             <div>
               <span className="logo-text">Fe3dr</span>
