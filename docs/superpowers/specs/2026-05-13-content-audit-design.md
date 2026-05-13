@@ -103,8 +103,10 @@ All four artifacts live under `docs/content-audit/` and commit independently.
 
 ```
 surface_id | app | category | route_or_file | audience | word_count |
-current_text_excerpt | owns_voice? | last_edited | notes
+current_text_excerpt | shared_component_origin | last_edited | notes
 ```
+
+`shared_component_origin` records the upstream source for shared-component text (e.g., `@tesserix/web` button label, `packages/ui` shared FAQ) so audits avoid duplicate findings on the same string consumed by multiple apps.
 
 **Estimated size:** ~600–1,500 rows total.
 
@@ -132,7 +134,13 @@ current_text_excerpt | owns_voice? | last_edited | notes
 
 ### Phase 3 — Multi-Lens Audit
 
-**Goal:** every inventory row scored by all four lenses. Output: `AUDIT-FINDINGS.md` keyed by `surface_id`, with per-category detail in `docs/content-audit/findings/*.md`.
+**Goal:** every inventory row scored by all four lenses.
+
+**Output layout:**
+- `AUDIT-FINDINGS.md` — a rolled-up index: one row per `finding_id` with columns `surface_id, lens, severity, link-to-category-file`. Sortable; greppable; the dashboard view.
+- `docs/content-audit/findings/<category>.md` — full detail per finding (issue prose, evidence excerpt, recommendation). One file per category.
+
+The index points into the category files; category files own the prose.
 
 **The four lenses (parallel subagents per category):**
 
@@ -225,7 +233,7 @@ review_required (lawyer/PM/design) | suggested_agent
 | 2. Style guide draft | Me (synthesize `.impeccable.md` + India locale + persona matrix) | `STYLE-GUIDE.md` |
 | 3. Lens audits (4 lenses × 9 categories = 36 agent runs) | 4 parallel subagents per category, 9 sequential categories | `AUDIT-FINDINGS.md` + `findings/*.md` |
 | 4. Backlog synthesis | Me (apply scoring formula, bundle into 10 phases) | `REWRITE-BACKLOG.md` |
-| 5. Hand-off | Invoke `writing-plans` skill on `REWRITE-BACKLOG.md` | Implementation plan for CW-01 + template for remaining phases |
+| 5. Hand-off (post-audit) | After this spec is approved, invoke `writing-plans` skill on this spec | Step-by-step implementation plan for executing the 5-step audit pipeline (the plan downstream phases CW-01..CW-10 consume `REWRITE-BACKLOG.md`, but each gets its own `writing-plans` invocation later) |
 
 **Repo layout for deliverables:**
 
