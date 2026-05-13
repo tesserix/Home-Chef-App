@@ -153,10 +153,12 @@ export default function ChefMenuPage() {
       <motion.div variants={fadeInUp} className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="flex-1 max-w-md">
           <Input
+            type="search"
+            aria-label="Search menu items"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search menu items..."
-            leftIcon={<Search className="h-5 w-5" />}
+            leftIcon={<Search aria-hidden="true" className="h-5 w-5" />}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">

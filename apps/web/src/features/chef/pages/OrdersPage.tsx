@@ -128,10 +128,12 @@ export default function ChefOrdersPage() {
       {/* Search */}
       <motion.div variants={fadeInUp} className="max-w-md">
         <Input
+          type="search"
+          aria-label="Search by order number"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search by order number..."
-          leftIcon={<Search className="h-5 w-5" />}
+          leftIcon={<Search aria-hidden="true" className="h-5 w-5" />}
         />
       </motion.div>
 

@@ -101,9 +101,12 @@ export default function OrdersPage() {
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
+            <label htmlFor="customer-orders-search" className="sr-only">Search your orders</label>
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
             <input
-              type="text"
+              id="customer-orders-search"
+              type="search"
+              aria-label="Search your orders"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search orders..."

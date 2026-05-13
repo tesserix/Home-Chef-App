@@ -90,10 +90,12 @@ export function AdminLayout() {
                 <p className="text-xs text-ink-muted capitalize">{user?.roles?.[0]}</p>
               </div>
               <button
+                type="button"
+                aria-label="Log out"
                 onClick={logout}
-                className="rounded-lg p-2 text-ink-muted hover:bg-ink hover:text-paper"
+                className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-ink hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -107,12 +109,21 @@ export function AdminLayout() {
             className="fixed inset-0 z-40 bg-ink/50 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-ink lg:hidden">
+          <aside
+            id="admin-mobile-sidebar"
+            aria-label="Main navigation"
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-ink lg:hidden"
+          >
             <div className="flex h-full flex-col">
               <div className="flex h-16 items-center justify-between px-4">
                 <span className="text-lg font-medium text-paper">Fe3dr Admin</span>
-                <button onClick={() => setSidebarOpen(false)}>
-                  <X className="h-6 w-6 text-ink-muted" />
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded-lg p-1 transition-colors hover:bg-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+                >
+                  <X aria-hidden="true" className="h-6 w-6 text-ink-muted" />
                 </button>
               </div>
               <nav className="flex-1 space-y-1 px-3 py-4">
@@ -146,17 +157,23 @@ export function AdminLayout() {
         <header className="flex h-16 items-center justify-between border-b border-mist bg-bone px-4 shadow-1 lg:px-8">
           <div className="flex items-center gap-4">
             <button
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={sidebarOpen}
+              aria-controls="admin-mobile-sidebar"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-lg p-2 hover:bg-mist lg:hidden"
+              className="rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 lg:hidden"
             >
-              <Menu className="h-5 w-5" />
+              <Menu aria-hidden="true" className="h-5 w-5" />
             </button>
 
             {/* Search */}
             <div className="hidden items-center gap-2 rounded-lg border border-mist-strong bg-paper px-3 py-2 md:flex">
-              <Search className="h-4 w-4 text-ink-muted" />
+              <Search aria-hidden="true" className="h-4 w-4 text-ink-muted" />
+              <label htmlFor="admin-global-search" className="sr-only">Search admin</label>
               <input
-                type="text"
+                id="admin-global-search"
+                type="search"
                 placeholder="Search..."
                 className="w-64 bg-transparent text-sm outline-none placeholder:text-ink-muted"
               />
@@ -165,9 +182,13 @@ export function AdminLayout() {
 
           <div className="flex items-center gap-4">
             {/* Notifications */}
-            <button className="relative rounded-lg p-2 hover:bg-mist">
-              <Bell className="h-5 w-5 text-ink-soft" />
-              <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-paprika text-xs text-paper">
+            <button
+              type="button"
+              aria-label="Notifications, 3 unread"
+              className="relative rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            >
+              <Bell aria-hidden="true" className="h-5 w-5 text-ink-soft" />
+              <span aria-hidden="true" className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-paprika text-xs text-paper">
                 3
               </span>
             </button>

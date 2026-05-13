@@ -80,8 +80,12 @@ export function ChefLayout() {
           {/* User section */}
           <div className="border-t border-mist p-4">
             <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              aria-label={userMenuOpen ? 'Close user menu' : 'Open user menu'}
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-paper"
+              className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
             >
               {user?.avatar ? (
                 <img
@@ -91,7 +95,7 @@ export function ChefLayout() {
                 />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-herb-tint">
-                  <User className="h-5 w-5 text-herb" />
+                  <User aria-hidden="true" className="h-5 w-5 text-herb" />
                 </div>
               )}
               <div className="flex-1 text-left">
@@ -100,16 +104,17 @@ export function ChefLayout() {
                 </p>
                 <p className="text-xs text-ink-muted">Chef</p>
               </div>
-              <ChevronDown className="h-4 w-4 text-ink-muted" />
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-ink-muted" />
             </button>
 
             {userMenuOpen && (
-              <div className="mt-2 space-y-1">
+              <div role="menu" className="mt-2 space-y-1">
                 <Link
                   to="/chef/profile/settings"
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-paper"
+                  role="menuitem"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-soft transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings aria-hidden="true" className="h-4 w-4" />
                   Settings
                 </Link>
                 <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-ink-soft">
@@ -117,10 +122,12 @@ export function ChefLayout() {
                   <ThemeToggle size="sm" />
                 </div>
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={logout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-paprika hover:bg-paprika-tint"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-paprika transition-colors hover:bg-paprika-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika focus-visible:ring-offset-2"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut aria-hidden="true" className="h-4 w-4" />
                   Logout
                 </button>
               </div>
@@ -136,17 +143,26 @@ export function ChefLayout() {
             className="fixed inset-0 z-40 bg-ink/50 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-bone lg:hidden">
+          <aside
+            id="chef-mobile-sidebar"
+            aria-label="Main navigation"
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-bone lg:hidden"
+          >
             <div className="flex h-full flex-col">
               <div className="flex h-16 items-center justify-between border-b border-mist px-4">
                 <Link to="/chef/dashboard" className="flex items-center gap-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-herb">
-                    <span className="text-lg font-medium text-paper">H</span>
+                    <span aria-hidden="true" className="text-lg font-medium text-paper">H</span>
                   </div>
                   <span className="text-lg font-medium text-ink">Fe3dr</span>
                 </Link>
-                <button onClick={() => setSidebarOpen(false)}>
-                  <X className="h-6 w-6 text-ink-muted" />
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded-lg p-1 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+                >
+                  <X aria-hidden="true" className="h-6 w-6 text-ink-muted" />
                 </button>
               </div>
               <nav className="flex-1 space-y-1 p-4">
@@ -179,26 +195,39 @@ export function ChefLayout() {
         {/* Top bar */}
         <header className="flex h-16 items-center justify-between border-b border-mist bg-bone px-4 lg:px-8">
           <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
+            aria-controls="chef-mobile-sidebar"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 hover:bg-mist lg:hidden"
+            className="rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 lg:hidden"
           >
-            <Menu className="h-5 w-5" />
+            <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
 
           <div className="flex items-center gap-4">
             {/* Online/Offline toggle */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-ink-soft">Status:</span>
-              <button className="flex items-center gap-2 rounded-full bg-herb-tint px-3 py-1 text-sm font-medium text-herb">
-                <span className="h-2 w-2 rounded-full bg-herb" />
+              <span id="chef-status-label" className="text-sm text-ink-soft">Status:</span>
+              <button
+                type="button"
+                aria-labelledby="chef-status-label"
+                aria-pressed="true"
+                className="flex items-center gap-2 rounded-full bg-herb-tint px-3 py-1 text-sm font-medium text-herb transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+              >
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-herb" />
                 Online
               </button>
             </div>
 
             {/* Notifications */}
-            <button className="relative rounded-lg p-2 hover:bg-mist">
-              <Bell className="h-5 w-5 text-ink-soft" />
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-paprika" />
+            <button
+              type="button"
+              aria-label="Notifications, unread"
+              className="relative rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            >
+              <Bell aria-hidden="true" className="h-5 w-5 text-ink-soft" />
+              <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-paprika" />
             </button>
           </div>
         </header>

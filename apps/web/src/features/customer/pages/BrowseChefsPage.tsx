@@ -151,12 +151,14 @@ export default function BrowseChefsPage() {
           className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
         >
           {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-xl">
+          <form onSubmit={handleSearch} role="search" className="flex-1 max-w-xl">
             <Input
+              type="search"
+              aria-label="Search chefs, dishes, or cuisines"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search chefs, dishes, cuisines..."
-              leftIcon={<Search className="h-5 w-5" />}
+              leftIcon={<Search aria-hidden="true" className="h-5 w-5" />}
               inputSize="lg"
             />
           </form>

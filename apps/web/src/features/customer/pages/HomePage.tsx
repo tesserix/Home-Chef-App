@@ -121,12 +121,14 @@ export default function HomePage() {
                   <div className="hidden sm:block w-px h-10 bg-mist" />
                   <div className="relative flex-1">
                     <Input
+                      type="search"
+                      aria-label="Search dishes or chefs"
                       variant="ghost"
                       inputSize="lg"
                       placeholder="Search dishes or chefs..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      leftIcon={<Search className="h-5 w-5" />}
+                      leftIcon={<Search aria-hidden="true" className="h-5 w-5" />}
                       className="border-0"
                     />
                   </div>

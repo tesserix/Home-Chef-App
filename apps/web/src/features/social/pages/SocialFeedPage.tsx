@@ -88,9 +88,12 @@ export default function SocialFeedPage() {
 
             {/* Search */}
             <div className="mb-6 relative">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
+              <label htmlFor="social-feed-search" className="sr-only">Search social feed</label>
+              <Search aria-hidden="true" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
               <input
-                type="text"
+                id="social-feed-search"
+                type="search"
+                aria-label="Search posts, chefs, or dishes"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search posts, chefs, or dishes..."

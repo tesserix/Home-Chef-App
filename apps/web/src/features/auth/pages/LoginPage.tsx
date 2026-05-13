@@ -177,6 +177,7 @@ export default function LoginPage() {
                       type="email"
                       autoComplete="email"
                       required
+                      aria-required="true"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       aria-invalid={!!error || undefined}
@@ -204,6 +205,7 @@ export default function LoginPage() {
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
+                        aria-required="true"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         aria-invalid={!!error || undefined}

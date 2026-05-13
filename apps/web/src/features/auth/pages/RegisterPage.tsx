@@ -212,6 +212,7 @@ export default function RegisterPage() {
                         type="text"
                         autoComplete="given-name"
                         required
+                        aria-required="true"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
@@ -226,6 +227,7 @@ export default function RegisterPage() {
                         type="text"
                         autoComplete="family-name"
                         required
+                        aria-required="true"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
@@ -242,6 +244,7 @@ export default function RegisterPage() {
                       type="email"
                       autoComplete="email"
                       required
+                      aria-required="true"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"
@@ -259,6 +262,7 @@ export default function RegisterPage() {
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="new-password"
                         required
+                        aria-required="true"
                         minLength={8}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -267,10 +271,12 @@ export default function RegisterPage() {
                       />
                       <button
                         type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-muted hover:text-ink-soft"
+                        className="absolute inset-y-0 right-0 flex items-center rounded pr-3 text-ink-muted transition-colors hover:text-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
@@ -284,6 +290,7 @@ export default function RegisterPage() {
                       type="password"
                       autoComplete="new-password"
                       required
+                      aria-required="true"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="mt-1 block w-full rounded-lg border border-mist-strong px-3 py-2.5 text-ink shadow-1 placeholder:text-ink-muted focus-visible:border-herb focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb/30"

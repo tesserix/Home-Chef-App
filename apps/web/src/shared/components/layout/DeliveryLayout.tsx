@@ -30,28 +30,42 @@ export function DeliveryLayout() {
           {/* Right side */}
           <div className="flex items-center gap-2">
             {/* Online toggle */}
-            <button className="flex items-center gap-2 rounded-full bg-herb-tint px-3 py-1.5 text-sm font-medium text-herb">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-herb" />
+            <button
+              type="button"
+              aria-label="Currently online — tap to toggle availability"
+              aria-pressed="true"
+              className="flex items-center gap-2 rounded-full bg-herb-tint px-3 py-1.5 text-sm font-medium text-herb transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            >
+              <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-full bg-herb" />
               Online
             </button>
 
             {/* Notifications */}
-            <button className="relative rounded-lg p-2 hover:bg-mist">
-              <Bell className="h-5 w-5 text-ink-soft" />
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-paprika" />
+            <button
+              type="button"
+              aria-label="Notifications, unread"
+              className="relative rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            >
+              <Bell aria-hidden="true" className="h-5 w-5 text-ink-soft" />
+              <span aria-hidden="true" className="absolute right-1 top-1 h-2 w-2 rounded-full bg-paprika" />
             </button>
 
             {/* User */}
-            <button className="flex items-center gap-2 rounded-lg p-2 hover:bg-mist">
+            <button
+              type="button"
+              aria-label={`Open menu for ${user?.firstName ?? 'driver'}`}
+              aria-haspopup="menu"
+              className="flex items-center gap-2 rounded-lg p-2 transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            >
               {user?.avatar ? (
                 <img
                   src={user.avatar}
-                  alt={user.firstName}
+                  alt=""
                   className="h-8 w-8 rounded-full object-cover"
                 />
               ) : (
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-herb-tint">
-                  <User className="h-4 w-4 text-herb" />
+                  <User aria-hidden="true" className="h-4 w-4 text-herb" />
                 </div>
               )}
             </button>

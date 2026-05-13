@@ -79,9 +79,12 @@ export default function AdminUsersPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
+          <label htmlFor="admin-users-search" className="sr-only">Search users</label>
+          <Search aria-hidden="true" className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
           <input
-            type="text"
+            id="admin-users-search"
+            type="search"
+            aria-label="Search users by name or email"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."

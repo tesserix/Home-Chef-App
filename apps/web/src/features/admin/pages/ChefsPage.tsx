@@ -91,9 +91,12 @@ export default function AdminChefsPage() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
+        <label htmlFor="admin-chefs-search" className="sr-only">Search chefs</label>
+        <Search aria-hidden="true" className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
         <input
-          type="text"
+          id="admin-chefs-search"
+          type="search"
+          aria-label="Search chefs"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search chefs..."
