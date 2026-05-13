@@ -94,33 +94,39 @@ export function StepKitchenDetails({ errors }: Props) {
           />
 
           {/* Kitchen Type */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-foreground">Kitchen Type</label>
+          <div role="radiogroup" aria-labelledby="onboarding-kitchen-type-label">
+            <span id="onboarding-kitchen-type-label" className="mb-2 block text-sm font-medium text-foreground">Kitchen Type</span>
             <div className="grid gap-3 sm:grid-cols-3">
-              {KITCHEN_TYPES.map((type) => (
-                <button
-                  key={type.value}
-                  type="button"
-                  onClick={() => updateData({ kitchenType: type.value })}
-                  className={`rounded-xl border-2 p-4 text-left transition-all ${
-                    data.kitchenType === type.value
-                      ? 'border-primary bg-primary/5 shadow-sm'
-                      : 'border-border hover:border-primary/30'
-                  }`}
-                >
-                  <p className="text-sm font-semibold text-foreground">{type.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{type.desc}</p>
-                </button>
-              ))}
+              {KITCHEN_TYPES.map((type) => {
+                const isSelected = data.kitchenType === type.value;
+                return (
+                  <button
+                    key={type.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => updateData({ kitchenType: type.value })}
+                    className={`rounded-xl border-2 p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                      isSelected
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-border hover:border-primary/30'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-foreground">{type.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{type.desc}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">
+              <label htmlFor="onboarding-years-experience" className="mb-1.5 block text-sm font-medium text-foreground">
                 Years of Cooking Experience
               </label>
               <select
+                id="onboarding-years-experience"
                 value={data.yearsOfExperience}
                 onChange={(e) => updateData({ yearsOfExperience: e.target.value })}
                 className="w-full rounded-lg border-2 border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
@@ -132,10 +138,11 @@ export function StepKitchenDetails({ errors }: Props) {
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">
+              <label htmlFor="onboarding-meals-per-day" className="mb-1.5 block text-sm font-medium text-foreground">
                 Meals You Can Prepare Daily
               </label>
               <select
+                id="onboarding-meals-per-day"
                 value={data.mealsPerDay}
                 onChange={(e) => updateData({ mealsPerDay: e.target.value })}
                 className="w-full rounded-lg border-2 border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"

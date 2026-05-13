@@ -48,11 +48,12 @@ export function StepOperations({ errors }: Props) {
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <Clock className="h-4 w-4 text-muted-foreground" />
+            <label htmlFor="onboarding-prep-time" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Clock aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
               Average Preparation Time
             </label>
             <select
+              id="onboarding-prep-time"
               value={data.prepTime}
               onChange={(e) => updateData({ prepTime: e.target.value })}
               className="w-full rounded-lg border-2 border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
@@ -64,12 +65,15 @@ export function StepOperations({ errors }: Props) {
           </div>
 
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
+            <label htmlFor="onboarding-service-radius" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <MapPin aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
               Delivery Radius (km)
             </label>
             <Input
+              id="onboarding-service-radius"
               type="number"
+              inputMode="numeric"
+              min={0}
               value={data.serviceRadius}
               onChange={(e) => updateData({ serviceRadius: Number(e.target.value) })}
               error={errors.serviceRadius}
@@ -78,16 +82,19 @@ export function StepOperations({ errors }: Props) {
           </div>
 
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <IndianRupee className="h-4 w-4 text-muted-foreground" />
+            <label htmlFor="onboarding-minimum-order" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <IndianRupee aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
               Minimum Order Value (Optional)
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 &#8377;
               </span>
               <input
+                id="onboarding-minimum-order"
                 type="number"
+                inputMode="numeric"
+                min={0}
                 value={data.minimumOrder}
                 onChange={(e) => updateData({ minimumOrder: Number(e.target.value) })}
                 className="w-full rounded-lg border-2 border-input bg-background py-2.5 pl-8 pr-4 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
@@ -98,16 +105,19 @@ export function StepOperations({ errors }: Props) {
           </div>
 
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <Truck className="h-4 w-4 text-muted-foreground" />
+            <label htmlFor="onboarding-delivery-fee" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Truck aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
               Delivery Fee
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 &#8377;
               </span>
               <input
+                id="onboarding-delivery-fee"
                 type="number"
+                inputMode="numeric"
+                min={0}
                 value={data.deliveryFee}
                 onChange={(e) => updateData({ deliveryFee: Number(e.target.value) })}
                 className="w-full rounded-lg border-2 border-input bg-background py-2.5 pl-8 pr-4 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"

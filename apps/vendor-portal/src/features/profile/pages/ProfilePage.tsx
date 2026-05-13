@@ -485,11 +485,12 @@ export default function ProfilePage() {
 
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
-                <Clock className="h-4 w-4 text-ink-muted" />
+              <label htmlFor="profile-prep-time" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <Clock aria-hidden="true" className="h-4 w-4 text-ink-muted" />
                 Average Prep Time
               </label>
               <select
+                id="profile-prep-time"
                 {...register('prepTime')}
                 className="w-full rounded-lg border-2 border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
               >
@@ -501,57 +502,72 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
-                <MapPin className="h-4 w-4 text-ink-muted" />
+              <label htmlFor="profile-service-radius" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <MapPin aria-hidden="true" className="h-4 w-4 text-ink-muted" />
                 Delivery Radius (km)
               </label>
               <input
+                id="profile-service-radius"
                 type="number"
+                inputMode="numeric"
+                min={0}
+                aria-describedby={errors.serviceRadius ? 'profile-service-radius-error' : undefined}
+                aria-invalid={Boolean(errors.serviceRadius)}
                 {...register('serviceRadius', { valueAsNumber: true })}
                 className="w-full rounded-lg border-2 border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
               />
               {errors.serviceRadius && (
-                <p className="mt-1 text-sm text-destructive">{errors.serviceRadius.message}</p>
+                <p id="profile-service-radius-error" className="mt-1 text-sm text-destructive">{errors.serviceRadius.message}</p>
               )}
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
-                <IndianRupee className="h-4 w-4 text-ink-muted" />
+              <label htmlFor="profile-minimum-order" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <IndianRupee aria-hidden="true" className="h-4 w-4 text-ink-muted" />
                 Minimum Order
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
+                <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
                   INR
                 </span>
                 <input
+                  id="profile-minimum-order"
                   type="number"
+                  inputMode="numeric"
+                  min={0}
+                  aria-describedby={errors.minimumOrder ? 'profile-minimum-order-error' : undefined}
+                  aria-invalid={Boolean(errors.minimumOrder)}
                   {...register('minimumOrder', { valueAsNumber: true })}
                   className="w-full rounded-lg border-2 border-input bg-background py-2.5 pl-12 pr-4 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
                 />
               </div>
               {errors.minimumOrder && (
-                <p className="mt-1 text-sm text-destructive">{errors.minimumOrder.message}</p>
+                <p id="profile-minimum-order-error" className="mt-1 text-sm text-destructive">{errors.minimumOrder.message}</p>
               )}
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
-                <Truck className="h-4 w-4 text-ink-muted" />
+              <label htmlFor="profile-delivery-fee" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                <Truck aria-hidden="true" className="h-4 w-4 text-ink-muted" />
                 Delivery Fee
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
+                <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">
                   INR
                 </span>
                 <input
+                  id="profile-delivery-fee"
                   type="number"
+                  inputMode="numeric"
+                  min={0}
+                  aria-describedby={errors.deliveryFee ? 'profile-delivery-fee-error' : undefined}
+                  aria-invalid={Boolean(errors.deliveryFee)}
                   {...register('deliveryFee', { valueAsNumber: true })}
                   className="w-full rounded-lg border-2 border-input bg-background py-2.5 pl-12 pr-4 text-sm shadow-sm transition-all hover:border-primary/30 focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
                 />
               </div>
               {errors.deliveryFee && (
-                <p className="mt-1 text-sm text-destructive">{errors.deliveryFee.message}</p>
+                <p id="profile-delivery-fee-error" className="mt-1 text-sm text-destructive">{errors.deliveryFee.message}</p>
               )}
             </div>
           </div>

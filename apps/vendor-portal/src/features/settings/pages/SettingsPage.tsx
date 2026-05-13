@@ -151,11 +151,14 @@ export default function SettingsPage() {
           />
           {localSettings.autoAcceptOrders && (
             <div className="ml-8">
-              <label className="block text-sm font-medium text-ink-soft">
+              <label htmlFor="settings-auto-accept-threshold" className="block text-sm font-medium text-ink-soft">
                 Auto-accept threshold ($)
               </label>
               <input
+                id="settings-auto-accept-threshold"
                 type="number"
+                inputMode="numeric"
+                min={0}
                 value={localSettings.autoAcceptThreshold}
                 onChange={(e) =>
                   setLocalSettings({
@@ -332,9 +335,11 @@ export default function SettingsPage() {
             {payoutForm.payoutMethod === 'bank_transfer' ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">Account Holder Name</label>
+                  <label htmlFor="payout-bank-name" className="block text-sm font-medium text-ink-soft">Account Holder Name</label>
                   <input
+                    id="payout-bank-name"
                     type="text"
+                    autoComplete="name"
                     value={payoutForm.bankAccountName}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankAccountName: e.target.value })}
                     placeholder="Name as on bank account"
@@ -342,9 +347,11 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">Account Number</label>
+                  <label htmlFor="payout-bank-number" className="block text-sm font-medium text-ink-soft">Account Number</label>
                   <input
+                    id="payout-bank-number"
                     type="text"
+                    inputMode="numeric"
                     value={payoutForm.bankAccountNumber}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankAccountNumber: e.target.value })}
                     placeholder="Enter account number"
@@ -352,8 +359,9 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">IFSC Code</label>
+                  <label htmlFor="payout-bank-ifsc" className="block text-sm font-medium text-ink-soft">IFSC Code</label>
                   <input
+                    id="payout-bank-ifsc"
                     type="text"
                     value={payoutForm.bankIFSC}
                     onChange={(e) => setPayoutForm({ ...payoutForm, bankIFSC: e.target.value.toUpperCase() })}
@@ -364,8 +372,9 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-ink-soft">UPI ID</label>
+                <label htmlFor="payout-upi-id" className="block text-sm font-medium text-ink-soft">UPI ID</label>
                 <input
+                  id="payout-upi-id"
                   type="text"
                   value={payoutForm.upiId}
                   onChange={(e) => setPayoutForm({ ...payoutForm, upiId: e.target.value })}
@@ -420,27 +429,33 @@ export default function SettingsPage() {
           </div>
           <div className="mt-4 max-w-md space-y-4">
             <div>
-              <label className="block text-sm font-medium text-ink-soft">Current Password</label>
+              <label htmlFor="settings-current-password" className="block text-sm font-medium text-ink-soft">Current Password</label>
               <input
+                id="settings-current-password"
                 type="password"
+                autoComplete="current-password"
                 value={passwordForm.currentPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-ink-soft">New Password</label>
+              <label htmlFor="settings-new-password" className="block text-sm font-medium text-ink-soft">New Password</label>
               <input
+                id="settings-new-password"
                 type="password"
+                autoComplete="new-password"
                 value={passwordForm.newPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-ink-soft">Confirm New Password</label>
+              <label htmlFor="settings-confirm-password" className="block text-sm font-medium text-ink-soft">Confirm New Password</label>
               <input
+                id="settings-confirm-password"
                 type="password"
+                autoComplete="new-password"
                 value={passwordForm.confirmPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"
@@ -686,8 +701,9 @@ function StripeConnectCard() {
             verification on their hosted pages — just pick your country and follow the flow.
           </p>
           <div>
-            <label className="block text-sm font-medium text-ink-soft">Country</label>
+            <label htmlFor="stripe-connect-country" className="block text-sm font-medium text-ink-soft">Country</label>
             <select
+              id="stripe-connect-country"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
               className="mt-1 w-full max-w-sm rounded-lg border border-mist-strong px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/20"

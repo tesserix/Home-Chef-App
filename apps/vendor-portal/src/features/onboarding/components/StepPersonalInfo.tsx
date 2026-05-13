@@ -228,8 +228,10 @@ export function StepPersonalInfo({ errors }: Props) {
 
           {/* Country */}
           <div className="w-full">
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Country</label>
+            <label htmlFor="onboarding-country" className="mb-1.5 block text-sm font-medium text-foreground">Country</label>
             <select
+              id="onboarding-country"
+              autoComplete="country"
               value={data.kitchenAddress.country}
               onChange={(e) => handleCountryChange(e.target.value)}
               className={selectClass}
@@ -246,12 +248,16 @@ export function StepPersonalInfo({ errors }: Props) {
           <div className="grid gap-4 sm:grid-cols-3">
             {/* State */}
             <div className="w-full">
-              <label className="mb-1.5 block text-sm font-medium text-foreground">State</label>
+              <label htmlFor="onboarding-state" className="mb-1.5 block text-sm font-medium text-foreground">State</label>
               <select
+                id="onboarding-state"
+                autoComplete="address-level1"
                 value={data.kitchenAddress.state}
                 onChange={(e) => handleStateChange(e.target.value)}
                 className={selectClass}
                 disabled={!data.kitchenAddress.country || loadingStates}
+                aria-describedby={errors['kitchenAddress.state'] ? 'onboarding-state-error' : undefined}
+                aria-invalid={Boolean(errors['kitchenAddress.state'])}
               >
                 <option value="">{loadingStates ? 'Loading...' : 'Select state'}</option>
                 {states.map((s) => (
@@ -261,14 +267,16 @@ export function StepPersonalInfo({ errors }: Props) {
                 ))}
               </select>
               {errors['kitchenAddress.state'] && (
-                <p className="mt-1.5 text-sm text-destructive">{errors['kitchenAddress.state']}</p>
+                <p id="onboarding-state-error" className="mt-1.5 text-sm text-destructive">{errors['kitchenAddress.state']}</p>
               )}
             </div>
 
             {/* City */}
             <div className="w-full">
-              <label className="mb-1.5 block text-sm font-medium text-foreground">City</label>
+              <label htmlFor="onboarding-city" className="mb-1.5 block text-sm font-medium text-foreground">City</label>
               <select
+                id="onboarding-city"
+                autoComplete="address-level2"
                 value={data.kitchenAddress.city}
                 onChange={(e) => handleCityChange(e.target.value)}
                 className={selectClass}

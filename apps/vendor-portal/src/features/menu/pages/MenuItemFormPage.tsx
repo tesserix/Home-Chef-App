@@ -120,9 +120,13 @@ function AllergenTagInput({
     }
   };
 
+  const inputId = 'allergen-tag-input';
+  const helpId = 'allergen-tag-help';
+  const errorId = 'allergen-tag-error';
+
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-foreground">Allergens</label>
+      <label htmlFor={inputId} className="mb-1.5 block text-sm font-medium text-foreground">Allergens</label>
       <div
         className={`flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-lg border-2 px-3 py-2 transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/20 ${
           error ? 'border-destructive' : 'border-input hover:border-primary/30'
@@ -137,20 +141,24 @@ function AllergenTagInput({
             {tag}
             <button
               type="button"
+              aria-label={`Remove ${tag}`}
               onClick={(e) => {
                 e.stopPropagation();
                 removeTag(tag);
               }}
-              className="rounded-full p-0.5 hover:bg-destructive/20"
+              className="rounded-full p-0.5 transition-colors hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-1"
             >
-              <X className="h-3 w-3" />
+              <X aria-hidden="true" className="h-3 w-3" />
             </button>
           </span>
         ))}
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           value={input}
+          aria-describedby={error ? `${helpId} ${errorId}` : helpId}
+          aria-invalid={Boolean(error)}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={() => { if (input.trim()) addTag(input); }}
@@ -158,10 +166,10 @@ function AllergenTagInput({
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
         />
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p id={helpId} className="mt-1 text-xs text-muted-foreground">
         Type each allergen and press Enter to add
       </p>
-      {error && <p className="mt-1.5 text-sm text-destructive">{error}</p>}
+      {error && <p id={errorId} className="mt-1.5 text-sm text-destructive">{error}</p>}
     </div>
   );
 }
@@ -502,7 +510,7 @@ export default function MenuItemFormPage() {
                   control={control}
                   render={({ field }) => (
                     <div className="w-full">
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
+                      <label id="menu-item-category-label" className="mb-1.5 block text-sm font-medium text-foreground">
                         Category
                       </label>
                       <Select
@@ -515,7 +523,7 @@ export default function MenuItemFormPage() {
                           }
                         }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger aria-labelledby="menu-item-category-label">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
@@ -553,10 +561,10 @@ export default function MenuItemFormPage() {
             </h2>
             <div className="space-y-4">
               {/* Dietary tags checkboxes */}
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
+              <div role="group" aria-labelledby="dietary-tags-label">
+                <span id="dietary-tags-label" className="mb-2 block text-sm font-medium text-foreground">
                   Dietary Tags
-                </label>
+                </span>
                 <Controller
                   name="dietaryTags"
                   control={control}

@@ -40,7 +40,7 @@ export function VendorBottomNav() {
                 isActive ? 'text-foreground' : 'text-ink-muted hover:text-foreground'
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon aria-hidden="true" className="h-5 w-5" />
               <span>{item.name}</span>
               {isActive && (
                 <motion.span
