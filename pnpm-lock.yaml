@@ -911,6 +911,9 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.62.8
         version: 5.91.1(@tanstack/react-query@5.90.12(react@19.2.3))(react@19.2.3)
+      '@tesserix/otto-widget':
+        specifier: ^0.1.0
+        version: 0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tesserix/web':
         specifier: ^1.2.0
         version: 1.2.1(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.2.1)
@@ -3345,6 +3348,12 @@ packages:
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-native: '>=0.70.0'
+
+  '@tesserix/otto-widget@0.1.0':
+    resolution: {integrity: sha512-D3WqEHH1Plxm6WuL+tPbdTExNt8nqy1lGd4FgIQKVKCljCgbiuLDu2rBsm3zl6f7qeL4kSEIOarMZofFAaLa2A==, tarball: https://npm.pkg.github.com/download/@tesserix/otto-widget/0.1.0/51b9247da3683db44b759cecf675f65f56640ea7}
+    peerDependencies:
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   '@tesserix/tokens@1.0.0':
     resolution: {integrity: sha512-grimAfdmmFAo5f0+rTyZ06PrtNCUkgaTGQ7lRR4E5dsbBhhthIKpw/d7mm8X42cOCVke6FIoHu0vG6JDJHBsiw==, tarball: https://npm.pkg.github.com/download/@tesserix/tokens/1.0.0/8d0661040a60420abea18bdd61a2701d166a9f17}
@@ -10348,6 +10357,11 @@ snapshots:
       '@tesserix/utils': 1.0.0(react@19.2.0)
       react: 19.2.0
       react-native: 0.83.4(@babel/core@7.29.0)(@types/react@19.2.7)(react@19.2.0)
+
+  '@tesserix/otto-widget@0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
 
   '@tesserix/tokens@1.0.0': {}
 
