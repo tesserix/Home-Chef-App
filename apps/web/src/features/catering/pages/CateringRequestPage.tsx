@@ -213,71 +213,90 @@ export default function CateringRequestPage() {
               <div className="mt-6 space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">
-                      <Calendar className="mr-2 inline h-4 w-4" />
+                    <label htmlFor="catering-event-date" className="block text-sm font-medium text-ink-soft">
+                      <Calendar aria-hidden="true" className="mr-2 inline h-4 w-4" />
                       Event Date
                     </label>
                     <input
+                      id="catering-event-date"
                       type="date"
+                      aria-required="true"
+                      aria-invalid={Boolean(errors.eventDate)}
+                      aria-describedby={errors.eventDate ? 'catering-event-date-error' : undefined}
                       {...register('eventDate')}
                       min={new Date().toISOString().split('T')[0]}
                       className="input-base mt-1"
                     />
                     {errors.eventDate && (
-                      <p className="mt-1 text-xs text-paprika">{errors.eventDate.message}</p>
+                      <p id="catering-event-date-error" className="mt-1 text-xs text-paprika">{errors.eventDate.message}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">
-                      <Clock className="mr-2 inline h-4 w-4" />
+                    <label htmlFor="catering-event-time" className="block text-sm font-medium text-ink-soft">
+                      <Clock aria-hidden="true" className="mr-2 inline h-4 w-4" />
                       Event Time
                     </label>
                     <input
+                      id="catering-event-time"
                       type="time"
+                      aria-required="true"
+                      aria-invalid={Boolean(errors.eventTime)}
+                      aria-describedby={errors.eventTime ? 'catering-event-time-error' : undefined}
                       {...register('eventTime')}
                       className="input-base mt-1"
                     />
                     {errors.eventTime && (
-                      <p className="mt-1 text-xs text-paprika">{errors.eventTime.message}</p>
+                      <p id="catering-event-time-error" className="mt-1 text-xs text-paprika">{errors.eventTime.message}</p>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">
-                    <Users className="mr-2 inline h-4 w-4" />
+                  <label htmlFor="catering-guest-count" className="block text-sm font-medium text-ink-soft">
+                    <Users aria-hidden="true" className="mr-2 inline h-4 w-4" />
                     Number of Guests
                   </label>
                   <input
+                    id="catering-guest-count"
                     type="number"
+                    inputMode="numeric"
+                    aria-required="true"
+                    aria-invalid={Boolean(errors.guestCount)}
+                    aria-describedby={errors.guestCount ? 'catering-guest-count-error catering-guest-count-help' : 'catering-guest-count-help'}
                     {...register('guestCount', { valueAsNumber: true })}
                     min={10}
                     max={500}
                     className="input-base mt-1"
                   />
                   {errors.guestCount && (
-                    <p className="mt-1 text-xs text-paprika">{errors.guestCount.message}</p>
+                    <p id="catering-guest-count-error" className="mt-1 text-xs text-paprika">{errors.guestCount.message}</p>
                   )}
-                  <p className="mt-1 text-sm text-ink-muted">Minimum 10, Maximum 500 guests</p>
+                  <p id="catering-guest-count-help" className="mt-1 text-sm text-ink-muted">Minimum 10, Maximum 500 guests</p>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">
-                      <DollarSign className="mr-2 inline h-4 w-4" />
+                    <span id="catering-budget-label" className="block text-sm font-medium text-ink-soft">
+                      <DollarSign aria-hidden="true" className="mr-2 inline h-4 w-4" />
                       Budget Range (Optional)
-                    </label>
+                    </span>
                     <div className="mt-1 flex gap-2">
                       <input
                         type="number"
+                        inputMode="numeric"
+                        aria-labelledby="catering-budget-label"
+                        aria-label="Minimum budget"
                         {...register('budgetMin', { valueAsNumber: true })}
                         placeholder="Min"
                         className="input-base"
                       />
-                      <span className="flex items-center text-ink-muted">to</span>
+                      <span aria-hidden="true" className="flex items-center text-ink-muted">to</span>
                       <input
                         type="number"
+                        inputMode="numeric"
+                        aria-labelledby="catering-budget-label"
+                        aria-label="Maximum budget"
                         {...register('budgetMax', { valueAsNumber: true })}
                         placeholder="Max"
                         className="input-base"
@@ -307,57 +326,65 @@ export default function CateringRequestPage() {
               <p className="mt-1 text-ink-soft">Select your cuisine and dietary preferences</p>
 
               <div className="mt-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-ink-soft mb-3">
+                <div role="group" aria-labelledby="catering-cuisines-label">
+                  <span id="catering-cuisines-label" className="block text-sm font-medium text-ink-soft mb-3">
                     Cuisine Preferences (Select at least one)
-                  </label>
+                  </span>
                   <div className="flex flex-wrap gap-2">
-                    {CUISINES.map((cuisine) => (
-                      <button
-                        key={cuisine}
-                        type="button"
-                        onClick={() => toggleCuisine(cuisine)}
-                        className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                          cuisines.includes(cuisine)
-                            ? 'bg-herb text-paper'
-                            : 'bg-mist text-ink-soft hover:bg-mist'
-                        }`}
-                      >
-                        {cuisine}
-                      </button>
-                    ))}
+                    {CUISINES.map((cuisine) => {
+                      const isPressed = cuisines.includes(cuisine);
+                      return (
+                        <button
+                          key={cuisine}
+                          type="button"
+                          aria-pressed={isPressed}
+                          onClick={() => toggleCuisine(cuisine)}
+                          className={`rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 ${
+                            isPressed
+                              ? 'bg-herb text-paper'
+                              : 'bg-mist text-ink-soft hover:bg-mist'
+                          }`}
+                        >
+                          {cuisine}
+                        </button>
+                      );
+                    })}
                   </div>
                   {errors.cuisinePreferences && (
-                    <p className="mt-2 text-xs text-paprika">{errors.cuisinePreferences.message}</p>
+                    <p role="alert" className="mt-2 text-xs text-paprika">{errors.cuisinePreferences.message}</p>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-ink-soft mb-3">
+                <div role="group" aria-labelledby="catering-dietary-label">
+                  <span id="catering-dietary-label" className="block text-sm font-medium text-ink-soft mb-3">
                     Dietary Requirements (Optional)
-                  </label>
+                  </span>
                   <div className="flex flex-wrap gap-2">
-                    {DIETARY_OPTIONS.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => toggleDietary(option)}
-                        className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                          dietary.includes(option)
-                            ? 'bg-herb text-paper'
-                            : 'bg-mist text-ink-soft hover:bg-mist'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
+                    {DIETARY_OPTIONS.map((option) => {
+                      const isPressed = dietary.includes(option);
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          aria-pressed={isPressed}
+                          onClick={() => toggleDietary(option)}
+                          className={`rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2 ${
+                            isPressed
+                              ? 'bg-herb text-paper'
+                              : 'bg-mist text-ink-soft hover:bg-mist'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-ink-soft mb-3">
+                <div role="radiogroup" aria-labelledby="catering-service-label">
+                  <span id="catering-service-label" className="block text-sm font-medium text-ink-soft mb-3">
                     Service Type
-                  </label>
+                  </span>
                   <div className="space-y-3">
                     {SERVICE_TYPES.map((type) => (
                       <label
@@ -384,10 +411,11 @@ export default function CateringRequestPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">
+                  <label htmlFor="catering-description" className="block text-sm font-medium text-ink-soft">
                     Additional Details (Optional)
                   </label>
                   <textarea
+                    id="catering-description"
                     {...register('description')}
                     rows={4}
                     placeholder="Tell us more about your event, special requests, theme, etc."
@@ -420,11 +448,15 @@ export default function CateringRequestPage() {
 
               <div className="mt-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">
-                    <MapPin className="mr-2 inline h-4 w-4" />
+                  <label htmlFor="catering-address-line1" className="block text-sm font-medium text-ink-soft">
+                    <MapPin aria-hidden="true" className="mr-2 inline h-4 w-4" />
                     Street Address
                   </label>
                   <input
+                    id="catering-address-line1"
+                    autoComplete="address-line1"
+                    aria-required="true"
+                    aria-invalid={Boolean(errors.addressLine1)}
                     {...register('addressLine1')}
                     placeholder="123 Main Street"
                     className="input-base mt-1"
@@ -435,10 +467,12 @@ export default function CateringRequestPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-ink-soft">
+                  <label htmlFor="catering-address-line2" className="block text-sm font-medium text-ink-soft">
                     Apartment, suite, etc. (Optional)
                   </label>
                   <input
+                    id="catering-address-line2"
+                    autoComplete="address-line2"
                     {...register('addressLine2')}
                     placeholder="Suite 100"
                     className="input-base mt-1"
@@ -447,22 +481,22 @@ export default function CateringRequestPage() {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">City</label>
-                    <input {...register('city')} className="input-base mt-1" />
+                    <label htmlFor="catering-city" className="block text-sm font-medium text-ink-soft">City</label>
+                    <input id="catering-city" autoComplete="address-level2" aria-required="true" aria-invalid={Boolean(errors.city)} {...register('city')} className="input-base mt-1" />
                     {errors.city && (
                       <p className="mt-1 text-xs text-paprika">{errors.city.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">State</label>
-                    <input {...register('state')} className="input-base mt-1" />
+                    <label htmlFor="catering-state" className="block text-sm font-medium text-ink-soft">State</label>
+                    <input id="catering-state" autoComplete="address-level1" aria-required="true" aria-invalid={Boolean(errors.state)} {...register('state')} className="input-base mt-1" />
                     {errors.state && (
                       <p className="mt-1 text-xs text-paprika">{errors.state.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-ink-soft">Postal Code</label>
-                    <input {...register('postalCode')} className="input-base mt-1" />
+                    <label htmlFor="catering-postal-code" className="block text-sm font-medium text-ink-soft">Postal Code</label>
+                    <input id="catering-postal-code" autoComplete="postal-code" inputMode="numeric" aria-required="true" aria-invalid={Boolean(errors.postalCode)} {...register('postalCode')} className="input-base mt-1" />
                     {errors.postalCode && (
                       <p className="mt-1 text-xs text-paprika">{errors.postalCode.message}</p>
                     )}

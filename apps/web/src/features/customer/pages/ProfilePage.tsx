@@ -791,31 +791,43 @@ function AddressesTab() {
           </h3>
           <div className="space-y-4">
             {/* Address Label toggle buttons */}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-soft">Address type *</label>
+            <div role="radiogroup" aria-labelledby="address-type-label">
+              <span id="address-type-label" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                Address type <span aria-hidden="true" className="text-ink-muted">*</span>
+              </span>
               <div className="flex gap-2">
-                {ADDRESS_LABELS.map((label) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => updateField('label', label)}
-                    className={cn(
-                      'rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all',
-                      formData.label === label
-                        ? 'border-herb bg-herb-tint text-herb'
-                        : 'border-mist hover:border-herb-tint text-ink-soft'
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {ADDRESS_LABELS.map((label) => {
+                  const isSelected = formData.label === label;
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => updateField('label', label)}
+                      className={cn(
+                        'rounded-lg border-2 px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2',
+                        isSelected
+                          ? 'border-herb bg-herb-tint text-herb'
+                          : 'border-mist hover:border-herb-tint text-ink-soft'
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Country dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-soft">Country *</label>
+              <label htmlFor="address-country" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                Country <span aria-hidden="true" className="text-ink-muted">*</span>
+              </label>
               <select
+                id="address-country"
+                autoComplete="country"
+                aria-required="true"
                 value={formData.country}
                 onChange={(e) => updateField('country', e.target.value)}
                 className={selectClass}
@@ -829,8 +841,13 @@ function AddressesTab() {
 
             {/* State dropdown */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-soft">State *</label>
+              <label htmlFor="address-state" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                State <span aria-hidden="true" className="text-ink-muted">*</span>
+              </label>
               <select
+                id="address-state"
+                autoComplete="address-level1"
+                aria-required="true"
                 value={formData.state}
                 onChange={(e) => updateField('state', e.target.value)}
                 disabled={states.length === 0}
