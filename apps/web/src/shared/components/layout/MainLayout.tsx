@@ -23,6 +23,7 @@ import { Logo } from '@/shared/components/brand';
 import { CurrencySelector } from '@/shared/components/CurrencySelector';
 import { Button } from '@/shared/components/ui';
 import { useIsMobile, useOnlineStatus } from '@/shared/hooks/useMobile';
+import { CookieBanner } from '../cookie-banner/CookieBanner';
 
 export function MainLayout() {
   const location = useLocation();
@@ -421,7 +422,42 @@ export function MainLayout() {
             </div>
           </div>
 
-          <div className="mt-12 border-t border-mist pt-8 text-center text-sm text-ink-muted">
+          {/* Grievance Officer + Data Fiduciary disclosure */}
+          <div className="mt-8 border-t border-mist pt-6 text-xs text-ink-muted">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-medium text-ink-soft mb-1">Data Fiduciary</h3>
+                <address className="not-italic">
+                  [Legal Entity Name]<br />
+                  [Registered Office Address]<br />
+                  CIN: [CIN]
+                </address>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-ink-soft mb-1">Grievance Officer</h3>
+                <address className="not-italic">
+                  [Grievance Officer Name]<br />
+                  <a href="mailto:grievance@homechef.in" className="text-herb hover:underline">grievance@homechef.in</a><br />
+                  Response within 15 days (DPDP Act §13)
+                </address>
+              </div>
+            </div>
+            <p className="mt-4">
+              For consumer disputes you can also contact the National Consumer Helpline at{' '}
+              <a href="tel:1915" className="text-herb hover:underline">1915</a> or visit{' '}
+              <a
+                href="https://consumerhelpline.gov.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-herb hover:underline"
+              >
+                consumerhelpline.gov.in
+              </a>
+              .
+            </p>
+          </div>
+
+          <div className="mt-8 border-t border-mist pt-8 text-center text-sm text-ink-muted">
             <p>&copy; {new Date().getFullYear()} Fe3dr. All rights reserved.</p>
           </div>
         </div>
@@ -429,6 +465,9 @@ export function MainLayout() {
 
       {/* Spacer for mobile bottom navigation */}
       {isMobile && <MobileBottomNavSpacer />}
+
+      {/* Cookie consent (DPDP Act + ePrivacy best practice) */}
+      <CookieBanner />
     </div>
   );
 }

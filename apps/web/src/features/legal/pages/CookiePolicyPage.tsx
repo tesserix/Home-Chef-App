@@ -599,11 +599,11 @@ export default function CookiePolicyPage() {
                     <dt className="font-medium text-ink">Email:</dt>
                     <dd>
                       <a
-                        href="mailto:grievance@fe3dr.com"
+                        href="mailto:grievance@homechef.in"
                         className="inline-flex items-center gap-1 font-medium text-herb hover:underline"
                       >
                         <Mail aria-hidden="true" className="h-3.5 w-3.5" />
-                        grievance@fe3dr.com
+                        grievance@homechef.in
                       </a>
                     </dd>
                   </div>

@@ -26,6 +26,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [confirmAge, setConfirmAge] = useState(false);
+  const [optInMarketing, setOptInMarketing] = useState(false);
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,10 +44,25 @@ export default function RegisterPage() {
       setError('Passwords do not match');
       return;
     }
+    if (!agreeTerms) {
+      setError('Please agree to the Terms, Privacy Policy, and Refund Policy.');
+      return;
+    }
+    if (!confirmAge) {
+      setError('You must be at least 18 to use Home Chef.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await registerWithEmail({ email, password, firstName, lastName });
+      await registerWithEmail({
+        email,
+        password,
+        firstName,
+        lastName,
+        // TODO(CW-01b): backend to accept and record this consent flag per DPDP §6
+        // marketingConsent: optInMarketing,
+      });
       navigate('/user-info');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -300,11 +318,75 @@ export default function RegisterPage() {
                     />
                   </div>
 
+                  <div className="space-y-3 text-sm">
+                    {/* Required: Terms + Privacy + Refund */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreeTerms}
+                        onChange={(e) => setAgreeTerms(e.target.checked)}
+                        required
+                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
+                        aria-describedby="agree-terms-help"
+                      />
+                      <span id="agree-terms-help" className="text-ink-soft">
+                        I have read and agree to the{' '}
+                        <Link to="/terms" className="text-herb hover:underline">Terms of Service</Link>,{' '}
+                        <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link>, and{' '}
+                        <Link to="/refund" className="text-herb hover:underline">Refund Policy</Link>.{' '}
+                        <span className="text-signal">(Required)</span>
+                      </span>
+                    </label>
+
+                    {/* Required: 18+ */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={confirmAge}
+                        onChange={(e) => setConfirmAge(e.target.checked)}
+                        required
+                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
+                      />
+                      <span className="text-ink-soft">
+                        I am at least 18 years old. <span className="text-signal">(Required)</span>
+                      </span>
+                    </label>
+
+                    {/* Optional: Marketing */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={optInMarketing}
+                        onChange={(e) => setOptInMarketing(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-mist text-herb focus:ring-herb"
+                      />
+                      <span className="text-ink-soft">
+                        Send me occasional updates about new chefs and seasonal menus. You can unsubscribe any time.{' '}
+                        <span className="text-ink-muted">(Optional)</span>
+                      </span>
+                    </label>
+
+                    {/* What we'll do with your data — purpose disclosure */}
+                    <details className="mt-2 rounded-md border border-mist bg-bone p-3 text-xs text-ink-muted">
+                      <summary className="cursor-pointer text-ink-soft font-medium">What happens with the information you provide?</summary>
+                      <ul className="mt-2 space-y-1 list-disc pl-5">
+                        <li>Your name and email let us create your account and send order updates.</li>
+                        <li>Your phone number lets your chef and driver reach you about your order.</li>
+                        <li>Your delivery address is shared only with the chef and driver for orders you place.</li>
+                        <li>We don't sell your data. We use Razorpay or Stripe to process payments; they receive only what's needed to process the transaction.</li>
+                        <li>
+                          You can request access, correction, or deletion of your data any time. See our{' '}
+                          <Link to="/privacy" className="text-herb hover:underline">Privacy Policy</Link>.
+                        </li>
+                      </ul>
+                    </details>
+                  </div>
+
                   <Button
                     type="submit"
                     variant="primary"
                     size="lg"
-                    disabled={loading}
+                    disabled={loading || !agreeTerms || !confirmAge}
                     className="w-full"
                   >
                     {loading ? (
@@ -319,17 +401,6 @@ export default function RegisterPage() {
                 </motion.form>
               )}
             </AnimatePresence>
-
-            <p className="mt-4 text-center text-xs text-ink-muted">
-              By signing up, you agree to our{' '}
-              <Link to="/terms" className="text-herb hover:text-herb transition-colors">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link to="/privacy" className="text-herb hover:text-herb transition-colors">
-                Privacy Policy
-              </Link>
-            </p>
           </motion.div>
         </div>
       </motion.div>
