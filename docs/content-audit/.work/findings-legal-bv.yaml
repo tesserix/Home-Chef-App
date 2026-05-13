@@ -1,0 +1,358 @@
+# Brand-Voice lens findings — LEGAL category
+# Auditor: brand-voice lens agent
+# Scope: 47 legal-category surfaces across web, vendor-portal, admin-portal, mobile-vendor, mobile-delivery, api
+# Date: 2026-05-13
+
+findings:
+  # ─────────────────────────────────────────────────────────────────────────
+  # P0 — Brand name drift (single biggest brand-trust break in legal copy)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-001
+    surface_id: api-email-base-footer
+    lens: brand-voice
+    severity: P0
+    issue: "Brand-name drift in legal footer of every transactional email — 'Fe3dr by HomeChef' contradicts every other surface which uses only 'Fe3dr'"
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    related_surfaces:
+      - web-mkt-brand-copyright
+      - vp-legal-login-footer
+      - vp-legal-register-footer
+      - vp-legal-policy-tos
+      - mv-onb-policies-terms-body
+      - ap-auth-footer-legal
+    recommendation: "Decide on ONE legal brand name and use it everywhere. Recommend 'Fe3dr' as the consumer brand and drop 'HomeChef' entirely from user-facing copy (or invert if HomeChef is the legal entity). Footer rewrite: 'Fe3dr · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms'. Document the legal-entity-vs-brand distinction in STYLE-GUIDE.md section 3."
+    depends_on: null
+
+  - finding_id: BV-002
+    surface_id: mv-onb-policies-terms-body
+    lens: brand-voice
+    severity: P0
+    issue: "Mobile vendor onboarding uses 'HomeChef' as brand name and links to 'homechef.in' domain — every other surface uses 'Fe3dr' / 'fe3dr.com'. A chef onboarding on mobile and then logging into vendor-portal on web will see two different brand names."
+    evidence_excerpt: "By joining HomeChef as a vendor you agree to maintain food hygiene standards per FSSAI regulations... HomeChef reserves the right to suspend accounts... Full terms available at homechef.in/vendor-terms."
+    related_surfaces:
+      - vp-legal-login-footer
+      - vp-legal-register-footer
+      - vp-legal-policy-tos
+      - api-email-base-footer
+    recommendation: "Replace all 'HomeChef' with 'Fe3dr' and 'homechef.in/vendor-terms' with 'fe3dr.com/vendor-terms'. This is a binding legal block — the brand name in it must match the brand the chef is actually signing up for."
+    depends_on: null
+
+  - finding_id: BV-003
+    surface_id: mv-settings-delete-contact-email
+    lens: brand-voice
+    severity: P0
+    issue: "Account-deletion support email uses 'support@homechef.app' — third brand-name variant (the .app TLD doesn't appear anywhere else in the product). Customer/chef has no way to verify this is a legitimate Fe3dr address."
+    evidence_excerpt: "Please email support@homechef.app to delete your account."
+    related_surfaces:
+      - api-email-base-footer
+      - mv-onb-policies-terms-body
+    recommendation: "Use support@fe3dr.com (matching the canonical brand and domain). Add a 'Support email' constant in shared config so this can't drift again."
+    depends_on: BV-001
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P0 — Terms naming drift (same legal concept, four different names)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-004
+    surface_id: vp-legal-register-footer
+    lens: brand-voice
+    severity: P0
+    issue: "Chef sees 'Vendor Terms' on register page but 'Terms of Service' on login page (same vendor-portal app, adjacent screens) — the document name drifts within a single sign-up flow"
+    evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+    related_surfaces:
+      - vp-legal-login-footer
+      - vp-legal-policy-tos
+      - web-legal-register-terms
+      - md-leg-001
+    recommendation: "Pick one canonical name for the chef-facing terms document and use it everywhere. Recommendation: 'Vendor Terms' (specific, accurate for the audience) on every chef-facing surface; 'Terms of Service' on customer-facing surfaces. Never use both names for the same document."
+    depends_on: null
+
+  - finding_id: BV-005
+    surface_id: vp-legal-policy-tos
+    lens: brand-voice
+    severity: P0
+    issue: "Onboarding step uses 'Fe3dr Platform Terms of Service' — a third name for the same document. Internally the body refers to 'Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement' (a fourth unnamed document)."
+    evidence_excerpt: "Fe3dr Platform Terms of Service / I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement."
+    related_surfaces:
+      - vp-legal-register-footer
+      - vp-legal-login-footer
+      - mv-onb-policies-checkbox
+    recommendation: "Heading and body must use the same document names. If there is a 'Vendor Agreement' separate from 'Terms of Service', it must appear in the inventory and be linked. Otherwise drop the phrase. Recommended canonical set: 'Vendor Terms', 'Privacy Policy' — two documents, two links."
+    depends_on: BV-004
+
+  - finding_id: BV-006
+    surface_id: md-leg-001
+    lens: brand-voice
+    severity: P1
+    issue: "Driver onboarding review screen shows only 'Terms of Service' / 'Privacy Policy' labels with no brand prefix and no actual navigation wired up — the driver agrees to a document we don't show them. The 4th naming variant (no prefix) across the product."
+    evidence_excerpt: "\"Terms of Service\" / \"Privacy Policy\""
+    related_surfaces:
+      - md-leg-002
+      - vp-legal-login-footer
+      - web-legal-register-terms
+    recommendation: "Use 'Fe3dr Driver Terms' (matching the Vendor Terms naming pattern for the driver persona). Wire the link to the actual document. Drivers should never sign an unnamed/unlinked legal document on first launch."
+    depends_on: BV-004
+
+  - finding_id: BV-007
+    surface_id: mv-onb-policies-checkbox
+    lens: brand-voice
+    severity: P1
+    issue: "Generic 'terms and conditions' label — fifth document-name variant. Voice principle Rule 2 (plain English) + Rule 4 (one accent) violated: vague legal phrasing with no brand reference and no link to what's being accepted."
+    evidence_excerpt: "I accept the terms and conditions"
+    related_surfaces:
+      - md-leg-001
+      - vp-legal-policy-tos
+    recommendation: "Rewrite to 'I accept the Fe3dr Vendor Terms and Privacy Policy' with both phrases as tappable links. Matches the vendor-portal web register footer and resolves the drift."
+    depends_on: BV-004
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P1 — Pronoun / persona-tone violations (style-guide section 5)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-008
+    surface_id: mv-onb-policies-terms-body
+    lens: brand-voice
+    severity: P1
+    issue: "Legal block addresses chef in third person ('vendor', 'accounts') instead of 'you' — violates STYLE-GUIDE.md section 5 ('We/you, never the Company/the User/the Service Provider')"
+    evidence_excerpt: "By joining HomeChef as a vendor you agree... HomeChef reserves the right to suspend accounts that receive repeated hygiene complaints..."
+    related_surfaces:
+      - vp-legal-policy-hygiene
+      - vp-legal-policy-cancellation
+      - vp-legal-policy-tos
+    recommendation: "Rewrite in we/you voice: 'By joining Fe3dr as a chef, you agree to maintain food hygiene per FSSAI rules, describe your menu accurately, prepare orders within your stated prep time, and follow local food safety laws. We may suspend your account if we receive repeated hygiene complaints or if your documents fail verification. Full terms: fe3dr.com/vendor-terms.'"
+    depends_on: null
+
+  - finding_id: BV-009
+    surface_id: vp-legal-docs-banner-title
+    lens: brand-voice
+    severity: P2
+    issue: "Mixed voice: 'Documents help us verify your kitchen and enable payouts' — uses 'us' / 'your' correctly here, but the surrounding StepDocuments labels ('PAN Card', 'Aadhaar Card', 'Identity Documents') are written as inventory labels rather than addressing the chef. Tone violates persona matrix: chef-facing should be 'functional, time-aware' — currently reads like a government form."
+    evidence_excerpt: "Identity Documents / These are required to verify your identity and set up payouts."
+    related_surfaces:
+      - vp-legal-docs-pan
+      - vp-legal-docs-aadhaar
+      - vp-legal-docs-identity-title
+    recommendation: "Section heading sentence case: 'Identity documents' (not 'Identity Documents' — Title Case banned per STYLE-GUIDE section 4). Keep document-name proper nouns ('PAN Card', 'Aadhaar Card', 'FSSAI License') capitalized since they are proper nouns for Indian regulatory documents."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P1 — Dev/internal language leaking to users
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-010
+    surface_id: vp-legal-settings-danger
+    lens: brand-voice
+    severity: P1
+    issue: "Toast leaks dev-environment language to chef in production: 'Account deactivation is not available in demo mode'. Chef has no idea what 'demo mode' is. Breaks brand-personality goal of 'confident · quietly modern' — sounds like an unfinished prototype."
+    evidence_excerpt: "Account deactivation is not available in demo mode"
+    related_surfaces:
+      - vp-legal-kitchen-payout-warning
+      - mv-settings-delete-confirm-body
+    recommendation: "Either ship the deactivation flow or write a chef-facing message: 'Account deactivation isn't ready yet. Email support@fe3dr.com to deactivate your kitchen.' Never use 'demo mode' anywhere user-facing."
+    depends_on: null
+
+  - finding_id: BV-011
+    surface_id: vp-legal-kitchen-payout-warning
+    lens: brand-voice
+    severity: P1
+    issue: "Banking-data collection helper text leaks implementation state and uses legally fraught wording: 'These details are saved locally for now.' Voice rule 'Plain English' is met but the message is alarming and ambiguous (local to browser? local to chef's machine? not transmitted?) — chefs entering bank details deserve a clear privacy statement, not a TODO note."
+    evidence_excerpt: "Payout integration coming soon. These details are saved locally for now."
+    related_surfaces:
+      - vp-legal-settings-danger
+      - vp-legal-docs-banner-body
+    recommendation: "If payouts aren't wired, don't collect bank details. If they are, write: 'Your bank details are encrypted and used only to send your payouts.' Never use 'saved locally' for financial data — it reads as either confused or careless."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Title Case drift in legal headings
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-012
+    surface_id: vp-legal-policies-compliance-title
+    lens: brand-voice
+    severity: P2
+    issue: "Title Case in legal heading 'Kitchen Compliance Checklist' violates STYLE-GUIDE section 4 (sentence case for labels and headings, Title Case banned outside proper nouns)"
+    evidence_excerpt: "Kitchen Compliance Checklist"
+    related_surfaces:
+      - vp-legal-policies-agreements-title
+      - vp-legal-policy-hygiene
+      - vp-legal-policy-cancellation
+      - vp-legal-policy-tos
+      - vp-legal-docs-identity-title
+      - vp-legal-settings-danger
+      - mv-onb-policies-cancel-label
+      - ap-auth-restricted-heading
+      - ap-secsettings-2fa-enforce
+    recommendation: "Sentence case throughout: 'Kitchen compliance checklist', 'Agreements and policies', 'Kitchen hygiene and food safety commitment', 'Order and cancellation policy', 'Fe3dr platform terms of service', 'Identity documents', 'Danger zone', 'Cancellation policy', 'Restricted access', 'Require 2FA for all admins'. Proper nouns (Fe3dr, FSSAI, PAN, Aadhaar, 2FA) stay capitalized."
+    depends_on: null
+
+  - finding_id: BV-013
+    surface_id: ap-auth-footer-legal
+    lens: brand-voice
+    severity: P2
+    issue: "Title Case in admin-portal footer 'Fe3dr Administration Portal · Internal Use Only' — also slightly stiff ('Administration' could be 'Admin'). Admin persona is 'neutral operator, precise', so the stiffness is acceptable, but the Title Case is not."
+    evidence_excerpt: "Fe3dr Administration Portal · Internal Use Only"
+    related_surfaces:
+      - ap-auth-restricted-heading
+      - ap-auth-restricted-body
+    recommendation: "Sentence case: 'Fe3dr Admin · Internal use only'. Shortens to fit admin's telegraphic voice and removes the Title Case violation. Proper noun 'Fe3dr' stays cased."
+    depends_on: BV-012
+
+  - finding_id: BV-014
+    surface_id: ap-auth-restricted-body
+    lens: brand-voice
+    severity: P3
+    issue: "Admin-portal restricted-access message uses 'administrators' rather than 'admins' — minor verbosity violation for the admin persona ('precise, no fluff')"
+    evidence_excerpt: "Only pre-authorized administrators can sign in. New registrations are not allowed."
+    related_surfaces:
+      - ap-auth-restricted-heading
+    recommendation: "Tighten to: 'Only pre-authorized admins can sign in. Registration isn't open.' Saves three words, drops passive voice, matches the persona-tone matrix."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Cross-surface inconsistency in FSSAI required/optional + naming
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-015
+    surface_id: vp-legal-profile-doc-types
+    lens: brand-voice
+    severity: P1
+    issue: "Same document labeled inconsistently across two surfaces of the same vendor-portal app: onboarding calls FSSAI License 'optional' with chef-friendly framing ('If you have one — gives your profile a verified badge'); profile-page DOCUMENT_TYPES marks it required:true. Also two different document names — 'Food Safety Training Certificate' (onboarding) vs 'Food Safety Certificate' (profile)."
+    evidence_excerpt: "FSSAI License (Food Safety and Standards Authority certificate) ... required: true. Food Safety Certificate ... description: 'Food safety training certificate'"
+    related_surfaces:
+      - vp-legal-docs-fssai
+      - vp-legal-docs-food-safety
+      - vp-legal-docs-banner-body
+    recommendation: "Reconcile in one place: define document set as a shared constant. Use the same name everywhere — recommend 'FSSAI License' and 'Food Safety Training Certificate'. Decide once whether FSSAI is required or optional and stop saying both. Brand-voice impact: a chef who saw 'optional' during onboarding and now sees 'required' on their profile loses trust."
+    depends_on: null
+
+  - finding_id: BV-016
+    surface_id: vp-legal-docs-fssai
+    lens: brand-voice
+    severity: P3
+    issue: "Inconsistent em-dash vs hyphen in onboarding description ('If you have one - gives your profile…' uses hyphen as parenthetical, should be em-dash per editorial typography). Same pattern in cheque/optional copy."
+    evidence_excerpt: "If you have one - gives your profile a verified badge. You can add this later."
+    related_surfaces:
+      - vp-legal-docs-cheque
+      - vp-legal-docs-food-safety
+    recommendation: "Use em-dash (—) for parentheticals: 'If you have one — gives your profile a verified badge.' Quietly modern editorial typography is part of brand voice."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Operational/cold tone where chef voice should be warmer-functional
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-017
+    surface_id: ap-chefs-reject-reason
+    lens: brand-voice
+    severity: P1
+    issue: "Hardcoded rejection reason 'Rejected by admin' is sent to the chef as legal-grade justification. Tone is cold-bureaucratic and content-empty. Violates brand-personality goal of trust + calm; reads as Soviet-era stamp rather than confident operator."
+    evidence_excerpt: "Rejected by admin"
+    related_surfaces:
+      - ap-approvaldetail-notes-helper
+    recommendation: "Never send a hardcoded reason. Require the admin to write a specific reason before submitting (form validation). Chef-facing rewrite once admin provides input: 'Your application needs more information: <reason>. Reply to support@fe3dr.com to resubmit.'"
+    depends_on: null
+
+  - finding_id: BV-018
+    surface_id: vp-legal-policy-hygiene
+    lens: brand-voice
+    severity: P2
+    issue: "Hygiene policy mixes warm self-pledge tone ('I commit to maintaining a clean and hygienic kitchen at all times') with operational obligation ('Fe3dr may conduct periodic kitchen checks') — the persona swings from earnest first-person to platform-as-watchdog within one paragraph. Plus 'sanitised' (British) appears next to American spellings elsewhere."
+    evidence_excerpt: "I commit to maintaining a clean and hygienic kitchen at all times. I will use fresh ingredients, follow proper food handling practices, store food at safe temperatures, and ensure all cooking utensils and surfaces are sanitised regularly. I understand Fe3dr may conduct periodic kitchen checks."
+    related_surfaces:
+      - vp-legal-policy-cancellation
+      - vp-legal-policies-compliance-confirm
+      - vp-legal-policies-compliance-items
+    recommendation: "Pick one stance and hold it. Recommend functional second-person ('you'): 'You agree to keep your kitchen clean, use fresh ingredients, handle and store food at safe temperatures, and sanitize utensils and surfaces regularly. We may run periodic kitchen checks.' Standardize on 'sanitize' (US spelling) per the rest of the codebase."
+    depends_on: BV-008
+
+  - finding_id: BV-019
+    surface_id: vp-legal-policies-compliance-items
+    lens: brand-voice
+    severity: P3
+    issue: "Compliance items mix sentence styles within a single 7-item attestation list. Three use full sentences ('My kitchen has access to clean running water'); others are partial ('I will label allergens and ingredients for each dish' future tense vs 'I store raw and cooked food separately' present). Inconsistent verb mood breaks list rhythm."
+    evidence_excerpt: "My kitchen has access to clean running water / I use separate cutting boards for vegetarian and non-vegetarian items / I store raw and cooked food separately / I wear clean attire and maintain personal hygiene while cooking / I have a designated waste disposal area away from cooking space / I ensure all food is freshly prepared on the day of delivery / I will label allergens and ingredients for each dish"
+    related_surfaces:
+      - vp-legal-policy-hygiene
+    recommendation: "Rewrite to consistent present-tense or imperative voice. Imperative is cleaner for a checklist (matches driver-app telegraphic style for any attestation list): 'Clean running water in the kitchen', 'Separate cutting boards for veg and non-veg', 'Raw and cooked food stored separately', 'Clean attire and personal hygiene while cooking', 'Designated waste disposal area away from cooking space', 'Food prepared fresh on the day of delivery', 'Allergens and ingredients labeled on each dish'."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Footer / tagline brand-voice issues
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-020
+    surface_id: api-email-base-footer
+    lens: brand-voice
+    severity: P2
+    issue: "Tagline 'Authentic homemade food, delivered' uses 'authentic' — adjacent to banned brand-drift terms ('artisanal', 'handcrafted with love', 'curated' per STYLE-GUIDE section 3). 'Authentic' carries the same artisanal-craft kitsch the brand is explicitly trying to avoid per .impeccable.md ('Appetizing, not artisanal')."
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    related_surfaces:
+      - web-mkt-brand-copyright
+    recommendation: "Drop 'Authentic'. Try 'Home-cooked food, delivered' or just 'Home cooks, delivered' (matches the brand's confident-restrained tone). 'Authentic' is the food-DTC tell the .impeccable.md anti-references warn against."
+    depends_on: BV-001
+
+  - finding_id: BV-021
+    surface_id: web-mkt-brand-copyright
+    lens: brand-voice
+    severity: P3
+    issue: "Copyright line says only 'Fe3dr' while email footer says 'Fe3dr by HomeChef'. Web register page heading separately says 'Join Fe3dr Today' (Title Case + filler word). Brand surfaces drift across three legal touchpoints customers see on day one."
+    evidence_excerpt: "© {year} Fe3dr. All rights reserved."
+    related_surfaces:
+      - api-email-base-footer
+      - web-legal-register-terms
+    recommendation: "Standardize on 'Fe3dr' (no 'by HomeChef', no 'Today'). 'All rights reserved' is acceptable boilerplate but lower-case 'rights reserved' is more on-brand: '© {year} Fe3dr. All rights reserved.' is fine; ensure year is computed not hardcoded."
+    depends_on: BV-001
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Cancellation-policy option labels (cross-surface verb-mood drift)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-022
+    surface_id: mv-onb-policies-cancel-option-no
+    lens: brand-voice
+    severity: P3
+    issue: "Cancellation option labels mix noun-phrase ('No cancellations after order accepted') with preposition-phrase ('Up to 1 hour before prep start' / 'Up to 30 mins before prep start') — different grammar shapes for what should be parallel radio options. Also 'mins' abbreviation drifts from 'hour' (full word) within the same option set."
+    evidence_excerpt: "No cancellations after order accepted / Up to 1 hour before prep start / Up to 30 mins before prep start"
+    related_surfaces:
+      - mv-onb-policies-cancel-option-1h
+      - mv-onb-policies-cancel-option-30m
+    recommendation: "Parallel grammar and consistent units: 'No cancellations after acceptance' / 'Up to 1 hour before prep' / 'Up to 30 minutes before prep'. Drop redundant 'start'; use full word 'minutes'."
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # P2 — Encryption / privacy claims need brand-voice + legal alignment
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BV-023
+    surface_id: vp-legal-docs-banner-body
+    lens: brand-voice
+    severity: P2
+    issue: "Privacy promise is grammatically passive and over-stated for brand voice. 'Your documents are encrypted and stored securely. They are only used for verification' uses 'are encrypted/stored/used' passive constructions where STYLE-GUIDE section 5 mandates active voice ('We refund within 7 days', not 'Refunds are processed within 7 days')."
+    evidence_excerpt: "Your documents are encrypted and stored securely. They are only used for verification. FSSAI license is optional — many home chefs start without one and add it later."
+    related_surfaces:
+      - vp-legal-kitchen-payout-warning
+      - vp-legal-docs-banner-title
+    recommendation: "Active voice + we/you: 'We encrypt and store your documents securely. We only use them to verify your kitchen. FSSAI license is optional — many home chefs start without one and add it later.' Also verify the encryption claim is technically accurate before shipping (separate legal-lens concern)."
+    depends_on: BV-008
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Summary
+  # ─────────────────────────────────────────────────────────────────────────
+
+summary:
+  total_findings: 23
+  by_severity:
+    P0: 5   # brand-name and terms-naming drift (BV-001..BV-005)
+    P1: 8   # pronoun violations, dev-language leaks, document required/optional drift, hardcoded rejection (BV-006, BV-007, BV-008, BV-010, BV-011, BV-015, BV-017)
+    P2: 8   # title-case, tone drift, encryption claim phrasing, tagline (BV-009, BV-012, BV-013, BV-018, BV-020, BV-023)
+    P3: 5   # em-dash, list grammar, copyright, admin verbosity, cancellation option parallelism (BV-014, BV-016, BV-019, BV-021, BV-022)
+  top_cross_app_drift_patterns:
+    - "Brand name drift: 'Fe3dr' (web, vendor-portal web, admin-portal, mobile-delivery, most API), 'Fe3dr by HomeChef' (every transactional email footer), 'HomeChef' (mobile-vendor vendor-terms constant + homechef.in URL), 'homechef.app' (mobile-vendor support email) — four variants across 6 surfaces"
+    - "Terms-document naming drift: 'Terms of Service' (web register, vp login), 'Vendor Terms' (vp register), 'Fe3dr Platform Terms of Service' (vp onboarding heading), 'terms and conditions' (mv onboarding checkbox), 'Terms of Service' unprefixed link (mobile-delivery review) — five names for what appears to be the same document"
+    - "Pronoun voice: vendor-portal onboarding policies (StepPolicies.tsx) use first-person 'I commit / I agree' (warm self-pledge), but mobile-vendor VENDOR_TERMS_TEXT uses third-person 'HomeChef reserves the right' (cold platform-watchdog), and admin-portal restricted-access copy uses agentless passive 'New registrations are not allowed' — three pronoun stances within one product"
+    - "Title Case bleed into legal headings: 'Kitchen Compliance Checklist', 'Identity Documents', 'Danger Zone', 'Restricted Access', 'Cancellation Policy', 'Internal Use Only' — should be sentence case per STYLE-GUIDE section 4"
+    - "FSSAI / Food Safety document naming inconsistency within vendor-portal: 'FSSAI License' optional during onboarding, 'FSSAI License' required on profile; 'Food Safety Training Certificate' becomes 'Food Safety Certificate' between the two screens"
+    - "Dev-state language leaking to chefs: 'demo mode', 'saved locally for now', 'coming soon' in legally-sensitive contexts (account deactivation, bank-detail capture) — breaks 'confident, quietly modern' brand goal"
+  output_file: docs/content-audit/.work/findings-legal-bv.yaml

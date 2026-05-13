@@ -1,0 +1,432 @@
+findings:
+  - finding_id: TW-001
+    surface_id: web-legal-register-terms
+    lens: technical-writer
+    severity: P3
+    issue: "Signup legal acknowledgment uses 'signing up' verb form, OK, but missing descriptive link context — bare 'Terms of Service' and 'Privacy Policy' phrases double as links and as defined terms with no surface-level explanation."
+    evidence_excerpt: "By signing up, you agree to our Terms of Service and Privacy Policy"
+    recommendation: "Acceptable as-is for short legal acknowledgment. If a tooltip is added, summarize each doc in one line (e.g., 'how we handle your data', 'rules for using Fe3dr'). Ensure same wording used on checkout (currently inconsistent — checkout omits Privacy Policy)."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-legal-checkout-terms-note
+    lens: technical-writer
+    severity: P2
+    issue: "Checkout legal acknowledgment is inconsistent with signup — references only 'Terms of Service' but signup references both Terms and Privacy. Same legal concept (consent) named/scoped differently across surfaces (Sec 3 inconsistency rule)."
+    evidence_excerpt: "By placing this order, you agree to our Terms of Service"
+    recommendation: "Align with signup: 'By placing this order, you agree to our Terms of Service and Privacy Policy.' Or document why Privacy is omitted here. Within-surface clarity is fine; cross-surface drift is the issue."
+    depends_on: null
+
+  - finding_id: TW-003
+    surface_id: web-mkt-brand-copyright
+    lens: technical-writer
+    severity: P3
+    issue: "Copyright footer uses 'All rights reserved.' — vestigial legal boilerplate that adds no value in modern footers. Plain-language test (Sec 5) flags this as ceremonial phrasing."
+    evidence_excerpt: "© {year} Fe3dr. All rights reserved."
+    recommendation: "Trim to '© {year} Fe3dr.' OR keep if Legal lens requires it — defer to Legal lens. TW flags as polish-level redundancy."
+    depends_on: null
+
+  - finding_id: TW-004
+    surface_id: vp-legal-login-footer
+    lens: technical-writer
+    severity: P2
+    issue: "Vendor portal login uses 'Terms of Service' but vendor portal register uses 'Vendor Terms'. Inconsistent naming of same legal concept across two adjacent screens in the same app (Sec 3 inconsistency rule)."
+    evidence_excerpt: "By continuing, you agree to Fe3dr's Terms of Service and Privacy Policy"
+    recommendation: "Decide on canonical name: 'Vendor Terms' (chef-specific) OR 'Terms of Service' (umbrella). Use the same on login and register. Recommend 'Vendor Terms' since vendors are signing a different agreement than customers."
+    depends_on: null
+
+  - finding_id: TW-005
+    surface_id: vp-legal-register-footer
+    lens: technical-writer
+    severity: P2
+    issue: "References 'Vendor Terms' but, per inventory note, has no link target. Either dead reference or undefined term. Surfaces a defined term without definition — violates Sec 5 'defined terms in bold first-use' principle when target doesn't exist."
+    evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+    recommendation: "Wire link target before shipping. If no Vendor Terms doc exists, change to 'Terms of Service' (or whatever single canonical doc covers vendor onboarding). Also: 'By registering' → 'By signing up' (Sec 3 vocab — 'Sign up' is preferred verb)."
+    depends_on: null
+
+  - finding_id: TW-006
+    surface_id: vp-legal-docs-banner-title
+    lens: technical-writer
+    severity: P3
+    issue: "Header conflates two distinct purposes ('verify your kitchen' AND 'enable payouts') in one sentence. Reads OK but a vendor scanning may miss either purpose."
+    evidence_excerpt: "Documents help us verify your kitchen and enable payouts"
+    recommendation: "Split or reorder: 'We use these to verify your kitchen and set up payouts.' Active voice, 'we'/'you' per Sec 5."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: vp-legal-docs-banner-body
+    lens: technical-writer
+    severity: P1
+    issue: "Two sentences, 26 words total — exceeds vendor-facing max of 20 words per sentence rule when combined as displayed. Also uses passive voice ('are encrypted', 'are only used') which Sec 5 forbids in legal copy."
+    evidence_excerpt: "Your documents are encrypted and stored securely. They are only used for verification. FSSAI license is optional - many home chefs start without one and add it later."
+    recommendation: "Active voice + plain language: 'We encrypt and store your documents securely, and we use them only to verify your kitchen. FSSAI license is optional — many chefs add it later.' Allergen/refund/encryption claim should also be a callout, not inline body text (Sec 5)."
+    depends_on: null
+
+  - finding_id: TW-008
+    surface_id: vp-legal-docs-identity-title
+    lens: technical-writer
+    severity: P3
+    issue: "Heading uses Title Case ('Identity Documents') in a UI that elsewhere uses sentence case. Helper text passive voice ('These are required to verify...')."
+    evidence_excerpt: "Identity Documents / These are required to verify your identity and set up payouts."
+    recommendation: "Sentence case: 'Identity documents'. Active voice: 'We need these to verify your identity and set up payouts.'"
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: vp-legal-docs-pan
+    lens: technical-writer
+    severity: P3
+    issue: "Helper 'Required for tax purposes and payouts' uses vague phrase 'tax purposes'. Plain-language test — could be 'income tax reporting' for specificity."
+    evidence_excerpt: "PAN Card / Required for tax purposes and payouts / PAN Number / ABCDE1234F / 10-character alphanumeric PAN"
+    recommendation: "Helper: 'Required for income tax reporting and payouts.' Also: label is 'PAN Number' (Title Case) — should be sentence case 'PAN number' per Sec 4 form-label rule."
+    depends_on: null
+
+  - finding_id: TW-010
+    surface_id: vp-legal-docs-aadhaar
+    lens: technical-writer
+    severity: P2
+    issue: "For one of India's most sensitive IDs, helper text is just 'For identity verification' — 6 words with no plain-English explanation of what happens to it, who sees it, or why it's needed beyond the abstract noun. Missing helper text where field is non-obvious for legal/privacy implications."
+    evidence_excerpt: "Aadhaar Card / For identity verification"
+    recommendation: "Expand: 'Aadhaar card — we mask all but the last 4 digits after upload and use it only to verify you. Required by Indian KYC rules.' Aadhaar is highly sensitive; vague helper text is a P2 transparency issue."
+    depends_on: null
+
+  - finding_id: TW-011
+    surface_id: vp-legal-docs-fssai
+    lens: technical-writer
+    severity: P2
+    issue: "FSSAI is labeled 'Optional' here but is labeled 'Required' on the profile-level doc types (vp-legal-profile-doc-types). Same legal/regulatory concept named differently across two surfaces in the SAME app. Major within-app inconsistency."
+    evidence_excerpt: "FSSAI License / If you have one - gives your profile a verified badge. You can add this later. / FSSAI License Number (Optional) / 14-digit FSSAI number."
+    recommendation: "Reconcile with vp-legal-profile-doc-types where FSSAI is marked 'Required'. Decide: is it optional at onboarding and required later? If so, say so explicitly: 'Optional during onboarding. Required to keep selling after [X days].' Don't ship contradicting copy."
+    depends_on: TW-021
+
+  - finding_id: TW-012
+    surface_id: vp-legal-docs-food-safety
+    lens: technical-writer
+    severity: P3
+    issue: "Helper 'Any food handling or safety certification (optional)' ends with parenthetical '(optional)'. Sec 4 form-label rule: required indicator is asterisk on field, label stays clean — parallel rule should apply to optional state. Inconsistent label-state convention."
+    evidence_excerpt: "Food Safety Training Certificate / Any food handling or safety certification (optional)"
+    recommendation: "Move 'optional' out of helper text and into a label-state badge or omit (assume optional unless asterisked). Helper: 'Any food handling or safety certification you have.' Also Title Case → sentence case: 'Food safety training certificate.'"
+    depends_on: null
+
+  - finding_id: TW-013
+    surface_id: vp-legal-docs-cheque
+    lens: technical-writer
+    severity: P3
+    issue: "Label is 'Cancelled Cheque / Bank Proof' — dual label is ambiguous (is it one document with two names, or two acceptable documents?). Title Case violates Sec 4 form-label rule."
+    evidence_excerpt: "Cancelled Cheque / Bank Proof / For setting up direct payouts to your bank account (optional, can add later)"
+    recommendation: "Pick one canonical label: 'Cancelled cheque' (most specific). Helper: 'We use this to verify your bank account for payouts. You can add it later.' Active voice ('we use this') per Sec 5."
+    depends_on: null
+
+  - finding_id: TW-014
+    surface_id: vp-legal-policies-compliance-title
+    lens: technical-writer
+    severity: P2
+    issue: "Second sentence is 18 words and uses 'maintain quality standards' — vague phrasing. Combined block is 20 words, at the vendor-facing sentence max. Reading-ease borderline."
+    evidence_excerpt: "Kitchen Compliance Checklist / Please confirm that your kitchen meets these basic food safety requirements. This ensures all home kitchens on Fe3dr maintain quality standards."
+    recommendation: "Simplify: 'Confirm your kitchen meets these food safety basics. Every Fe3dr kitchen agrees to the same standards.' Drops to 5+11 words. Active voice, no filler ('Please confirm' → 'Confirm')."
+    depends_on: null
+
+  - finding_id: TW-015
+    surface_id: vp-legal-policies-compliance-items
+    lens: technical-writer
+    severity: P2
+    issue: "Compliance checklist items are inconsistent in grammatical form — mix of noun phrases ('clean water', 'waste disposal area') and verb phrases ('store raw and cooked separately', 'label allergens and ingredients'). Parallel structure principle for checklists."
+    evidence_excerpt: "clean water / separate cutting boards veg vs non-veg / store raw and cooked separately / clean attire and personal hygiene / waste disposal area / freshly prepared / label allergens and ingredients"
+    recommendation: "Pick one form. Recommend imperative-verb form for attestation: 'Use clean water', 'Keep separate cutting boards for veg and non-veg', 'Store raw and cooked food separately', 'Wear clean attire and maintain personal hygiene', 'Use a dedicated waste disposal area', 'Prepare food fresh for each order', 'Label allergens and ingredients on every dish.'"
+    depends_on: null
+
+  - finding_id: TW-016
+    surface_id: vp-legal-policies-compliance-confirm
+    lens: technical-writer
+    severity: P3
+    issue: "Attestation gate uses 'By proceeding' — passive framing. Plain-language test prefers direct verb. 14 words is fine for vendor."
+    evidence_excerpt: "By proceeding, you confirm that all the above conditions are met in your kitchen."
+    recommendation: "Active: 'By proceeding, you confirm your kitchen meets all the above.' (10 words). Or as checkbox label: 'My kitchen meets all the above conditions.'"
+    depends_on: null
+
+  - finding_id: TW-017
+    surface_id: vp-legal-policies-agreements-title
+    lens: technical-writer
+    severity: P3
+    issue: "Title 'Agreements & Policies' is Title Case. Helper 'Please read and accept each policy' is polite filler. Sec 5 active-voice preference."
+    evidence_excerpt: "Agreements & Policies / Please read and accept each policy to complete your registration."
+    recommendation: "Sentence case + plainer: 'Agreements and policies / Read and accept each one to finish signing up.' Also vocab: 'registration' → 'signing up' (Sec 3)."
+    depends_on: null
+
+  - finding_id: TW-018
+    surface_id: vp-legal-policy-hygiene
+    lens: technical-writer
+    severity: P1
+    issue: "52-word policy block uses formal first-person legal voice ('I commit to maintaining...'). Sec 5 requires 'we'/'you' in legal copy — not 'I'. Mixing chef-as-signer perspective into UI body text reads as a checkbox-disguised-as-contract. Also likely exceeds 25-word sentence max."
+    evidence_excerpt: "Kitchen Hygiene & Food Safety Commitment / I commit to maintaining a clean and hygienic kitchen at all times... Fe3dr may conduct periodic kitchen checks."
+    recommendation: "Reframe as plain 'you' statement, attest via checkbox: 'You agree to: keep your kitchen clean and hygienic, follow food safety practices, and allow Fe3dr to do periodic kitchen checks.' Bullet the obligations; one idea per paragraph per Sec 5."
+    depends_on: null
+
+  - finding_id: TW-019
+    surface_id: vp-legal-policy-cancellation
+    lens: technical-writer
+    severity: P1
+    issue: "56-word block in formal 'I' voice. Buries operational consequences in legal prose ('Repeated late cancellations may affect my kitchen rating and visibility') — Sec 5 says consequences get callout treatment, not buried. Likely also >25 word sentences."
+    evidence_excerpt: "Order & Cancellation Policy / accept or reject orders within 5 minutes / prepare within estimated time / Repeated late cancellations may affect my kitchen rating and visibility."
+    recommendation: "Reframe in 'you' voice. Bullet the obligations. Pull consequences into a callout: 'Heads up: repeated late cancellations lower your kitchen rating and reduce visibility in search.' Per Sec 5 (allergen/refund clauses get callouts) — operational penalties should too."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: vp-legal-policy-tos
+    lens: technical-writer
+    severity: P1
+    issue: "46-word TOS block in 'I' voice commits chef to commission + weekly payouts. Two material business terms (commission %, payout cadence) buried in one sentence with no callout. Sec 5 says financial commitments need callout treatment."
+    evidence_excerpt: "Fe3dr Platform Terms of Service / I have read and agree... Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account."
+    recommendation: "Pull payment terms into a callout: '**Money basics.** Fe3dr keeps a platform commission on each order. We pay out the rest to your bank account weekly.' Body becomes 'you have read and agree...'. Per Sec 5, defined terms ('Platform Commission', 'Payout') in bold on first use."
+    depends_on: null
+
+  - finding_id: TW-021
+    surface_id: vp-legal-kitchen-payout-warning
+    lens: technical-writer
+    severity: P0
+    issue: "Banking-data collection warning says 'saved locally for now' — factually misleading copy that suggests data lives only on-device when the field is in a web app form (i.e., 'locally' is ambiguous — local storage? local to demo? local to backend?). Sec 5 plain-language test + P0 severity guide (factually misleading copy)."
+    evidence_excerpt: "Payout Details / Bank account details for receiving your earnings / Payout integration coming soon. These details are saved locally for now."
+    recommendation: "Clarify exactly where the data lives. If demo-only: 'Payouts coming soon. We're not collecting bank details yet — this form is preview only.' If saved to backend awaiting wiring: 'Payouts coming soon. We're storing these details securely and will use them once payouts go live.' Never say 'locally' without specifying."
+    depends_on: null
+
+  - finding_id: TW-022
+    surface_id: vp-legal-profile-doc-types
+    lens: technical-writer
+    severity: P1
+    issue: "FSSAI marked 'Required' here but 'Optional' on onboarding (vp-legal-docs-fssai). Same regulatory document in same app named with opposing legal weight. Direct contradiction visible to the same chef across two screens — P1 conversion-critical + Sec 3 inconsistency."
+    evidence_excerpt: "FSSAI License (Food Safety and Standards Authority certificate) / PAN Card (Permanent Account Number card) / Aadhaar Card / Food Safety Certificate / Cancelled Cheque / Required"
+    recommendation: "Reconcile required/optional state across onboarding + profile. Pick one truth and propagate. See TW-011. Also: parenthetical full-name expansions ('Food Safety and Standards Authority certificate') only needed on first reference per page; consider tooltip pattern instead."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: vp-legal-settings-stripe
+    lens: technical-writer
+    severity: P2
+    issue: "75-word block is a wall of mixed concepts: positioning ('for chefs outside India'), feature description, KYC disclosure, action buttons ('Resume Onboarding', 'Make Stripe My Primary Gateway'), status labels. Multiple Sec 4 violations: 'Make Stripe My Primary Gateway' is a 5-word button (max 3); 'Resume Onboarding' is Title Case button (should be sentence case 'Resume onboarding')."
+    evidence_excerpt: "Stripe (International Payouts) / For chefs outside India, or as an alternative to Razorpay. / ... / Make Stripe My Primary Gateway / Switch Back to Razorpay / Refresh Status"
+    recommendation: "Button rewrites (verb-first, ≤3 words, sentence case): 'Make Stripe My Primary Gateway' → 'Set as primary'; 'Switch Back to Razorpay' → 'Switch to Razorpay'; 'Refresh Status' → 'Refresh status'; 'Resume Onboarding' → 'Resume setup'; 'Connect with Stripe' → 'Connect Stripe'. Break body into 'About Stripe' (1 sentence) + 'How KYC works' (1 sentence) + status labels."
+    depends_on: null
+
+  - finding_id: TW-024
+    surface_id: vp-legal-settings-stripe
+    lens: technical-writer
+    severity: P2
+    issue: "'Stripe needs more information before you can accept payments.' — vague pronoun referent ('more information' — what kind?). Plain-language test: tell the chef what's missing."
+    evidence_excerpt: "Stripe needs more information before you can accept payments. Resume onboarding to finish."
+    recommendation: "If Stripe API tells us what's missing, surface it: 'Stripe needs a few more details (ID and bank info). Resume setup to finish.' If not, at least: 'Stripe needs more details before you can accept payments. Resume setup to finish.'"
+    depends_on: null
+
+  - finding_id: TW-025
+    surface_id: vp-legal-settings-danger
+    lens: technical-writer
+    severity: P1
+    issue: "'Account deactivation is not available in demo mode' shipped to vendor portal settings. If this is reaching production, it's a P1 trust break — chefs see 'demo mode' on a live app. Also: 'Danger Zone' is a Github-ism that doesn't match Fe3dr's calm/quietly-modern brand voice (Sec 1 Rule 5)."
+    evidence_excerpt: "Danger Zone / Deactivating your account will hide your kitchen from customers and pause all orders. / Deactivate Account / Account deactivation is not available in demo mode"
+    recommendation: "Verify 'demo mode' is not in production. If staging-only, gate the string. 'Danger Zone' → 'Deactivate account' (the section IS the action). Button 'Deactivate Account' → 'Deactivate account' (sentence case). Body is fine — clear consequence statement per Sec 4 modal subtitle rule."
+    depends_on: null
+
+  - finding_id: TW-026
+    surface_id: ap-approvaldetail-notes-helper
+    lens: technical-writer
+    severity: P3
+    issue: "Helper text is clear and active-voice — borderline within admin tone. Could be tighter."
+    evidence_excerpt: "These notes will be recorded in the history and visible to other admins."
+    recommendation: "Tighten: 'Saved to history. Visible to other admins.' (8 words) — matches admin tone matrix (Sec 2: precise, no fluff)."
+    depends_on: null
+
+  - finding_id: TW-027
+    surface_id: ap-auth-restricted-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Restricted Access' is Title Case; admin pages should match the sentence-case convention used elsewhere. Also could be more informative."
+    evidence_excerpt: "Restricted Access"
+    recommendation: "Sentence case: 'Restricted access' or more specific 'Admin portal — sign-in required'."
+    depends_on: null
+
+  - finding_id: TW-028
+    surface_id: ap-auth-restricted-body
+    lens: technical-writer
+    severity: P3
+    issue: "'Only pre-authorized administrators can sign in. New registrations are not allowed.' — second sentence uses banned form 'registrations' (Sec 3: 'Sign up' is preferred). Two sentences saying the same thing."
+    evidence_excerpt: "Only pre-authorized administrators can sign in. New registrations are not allowed."
+    recommendation: "Combine: 'Only pre-authorized admins can sign in. You can't sign up here.' Or just 'Only pre-authorized admins can sign in.'"
+    depends_on: null
+
+  - finding_id: TW-029
+    surface_id: ap-auth-footer-legal
+    lens: technical-writer
+    severity: P3
+    issue: "'Fe3dr Administration Portal · Internal Use Only' — 'Administration' is jargon for 'Admin'. Plain-language test."
+    evidence_excerpt: "Fe3dr Administration Portal · Internal Use Only"
+    recommendation: "'Fe3dr Admin · Internal use only' (sentence case on second clause)."
+    depends_on: null
+
+  - finding_id: TW-030
+    surface_id: ap-chefs-reject-reason
+    lens: technical-writer
+    severity: P1
+    issue: "'Rejected by admin' is the default reason sent to a chef when no specific reason is given — it tells the chef nothing about why, what to do next, or how to appeal. Sec 4 error formula: 'what happened → what to do.' This is what happened only."
+    evidence_excerpt: "Rejected by admin"
+    recommendation: "Replace generic with structured fallback: 'Application rejected. Contact support@fe3dr.com to learn why or appeal.' If a real reason should be required, gate the action behind a required-reason field — don't ship a copy-only fallback."
+    depends_on: null
+
+  - finding_id: TW-031
+    surface_id: ap-auditlogs-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "Subtitle is admin-precise and works. Minor: 'before/after values' is jargon-adjacent for non-engineer admins."
+    evidence_excerpt: "Admin actions recorded with actor, IP, user agent, and before/after values."
+    recommendation: "Acceptable for admin tone. Optional: 'Admin actions recorded with the admin's identity, IP, browser, and what changed.'"
+    depends_on: null
+
+  - finding_id: TW-032
+    surface_id: ap-secsettings-2fa-enforce
+    lens: technical-writer
+    severity: P2
+    issue: "25-word combined string is at the customer-facing max but applied to admin (where 20-word vendor cap is more typical). Two sentences sharing the toggle label is awkward; helper text should be separate and shorter."
+    evidence_excerpt: "Require 2FA for all admins; When enabled, admins without 2FA are prompted to enroll on their next login."
+    recommendation: "Label: 'Require 2FA for all admins'. Helper: 'Admins without 2FA enroll on next sign-in.' (8 words, active voice, 'sign-in' per Sec 3 not 'login')."
+    depends_on: null
+
+  - finding_id: TW-033
+    surface_id: ap-secsettings-2fa-exempt
+    lens: technical-writer
+    severity: P2
+    issue: "35-word helper text exceeds even customer-facing 25-word cap. Contains nested parenthetical ('(E2E tests, automation)') and three separate ideas: format ('one per line'), use case, and default behavior. Sec 5 'one idea per paragraph.'"
+    evidence_excerpt: "2FA exempt emails; One per line. Useful for service accounts (E2E tests, automation) that can't scan a QR. Leave empty to enforce 2FA on every admin."
+    recommendation: "Split: Label 'Exempt emails'. Helper line 1: 'One email per line.' Helper line 2: 'Use for service accounts that can't scan a QR.' Placeholder text or footnote: 'Leave empty to require 2FA for every admin.'"
+    depends_on: null
+
+  - finding_id: TW-034
+    surface_id: ap-secsettings-apikey-warn
+    lens: technical-writer
+    severity: P2
+    issue: "Warning is one-time-secret disclosure but uses em-dash mid-sentence and lacks a what-to-do. Sec 4 error pattern: what happened → what to do."
+    evidence_excerpt: "Copy this key now — you won't see it again"
+    recommendation: "'Copy this key now. We won't show it again.' (active voice, period not em-dash, parallel sentence structure)."
+    depends_on: null
+
+  - finding_id: TW-035
+    surface_id: ap-settings-payment-helpers
+    lens: technical-writer
+    severity: P2
+    issue: "Helper text is duplicated verbatim across two payment fields — Sec 3 inconsistency check passes (they match each other) but they're redundant and 'GCP Secret Manager' is jargon for a non-engineer admin who might handle payment keys."
+    evidence_excerpt: "Keys are stored securely in GCP Secret Manager. Leave a field empty to keep its current value."
+    recommendation: "De-jargon: 'Stored securely in our secret manager. Leave empty to keep current value.' Only one of the two fields needs the storage disclosure — put it once at the section level, not per field."
+    depends_on: null
+
+  - finding_id: TW-036
+    surface_id: ap-staffdetail-role-descriptions
+    lens: technical-writer
+    severity: P3
+    issue: "Role descriptions are short noun phrases, mostly parallel, but 'Full access to everything' is colloquial vs 'Admin portal management' (formal). Mixed register."
+    evidence_excerpt: "Full access to everything; Admin portal management; Delivery fleet management; Delivery operations; Read-only support access"
+    recommendation: "Parallel structure: 'Full platform access'; 'Admin portal management'; 'Delivery fleet management'; 'Delivery operations'; 'Read-only support access'. All noun-phrase, similar length."
+    depends_on: null
+
+  - finding_id: TW-037
+    surface_id: mv-onb-policies-checkbox
+    lens: technical-writer
+    severity: P2
+    issue: "'I accept the terms and conditions' uses 'terms and conditions' — banned generic phrasing. App uses 'Terms of Service' elsewhere. Sec 3 inconsistency + Sec 5 'we/you' principle ('I accept' vs other apps' 'you agree')."
+    evidence_excerpt: "I accept the terms and conditions"
+    recommendation: "'I agree to the Vendor Terms and Privacy Policy.' Match the named documents used elsewhere (vp-legal-register-footer). Or stay in 'you' voice if the checkbox sits under a 'By signing up, you agree to...' line."
+    depends_on: TW-004
+
+  - finding_id: TW-038
+    surface_id: mv-onb-policies-cancel-label
+    lens: technical-writer
+    severity: P3
+    issue: "'Cancellation Policy *' — Title Case label and uses asterisk inline (Sec 4 form-label rule: required indicator is the asterisk on field, label stays clean — should not be in label text)."
+    evidence_excerpt: "Cancellation Policy *"
+    recommendation: "'Cancellation policy' (sentence case, no inline asterisk; required state via field-level asterisk indicator)."
+    depends_on: null
+
+  - finding_id: TW-039
+    surface_id: mv-settings-delete-confirm-body
+    lens: technical-writer
+    severity: P2
+    issue: "'To delete your account, please contact our support team. This action cannot be undone.' — second sentence is the exact pattern Sec 4 modal-subtitle rule bans ('Are you sure? This action cannot be undone' — vague). Doesn't explain WHAT can't be undone in concrete terms."
+    evidence_excerpt: "To delete your account, please contact our support team. This action cannot be undone."
+    recommendation: "'Email support to delete your account. Deletion is permanent — you'll lose your menu, orders, and payouts history.' (concrete consequences per Sec 4)."
+    depends_on: null
+
+  - finding_id: TW-040
+    surface_id: mv-settings-delete-contact-action
+    lens: technical-writer
+    severity: P3
+    issue: "'Contact Support' button — Title Case. Sec 4 button formula: verb-first, ≤3 words, sentence case."
+    evidence_excerpt: "Contact Support"
+    recommendation: "'Email support' (verb-first, action-explicit, sentence case)."
+    depends_on: null
+
+  - finding_id: TW-041
+    surface_id: mv-settings-delete-contact-email
+    lens: technical-writer
+    severity: P2
+    issue: "Email is 'support@homechef.app' but inventory notes brand drift — other surfaces use Fe3dr (fe3dr.com). Within-surface fine but cross-app brand inconsistency (Sec 3)."
+    evidence_excerpt: "Please email support@homechef.app to delete your account."
+    recommendation: "Verify canonical support email (support@fe3dr.com vs support@homechef.app). Pick one and propagate. Also: drop 'Please' (Sec 1 Rule 1, confident not deferential): 'Email support@fe3dr.com to delete your account.'"
+    depends_on: null
+
+  - finding_id: TW-042
+    surface_id: mv-onb-policies-cancel-option-no
+    lens: technical-writer
+    severity: P3
+    issue: "'No cancellations after order accepted' — fine but ambiguous tense ('order accepted' is past participle hanging). Parallel structure with other cancel options."
+    evidence_excerpt: "No cancellations after order accepted"
+    recommendation: "'No cancellations after I accept the order' OR (more consistent with other options): 'Not allowed after order is accepted'. Match parallel form across cancel-option-1h, cancel-option-30m."
+    depends_on: null
+
+  - finding_id: TW-043
+    surface_id: mv-onb-policies-cancel-option-1h
+    lens: technical-writer
+    severity: P3
+    issue: "'Up to 1 hour before prep start' — terse, parallel with -30m, OK. Minor: 'prep start' is jargon — could be 'cooking starts.'"
+    evidence_excerpt: "Up to 1 hour before prep start"
+    recommendation: "Acceptable. Optional: 'Up to 1 hour before cooking starts' (plain English, Sec 5)."
+    depends_on: null
+
+  - finding_id: TW-044
+    surface_id: mv-onb-policies-cancel-option-30m
+    lens: technical-writer
+    severity: P3
+    issue: "'Up to 30 mins before prep start' — uses 'mins' abbreviation; elsewhere app uses 'min' or 'minutes'. Sec 6 numerals/formatting expects consistent unit notation."
+    evidence_excerpt: "Up to 30 mins before prep start"
+    recommendation: "'Up to 30 minutes before cooking starts.' Spell out 'minutes' for clarity (and translation-readiness — Sec 7)."
+    depends_on: TW-043
+
+  - finding_id: TW-045
+    surface_id: mv-onb-policies-terms-body
+    lens: technical-writer
+    severity: P1
+    issue: "60-word block with two very long sentences (one is ~38 words). Sec 5 says max 25 words per sentence in legal copy. Uses 'reserves the right to suspend' — formal legal jargon. Also references 'homechef.in/vendor-terms' which is brand-inconsistent with fe3dr.com elsewhere. Sec 3 'we/you' principle: uses 'HomeChef' as third-party rather than 'we'."
+    evidence_excerpt: "By joining HomeChef as a vendor you agree to maintain food hygiene standards per FSSAI regulations... HomeChef reserves the right to suspend accounts that receive repeated hygiene complaints or fail document verification."
+    recommendation: "Rewrite into short sentences, 'we'/'you' voice: 'By joining Fe3dr as a chef, you agree to: keep food hygiene standards per FSSAI rules, write accurate menu descriptions, prepare orders within your stated prep time, and follow local food safety laws. We may suspend accounts with repeated hygiene complaints or failed document checks. Full terms: fe3dr.com/vendor-terms.' Also resolve brand drift (HomeChef vs Fe3dr)."
+    depends_on: null
+
+  - finding_id: TW-046
+    surface_id: md-leg-001
+    lens: technical-writer
+    severity: P2
+    issue: "'Terms of Service' on driver onboarding review screen — note says no navigation wired. Same legal concept named differently than mobile-vendor ('terms and conditions') and vendor portal ('Vendor Terms'). Three-app drift. Also: dead link is a P2 trust break."
+    evidence_excerpt: "Terms of Service"
+    recommendation: "Decide naming convention by audience: 'Driver Terms' (driver-specific), 'Vendor Terms' (chef-specific), 'Terms of Service' (customer umbrella). Wire link before ship — TW won't flag a real link, but a label-only legal reference is misleading."
+    depends_on: TW-004
+
+  - finding_id: TW-047
+    surface_id: md-leg-002
+    lens: technical-writer
+    severity: P3
+    issue: "'Privacy Policy' on driver onboarding review screen — assuming link wires, OK. Driver-facing copy generally fine at 2 words per Sec 2 driver tone (telegraphic)."
+    evidence_excerpt: "Privacy Policy"
+    recommendation: "No change needed if linked. If not linked, see TW-046."
+    depends_on: TW-046
+
+  - finding_id: TW-048
+    surface_id: api-email-base-footer
+    lens: technical-writer
+    severity: P1
+    issue: "'Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms' — brand drift: header says 'Fe3dr' only; footer says 'Fe3dr by HomeChef'. Also 'Authentic homemade food' uses 'Authentic' which is brand-drift-adjacent (similar register to banned 'Artisanal' per Sec 3 banned brand-drift terms). Plus inconsistent legal-link names ('Privacy' vs 'Privacy Policy' elsewhere; 'Terms' vs 'Terms of Service')."
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    recommendation: "'Fe3dr · Home-cooked food, delivered · fe3dr.com · Privacy Policy · Terms of Service'. Drops brand drift, drops 'Authentic' (Sec 3 banned-adjacent), aligns link names with web/vp surfaces."
+    depends_on: null

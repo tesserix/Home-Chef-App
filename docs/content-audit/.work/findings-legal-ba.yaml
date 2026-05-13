@@ -1,0 +1,366 @@
+findings:
+
+  - finding_id: BA-001
+    surface_id: vp-legal-kitchen-payout-warning
+    lens: business-analyst
+    severity: P0
+    issue: '"Saved locally" on payout bank-detail form is a trust-destroying production leak'
+    evidence_excerpt: "Payout integration coming soon. These details are saved locally for now."
+    recommendation: >
+      Remove the warning entirely until payout integration is live. If collection must precede
+      integration, replace with: "Your bank details are stored securely. Payouts go live once your
+      kitchen is approved — we'll notify you when your first payout is scheduled." This reframes
+      collection as onboarding progress, not a dead-end. Expected impact: eliminate the drop-off
+      spike at KitchenSetupPage for chefs who reach payout section; estimated 15-25% reduction
+      in abandonment at that step.
+    metric_hypothesis: "chef onboarding completion (KitchenSetupPage → submission)"
+    depends_on: null
+
+  - finding_id: BA-002
+    surface_id: vp-legal-settings-danger
+    lens: business-analyst
+    severity: P0
+    issue: '"Demo mode" toast on Deactivate Account button leaks placeholder copy to production'
+    evidence_excerpt: "onClick={() => toast.error('Account deactivation is not available in demo mode')}"
+    recommendation: >
+      This is a shipped placeholder. Either wire real deactivation logic or replace the toast
+      with: "To deactivate your kitchen, contact support@homechef.app — we'll pause your orders
+      and hide your profile within 1 hour." Do not surface "demo mode" language to any real chef.
+      Trust catastrophe: a chef who sees "demo mode" on their live account concludes the platform
+      is not production-ready and churns immediately.
+    metric_hypothesis: "chef trust score; chef D30 retention"
+    depends_on: null
+
+  - finding_id: BA-003
+    surface_id: mv-onb-policies-terms-body
+    lens: business-analyst
+    severity: P0
+    issue: 'Mobile-vendor terms use brand name "HomeChef" while web onboarding uses "Fe3dr" — same legal document, two different brands'
+    evidence_excerpt: "By joining HomeChef as a vendor you agree to... HomeChef reserves the right to suspend accounts... Full terms available at homechef.in/vendor-terms."
+    recommendation: >
+      Resolve brand identity before next onboarding release. Pick one name and apply it
+      consistently across constants/terms.ts, StepPolicies.tsx, all email templates, and all
+      legal footers. The URL homechef.in/vendor-terms does not match the vendor-portal TOS
+      referenced on the web (Fe3dr Platform Terms of Service). A chef who reads the mobile terms
+      (HomeChef) and the web terms (Fe3dr) will believe they are agreeing to different contracts.
+      This is both a trust failure and a legal exposure.
+    metric_hypothesis: "chef onboarding completion (mobile); chef trust score"
+    depends_on: null
+
+  - finding_id: BA-004
+    surface_id: api-email-base-footer
+    lens: business-analyst
+    severity: P1
+    issue: 'Email footer uses hybrid brand "Fe3dr by HomeChef" — customers receive an identity-confused legal footer on every transactional email'
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    recommendation: >
+      Unify to single brand name matching the registered legal entity. The footer is present on
+      every transactional email (order confirmation, verification, payout, chef approval) — this
+      dual-brand attribution creates confusion about who the customer has contracted with.
+      Suggested: "HomeChef · fe3dr.com · Privacy · Terms" OR "Fe3dr · homechef.in · Privacy ·
+      Terms" — choose one, update email_templates.go emailBase function. Expected impact: improved
+      open-and-click trust on transactional emails; reduced support queries about "who is Fe3dr".
+    metric_hypothesis: "transactional email trust; customer support contact rate"
+    depends_on: null
+
+  - finding_id: BA-005
+    surface_id: vp-legal-docs-aadhaar
+    lens: business-analyst
+    severity: P1
+    issue: 'Aadhaar collection described only as "For identity verification" — no trust framing causes drop-off on India most-sensitive government ID'
+    evidence_excerpt: "Aadhaar Card / For identity verification"
+    recommendation: >
+      Add a trust-framing helper line beneath the label: "Required by UIDAI regulations for
+      home-based food businesses. Your Aadhaar number is masked after verification and never
+      shared with customers." Two sentences that explain the legal basis (reduces anxiety) and
+      the data-minimisation commitment (rebuilds trust). Aadhaar is the single highest-friction
+      document in Indian consumer KYC; without framing it is the most common abandonment trigger
+      in the StepDocuments flow.
+    metric_hypothesis: "chef onboarding completion (StepDocuments step); KYC drop-off rate"
+    depends_on: null
+
+  - finding_id: BA-006
+    surface_id: vp-legal-profile-doc-types
+    lens: business-analyst
+    severity: P1
+    issue: 'FSSAI License labelled "Required" on ProfilePage but "Optional" during onboarding — contradictory requirement creates chef confusion and support burden'
+    evidence_excerpt: >
+      ProfilePage DOCUMENT_TYPES: { type: 'fssai_license', label: 'FSSAI License', required: true }
+      vs StepDocuments OPTIONAL_DOCS: { type: 'fssai_license', label: 'FSSAI License',
+      description: 'If you have one — gives your profile a verified badge. You can add this later.', required: false }
+    recommendation: >
+      Align required status to one source of truth. If FSSAI is legally optional (many home
+      chefs operate on Basic Registration below ₹12L turnover), mark it optional everywhere with
+      a badge upsell: "Add FSSAI for a Verified Kitchen badge." If it is required, update
+      onboarding to gate submission on it. The current contradiction causes chefs who sailed
+      through onboarding to hit a "Required" blocker on ProfilePage and call support.
+    metric_hypothesis: "chef profile completion rate; support ticket volume (FSSAI-related)"
+    depends_on: null
+
+  - finding_id: BA-007
+    surface_id: web-legal-checkout-terms-note
+    lens: business-analyst
+    severity: P1
+    issue: 'Checkout terms acknowledgment has no hyperlink to Terms of Service — legal consent is uncollectable and creates friction without the reassurance of transparency'
+    evidence_excerpt: "By placing this order, you agree to our Terms of Service"
+    recommendation: >
+      Link "Terms of Service" to /terms. Without the link, the acknowledgment creates friction
+      (implies a contract) but delivers no trust benefit (customer cannot read what they're
+      agreeing to). A clickable link shows transparency and is standard checkout practice.
+      Suggested text: "By placing this order, you agree to our Terms of Service and our
+      Cancellation Policy." Adding the Cancellation Policy link at checkout sets expectations
+      that reduce post-order refund disputes.
+    metric_hypothesis: "checkout completion rate; post-order dispute rate"
+    depends_on: null
+
+  - finding_id: BA-008
+    surface_id: vp-legal-policy-tos
+    lens: business-analyst
+    severity: P1
+    issue: 'TOS acceptance checkbox embeds commission disclosure as inline prose with no link to full terms — chef cannot verify the commission rate before agreeing'
+    evidence_excerpt: "I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement. I understand that Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account."
+    recommendation: >
+      The title "Fe3dr Platform Terms of Service" must link to the actual TOS document. The
+      phrase "a platform commission" is dangerously vague — chefs will later dispute the actual
+      percentage. Replace with the concrete rate: "Fe3dr charges a X% commission on each order"
+      or link to a Pricing page. A chef who discovers a different commission rate post-signup
+      churns and generates negative word-of-mouth. Expected impact: reduce chef churn attributed
+      to pricing surprise; reduce commission dispute support tickets.
+    metric_hypothesis: "chef D30 retention; chef support ticket volume (commission-related)"
+    depends_on: null
+
+  - finding_id: BA-009
+    surface_id: vp-legal-policy-cancellation
+    lens: business-analyst
+    severity: P1
+    issue: 'Cancellation policy agreement mentions rating/visibility penalties as consequence but without specificity — vague penalty language both frightens and misleads chefs'
+    evidence_excerpt: "Repeated late cancellations may affect my kitchen rating and visibility."
+    recommendation: >
+      Replace vague consequence copy with a defined threshold: "Three or more cancellations in
+      a week reduces your search ranking. Five or more in a week pauses new orders for 24 hours."
+      Specific thresholds convert a threatening clause into a navigable rule. A chef who knows
+      the threshold can manage their kitchen; a chef who reads "may affect" interprets it as
+      arbitrary punishment and reduces order acceptance rates pre-emptively.
+    metric_hypothesis: "chef order acceptance rate; chef D7 activation"
+    depends_on: null
+
+  - finding_id: BA-010
+    surface_id: vp-legal-docs-banner-body
+    lens: business-analyst
+    severity: P1
+    issue: '"Encrypted and stored securely" is an unqualified trust claim that cannot be substantiated without naming the standard — if false, it is a compliance liability; if true, it is weak without specificity'
+    evidence_excerpt: "Your documents are encrypted and stored securely. They are only used for verification."
+    recommendation: >
+      Replace with a commitment that is both true and trust-building: "Documents are encrypted
+      at rest in Google Cloud Storage. Only our verification team can access them. We delete
+      uploaded images within 30 days of verification." If 30-day deletion is not the policy,
+      state the actual retention period. Vague encryption claims score poorly in user trust
+      research; specific, named storage with a retention timeline converts significantly better
+      for KYC step completion.
+    metric_hypothesis: "chef onboarding completion (StepDocuments); KYC conversion rate"
+    depends_on: null
+
+  - finding_id: BA-011
+    surface_id: ap-chefs-reject-reason
+    lens: business-analyst
+    severity: P1
+    issue: 'Hardcoded rejection reason "Rejected by admin" is sent to chef via API — vague rejection with no actionable reason causes chef re-apply abandonment'
+    evidence_excerpt: "mutationFn: (id: string) => apiClient.put(`/admin/chefs/${id}/reject`, { reason: 'Rejected by admin' })"
+    recommendation: >
+      The rejection payload must be human-authored per case. Replace the hardcoded string with
+      an admin-entered reason field (modal with a free-text input, required before reject button
+      activates). The reason text should be surfaced to the chef in their rejection notification
+      email. A chef who receives "Rejected by admin" has no path to re-apply; a chef who
+      receives "Your Aadhaar scan was illegible — please re-upload a clear photo" reapplies
+      within 48 hours. Impact: re-apply conversion rate; chef acquisition funnel recovery.
+    metric_hypothesis: "rejected-chef re-apply rate; chef acquisition funnel"
+    depends_on: null
+
+  - finding_id: BA-012
+    surface_id: mv-settings-delete-contact-email
+    lens: business-analyst
+    severity: P1
+    issue: 'Account deletion flow sends mobile chef to email support@homechef.app — domain does not match the Fe3dr brand on web portal, and friction makes GDPR/DPDPA right-to-erasure requests adversarial'
+    evidence_excerpt: "Please email support@homechef.app to delete your account."
+    recommendation: >
+      Resolve the domain inconsistency (homechef.app vs fe3dr.com). More importantly, replace
+      the email-to-delete pattern with a self-service in-app deletion request that is queued
+      for admin action. Under India's Digital Personal Data Protection Act 2023, data principals
+      have a right to erasure — routing this through an unmonitored email creates compliance
+      risk. From a conversion standpoint, a chef who cannot easily exit will distrust the
+      platform when joining. Suggested UX: "Request account deletion" button → confirmation
+      → "We'll delete your account within 30 days and email confirmation to [email]."
+    metric_hypothesis: "chef trust score; DPDPA compliance risk; support ticket volume"
+    depends_on: null
+
+  - finding_id: BA-013
+    surface_id: vp-legal-register-footer
+    lens: business-analyst
+    severity: P2
+    issue: '"Vendor Terms" linked in chef registration footer points to no destination — dead link at the conversion gate undermines legal consent and trust'
+    evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+    recommendation: >
+      Wire the "Vendor Terms" text to the actual vendor terms URL (same as what is referenced
+      in the TOS acceptance checkbox on StepPolicies). If the terms document does not yet exist
+      at a public URL, temporarily link to the inline terms shown in the onboarding wizard.
+      A dead or missing link on the registration legal footer erodes trust and renders the
+      consent collection legally questionable.
+    metric_hypothesis: "chef signup completion rate; legal consent validity"
+    depends_on: null
+
+  - finding_id: BA-014
+    surface_id: vp-legal-policies-compliance-confirm
+    lens: business-analyst
+    severity: P2
+    issue: 'Kitchen Compliance Checklist confirmation is a silent passive attestation — no affirmative action is required from the chef before proceeding'
+    evidence_excerpt: "By proceeding, you confirm that all the above conditions are met in your kitchen."
+    recommendation: >
+      Add an explicit checkbox with label "I confirm my kitchen meets all 7 requirements above."
+      The current passive confirmation (merely scrolling past triggers it) is not a meaningful
+      affirmative consent for food-safety self-attestation. From a BA lens: without the
+      checkbox, chefs who skip reading the checklist proceed anyway, then fail kitchen inspections,
+      leading to suspension and negative reviews. An explicit gate adds 3 seconds of friction
+      but increases compliance quality and reduces suspension rates.
+    metric_hypothesis: "chef kitchen inspection pass rate; chef suspension rate"
+    depends_on: null
+
+  - finding_id: BA-015
+    surface_id: vp-legal-settings-stripe
+    lens: business-analyst
+    severity: P2
+    issue: '"Make Stripe My Primary Gateway" and "Switch Back to Razorpay" are high-stakes financial switches with no consequence explanation — a chef who taps the wrong button cannot predict what happens to in-flight orders'
+    evidence_excerpt: "Make Stripe My Primary Gateway / Switch Back to Razorpay / Active gateway for your orders: ..."
+    recommendation: >
+      Add a one-line consequence note beneath each switch button: "Switching to Stripe will
+      process all new orders through Stripe. Orders already placed will complete via Razorpay."
+      Without this, a chef mid-service who accidentally switches gateways risks payment
+      disruption. This is a trust and financial safety issue that can generate high-severity
+      support escalations. A modal confirmation with the consequence displayed before the action
+      is committed would eliminate the risk.
+    metric_hypothesis: "chef payment incident rate; chef support escalation volume (gateway-related)"
+    depends_on: null
+
+  - finding_id: BA-016
+    surface_id: md-leg-001
+    lens: business-analyst
+    severity: P2
+    issue: 'Driver onboarding Terms of Service and Privacy Policy are styled as links but have no navigation wired — tapping them does nothing, which invalidates the consent gate'
+    evidence_excerpt: >
+      <Text className="text-herb font-medium">Terms of Service</Text> and
+      <Text className="text-herb font-medium">Privacy Policy</Text>
+      (no onPress handler, no Linking.openURL)
+    recommendation: >
+      Wire both terms links to Linking.openURL pointing to the canonical terms URLs
+      (fe3dr.com/terms and fe3dr.com/privacy, or homechef.in equivalents — resolve brand
+      first per BA-003). A driver who taps "Terms of Service" and nothing happens will either
+      distrust the app or assume consent was not real. This is also a legal risk: consent
+      collected through a non-functional link is uncollectable consent.
+    metric_hypothesis: "driver onboarding completion; driver trust score"
+    depends_on: BA-003
+
+  - finding_id: BA-017
+    surface_id: web-mkt-brand-copyright
+    lens: business-analyst
+    severity: P2
+    issue: 'Web footer copyright reads "Fe3dr" while email footer reads "Fe3dr by HomeChef" — inconsistent legal entity attribution across a single user session'
+    evidence_excerpt: "© {year} Fe3dr. All rights reserved."
+    recommendation: >
+      The copyright entity must match the registered legal name exactly — neither "Fe3dr" nor
+      "Fe3dr by HomeChef" is necessarily correct until confirmed against company registration.
+      Resolve the legal entity name and apply consistently across: LogoFooter (web), email
+      footer (API), vendor-portal legal footers (vp-legal-login-footer, vp-legal-register-footer),
+      admin-portal footer (ap-auth-footer-legal), and mobile-vendor terms (mv-onb-policies-terms-body).
+      A customer who sees different entity names in the same week loses trust in the platform's
+      legitimacy.
+    metric_hypothesis: "customer trust score; brand clarity"
+    depends_on: null
+
+  - finding_id: BA-018
+    surface_id: vp-legal-login-footer
+    lens: business-analyst
+    severity: P2
+    issue: 'Chef portal login-page legal footer has no clickable links — terms and privacy mentioned but not accessible at the exact moment chef is committing to the platform'
+    evidence_excerpt: "By continuing, you agree to Fe3dr's Terms of Service and Privacy Policy"
+    recommendation: >
+      Link "Terms of Service" and "Privacy Policy" to their respective URLs. Login is a
+      re-consent moment — a returning chef who has a concern about terms should be able to
+      access them. The absence of links on a consent statement is a common reason for
+      legal challenges to collected consent. From a conversion standpoint, a chef who cannot
+      verify the terms is more likely to abandon login if they have heard negative things
+      about the platform.
+    metric_hypothesis: "chef login completion rate; legal consent validity"
+    depends_on: null
+
+  - finding_id: BA-019
+    surface_id: ap-auth-restricted-heading
+    lens: business-analyst
+    severity: P3
+    issue: '"Restricted Access" heading on admin login is security-framing language that creates anxiety for legitimate admins who mistype their password'
+    evidence_excerpt: "Restricted Access / Only pre-authorized administrators can sign in. New registrations are not allowed."
+    recommendation: >
+      Reframe without reducing security signal: "Admin sign-in / Access is limited to authorised
+      team members." This communicates the same access restriction without the threat tone.
+      Per style guide: Admin persona is "neutral operator" not "warned intruder." Current copy
+      makes new admins on their first login feel they may be doing something wrong.
+    metric_hypothesis: "admin onboarding friction; admin first-login completion"
+    depends_on: null
+
+  - finding_id: BA-020
+    surface_id: vp-legal-docs-cheque
+    lens: business-analyst
+    severity: P3
+    issue: 'Cancelled Cheque described as "optional, can add later" with no explanation of the consequence of not adding it — chef does not know payouts will be blocked without it'
+    evidence_excerpt: "Cancelled Cheque / Bank Proof / For setting up direct payouts to your bank account (optional, can add later)"
+    recommendation: >
+      Add a consequence clause: "Without bank proof, payouts default to UPI. Add later in
+      Settings → Payout Details." This converts "optional" from a reassuring skip to an
+      informed skip. A chef who skips and then cannot receive a bank transfer will blame
+      the platform, not their earlier choice. Informed consent at the skip moment reduces
+      payout-related support contacts.
+    metric_hypothesis: "chef payout setup completion rate; payout support ticket volume"
+    depends_on: null
+
+  - finding_id: BA-021
+    surface_id: ap-secsettings-2fa-exempt
+    lens: business-analyst
+    severity: P3
+    issue: 'Placeholder email "service@fe3dr.com" is hardcoded in the 2FA exempt list textarea — if shipped to production, a non-admin account is pre-exempted from 2FA'
+    evidence_excerpt: "placeholder=\"service@fe3dr.com\""
+    recommendation: >
+      Change placeholder to a generic example format: "placeholder=\"service-account@yourdomain.com\"".
+      This is a BA severity P3 because the placeholder value does not persist unless an admin
+      saves it, but the specific internal email in a placeholder normalises the idea of this
+      being a valid entry and risks a copy-paste error that exempts a real service account.
+      From a trust lens: admins see a pre-populated example and may assume it belongs there.
+    metric_hypothesis: "admin security compliance; 2FA enforcement rate"
+    depends_on: null
+
+  - finding_id: BA-022
+    surface_id: mv-onb-policies-checkbox
+    lens: business-analyst
+    severity: P2
+    issue: 'Mobile-vendor policies checkbox reads "I accept the terms and conditions" — generic legal boilerplate with no link to what terms are being accepted'
+    evidence_excerpt: "I accept the terms and conditions"
+    recommendation: >
+      Replace with: "I accept the Vendor Terms at homechef.in/vendor-terms." Make the URL
+      a tappable link via Linking.openURL. The generic "terms and conditions" label is the
+      lowest-trust variant of consent copy — it signals that the terms are hidden, not
+      transparent. After brand resolution (BA-003), the URL and brand name should be updated
+      to match the canonical domain.
+    metric_hypothesis: "chef mobile onboarding completion; legal consent validity"
+    depends_on: BA-003
+
+  - finding_id: BA-023
+    surface_id: vp-legal-policy-hygiene
+    lens: business-analyst
+    severity: P2
+    issue: '"Fe3dr may conduct periodic kitchen checks" buried inside the hygiene policy checkbox description — consent to physical inspection hidden in prose, not surfaced as a distinct commitment'
+    evidence_excerpt: "I commit to maintaining a clean and hygienic kitchen at all times... I understand Fe3dr may conduct periodic kitchen checks."
+    recommendation: >
+      Elevate kitchen inspection consent to a standalone sentence or callout: "By accepting,
+      you agree that HomeChef may request a kitchen visit with 48 hours notice." Hiding
+      inspection consent inside a hygiene commitment paragraph means chefs who skim will
+      be surprised by inspection requests, generating complaints and trust erosion. A
+      prominent but plainly-worded inspection notice is both fairer and more legally defensible.
+    metric_hypothesis: "chef kitchen inspection consent rate; chef complaint rate post-inspection"
+    depends_on: null

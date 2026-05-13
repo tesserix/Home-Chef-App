@@ -1,0 +1,636 @@
+# Legal lens findings — Home Chef Content Audit
+# Scope: India regulatory exposure (DPDP Act 2023, FSSAI, RBI Payment Aggregator, GST) + generic best-practice
+# IMPORTANT: All findings carry depends_on: "needs lawyer review" — this audit is not legal advice.
+
+findings:
+  # ============================================================================
+  # CROSS-CUTTING / MISSING-ENTIRELY FINDINGS (apps with no legal pages at all)
+  # ============================================================================
+
+  - finding_id: LEG-001
+    surface_id: web-legal-register-terms
+    lens: legal
+    severity: P0
+    issue: "Signup links to 'Terms of Service' and 'Privacy Policy' but no such pages exist in apps/web; clicking either link will 404 or break the agreement"
+    evidence_excerpt: "By signing up, you agree to our Terms of Service and Privacy Policy"
+    recommendation: "Ship actual T&C and Privacy Policy pages at /terms and /privacy before any production signup; under DPDP Act §5 (Notice) and Indian Contract Act, consent referencing a missing document is unenforceable. Also add granular DPDP-grade notice listing purposes of data collection, retention period, data fiduciary identity, and grievance officer contact."
+    citation: "DPDP Act 2023 §5 (Notice), §6 (Consent); Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-002
+    surface_id: web-legal-register-terms
+    lens: legal
+    severity: P0
+    issue: "Bundled consent — single 'by signing up' clause covers both T&C and Privacy in one act, with no granular opt-in for marketing/analytics/third-party sharing"
+    evidence_excerpt: "By signing up, you agree to our Terms of Service and Privacy Policy"
+    recommendation: "DPDP Act requires consent to be 'free, specific, informed, unconditional and unambiguous' (§6). Split into: (a) T&C acceptance (contractual, can be implied), (b) Privacy Notice acknowledgment, (c) optional purpose-by-purpose opt-ins (marketing emails, analytics, third-party sharing). Pre-checked boxes are prohibited."
+    citation: "DPDP Act 2023 §6(1)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-003
+    surface_id: web-legal-checkout-terms-note
+    lens: legal
+    severity: P1
+    issue: "Order placement references T&C only, not Refund Policy or Cancellation Policy — RBI PA Master Direction requires refund timeline disclosure at point of payment"
+    evidence_excerpt: "By placing this order, you agree to our Terms of Service"
+    recommendation: "Add explicit reference to Refund Policy + Cancellation Policy at checkout. State maximum refund timeline (commonly ≤7 working days for digital refunds per RBI PA framework). Also link to FSSAI-mandated allergen/ingredient disclosure for the order."
+    citation: "RBI Payment Aggregator Master Direction (17 Mar 2020, updated 2024); FSSAI Regulations 2011 Ch. 2"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-004
+    surface_id: md-leg-001
+    lens: legal
+    severity: P0
+    issue: "Driver onboarding shows 'Terms of Service' link but inventory notes 'no navigation wired in code' — driver is being asked to accept terms they cannot read"
+    evidence_excerpt: "Terms of Service"
+    recommendation: "Wire navigation to actual driver-specific T&C page covering gig-worker classification (independent contractor vs employee), insurance disclosure, earnings/deductions transparency, and termination clause. Without a readable contract, the agreement is voidable under Indian Contract Act §10."
+    citation: "Indian Contract Act 1872 §10; Code on Social Security 2020 (gig worker provisions)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-005
+    surface_id: md-leg-002
+    lens: legal
+    severity: P0
+    issue: "Driver onboarding shows 'Privacy Policy' link with no navigation wired — driver location tracking, ID docs, banking info are collected without a readable privacy notice"
+    evidence_excerpt: "Privacy Policy"
+    recommendation: "Wire link to a driver-specific Privacy Notice that discloses: continuous GPS tracking, retention period for location history, biometric/ID handling, payment-data flow, and grievance officer contact. Drivers are data principals under DPDP and require notice at the time of data collection."
+    citation: "DPDP Act 2023 §5; §13 (Grievance redressal)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # FSSAI / FOOD SAFETY (HIGHEST EXPOSURE)
+  # ============================================================================
+
+  - finding_id: LEG-006
+    surface_id: vp-legal-docs-fssai
+    lens: legal
+    severity: P0
+    issue: "FSSAI license labeled '(Optional)' during chef onboarding — but FSSAI registration is mandatory for any food business, including home-based, with turnover obligations under FSS Act 2006"
+    evidence_excerpt: "FSSAI License / If you have one - gives your profile a verified badge. You can add this later. / FSSAI License Number (Optional)"
+    recommendation: "Per FSS Act 2006 §31, no food business can operate without an FSSAI registration/license. Home chefs with annual turnover ≤ ₹12 lakh need Basic Registration; above that, State/Central licence. 'Optional' framing exposes platform to aiding unlicensed food business operation. Reframe as 'FSSAI Registration is required by Indian law — Basic Registration is free and takes ~7 days'. Block listing/payouts until provided OR add a verified disclosure that the chef holds at least Basic Registration."
+    citation: "FSS Act 2006 §31; FSS (Licensing & Registration) Regulations 2011 Reg. 2.1"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-007
+    surface_id: vp-legal-profile-doc-types
+    lens: legal
+    severity: P0
+    issue: "FSSAI labeled 'Required' on Profile DOCUMENT_TYPES but 'Optional' on onboarding — internally inconsistent contract; chef can complete onboarding without FSSAI but is told it's required at profile level"
+    evidence_excerpt: "FSSAI License (Food Safety and Standards Authority certificate) ... Required"
+    recommendation: "Resolve contradiction across all surfaces. If FSSAI is required (correct under FSS Act 2006), enforce it at onboarding too. Inconsistent disclosures across screens create estoppel risk and consumer-protection exposure for misrepresentation."
+    citation: "FSS Act 2006 §31; Consumer Protection Act 2019 §2(28) (misleading representation)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-008
+    surface_id: vp-legal-docs-food-safety
+    lens: legal
+    severity: P1
+    issue: "Food Safety Training Certificate marked optional — FoSTaC training is mandated by FSSAI for at least one Food Safety Supervisor per food business (Schedule 4 of FSS Regulations)"
+    evidence_excerpt: "Food Safety Training Certificate / Any food handling or safety certification (optional)"
+    recommendation: "Verify with counsel whether home-chef setups fall under FoSTaC mandate. If yes, change framing from 'optional' to 'required for chefs preparing >X meals/day' with clear threshold disclosure. Reference: Schedule 4 of FSS (Licensing & Registration) Regulations 2011."
+    citation: "FSS (Licensing & Registration) Regulations 2011 Schedule 4 (FoSTaC)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-009
+    surface_id: vp-legal-policies-compliance-items
+    lens: legal
+    severity: P0
+    issue: "7-item food-safety self-attestation list is load-bearing for FSSAI compliance, platform liability, and consumer-protection defence — but uses vague language ('clean water', 'clean attire') with no measurable standard"
+    evidence_excerpt: "clean water / separate cutting boards veg vs non-veg / store raw and cooked separately / clean attire and personal hygiene / waste disposal area / freshly prepared / label allergens and ingredients"
+    recommendation: "Each item should map to a specific clause in FSS (Licensing & Registration) Regulations 2011 Schedule 4 (Part II for home-based) so attestation is legally meaningful. E.g., 'potable water meeting IS 10500:2012'. Without measurable criteria, attestation provides no liability shield and may be unenforceable as too vague."
+    citation: "FSS (Licensing & Registration) Regulations 2011 Schedule 4; IS 10500:2012 (potable water)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-010
+    surface_id: vp-legal-policies-compliance-confirm
+    lens: legal
+    severity: P1
+    issue: "Single tick-box attestation for 7 distinct compliance items — combined consent prevents partial truthful answers; encourages 'click-through' behavior"
+    evidence_excerpt: "By proceeding, you confirm that all the above conditions are met in your kitchen."
+    recommendation: "Require individual attestation per item (separate checkbox per row). Combined attestation is harder to enforce in a Consumer Forum action and easier to dismiss as boilerplate. Per FSSAI good-practice and DPDP §6 spirit (specific consent), break apart bundled affirmations."
+    citation: "best-practice; DPDP Act 2023 §6 (specificity by analogy)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-011
+    surface_id: vp-legal-policy-hygiene
+    lens: legal
+    severity: P1
+    issue: "Hygiene policy commits chef to 'periodic kitchen checks' by Fe3dr — but does not state inspection frequency, notice period, audit rights of refusal, or who bears cost"
+    evidence_excerpt: "I commit to maintaining a clean and hygienic kitchen at all times... Fe3dr may conduct periodic kitchen checks."
+    recommendation: "Specify: notice required before inspection, frequency cap, recordable findings, chef's right to be present, and remediation window before delisting. Vague inspection rights may be unconscionable under Consumer Protection Act for the chef-as-platform-user; also creates ambiguity for platform's own auditors."
+    citation: "Consumer Protection Act 2019; best-practice (contract clarity)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-012
+    surface_id: vp-legal-policy-cancellation
+    lens: legal
+    severity: P1
+    issue: "'Repeated late cancellations may affect my kitchen rating and visibility' — penalty terms are vague ('may'), with no defined threshold, appeal process, or proportionality"
+    evidence_excerpt: "Repeated late cancellations may affect my kitchen rating and visibility."
+    recommendation: "Define: count threshold ('3 late cancellations in 30 days'), visibility penalty magnitude, appeal/grievance pathway (mandated by DPDP §13 for data-based decisions, and CCPA-style for platform decisions), and reset period. Indeterminate enforcement clauses are challengeable in Consumer Forums."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(3) (grievance mechanism)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-013
+    surface_id: vp-legal-policy-tos
+    lens: legal
+    severity: P0
+    issue: "Vendor TOS clause commits chef to 'commission' and 'weekly payouts' without disclosing commission percentage, TDS withholding, GST treatment, or settlement cycle definition"
+    evidence_excerpt: "Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account."
+    recommendation: "Disclose: (a) commission rate or rate-card link, (b) GST treatment (platform charges GST on commission to chef under reverse charge), (c) TDS withholding under §194-O of Income Tax Act (1% TDS on e-commerce participants), (d) payout cycle definition (which day, what cutoff). Failure to disclose §194-O TDS at point of agreement is a known dispute trigger."
+    citation: "Income Tax Act 1961 §194-O; CGST Act 2017 §9(5); RBI Payment Aggregator Master Direction (settlement timelines)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-014
+    surface_id: mv-onb-policies-terms-body
+    lens: legal
+    severity: P1
+    issue: "Vendor terms reference URL 'homechef.in/vendor-terms' but inventory notes URL is unverified and only referenced from mobile vendor app — drift risk: same TOS likely not mirrored on web vendor-portal"
+    evidence_excerpt: "Full terms available at homechef.in/vendor-terms."
+    recommendation: "Verify the URL resolves, is owned by the same legal entity, and serves identical text to what is binding on vendor-portal users. Differing TOS across surfaces is unenforceable as to the version not actually seen by user. Also check domain registration matches the brand identity used elsewhere (Fe3dr vs HomeChef inconsistency — see LEG-046)."
+    citation: "Indian Contract Act 1872 §10; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-015
+    surface_id: mv-onb-policies-terms-body
+    lens: legal
+    severity: P1
+    issue: "Mobile vendor terms claim platform may 'suspend accounts that receive repeated hygiene complaints' — no due-process step, no opportunity to respond, no appeal"
+    evidence_excerpt: "HomeChef reserves the right to suspend accounts that receive repeated hygiene complaints or fail document verification."
+    recommendation: "Add procedural fairness: notice of complaint, opportunity to respond, defined threshold ('repeated' = how many?), and appeal/grievance officer route. Per Consumer Protection (E-Commerce) Rules 2020 Rule 5(3), grievance officer must respond within 48 hours of complaint and resolve within 30 days. Unilateral suspension without process risks Consumer Forum reversal."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5), 5(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-016
+    surface_id: mv-onb-policies-checkbox
+    lens: legal
+    severity: P1
+    issue: "Single checkbox 'I accept the terms and conditions' bundles entire vendor agreement — no acknowledgment of specific load-bearing clauses (commission, suspension rights, food-safety liability)"
+    evidence_excerpt: "I accept the terms and conditions"
+    recommendation: "Break out high-stakes clauses for separate scroll-and-acknowledge: (a) commission %, (b) suspension grounds, (c) food-safety attestation, (d) DPDP consent. Indian courts have shown willingness to strike unconscionable clauses in click-through contracts where no specific attention was drawn."
+    citation: "LIC of India v. Consumer Education & Research Centre (1995); best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # DPDP / DATA PROTECTION
+  # ============================================================================
+
+  - finding_id: LEG-017
+    surface_id: vp-legal-docs-banner-body
+    lens: legal
+    severity: P0
+    issue: "Claim 'Your documents are encrypted and stored securely' is a content claim that requires technical backing — under DPDP §8(5), data fiduciary must implement reasonable security safeguards AND not misrepresent them"
+    evidence_excerpt: "Your documents are encrypted and stored securely. They are only used for verification."
+    recommendation: "Verify with engineering: (a) at-rest encryption (KMS-managed keys, algorithm), (b) in-transit (TLS 1.2+), (c) access controls (who can decrypt), (d) retention period after verification. Then either: (i) make the claim specific ('AES-256 at rest, TLS 1.3 in transit, deleted 90 days after rejection') or (ii) soften to non-claim ('stored securely per industry standards'). False security representations under DPDP §33 attract penalties up to ₹250 crore."
+    citation: "DPDP Act 2023 §8(5) (security safeguards), §33 (penalty for failure of safeguards)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-018
+    surface_id: vp-legal-docs-banner-body
+    lens: legal
+    severity: P0
+    issue: "Claim 'They are only used for verification' is a purpose-limitation promise but no retention period disclosed — DPDP requires explicit retention statement"
+    evidence_excerpt: "They are only used for verification."
+    recommendation: "Add: 'Retained for [X] years after kitchen deactivation as required by [tax/FSSAI/anti-money-laundering law cite]; then deleted within [Y] days'. DPDP §8(7) requires deletion once purpose is satisfied unless retention is required by law. Document retention without legal-basis disclosure is a §33 violation risk."
+    citation: "DPDP Act 2023 §8(7) (retention limitation); §5(1)(ii) (retention notice in consent)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-019
+    surface_id: vp-legal-docs-aadhaar
+    lens: legal
+    severity: P0
+    issue: "Aadhaar Card collected with only 'For identity verification' framing — Aadhaar is governed by Aadhaar Act 2016 and UIDAI rules, NOT just DPDP; private entities have strict limits on holding Aadhaar"
+    evidence_excerpt: "Aadhaar Card / For identity verification"
+    recommendation: "Per Aadhaar Act §57 (post-2018 Supreme Court ruling in K.S. Puttaswamy II), private entities cannot mandate Aadhaar for service. Use Offline e-KYC (XML/QR) instead of storing Aadhaar number directly, OR use UIDAI-approved e-KYC AUA/KUA. Storing Aadhaar number or scans without UIDAI registration may violate Aadhaar (Authentication & Offline Verification) Regulations 2021. Also mask Aadhaar in any UI showing it back."
+    citation: "Aadhaar Act 2016 §57; K.S. Puttaswamy v. Union of India (2018) 1 SCC 809; Aadhaar (Authentication & Offline Verification) Regulations 2021"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-020
+    surface_id: vp-legal-docs-aadhaar
+    lens: legal
+    severity: P1
+    issue: "Aadhaar collection alongside PAN and bank details — no separate, prominent Aadhaar consent or 'why we need Aadhaar specifically' disclosure"
+    evidence_excerpt: "Aadhaar Card / For identity verification"
+    recommendation: "Aadhaar collection requires distinct, written informed consent disclosing: (a) specific purpose, (b) alternatives available, (c) consequences of refusal. Bundling Aadhaar consent with general document upload violates Aadhaar Regulation 6(2). Offer Voter ID/Passport/Driving Licence as alternatives — Aadhaar must be optional for private platforms per Puttaswamy II."
+    citation: "Aadhaar (Authentication & Offline Verification) Regulations 2021 Reg. 6; K.S. Puttaswamy II (2018)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-021
+    surface_id: vp-legal-docs-pan
+    lens: legal
+    severity: P1
+    issue: "PAN Card framed as 'Required for tax purposes and payouts' but no disclosure of TDS §194-O (1% TDS on e-commerce participants from gross sales over ₹5 lakh)"
+    evidence_excerpt: "PAN Card / Required for tax purposes and payouts"
+    recommendation: "Disclose at collection: 'We need your PAN to deduct 1% TDS on your gross sales above ₹5 lakh per year under Income Tax Act §194-O. Form 26AS will reflect this credit.' Chefs need to understand the tax-withholding implication BEFORE they sign up, not at first payout."
+    citation: "Income Tax Act 1961 §194-O (e-commerce TDS); DPDP Act 2023 §5 (Notice)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-022
+    surface_id: vp-legal-docs-banner-title
+    lens: legal
+    severity: P1
+    issue: "'Documents help us verify your kitchen and enable payouts' — does not identify the data fiduciary, grievance officer, or rights of the data principal (chef)"
+    evidence_excerpt: "Documents help us verify your kitchen and enable payouts"
+    recommendation: "Add DPDP §5-compliant notice at point of collection (or prominent link to one): (a) data fiduciary entity name + registered address, (b) purposes (verify kitchen, payouts, TDS, FSSAI), (c) right to access/correct/erase (§11-13), (d) grievance officer name + contact + 30-day SLA, (e) right to file complaint with Data Protection Board (§28)."
+    citation: "DPDP Act 2023 §5, §11-13, §28"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-023
+    surface_id: vp-legal-docs-identity-title
+    lens: legal
+    severity: P2
+    issue: "'These are required to verify your identity and set up payouts' — broad single-purpose framing; doesn't clarify which doc serves which purpose"
+    evidence_excerpt: "Identity Documents / These are required to verify your identity and set up payouts."
+    recommendation: "Per-document purpose disclosure: PAN → tax compliance and payouts; Aadhaar → identity verification (optional, alternatives available); Cheque → bank verification for payouts; FSSAI → food-business licence display. DPDP §5 requires purpose specificity — vague global purpose is non-compliant."
+    citation: "DPDP Act 2023 §5(1)(i) (purpose of processing)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-024
+    surface_id: vp-legal-docs-cheque
+    lens: legal
+    severity: P1
+    issue: "Cancelled cheque collected with no disclosure of how bank details are stored, who has access, or PCI/RBI safeguards around banking data"
+    evidence_excerpt: "Cancelled Cheque / Bank Proof / For setting up direct payouts to your bank account (optional, can add later)"
+    recommendation: "Add: 'Your cancelled cheque is encrypted at rest and used only to set up payouts via [Razorpay/Stripe]. We do not store your IFSC/account number in plain text outside this verification.' Banking data falls under DPDP §6(7) sensitive-personal-data-like treatment (per draft Rules) and may require explicit consent."
+    citation: "DPDP Act 2023 §8(5); RBI Master Direction on Digital Payment Security Controls 2021"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # BANKING / PAYMENTS / RBI
+  # ============================================================================
+
+  - finding_id: LEG-025
+    surface_id: vp-legal-kitchen-payout-warning
+    lens: legal
+    severity: P0
+    issue: "'Payout integration coming soon. These details are saved locally for now' — collecting banking data without clear handling disclosure; 'saved locally' may mean unencrypted browser storage, which is a data breach waiting to happen"
+    evidence_excerpt: "Payout integration coming soon. These details are saved locally for now."
+    recommendation: "STOP collecting bank account details until payout integration ships. 'Saved locally' is ambiguous — if it means localStorage/IndexedDB in browser, banking data sits in plain text exposed to XSS. If it means server-side stub, it must be encrypted with KMS keys. Either way, do not collect data you cannot yet process. Per RBI Master Direction on Digital Payment Security Controls 2021, banking data requires AES-256 encryption and tokenization."
+    citation: "RBI Master Direction on Digital Payment Security Controls 2021; DPDP Act 2023 §8(5); §6 (purpose limitation — can't process for a purpose that doesn't yet exist)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-026
+    surface_id: vp-legal-settings-stripe
+    lens: legal
+    severity: P1
+    issue: "Stripe Connect block routes chef KYC through Stripe's hosted onboarding but doesn't disclose data flow to chef — Stripe is a cross-border processor (USA), so DPDP §16 cross-border transfer rules apply"
+    evidence_excerpt: "Stripe handles KYC and bank verification on their hosted pages - just pick your country and follow the flow."
+    recommendation: "Disclose: (a) Stripe is a data processor; chef's data leaves India; (b) Stripe's privacy policy applies in addition to ours; (c) data is transferred to USA. Under DPDP §16, cross-border transfers are allowed but require notification. Add link to Stripe's privacy policy at point of redirect. Also: Stripe is not a registered Payment Aggregator in India under RBI's PA framework — verify the legal structure (is Stripe acting as PA, or merchant-of-record outside India?)."
+    citation: "DPDP Act 2023 §16; RBI Payment Aggregator Master Direction (Mar 2020, updated 2024) — PA licence requirement"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-027
+    surface_id: vp-legal-settings-stripe
+    lens: legal
+    severity: P1
+    issue: "Gateway switch text 'Make Stripe My Primary Gateway / Switch Back to Razorpay' — no disclosure of refund-in-flight handling, pending payout impact, or settlement-cycle change"
+    evidence_excerpt: "Make Stripe My Primary Gateway / Switch Back to Razorpay / Active gateway for your orders: ..."
+    recommendation: "Add a consequence callout before switch: 'Switching gateways will: pause new payouts for [X] hours; existing pending settlements complete via [old gateway]; refunds for past orders process through [old gateway] for [Y] days.' RBI PA Master Direction §9 requires settlement transparency; ambiguous gateway switching during open settlement windows is a customer-protection issue."
+    citation: "RBI Payment Aggregator Master Direction §9 (settlement); Consumer Protection (E-Commerce) Rules 2020 Rule 5"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-028
+    surface_id: vp-legal-policy-tos
+    lens: legal
+    severity: P1
+    issue: "'Payouts will be processed weekly' — RBI PA Master Direction defines specific settlement cycles (T+1 to T+3 standard); 'weekly' without anchor day or holiday handling is operationally ambiguous"
+    evidence_excerpt: "my payouts will be processed weekly to my registered bank account."
+    recommendation: "State the specific cycle: 'Every Monday for orders completed up to the previous Friday' or similar. Disclose: what happens on bank holidays, what cutoff time defines 'completed', and what an order failure does to the cycle. Verify the cycle is consistent with the PA's settlement obligations to merchants under the RBI Master Direction."
+    citation: "RBI Payment Aggregator Master Direction §9 (settlement to merchant)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ADMIN PORTAL — DUE PROCESS / TRANSPARENCY
+  # ============================================================================
+
+  - finding_id: LEG-029
+    surface_id: ap-chefs-reject-reason
+    lens: legal
+    severity: P0
+    issue: "Hardcoded rejection reason 'Rejected by admin' sent to chef with no specific reason — fails Consumer Protection (E-Commerce) Rules 2020 Rule 4(5) requirement to communicate reasons for actions affecting users"
+    evidence_excerpt: "Rejected by admin"
+    recommendation: "Require admin to select a coded reason from a structured list (FSSAI docs missing, kitchen photos insufficient, identity mismatch, prior policy violations, etc.) and append a free-text justification visible to the chef. Vague rejections are: (a) ripe for discrimination claims if patterns emerge, (b) non-compliant with E-Commerce Rules 4(5)/(11), (c) impossible to appeal under §13 DPDP grievance rights for automated/admin decisions."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 4(5), 4(11); DPDP Act 2023 §13 (grievance redressal)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-030
+    surface_id: ap-approvaldetail-notes-helper
+    lens: legal
+    severity: P2
+    issue: "'These notes will be recorded in the history and visible to other admins' — does not state whether notes are also disclosable to the affected chef under DPDP §11 (right of access)"
+    evidence_excerpt: "These notes will be recorded in the history and visible to other admins."
+    recommendation: "Add disclosure that admin notes about a data principal (chef) may be requested by that chef under DPDP §11 right of access — unless they fall under §17 exemption (e.g., prevention of fraud). This sets correct admin expectations and prevents tortious-interference / defamation exposure from off-record comments mistakenly thought to be private."
+    citation: "DPDP Act 2023 §11 (right of access); §17 (exemptions)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-031
+    surface_id: ap-auditlogs-subtitle
+    lens: legal
+    severity: P3
+    issue: "Audit log subtitle states 'IP, user agent' captured — admin's own personal data is being processed; admin DPDP notice should cover this"
+    evidence_excerpt: "Admin actions recorded with actor, IP, user agent, and before/after values."
+    recommendation: "Cross-check: admin onboarding / employment contract should include notice that admin activities are logged with IP/UA for tamper-evidence and breach-investigation purposes. Without notice at hire, surveillance of admins may breach DPDP §5 even where employment-context exemptions narrow under §17."
+    citation: "DPDP Act 2023 §5; §17"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-032
+    surface_id: ap-secsettings-2fa-exempt
+    lens: legal
+    severity: P1
+    issue: "2FA-exempt email list defines a carve-out for service accounts — without policy text explaining why exemptions are granted, this is a security/compliance gap and audit-trail weakness"
+    evidence_excerpt: "2FA exempt emails ... Useful for service accounts (E2E tests, automation) that can't scan a QR. Leave empty to enforce 2FA on every admin. ... service@fe3dr.com"
+    recommendation: "Policy gap: write a documented exemption policy with: (a) approval authority for adding an exemption, (b) review cadence, (c) compensating controls (IP allowlist, restricted scope), (d) audit log of additions/removals. Production-hardcoded 'service@fe3dr.com' must be verified as a real, secured service account, not a backdoor. Per CERT-In Directions Apr 2022, admin account compromise is reportable in 6 hours."
+    citation: "CERT-In Direction No. 20(3)/2022-CERT-In dated 28 Apr 2022; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-033
+    surface_id: ap-settings-payment-helpers
+    lens: legal
+    severity: P2
+    issue: "'Keys are stored securely in GCP Secret Manager' — specific technical claim that creates liability if false; also discloses internal infrastructure choice (GCP) which some security policies flag"
+    evidence_excerpt: "Keys are stored securely in GCP Secret Manager. Leave a field empty to keep its current value."
+    recommendation: "Verify the claim is true (engineering confirmation). If true, leave as-is (it's accurate and reassures admins). If GCP Secret Manager use is partial/migrating, soften to 'stored encrypted in our secrets manager'. Disclosing infrastructure to internal admins is fine; but copy this claim does not leak to chefs/customers."
+    citation: "best-practice (truthful claims)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-034
+    surface_id: ap-secsettings-2fa-enforce
+    lens: legal
+    severity: P3
+    issue: "2FA enforcement toggle — no record of when/by whom the policy was last changed visible in the helper text"
+    evidence_excerpt: "Require 2FA for all admins; When enabled, admins without 2FA are prompted to enroll on their next login."
+    recommendation: "Cross-reference with audit log: any change to authentication policy should be recorded in audit log with actor, timestamp, before/after state — and ideally surfaced as last-changed banner here. CERT-In Directions require certain security events to be retained 180 days."
+    citation: "CERT-In Direction 28 Apr 2022 (log retention); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-035
+    surface_id: ap-secsettings-apikey-warn
+    lens: legal
+    severity: P3
+    issue: "'Copy this key now — you won't see it again' — operationally correct but doesn't disclose that the key, once leaked, identifies admin actions in audit logs"
+    evidence_excerpt: "Copy this key now — you won't see it again"
+    recommendation: "Add follow-up sentence: 'If you lose this key, regenerate it — don't share or store it in source code or screenshots. Compromised keys must be reported to security within 24 hours.' This aligns admin behaviour with CERT-In incident reporting (6-hour rule for major incidents)."
+    citation: "CERT-In Direction 28 Apr 2022 §2(ii) (6-hour reporting); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-036
+    surface_id: ap-staffdetail-role-descriptions
+    lens: legal
+    severity: P2
+    issue: "Role descriptions are one-line summaries ('Full access to everything', 'Read-only support access') — these are RBAC labels that drive admin permissions; vague labels make access-control review harder for an auditor or DPDP investigation"
+    evidence_excerpt: "Full access to everything; Admin portal management; Delivery fleet management; Delivery operations; Read-only support access"
+    recommendation: "Map each role to a documented permissions matrix (what it can read/write/delete, with examples). Per DPDP §8(4), data fiduciary must implement appropriate technical and organisational measures — vague RBAC labels undercut that. 'Full access to everything' especially needs explicit scoping for principle of least privilege."
+    citation: "DPDP Act 2023 §8(4); ISO/IEC 27001 A.9 (Access Control) — best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-037
+    surface_id: ap-auth-restricted-body
+    lens: legal
+    severity: P3
+    issue: "'New registrations are not allowed' — informational but combined with 'Restricted Access' could be perceived as discouraging legitimate access requests from authorised staff who haven't been onboarded"
+    evidence_excerpt: "Only pre-authorized administrators can sign in. New registrations are not allowed."
+    recommendation: "Add contact for legitimate access requests: 'If you need admin access, contact your manager or security@fe3dr.com.' Clarifies the gate is procedural, not adversarial, and provides legitimate-purpose channel."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # ACCOUNT DELETION / DPDP RIGHTS
+  # ============================================================================
+
+  - finding_id: LEG-038
+    surface_id: vp-legal-settings-danger
+    lens: legal
+    severity: P0
+    issue: "'Account deactivation is not available in demo mode' — production-shipped string referencing 'demo mode'; either (a) demo branch leaked to prod, OR (b) deactivation is disabled in prod under demo label, blocking DPDP §12 right to erasure"
+    evidence_excerpt: "Account deactivation is not available in demo mode"
+    recommendation: "URGENT: verify this is not blocking real account deletions. DPDP §12(1) gives data principal explicit right to erasure of personal data. Demo-mode strings in production are a P0 trust signal + a regulatory time-bomb. Remove the demo-mode gate, implement real deactivation, or clearly state deactivation is unavailable for legal reasons (e.g., open tax obligations) and provide alternative via grievance officer."
+    citation: "DPDP Act 2023 §12 (right to correction and erasure); §13 (grievance)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-039
+    surface_id: vp-legal-settings-danger
+    lens: legal
+    severity: P1
+    issue: "'Deactivating your account will hide your kitchen from customers and pause all orders' — 'deactivate' is not 'delete'; doesn't disclose data retention after deactivation"
+    evidence_excerpt: "Deactivating your account will hide your kitchen from customers and pause all orders. Deactivate Account"
+    recommendation: "Distinguish: 'Deactivate' (hide profile, pause orders, data retained for X reason) vs 'Delete account' (erasure under DPDP §12). Disclose retention period and legal basis for each retention category (e.g., tax records 8 years, FSSAI complaint records X years). Currently 'deactivate' obscures whether data is actually erased."
+    citation: "DPDP Act 2023 §8(7), §12"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-040
+    surface_id: mv-settings-delete-confirm-body
+    lens: legal
+    severity: P0
+    issue: "'To delete your account, please contact our support team' — under DPDP §12, deletion request must be actionable by data principal directly or via a clearly-defined process; routing through an unidentified support team without SLA fails the right-to-erasure standard"
+    evidence_excerpt: "To delete your account, please contact our support team. This action cannot be undone."
+    recommendation: "Implement self-service deletion OR provide: (a) grievance officer name + email per DPDP §10(2), (b) 30-day response SLA per §13(1), (c) escalation route to Data Protection Board. 'Contact support' without SLA is not a compliant erasure pathway."
+    citation: "DPDP Act 2023 §10(2), §12, §13"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-041
+    surface_id: mv-settings-delete-contact-email
+    lens: legal
+    severity: P1
+    issue: "Support email 'support@homechef.app' — inconsistent with brand 'Fe3dr' (see LEG-046), AND inventory notes a different domain 'support@homechef.in' is referenced in mobile-delivery — two different support emails undermines grievance pathway"
+    evidence_excerpt: "Please email support@homechef.app to delete your account."
+    recommendation: "Pick one canonical grievance email and use it everywhere. DPDP §10(2) requires data fiduciary to publish a single grievance officer contact. Multiple emails create plausible-deniability risk where one mailbox is unmonitored. Verify domain ownership: homechef.app and homechef.in must both be owned by the same legal entity, or split clearly which serves which jurisdiction."
+    citation: "DPDP Act 2023 §10(2); best-practice (grievance pathway clarity)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # MARKETING / EMAIL / BRAND CONSISTENCY
+  # ============================================================================
+
+  - finding_id: LEG-042
+    surface_id: api-email-base-footer
+    lens: legal
+    severity: P1
+    issue: "Email footer says 'Fe3dr by HomeChef' — brand identity inconsistency across product (Fe3dr vs HomeChef) creates legal entity ambiguity, especially for receipt/notice/grievance emails that must clearly identify the data fiduciary"
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    recommendation: "Pick one. If Fe3dr is a brand of HomeChef Pvt Ltd (or similar), state in footer: 'Fe3dr is a service of HomeChef Pvt Ltd, [registered address], CIN: [X]'. Email-marketing rules (TRAI commercial communications regs) and DPDP §5 require clear data fiduciary identification. Brand ambiguity also makes it hard to know which entity is the merchant of record for refunds (RBI PA framework)."
+    citation: "DPDP Act 2023 §5; TRAI Telecom Commercial Communications Customer Preference Regulations 2018; Companies Act 2013 §12(3) (display of company name)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-043
+    surface_id: api-email-base-footer
+    lens: legal
+    severity: P1
+    issue: "Footer links to '/privacy' and '/terms' hardcoded — same risk as LEG-001 (pages must exist) plus no unsubscribe / preferences link for marketing-class emails"
+    evidence_excerpt: "fe3dr.com · Privacy · Terms"
+    recommendation: "For transactional emails: include privacy + terms + grievance officer contact. For marketing emails: also include unsubscribe link (one-click), preference centre, and explicit identification of sender. Mixing classes (transactional + marketing) without separate footers violates DLT/TRAI norms for SMS/email commercial communications."
+    citation: "TRAI Telecom Commercial Communications Customer Preference Regulations 2018; DPDP Act 2023 §6 (withdrawal of consent must be as easy as giving it)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-044
+    surface_id: web-mkt-brand-copyright
+    lens: legal
+    severity: P2
+    issue: "Copyright © {year} Fe3dr — no entity name beyond brand; for footer copyright to function as a legal notice, full company name should appear"
+    evidence_excerpt: "© {year} Fe3dr. All rights reserved."
+    recommendation: "Replace with full legal entity: '© {year} HomeChef Pvt Ltd. All rights reserved. Fe3dr is a registered trademark of HomeChef Pvt Ltd.' Companies Act 2013 §12(3) requires registered company name on all business communications. 'All rights reserved' is largely vestigial post-Berne Convention but harmless."
+    citation: "Companies Act 2013 §12(3); Trade Marks Act 1999 §29"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-045
+    surface_id: vp-legal-login-footer
+    lens: legal
+    severity: P1
+    issue: "Sign-in screen footer 'By continuing, you agree to Fe3dr's Terms of Service and Privacy Policy' — but no link target verified; chef logs in routinely and is bound each time without notice of changes"
+    evidence_excerpt: "By continuing, you agree to Fe3dr's Terms of Service and Privacy Policy"
+    recommendation: "Verify links resolve. Add version/date stamp ('last updated: DD Mon YYYY') so chefs can identify if terms changed since their last accepted version. Major term changes (commission %, payout cycle, data-handling) require fresh consent per DPDP §6, not click-wrap acceptance via login."
+    citation: "DPDP Act 2023 §6 (informed consent on changes); Indian Contract Act 1872 §10"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-046
+    surface_id: vp-legal-register-footer
+    lens: legal
+    severity: P0
+    issue: "'You agree to Fe3dr's Vendor Terms' — but inventory notes 'no link target' for Vendor Terms; chef is being asked to accept a document they cannot access during registration"
+    evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+    recommendation: "Wire the link to actual Vendor Terms (currently only mobile-vendor app references 'homechef.in/vendor-terms' — verify same URL works here). Without a readable contract at the moment of acceptance, the agreement may be voidable. Vendor Terms is the highest-stakes contract on the platform (commission, suspension, food-safety liability) — must be accessible."
+    citation: "Indian Contract Act 1872 §10; Consumer Protection Act 2019 §2(11) (unfair contract)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-047
+    surface_id: ap-auth-footer-legal
+    lens: legal
+    severity: P3
+    issue: "'Fe3dr Administration Portal · Internal Use Only' — clarifies portal scope but doesn't reference confidentiality obligations on admins"
+    evidence_excerpt: "Fe3dr Administration Portal · Internal Use Only"
+    recommendation: "Admins handling chef/customer PII should see a confidentiality notice at login: 'Information accessed via this portal is confidential and protected under the DPDP Act 2023. Unauthorised access, disclosure, or use may result in disciplinary action and legal penalties.' Sets expectations and supports later enforcement."
+    citation: "DPDP Act 2023 §33 (penalties); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-048
+    surface_id: mv-onb-policies-cancel-label
+    lens: legal
+    severity: P3
+    issue: "'Cancellation Policy *' — asterisk on label conflicts with style guide which says required indicator should be on field, not label; also a contractual term being framed as a form field rather than a clause"
+    evidence_excerpt: "Cancellation Policy *"
+    recommendation: "Cancellation policy is a binding term, not a preference. Reframe as 'Select your cancellation policy — this becomes part of your kitchen's customer commitment.' Plus full preview of consequences for customers (what they'll see at checkout) so chef makes an informed selection."
+    citation: "best-practice (informed contracting); Style guide §4 (Form labels)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-049
+    surface_id: mv-onb-policies-cancel-option-no
+    lens: legal
+    severity: P1
+    issue: "Cancellation option 'No cancellations after order accepted' — may conflict with Consumer Protection (E-Commerce) Rules 2020 which require reasonable cancellation windows for consumers"
+    evidence_excerpt: "No cancellations after order accepted"
+    recommendation: "Under E-Commerce Rules Rule 5(7), seller must accept cancellation 'before shipping/delivery'. For perishable home-cooked food, 'before prep starts' is the analogous moment. A blanket 'no cancellations after order accepted' is likely unenforceable against a consumer making a reasonable, timely cancellation. Frame as 'No refunds after prep starts; cancellations free until chef begins cooking.'"
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5(7)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-050
+    surface_id: mv-onb-policies-cancel-option-1h
+    lens: legal
+    severity: P2
+    issue: "'Up to 1 hour before prep start' — consumer-facing implication of this option not surfaced; chef may pick without realising customer-side impact"
+    evidence_excerpt: "Up to 1 hour before prep start"
+    recommendation: "Show alongside each option a customer-side preview: 'Customers will see: \"Cancel free up to 1 hour before the chef starts cooking. After that, refunds may not apply.\"' Per Consumer Protection (E-Commerce) Rules 2020 Rule 5(3) and DPDP §5 transparency, customers need to know cancellation terms BEFORE paying."
+    citation: "Consumer Protection (E-Commerce) Rules 2020 Rule 5; best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-051
+    surface_id: mv-onb-policies-cancel-option-30m
+    lens: legal
+    severity: P2
+    issue: "'Up to 30 mins before prep start' — same as LEG-050, no consumer-side preview, plus a very short refund window for digital food orders"
+    evidence_excerpt: "Up to 30 mins before prep start"
+    recommendation: "Verify with counsel whether 30-minute pre-prep cutoff meets the Consumer Protection Act 'reasonable opportunity to cancel' standard. Add customer-side preview and ensure refund timeline (≤7 days per RBI PA Master Direction) is stated separately."
+    citation: "Consumer Protection Act 2019; RBI Payment Aggregator Master Direction (refund timelines)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-052
+    surface_id: mv-settings-delete-contact-action
+    lens: legal
+    severity: P3
+    issue: "'Contact Support' as the only action for account deletion — button text doesn't reflect the legal weight of the request (DPDP §12 right of erasure)"
+    evidence_excerpt: "Contact Support"
+    recommendation: "Label more precisely: 'Request account deletion' (verb-first per style guide). Sets correct user expectation that this is a DPDP §12 request with 30-day SLA, not a casual support ticket."
+    citation: "DPDP Act 2023 §12; Style guide §4 (Buttons)"
+    depends_on: "needs lawyer review"
+
+  # ============================================================================
+  # CROSS-CUTTING — PROHIBITED / MISSING DISCLOSURES (jurisdiction-agnostic)
+  # ============================================================================
+
+  - finding_id: LEG-053
+    surface_id: api-email-base-footer
+    lens: legal
+    severity: P2
+    issue: "No allergen disclaimer in email order confirmations — FSSAI requires allergen information to travel with the product to the consumer"
+    evidence_excerpt: "Fe3dr by HomeChef · Authentic homemade food, delivered · fe3dr.com · Privacy · Terms"
+    recommendation: "Add to order-confirmation email template (separate from footer): 'Allergens: [list from menu item]. If you have allergies, contact the chef before delivery: [chef contact]. We aren't responsible for allergic reactions unless we hid this information.' FSS (Packaging and Labelling) Regulations 2011 Reg. 2.4.5 mandates allergen disclosure."
+    citation: "FSS (Packaging and Labelling) Regulations 2011 Reg. 2.4.5; FSS (Labelling and Display) Regulations 2020"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-054
+    surface_id: vp-legal-docs-pan
+    lens: legal
+    severity: P3
+    issue: "PAN placeholder 'ABCDE1234F' — using a realistic-looking PAN as placeholder could be confused with a real one; better to use clearly fake format like 'AAAPL1234C' (UIDAI/Income-Tax docs use this convention)"
+    evidence_excerpt: "PAN Number / ABCDE1234F / 10-character alphanumeric PAN"
+    recommendation: "Cosmetic but worth checking: ensure 'ABCDE1234F' is not actually a registered PAN (PAN structure: 5 letters + 4 digits + 1 letter, fourth letter is entity type). Use government-published example format. Low-risk but tidy."
+    citation: "best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-055
+    surface_id: vp-legal-policies-agreements-title
+    lens: legal
+    severity: P2
+    issue: "'Please read and accept each policy to complete your registration' — implies user will read each policy, but inventory shows policies are presented as short paragraphs followed by checkboxes; no scroll-to-bottom or time-spent gating"
+    evidence_excerpt: "Agreements & Policies / Please read and accept each policy to complete your registration."
+    recommendation: "For high-stakes policies (commission, suspension, food-safety attestation), require scroll-to-bottom before checkbox enables. Indian courts have looked favourably on platforms that demonstrably ensured the user saw the term. Pure click-wrap with no engagement evidence is weaker."
+    citation: "best-practice (click-wrap enforceability); LIC v. CERC (1995) — unconscionable terms"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-056
+    surface_id: vp-legal-policy-tos
+    lens: legal
+    severity: P2
+    issue: "Vendor TOS uses 'I' first-person ('I have read and agree') — style-guide says legal pages should use 'we' / 'you'; first-person attestation is ok for the act of attesting but should resolve into 'you' terms in the body"
+    evidence_excerpt: "I have read and agree..."
+    recommendation: "'I' is acceptable as the attestation verb; the underlying policy text should be in 'we'/'you' form per style guide §5. Verify the linked-full-policy uses 'we'/'you'. Mixing 'the Platform', 'the Company', 'the Vendor' across documents is a drift signal."
+    citation: "Style guide §5 (Legal-page tone); best-practice"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-057
+    surface_id: web-legal-checkout-terms-note
+    lens: legal
+    severity: P1
+    issue: "Missing GST disclosure at checkout — under CGST Act and standard e-commerce practice, customers must see tax breakup before payment, not only on invoice"
+    evidence_excerpt: "By placing this order, you agree to our Terms of Service"
+    recommendation: "Verify checkout shows: subtotal, delivery, GST line (with rate, e.g., '5% GST on food'), total. Inclusive vs exclusive must be unambiguous. Under §31 CGST Act, tax invoice is mandatory; under E-Commerce Rules 4(3), price breakup including taxes must be shown. Missing GST disclosure pre-payment is an audit/refund liability."
+    citation: "CGST Act 2017 §31; Consumer Protection (E-Commerce) Rules 2020 Rule 4(3)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-058
+    surface_id: vp-legal-policies-compliance-items
+    lens: legal
+    severity: P1
+    issue: "'label allergens and ingredients' is item #7 in compliance checklist but no enforcement mechanism shown — chef attests once at onboarding, not per dish; FSSAI requires per-product disclosure"
+    evidence_excerpt: "label allergens and ingredients"
+    recommendation: "Onboarding-time attestation is not sufficient. Each menu item must carry allergen + ingredient information. Make the chef-side menu form enforce this (required field), and surface allergens prominently to customers on item pages and at checkout. Per FSS (Labelling and Display) Regulations 2020, allergens must be highlighted (bold, italics, or different colour)."
+    citation: "FSS (Labelling and Display) Regulations 2020 Reg. 5(7)"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-059
+    surface_id: vp-legal-policy-hygiene
+    lens: legal
+    severity: P2
+    issue: "'I commit to maintaining a clean and hygienic kitchen at all times' — open-ended commitment with no measurable bar; combined with 'periodic kitchen checks' creates a one-sided contract where platform defines the standard at audit time"
+    evidence_excerpt: "I commit to maintaining a clean and hygienic kitchen at all times..."
+    recommendation: "Reference an objective standard (FSSAI Schedule 4 home-based food business hygiene norms) so both chef and platform know the bar. Open-ended hygiene clauses are vulnerable to challenge and don't actually protect platform if a hygiene incident triggers litigation."
+    citation: "FSS (Licensing & Registration) Regulations 2011 Schedule 4 Part V"
+    depends_on: "needs lawyer review"
+
+  - finding_id: LEG-060
+    surface_id: vp-legal-policy-cancellation
+    lens: legal
+    severity: P2
+    issue: "'Accept or reject orders within 5 minutes' — chef-side SLA; platform doesn't disclose its own SLA to chefs (e.g., dispute response time, payout settlement time)"
+    evidence_excerpt: "accept or reject orders within 5 minutes / prepare within estimated time"
+    recommendation: "Contract reciprocity: if chef has 5-minute order-accept SLA, platform should commit to corresponding SLAs (dispute response, payout, support). One-sided SLAs are a hallmark of unfair contracts under Consumer Protection Act §2(46) and may be unenforceable."
+    citation: "Consumer Protection Act 2019 §2(46) (unfair contract); best-practice (contract reciprocity)"
+    depends_on: "needs lawyer review"
