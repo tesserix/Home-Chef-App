@@ -43,6 +43,7 @@ export function OttoChat() {
       tenantId="homechef"
       reasons={HOMECHEF_REASONS}
       statusPlaceholder="e.g. Order #ORD-2041 stuck on 'preparing'"
+      customerId={user?.id ?? undefined}
       customerName={displayName}
       customerEmail={user?.email ?? undefined}
     />
