@@ -1,0 +1,1767 @@
+# Technical Writer lens findings — auth-onboarding category
+# Auditor: TW lens agent
+# Date: 2026-05-13
+# Style guide: docs/content-audit/STYLE-GUIDE.md
+# Brief: docs/content-audit/lens-briefs/technical-writer.md
+
+findings:
+
+  # ===========================================================
+  # WEB (customer-facing auth + onboarding)
+  # ===========================================================
+
+  - finding_id: TW-001
+    surface_id: web-auth-login-email-fields
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Enter your password' restates the label. Adds no value, fights translation slack."
+    evidence_excerpt: "Password / Enter your password"
+    recommendation: "Remove the placeholder. Empty placeholder is preferred for password fields (security best practice — discourages auto-suggest UI hints)."
+    depends_on: null
+
+  - finding_id: TW-002
+    surface_id: web-auth-login-email-fields
+    lens: technical-writer
+    severity: P2
+    issue: "'Forgot password?' is fine as a link but should be styled and worded as one phrase. Currently mixed-case sentence + question mark. Style guide prefers descriptive link text, sentence case, no trailing punctuation on inline links."
+    evidence_excerpt: "Forgot password?"
+    recommendation: "'Reset password' (verb-first, no question mark)."
+    depends_on: null
+
+  - finding_id: TW-003
+    surface_id: web-auth-login-submit
+    lens: technical-writer
+    severity: P3
+    issue: "Loading state uses ellipsis 'Signing in...' which is acceptable, but inconsistent with other web surfaces that use 'Signing in' (no ellipsis) — see vendor-portal."
+    evidence_excerpt: "Sign in / Signing in..."
+    recommendation: "Standardise loading copy across portals: 'Signing in…' with single Unicode ellipsis (…) not three dots. Apply consistently."
+    depends_on: null
+
+  - finding_id: TW-004
+    surface_id: web-auth-login-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Don't have an account? Sign up' uses inline question + CTA. Style guide prefers single-clause statements for sub-links."
+    evidence_excerpt: "Don't have an account? Sign up"
+    recommendation: "'New here? Create an account.' OR keep as-is but ensure 'Sign up' is the link target and verb is consistent (style guide allows 'Sign up' as verb)."
+    depends_on: null
+
+  - finding_id: TW-005
+    surface_id: web-auth-register-heading
+    lens: technical-writer
+    severity: P3
+    issue: "Heading 'Create your account' is fine; sub-link 'Already have an account? Sign in' mirrors the inverse problem from TW-004 — inline question + CTA."
+    evidence_excerpt: "Already have an account? Sign in"
+    recommendation: "'Returning? Sign in.' Keep parallel structure with login page sub-link."
+    depends_on: null
+
+  - finding_id: TW-006
+    surface_id: web-auth-register-form-fields
+    lens: technical-writer
+    severity: P2
+    issue: "Helper text 'Min. 8 characters' uses abbreviation. Style guide prefers plain English."
+    evidence_excerpt: "Min. 8 characters"
+    recommendation: "'At least 8 characters.' Reads naturally, translates cleanly."
+    depends_on: null
+
+  - finding_id: TW-007
+    surface_id: web-auth-register-form-fields
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Re-enter password' on confirm-password field — confirm-password helper text should explain WHY ('to make sure they match'), not just restate."
+    evidence_excerpt: "Confirm password / Re-enter password"
+    recommendation: "Remove placeholder; add helper text under input: 'We'll check it matches.'"
+    depends_on: null
+
+  - finding_id: TW-008
+    surface_id: web-auth-onboarding-step-address
+    lens: technical-writer
+    severity: P2
+    issue: "Title 'Delivery Address' uses Title Case. Style guide requires sentence case for form labels and section titles."
+    evidence_excerpt: "Delivery Address"
+    recommendation: "'Delivery address' (sentence case throughout)."
+    depends_on: null
+
+  - finding_id: TW-009
+    surface_id: web-auth-onboarding-step-address
+    lens: technical-writer
+    severity: P2
+    issue: "Placeholder 'House / flat / building number, street' is conversational and longer than the field allows visually. Helper text territory."
+    evidence_excerpt: "House / flat / building number, street"
+    recommendation: "Placeholder: 'Flat, building, street'. Helper text under input: 'Where should we deliver? Include floor or landmark if helpful.'"
+    depends_on: null
+
+  - finding_id: TW-010
+    surface_id: web-auth-onboarding-step-address
+    lens: technical-writer
+    severity: P3
+    issue: "'Landmark, area (optional)' — '(optional)' in placeholder is anti-pattern. Optional fields should drop the asterisk requirement marker; helper text shouldn't carry the '(optional)' tag."
+    evidence_excerpt: "Landmark, area (optional)"
+    recommendation: "Label: 'Landmark or area'. Remove '(optional)' qualifier — required indicator (asterisk) is the only signal of required vs optional. See style guide §4 Form labels."
+    depends_on: null
+
+  - finding_id: TW-011
+    surface_id: web-auth-onboarding-step-basic
+    lens: technical-writer
+    severity: P2
+    issue: "Title 'Basic Information' is Title Case; sentence case per style guide. Also generic — 'Basic Information' tells the user nothing about what step they're in."
+    evidence_excerpt: "Basic Information / Tell us a bit about yourself"
+    recommendation: "Title: 'About you'. Subtitle: 'A few details so we can personalise your home page.' Clarifies why we're asking."
+    depends_on: null
+
+  - finding_id: TW-012
+    surface_id: web-auth-onboarding-step-basic
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder example phone '+91 98765 43210' is good but inconsistent across surfaces (some show '+91 9876543210' without space). Style guide specifies '+91 98765 43210'."
+    evidence_excerpt: "+91 98765 43210"
+    recommendation: "Keep this format. Audit other surfaces (dp-auth-step1-emergency-phone, md-onb-014) and align to this format."
+    depends_on: null
+
+  - finding_id: TW-013
+    surface_id: web-auth-onboarding-step-preferences
+    lens: technical-writer
+    severity: P2
+    issue: "Five sub-section titles use Title Case: 'Dietary Preferences', 'Food Allergies', 'Favourite Cuisines', 'Spice Tolerance', 'Household Size'. Style guide requires sentence case."
+    evidence_excerpt: "Dietary Preferences / Food Allergies / Favourite Cuisines / Spice Tolerance / Household Size"
+    recommendation: "Sentence case all: 'Dietary preferences', 'Food allergies', 'Favourite cuisines', 'Spice tolerance', 'Household size'."
+    depends_on: null
+
+  - finding_id: TW-014
+    surface_id: web-auth-onboarding-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Complete Your Profile' Title Case; should be sentence case."
+    evidence_excerpt: "Complete Your Profile"
+    recommendation: "'Complete your profile'."
+    depends_on: null
+
+  - finding_id: TW-015
+    surface_id: web-auth-onboarding-heading
+    lens: technical-writer
+    severity: P3
+    issue: "Step progress 'Step {n} of 3' is fine. 'Skip' as a link is ambiguous — skip this step or skip onboarding entirely?"
+    evidence_excerpt: "Step {n} of 3 / Skip"
+    recommendation: "Replace 'Skip' with 'Skip for now' or 'Do this later' — clarifies intent. Style guide microcopy §4: buttons ≤3 words, but link text should be unambiguous."
+    depends_on: null
+
+  - finding_id: TW-016
+    surface_id: web-auth-onboarding-steps
+    lens: technical-writer
+    severity: P3
+    issue: "Step labels 'Basic Info / Your details / Preferences / Food & dietary / Address / Delivery location' — descriptions are clearer than titles. 'Basic Info' is filler. 'Address' + 'Delivery location' is redundant."
+    evidence_excerpt: "Basic Info / Your details / Preferences / Food & dietary / Address / Delivery location"
+    recommendation: "Titles: 'About you', 'Tastes', 'Address'. Descriptions: 'Name and phone', 'Cuisines you love', 'Where to deliver'. Tighter, no Title Case."
+    depends_on: null
+
+  # ===========================================================
+  # VENDOR-PORTAL (chef-facing auth + onboarding wizard)
+  # ===========================================================
+
+  - finding_id: TW-017
+    surface_id: vp-auth-forgot-redirect
+    lens: technical-writer
+    severity: P2
+    issue: "Interim 'Redirecting to password reset...' uses three-dot ellipsis. Also no explanation of duration or fallback."
+    evidence_excerpt: "Redirecting to password reset..."
+    recommendation: "'Redirecting…' (single ellipsis char). If redirect can fail, add helper: 'If nothing happens in 5 seconds, click here.'"
+    depends_on: null
+
+  - finding_id: TW-018
+    surface_id: vp-auth-login-hero-heading
+    lens: technical-writer
+    severity: P2
+    issue: "Hero heading 'Grow your home kitchen business' is marketing-flavoured but acceptable. Subhead 'Manage menus, track orders, view earnings - all from one dashboard.' uses hyphen instead of em-dash. Sentence length 11 words — within chef range (5-12). Hyphen-spacing issue is the main flaw."
+    evidence_excerpt: "Manage menus, track orders, view earnings - all from one dashboard."
+    recommendation: "Replace ' - ' with em-dash ' — '. Final: 'Manage menus, track orders, view earnings — all from one dashboard.'"
+    depends_on: null
+
+  - finding_id: TW-019
+    surface_id: vp-auth-login-features-list
+    lens: technical-writer
+    severity: P2
+    issue: "Five features list uses ampersand inconsistently and runs long: 'Document verification & compliance' is vendor-side jargon. 'Customer reviews & ratings' uses ampersand mid-sentence — style guide prefers 'and' in prose."
+    evidence_excerpt: "Real-time order management / Earnings & analytics dashboard / Menu management with categories / Customer reviews & ratings / Document verification & compliance"
+    recommendation: "Use 'and' (not '&'): 'Earnings and analytics', 'Reviews and ratings', 'Verification and compliance'. Trim 'Real-time order management' → 'Live order tracking'."
+    depends_on: null
+
+  - finding_id: TW-020
+    surface_id: vp-auth-login-google-btn
+    lens: technical-writer
+    severity: P3
+    issue: "'Continue with Google' is 3 words, verb-first — within style. Cross-app consistency: web uses same phrase. OK as-is."
+    evidence_excerpt: "Continue with Google"
+    recommendation: "No change — flagging only for cross-app voice consistency check (vendor + web + delivery all use this exact phrase, which is correct)."
+    depends_on: null
+
+  - finding_id: TW-021
+    surface_id: vp-auth-login-email-btn
+    lens: technical-writer
+    severity: P2
+    issue: "'Sign in with Email' uses Title Case on 'Email'. Inconsistent with web ('Sign in with email')."
+    evidence_excerpt: "Sign in with Email"
+    recommendation: "'Sign in with email' — sentence case, matches web."
+    depends_on: null
+
+  - finding_id: TW-022
+    surface_id: vp-auth-login-register-link
+    lens: technical-writer
+    severity: P3
+    issue: "'Want to start selling? Register as a vendor' uses 'vendor' which style guide bans for customer-facing copy but allows chef-facing. However 'Register' is colder than the brand voice — also 'selling' is a vocabulary term for the chef portal (chefs sell). Acceptable, but could be warmer."
+    evidence_excerpt: "Want to start selling? Register as a vendor"
+    recommendation: "'New to Fe3dr? Register your kitchen.' Warmer, mirrors hero CTA on register page, replaces 'vendor' (cold) with 'kitchen' (concrete)."
+    depends_on: null
+
+  - finding_id: TW-023
+    surface_id: vp-auth-register-hero-sub
+    lens: technical-writer
+    severity: P1
+    issue: "AI-SLOP: 'Join thousands of home chefs earning with Fe3dr.' Unverified social-proof metric, exactly the pattern called out in the TW brief and Style Rule 5. No way to verify 'thousands'."
+    evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+    recommendation: "Replace with concrete, verifiable: 'Start earning from your kitchen. Your recipes, your hours, your terms.' Removes unverified 'thousands' claim."
+    depends_on: null
+
+  - finding_id: TW-024
+    surface_id: vp-auth-register-subheading
+    lens: technical-writer
+    severity: P3
+    issue: "Subheading 'Create your vendor account to start selling home-cooked meals' uses 'vendor account' — chef-facing should say 'chef' (they self-identify as chefs per style guide vocabulary)."
+    evidence_excerpt: "Create your vendor account to start selling home-cooked meals"
+    recommendation: "'Create your chef account to start selling home-cooked meals.'"
+    depends_on: null
+
+  - finding_id: TW-025
+    surface_id: vp-auth-register-email-btn
+    lens: technical-writer
+    severity: P2
+    issue: "'Register with Email' Title Case on 'Email'. Inconsistent with 'Sign up with email' on web."
+    evidence_excerpt: "Register with Email"
+    recommendation: "'Sign up with email' — sentence case, and align verb across portals ('register' vs 'sign up' inconsistency)."
+    depends_on: null
+
+  - finding_id: TW-026
+    surface_id: vp-onb-kitchen-title
+    lens: technical-writer
+    severity: P2
+    issue: "'Kitchen Information' Title Case → sentence case per style guide. Also 'Information' is filler."
+    evidence_excerpt: "Kitchen Information"
+    recommendation: "'About your kitchen' (sentence case, more conversational)."
+    depends_on: null
+
+  - finding_id: TW-027
+    surface_id: vp-onb-kitchen-blurb
+    lens: technical-writer
+    severity: P3
+    issue: "'Tell customers about your kitchen and what makes your food special.' 11 words — within chef range. Word 'special' is vague."
+    evidence_excerpt: "Tell customers about your kitchen and what makes your food special."
+    recommendation: "'Tell customers about your kitchen and what you cook best.' Tighter, concrete."
+    depends_on: null
+
+  - finding_id: TW-028
+    surface_id: vp-onb-ops-pricing-title
+    lens: technical-writer
+    severity: P2
+    issue: "'Delivery & Pricing' uses ampersand and Title Case. Also section heading + helper merged. Style guide prefers 'and' over '&'."
+    evidence_excerpt: "Delivery & Pricing / Set your preparation time, delivery range, and pricing. You can change these anytime."
+    recommendation: "Heading: 'Delivery and pricing'. Helper kept (good copy — explains reversibility)."
+    depends_on: null
+
+  - finding_id: TW-029
+    surface_id: vp-onb-personal-title
+    lens: technical-writer
+    severity: P2
+    issue: "'Personal Details' Title Case. Field is KYC-collection but title doesn't signal that."
+    evidence_excerpt: "Personal Details"
+    recommendation: "'Personal details' (sentence case). Acceptable as-is for tone; KYC framing belongs in helper text (already present in vp-onb-personal-blurb)."
+    depends_on: null
+
+  - finding_id: TW-030
+    surface_id: vp-onb-personal-fields
+    lens: technical-writer
+    severity: P2
+    issue: "All four field labels use Title Case: 'Full Name', 'Phone Number', 'Email Address'. Style guide requires sentence case."
+    evidence_excerpt: "Full Name / Phone Number / Email Address / Pre-filled from your login"
+    recommendation: "'Full name', 'Phone number', 'Email address'. Helper 'Pre-filled from your login' is good."
+    depends_on: null
+
+  - finding_id: TW-031
+    surface_id: vp-onb-personal-address-title
+    lens: technical-writer
+    severity: P2
+    issue: "'Kitchen Address' Title Case."
+    evidence_excerpt: "Kitchen Address"
+    recommendation: "'Kitchen address'."
+    depends_on: null
+
+  - finding_id: TW-032
+    surface_id: vp-onb-personal-address-blurb
+    lens: technical-writer
+    severity: P3
+    issue: "Helper 'Where your kitchen is located. This is used for delivery radius and customer visibility.' is two sentences. Sentence 2 is passive ('is used for')."
+    evidence_excerpt: "Where your kitchen is located. This is used for delivery radius and customer visibility."
+    recommendation: "'We use this to calculate delivery range and show your kitchen to nearby customers.' Active voice, single sentence, plain English."
+    depends_on: null
+
+  - finding_id: TW-033
+    surface_id: vp-onb-header-title
+    lens: technical-writer
+    severity: P2
+    issue: "'Set Up Your Kitchen' Title Case."
+    evidence_excerpt: "Set Up Your Kitchen"
+    recommendation: "'Set up your kitchen'."
+    depends_on: null
+
+  - finding_id: TW-034
+    surface_id: vp-onb-stepper-labels
+    lens: technical-writer
+    severity: P2
+    issue: "Stepper labels mix Title Case ('Personal Info', 'Kitchen Details', 'Operations', 'Documents', 'Policies & Review'). Ampersand in last step."
+    evidence_excerpt: "Personal Info / Kitchen Details / Operations / Documents / Policies & Review"
+    recommendation: "'Personal info', 'Kitchen', 'Operations', 'Documents', 'Policies and review'. Sentence case + 'and'."
+    depends_on: null
+
+  # ===========================================================
+  # DELIVERY-PORTAL (driver-facing — TELEGRAPHIC ≤4 words)
+  # ===========================================================
+
+  - finding_id: TW-035
+    surface_id: dp-auth-mode-staff-cta
+    lens: technical-writer
+    severity: P2
+    issue: "Button label 'I'm Staff' uses Title Case. Driver-facing should be glanceable but sentence case."
+    evidence_excerpt: "I'm Staff"
+    recommendation: "'I'm staff' (sentence case). Already telegraphic — within driver range."
+    depends_on: null
+
+  - finding_id: TW-036
+    surface_id: dp-auth-mode-staff-sub
+    lens: technical-writer
+    severity: P2
+    issue: "Sub 'Fleet managers & delivery operations' — ampersand."
+    evidence_excerpt: "Fleet managers & delivery operations"
+    recommendation: "'Fleet managers and ops staff'. Or simpler: 'Manage fleet and operations'."
+    depends_on: null
+
+  - finding_id: TW-037
+    surface_id: dp-auth-email-button
+    lens: technical-writer
+    severity: P2
+    issue: "'Sign in with Email' Title Case 'Email'."
+    evidence_excerpt: "Sign in with Email"
+    recommendation: "'Sign in with email' — sentence case, aligns with web."
+    depends_on: null
+
+  - finding_id: TW-038
+    surface_id: dp-auth-mode-driver-cta
+    lens: technical-writer
+    severity: P2
+    issue: "'I'm a Driver' Title Case 'Driver'."
+    evidence_excerpt: "I'm a Driver"
+    recommendation: "'I'm a driver' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-039
+    surface_id: dp-auth-mode-driver-sub
+    lens: technical-writer
+    severity: P3
+    issue: "'Login or sign up to deliver with Fe3dr' — 'Login' is banned (style guide: always 'Sign in')."
+    evidence_excerpt: "Login or sign up to deliver with Fe3dr"
+    recommendation: "'Sign in or sign up to deliver with Fe3dr.' Or shorter for driver: 'Sign in to start delivering.'"
+    depends_on: null
+
+  - finding_id: TW-040
+    surface_id: dp-auth-login-subtitle-driver
+    lens: technical-writer
+    severity: P2
+    issue: "'Driver login or sign up' — 'login' banned vocabulary, also drift from sibling subtitle which uses 'Sign in'."
+    evidence_excerpt: "Driver login or sign up"
+    recommendation: "'Driver sign in or sign up.'"
+    depends_on: null
+
+  - finding_id: TW-041
+    surface_id: dp-auth-step1-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Personal Information' Title Case. Driver-facing — should be telegraphic AND sentence case."
+    evidence_excerpt: "Personal Information"
+    recommendation: "'About you' (sentence case, telegraphic, parallel with chef onboarding suggestion)."
+    depends_on: null
+
+  - finding_id: TW-042
+    surface_id: dp-auth-step1-city
+    lens: technical-writer
+    severity: P2
+    issue: "Label 'City *' includes asterisk inline with label. Style guide §4: label stays clean, asterisk goes on the field (visual indicator only)."
+    evidence_excerpt: "City *"
+    recommendation: "Label: 'City'. Render required marker as a visual asterisk via CSS, not inline in string. (This recommendation applies to ALL dp-auth-step1-*, step2, payout fields with '*' suffix.)"
+    depends_on: null
+
+  - finding_id: TW-043
+    surface_id: dp-auth-step1-emergency-name
+    lens: technical-writer
+    severity: P2
+    issue: "'Emergency Contact Name *' — Title Case + inline asterisk."
+    evidence_excerpt: "Emergency Contact Name *"
+    recommendation: "'Emergency contact name'. Strip asterisk from string."
+    depends_on: null
+
+  - finding_id: TW-044
+    surface_id: dp-auth-step1-emergency-phone
+    lens: technical-writer
+    severity: P2
+    issue: "'Emergency Phone *' Title Case + inline asterisk. Placeholder '+91 9876543210' missing space."
+    evidence_excerpt: "Emergency Phone * / +91 9876543210"
+    recommendation: "Label: 'Emergency phone'. Placeholder: '+91 98765 43210' (en-IN format per style guide §6)."
+    depends_on: null
+
+  - finding_id: TW-045
+    surface_id: dp-auth-step1-dob
+    lens: technical-writer
+    severity: P2
+    issue: "'Date of Birth' Title Case."
+    evidence_excerpt: "Date of Birth"
+    recommendation: "'Date of birth'."
+    depends_on: null
+
+  - finding_id: TW-046
+    surface_id: dp-auth-step1-vehicle-type
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Type *' Title Case + asterisk. Options 'Scooter/Motorcycle' uses slash — chip labels should be one word where possible."
+    evidence_excerpt: "Vehicle Type * / Bicycle / Scooter/Motorcycle / Car"
+    recommendation: "Label: 'Vehicle type'. Options: 'Bicycle', 'Scooter or motorcycle', 'Car'. Spell out 'or'."
+    depends_on: null
+
+  - finding_id: TW-047
+    surface_id: dp-auth-step1-referral
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Enter referral code (optional)' duplicates the qualifier '(optional)' — see TW-010 rule. Also 'Validate' button label is acceptable but 'Check' is shorter for driver-glanceable."
+    evidence_excerpt: "Referral Code + Enter referral code (optional) + Validate"
+    recommendation: "Label: 'Referral code'. Placeholder: empty or 'e.g. SARAH123'. Button: 'Check'."
+    depends_on: null
+
+  - finding_id: TW-048
+    surface_id: dp-auth-onboarding-step-labels
+    lens: technical-writer
+    severity: P2
+    issue: "Step labels 'Personal Info / Vehicle Details / Documents / Plan / Review' — Title Case."
+    evidence_excerpt: "Personal Info / Vehicle Details / Documents / Plan / Review"
+    recommendation: "'Personal', 'Vehicle', 'Documents', 'Plan', 'Review'. Sentence case + shorter (driver glanceable)."
+    depends_on: null
+
+  - finding_id: TW-049
+    surface_id: dp-auth-step2-h-vehicle
+    lens: technical-writer
+    severity: P2
+    issue: "Heading 'Bicycle Details / Vehicle Details' + sub 'Tell us about your bicycle/vehicle' — Title Case + slash."
+    evidence_excerpt: "Bicycle Details / Vehicle Details + Tell us about your bicycle/vehicle"
+    recommendation: "Heading: 'Your bicycle' / 'Your vehicle'. Subhead: 'Tell us about your ride.'"
+    depends_on: null
+
+  - finding_id: TW-050
+    surface_id: dp-auth-step2-carrier-q
+    lens: technical-writer
+    severity: P2
+    issue: "'Can your bicycle carry a delivery box / bag? *' — 11 words, exceeds driver limit (≤12 OK but borderline). Slash + inline asterisk."
+    evidence_excerpt: "Can your bicycle carry a delivery box / bag? *"
+    recommendation: "'Can your bicycle carry a delivery bag?' — drop 'box' (redundant), tighter, no slash, no inline asterisk."
+    depends_on: null
+
+  - finding_id: TW-051
+    surface_id: dp-auth-step2-carrier-warning
+    lens: technical-writer
+    severity: P2
+    issue: "'You can still proceed, but you'll need to attach a carrier or use a delivery backpack before starting deliveries.' — 18 words. Driver limit ≤12 words/sentence."
+    evidence_excerpt: "You can still proceed, but you'll need to attach a carrier or use a delivery backpack before starting deliveries."
+    recommendation: "'Continue for now. Attach a carrier or use a delivery backpack before your first delivery.' Two short sentences."
+    depends_on: null
+
+  - finding_id: TW-052
+    surface_id: dp-auth-step2-motor-fields
+    lens: technical-writer
+    severity: P2
+    issue: "All four labels Title Case: 'Vehicle Make', 'Vehicle Model', 'Vehicle Year', 'Vehicle Color'. Also 'Vehicle' prefix is redundant within step labeled 'Vehicle details'."
+    evidence_excerpt: "Vehicle Make / Vehicle Model / Vehicle Year / Vehicle Color"
+    recommendation: "Drop 'Vehicle' prefix. Labels: 'Make', 'Model', 'Year', 'Colour'. Sentence case + UK spelling for consistency with mobile-customer (mc-onb-step3 uses 'favourite/personalised')."
+    depends_on: null
+
+  - finding_id: TW-053
+    surface_id: dp-auth-step2-reg-number
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Registration Number *' — Title Case + inline asterisk. Long label for driver."
+    evidence_excerpt: "Vehicle Registration Number *"
+    recommendation: "'Registration number'. Drop 'Vehicle' (redundant), drop asterisk from string."
+    depends_on: null
+
+  - finding_id: TW-054
+    surface_id: dp-auth-step2-license
+    lens: technical-writer
+    severity: P2
+    issue: "'Driving License Number *' — Title Case + asterisk."
+    evidence_excerpt: "Driving License Number *"
+    recommendation: "'Driving licence number' (UK spelling for en-IN per style guide). Drop asterisk."
+    depends_on: null
+
+  - finding_id: TW-055
+    surface_id: dp-auth-step3-section-headers
+    lens: technical-writer
+    severity: P2
+    issue: "Section headers Title Case: 'Personal Documents', 'Vehicle Documents', 'Vehicle Photos — All Angles', 'Optional'."
+    evidence_excerpt: "Personal Documents / Vehicle Documents / Vehicle Photos — All Angles / Optional"
+    recommendation: "'Personal documents', 'Vehicle documents', 'Vehicle photos', 'Optional uploads'. 'All Angles' is documentation-style — drop."
+    depends_on: null
+
+  - finding_id: TW-056
+    surface_id: dp-auth-step3-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Documents & Photos' Title Case + ampersand. Sub 'Upload your documents and vehicle photos for verification' is fine."
+    evidence_excerpt: "Documents & Photos + Upload your documents and vehicle photos for verification"
+    recommendation: "Heading: 'Documents and photos'. Subhead OK as-is, but 12 words — borderline driver length."
+    depends_on: null
+
+  - finding_id: TW-057
+    surface_id: dp-auth-step3-bicycle-hint
+    lens: technical-writer
+    severity: P2
+    issue: "'Since you're using a bicycle, driving license, vehicle RC, and insurance are not required.' — 14 words, exceeds driver limit ≤12. Also passive 'are not required'."
+    evidence_excerpt: "Since you're using a bicycle, driving license, vehicle RC, and insurance are not required."
+    recommendation: "'You ride a bicycle — no licence, RC, or insurance needed.' 11 words, em-dash, active."
+    depends_on: null
+
+  - finding_id: TW-058
+    surface_id: dp-auth-step3-doc-labels
+    lens: technical-writer
+    severity: P3
+    issue: "Long doc list mixes Title Case. Helper for 'Number Plate (clear photo)' — qualifier in parentheses is helper-text pattern violation."
+    evidence_excerpt: "Profile Photo / Driving License / Aadhaar Card / PAN Card / Vehicle RC / Insurance / Vehicle — Front View / Back View / Left Side / Right Side / Top View / Number Plate (clear photo) / Bicycle — Front/Back/Left/Right View / Police Verification"
+    recommendation: "Sentence case all: 'Profile photo', 'Driving licence', 'Aadhaar card', 'PAN card', 'Vehicle RC', 'Insurance', 'Front view', 'Back view', etc. Move '(clear photo)' qualifier out of label to helper text under the upload slot: 'Make sure the number plate is readable.'"
+    depends_on: null
+
+  - finding_id: TW-059
+    surface_id: dp-auth-step3-size-hints
+    lens: technical-writer
+    severity: P3
+    issue: "Hints 'JPEG or PNG only, max 5MB' / 'JPEG, PNG, WebP, or PDF, max 10MB' — inventory note says NOT rendered. Defined but unused → dead string. Also format inconsistent (one excludes WebP/PDF, the other includes them)."
+    evidence_excerpt: "JPEG or PNG only, max 5MB / JPEG, PNG, WebP, or PDF, max 10MB"
+    recommendation: "Wire these hints into the UI as helper text under each upload slot. Standardise: 'JPEG, PNG up to 5 MB' / 'JPEG, PNG, PDF up to 10 MB'. Note: 'MB' with space per ISO."
+    depends_on: null
+
+  - finding_id: TW-060
+    surface_id: dp-auth-step-payout-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Payout Details' Title Case. Sub 'How would you like to receive your earnings?' is fine (8 words, conversational for driver — borderline)."
+    evidence_excerpt: "Payout Details + How would you like to receive your earnings?"
+    recommendation: "'Payout details'. Sub: 'How should we pay you?' (5 words — telegraphic, driver-friendly)."
+    depends_on: null
+
+  - finding_id: TW-061
+    surface_id: dp-auth-step-payout-methods
+    lens: technical-writer
+    severity: P2
+    issue: "'Payout Method' Title Case. 'Bank Transfer' Title Case."
+    evidence_excerpt: "Payout Method + Bank Transfer / UPI"
+    recommendation: "'Payout method'. Options: 'Bank transfer', 'UPI'."
+    depends_on: null
+
+  - finding_id: TW-062
+    surface_id: dp-auth-step-payout-bank-fields
+    lens: technical-writer
+    severity: P2
+    issue: "All three labels Title Case + asterisk inline: 'Account Holder Name *', 'Account Number *', 'IFSC Code *'."
+    evidence_excerpt: "Account Holder Name * / Account Number * / IFSC Code *"
+    recommendation: "'Account holder name', 'Account number', 'IFSC code'. Strip asterisks."
+    depends_on: null
+
+  - finding_id: TW-063
+    surface_id: dp-auth-step-payout-upi
+    lens: technical-writer
+    severity: P2
+    issue: "'UPI ID *' inline asterisk."
+    evidence_excerpt: "UPI ID *"
+    recommendation: "'UPI ID'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-064
+    surface_id: dp-auth-step4-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Choose Your Plan' Title Case. Subhead 'A small subscription to keep Fe3dr running — you keep every rupee you earn.' is 14 words — exceeds driver limit ≤12. 'rupee' is hardcoded (not i18n-ready)."
+    evidence_excerpt: "Choose Your Plan + A small subscription to keep Fe3dr running — you keep every rupee you earn."
+    recommendation: "Heading: 'Choose your plan'. Subhead: 'Small subscription. You keep every rupee.' (6 words.) 'Rupee' is acceptable for en-IN; flag for i18n later if Tamil/Hindi/global rollout."
+    depends_on: null
+
+  - finding_id: TW-065
+    surface_id: dp-auth-step4-zero-commission
+    lens: technical-writer
+    severity: P1
+    issue: "Block: 'We don't take any commission from your earnings… 100%… We're here to help you succeed, not to make profit from your hard work.' — 38 words in a single block. Driver limit ≤12 per sentence. Tone drifts marketing ('here to help you succeed') — banned brand-drift per Rule 5 'restraint over urgency'. Also 'not to make profit' is grammatically off ('make a profit')."
+    evidence_excerpt: "We don't take any commission from your earnings + Every delivery fee and every tip goes directly to your account — 100%. We only charge a small subscription fee to keep the platform running and help you get more orders. We're here to help you succeed, not to make profit from your hard work."
+    recommendation: "Replace with three short sentences: 'No commission. Every fee and tip is yours, 100%. We only charge a small subscription to run the platform.' 19 words total. Drops marketing flourish, fixes grammar, hits driver telegraphic style."
+    depends_on: null
+
+  - finding_id: TW-066
+    surface_id: dp-auth-step4-trial
+    lens: technical-writer
+    severity: P3
+    issue: "'{n}-day free trial' + 'Try everything free. No card needed.' — second clause is good, telegraphic. 'No card needed' is concrete trust signal."
+    evidence_excerpt: "{n}-day free trial + Try everything free. No card needed."
+    recommendation: "Keep. Minor: ensure pluralisation works for n=1 ('1-day free trial' is unidiomatic — consider '{n} days free' for plurals)."
+    depends_on: null
+
+  - finding_id: TW-067
+    surface_id: dp-auth-step4-threshold
+    lens: technical-writer
+    severity: P2
+    issue: "'No charge until you earn {amount}' + 'We only bill after you start earning well.' — 'earning well' is vague and editorial."
+    evidence_excerpt: "No charge until you earn {amount} + We only bill after you start earning well."
+    recommendation: "'No charge until you earn {amount}.' Drop the second sentence — it restates the first. If kept, replace with concrete: 'Billing starts after your first {amount} in earnings.'"
+    depends_on: null
+
+  - finding_id: TW-068
+    surface_id: dp-auth-step4-billing-howto
+    lens: technical-writer
+    severity: P2
+    issue: "'How billing works:' + 4-step ordered list, 50 words total. Trailing colon on heading violates style guide §4 (form labels no colons; same rule applies to in-content headings)."
+    evidence_excerpt: "How billing works: + 4-step ordered list explaining trial, threshold, deduction, cancel-anytime"
+    recommendation: "Heading: 'How billing works' (no colon). Confirm each list item is ≤12 words (driver limit). Cannot verify without reading the actual 4 items — flag for follow-up audit of those strings."
+    depends_on: null
+
+  - finding_id: TW-069
+    surface_id: dp-auth-step4-secure-pay
+    lens: technical-writer
+    severity: P2
+    issue: "'Payments are securely processed via {gateway}. You can change your plan or cancel anytime from your dashboard.' — 17 words, two sentences. Passive 'are processed'. Borderline length for driver."
+    evidence_excerpt: "Payments are securely processed via {gateway}. You can change your plan or cancel anytime from your dashboard."
+    recommendation: "'{gateway} handles payments securely. Change or cancel anytime from your dashboard.' Active voice, 11 words."
+    depends_on: null
+
+  - finding_id: TW-070
+    surface_id: dp-auth-step4-submit
+    lens: technical-writer
+    severity: P2
+    issue: "'Start with {interval} Plan' — 'Plan' Title Case + interpolated word: 'Start with Monthly Plan' reads odd. Loading state 'Saving...' uses three-dot ellipsis."
+    evidence_excerpt: "Start with {interval} Plan / Saving..."
+    recommendation: "'Start {interval} plan' or 'Begin {interval} plan'. Loading: 'Saving…' (Unicode ellipsis)."
+    depends_on: null
+
+  - finding_id: TW-071
+    surface_id: dp-auth-step5-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Review & Submit' ampersand + Title Case. Sub 'Review your information before submitting' is fine."
+    evidence_excerpt: "Review & Submit + Review your information before submitting"
+    recommendation: "'Review and submit'. Sub OK."
+    depends_on: null
+
+  - finding_id: TW-072
+    surface_id: dp-auth-step5-sections
+    lens: technical-writer
+    severity: P2
+    issue: "Section headers Title Case: 'Personal Information', 'Vehicle Details', 'Documents ({n} uploaded)', 'Subscription Plan'."
+    evidence_excerpt: "Personal Information / Vehicle Details / Documents ({n} uploaded) / Subscription Plan"
+    recommendation: "'Personal info', 'Vehicle', 'Documents ({n})', 'Plan'. Sentence case + tighter, glanceable."
+    depends_on: null
+
+  - finding_id: TW-073
+    surface_id: dp-auth-step5-edit
+    lens: technical-writer
+    severity: P3
+    issue: "Mixed CTAs: 'Edit' / 'Change' for the same action on review rows. Inconsistency."
+    evidence_excerpt: "Edit / Change"
+    recommendation: "Pick one. 'Edit' is shorter and standard. Apply consistently to all review-row actions."
+    depends_on: null
+
+  - finding_id: TW-074
+    surface_id: dp-auth-step5-plan-summary
+    lens: technical-writer
+    severity: P2
+    issue: "'Plan selected. Payments handled securely via Razorpay.' + 'Billing starts only after you reach the minimum earnings threshold.' — Razorpay name hardcoded (inventory note flags this; gateway varies). Second sentence 11 words, OK. 'minimum earnings threshold' is jargon."
+    evidence_excerpt: "Plan selected. Payments handled securely via Razorpay. + Billing starts only after you reach the minimum earnings threshold."
+    recommendation: "'Plan selected. {gateway} handles payments securely.' (Use template var, not hardcoded 'Razorpay'.) Second sentence: 'Billing starts after you reach the earnings threshold.' Drop 'minimum' (redundant)."
+    depends_on: null
+
+  - finding_id: TW-075
+    surface_id: dp-auth-step5-terms
+    lens: technical-writer
+    severity: P1
+    issue: "'I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate and up to date.' — 19 words but more critically: 'Terms & Conditions' and 'Privacy Policy' are NOT linked per inventory note ('no link wired'). Style guide forbids click-here patterns AND requires proper link text. Legal-page text without links is non-compliant."
+    evidence_excerpt: "I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate and up to date."
+    recommendation: "Wire 'Terms and Conditions' and 'Privacy Policy' as proper links. Rewrite: 'I agree to the [Terms and Conditions] and [Privacy Policy]. I confirm the information above is accurate.' Two clear sentences."
+    depends_on: null
+
+  - finding_id: TW-076
+    surface_id: dp-auth-step5-submit
+    lens: technical-writer
+    severity: P2
+    issue: "'Submit Application' Title Case + 2 words OK. Loading 'Submitting...' three-dot ellipsis."
+    evidence_excerpt: "Submitting... / Submit Application"
+    recommendation: "'Submit application' (sentence case). Loading: 'Submitting…' (Unicode ellipsis)."
+    depends_on: null
+
+  - finding_id: TW-077
+    surface_id: dp-auth-onboarding-header
+    lens: technical-writer
+    severity: P2
+    issue: "'Become a Delivery Partner' Title Case. 'Delivery Partner' is style-guide-approved customer-facing term, but this is driver-facing (driver pages use 'Driver')."
+    evidence_excerpt: "Become a Delivery Partner"
+    recommendation: "'Become a driver' (sentence case, chef-/driver-self-identity)."
+    depends_on: null
+
+  - finding_id: TW-078
+    surface_id: dp-auth-status-h
+    lens: technical-writer
+    severity: P2
+    issue: "'Application Status' + 'Delivery Partner Onboarding' — both Title Case. Driver-facing — should be brief."
+    evidence_excerpt: "Application Status + Delivery Partner Onboarding"
+    recommendation: "'Application status' + 'Driver onboarding' (sentence case, driver self-identity)."
+    depends_on: null
+
+  - finding_id: TW-079
+    surface_id: dp-auth-status-titles
+    lens: technical-writer
+    severity: P2
+    issue: "Status titles Title Case: 'Application Needs Changes', 'Under Review', 'Application Submitted'."
+    evidence_excerpt: "Application Needs Changes / Under Review / Application Submitted"
+    recommendation: "'Application needs changes', 'Under review', 'Application submitted' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-080
+    surface_id: dp-auth-status-descriptions
+    lens: technical-writer
+    severity: P2
+    issue: "'Our team is currently reviewing your application. This usually takes 1-2 business days.' — 13 + 7 = 20 words for the longest. Inconsistent dash style: '1-2' should be en-dash '1–2'. Driver SLA wording mixes 'currently reviewing' (filler — 'currently' is redundant)."
+    evidence_excerpt: "Our team is currently reviewing your application. This usually takes 1-2 business days. / Your application has been received and will be reviewed shortly."
+    recommendation: "'We're reviewing your application. Usually 1–2 business days.' (en-dash for range per style guide). Third state: 'Application received. We'll review it shortly.' Tighter, active."
+    depends_on: null
+
+  - finding_id: TW-081
+    surface_id: dp-auth-status-badges
+    lens: technical-writer
+    severity: P2
+    issue: "Status badges Title Case: 'Rejected', 'In Review', 'Submitted'. Badge labels acceptable as Title Case across UI conventions, but inconsistent with sentence-case rule. Style guide is silent on badges specifically — flag for editorial decision."
+    evidence_excerpt: "Rejected / In Review / Submitted"
+    recommendation: "If badges follow Title Case as a system, document the exception. Otherwise: 'Rejected', 'In review', 'Submitted'."
+    depends_on: null
+
+  - finding_id: TW-082
+    surface_id: dp-auth-status-fix-resubmit
+    lens: technical-writer
+    severity: P2
+    issue: "'Fix & Resubmit' ampersand + Title Case."
+    evidence_excerpt: "Fix & Resubmit"
+    recommendation: "'Fix and resubmit' OR shorter 'Fix issues'."
+    depends_on: null
+
+  - finding_id: TW-083
+    surface_id: dp-auth-status-auto-refresh
+    lens: technical-writer
+    severity: P3
+    issue: "'Auto-refreshing every 30 seconds' is informational and acceptable. Inconsistent with mobile-delivery wording (md-onb-116 uses 'checks for updates automatically every 30 seconds')."
+    evidence_excerpt: "Auto-refreshing every 30 seconds"
+    recommendation: "Standardise across portals: 'Checks for updates every 30 seconds.' Apply same wording on mobile and web delivery status pages."
+    depends_on: null
+
+  # ===========================================================
+  # ADMIN-PORTAL
+  # ===========================================================
+
+  - finding_id: TW-084
+    surface_id: ap-auth-login-feature-list
+    lens: technical-writer
+    severity: P1
+    issue: "Six-feature sales-style bullet list on an INTERNAL admin login page is voice-drift. Admin tone is 'neutral operator, direct'. Bullets read like marketing collateral: 'Platform analytics & insights', 'Revenue tracking & payouts', 'Content moderation tools'."
+    evidence_excerpt: "User & role management; Chef verification & approvals; Order monitoring & refunds; Platform analytics & insights; Revenue tracking & payouts; Content moderation tools"
+    recommendation: "Remove the feature list entirely from internal admin login OR replace with terse functional sentence: 'Admin tools for users, chefs, orders, and platform health.' (Internal users don't need a marketing pitch.)"
+    depends_on: null
+
+  - finding_id: TW-085
+    surface_id: ap-auth-login-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Admin Sign In' Title Case."
+    evidence_excerpt: "Admin Sign In"
+    recommendation: "'Admin sign in' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-086
+    surface_id: ap-auth-login-instruction
+    lens: technical-writer
+    severity: P3
+    issue: "'Access the administration dashboard with your internal credentials' is jargon ('administration dashboard', 'internal credentials'). Admin tone is direct, but this is procedural — could be plainer."
+    evidence_excerpt: "Access the administration dashboard with your internal credentials"
+    recommendation: "'Sign in with your internal credentials.' Drops the redundant 'access the administration dashboard' clause (sign-in implies it)."
+    depends_on: null
+
+  - finding_id: TW-087
+    surface_id: ap-auth-totp-verify-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Enter your 6-digit code' is acceptable. 4 words. Admin-direct."
+    evidence_excerpt: "Enter your 6-digit code"
+    recommendation: "Keep. Minor: ensure no Title Case drift in production."
+    depends_on: null
+
+  - finding_id: TW-088
+    surface_id: ap-auth-totp-verify-help
+    lens: technical-writer
+    severity: P2
+    issue: "'Open your authenticator app and enter the code shown for Fe3dr Admin.' — 13 words. Acceptable for admin. 'Fe3dr Admin' is brand name OK."
+    evidence_excerpt: "Open your authenticator app and enter the code shown for Fe3dr Admin."
+    recommendation: "Keep. Possibly tighten: 'Open your authenticator app and enter the Fe3dr Admin code.' (11 words.)"
+    depends_on: null
+
+  - finding_id: TW-089
+    surface_id: ap-auth-totp-enroll-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Set up 2FA to continue' acceptable but slightly awkward. Could be tighter."
+    evidence_excerpt: "Set up 2FA to continue"
+    recommendation: "'Set up 2FA' (3 words, drops 'to continue' which the workflow implies)."
+    depends_on: null
+
+  - finding_id: TW-090
+    surface_id: ap-auth-totp-enroll-help
+    lens: technical-writer
+    severity: P2
+    issue: "'Your organization requires 2FA for admins. Scan this QR with Google Authenticator (or similar), then enter the generated code.' — 22 words total, sentence 2 is 17 words. American spelling 'organization' inconsistent with British/Indian-English elsewhere."
+    evidence_excerpt: "Your organization requires 2FA for admins. Scan this QR with Google Authenticator (or similar), then enter the generated code."
+    recommendation: "'2FA is required for admins. Scan the QR with Google Authenticator or similar, then enter the code.' 17 words, 'organisation' if standardising on UK/IN. Removes 'this' (deictic ambiguity) — 'the QR' is clearer."
+    depends_on: null
+
+  - finding_id: TW-091
+    surface_id: ap-secsettings-2fa-enroll
+    lens: technical-writer
+    severity: P2
+    issue: "Multi-string concatenated entry: 'Scan with your authenticator; Or type this key manually:; Verify & enable; 6-digit code' — colons after labels violate §4. Ampersand in CTA."
+    evidence_excerpt: "Scan with your authenticator; Or type this key manually:; Verify & enable; 6-digit code"
+    recommendation: "'Scan with your authenticator.' / 'Or type this key manually' (no colon). CTA: 'Verify and enable' or shorter 'Enable 2FA'. Label '6-digit code' OK."
+    depends_on: null
+
+  - finding_id: TW-092
+    surface_id: ap-secsettings-2fa-disable
+    lens: technical-writer
+    severity: P2
+    issue: "'Disable 2FA; Requires your password and a current 6-digit code.; Password; Disabling...; Cancel' — confirmation pattern OK, but 'Disabling...' uses three-dot ellipsis. Helper sentence ends with period, but is mid-line in the inventory; verify rendering."
+    evidence_excerpt: "Disable 2FA; Requires your password and a current 6-digit code.; Password; Disabling...; Cancel"
+    recommendation: "Loading 'Disabling…' (Unicode ellipsis). Heading 'Disable 2FA' OK. Helper sentence 'Requires your password and a current 6-digit code' OK."
+    depends_on: null
+
+  # ===========================================================
+  # MOBILE-CUSTOMER
+  # ===========================================================
+
+  - finding_id: TW-093
+    surface_id: mc-onb-step2-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "'Where should we deliver your orders?' is fine. 6 words. Customer-conversational. Note inconsistency with web: web onboarding step says 'Delivery Address' (cold), mobile says 'Your delivery address' (warmer)."
+    evidence_excerpt: "Where should we deliver your orders?"
+    recommendation: "Keep mobile copy; rewrite web (see TW-008) to match. Cross-app voice consistency."
+    depends_on: null
+
+  - finding_id: TW-094
+    surface_id: mc-onb-step2-labels
+    lens: technical-writer
+    severity: P2
+    issue: "Field labels 'Address / City / State / Pincode' — single words OK, but 'Pincode' could be 'PIN code' (style guide is silent but en-IN convention is 'PIN'). Web onboarding uses 'PIN code' (web-auth-onboarding-step-address: 'Enter PIN code'). Inconsistency."
+    evidence_excerpt: "Address / City / State / Pincode"
+    recommendation: "'PIN code' (uppercase PIN, space). Apply consistently across web + mobile."
+    depends_on: null
+
+  - finding_id: TW-095
+    surface_id: mc-onb-step2-placeholders
+    lens: technical-writer
+    severity: P3
+    issue: "'House no., street, area' uses abbreviation 'no.'. Helper text on cramped mobile is fine, but 'House number, street' is plain English."
+    evidence_excerpt: "House no., street, area / Enter your city / Enter your state / 6-digit pincode"
+    recommendation: "'Flat, building, street' (matches web TW-009 recommendation). '6-digit PIN code' (uppercase). 'Enter your city/state' placeholders restate label — remove."
+    depends_on: null
+
+  - finding_id: TW-096
+    surface_id: mc-onb-step3-subtitle
+    lens: technical-writer
+    severity: P3
+    issue: "'Select your favourite cuisines to get personalised recommendations.' — 9 words. UK spelling 'favourite/personalised' OK for en-IN. Inventory note flags potential drift with American spelling on web. Confirm consistency."
+    evidence_excerpt: "Select your favourite cuisines to get personalised recommendations."
+    recommendation: "Audit: web uses 'Favourite Cuisines' (Title Case but UK spelling) — consistent. Keep mobile copy. Final fix: sentence case label 'Favourite cuisines'."
+    depends_on: null
+
+  - finding_id: TW-097
+    surface_id: mc-onb-step1-labels
+    lens: technical-writer
+    severity: P2
+    issue: "'First Name / Last Name / Phone Number' Title Case. Web equivalent (TW-011 area) likely also Title Case — confirm cross-app."
+    evidence_excerpt: "First Name / Last Name / Phone Number"
+    recommendation: "'First name', 'Last name', 'Phone number' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-098
+    surface_id: mc-onb-step1-placeholders
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholders 'Enter your first name / Enter your last name / 10-digit mobile number' — first two restate label."
+    evidence_excerpt: "Enter your first name / Enter your last name / 10-digit mobile number"
+    recommendation: "Drop 'Enter your...' placeholders (label is enough). Keep '10-digit mobile number' as format hint."
+    depends_on: null
+
+  # ===========================================================
+  # MOBILE-VENDOR (chef-facing, mirrors vendor-portal)
+  # ===========================================================
+
+  - finding_id: TW-099
+    surface_id: mv-onb-step1-title
+    lens: technical-writer
+    severity: P3
+    issue: "Stack header titles 'Step 1 of 6' through 'Step 6 of 6' — verbose for mobile glanceable. Inventory note: 'verbose for glanceable mobile chef context but standard'. Drift risk with vendor-portal (5 steps vs 6 in mobile)."
+    evidence_excerpt: "Step 1 of 6 / Step 2 of 6 / Step 3 of 6 / Step 4 of 6 / Step 5 of 6 / Step 6 of 6"
+    recommendation: "Reconcile step count: mobile-vendor has 6, vendor-portal has 5 (Personal Info / Kitchen Details / Operations / Documents / Policies & Review). Confirm intentional and align stepper UX between web and mobile chef portals. Either both 5 or both 6 — currently INCONSISTENT."
+    depends_on: null
+
+  - finding_id: TW-100
+    surface_id: mv-onb-docs-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Documents' is fine as a screen heading. 'Upload your identity and FSSAI documents' subhead is good but 'identity' could be 'ID'."
+    evidence_excerpt: "Documents / Upload your identity and FSSAI documents"
+    recommendation: "Keep heading. Subhead: 'Upload your ID and FSSAI documents.' (Tighter, chef-functional.)"
+    depends_on: null
+
+  - finding_id: TW-101
+    surface_id: mv-onb-docs-id-slot
+    lens: technical-writer
+    severity: P2
+    issue: "'ID Proof' Title Case. Inconsistent with delivery's 'ID Proof' (also Title Case, also wrong)."
+    evidence_excerpt: "ID Proof"
+    recommendation: "'ID proof' (sentence case). Apply across mobile-vendor + mobile-delivery."
+    depends_on: null
+
+  - finding_id: TW-102
+    surface_id: mv-onb-docs-fssai-slot
+    lens: technical-writer
+    severity: P2
+    issue: "'FSSAI License' Title Case. FSSAI is acronym (uppercase OK). 'License' should be sentence case 'licence' (en-IN spelling)."
+    evidence_excerpt: "FSSAI License"
+    recommendation: "'FSSAI licence' (UK/IN spelling, sentence case)."
+    depends_on: null
+
+  - finding_id: TW-103
+    surface_id: mv-onb-kitchen-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Kitchen Details' Title Case. Sub 'Tell us about your kitchen' OK."
+    evidence_excerpt: "Kitchen Details / Tell us about your kitchen"
+    recommendation: "'Kitchen details' or 'About your kitchen' (matching web suggestion TW-026)."
+    depends_on: null
+
+  - finding_id: TW-104
+    surface_id: mv-onb-kitchen-business-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Business Name *' Title Case + inline asterisk."
+    evidence_excerpt: "Business Name *"
+    recommendation: "'Business name'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-105
+    surface_id: mv-onb-kitchen-business-ph
+    lens: technical-writer
+    severity: P3
+    issue: "'Your kitchen / business name' — slash separates synonyms but reads awkward."
+    evidence_excerpt: "Your kitchen / business name"
+    recommendation: "'e.g. Meena's Kitchen' (concrete example placeholder, friendlier)."
+    depends_on: null
+
+  - finding_id: TW-106
+    surface_id: mv-onb-kitchen-cuisines-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Cuisine Types *' Title Case + asterisk. 'Types' is filler."
+    evidence_excerpt: "Cuisine Types *"
+    recommendation: "'Cuisines'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-107
+    surface_id: mv-onb-kitchen-desc-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Description *' is fine — single word — but Title Case + asterisk."
+    evidence_excerpt: "Description *"
+    recommendation: "'Description'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-108
+    surface_id: mv-onb-kitchen-desc-ph
+    lens: technical-writer
+    severity: P2
+    issue: "'Describe your kitchen, specialties, and cooking style (min 50 characters)' — 11 words, verbose for placeholder. Inventory note flags it. Chef may skim. '(min 50 characters)' belongs in helper text under input, not placeholder."
+    evidence_excerpt: "Describe your kitchen, specialties, and cooking style (min 50 characters)"
+    recommendation: "Placeholder: 'What do you cook? What makes your food special?' Helper text under input: 'At least 50 characters.'"
+    depends_on: null
+
+  - finding_id: TW-109
+    surface_id: mv-onb-ops-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Operations' single word — good. Sub 'Set your working hours and service details' 7 words, OK for chef."
+    evidence_excerpt: "Operations / Set your working hours and service details"
+    recommendation: "Keep. Minor: 'Set your hours and service area' (more concrete than 'service details')."
+    depends_on: null
+
+  - finding_id: TW-110
+    surface_id: mv-onb-ops-hours-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Operating Hours' Title Case."
+    evidence_excerpt: "Operating Hours"
+    recommendation: "'Operating hours' or 'Hours' (drop redundant qualifier — already in 'Operations' section)."
+    depends_on: null
+
+  - finding_id: TW-111
+    surface_id: mv-onb-ops-preptime-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Prep Time' Title Case."
+    evidence_excerpt: "Prep Time"
+    recommendation: "'Prep time'."
+    depends_on: null
+
+  - finding_id: TW-112
+    surface_id: mv-onb-ops-radius-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Service Radius (km)' Title Case. '(km)' qualifier in label OK as unit indicator."
+    evidence_excerpt: "Service Radius (km)"
+    recommendation: "'Service radius (km)'."
+    depends_on: null
+
+  - finding_id: TW-113
+    surface_id: mv-onb-ops-radius-ph
+    lens: technical-writer
+    severity: P3
+    issue: "'1–50 km' uses en-dash for range — correct per style guide §6 (distances)."
+    evidence_excerpt: "1–50 km"
+    recommendation: "Keep. Good example of correct dash + space + unit formatting."
+    depends_on: null
+
+  - finding_id: TW-114
+    surface_id: mv-onb-personal-heading
+    lens: technical-writer
+    severity: P2
+    issue: "'Personal Information' Title Case. Matches mobile-delivery's same wrong pattern."
+    evidence_excerpt: "Personal Information"
+    recommendation: "'About you' (matches web/vendor-portal suggestion TW-011, TW-041)."
+    depends_on: null
+
+  - finding_id: TW-115
+    surface_id: mv-onb-personal-fullname-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Full Name *' Title Case + inline asterisk."
+    evidence_excerpt: "Full Name *"
+    recommendation: "'Full name'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-116
+    surface_id: mv-onb-personal-phone-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Phone Number *' Title Case + asterisk."
+    evidence_excerpt: "Phone Number *"
+    recommendation: "'Phone number'. Strip asterisk."
+    depends_on: null
+
+  - finding_id: TW-117
+    surface_id: mv-onb-personal-email-label
+    lens: technical-writer
+    severity: P2
+    issue: "'Email Address' Title Case. Also 'Address' is redundant — 'Email' is sufficient."
+    evidence_excerpt: "Email Address"
+    recommendation: "'Email'."
+    depends_on: null
+
+  - finding_id: TW-118
+    surface_id: mv-onb-review-section-personal
+    lens: technical-writer
+    severity: P2
+    issue: "'Personal Information' (review section label, inventory notes 'uppercase styled'). If styled uppercase via CSS, source string should still be sentence case."
+    evidence_excerpt: "Personal Information"
+    recommendation: "Source: 'Personal info'. CSS handles visual uppercase."
+    depends_on: null
+
+  - finding_id: TW-119
+    surface_id: mv-onb-review-field-labels
+    lens: technical-writer
+    severity: P2
+    issue: "Review labels mix Title Case: 'Full Name / Phone / Email / Business Name / Cuisines / Description / Open Days / Prep Time / Service Radius / ID Proof / FSSAI License / Terms Accepted / Cancellation Policy'."
+    evidence_excerpt: "Full Name / Phone / Email / Business Name / Cuisines / Description / Open Days / Prep Time / Service Radius / ID Proof / FSSAI License / Terms Accepted / Cancellation Policy"
+    recommendation: "All sentence case: 'Full name', 'Phone', 'Email', 'Business name', 'Cuisines', 'Description', 'Open days', 'Prep time', 'Service radius', 'ID proof', 'FSSAI licence', 'Terms accepted', 'Cancellation policy'."
+    depends_on: null
+
+  # ===========================================================
+  # MOBILE-DELIVERY
+  # ===========================================================
+
+  - finding_id: TW-120
+    surface_id: md-auth-002
+    lens: technical-writer
+    severity: P0
+    issue: "User-facing error 'Google sign-in failed: no ID token' is a developer-shaped error (mentions internal 'ID token' concept). Style guide §4: errors follow 'what happened → what to do'. Currently no 'what to do'. If this surfaces uncaught, it's misleading copy."
+    evidence_excerpt: "Google sign-in failed: no ID token"
+    recommendation: "Catch in UI layer. Replace with: 'Google sign-in didn't complete. Try again or use email.' (Driver-friendly, action-oriented.)"
+    depends_on: null
+
+  - finding_id: TW-121
+    surface_id: md-auth-003
+    lens: technical-writer
+    severity: P0
+    issue: "'Apple sign-in failed: no identity token' — same developer-shaped error pattern as TW-120."
+    evidence_excerpt: "Apple sign-in failed: no identity token"
+    recommendation: "Catch in UI. Replace with: 'Apple sign-in didn't complete. Try again or use email.'"
+    depends_on: null
+
+  - finding_id: TW-122
+    surface_id: md-auth-004
+    lens: technical-writer
+    severity: P1
+    issue: "'Biometric authentication failed' — missing 'what to do' per §4 errors rule. Driver may not know what to try next."
+    evidence_excerpt: "Biometric authentication failed"
+    recommendation: "'Biometric sign-in failed. Try your password or face recognition.' (What happened → what to do.)"
+    depends_on: null
+
+  - finding_id: TW-123
+    surface_id: md-auth-005
+    lens: technical-writer
+    severity: P2
+    issue: "'No saved session found. Please log in with email.' — 'log in' is banned vocabulary (always 'Sign in')."
+    evidence_excerpt: "No saved session found. Please log in with email."
+    recommendation: "'No saved session. Please sign in with email.' Drops 'found' (redundant), uses 'sign in'."
+    depends_on: null
+
+  - finding_id: TW-124
+    surface_id: md-onb-002
+    lens: technical-writer
+    severity: P2
+    issue: "'Driver Onboarding' Title Case (header fallback title)."
+    evidence_excerpt: "Driver Onboarding"
+    recommendation: "'Driver onboarding'."
+    depends_on: null
+
+  - finding_id: TW-125
+    surface_id: md-onb-042
+    lens: technical-writer
+    severity: P2
+    issue: "'Upload Documents' Title Case."
+    evidence_excerpt: "Upload Documents"
+    recommendation: "'Upload documents'."
+    depends_on: null
+
+  - finding_id: TW-126
+    surface_id: md-onb-043
+    lens: technical-writer
+    severity: P3
+    issue: "'Please upload clear photos or PDFs of your documents' 9 words. 'Please' adds politeness but is filler in driver-glanceable. 'clear photos' is good (instruction)."
+    evidence_excerpt: "Please upload clear photos or PDFs of your documents"
+    recommendation: "'Upload clear photos or PDFs of your documents.' Drops 'Please' (driver-direct)."
+    depends_on: null
+
+  - finding_id: TW-127
+    surface_id: md-onb-044
+    lens: technical-writer
+    severity: P2
+    issue: "'Driving License' Title Case + American spelling. en-IN should be 'licence'."
+    evidence_excerpt: "Driving License"
+    recommendation: "'Driving licence' (UK/IN spelling, sentence case)."
+    depends_on: null
+
+  - finding_id: TW-128
+    surface_id: md-onb-046
+    lens: technical-writer
+    severity: P3
+    issue: "'Vehicle RC (optional)' — '(optional)' qualifier in label violates §4. Use no asterisk for optional fields."
+    evidence_excerpt: "Vehicle RC (optional)"
+    recommendation: "'Vehicle RC' (no qualifier). Required indicator is asterisk on required fields ONLY; optional fields have no marker."
+    depends_on: null
+
+  - finding_id: TW-129
+    surface_id: md-onb-049
+    lens: technical-writer
+    severity: P2
+    issue: "'Uploading...' three-dot ellipsis."
+    evidence_excerpt: "Uploading..."
+    recommendation: "'Uploading…' (Unicode ellipsis)."
+    depends_on: null
+
+  - finding_id: TW-130
+    surface_id: md-onb-053
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Permission Required' Title Case. Body 'Camera permission is required to capture documents.' uses passive voice and 7 words, driver-OK."
+    evidence_excerpt: "Permission Required + Camera permission is required to capture documents."
+    recommendation: "Title: 'Camera access needed'. Body: 'We need camera access to capture your documents.' Active voice."
+    depends_on: null
+
+  - finding_id: TW-131
+    surface_id: md-onb-055
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Upload Error' Title Case + generic. Body 'Upload failed. Please try again.' OK (what happened + what to do)."
+    evidence_excerpt: "Upload Error + Upload failed. Please try again."
+    recommendation: "Title: 'Upload failed'. Body: 'Try again, or check your connection.' (Adds diagnostic hint.)"
+    depends_on: null
+
+  - finding_id: TW-132
+    surface_id: md-onb-057
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Required Documents' Title Case. Body 'Please upload Driving License and ID Proof to continue.' — 'Driving License' should be 'driving licence', 'ID Proof' should be 'ID proof' (sentence case in running text)."
+    evidence_excerpt: "Required Documents + Please upload Driving License and ID Proof to continue."
+    recommendation: "Title: 'Missing documents'. Body: 'Upload your driving licence and ID proof to continue.'"
+    depends_on: null
+
+  - finding_id: TW-133
+    surface_id: md-onb-059
+    lens: technical-writer
+    severity: P2
+    issue: "'Payout Details' Title Case."
+    evidence_excerpt: "Payout Details"
+    recommendation: "'Payout details'."
+    depends_on: null
+
+  - finding_id: TW-134
+    surface_id: md-onb-060
+    lens: technical-writer
+    severity: P3
+    issue: "'Choose how you would like to receive your earnings' — 8 words. Driver-OK. Could be tighter."
+    evidence_excerpt: "Choose how you would like to receive your earnings"
+    recommendation: "'How should we pay you?' 5 words, telegraphic, conversational."
+    depends_on: null
+
+  - finding_id: TW-135
+    surface_id: md-onb-061
+    lens: technical-writer
+    severity: P2
+    issue: "'Bank Account' Title Case (tab label)."
+    evidence_excerpt: "Bank Account"
+    recommendation: "'Bank account' or just 'Bank' (tab label, telegraphic)."
+    depends_on: null
+
+  - finding_id: TW-136
+    surface_id: md-onb-063
+    lens: technical-writer
+    severity: P2
+    issue: "'Account Number' Title Case."
+    evidence_excerpt: "Account Number"
+    recommendation: "'Account number'."
+    depends_on: null
+
+  - finding_id: TW-137
+    surface_id: md-onb-065
+    lens: technical-writer
+    severity: P2
+    issue: "'Confirm Account Number' Title Case."
+    evidence_excerpt: "Confirm Account Number"
+    recommendation: "'Confirm account number'."
+    depends_on: null
+
+  - finding_id: TW-138
+    surface_id: md-onb-070
+    lens: technical-writer
+    severity: P2
+    issue: "'IFSC Code' Title Case. IFSC is acronym (uppercase OK), 'Code' should be sentence case."
+    evidence_excerpt: "IFSC Code"
+    recommendation: "'IFSC code'."
+    depends_on: null
+
+  - finding_id: TW-139
+    surface_id: md-onb-073
+    lens: technical-writer
+    severity: P2
+    issue: "'Bank Name' Title Case."
+    evidence_excerpt: "Bank Name"
+    recommendation: "'Bank name'."
+    depends_on: null
+
+  - finding_id: TW-140
+    surface_id: md-onb-079
+    lens: technical-writer
+    severity: P2
+    issue: "'Your payout details are encrypted and never stored on this device. They are used solely for processing your earnings.' — 19 words, sentence 1 is 12 words (driver borderline), sentence 2 is 7. Passive 'are encrypted' / 'are used'. 'solely' is formal."
+    evidence_excerpt: "Your payout details are encrypted and never stored on this device. They are used solely for processing your earnings."
+    recommendation: "'We encrypt your payout details. We only use them to pay you.' 13 words, active, plain English."
+    depends_on: null
+
+  - finding_id: TW-141
+    surface_id: md-onb-081
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to save payout details. Please try again.' — follows what happened → what to do pattern. OK, but 'Please' is filler for driver."
+    evidence_excerpt: "Failed to save payout details. Please try again."
+    recommendation: "'Couldn't save payout details. Try again.' Drops 'Please', conversational."
+    depends_on: null
+
+  - finding_id: TW-142
+    surface_id: md-onb-109
+    lens: technical-writer
+    severity: P2
+    issue: "'Application Not Approved' Title Case + euphemism. Inventory note: 'Rejected state heading'."
+    evidence_excerpt: "Application Not Approved"
+    recommendation: "'Application not approved' (sentence case). Note: aligns with delivery-portal 'Application Needs Changes' for re-applicable rejection (different state — confirm which applies here)."
+    depends_on: null
+
+  - finding_id: TW-143
+    surface_id: md-onb-110
+    lens: technical-writer
+    severity: P2
+    issue: "'Unfortunately your application was not approved at this time.' — 9 words. 'Unfortunately' is editorial sympathy ('No urgency tricks' Rule 1 — adjacent: no manufactured emotion). Passive 'was not approved'. Driver-glanceable should be direct."
+    evidence_excerpt: "Unfortunately your application was not approved at this time."
+    recommendation: "'Your application wasn't approved.' Direct, no euphemism, 5 words."
+    depends_on: null
+
+  - finding_id: TW-144
+    surface_id: md-onb-113
+    lens: technical-writer
+    severity: P2
+    issue: "'Application Under Review' Title Case."
+    evidence_excerpt: "Application Under Review"
+    recommendation: "'Application under review'."
+    depends_on: null
+
+  - finding_id: TW-145
+    surface_id: md-onb-114
+    lens: technical-writer
+    severity: P2
+    issue: "'Your application has been submitted and is being reviewed by our team.' — 12 words, driver borderline. Two passives ('has been submitted', 'is being reviewed')."
+    evidence_excerpt: "Your application has been submitted and is being reviewed by our team."
+    recommendation: "'We received your application. Our team is reviewing it.' 9 words, active."
+    depends_on: null
+
+  - finding_id: TW-146
+    surface_id: md-onb-115
+    lens: technical-writer
+    severity: P2
+    issue: "'Estimated review time: 24–48 hours' — colon after label (§4 form labels no colons; this is an info string). en-dash range is correct (✓ style guide §6)."
+    evidence_excerpt: "Estimated review time: 24–48 hours"
+    recommendation: "'Review time: 24–48 hours' — drop 'Estimated' (redundant). Alternative without colon: 'Review takes 24–48 hours.'"
+    depends_on: null
+
+  - finding_id: TW-147
+    surface_id: md-onb-116
+    lens: technical-writer
+    severity: P2
+    issue: "'We'll notify you once your application is approved. This page checks for updates automatically every 30 seconds.' — sentence 2 is 11 words, driver-OK. Sentence 1: 9 words. But inconsistent wording with delivery-portal (dp-auth-status-auto-refresh: 'Auto-refreshing every 30 seconds')."
+    evidence_excerpt: "We'll notify you once your application is approved. This page checks for updates automatically every 30 seconds."
+    recommendation: "Standardise: 'We'll notify you once approved. This page checks for updates every 30 seconds.' Aligns wording with delivery-portal (see TW-083)."
+    depends_on: null
+
+  - finding_id: TW-148
+    surface_id: md-onb-001
+    lens: technical-writer
+    severity: P3
+    issue: "Step header 'Step 1 of 6' is mobile-glanceable, driver-OK. Matches mobile-vendor pattern (TW-099) — 6 steps both apps. Internal consistency OK."
+    evidence_excerpt: "Step 1 of 6"
+    recommendation: "No change. Cross-link: confirm 6-step pattern matches delivery-portal web (dp-auth-onboarding-step-labels has 5 steps) — POTENTIAL DRIFT. Mobile delivery has 6 steps (Personal, Vehicle, Documents, Payout, Subscription, Review), web delivery-portal has 5 (Personal Info, Vehicle Details, Documents, Plan, Review). Web is missing Payout. CONFIRM intentional."
+    depends_on: null
+
+  - finding_id: TW-149
+    surface_id: md-onb-003
+    lens: technical-writer
+    severity: P2
+    issue: "'Personal Information' Title Case (matches mobile-vendor, vendor-portal, delivery-portal — same drift everywhere)."
+    evidence_excerpt: "Personal Information"
+    recommendation: "'About you' OR 'Personal info' — sentence case. Apply globally (see TW-041, TW-114, TW-118)."
+    depends_on: null
+
+  - finding_id: TW-150
+    surface_id: md-onb-005
+    lens: technical-writer
+    severity: P2
+    issue: "'City' OK single word. Other fields TW-151 onwards."
+    evidence_excerpt: "City"
+    recommendation: "Keep."
+    depends_on: null
+
+  - finding_id: TW-151
+    surface_id: md-onb-008
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Type' Title Case."
+    evidence_excerpt: "Vehicle Type"
+    recommendation: "'Vehicle type' or just 'Vehicle' (telegraphic)."
+    depends_on: null
+
+  - finding_id: TW-152
+    surface_id: md-onb-010
+    lens: technical-writer
+    severity: P2
+    issue: "'Emergency Contact Name' Title Case. Inconsistent with delivery-portal (which adds asterisk inline — TW-043)."
+    evidence_excerpt: "Emergency Contact Name"
+    recommendation: "'Emergency contact name' (sentence case). Asterisk via CSS, not inline."
+    depends_on: null
+
+  - finding_id: TW-153
+    surface_id: md-onb-011
+    lens: technical-writer
+    severity: P3
+    issue: "Placeholder 'Full name of emergency contact' restates label phrasing. Use example."
+    evidence_excerpt: "Full name of emergency contact"
+    recommendation: "Drop placeholder OR replace with example: 'e.g. Priya Sharma'."
+    depends_on: null
+
+  - finding_id: TW-154
+    surface_id: md-onb-013
+    lens: technical-writer
+    severity: P2
+    issue: "'Emergency Contact Phone' Title Case."
+    evidence_excerpt: "Emergency Contact Phone"
+    recommendation: "'Emergency contact phone'."
+    depends_on: null
+
+  - finding_id: TW-155
+    surface_id: md-onb-018
+    lens: technical-writer
+    severity: P1
+    issue: "DOB placeholder 'MM/DD/YYYY' is US format. INCONSISTENT with India-only validation elsewhere (zod patterns expect en-IN: '+91' phone, KA01AB1234 vehicle, etc.). Inventory note flags this drift."
+    evidence_excerpt: "MM/DD/YYYY"
+    recommendation: "'DD/MM/YYYY' (en-IN format). Align across all date fields. Style guide §6 implies en-IN locale primary."
+    depends_on: null
+
+  - finding_id: TW-156
+    surface_id: md-onb-016
+    lens: technical-writer
+    severity: P2
+    issue: "'Date of Birth' Title Case."
+    evidence_excerpt: "Date of Birth"
+    recommendation: "'Date of birth'."
+    depends_on: null
+
+  - finding_id: TW-157
+    surface_id: md-onb-017
+    lens: technical-writer
+    severity: P3
+    issue: "'(optional)' qualifier in label. See TW-010, TW-128. Optional fields should have NO qualifier."
+    evidence_excerpt: "(optional)"
+    recommendation: "Drop the qualifier. Required-only fields show asterisk; absence implies optional."
+    depends_on: null
+
+  - finding_id: TW-158
+    surface_id: md-onb-020
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to save personal info. Please try again.' — what happened + what to do. 'Please' is filler."
+    evidence_excerpt: "Failed to save personal info. Please try again."
+    recommendation: "'Couldn't save. Try again.' Driver-telegraphic."
+    depends_on: null
+
+  - finding_id: TW-159
+    surface_id: md-onb-021
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Details' Title Case."
+    evidence_excerpt: "Vehicle Details"
+    recommendation: "'Vehicle details' or 'Your vehicle'."
+    depends_on: null
+
+  - finding_id: TW-160
+    surface_id: md-onb-022
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle type:' — trailing colon violates §4 form labels rule."
+    evidence_excerpt: "Vehicle type:"
+    recommendation: "'Vehicle type' (no colon)."
+    depends_on: null
+
+  - finding_id: TW-161
+    surface_id: md-onb-023
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Make' Title Case. Also 'Vehicle' prefix redundant in vehicle screen."
+    evidence_excerpt: "Vehicle Make"
+    recommendation: "'Make' (drops 'Vehicle' prefix, lower-case)."
+    depends_on: null
+
+  - finding_id: TW-162
+    surface_id: md-onb-026
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Model' Title Case + redundant prefix."
+    evidence_excerpt: "Vehicle Model"
+    recommendation: "'Model'."
+    depends_on: null
+
+  - finding_id: TW-163
+    surface_id: md-onb-029
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Year' Title Case + redundant prefix."
+    evidence_excerpt: "Vehicle Year"
+    recommendation: "'Year'."
+    depends_on: null
+
+  - finding_id: TW-164
+    surface_id: md-onb-032
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Color' Title Case + redundant prefix + American spelling."
+    evidence_excerpt: "Vehicle Color"
+    recommendation: "'Colour' (UK/IN spelling)."
+    depends_on: null
+
+  - finding_id: TW-165
+    surface_id: md-onb-035
+    lens: technical-writer
+    severity: P2
+    issue: "'Vehicle Registration Number' Title Case + verbose."
+    evidence_excerpt: "Vehicle Registration Number"
+    recommendation: "'Registration number'."
+    depends_on: null
+
+  - finding_id: TW-166
+    surface_id: md-onb-038
+    lens: technical-writer
+    severity: P2
+    issue: "'Driving License Number' Title Case + American spelling 'License'."
+    evidence_excerpt: "Driving License Number"
+    recommendation: "'Driving licence number' (UK/IN spelling, sentence case)."
+    depends_on: null
+
+  - finding_id: TW-167
+    surface_id: md-onb-041
+    lens: technical-writer
+    severity: P3
+    issue: "'Failed to save vehicle details. Please try again.' — 'Please' filler."
+    evidence_excerpt: "Failed to save vehicle details. Please try again."
+    recommendation: "'Couldn't save vehicle details. Try again.' Driver-direct."
+    depends_on: null
+
+  - finding_id: TW-168
+    surface_id: md-onb-082
+    lens: technical-writer
+    severity: P2
+    issue: "'Choose Your Plan' Title Case."
+    evidence_excerpt: "Choose Your Plan"
+    recommendation: "'Choose your plan'."
+    depends_on: null
+
+  - finding_id: TW-169
+    surface_id: md-onb-083
+    lens: technical-writer
+    severity: P2
+    issue: "'Select a subscription plan that works best for you' — 8 words. Driver-OK. 'that works best for you' is conversational filler."
+    evidence_excerpt: "Select a subscription plan that works best for you"
+    recommendation: "'Pick the plan that fits.' 5 words. Direct."
+    depends_on: null
+
+  - finding_id: TW-170
+    surface_id: md-onb-086
+    lens: technical-writer
+    severity: P3
+    issue: "'Up to {n} deliveries/month' uses '/month' suffix — fine. Pluralisation when n=1 unclear: 'Up to 1 deliveries/month'?"
+    evidence_excerpt: "Up to {n} deliveries/month"
+    recommendation: "Use ICU MessageFormat: '{n, plural, one {Up to # delivery/month} other {Up to # deliveries/month}}'. Style guide §6 plural rule."
+    depends_on: null
+
+  - finding_id: TW-171
+    surface_id: md-onb-088
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Select a Plan' Title Case + identical to button text — confusing. Body 'Please select a subscription plan to continue.' has 'Please' filler."
+    evidence_excerpt: "Select a Plan + Please select a subscription plan to continue."
+    recommendation: "Title: 'Choose a plan'. Body: 'Pick a plan to continue.'"
+    depends_on: null
+
+  - finding_id: TW-172
+    surface_id: md-onb-093
+    lens: technical-writer
+    severity: P2
+    issue: "'Review Your Application' Title Case."
+    evidence_excerpt: "Review Your Application"
+    recommendation: "'Review your application'."
+    depends_on: null
+
+  - finding_id: TW-173
+    surface_id: md-onb-094
+    lens: technical-writer
+    severity: P3
+    issue: "'Please review your details before submitting' — 6 words, OK. 'Please' is filler."
+    evidence_excerpt: "Please review your details before submitting"
+    recommendation: "'Review your details before submitting.' Drops 'Please'."
+    depends_on: null
+
+  - finding_id: TW-174
+    surface_id: md-onb-099
+    lens: technical-writer
+    severity: P3
+    issue: "Summary row value '{n}/{total} required + RC' is cryptic. 'RC' is acronym, needs context for drivers unfamiliar."
+    evidence_excerpt: "{n}/{total} required + RC"
+    recommendation: "'{n} of {total} required, plus RC'. Spells out 'of', adds 'plus' for clarity."
+    depends_on: null
+
+  - finding_id: TW-175
+    surface_id: md-onb-103
+    lens: technical-writer
+    severity: P1
+    issue: "'I accept the Terms of Service and Privacy Policy' — link wiring not confirmed in inventory. If 'Terms of Service' and 'Privacy Policy' are NOT linked, same problem as TW-075 (delivery-portal)."
+    evidence_excerpt: "I accept the Terms of Service and Privacy Policy"
+    recommendation: "Confirm links are wired. Wording also drifts from delivery-portal ('Terms & Conditions, Privacy Policy'). Align across portals: 'I agree to the [Terms and Conditions] and [Privacy Policy].'"
+    depends_on: null
+
+  - finding_id: TW-176
+    surface_id: md-onb-104
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Terms Required' Title Case."
+    evidence_excerpt: "Terms Required"
+    recommendation: "'Accept terms to continue' (more specific). Or 'Terms required' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-177
+    surface_id: md-onb-107
+    lens: technical-writer
+    severity: P2
+    issue: "Alert title 'Submission Error' Title Case + generic."
+    evidence_excerpt: "Submission Error"
+    recommendation: "'Submission failed' (what happened, not just 'error')."
+    depends_on: null
+
+  - finding_id: TW-178
+    surface_id: md-onb-095
+    lens: technical-writer
+    severity: P2
+    issue: "Review section headers Title Case: 'Personal Info', 'Vehicle Details', 'Documents', 'Documents Uploaded', 'Payout Method', 'Subscription Plan', 'Selected Plan'."
+    evidence_excerpt: "Personal Info / Vehicle Details / Documents / Documents Uploaded / Payout Method / Subscription Plan / Selected Plan"
+    recommendation: "All sentence case: 'Personal info', 'Vehicle details', 'Documents', 'Documents uploaded', 'Payout method', 'Subscription plan', 'Selected plan'."
+    depends_on: null
+
+  # ===========================================================
+  # CROSS-CUTTING / CONSISTENCY
+  # ===========================================================
+
+  - finding_id: TW-179
+    surface_id: dp-auth-step-payout-h
+    lens: technical-writer
+    severity: P1
+    issue: "ORPHAN component: inventory notes the payout step file is present but 'not wired into OnboardingPage; orphan component'. Driver-onboarding web has no payout step in inventory list — mobile-delivery has full payout flow (md-onb-059 → md-onb-081). This is feature parity drift between web and mobile delivery, not just copy."
+    evidence_excerpt: "dp-auth-step-payout-h — file present but not wired into OnboardingPage; orphan component"
+    recommendation: "Surface this to product: mobile-delivery collects payout details during onboarding, web delivery-portal doesn't. Confirm intentional or wire the orphan component. From TW lens: if wired, all payout copy from delivery-portal needs to match mobile-delivery wording."
+    depends_on: null
+
+  - finding_id: TW-180
+    surface_id: md-onb-018
+    lens: technical-writer
+    severity: P2
+    issue: "CROSS-APP DATE FORMAT DRIFT: mobile-delivery uses 'MM/DD/YYYY' (US) for DOB placeholder; vendor-portal/web use no explicit format hint; mobile-vendor has no DOB. en-IN convention is DD/MM/YYYY."
+    evidence_excerpt: "MM/DD/YYYY"
+    recommendation: "Standardise: 'DD/MM/YYYY' on all DOB placeholders across portals. Document the decision."
+    depends_on: null
+
+  - finding_id: TW-181
+    surface_id: vp-auth-register-hero-sub
+    lens: technical-writer
+    severity: P1
+    issue: "AI-SLOP IN ENTRY SURFACES — comprehensive scan: vp-auth-register-hero-sub ('Join thousands') flagged TW-023. Cross-checking ap-auth-login-feature-list (TW-084 — marketing tone in admin), dp-auth-step4-zero-commission (TW-065 — 'here to help you succeed'), and dp-auth-step4-h ('keep every rupee you earn'). All hit unverified-metric or marketing-flourish anti-patterns. Pattern: Fe3dr marketing copy is leaking into functional surfaces."
+    evidence_excerpt: "Join thousands of home chefs… / We're here to help you succeed, not to make profit from your hard work… / 100%…"
+    recommendation: "Audit ALL hero/subhead strings across auth-onboarding for unverifiable claims and editorial sympathy. Replace with concrete, falsifiable copy. See individual findings TW-023, TW-065, TW-084 for specific rewrites."
+    depends_on: null
+
+  - finding_id: TW-182
+    surface_id: dp-auth-onboarding-step-labels
+    lens: technical-writer
+    severity: P1
+    issue: "STEPPER COUNT DRIFT: delivery-portal web has 5 steps (Personal Info / Vehicle Details / Documents / Plan / Review); mobile-delivery has 6 steps (adds Payout — see md-onb-001 + md-onb-059). Same product, two different onboarding flows. This is a TW lens flag because step labels and progress copy ('Step 1 of 5' vs 'Step 1 of 6') are user-facing and confusing for drivers switching devices."
+    evidence_excerpt: "Personal Info / Vehicle Details / Documents / Plan / Review (web, 5 steps) vs Personal Info / Vehicle / Documents / Payout / Subscription / Review (mobile, 6 steps)"
+    recommendation: "Reconcile: either wire payout step on web (TW-179) or remove from mobile. Step copy must match across portals. Same for vendor-portal (5 steps) vs mobile-vendor (6 steps) — TW-099."
+    depends_on: null
+
+  - finding_id: TW-183
+    surface_id: web-auth-onboarding-heading
+    lens: technical-writer
+    severity: P2
+    issue: "CUSTOMER ONBOARDING STEP COUNT: web shows 'Step {n} of 3', mobile-customer shows 'Step 1 of 3' (matches). OK consistency. Flagging only for completeness — customer parity holds."
+    evidence_excerpt: "Step {n} of 3 (web) / Step 1 of 3 (mobile)"
+    recommendation: "No change. Cross-app customer onboarding step count is consistent at 3 steps."
+    depends_on: null
+
+  - finding_id: TW-184
+    surface_id: mc-auth-register-host
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer register screen uses shared RegisterScreen from @homechef/mobile-shared with no local strings. Inventory notes 'flag for cross-app voice audit'. TW lens cannot audit shared screen body copy without separate inventory entry."
+    evidence_excerpt: "(shared RegisterScreen — no local strings)"
+    recommendation: "Request inventory expansion: extract all strings from @homechef/mobile-shared/screens/RegisterScreen and add to inventory as separate surface_ids. Cannot audit what isn't visible."
+    depends_on: null
+
+  - finding_id: TW-185
+    surface_id: mc-auth-login-title
+    lens: technical-writer
+    severity: P3
+    issue: "Mobile-customer login title 'Welcome back' is consistent across portals (web, vendor-portal, mobile-vendor, mobile-delivery all use 'Welcome back'). Good cross-app consistency."
+    evidence_excerpt: "Welcome back"
+    recommendation: "No change. Confirm same shared LoginScreen is in use to prevent future drift."
+    depends_on: null
+
+  - finding_id: TW-186
+    surface_id: dp-auth-login-title
+    lens: technical-writer
+    severity: P3
+    issue: "Brand wordmark 'Fe3dr Delivery' is consistent with admin-portal brand block. Brand wordmark OK."
+    evidence_excerpt: "Fe3dr Delivery"
+    recommendation: "No change. Brand wordmark formatting consistent."
+    depends_on: null
+
+  - finding_id: TW-187
+    surface_id: dp-auth-login-subtitle-choose
+    lens: technical-writer
+    severity: P3
+    issue: "'Sign in to get started' — inventory note V: '\"Sign in\" alone is enough'. 5 words; could be tighter for driver context."
+    evidence_excerpt: "Sign in to get started"
+    recommendation: "'Sign in.' Or keep current — both fine. Inventory note suggests dropping 'to get started'."
+    depends_on: null
+
+  - finding_id: TW-188
+    surface_id: dp-auth-login-subtitle-staff
+    lens: technical-writer
+    severity: P3
+    issue: "'Staff & fleet manager login' — ampersand + 'login' banned vocabulary."
+    evidence_excerpt: "Staff & fleet manager login"
+    recommendation: "'Staff and fleet manager sign-in.' Drops ampersand and banned 'login'."
+    depends_on: null
+
+  - finding_id: TW-189
+    surface_id: ap-auth-login-brand-heading
+    lens: technical-writer
+    severity: P3
+    issue: "'Platform Administration' is Title Case + abstract. Admin tone is direct/precise."
+    evidence_excerpt: "Platform Administration"
+    recommendation: "'Platform administration' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-190
+    surface_id: ap-auth-login-brand-sub
+    lens: technical-writer
+    severity: P3
+    issue: "'Manage users, chefs, orders, and analytics for the Fe3dr platform.' — 10 words. Admin-OK."
+    evidence_excerpt: "Manage users, chefs, orders, and analytics for the Fe3dr platform."
+    recommendation: "Keep. Mild: 'Manage users, chefs, orders, and analytics across Fe3dr.' (Drops 'for the…platform' which is filler.)"
+    depends_on: null
+
+  - finding_id: TW-191
+    surface_id: ap-auth-login-portal-label
+    lens: technical-writer
+    severity: P3
+    issue: "'Admin Portal' Title Case. Logo sub-label."
+    evidence_excerpt: "Admin Portal"
+    recommendation: "'Admin portal' (sentence case)."
+    depends_on: null
+
+  - finding_id: TW-192
+    surface_id: md-onb-080
+    lens: technical-writer
+    severity: P3
+    issue: "Inventory annotation says 'Select a Plan' alert appears in subscription screen but is filed under payout.tsx surface — possible inventory misclassification. TW lens: 'Select a Plan' is Title Case."
+    evidence_excerpt: "Select a Plan"
+    recommendation: "'Choose a plan' (sentence case). Confirm which screen it actually renders on."
+    depends_on: null

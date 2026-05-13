@@ -1,0 +1,1096 @@
+# Legal lens findings — auth-onboarding category
+# Jurisdiction: India + generic best-practice
+# Auditor disclaimer: this is a content audit, NOT legal advice. Every finding
+# requires lawyer review before binding text is drafted or shipped.
+
+# =============================================================================
+# WEB CUSTOMER — apps/web/src/features/auth/
+# =============================================================================
+
+- finding_id: LEG-001
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P0
+  issue: "Signup form collects personal data (name, email, password) with no DPDP §6 consent notice at the data-collection moment"
+  evidence_excerpt: "First name / Last name / Email / Password / Confirm password / Min. 8 characters / Re-enter password"
+  recommendation: "Add an explicit, granular consent notice immediately above the submit button: purposes of processing, identity of data fiduciary (legal entity name), retention period, and link to grievance officer. The post-submit footer 'By signing up, you agree to our Terms and Privacy Policy' is bundled blanket consent and does not satisfy DPDP §6 specificity requirements."
+  citation: "DPDP Act 2023 §6 (consent must be free, specific, informed, unconditional, unambiguous, with clear affirmative action) + §5 (notice requirements)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-002
+  surface_id: web-auth-register-submit
+  lens: legal
+  severity: P0
+  issue: "Account creation submit button has no checkbox-gated affirmative-action consent; clicking 'Create account' is treated as implied consent"
+  evidence_excerpt: "Create account / Creating account..."
+  recommendation: "Per DPDP §6(1) consent must be by 'clear affirmative action'. A button click bundled with T&C acceptance after the fact does not satisfy this. Add at minimum an unchecked checkbox: 'I agree to the Terms of Service and Privacy Policy' that gates submission. Separate marketing-communications consent checkbox required if any opt-in to non-transactional email."
+  citation: "DPDP Act 2023 §6(1); best-practice unbundled consent"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-003
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P0
+  issue: "No children's-data screening at signup; platform has no age gate"
+  evidence_excerpt: "First name / Last name / Email / Password / Confirm password"
+  recommendation: "Per DPDP §9 (renumbered §7 in some drafts), data fiduciary must obtain verifiable parental consent before processing personal data of a child (<18). Add either (a) explicit age confirmation checkbox 'I confirm I am 18 or older' or (b) DOB collection at signup with backend rejection for <18. Food delivery is not exempted from §9."
+  citation: "DPDP Act 2023 §9 (children's data) + Rule 10 of draft DPDP Rules 2025"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-004
+  surface_id: web-auth-register-heading
+  lens: legal
+  severity: P1
+  issue: "Signup heading does not identify the legal entity (data fiduciary) collecting the data"
+  evidence_excerpt: "Create your account / Already have an account? Sign in"
+  recommendation: "Per DPDP §5(i), notice must identify the data fiduciary. Add legal entity name (e.g., 'Fe3dr is operated by [Pvt Ltd entity name], registered office: [address]') either inline or via a 'Who we are' link in the consent notice."
+  citation: "DPDP Act 2023 §5(i)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-005
+  surface_id: web-auth-register-heading
+  lens: legal
+  severity: P0
+  issue: "No grievance-officer contact disclosed at signup or in the visible consent footer"
+  evidence_excerpt: "Create your account"
+  recommendation: "Per DPDP §13, data fiduciary must publish grievance officer name and contact and make them accessible. Signup is the first contact; a 'Contact our Grievance Officer' link belongs in the consent notice or in the privacy policy linked from this screen — and lawyer must confirm the linked privacy policy actually lists the officer."
+  citation: "DPDP Act 2023 §13(1)-(2)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-006
+  surface_id: web-auth-register-heading
+  lens: legal
+  severity: P0
+  issue: "No disclosure of user rights (access, correction, erasure, nomination, grievance redressal) at signup"
+  evidence_excerpt: "Create your account / Already have an account? Sign in"
+  recommendation: "Per DPDP §5(iii)–(iv), notice at consent must inform user of their rights (§11 access/correction, §12 erasure, §13 grievance) and the procedure to exercise them. Add a one-line summary with a link, or link the privacy policy that lawyer has reviewed for §11/12/13 compliance."
+  citation: "DPDP Act 2023 §5(iii), §11, §12, §13"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-007
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P1
+  issue: "Password collected and stored; no statement of security practices (encryption at rest/transit, bcrypt/argon2 hashing, breach notification commitment)"
+  evidence_excerpt: "Password / Min. 8 characters"
+  recommendation: "DPDP §8(5) requires data fiduciary to implement 'reasonable security safeguards'. Privacy policy linked from signup must describe these. Password minimum 8 chars is weak — consider documenting NIST SP 800-63B alignment (length over complexity, breach-list check) for binding policy text. Lawyer to confirm policy meets §8(5) standard."
+  citation: "DPDP Act 2023 §8(5); NIST SP 800-63B best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-008
+  surface_id: web-auth-register-social
+  lens: legal
+  severity: P0
+  issue: "OAuth signup (Google/Facebook) does not disclose what data is shared with third-party identity provider before user clicks"
+  evidence_excerpt: "Sign up with Google / Sign up with Facebook"
+  recommendation: "Per DPDP §10 (if Fe3dr is significant data fiduciary) and §11 disclosure, user must know which fields are pulled from Google/Facebook (email, name, profile photo, locale, etc.) before authorising. Add a tooltip or 'What does Google share?' link below each OAuth button. Note also: Meta/Facebook OAuth has separate consent flow concerns — lawyer to confirm Fe3dr's data-handling addendum with each provider is current."
+  citation: "DPDP Act 2023 §5, §10; best-practice OAuth disclosure"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-009
+  surface_id: web-auth-register-social
+  lens: legal
+  severity: P1
+  issue: "OAuth buttons identical for sign-up and login — different consent expectations; first-time OAuth signup needs DPDP consent capture, returning login does not"
+  evidence_excerpt: "Sign up with Google / Sign up with Facebook (signup) vs Continue with Google (login)"
+  recommendation: "On first OAuth signup, after callback, force user through a one-time consent screen capturing DPDP §6 affirmative action (purposes, retention, rights) before account is created. Currently the OAuth callback presumably creates the account silently with no consent record. Lawyer to confirm consent log/audit trail."
+  citation: "DPDP Act 2023 §6(2) (record of consent)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-010
+  surface_id: web-auth-login-social
+  lens: legal
+  severity: P2
+  issue: "Login OAuth flow has no T&C/Privacy disclosure visible (unlike register page footer)"
+  evidence_excerpt: "Continue with Google / Continue with Facebook"
+  recommendation: "Even on returning-user login, jurisdictional best-practice is to keep T&C/Privacy links visible (e.g., footer) for users who may want to review before re-authenticating. Currently invisible on web-auth-login surface. Lawyer to confirm minimum disclosure requirement on returning-login screens."
+  citation: "best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-011
+  surface_id: web-auth-login-email-fields
+  lens: legal
+  severity: P1
+  issue: "'Forgot password?' flow not inventoried for legal exposure — password reset emails carry security/notification obligations"
+  evidence_excerpt: "Email / Password / Forgot password? / you@example.com / Enter your password"
+  recommendation: "Password reset notification emails are a §8(6) breach-adjacent security control; if reset is triggered without user knowledge, DPDP arguably requires notice. Lawyer to confirm reset-email template text discloses (a) who initiated, (b) IP/device, (c) what to do if user didn't request."
+  citation: "DPDP Act 2023 §8(5)–(6); best-practice account-security notification"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-012
+  surface_id: web-auth-onboarding-step-basic
+  lens: legal
+  severity: P0
+  issue: "Phone number collected post-signup without separate purpose-specific consent (transactional SMS vs marketing SMS)"
+  evidence_excerpt: "Basic Information / Tell us a bit about yourself / Enter your first name / Enter your last name / +91 98765 43210"
+  recommendation: "TRAI commercial-communications rules require explicit consent for promotional SMS/calls, separate from transactional. Per DPDP §6 'specific' consent requirement, bundling phone collection with general signup-consent is non-compliant. Add granular checkbox: 'Send me order updates by SMS (required)' (cannot legally make optional for transactional) and 'Send me offers and recommendations by SMS' (must be unchecked, opt-in)."
+  citation: "DPDP Act 2023 §6; TRAI Telecom Commercial Communications Customer Preference Regulations (TCCCPR) 2018"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-013
+  surface_id: web-auth-onboarding-step-address
+  lens: legal
+  severity: P1
+  issue: "Delivery address collected with no retention statement or purpose limitation"
+  evidence_excerpt: "Delivery Address / Enter PIN code / House / flat / building number, street / Landmark, area (optional)"
+  recommendation: "Per DPDP §8(7) (storage limitation principle), specify retention period for address data. Per §5(ii), specify the purpose (delivery only? or also profiling/marketing recommendations?). Add helper text under section title: 'We use this to route deliveries. We keep it for [X period] after your last order.' Lawyer to confirm retention period aligns with Income Tax record-keeping (8 yrs) and FSSAI traceability (3 yrs)."
+  citation: "DPDP Act 2023 §5(ii), §8(7); FSSAI Regulations §2.1.13 (traceability records); Income Tax §44AA"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-014
+  surface_id: web-auth-onboarding-step-preferences
+  lens: legal
+  severity: P1
+  issue: "Dietary preferences and allergies collected — potentially sensitive health data — no special-category consent flow"
+  evidence_excerpt: "Dietary Preferences / What type of food do you prefer? / Food Allergies / Favourite Cuisines / Spice Tolerance / Household Size"
+  recommendation: "Food allergies are health-related data. While DPDP 2023 does not formally create 'sensitive personal data' category (unlike GDPR Art. 9), §8(4) imposes accuracy obligations and best-practice treats health-related fields specially. Add explicit purpose statement: 'We use allergy info to flag risky dishes; you can change this anytime' and confirm with lawyer whether 'Skip' option (currently exists per web-auth-onboarding-heading) properly preserves DPDP §6 voluntariness."
+  citation: "DPDP Act 2023 §8(4); best-practice — health-adjacent data"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-015
+  surface_id: web-auth-onboarding-step-preferences
+  lens: legal
+  severity: P2
+  issue: "'Household Size' collected — household composition is profile-enriching data, no purpose disclosed"
+  evidence_excerpt: "Household Size"
+  recommendation: "Household size goes beyond what's needed to deliver food. If used for portion recommendations, say so. If used for marketing segmentation (family-pack ads), separate consent is required. Either remove the field or add purpose justification."
+  citation: "DPDP Act 2023 §5(ii) (purpose limitation), §6 (specific consent)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-016
+  surface_id: web-auth-onboarding-heading
+  lens: legal
+  severity: P1
+  issue: "'Skip' link on onboarding wizard implies users can bypass data collection — must confirm DPDP voluntariness; but be careful conditional consent isn't being collected"
+  evidence_excerpt: "Complete Your Profile / Step {n} of 3 / Skip"
+  recommendation: "Per DPDP §7(b) (lawful processing — note Act numbering varies), services cannot deny basic functionality for refusing consent to optional data. 'Skip' is good. But lawyer to confirm: does the platform actually function fully if user skips all preferences? If app blocks browsing/ordering until preferences are filled, that's conditional consent contrary to §7."
+  citation: "DPDP Act 2023 §7 (conditional consent prohibition); §6(2)"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# VENDOR PORTAL — apps/vendor-portal/src/features/auth/
+# =============================================================================
+
+- finding_id: LEG-017
+  surface_id: vp-auth-login-hero-heading
+  lens: legal
+  severity: P2
+  issue: "Marketing claim on auth screen ('Grow your home kitchen business') is pre-contractual representation"
+  evidence_excerpt: "Grow your home kitchen business"
+  recommendation: "Pre-contractual marketing claims can be invoked in disputes under Indian Contract Act §17 (misrepresentation) and Consumer Protection Act 2019 §2(28). 'Grow your business' is sufficiently puffery to be defensible, but pair it with the binding T&C link to avoid implied warranty. Lawyer to confirm no binding promise read into hero copy."
+  citation: "Indian Contract Act 1872 §17; Consumer Protection Act 2019 §2(28)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-018
+  surface_id: vp-auth-login-features-list
+  lens: legal
+  severity: P1
+  issue: "Pre-contract feature promise 'Document verification & compliance' implies platform handles regulatory compliance for chef — could shift liability"
+  evidence_excerpt: "Real-time order management / Earnings & analytics dashboard / Menu management with categories / Customer reviews & ratings / Document verification & compliance"
+  recommendation: "Saying 'Document verification & compliance' to a chef can be read as platform assuming FSSAI/tax compliance burden. FSSAI license under FSS Act §31 is the chef's obligation, not the platform's. Reword to 'Document upload for FSSAI and ID verification' or 'Compliance support' with explicit disclaimer in T&C that legal responsibility for FSSAI/GST/income-tax compliance rests with the chef."
+  citation: "FSS Act 2006 §31; best-practice — pre-contractual misrepresentation"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-019
+  surface_id: vp-auth-register-hero-sub
+  lens: legal
+  severity: P1
+  issue: "'Join thousands of home chefs earning' is a verifiable factual claim — must be substantiated or removed"
+  evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+  recommendation: "ASCI Code, MCA Consumer Protection (E-Commerce) Rules 2020 §6(1)(d), and Consumer Protection Act 2019 §2(28)(iv) prohibit misleading representations of fact. If 'thousands' (≥2,000) of active chefs aren't actually onboarded and earning, this is misleading. Lawyer to confirm actual numbers; if false, rewrite as 'Join home chefs across India' without quantitative claim."
+  citation: "ASCI Code; Consumer Protection (E-Commerce) Rules 2020 §6(1)(d); Consumer Protection Act 2019 §2(28)(iv)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-020
+  surface_id: vp-auth-register-hero-sub
+  lens: legal
+  severity: P2
+  issue: "'Your kitchen, your recipes, your rules' contradicts platform T&C which inevitably impose menu, pricing, hygiene, and cancellation rules"
+  evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+  recommendation: "Pre-contractual representation that contradicts subsequent T&C is a misrepresentation risk under Indian Contract Act §17. Vendor Terms (per StepPolicies.tsx) clearly impose platform commission, payout cadence, hygiene policy, and cancellation rules — not 'your rules'. Reword to 'Your kitchen, your menu, your schedule' or similar that is consistent with the actual contract."
+  citation: "Indian Contract Act 1872 §17, §18; best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-021
+  surface_id: vp-auth-register-login-link
+  lens: legal
+  severity: P0
+  issue: "Vendor register page T&C disclosure says 'By registering, you agree...' — implies-consent pattern not §6 affirmative action"
+  evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+  recommendation: "Same as LEG-002 but vendor-side: button-click implies consent is not 'clear affirmative action' per DPDP §6(1). Vendor commits to Vendor Agreement, Privacy Policy, AND implicitly platform commission rate — needs explicit checkbox-gated affirmative consent at minimum. Lawyer to confirm vendor onboarding properly captures consent record per §6(2)."
+  citation: "DPDP Act 2023 §6(1)–(2); Indian Contract Act 1872 §10 (consent must be free)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-022
+  surface_id: vp-onb-personal-blurb
+  lens: legal
+  severity: P0
+  issue: "'This information helps verify your identity' is KYC framing without disclosure of KYC obligations, retention, or refusal consequences"
+  evidence_excerpt: "Tell us about yourself. This information helps verify your identity."
+  recommendation: "KYC of vendors is required under RBI Payment Aggregator MD 2020 (Annex 2) for payout recipients. User must know: (a) data fiduciary identity, (b) KYC purpose specifically (payout disbursement + regulatory recordkeeping), (c) retention (5 yrs minimum per PMLA §12), (d) consequence of refusal (no payouts). Add a 'Why we need this' callout."
+  citation: "RBI Payment Aggregator MD 2020 (Annex 2); PMLA 2002 §12; DPDP §5(ii)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-023
+  surface_id: vp-onb-personal-fields
+  lens: legal
+  severity: P0
+  issue: "Vendor full name, phone, email collected as KYC without explicit DPDP consent log capture"
+  evidence_excerpt: "Full Name / Phone Number / Email Address / Pre-filled from your login / e.g. Meena Sharma / meena@example.com"
+  recommendation: "Per DPDP §6(2), data fiduciary must keep a record of consent. Vendor KYC data is dual-purpose (account + payment compliance). Lawyer to confirm backend logs which version of T&C and Privacy Policy the vendor consented to, with timestamp, and that revocation per §6(4)–(6) is wired."
+  citation: "DPDP Act 2023 §6(2)–(6); PMLA Record Maintenance Rules 2005"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-024
+  surface_id: vp-onb-kitchen-blurb
+  lens: legal
+  severity: P1
+  issue: "'Tell customers about your kitchen and what makes your food special' — chef-authored public-facing copy carries food-safety representation risk"
+  evidence_excerpt: "Tell customers about your kitchen and what makes your food special."
+  recommendation: "Chef-authored claims (e.g., 'organic', 'fresh', 'home-style', 'no preservatives') can attract FSSAI labelling and advertising violations (FSS Act §52, §53). Add a helper-text disclaimer: 'Avoid claims like organic, low-fat, or sugar-free unless certified — read our labelling guide.' Vendor Agreement (T&C) should explicitly transfer ad-claim liability to chef."
+  citation: "FSS Act 2006 §52 (misleading advertisements), §53 (penalty); FSSAI Advertising and Claims Regulations 2018"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-025
+  surface_id: vp-onb-personal-address-blurb
+  lens: legal
+  severity: P1
+  issue: "Kitchen address collection does not disclose this becomes the FSSAI-registered premises address"
+  evidence_excerpt: "Where your kitchen is located. This is used for delivery radius and customer visibility."
+  recommendation: "Per FSS Act §31 and FSSAI Licensing & Registration Regulations 2011, a food business operator must register/license the actual premises where food is prepared. Address provided here likely flows to FSSAI license application. Clarify: 'This must be the actual kitchen address where you prepare food — it will appear on your FSSAI registration.' Critical for license validity and recall traceability."
+  citation: "FSS Act 2006 §31; FSSAI Licensing & Registration Regulations 2011, Regulation 2.1.2"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-026
+  surface_id: vp-onb-stepper-labels
+  lens: legal
+  severity: P1
+  issue: "Stepper labels show 'Documents' generically — KYC documents required by RBI/PMLA must be enumerated upfront"
+  evidence_excerpt: "Personal Info / Kitchen Details / Operations / Documents / Policies & Review (+ descriptions)"
+  recommendation: "Before reaching Documents step, vendor should know what they will be asked for (PAN, Aadhaar/passport, FSSAI license, bank proof, cancelled cheque). Add a 'What you'll need' checklist at signup or before Documents step. Failure to disclose required documents upfront has been flagged by consumer courts as misleading pre-onboarding."
+  citation: "RBI Payment Aggregator MD 2020 Annex 2 (KYC docs); CP(E-Commerce) Rules 2020 §6"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-027
+  surface_id: vp-onb-ops-pricing-title
+  lens: legal
+  severity: P1
+  issue: "'You can change these anytime' — pricing/prep-time promise without reference to platform commission deductions"
+  evidence_excerpt: "Delivery & Pricing / Set your preparation time, delivery range, and pricing. You can change these anytime."
+  recommendation: "Vendors set list price, but final payout reflects platform commission (per StepPolicies). 'You can change pricing anytime' creates expectation of full price control; needs callout: 'Your menu prices set what customers pay. See payout breakdown for the amount you receive after platform commission.' Lawyer to confirm Vendor Agreement properly discloses commission percentage upfront."
+  citation: "Indian Contract Act 1872 §17; CP(E-Commerce) Rules 2020 §5(3) (transparency of fees)"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# DELIVERY PORTAL — apps/delivery-portal/
+# =============================================================================
+
+- finding_id: LEG-028
+  surface_id: dp-auth-mode-driver-cta
+  lens: legal
+  severity: P1
+  issue: "'I'm a Driver' / 'Login or sign up to deliver with Fe3dr' — driver-employment classification not addressed pre-onboarding"
+  evidence_excerpt: "I'm a Driver / Login or sign up to deliver with Fe3dr"
+  recommendation: "Gig worker classification under Code on Social Security 2020 §2(35) and Code on Wages 2019 has not been notified in many states, but Karnataka Platform-Based Gig Workers (Social Security and Welfare) Bill 2024 and Rajasthan Platform-Based Gig Workers Act 2023 impose specific disclosures pre-onboarding. Lawyer to confirm pre-onboarding state-specific gig-worker disclosures (welfare fee, ID issuance, termination process) are present."
+  citation: "Code on Social Security 2020 §2(35) gig worker; Rajasthan PBGW Act 2023; Karnataka PBGW Bill 2024"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-029
+  surface_id: dp-auth-google-button
+  lens: legal
+  severity: P1
+  issue: "Driver OAuth signup (Google) — no separate driver-specific consent for KYC data sharing"
+  evidence_excerpt: "Continue with Google"
+  recommendation: "Driver onboarding is dual-purpose: account creation + gig-platform onboarding. OAuth signup pulls email/name; subsequent screens collect KYC, vehicle, license, Aadhaar, PAN. DPDP §6 'specific' consent requires separating these. Currently driver clicks Google OAuth then is funneled into KYC with no separate consent. Lawyer to confirm separate KYC-purpose consent screen exists between OAuth callback and StepPersonalInfo."
+  citation: "DPDP Act 2023 §6(1) (specific consent); §5(ii)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-030
+  surface_id: dp-auth-step3-doc-labels
+  lens: legal
+  severity: P0
+  issue: "Aadhaar collected as document with no UIDAI offline e-KYC / consent framework disclosure"
+  evidence_excerpt: "Profile Photo / Driving License / Aadhaar Card / PAN Card / Vehicle RC / Insurance / Vehicle — Front View / Back View / Left Side / Right Side / Top View / Number Plate (clear photo) / Bicycle — Front/Back/Left/Right View / Police Verification"
+  recommendation: "Aadhaar Act 2016 §8 and Aadhaar Regulations 2016 (Authentication) restrict who can collect Aadhaar and how. Private platforms are NOT authorised to seek Aadhaar authentication except under specific licences. Acceptable mechanisms: UIDAI offline e-KYC (Aadhaar XML/QR) or DigiLocker-issued Aadhaar — NOT raw Aadhaar card upload. Raw Aadhaar upload also creates UIDAI §29(1) breach risk (sharing core biometric/identity number) and PMLA risk. URGENT: switch to Aadhaar offline e-KYC or DigiLocker integration; mask last 8 digits if photo is retained."
+  citation: "Aadhaar Act 2016 §8, §29; Aadhaar Authentication Regulations 2016; UIDAI Circular K-11020/217/2018"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-031
+  surface_id: dp-auth-step3-doc-labels
+  lens: legal
+  severity: P0
+  issue: "PAN Card collection with no Income Tax §139A purpose disclosure or Rule 114B compliance"
+  evidence_excerpt: "PAN Card"
+  recommendation: "PAN collection requires §139A purpose disclosure (here: TDS on driver earnings under §194O e-commerce operator TDS). Form 60 substitute mandatory if driver has no PAN. Add explanatory text under PAN slot: 'We collect PAN to deduct TDS at 1% on your earnings, per Income Tax §194O.' Lawyer to confirm Form 60 fallback workflow exists for PAN-less drivers."
+  citation: "Income Tax Act §139A; Rule 114B; §194O (TDS by e-commerce operator); Form 60"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-032
+  surface_id: dp-auth-step3-doc-labels
+  lens: legal
+  severity: P1
+  issue: "'Police Verification' document slot — uploading police verification certificate has DPDP §8(4) accuracy and §10 sharing implications"
+  evidence_excerpt: "Police Verification"
+  recommendation: "Police verification documents contain criminal-record-adjacent info; treatment as 'special category' is best-practice. Lawyer to confirm: (a) document retention duration, (b) access controls in admin portal, (c) whether absence is grounds for rejection (must be disclosed upfront), (d) handling if police verification reveals adverse history (driver classification + recourse). Currently no UI disclosure of any of this."
+  citation: "DPDP Act 2023 §8(4) accuracy, §8(7) retention; best-practice criminal-record handling"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-033
+  surface_id: dp-auth-step3-bicycle-hint
+  lens: legal
+  severity: P2
+  issue: "'Since you're using a bicycle, driving license, vehicle RC, and insurance are not required.' — accepting bicycle drivers without insurance shifts third-party liability risk"
+  evidence_excerpt: "Since you're using a bicycle, driving license, vehicle RC, and insurance are not required."
+  recommendation: "Bicycle delivery riders are not subject to Motor Vehicles Act but are still subject to general tort liability (negligence causing injury). Platform liability under Consumer Protection Act 2019 §86 (e-commerce entity) and §94 (duty of due diligence) is heightened when there is no driver-side insurance. Lawyer to confirm platform-purchased third-party liability insurance covers bicycle riders; flag whether copy should disclose insurance arrangement."
+  citation: "Consumer Protection Act 2019 §86, §94; Motor Vehicles Act 1988 (inapplicable); general tort"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-034
+  surface_id: dp-auth-step3-section-headers
+  lens: legal
+  severity: P1
+  issue: "'Vehicle Photos — All Angles / Optional' framing for photos that the platform later uses for verification creates ambiguous obligation"
+  evidence_excerpt: "Personal Documents / Vehicle Documents / Vehicle Photos — All Angles / Optional"
+  recommendation: "If photos are truly optional, no problem. If approval can be denied for missing photos, they aren't really optional — that's misrepresentation. Lawyer to confirm with PM whether photos affect approval; if yes, change copy to '(required for approval)' or remove 'Optional' label."
+  citation: "Indian Contract Act 1872 §18; CP(E-Commerce) Rules 2020 §6(1)(d)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-035
+  surface_id: dp-auth-step-payout-bank-fields
+  lens: legal
+  severity: P0
+  issue: "Bank account collection (Account Holder Name, Account Number, IFSC) with no RBI penny-drop verification disclosure or escrow disclosure"
+  evidence_excerpt: "Account Holder Name * / Name as on bank account / Account Number * / Enter account number / IFSC Code * / e.g., SBIN0001234"
+  recommendation: "Per RBI Payment Aggregator MD 2020 §8.5 and §10, payout to driver requires: (a) name-match verification with PAN, (b) bank account validation (penny drop), (c) settlement timeline disclosure, (d) escrow/nodal account disclosure for funds awaiting settlement. None visible in onboarding UI. Lawyer to confirm whether penny-drop happens silently and whether disclosure obligation is met in Driver Agreement."
+  citation: "RBI Payment Aggregator MD 2020 §8.5, §10; PMLA Record Maintenance Rules 2005 Rule 3"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-036
+  surface_id: dp-auth-step-payout-upi
+  lens: legal
+  severity: P1
+  issue: "UPI ID collection with no NPCI-mandated VPA verification disclosure"
+  evidence_excerpt: "UPI ID * + e.g., name@upi"
+  recommendation: "NPCI UPI Procedural Guidelines require name-resolution of VPA before payout to confirm beneficiary. Disclose to driver that 'We'll verify this UPI ID resolves to your registered name' to set expectation; refusal handling needed for VPA-name mismatch. Lawyer to confirm verification logic exists and matches the DPDP §8(4) accuracy obligation."
+  citation: "NPCI UPI Procedural Guidelines; DPDP §8(4)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-037
+  surface_id: dp-auth-step1-emergency-name
+  lens: legal
+  severity: P1
+  issue: "Emergency contact name/phone collected — third-party personal data with no consent from that third party"
+  evidence_excerpt: "Emergency Contact Name * + Full name / Emergency Phone * + +91 9876543210"
+  recommendation: "Per DPDP §6(1), data fiduciary needs consent from each data principal. The driver cannot consent on behalf of their emergency contact. Add a notice to driver: 'You confirm your emergency contact has agreed to be reached by Fe3dr in case of safety incidents.' Best-practice (GDPR Art. 14 analogue) also recommends notice-to-third-party. Lawyer to confirm 'driver-attested consent' is sufficient under DPDP."
+  citation: "DPDP Act 2023 §6(1); §5(i) (notice to data principal)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-038
+  surface_id: dp-auth-step1-dob
+  lens: legal
+  severity: P0
+  issue: "Date of Birth collected with no age-validation gate — driver could be a minor"
+  evidence_excerpt: "Date of Birth"
+  recommendation: "Drivers must be ≥18 (Motor Vehicles Act 1988 §4 for motorised vehicle, light-MV class — and platform's age requirement). Bicycle riders technically have no MV Act age floor, but platform may set its own. DPDP §9 imposes parental-consent requirement for <18. Add inline DOB validation: '(must be 18 or older)' helper, and backend enforcement."
+  citation: "DPDP Act 2023 §9; Motor Vehicles Act 1988 §4"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-039
+  surface_id: dp-auth-step1-referral
+  lens: legal
+  severity: P2
+  issue: "Referral code field — pre-onboarding promise of referral reward must match Vendor/Driver Agreement"
+  evidence_excerpt: "Referral Code + Enter referral code (optional) + Validate"
+  recommendation: "Referral codes create contractual obligations to both referrer (referral bonus) and referee (signup bonus). Pre-disclose: 'What does this code do?' tooltip or info text. Lawyer to confirm referral T&C are linked from this field; otherwise referrer can sue for unpaid referral if rewarded inconsistently."
+  citation: "Indian Contract Act 1872 §10; CP(E-Commerce) Rules 2020 §5(3)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-040
+  surface_id: dp-auth-step1-referral-valid
+  lens: legal
+  severity: P2
+  issue: "'Referred by {referrerName}' shows referrer's name — DPDP §5/§6 concern about disclosing one user's identity to another"
+  evidence_excerpt: "Referred by {referrerName}"
+  recommendation: "Showing referrer's full name to referee may exceed what referrer consented to. Consider showing initials only ('Referred by R. S.') unless referral T&C explicitly inform referrer their name is shown. Lawyer to confirm referral consent text addresses cross-disclosure."
+  citation: "DPDP Act 2023 §6(1); §10 disclosure"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-041
+  surface_id: dp-auth-step4-h
+  lens: legal
+  severity: P1
+  issue: "'A small subscription to keep Fe3dr running — you keep every rupee you earn' — claim of '100% earnings' undermined by subsequent commission/deduction disclosures"
+  evidence_excerpt: "Choose Your Plan + A small subscription to keep Fe3dr running — you keep every rupee you earn."
+  recommendation: "Marketing promise of 'every rupee' is misrepresentation if any deductions exist (TDS under §194O, GST on subscription, late-cancellation deductions, etc.). Reword to 'You keep your delivery fees and tips — we charge a flat subscription, no per-order commission.' Lawyer to confirm no other deductions exist that contradict this claim."
+  citation: "Indian Contract Act 1872 §17, §18; CP Act 2019 §2(28)(iv); Income Tax §194O TDS"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-042
+  surface_id: dp-auth-step4-zero-commission
+  lens: legal
+  severity: P0
+  issue: "Multiple repeated 'no commission' / '100%' promises in subscription marketing block — high misrepresentation exposure"
+  evidence_excerpt: "We don't take any commission from your earnings + Every delivery fee and every tip goes directly to your account — 100%. We only charge a small subscription fee to keep the platform running and help you get more orders. We're here to help you succeed, not to make profit from your hard work."
+  recommendation: "'100%' and 'no commission' must be literally true in every scenario including: surge pricing, refunds, customer cancellations after pickup, TDS deductions, GST on subscription. Add asterisked disclaimer with link to full payout terms. 'Not to make profit from your hard work' is a separate concern — implied non-profit promise creates fiduciary-style expectation that could be exploited in disputes. Strongly recommend removing or substantially softening."
+  citation: "CP Act 2019 §2(28); CP(E-Commerce) Rules 2020 §6; Indian Contract Act §17–§18"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-043
+  surface_id: dp-auth-step4-trial
+  lens: legal
+  severity: P1
+  issue: "'{n}-day free trial / Try everything free. No card needed.' — auto-conversion to paid subscription must be disclosed at signup"
+  evidence_excerpt: "{n}-day free trial + Try everything free. No card needed."
+  recommendation: "Free trial that converts to paid is a 'dark pattern' per Guidelines for Prevention and Regulation of Dark Patterns 2023 (CCPA notification) — specifically 'Subscription Trap' (Annexure I.4). Required disclosure: (a) trial duration, (b) what happens after trial (auto-charge or auto-cancel), (c) cancellation steps. Currently '{n}-day free trial' is vague. Lawyer to verify against CCPA Dark Patterns Guidelines 2023."
+  citation: "CCPA Guidelines for Prevention of Dark Patterns 2023 (Annexure I.4 Subscription Trap)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-044
+  surface_id: dp-auth-step4-threshold
+  lens: legal
+  severity: P1
+  issue: "'No charge until you earn {amount}' creates conditional billing promise — billing trigger logic must be deterministic and disclosed"
+  evidence_excerpt: "No charge until you earn {amount} + We only bill after you start earning well."
+  recommendation: "'Earn well' is non-deterministic; the {amount} threshold is the actual trigger. Reword: 'No charge until your total earnings reach ₹{amount}. After that, billing starts on your next cycle.' Lawyer to confirm threshold value and billing-cycle interaction with Vendor/Driver Agreement."
+  citation: "CP(E-Commerce) Rules 2020 §5(3) transparency; Indian Contract Act §29 (certainty of contract terms)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-045
+  surface_id: dp-auth-step4-billing-howto
+  lens: legal
+  severity: P1
+  issue: "4-step billing explanation is dense legal-info copy presented inside onboarding — readability test for binding subscription terms"
+  evidence_excerpt: "How billing works: + 4-step ordered list explaining trial, threshold, deduction, cancel-anytime"
+  recommendation: "Per STYLE-GUIDE.md §5 'Legal-Page Tone', binding text must be plain language with one idea per paragraph and 15-25-word sentences. Without seeing actual text, lawyer to confirm: each step is a single sentence, defined terms (Free Trial, Earnings Threshold, Billing Cycle, Cancellation Window) are in bold first use, and the canonical version is also in Vendor Agreement. Inconsistency between onboarding summary and binding T&C is a contract-formation problem."
+  citation: "Indian Contract Act §10, §29; best-practice — plain language"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-046
+  surface_id: dp-auth-step4-secure-pay
+  lens: legal
+  severity: P1
+  issue: "'Payments are securely processed via {gateway}' — gateway is a sub-processor; DPDP §10 third-party disclosure required"
+  evidence_excerpt: "Payments are securely processed via {gateway}. You can change your plan or cancel anytime from your dashboard."
+  recommendation: "Per DPDP §10 (Significant Data Fiduciary) and §5(ii)/(v), data shared with payment gateway (sub-processor) must be disclosed: which fields, for what purpose, retention by gateway. Privacy Policy must list gateway as a third-party processor with their privacy policy link. Lawyer to confirm Razorpay/Stripe/PayU is listed in privacy policy as named sub-processor."
+  citation: "DPDP Act 2023 §10; §5(ii); §5(v) cross-border transfer if applicable"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-047
+  surface_id: dp-auth-step5-terms
+  lens: legal
+  severity: P0
+  issue: "'I agree to the Terms & Conditions, Privacy Policy' — links not wired (per inventory note 'no link wired')"
+  evidence_excerpt: "I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate and up to date."
+  recommendation: "Consent to T&C requires actual access to T&C. Per Indian Contract Act §13 (consent must be free and informed) and DPDP §6(1)(d) (consent must be 'informed'), unlinked T&C reference does NOT create binding consent. This is a contract-formation defect. URGENT: wire T&C and Privacy Policy to live, versioned documents before any production use; also bundle the 'accuracy of information' attestation into a separate checkbox (currently bundled with T&C — multiple-issue consent)."
+  citation: "Indian Contract Act 1872 §13; DPDP Act 2023 §6(1)(d); §6 unbundled consent"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-048
+  surface_id: dp-auth-step5-terms
+  lens: legal
+  severity: P0
+  issue: "Bundled consent: 'Terms + Privacy Policy + accuracy attestation' is three obligations under one checkbox"
+  evidence_excerpt: "I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate and up to date."
+  recommendation: "DPDP §6(1) requires consent to be specific to each purpose. T&C acceptance (contract) + Privacy Policy consent (data processing) + factual-accuracy attestation (warranty) are three separate legal acts. Split into 3 checkboxes (or 2 minimum: 'I agree to T&C and Privacy Policy' + 'I confirm information is accurate'). Lawyer to confirm split structure."
+  citation: "DPDP Act 2023 §6(1) (specific consent); Indian Contract Act §10"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-049
+  surface_id: dp-auth-step5-plan-summary
+  lens: legal
+  severity: P1
+  issue: "'Plan selected. Payments handled securely via Razorpay.' — gateway hardcoded; if gateway changes, this is a misrepresentation"
+  evidence_excerpt: "Plan selected. Payments handled securely via Razorpay. + Billing starts only after you reach the minimum earnings threshold."
+  recommendation: "Hardcoding Razorpay creates risk if platform switches gateways. Use parameterised {gateway} as elsewhere. Also: 'minimum earnings threshold' is vague; should reference the specific amount shown earlier and confirm consistency with Driver Agreement."
+  citation: "Indian Contract Act §17–§18; DPDP §10 (third-party disclosure)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-050
+  surface_id: dp-auth-onboarding-header
+  lens: legal
+  severity: P2
+  issue: "'Become a Delivery Partner' — 'Delivery Partner' is gig-economy terminology that obscures contractor/employee classification"
+  evidence_excerpt: "Become a Delivery Partner"
+  recommendation: "'Partner' implies equity/profit-sharing relationship; here driver is an independent contractor. Karnataka and Rajasthan gig-worker laws use 'platform-based gig worker'. Inside the onboarding flow (where contractual relationship is being formed), 'Driver' is more accurate. Per Style Guide, customer-facing 'Delivery partner' is OK but driver-facing 'Driver' is preferred. Lawyer to confirm Driver Agreement is unambiguous on independent-contractor classification."
+  citation: "Code on Social Security 2020 §2(35); Rajasthan PBGW Act 2023 §2(g); best-practice — classification clarity"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-051
+  surface_id: dp-auth-status-descriptions
+  lens: legal
+  severity: P1
+  issue: "'Our team is currently reviewing your application. This usually takes 1-2 business days.' — SLA promise without disclaimer or recourse"
+  evidence_excerpt: "Your application requires some changes before it can be approved. / Our team is currently reviewing your application. This usually takes 1-2 business days. / Your application has been received and will be reviewed shortly."
+  recommendation: "Stating '1-2 business days' creates expectation that, if breached, drives consumer complaints (CP Act §35). Add 'usually' (good — already there) and a 'What if it takes longer?' link. Lawyer to confirm whether breach of stated SLA gives rise to any liability."
+  citation: "CP Act 2019 §35 (consumer complaints); §94 (e-commerce due diligence)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-052
+  surface_id: dp-auth-status-rejection-reason
+  lens: legal
+  severity: P0
+  issue: "'Reason for rejection: {rejectionReason}' — no appeal pathway shown, no DPDP §11(2) recourse"
+  evidence_excerpt: "Reason for rejection: + {rejectionReason}"
+  recommendation: "Per DPDP §11(2), data principal has the right to know how their data is being processed and to grieve adverse decisions. Per CP(E-Commerce) Rules 2020 §5(6), platform must have grievance redressal mechanism. Add 'Disagree with this decision? Contact us at [grievance officer]' below rejection reason. Also: per Algorithm Transparency Bill (draft), automated rejection must be flagged."
+  citation: "DPDP Act 2023 §11(2), §13; CP(E-Commerce) Rules 2020 §5(6); draft Digital India Act"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-053
+  surface_id: dp-auth-status-auto-refresh
+  lens: legal
+  severity: P3
+  issue: "'Auto-refreshing every 30 seconds' — auto-refresh of status page is benign, but no privacy disclosure on background polling"
+  evidence_excerpt: "Auto-refreshing every 30 seconds"
+  recommendation: "Minor: background polling is normal app behavior and would not normally need disclosure. Listed for completeness in case automated decisions are made server-side during polling window. No action required unless polling triggers other data processing."
+  citation: "best-practice"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# ADMIN PORTAL — apps/admin-portal/
+# =============================================================================
+
+- finding_id: LEG-054
+  surface_id: ap-auth-login-feature-list
+  lens: legal
+  severity: P2
+  issue: "Admin login left-pane features list contains sales-style copy on internal portal — unnecessary contractual surface"
+  evidence_excerpt: "User & role management; Chef verification & approvals; Order monitoring & refunds; Platform analytics & insights; Revenue tracking & payouts; Content moderation tools"
+  recommendation: "Admin portal is internal-only; these features don't need pre-contractual disclosure. But content moderation, refunds, payouts, verification are all areas with chef/customer-facing legal consequences — if this copy is ever seen by an admin who shares a screenshot externally, it forms an implied platform-capability statement. Recommend strip down to minimal 'Admin Sign In' surface. Low priority but advisable."
+  citation: "best-practice — internal-tool minimal disclosure"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-055
+  surface_id: ap-auth-login-instruction
+  lens: legal
+  severity: P1
+  issue: "Admin login has no security warning notice (unauthorized access, monitoring) — best-practice for privileged accounts"
+  evidence_excerpt: "Access the administration dashboard with your internal credentials"
+  recommendation: "Internal/privileged admin login screens should display a 'This system is monitored. Unauthorized access prohibited under IT Act 2000 §66' style notice. Provides basis for prosecuting external unauthorized access attempts under IT Act §43, §66. Lawyer to confirm wording and whether session activity is logged for §66 evidentiary chain."
+  citation: "IT Act 2000 §43, §66 unauthorized access; best-practice (NIST SP 800-53 AC-8)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-056
+  surface_id: ap-auth-totp-enroll-help
+  lens: legal
+  severity: P1
+  issue: "'Your organization requires 2FA for admins' — TOTP is correct security practice; but recovery-code disclosure is missing"
+  evidence_excerpt: "Your organization requires 2FA for admins. Scan this QR with Google Authenticator (or similar), then enter the generated code."
+  recommendation: "TOTP enrollment without recovery-code disclosure creates lockout risk. Best-practice (NIST SP 800-63B §5.1.2) requires single-use recovery codes shown once at enrollment. Lawyer concern: if admin is locked out and lacks recovery, what is the audit-trail-preserving recovery path? Must be documented in Admin Security Policy."
+  citation: "NIST SP 800-63B §5.1.2; DPDP §8(5) reasonable security"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-057
+  surface_id: ap-secsettings-2fa-disable
+  lens: legal
+  severity: P0
+  issue: "Disabling 2FA is highly-sensitive privileged action — no co-approval or audit-trail disclosure"
+  evidence_excerpt: "Disable 2FA; Requires your password and a current 6-digit code.; Password; Disabling...; Cancel"
+  recommendation: "Disabling 2FA on an admin account is a security-policy event. Best-practice (and DPDP §8(5) reasonable security): require admin manager co-approval, log the event to audit-service immutably, and notify other admins. Currently only password + TOTP — same factors used for normal login. Lawyer to confirm internal Security Policy permits self-service 2FA disable, and that audit trail is sufficient."
+  citation: "DPDP §8(5); ISO/IEC 27001 A.9.4.1; best-practice"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# MOBILE CUSTOMER — apps/mobile-customer/
+# =============================================================================
+
+- finding_id: LEG-058
+  surface_id: mc-auth-login-title
+  lens: legal
+  severity: P1
+  issue: "Mobile customer login 'Welcome back' — local title override but underlying shared LoginScreen may not surface mobile-specific DPDP/T&C disclosures"
+  evidence_excerpt: '"Welcome back"'
+  recommendation: "Inventory notes the rest of LoginScreen lives in @homechef/mobile-shared. Lawyer to confirm: (a) shared screen has T&C/Privacy footer same as web, (b) mobile-specific platform consent (Apple App Tracking Transparency, Google Play Data Safety, app permission consent) is captured before signin. Apple ATT prompt + Google Play DSA disclosure may need to fire before first data is processed."
+  citation: "Apple App Tracking Transparency; Google Play Data Safety; DPDP §6(1)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-059
+  surface_id: mc-auth-register-host
+  lens: legal
+  severity: P0
+  issue: "Mobile customer register screen has zero local strings — all copy in shared screen; impossible to audit consent flow from local code"
+  evidence_excerpt: "(shared RegisterScreen — no local strings)"
+  recommendation: "Hidden in @homechef/mobile-shared/screens. Lawyer + auditor must inspect that shared package directly to verify DPDP §5/§6 disclosures are present. Currently invisible to per-app audit. Recommend exposing mobile-shared inventory in subsequent audit pass."
+  citation: "DPDP Act 2023 §5, §6 (auditability)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-060
+  surface_id: mc-onb-step3-title
+  lens: legal
+  severity: P2
+  issue: "Mobile customer preferences subtitle 'Select your favourite cuisines to get personalised recommendations' explicitly says recommendation profiling — needs DPDP profiling notice"
+  evidence_excerpt: "What do you love to eat? + Select your favourite cuisines to get personalised recommendations."
+  recommendation: "Per DPDP §5(ii), purposes must be disclosed. 'Personalised recommendations' is profiling per draft DPDP Rules 2025. Add 'You can change preferences anytime; we don't share them outside Fe3dr.' Lawyer to confirm profiling-purpose disclosure aligns with privacy policy."
+  citation: "DPDP Act 2023 §5(ii); draft DPDP Rules 2025 (profiling provisions); §6 consent"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-061
+  surface_id: mc-onb-step1-labels
+  lens: legal
+  severity: P1
+  issue: "Mobile-customer collects 'Phone Number' as part of onboarding — TRAI commercial-communications regime applies"
+  evidence_excerpt: "First Name / Last Name / Phone Number"
+  recommendation: "Same as LEG-012 (web equivalent). Mobile app must split transactional-SMS consent from promotional-SMS consent. Best-practice: explicit checkboxes."
+  citation: "TRAI TCCCPR 2018; DPDP §6 specific consent"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# MOBILE VENDOR — apps/mobile-vendor/
+# =============================================================================
+
+- finding_id: LEG-062
+  surface_id: mv-auth-login-title
+  lens: legal
+  severity: P1
+  issue: "Mobile vendor login title 'Welcome back' — same shared-screen audit gap as mobile customer"
+  evidence_excerpt: "Welcome back"
+  recommendation: "Same as LEG-058. Vendor side has higher legal exposure because of KYC + commission terms. Lawyer to audit @homechef/mobile-shared/screens for vendor-specific disclosures."
+  citation: "DPDP §6; RBI PA MD 2020"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-063
+  surface_id: mv-onb-docs-sub
+  lens: legal
+  severity: P0
+  issue: "'Upload your identity and FSSAI documents' — both are critical regulatory documents; no upload-purpose, retention, or sharing disclosure"
+  evidence_excerpt: "Upload your identity and FSSAI documents"
+  recommendation: "FSSAI license (FSS Act §31 mandatory for food business) and ID proof (KYC per RBI PA MD) are dual-purpose collections. Disclose: (a) FSSAI license number will be shown on customer order receipts (FSSAI mandates this), (b) ID proof stored encrypted for KYC retention period (5 yrs PMLA), (c) consequences of refusal (no payouts, no chef approval). Currently invisible to vendor."
+  citation: "FSS Act 2006 §31; FSSAI Regulations Reg 2.1.2; PMLA Record Maintenance Rules 2005 Rule 3"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-064
+  surface_id: mv-onb-docs-fssai-slot
+  lens: legal
+  severity: P0
+  issue: "'FSSAI License' upload slot — if marked optional or accepted-as-blank, platform enables illegal food business"
+  evidence_excerpt: "FSSAI License"
+  recommendation: "Per FSS Act §31, no person can run a food business without FSSAI registration/license. Platform onboarding chefs without FSSAI exposes platform to vicarious liability under FSS Act §53 and IT Rules 2021 §3(1)(b) (publishing illegal info). Lawyer to confirm: (a) FSSAI license is hard-required (no submit without), (b) license number is validated against FSSAI database (or at least format check), (c) Vendor Agreement explicitly says chef warrants FSSAI is current."
+  citation: "FSS Act 2006 §31, §53; FSSAI Licensing Regulations 2011; IT Rules 2021 §3(1)(b)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-065
+  surface_id: mv-onb-docs-id-slot
+  lens: legal
+  severity: P0
+  issue: "'ID Proof' is non-specific — must specify accepted IDs (PAN required for payouts; Aadhaar offline only)"
+  evidence_excerpt: "ID Proof"
+  recommendation: "Same Aadhaar concerns as LEG-030. Spec must say: 'Upload PAN card (required for payouts)' and separately 'Identity verification: choose Aadhaar offline e-KYC, DigiLocker, or Voter ID/Passport scan'. Generic 'ID Proof' invites uploads of raw Aadhaar (UIDAI §29 breach risk)."
+  citation: "Aadhaar Act 2016 §29; Income Tax §139A; PMLA Rule 9 KYC"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-066
+  surface_id: mv-onb-policies-heading
+  lens: legal
+  severity: P1
+  issue: "'Policies / Review and accept terms' is bare-minimum policy-acceptance UI; deep concern about how policies are structured"
+  evidence_excerpt: "Policies / Review and accept terms"
+  recommendation: "Per vendor-portal StepPolicies.tsx (web equivalent), three checkboxes: Terms, Hygiene Policy, Cancellation Policy. Each must be individually checked. Inventory does not show whether mobile-vendor mirrors this; lawyer/dev to confirm parity. Bundled or pre-checked = §6 violation."
+  citation: "DPDP §6(1); Indian Contract Act §13"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-067
+  surface_id: mv-onb-review-section-policies
+  lens: legal
+  severity: P1
+  issue: "Review screen shows 'Policies' section but inventory doesn't confirm read-only display of which policies + versions were accepted"
+  evidence_excerpt: "Policies (section label)"
+  recommendation: "Per DPDP §6(2) (consent record), Review screen should show: which policy versions were accepted, at what time, with consent token. Currently only labels visible in inventory. Lawyer to confirm consent record is preserved server-side and shown on Review for user verification."
+  citation: "DPDP §6(2) record of consent"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-068
+  surface_id: mv-onb-review-field-labels
+  lens: legal
+  severity: P1
+  issue: "'Terms Accepted / Cancellation Policy' shown as a review row — but does not link out to the actual accepted version"
+  evidence_excerpt: "Full Name / Phone / Email / Business Name / Cuisines / Description / Open Days / Prep Time / Service Radius / ID Proof / FSSAI License / Terms Accepted / Cancellation Policy"
+  recommendation: "Reviewing 'Terms Accepted: ✓' on submission screen does not give user access to the version they accepted. Best-practice: link to the versioned policy document so user can confirm. DPDP §11(1) (access right) likely requires this on demand."
+  citation: "DPDP Act 2023 §11(1); best-practice — versioned consent"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# MOBILE DELIVERY — apps/mobile-delivery/
+# =============================================================================
+
+- finding_id: LEG-069
+  surface_id: md-auth-002
+  lens: legal
+  severity: P2
+  issue: "Developer-shaped error 'Google sign-in failed: no ID token' could surface to user with technical detail"
+  evidence_excerpt: 'error: "Google sign-in failed: no ID token"'
+  recommendation: "Technical error strings exposed to users are not directly a legal issue, but they reveal internals (OAuth ID-token flow) which is a minor security-disclosure concern. Reword to 'Sign-in with Google didn't complete. Try again.' Lawyer concern is minimal but flagged for completeness."
+  citation: "best-practice — minimum information disclosure"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-070
+  surface_id: md-auth-003
+  lens: legal
+  severity: P2
+  issue: "'Apple sign-in failed: no identity token' — same as above; Apple has additional Sign-In-with-Apple disclosure requirements"
+  evidence_excerpt: 'error: "Apple sign-in failed: no identity token"'
+  recommendation: "Apple Sign-In Review Guidelines §4.8 require equivalent prominence of SIWA when other third-party signin is offered. Lawyer to confirm SIWA is offered alongside Google. Also user-facing copy: 'Sign-in with Apple didn't complete. Try again.'"
+  citation: "Apple App Store Review Guidelines §4.8; best-practice error UX"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-071
+  surface_id: md-auth-004
+  lens: legal
+  severity: P1
+  issue: "'Biometric authentication failed' — biometric data is sensitive; DPDP §8(4) accuracy obligation + Apple/Google biometric API constraints"
+  evidence_excerpt: 'error: "Biometric authentication failed"'
+  recommendation: "Biometric authentication on iOS (FaceID/TouchID) and Android (BiometricPrompt) keeps biometric data on-device — that's compliant. But platform must disclose to user pre-enrollment that biometric is locally stored, not server-transmitted. Add a one-time disclosure on first enrollment. Lawyer to confirm enrollment-disclosure copy exists in mobile-shared."
+  citation: "DPDP §6 specific consent; Apple Privacy Manifests; Google Play Data Safety"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-072
+  surface_id: md-auth-005
+  lens: legal
+  severity: P3
+  issue: "'No saved session found. Please log in with email.' — benign UX message; no legal issue but mentioned for completeness"
+  evidence_excerpt: 'error: "No saved session found. Please log in with email."'
+  recommendation: "No action required from a legal perspective."
+  citation: "n/a"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-073
+  surface_id: md-onb-001
+  lens: legal
+  severity: P3
+  issue: "'Step 1 of 6' header stepper — cosmetic; no legal concern except confirming user knows what's coming"
+  evidence_excerpt: '"Step 1 of 6"'
+  recommendation: "Best-practice consumer disclosure: tell user upfront what each step will collect. Currently steps are revealed sequentially. Recommend a pre-step preview list ('Here's what we'll ask for'). Lawyer notes this as best-practice not requirement."
+  citation: "best-practice — informed consent UX"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-074
+  surface_id: md-onb-042
+  lens: legal
+  severity: P0
+  issue: "'Upload Documents' mobile screen — same Aadhaar/PAN/license concerns as dp-auth-step3-doc-labels"
+  evidence_excerpt: "Upload Documents"
+  recommendation: "Mobile parity with delivery-portal. All concerns LEG-030, LEG-031, LEG-032 apply. Lawyer to confirm UIDAI offline e-KYC integration in mobile flow, especially because mobile camera-based ID capture is more error-prone and creates higher PII-leak risk."
+  citation: "Aadhaar Act §29; Income Tax §139A; PMLA Rule 9"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-075
+  surface_id: md-onb-044
+  lens: legal
+  severity: P0
+  issue: "'Driving License' slot — Motor Vehicles Act compliance and DL data treatment"
+  evidence_excerpt: "Driving License"
+  recommendation: "DL is regulated identity document. MV Act §3 requires valid DL for motor-vehicle delivery. Backend must verify DL validity (not expired, valid class) — for liability protection. Per DPDP §8(4), DL data must be accurate. Disclose: 'We verify your DL with the Ministry of Road Transport database' if mParivahan/DigiLocker is used. Lawyer to confirm verification mechanism."
+  citation: "Motor Vehicles Act 1988 §3, §10; DPDP §8(4); DigiLocker Act"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-076
+  surface_id: md-onb-045
+  lens: legal
+  severity: P0
+  issue: "Mobile 'ID Proof' slot — generic label same concern as mv-onb-docs-id-slot (LEG-065)"
+  evidence_excerpt: "ID Proof"
+  recommendation: "Same as LEG-065. Specify accepted IDs; do not accept raw Aadhaar."
+  citation: "Aadhaar Act §29; PMLA Rule 9"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-077
+  surface_id: md-onb-046
+  lens: legal
+  severity: P1
+  issue: "'Vehicle RC (optional)' — RC is regulatory document; making it optional in onboarding while required for motorised-vehicle delivery is contradiction"
+  evidence_excerpt: "Vehicle RC (optional)"
+  recommendation: "RC (Registration Certificate) is mandatory under MV Act §39 to operate any motor vehicle. Marking RC 'optional' is OK ONLY IF the driver-vehicle pair is bicycle (no MV registration). Lawyer to confirm conditional optionality is enforced; if motorised-vehicle driver omits RC, that is an MV Act §39 issue plus platform §94 (CP Act due-diligence) issue."
+  citation: "Motor Vehicles Act 1988 §39; CP Act 2019 §94"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-078
+  surface_id: md-onb-053
+  lens: legal
+  severity: P1
+  issue: "'Upload PDF' as document-upload — PDF can carry embedded metadata/PII; no scrubbing disclosure"
+  evidence_excerpt: "Upload PDF"
+  recommendation: "PDFs often contain author name, software, timestamps in metadata. For KYC documents this can leak additional PII. Best-practice: server-side strip metadata before storage. Lawyer to confirm metadata-handling policy in Privacy Policy."
+  citation: "DPDP §8(7) storage limitation; best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-079
+  surface_id: md-onb-054
+  lens: legal
+  severity: P1
+  issue: "'Camera permission is required to capture documents' — DPDP requires purpose-specific consent for sensor access; platform-specific permission strings also needed"
+  evidence_excerpt: "Camera permission is required to capture documents."
+  recommendation: "Apple Info.plist (NSCameraUsageDescription) and Android Manifest permission rationale must mirror this. The user-facing rationale should specifically say what photo is captured for (KYC docs only). Currently broad. Lawyer + dev to confirm app store privacy manifests match."
+  citation: "Apple Info.plist NSCameraUsageDescription; Google Play permission policy; DPDP §6"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-080
+  surface_id: md-onb-058
+  lens: legal
+  severity: P1
+  issue: "'Please upload Driving License and ID Proof to continue' — gating requires DL but driver may be bicycle (DL not required)"
+  evidence_excerpt: "Please upload Driving License and ID Proof to continue."
+  recommendation: "Inconsistent with dp-auth-step3-bicycle-hint which says bicycle drivers don't need DL. Mobile flow must mirror this conditional logic. Currently gating is universal — would force bicycle drivers to upload DL or be blocked, which is misrepresentation of requirements."
+  citation: "Indian Contract Act §17 misrepresentation; consistency requirement"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-081
+  surface_id: md-onb-059
+  lens: legal
+  severity: P0
+  issue: "'Payout Details' mobile screen — same RBI PA MD concerns as dp-auth-step-payout-bank-fields (LEG-035)"
+  evidence_excerpt: "Payout Details"
+  recommendation: "Same as LEG-035. RBI PA MD §8.5/§10 disclosures, name-match verification, escrow disclosure. Mobile parity required."
+  citation: "RBI PA MD 2020 §8.5, §10"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-082
+  surface_id: md-onb-063
+  lens: legal
+  severity: P0
+  issue: "Mobile bank account collection without on-device security disclosure (autofill, screen recording, screenshot)"
+  evidence_excerpt: "Account Number"
+  recommendation: "On mobile, account number entry is exposed to clipboard managers, screenshot apps, screen-recording on Android. Set `secureTextEntry`, disable iOS keyboard autofill where appropriate, and disclose in Privacy Policy. Lawyer to confirm policy text. Note: copy 'Your payout details are encrypted and never stored on this device' (md-onb-079) is a binding factual claim — if app caches anything (form-state, Redux, AsyncStorage), this is a misrepresentation."
+  citation: "DPDP §8(5) reasonable security; Indian Contract Act §17 misrepresentation"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-083
+  surface_id: md-onb-079
+  lens: legal
+  severity: P0
+  issue: "'Your payout details are encrypted and never stored on this device' — binding factual claim; if React state, Redux, or AsyncStorage caches the value, claim is false"
+  evidence_excerpt: "Your payout details are encrypted and never stored on this device. They are used solely for processing your earnings."
+  recommendation: "URGENT: dev to verify literal truth of this claim — React component state persists at least transiently; if it's saved through any form-draft mechanism or app-backgrounding restore, the claim is false. False security claims attract CP Act §2(28) misleading advertisement and DPDP §8(5) (claim of security practices that don't exist). Lawyer to review verbatim text against actual storage behavior."
+  citation: "CP Act 2019 §2(28); DPDP §8(5); Indian Contract Act §17"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-084
+  surface_id: md-onb-070
+  lens: legal
+  severity: P1
+  issue: "IFSC Code collection — needs RBI/IFSC validation, no validation disclosure"
+  evidence_excerpt: 'IFSC Code + "e.g. HDFC0001234"'
+  recommendation: "IFSC validation (RBI lookup) typically happens server-side. If validation fails server-side after user submits, the per-field error display must be clear. Per DPDP §8(4) accuracy, IFSC should be validated, not just regex-checked. Lawyer to confirm penny-drop + IFSC lookup."
+  citation: "RBI PA MD 2020 §8.5; DPDP §8(4)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-085
+  surface_id: md-onb-076
+  lens: legal
+  severity: P1
+  issue: "UPI ID collection — same NPCI VPA verification concern as dp-auth-step-payout-upi (LEG-036)"
+  evidence_excerpt: "UPI ID"
+  recommendation: "Same as LEG-036. Validate VPA resolves to expected name. Disclosure on mobile."
+  citation: "NPCI UPI Procedural Guidelines; DPDP §8(4)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-086
+  surface_id: md-onb-082
+  lens: legal
+  severity: P0
+  issue: "Mobile 'Choose Your Plan' subscription screen — same dark-pattern subscription-trap concerns as dp-auth-step4-h"
+  evidence_excerpt: "Choose Your Plan"
+  recommendation: "Mobile flow inherits all subscription concerns LEG-041–LEG-046 — '100% earnings' claim, free-trial subscription trap, auto-billing trigger, gateway disclosure. Apple and Google Play also impose their own subscription disclosure rules (App Store §3.1.2 auto-renewable subscriptions, Google Play subscription policy). Lawyer + dev to verify mobile subscription terms also comply with store policies."
+  citation: "CCPA Dark Patterns Guidelines 2023; Apple §3.1.2; Google Play subscription policy"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-087
+  surface_id: md-onb-093
+  lens: legal
+  severity: P0
+  issue: "Mobile review screen + Terms-acceptance gate parallels dp-auth-step5-terms (LEG-047, LEG-048)"
+  evidence_excerpt: "Review Your Application"
+  recommendation: "Same as LEG-047 (T&C links must be wired) and LEG-048 (unbundled consent). Mobile parity required."
+  citation: "Indian Contract Act §13; DPDP §6(1)(d)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-088
+  surface_id: md-onb-103
+  lens: legal
+  severity: P0
+  issue: "'I accept the Terms of Service and Privacy Policy' — single checkbox bundles two consents"
+  evidence_excerpt: "I accept the Terms of Service and Privacy Policy"
+  recommendation: "Same as LEG-048: per DPDP §6, Terms of Service (contract) and Privacy Policy (data processing) must be separate consent items. Two checkboxes."
+  citation: "DPDP Act 2023 §6(1); Indian Contract Act §13"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-089
+  surface_id: md-onb-103
+  lens: legal
+  severity: P0
+  issue: "T&C and Privacy Policy strings in mobile review have no hyperlink behavior confirmed — same wiring concern as web"
+  evidence_excerpt: "I accept the Terms of Service and Privacy Policy"
+  recommendation: "Mobile devs to confirm tappable links open in-app browser to live policies. Without tappable links, user has no access to the documents being accepted. Same Indian Contract Act §13 informed-consent issue."
+  citation: "Indian Contract Act §13; DPDP §6(1)(d)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-090
+  surface_id: md-onb-109
+  lens: legal
+  severity: P1
+  issue: "'Application Not Approved' + 'Unfortunately your application was not approved at this time.' — no DPDP §11(2) reason-for-decision disclosure or appeal pathway"
+  evidence_excerpt: "Application Not Approved / Unfortunately your application was not approved at this time."
+  recommendation: "Driver has right to know reason for adverse decision. Currently 'Reason: {rejectionReason}' (md-onb-111) follows but inventory does not confirm grievance/appeal path. Add: 'Disagree? Contact our Grievance Officer at [contact].' DPDP §13(2) and CP Act §35."
+  citation: "DPDP §11(2), §13(2); CP Act §35"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-091
+  surface_id: md-onb-115
+  lens: legal
+  severity: P1
+  issue: "'Estimated review time: 24–48 hours' — same SLA-promise concern as dp-auth-status-descriptions (LEG-051) but tighter window (24-48h vs 1-2 business days)"
+  evidence_excerpt: "Estimated review time: 24–48 hours"
+  recommendation: "Tighter SLA window (24-48 hrs) on mobile contradicts portal (1-2 business days). Inconsistency between portals is a misrepresentation risk. Pick one, align everywhere, and add 'usually' qualifier."
+  citation: "Indian Contract Act §17; CP(E-Commerce) Rules 2020 §5(3) consistency"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-092
+  surface_id: md-onb-116
+  lens: legal
+  severity: P2
+  issue: "'We'll notify you once your application is approved' — notification commitment without channel disclosure"
+  evidence_excerpt: "We'll notify you once your application is approved. This page checks for updates automatically every 30 seconds."
+  recommendation: "What channel? Push notification, email, SMS, in-app? TRAI rules for SMS, DPDP §6 specificity for push. Add: 'We'll send a push notification and email.' Confirm with engineering."
+  citation: "TRAI TCCCPR 2018; DPDP §6"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-093
+  surface_id: md-onb-014
+  lens: legal
+  severity: P1
+  issue: "Emergency contact phone '10-digit mobile number' — same third-party-consent concern as LEG-037"
+  evidence_excerpt: "10-digit mobile number"
+  recommendation: "Same as LEG-037. Mobile parity."
+  citation: "DPDP §6(1); §5(i)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-094
+  surface_id: md-onb-018
+  lens: legal
+  severity: P2
+  issue: "DOB placeholder 'MM/DD/YYYY' inconsistent with India-only validation context — minor PII collection consistency issue"
+  evidence_excerpt: "MM/DD/YYYY"
+  recommendation: "India uses DD/MM/YYYY. Inconsistency is a UX bug but also a data-quality issue (DPDP §8(4) accuracy) — if users enter their date in their local-format expectation while UI shows MM/DD/YYYY, dates may be parsed wrong. Lawyer angle is minor; engineering fix primary."
+  citation: "DPDP §8(4) accuracy"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-095
+  surface_id: md-onb-015
+  lens: legal
+  severity: P3
+  issue: "'Enter a valid 10-digit Indian mobile number' — explicit India-only validation; needs confirmation Indian-only is intended"
+  evidence_excerpt: 'error: "Enter a valid 10-digit Indian mobile number"'
+  recommendation: "If platform is India-only (per project CLAUDE.md), this is correct. If platform aspires to non-India, validation excludes valid foreign numbers. Lawyer to confirm jurisdictional scope statement in T&C matches India-only validation."
+  citation: "consistency; CP Act §94"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-096
+  surface_id: md-onb-038
+  lens: legal
+  severity: P1
+  issue: "'Driving License Number' field — manual entry vs DigiLocker pull"
+  evidence_excerpt: "Driving License Number"
+  recommendation: "Manual DL number entry creates accuracy risk (DPDP §8(4)) and fraud risk. Best-practice: DigiLocker-backed pull or mParivahan API verification. Currently regex-only check ('Min 8 characters'). Lawyer to confirm backend verifies DL against authoritative source before driver approval."
+  citation: "DPDP §8(4); Motor Vehicles Act §3"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-097
+  surface_id: md-onb-035
+  lens: legal
+  severity: P1
+  issue: "'Vehicle Registration Number' — regex-only check (e.g. MH12AB1234); no MV Act verification"
+  evidence_excerpt: 'Vehicle Registration Number + "e.g. MH12AB1234"'
+  recommendation: "Per MV Act §39 + §192, motor vehicle must be registered. Format check is insufficient — backend should verify with mParivahan/VAHAN before approval. Otherwise platform onboards drivers using fake/expired registration. Lawyer to confirm verification step."
+  citation: "Motor Vehicles Act §39, §192; CP Act §94"
+  depends_on: "needs lawyer review"
+
+# =============================================================================
+# CROSS-CUTTING / META
+# =============================================================================
+
+- finding_id: LEG-098
+  surface_id: vp-auth-forgot-redirect
+  lens: legal
+  severity: P3
+  issue: "'Redirecting to password reset...' has stale Keycloak code comment per inventory note; not directly user-visible but indicates auth-flow drift"
+  evidence_excerpt: "Redirecting to password reset..."
+  recommendation: "Stale references to deprecated auth provider (Keycloak) in code comments are not directly a legal issue but signal possible drift in auth flow. Lawyer angle: confirm password-reset emails accurately identify current data fiduciary, not Keycloak. Dev cleanup recommended."
+  citation: "DPDP §5(i) data fiduciary identification; best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-099
+  surface_id: dp-auth-login-title
+  lens: legal
+  severity: P3
+  issue: "'Fe3dr Delivery' brand wordmark — confirm trademark protection and consistency"
+  evidence_excerpt: "Fe3dr Delivery"
+  recommendation: "Confirm 'Fe3dr' is registered trademark per Trade Marks Act 1999. Brand inconsistency between Fe3dr (apps) and Mark8ly (CLAUDE.md domain) is a brand-IP question. Lawyer to confirm both marks are registered/in-use and clear."
+  citation: "Trade Marks Act 1999"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-100
+  surface_id: dp-auth-login-title
+  lens: legal
+  severity: P0
+  issue: "Across web, vendor-portal, delivery-portal, and three mobile apps — there is NO visible cookie/tracking consent banner on or before any auth-onboarding surface"
+  evidence_excerpt: "(missing entirely)"
+  recommendation: "DPDP §6 (consent before processing) + draft DPDP Rules 2025 require cookie/tracking consent before non-essential cookies fire. Auth pages typically load analytics (PostHog, OpenPanel, GA), session-replay (FullStory analogues), and OAuth provider tracking. Currently no cookie banner is inventoried on any auth screen. URGENT cross-app: implement DPDP-compliant cookie consent (granular: essential / analytics / marketing), pre-display, with reject-all as easy as accept-all. Lawyer to draft banner copy."
+  citation: "DPDP Act 2023 §6; draft DPDP Rules 2025; CCPA Dark Patterns Guidelines 2023 (consent design)"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-101
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P1
+  issue: "No CAPTCHA/bot-protection disclosure on signup — bot signup creates compliance liability if fake accounts proliferate"
+  evidence_excerpt: "(missing entirely)"
+  recommendation: "Best-practice and DPDP §8(5) reasonable security imply protection against automated account creation. If reCAPTCHA/hCaptcha is used, Privacy Policy must disclose Google/hCaptcha as a third-party processor. If not used, lawyer concern around fake-account proliferation. Confirm with engineering."
+  citation: "DPDP §8(5); §10 third-party disclosure"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-102
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P1
+  issue: "Email verification flow not inventoried — confirming email controls account-takeover risk and DPDP accuracy"
+  evidence_excerpt: "(missing entirely)"
+  recommendation: "Best-practice: email verification before any meaningful action (especially payouts). Without verification, fraudster can create accounts at victim's email. Per DPDP §8(4) accuracy and §8(5) security, email verification is reasonable security. Confirm in code that verification email is sent and account remains gated until verified."
+  citation: "DPDP §8(4), §8(5); best-practice account security"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-103
+  surface_id: vp-onb-stepper-labels
+  lens: legal
+  severity: P0
+  issue: "Across vendor-portal AND mobile-vendor onboarding — there is no visible disclosure of platform commission rate before the chef commits to onboarding"
+  evidence_excerpt: "Personal Info / Kitchen Details / Operations / Documents / Policies & Review"
+  recommendation: "Platform commission is the single most material economic term of the Vendor Agreement. Per CP(E-Commerce) Rules 2020 §5(3)(c) and Indian Contract Act §29 (certainty), this must be disclosed BEFORE acceptance. StepPolicies says 'Fe3dr charges a platform commission on each order' without naming the percentage. Lawyer to confirm: actual commission percentage is pre-disclosed in onboarding (Stepper preview or Step 0), not buried in T&C only."
+  citation: "CP(E-Commerce) Rules 2020 §5(3)(c); Indian Contract Act §29"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-104
+  surface_id: dp-auth-onboarding-header
+  lens: legal
+  severity: P0
+  issue: "Cross-driver-onboarding: no disclosure of platform-side insurance arrangement (third-party liability for accidents during delivery)"
+  evidence_excerpt: "Become a Delivery Partner / Complete your profile to start delivering"
+  recommendation: "Karnataka PBGW Bill 2024 §13 and Rajasthan PBGW Act 2023 §11 require platforms to disclose insurance arrangements (accident, health) to gig workers. Currently no disclosure visible in driver onboarding. Lawyer to confirm: (a) does platform provide insurance, (b) what's covered (accidental death, medical, third-party liability), (c) what driver pays/contributes. Major gig-worker disclosure gap."
+  citation: "Rajasthan PBGW Act 2023 §11; Karnataka PBGW Bill 2024 §13; Code on Social Security 2020 §114"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-105
+  surface_id: web-auth-register-heading
+  lens: legal
+  severity: P1
+  issue: "Across all six apps — no language-choice disclosure or vernacular T&C availability"
+  evidence_excerpt: "(missing entirely)"
+  recommendation: "India is multilingual. Per CP(E-Commerce) Rules 2020 §6(1)(f) and best-practice consumer law, key contractual terms should be available in the language a reasonable consumer understands. Currently English-only inventory. Lawyer to confirm: (a) policy in Hindi + major regional languages, (b) signup screen offers language toggle, (c) T&C acceptance in non-English language is enforceable. STYLE-GUIDE §7 notes i18n is out of scope for audit but flagged here as legal exposure."
+  citation: "CP(E-Commerce) Rules 2020 §6(1)(f); CP Act §2(28); best-practice"
+  depends_on: "needs lawyer review"
+
+- finding_id: LEG-106
+  surface_id: web-auth-register-form-fields
+  lens: legal
+  severity: P1
+  issue: "Account deletion / DPDP §12 erasure right — no visible path from signup/onboarding to deletion mechanism"
+  evidence_excerpt: "(missing entirely)"
+  recommendation: "Per DPDP §12, data principal has right to erasure. Per §5(iii)–(iv), this right must be disclosed at consent. Currently the signup flow does not mention erasure or how to exercise it. Lawyer to confirm Privacy Policy describes erasure procedure (in-app + email channel), and that the consent notice references it."
+  citation: "DPDP Act 2023 §12; §5(iii)"
+  depends_on: "needs lawyer review"

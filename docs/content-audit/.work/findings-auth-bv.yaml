@@ -1,0 +1,657 @@
+# Brand Voice findings — auth-onboarding category
+# Lens: brand-voice (cross-app, cross-surface voice consistency)
+# Inputs: STYLE-GUIDE.md, .impeccable.md, CONTENT-INVENTORY.md auth-onboarding slice
+
+# ─── P0: AI-slop / unverified social proof / brand-trust breakers ─────────────
+
+- finding_id: BV-001
+  surface_id: web-auth-register-heading
+  lens: brand-voice
+  severity: P0
+  issue: "Marketing-toned 'Access to 500+ home chefs' bullet on a customer register page — hardcoded fake metric on first auth surface."
+  evidence_excerpt: "Access to 500+ home chefs"
+  related_surfaces: ["web-home-hero", "web-home-stats"]
+  recommendation: "Remove hardcoded '500+' bullets from RegisterPage. Either bind to live count from the chef-discovery API or delete the bullet entirely. Style-guide Rule 1 + 5: no unverified social-proof on register surfaces."
+  depends_on: null
+
+- finding_id: BV-002
+  surface_id: vp-auth-register-hero-sub
+  lens: brand-voice
+  severity: P0
+  issue: "'Join thousands of home chefs earning with Fe3dr' — unverified 'thousands' claim on the chef-facing register hero, the very first impression for new vendors."
+  evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+  related_surfaces: ["web-home-hero-cta", "vp-auth-register-heading"]
+  recommendation: "Replace with a calm, factual line: 'Sell home-cooked food from your kitchen. Your menu, your hours, your earnings.' Drop 'thousands' until live count is wired."
+  depends_on: null
+
+- finding_id: BV-003
+  surface_id: vp-auth-register-hero-sub
+  lens: brand-voice
+  severity: P0
+  issue: "Marketing bullets on chef register page — 'Zero commission first month' and 'Weekly payouts' belong on a marketing landing, not on a functional auth surface."
+  evidence_excerpt: "Zero commission first month / Get started completely risk-free / Weekly payouts / Get paid directly to your bank account"
+  related_surfaces: ["vp-auth-login-features-list", "dp-auth-step4-zero-commission"]
+  recommendation: "Strip benefit bullets from RegisterPage (wrong persona-tone — chef wants to register, not be sold to). Move the same content to a separate /sell-with-us marketing page if needed. Persona-tone for chef = functional/operational, never hype."
+  depends_on: null
+
+- finding_id: BV-004
+  surface_id: dp-auth-step4-zero-commission
+  lens: brand-voice
+  severity: P0
+  issue: "Two-paragraph 'We don't take any commission' block inside driver onboarding step 4 — marketing prose in the middle of a functional flow."
+  evidence_excerpt: "We don't take any commission from your earnings. Every delivery fee and every tip goes directly to your account — 100%. We only charge a small subscription fee to keep the platform running and help you get more orders. We're here to help you succeed, not to make profit from your hard work."
+  related_surfaces: ["vp-auth-register-hero-sub", "dp-auth-step4-h"]
+  recommendation: "Cut to one sentence in driver tone: 'You keep 100% of delivery fees and tips. We charge only the plan fee below.' Glanceable driver copy ≤4 words where possible, ≤25 words for explanatory blocks. Current 38-word block violates persona-tone rule."
+  depends_on: null
+
+- finding_id: BV-005
+  surface_id: dp-auth-step4-billing-howto
+  lens: brand-voice
+  severity: P1
+  issue: "Driver-facing 'How billing works' is a 50-word dense block with 4-step list inside onboarding — too verbose for driver persona (target ≤4 words / telegraphic per matrix)."
+  evidence_excerpt: "How billing works: [4-step ordered list explaining trial, threshold, deduction, cancel-anytime]"
+  related_surfaces: ["dp-auth-step4-trial", "dp-auth-step4-threshold"]
+  recommendation: "Collapse into 3 short rows: 'Free for {n} days. Pay after you reach {amount}. Cancel anytime.' Move full detail to a 'Plan details' modal."
+  depends_on: null
+
+# ─── P0: Cross-app verb drift on the core auth action ────────────────────────
+
+- finding_id: BV-006
+  surface_id: web-auth-login-email-toggle
+  lens: brand-voice
+  severity: P0
+  issue: "'Sign in with email' vs 'Sign in with Email' vs 'Sign in with Email' — capitalization of the same OAuth toggle drifts across 4 surfaces. Style-guide is explicit: sentence case for buttons."
+  evidence_excerpt: "web: 'Sign in with email' / vendor-portal: 'Sign in with Email' / delivery-portal: 'Sign in with Email' / admin-portal: 'Sign in with Email'"
+  related_surfaces: ["vp-auth-login-email-btn", "dp-auth-email-button", "ap-auth-login-heading"]
+  recommendation: "Canonicalize as 'Sign in with email' (sentence case) per STYLE-GUIDE §4 Buttons. Apply to web, vendor-portal, delivery-portal, admin-portal."
+  depends_on: null
+
+- finding_id: BV-007
+  surface_id: web-auth-register-email-toggle
+  lens: brand-voice
+  severity: P0
+  issue: "Register-with-email toggle wording drifts: 'Sign up with email' (web) vs 'Register with Email' (vendor-portal). Same action, two verbs and two casings."
+  evidence_excerpt: "web: 'Sign up with email' / vendor-portal: 'Register with Email'"
+  related_surfaces: ["vp-auth-register-email-btn"]
+  recommendation: "Use 'Sign up with email' everywhere — style-guide bans 'Register' in favor of 'Sign up'. Apply lowercase 'email'."
+  depends_on: null
+
+- finding_id: BV-008
+  surface_id: dp-auth-login-subtitle-driver
+  lens: brand-voice
+  severity: P0
+  issue: "'Driver login or sign up' and 'Login or sign up to deliver with Fe3dr' mix banned 'Login' with approved 'sign up' on the same surface."
+  evidence_excerpt: "Driver login or sign up / Login or sign up to deliver with Fe3dr"
+  related_surfaces: ["dp-auth-mode-driver-sub"]
+  recommendation: "Use 'Sign in' (two words) — STYLE-GUIDE §3 explicitly bans 'Login' and 'Log in'. Rewrite as 'Sign in or sign up to deliver'."
+  depends_on: null
+
+- finding_id: BV-009
+  surface_id: ap-auth-login-heading
+  lens: brand-voice
+  severity: P1
+  issue: "'Admin Sign In' uses Title Case for a heading + the canonical verb is one word in heading vs two in button. Inconsistent with sentence-case norm."
+  evidence_excerpt: "Admin Sign In"
+  related_surfaces: ["vp-auth-login-heading", "web-auth-login-heading"]
+  recommendation: "Use sentence case: 'Admin sign in' or simply 'Sign in' (the page context already says Admin Portal). Pick one form for the verb across all four web auth surfaces."
+  depends_on: null
+
+# ─── P1: Welcome-back consistency (good) but contextually thin ───────────────
+
+- finding_id: BV-010
+  surface_id: web-auth-login-heading
+  lens: brand-voice
+  severity: P3
+  issue: "'Welcome back' is consistent across web, vendor-portal, mobile-customer, mobile-vendor, mobile-delivery — flag as the standard. But delivery-portal and admin-portal LoginPage skip the welcome-back greeting entirely (drift by omission)."
+  evidence_excerpt: "web/vp/mc/mv/md: 'Welcome back' / delivery-portal: 'Sign in to get started' / admin-portal: 'Admin Sign In'"
+  related_surfaces: ["vp-auth-login-heading", "dp-auth-login-subtitle-choose", "ap-auth-login-heading", "mc-auth-login-title", "mv-auth-login-title", "md-auth-001"]
+  recommendation: "Keep 'Welcome back' on customer + chef surfaces (warmer tone). Admin/driver default to 'Sign in' (Q+M persona tone matrix). Document the split in style guide."
+  depends_on: null
+
+# ─── P0: Brand-name confusion — most damaging at first impression ────────────
+
+- finding_id: BV-011
+  surface_id: dp-auth-login-title
+  lens: brand-voice
+  severity: P0
+  issue: "Brand wordmark on delivery login is 'Fe3dr Delivery' — sub-brand applied to login page header creates inconsistency vs other portals that show just 'Fe3dr'."
+  evidence_excerpt: "Fe3dr Delivery"
+  related_surfaces: ["web-auth-login-heading", "vp-auth-login-heading", "ap-auth-login-portal-label"]
+  recommendation: "Unify wordmark to 'Fe3dr' across all portals; use a small subordinate label ('Delivery portal' / 'Admin portal') below if needed. Sub-brand stacking is anti-pattern per .impeccable.md photo-forward / chrome-light principle."
+  depends_on: null
+
+- finding_id: BV-012
+  surface_id: vp-auth-login-features-list
+  lens: brand-voice
+  severity: P1
+  issue: "'This portal is only for vendor accounts. Please use the Fe3dr customer app.' — refers to customer app, but the customer-facing brand surface is also Fe3dr. Distinction is unclear and may confuse users about which 'Fe3dr' is which."
+  evidence_excerpt: "This portal is only for vendor accounts. Please use the Fe3dr customer app."
+  related_surfaces: ["dp-auth-mode-driver-sub", "ap-auth-login-brand-sub"]
+  recommendation: "Either name the surfaces ('Fe3dr Vendor', 'Fe3dr Driver', 'Fe3dr Customer') or refer by purpose ('To order food, sign in at fe3dr.com'). Avoid ambiguous self-reference."
+  depends_on: null
+
+# ─── P0: Chef onboarding step labels drift between mobile-vendor and vendor-portal ──
+
+- finding_id: BV-013
+  surface_id: vp-onb-personal-title
+  lens: brand-voice
+  severity: P0
+  issue: "Same chef onboarding step labelled differently across mobile-vendor and vendor-portal: 'Personal Details' (vp StepPersonalInfo h3) vs 'Personal Information' (mv personal-info.tsx) vs 'Personal Info' (vp stepper)."
+  evidence_excerpt: "vp StepPersonalInfo h3: 'Personal Details' / mv personal-info.tsx: 'Personal Information' / vp stepper: 'Personal Info'"
+  related_surfaces: ["vp-onb-stepper-labels", "mv-onb-personal-heading", "mv-onb-review-section-personal"]
+  recommendation: "Pick 'Personal information' (sentence case) as canonical — it matches the review section. Stepper label can shorten to 'Personal info' but the page heading should match across web + mobile."
+  depends_on: null
+
+- finding_id: BV-014
+  surface_id: vp-onb-kitchen-title
+  lens: brand-voice
+  severity: P1
+  issue: "Same chef onboarding step labelled 'Kitchen Information' (vp StepKitchenDetails) vs 'Kitchen Details' (mv kitchen-details.tsx) vs 'Kitchen Details' (vp stepper). Inconsistent across web + mobile chef surfaces."
+  evidence_excerpt: "vp StepKitchenDetails: 'Kitchen Information' / mv: 'Kitchen Details' / vp stepper: 'Kitchen Details'"
+  related_surfaces: ["vp-onb-stepper-labels", "mv-onb-kitchen-heading"]
+  recommendation: "Canonicalize as 'Kitchen details' (sentence case) on both web and mobile, both the heading and the stepper."
+  depends_on: null
+
+- finding_id: BV-015
+  surface_id: vp-onb-ops-pricing-title
+  lens: brand-voice
+  severity: P1
+  issue: "Web chef step is 'Delivery & Pricing' / 'Operations' (stepper) but mobile-vendor uses 'Operations' as the screen heading. Step count differs too — vendor-portal has fewer steps than mobile-vendor (6)."
+  evidence_excerpt: "vp StepOperations: 'Delivery & Pricing' / mv operations.tsx: 'Operations' / vp stepper: includes 'Operations'"
+  related_surfaces: ["vp-onb-stepper-labels", "mv-onb-ops-heading"]
+  recommendation: "Use 'Delivery & pricing' as the screen heading on mobile-vendor too (it's the human-readable summary). Keep stepper short label as 'Operations'. Reconcile step counts in a follow-up info-arch task."
+  depends_on: null
+
+- finding_id: BV-016
+  surface_id: vp-onb-header-title
+  lens: brand-voice
+  severity: P1
+  issue: "Web chef onboarding header is 'Set Up Your Kitchen' (Title Case) while no mobile-vendor equivalent header exists; step counter 'Step 4 of 6' titles in mobile are stack-header strings only."
+  evidence_excerpt: "vendor-portal: 'Set Up Your Kitchen' (Title Case) / mobile-vendor: just 'Step N of 6' in header"
+  related_surfaces: ["mv-onb-step1-title", "vp-onb-stepper-labels"]
+  recommendation: "Use sentence case 'Set up your kitchen' on web. Add same heading above the step counter on mobile-vendor for consistency."
+  depends_on: null
+
+- finding_id: BV-017
+  surface_id: vp-onb-stepper-labels
+  lens: brand-voice
+  severity: P1
+  issue: "Web chef stepper uses Title Case ('Personal Info', 'Kitchen Details', 'Operations', 'Documents', 'Policies & Review') — banned outside proper nouns per STYLE-GUIDE §6."
+  evidence_excerpt: "Personal Info / Kitchen Details / Operations / Documents / Policies & Review"
+  related_surfaces: ["dp-auth-onboarding-step-labels"]
+  recommendation: "Sentence case throughout: 'Personal info / Kitchen details / Operations / Documents / Policies & review'."
+  depends_on: null
+
+# ─── P0: Driver onboarding step labels drift between mobile-delivery & delivery-portal ──
+
+- finding_id: BV-018
+  surface_id: dp-auth-onboarding-step-labels
+  lens: brand-voice
+  severity: P0
+  issue: "Driver step labels Title Case on delivery-portal ('Personal Info', 'Vehicle Details', 'Documents', 'Plan', 'Review') vs sentence case context expected; same step headings on mobile-delivery use yet another form ('Personal Information' as full heading, 'Personal Info' in review)."
+  evidence_excerpt: "delivery-portal StepProgress: 'Personal Info / Vehicle Details / Documents / Plan / Review' / mobile-delivery personal.tsx heading: 'Personal Information' / mobile-delivery review.tsx section: 'Personal Info'"
+  related_surfaces: ["md-onb-003", "md-onb-095", "dp-auth-step1-h", "dp-auth-step5-sections"]
+  recommendation: "Canonicalize driver step labels: 'Personal information / Vehicle details / Documents / Plan / Review' (sentence case). Match between delivery-portal and mobile-delivery 1:1, including review section names."
+  depends_on: null
+
+- finding_id: BV-019
+  surface_id: dp-auth-step3-h
+  lens: brand-voice
+  severity: P1
+  issue: "Step heading 'Documents & Photos' (delivery-portal) vs 'Upload Documents' (mobile-delivery) for the same step. Customer + chef + driver: each app names doc-upload step differently."
+  evidence_excerpt: "delivery-portal StepDocuments: 'Documents & Photos' / mobile-delivery documents.tsx: 'Upload Documents' / mobile-vendor documents.tsx: 'Documents'"
+  related_surfaces: ["md-onb-042", "mv-onb-docs-heading"]
+  recommendation: "Use 'Documents' as the heading everywhere; subline can explain what's needed (e.g. 'Photos and PDFs of your ID and vehicle papers'). Removes Title Case, removes verbosity, unifies the step name across all three apps."
+  depends_on: null
+
+- finding_id: BV-020
+  surface_id: dp-auth-onboarding-header
+  lens: brand-voice
+  severity: P1
+  issue: "Driver onboarding entry header is 'Become a Delivery Partner' on web (delivery-portal) but 'Driver Onboarding' on mobile-delivery stack header — same flow, two different framings."
+  evidence_excerpt: "delivery-portal OnboardingPage: 'Become a Delivery Partner' / mobile-delivery layout: 'Driver Onboarding'"
+  related_surfaces: ["md-onb-002", "dp-auth-status-h"]
+  recommendation: "Use 'Become a driver' (Customer-facing brand uses 'Delivery partner', but driver-facing always uses 'Driver' per STYLE-GUIDE §3). Apply same heading on both. Status page 'Delivery Partner Onboarding' should also become 'Driver onboarding'."
+  depends_on: null
+
+- finding_id: BV-021
+  surface_id: dp-auth-status-h
+  lens: brand-voice
+  severity: P0
+  issue: "Status page sub-heading is 'Delivery Partner Onboarding' on delivery-portal — driver should never see 'Delivery Partner' (that's the customer-facing variant per STYLE-GUIDE §3)."
+  evidence_excerpt: "Delivery Partner Onboarding"
+  related_surfaces: ["dp-auth-mode-driver-sub"]
+  recommendation: "Rewrite as 'Driver onboarding'. STYLE-GUIDE: customer sees 'Delivery partner', driver always sees 'Driver'."
+  depends_on: null
+
+- finding_id: BV-022
+  surface_id: dp-auth-mode-driver-sub
+  lens: brand-voice
+  severity: P0
+  issue: "'I'm a Driver' / 'I'm Staff' role-chooser uses Title Case + capitalised role — should be sentence case ('I'm a driver', 'I'm staff')."
+  evidence_excerpt: "I'm a Driver / I'm Staff"
+  related_surfaces: ["dp-auth-mode-staff-cta"]
+  recommendation: "Sentence case: 'I'm a driver' / 'I'm staff'."
+  depends_on: null
+
+# ─── P1: Persona-tone violations on driver/vendor surfaces ───────────────────
+
+- finding_id: BV-023
+  surface_id: vp-auth-login-hero-heading
+  lens: brand-voice
+  severity: P1
+  issue: "Chef login hero 'Grow your home kitchen business' is marketing-tone on a returning-user surface. Returning vendor already has a kitchen — they want to sign in, not be pitched."
+  evidence_excerpt: "Grow your home kitchen business / Manage menus, track orders, view earnings - all from one dashboard."
+  related_surfaces: ["vp-auth-login-features-list", "vp-auth-register-hero-heading"]
+  recommendation: "Remove the marketing hero from LOGIN page (returning user). Keep brief subline only. Move 'Grow your home kitchen business' to RegisterPage hero where it's audience-appropriate."
+  depends_on: null
+
+- finding_id: BV-024
+  surface_id: vp-auth-login-features-list
+  lens: brand-voice
+  severity: P1
+  issue: "5-bullet feature list ('Real-time order management', 'Earnings & analytics dashboard'…) on chef login page — sales-style copy where chef just wants to sign in. Persona-tone violation (chef should see functional/operational language)."
+  evidence_excerpt: "Real-time order management / Earnings & analytics dashboard / Menu management with categories / Customer reviews & ratings / Document verification & compliance"
+  related_surfaces: ["ap-auth-login-feature-list"]
+  recommendation: "Drop the feature list from LoginPage. Either keep a single calm photo + subline, or move bullets to RegisterPage where they're audience-appropriate."
+  depends_on: null
+
+- finding_id: BV-025
+  surface_id: ap-auth-login-feature-list
+  lens: brand-voice
+  severity: P1
+  issue: "Admin portal login left panel has 6 sales-style feature bullets ('User & role management; Chef verification & approvals…') — wrong persona-tone. Admin = 'precise, no fluff' per STYLE-GUIDE."
+  evidence_excerpt: "User & role management; Chef verification & approvals; Order monitoring & refunds; Platform analytics & insights; Revenue tracking & payouts; Content moderation tools"
+  related_surfaces: ["ap-auth-login-brand-sub", "ap-auth-login-instruction"]
+  recommendation: "Strip the bullet list on admin login. Admin already knows what they're signing into. Replace left panel with a single line + quiet brand mark; or drop the split-pane entirely."
+  depends_on: null
+
+- finding_id: BV-026
+  surface_id: ap-auth-login-instruction
+  lens: brand-voice
+  severity: P2
+  issue: "'Access the administration dashboard with your internal credentials' — verbose, slightly bureaucratic. Admin persona = neutral operator, plain English."
+  evidence_excerpt: "Access the administration dashboard with your internal credentials"
+  related_surfaces: ["ap-auth-login-heading"]
+  recommendation: "Trim to 'Sign in with your work account.' or simply remove (the heading 'Admin sign in' is enough)."
+  depends_on: null
+
+- finding_id: BV-027
+  surface_id: ap-auth-login-brand-sub
+  lens: brand-voice
+  severity: P3
+  issue: "'Manage users, chefs, orders, and analytics for the Fe3dr platform.' — slight redundancy with feature list above; Oxford comma is fine but tone is brochure-ish."
+  evidence_excerpt: "Manage users, chefs, orders, and analytics for the Fe3dr platform."
+  related_surfaces: ["ap-auth-login-feature-list"]
+  recommendation: "Trim or remove once feature list is dropped per BV-025."
+  depends_on: null
+
+# ─── P0: Mobile-vendor Title Case headings violate sentence-case rule ───────
+
+- finding_id: BV-028
+  surface_id: mv-onb-personal-heading
+  lens: brand-voice
+  severity: P1
+  issue: "Mobile-vendor onboarding screens use Title Case headings ('Personal Information', 'Kitchen Details', 'Personal Information', 'Documents'). STYLE-GUIDE §6 mandates sentence case for labels."
+  evidence_excerpt: "Personal Information / Kitchen Details / Documents / Operations / Policies / Review Application"
+  related_surfaces: ["mv-onb-kitchen-heading", "mv-onb-docs-heading", "mv-onb-ops-heading", "mv-onb-policies-heading", "mv-onb-review-heading"]
+  recommendation: "Sentence case throughout: 'Personal information / Kitchen details / Documents / Operations / Policies / Review application'."
+  depends_on: null
+
+- finding_id: BV-029
+  surface_id: mv-onb-personal-fullname-label
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-vendor field labels Title Case ('Full Name *', 'Phone Number *', 'Email Address', 'Business Name *', 'Cuisine Types *', 'Description *'). STYLE-GUIDE §4 form labels: sentence case, no colons."
+  evidence_excerpt: "Full Name * / Phone Number * / Email Address / Business Name * / Cuisine Types * / Description *"
+  related_surfaces: ["mv-onb-personal-phone-label", "mv-onb-kitchen-business-label", "mv-onb-kitchen-cuisines-label"]
+  recommendation: "Sentence case: 'Full name', 'Phone number', 'Email address', 'Business name', 'Cuisine types', 'Description'. Move required asterisk to field-level visual rather than appending to label string."
+  depends_on: null
+
+- finding_id: BV-030
+  surface_id: mc-onb-step1-labels
+  lens: brand-voice
+  severity: P2
+  issue: "Mobile-customer onboarding field labels Title Case ('First Name', 'Last Name', 'Phone Number'). Web equivalent (web-auth-register-form-fields) uses sentence case ('First name', 'Last name')."
+  evidence_excerpt: "mobile-customer: First Name / Last Name / Phone Number / web: First name / Last name / Phone number"
+  related_surfaces: ["web-auth-register-form-fields", "web-auth-onboarding-step-basic"]
+  recommendation: "Mobile-customer should match web: sentence case. Casing drift across customer surfaces undermines unified brand voice."
+  depends_on: null
+
+# ─── P1: Field-label drift across personas (Phone vs Email) ─────────────────
+
+- finding_id: BV-031
+  surface_id: vp-onb-personal-fields
+  lens: brand-voice
+  severity: P2
+  issue: "Email/Phone field labels drift: 'Email Address' (vp + mv), 'Email' (web auth), 'Phone Number' (vp + mc + mv), 'Phone number' (web onboarding). Casing AND verbosity drift."
+  evidence_excerpt: "vp: Email Address / Phone Number / web register: Email / Password / web onboarding: Phone number / mc: Phone Number / mv: Email Address"
+  related_surfaces: ["mc-onb-step1-labels", "mv-onb-personal-email-label", "web-auth-onboarding-step-basic"]
+  recommendation: "Canonical labels: 'Email' (single word, sentence case) and 'Phone number' (when distinct field). Use 'Email address' only in legal/contact contexts. Apply across all 7 apps."
+  depends_on: null
+
+# ─── P1: Onboarding subtitle drift  ─────────────────────────────────────────
+
+- finding_id: BV-032
+  surface_id: mc-onb-step1-subtitle
+  lens: brand-voice
+  severity: P2
+  issue: "Customer onboarding step 1 subtitle 'We need a few details to set up your account.' is functional/bland; mobile-vendor uses warmer 'Tell us about yourself'. Cross-app drift in the same persona function."
+  evidence_excerpt: "mc step 1 sub: 'We need a few details to set up your account.' / mv personal-info sub: 'Tell us about yourself' / md personal sub: 'Tell us about yourself to get started' / dp StepPersonalInfo sub: 'Tell us about yourself to get started'"
+  related_surfaces: ["mv-onb-personal-sub", "md-onb-004", "dp-auth-step1-sub"]
+  recommendation: "Use 'Tell us about yourself.' on customer step 1 too — matches the warm/sensory customer persona-tone and is consistent with chef/driver flows. Drop the bland 'We need a few details' line."
+  depends_on: null
+
+- finding_id: BV-033
+  surface_id: mc-onb-step2-subtitle
+  lens: brand-voice
+  severity: P2
+  issue: "'Where should we deliver your orders?' phrases first-person plural correctly but follows pattern 'Where should we…' that's slightly transactional. Inconsistent with the warmer 'Your delivery address' title above."
+  evidence_excerpt: "Where should we deliver your orders?"
+  related_surfaces: ["web-auth-onboarding-step-address"]
+  recommendation: "Trim to 'We'll send your driver here.' (matches STYLE-GUIDE §4 helper-text example verbatim — pattern source)."
+  depends_on: null
+
+- finding_id: BV-034
+  surface_id: web-auth-onboarding-heading
+  lens: brand-voice
+  severity: P2
+  issue: "Web onboarding header 'Complete Your Profile' (Title Case) drifts from chef header 'Set Up Your Kitchen' (also Title Case but different verb pattern) and driver 'Become a Delivery Partner'."
+  evidence_excerpt: "web onboarding: 'Complete Your Profile' / vendor-portal: 'Set Up Your Kitchen' / delivery-portal: 'Become a Delivery Partner'"
+  related_surfaces: ["vp-onb-header-title", "dp-auth-onboarding-header"]
+  recommendation: "Sentence case all three: 'Complete your profile' / 'Set up your kitchen' / 'Become a driver'. Same verb pattern would also help — consider 'Complete your profile / Complete your kitchen profile / Complete your driver profile' as a parallel set."
+  depends_on: null
+
+# ─── P1: Step counter drift ────────────────────────────────────────────────
+
+- finding_id: BV-035
+  surface_id: web-auth-onboarding-heading
+  lens: brand-voice
+  severity: P3
+  issue: "Step counter format drift: web onboarding 'Step {n} of 3' inline with mdash separator vs mobile-customer 'Step 2 of 3' as static label vs mobile-vendor 'Step 1 of 6' as stack title vs delivery-portal 'Step N of 5' implicit via StepProgress badge."
+  evidence_excerpt: "web: 'Step 1 of 3 — {title}' / mc: 'Step 2 of 3' / mv: 'Step 1 of 6' / md: 'Step 1 of 6'"
+  related_surfaces: ["mc-onb-step1-progress", "mv-onb-step1-title", "md-onb-001"]
+  recommendation: "Standardize as 'Step {n} of {total}' (no mdash, no static title appended). Position consistently (above heading, muted text). Different totals (3 / 5 / 6) are correct per audience, but format must match."
+  depends_on: null
+
+# ─── P1: Verification/waiting messages drift ────────────────────────────────
+
+- finding_id: BV-036
+  surface_id: dp-auth-status-descriptions
+  lens: brand-voice
+  severity: P1
+  issue: "Application-waiting copy drifts across driver and chef surfaces. Driver: 'Our team is currently reviewing your application. This usually takes 1-2 business days.' Chef mobile pending: 'Your application has been submitted and is being reviewed by our team.' Driver mobile pending: 'Estimated review time: 24–48 hours.'"
+  evidence_excerpt: "dp web status: 'Our team is currently reviewing your application. This usually takes 1-2 business days.' / md pending: 'Your application has been submitted and is being reviewed by our team.' / 'Estimated review time: 24–48 hours' / mv pending: 'Application Submitted!'"
+  related_surfaces: ["md-onb-114", "md-onb-115", "mv-onb-pending-title"]
+  recommendation: "Standardize a single sentence: 'Your application is under review. We'll let you know within 24–48 hours.' Apply identically to driver web, driver mobile, and chef mobile pending screens. Drop the exclamation in 'Application Submitted!'."
+  depends_on: null
+
+- finding_id: BV-037
+  surface_id: dp-auth-status-titles
+  lens: brand-voice
+  severity: P0
+  issue: "Same status labelled differently across surfaces: 'Under Review' (dp web title) / 'Application Under Review' (md mobile) / 'Submitted' / 'In Review' (dp web badge) / 'Application Needs Changes' (dp web) / 'Application Not Approved' (md, mv mobile)."
+  evidence_excerpt: "dp web titles: 'Application Needs Changes / Under Review / Application Submitted' / dp web badges: 'Rejected / In Review / Submitted' / md pending: 'Application Under Review / Application Not Approved' / mv pending: 'Application Not Approved / Application Submitted!'"
+  related_surfaces: ["dp-auth-status-badges", "md-onb-109", "md-onb-113", "mv-onb-pending-title"]
+  recommendation: "Canonical three statuses: 'Under review' / 'Approved' / 'Needs changes'. Drop 'Application' prefix (context already implied), drop 'Not Approved' euphemism (use 'Needs changes' which is also more action-oriented). Standardize across web + mobile for driver and chef."
+  depends_on: null
+
+- finding_id: BV-038
+  surface_id: md-onb-109
+  lens: brand-voice
+  severity: P1
+  issue: "'Application Not Approved' followed by 'Unfortunately your application was not approved at this time.' — apologetic + indirect. Plain English / restraint principle says lead with the action."
+  evidence_excerpt: "Application Not Approved / Unfortunately your application was not approved at this time."
+  related_surfaces: ["dp-auth-status-rejection-reason", "mv-onb-pending-title"]
+  recommendation: "'Needs changes. Here's what to fix.' followed by the rejection reason. Reduces emotional load + leads with action. Apply across driver and chef pending screens."
+  depends_on: null
+
+# ─── P1: OAuth/biometric button casing drift  ───────────────────────────────
+
+- finding_id: BV-039
+  surface_id: dp-auth-google-button
+  lens: brand-voice
+  severity: P3
+  issue: "Mobile shared LoginScreen 'Continue with Google' + 'Continue with Apple' is canonical, but admin-portal + vendor-portal + delivery-portal also use 'Continue with Google' — consistent on Google, ✓. Apple button only appears in mobile-shared."
+  evidence_excerpt: "All web + mobile use 'Continue with Google'; Apple only on mobile-shared LoginScreen 'Continue with Apple'"
+  related_surfaces: ["vp-auth-login-google-btn", "web-auth-login-social"]
+  recommendation: "Document 'Continue with {provider}' as the canonical OAuth pattern in style guide. Apple button text already correct; this finding is to capture-and-enforce going forward."
+  depends_on: null
+
+- finding_id: BV-040
+  surface_id: web-auth-login-submit
+  lens: brand-voice
+  severity: P3
+  issue: "Loading state strings drift: 'Signing in...' (web) vs 'Submitting...' (driver review) vs 'Creating account...' (web register) vs 'Saving...' (driver subscription) vs 'Uploading...' (driver docs). Some use ellipsis, some end without punctuation."
+  evidence_excerpt: "web: 'Signing in...' / 'Creating account...' / dp: 'Submitting...' / 'Saving...' / md: 'Uploading...'"
+  related_surfaces: ["web-auth-register-submit", "dp-auth-step5-submit", "dp-auth-step4-submit"]
+  recommendation: "Loading state pattern: '<Verb>ing…' with proper ellipsis character (U+2026). Standardize across all auth/onboarding loading states."
+  depends_on: null
+
+# ─── P1: Mobile error messages — developer-shaped, leak provider names ──────
+
+- finding_id: BV-041
+  surface_id: md-auth-002
+  lens: brand-voice
+  severity: P1
+  issue: "Developer-shaped error 'Google sign-in failed: no ID token' / 'Apple sign-in failed: no identity token' surfaces to user if uncaught. Style-guide §4: 'What happened → What to do.' No technical terms."
+  evidence_excerpt: "Google sign-in failed: no ID token / Apple sign-in failed: no identity token / Biometric authentication failed"
+  related_surfaces: ["md-auth-003", "md-auth-004", "md-auth-005"]
+  recommendation: "User-facing strings: 'Couldn't sign in with Google. Try again or use email.' / 'Couldn't sign in with Apple. Try again or use email.' / 'Couldn't verify fingerprint. Try again or sign in with email.' Log technical detail separately."
+  depends_on: null
+
+- finding_id: BV-042
+  surface_id: md-onb-081
+  lens: brand-voice
+  severity: P2
+  issue: "Generic 'Failed to save payout details. Please try again.' pattern repeated across md-onb-020, md-onb-041, md-onb-081, md-onb-092, md-onb-108 — identical phrasing is OK, but 'Please try again.' is bland."
+  evidence_excerpt: "Failed to save personal info. Please try again. / Failed to save vehicle details. Please try again. / Failed to save payout details. Please try again. / Failed to submit application. Please try again. / Failed to select plan. Please try again."
+  related_surfaces: ["md-onb-020", "md-onb-041", "md-onb-092", "md-onb-108"]
+  recommendation: "Style-guide pattern 'What happened → What to do.' Replace with action-led: 'Couldn't save. Check your connection and try again.' Single utility function for these generic API failures."
+  depends_on: null
+
+# ─── P0: Banned-vocab + AI-slop email-confirmation drift ─────────────────────
+
+- finding_id: BV-043
+  surface_id: vp-auth-register-subheading
+  lens: brand-voice
+  severity: P2
+  issue: "'Create your vendor account to start selling home-cooked meals' uses 'vendor account' (chef-facing should be 'chef account' per STYLE-GUIDE §3 'Vendor ❌')."
+  evidence_excerpt: "Create your vendor account to start selling home-cooked meals"
+  related_surfaces: ["vp-auth-login-register-link"]
+  recommendation: "Use 'Create your chef account…' — 'Vendor' is banned externally; the chef self-identifies as a chef. Internal database can still use 'vendor', but UI strings use 'chef'."
+  depends_on: null
+
+- finding_id: BV-044
+  surface_id: vp-auth-login-register-link
+  lens: brand-voice
+  severity: P2
+  issue: "'Want to start selling? Register as a vendor' — 'Register' is banned ('Sign up' ✓), 'vendor' is banned for chef-facing (should be 'chef')."
+  evidence_excerpt: "Want to start selling? Register as a vendor"
+  related_surfaces: ["vp-auth-register-subheading", "vp-onb-personal-title"]
+  recommendation: "'New to Fe3dr? Sign up as a chef.'"
+  depends_on: null
+
+# ─── P1: Mixed legal-tone drift in onboarding consent ───────────────────────
+
+- finding_id: BV-045
+  surface_id: dp-auth-step5-terms
+  lens: brand-voice
+  severity: P1
+  issue: "Driver consent string 'I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate and up to date.' uses '& Conditions' while customer/chef use 'Terms of Service'."
+  evidence_excerpt: "dp web: 'Terms & Conditions, Privacy Policy' / md mobile: 'Terms of Service and Privacy Policy' / vp register: 'Vendor Terms and Privacy Policy' / vp login: 'Terms of Service and Privacy Policy'"
+  related_surfaces: ["md-onb-103", "vp-auth-register-login-link"]
+  recommendation: "Pick one: 'Terms of Service' (already most common). Drop '& Conditions' phrasing — sounds legalistic and varies."
+  depends_on: null
+
+# ─── P2: Helper/placeholder voice  ──────────────────────────────────────────
+
+- finding_id: BV-046
+  surface_id: vp-onb-personal-fields
+  lens: brand-voice
+  severity: P3
+  issue: "'Pre-filled from your login' hint — mixes verb tense and is unclear. Better: 'From your login'."
+  evidence_excerpt: "Pre-filled from your login"
+  related_surfaces: []
+  recommendation: "'From your login' — passive 'pre-filled' adds nothing."
+  depends_on: null
+
+- finding_id: BV-047
+  surface_id: web-auth-login-email-fields
+  lens: brand-voice
+  severity: P3
+  issue: "Password placeholder 'Enter your password' is redundant with 'Password' label. STYLE-GUIDE §4 form-labels: placeholders show format/example, not restate label."
+  evidence_excerpt: "label='Password' placeholder='Enter your password'"
+  related_surfaces: ["mc-onb-step1-placeholders", "mv-onb-personal-fullname-ph"]
+  recommendation: "Remove redundant placeholder (or use '••••••••' like mobile-shared LoginScreen). 'Enter your first name' / 'Enter your last name' / 'Enter your city' all show the same redundancy pattern across apps — replace with examples ('Meena', 'Bangalore') where possible."
+  depends_on: null
+
+# ─── P2: Date / locale drift ────────────────────────────────────────────────
+
+- finding_id: BV-048
+  surface_id: md-onb-018
+  lens: brand-voice
+  severity: P2
+  issue: "Date placeholder 'MM/DD/YYYY' on driver mobile DOB field — inconsistent with India-locale validation elsewhere (10-digit Indian mobile, KA01AB1234 plate). en-IN should be DD/MM/YYYY."
+  evidence_excerpt: "MM/DD/YYYY"
+  related_surfaces: ["dp-auth-step1-dob"]
+  recommendation: "Use 'DD/MM/YYYY' for en-IN. Or, better, use a native date picker and drop the placeholder string."
+  depends_on: null
+
+- finding_id: BV-049
+  surface_id: mc-onb-step3-subtitle
+  lens: brand-voice
+  severity: P3
+  issue: "British spelling 'favourite cuisines to get personalised recommendations' on mobile-customer — web app uses 'Favourite Cuisines' in StepPreferences too. Consistent on en-GB, but document the en-GB choice in style guide."
+  evidence_excerpt: "Select your favourite cuisines to get personalised recommendations."
+  related_surfaces: ["web-auth-onboarding-step-preferences"]
+  recommendation: "Lock en-GB (favourite, personalised, kilometre) as the project locale in STYLE-GUIDE §6. Today this is consistent but undocumented — it'll drift the moment a new screen is written."
+  depends_on: null
+
+# ─── P3: Punctuation budget  ────────────────────────────────────────────────
+
+- finding_id: BV-050
+  surface_id: mv-onb-pending-title
+  lens: brand-voice
+  severity: P2
+  issue: "'Application Submitted!' on chef mobile pending screen uses an exclamation mark on a status surface. STYLE-GUIDE §1: exclamation-mark budget = 1 per page customer-facing, 0 vendor/driver."
+  evidence_excerpt: "Application Submitted!"
+  related_surfaces: ["md-onb-113"]
+  recommendation: "Remove exclamation: 'Application submitted.' Mobile chef = chef persona = 0 exclamation marks."
+  depends_on: null
+
+- finding_id: BV-051
+  surface_id: vp-onb-personal-blurb
+  lens: brand-voice
+  severity: P3
+  issue: "Two-sentence helper 'Tell us about yourself. This information helps verify your identity.' is verbose for an onboarding-step blurb. Plain English principle: one sentence, no jargon."
+  evidence_excerpt: "Tell us about yourself. This information helps verify your identity."
+  related_surfaces: ["vp-onb-personal-address-blurb"]
+  recommendation: "'We use this to verify your identity.' (drop redundant 'Tell us about yourself' — the screen already shows that). Apply same trim to 'Kitchen Address' blurb."
+  depends_on: null
+
+# ─── P1: Inconsistent CTA verbs on submit ───────────────────────────────────
+
+- finding_id: BV-052
+  surface_id: dp-auth-step5-submit
+  lens: brand-voice
+  severity: P1
+  issue: "Final submit CTA drift: driver web 'Submit Application' / driver mobile 'Submit Application' / chef mobile review uses '(no inline excerpt — needs verify)' / customer onboarding has no terminal submit CTA in inventory."
+  evidence_excerpt: "dp web: 'Submit Application' / md mobile: 'Submit Application' / web onboarding final step: '?'"
+  related_surfaces: ["md-onb-106"]
+  recommendation: "Canonical final-step CTA: 'Submit' or 'Submit application' (sentence case). Customer onboarding likely uses 'Finish' or similar — pick a single closing verb pattern. Verify chef-portal final CTA."
+  depends_on: null
+
+# ─── P1: Recommended-plan label is decorative, not voice  ───────────────────
+
+- finding_id: BV-053
+  surface_id: md-onb-084
+  lens: brand-voice
+  severity: P3
+  issue: "'Recommended' badge on subscription plans — fine voice-wise but flagged because the recommendation logic is unclear from copy; if hardcoded, this approaches the AI-slop pattern (looks dynamic, isn't)."
+  evidence_excerpt: "Recommended"
+  related_surfaces: []
+  recommendation: "Either show 'Recommended for your delivery volume' (with reason) or drop the badge. Bare 'Recommended' without explanation is brand-trust-eroding."
+  depends_on: null
+
+# ─── P2: Forgot-password flow ───────────────────────────────────────────────
+
+- finding_id: BV-054
+  surface_id: vp-auth-forgot-redirect
+  lens: brand-voice
+  severity: P3
+  issue: "'Redirecting to password reset…' interim screen — stale Keycloak reference per inventory notes. Voice itself is OK but the screen may not be hit post-GIP migration."
+  evidence_excerpt: "Redirecting to password reset..."
+  related_surfaces: []
+  recommendation: "Verify if this screen is still reachable. If yes, rewrite as 'Taking you to password reset…' (warmer). If no, remove dead screen + comment."
+  depends_on: null
+
+# ─── P2: Web register marketing-bullets cleanup follow-up  ───────────────────
+
+- finding_id: BV-055
+  surface_id: web-auth-register-heading
+  lens: brand-voice
+  severity: P2
+  issue: "'Join Fe3dr Today' heading on register left panel — 'Today' adds artificial urgency, Title Case used. Trend-chasing copy pattern flagged in lens brief."
+  evidence_excerpt: "Join Fe3dr Today"
+  related_surfaces: ["web-auth-register-social"]
+  recommendation: "Sentence case + drop 'Today': 'Sign up to Fe3dr' or 'Order from home chefs' (food-forward). STYLE-GUIDE Rule 1: confident, not loud."
+  depends_on: null
+
+# ─── P1: vendor-portal "vendor" leakage on customer-facing wording  ─────────
+
+- finding_id: BV-056
+  surface_id: vp-auth-login-features-list
+  lens: brand-voice
+  severity: P2
+  issue: "Document verification & compliance' bullet phrasing for chef login is enterprise-SaaS tone, anti-reference per .impeccable.md ('Generic SaaS dashboard')."
+  evidence_excerpt: "Document verification & compliance"
+  related_surfaces: ["ap-auth-login-feature-list"]
+  recommendation: "If bullet list survives (it shouldn't, per BV-024), rewrite as 'Document checks' or simply 'Verified status'. Avoid SaaS-speak."
+  depends_on: null
+
+- finding_id: BV-057
+  surface_id: dp-auth-step4-secure-pay
+  lens: brand-voice
+  severity: P3
+  issue: "'Payments are securely processed via {gateway}.' — passive voice, slightly trust-bait. STYLE-GUIDE §5 active voice."
+  evidence_excerpt: "Payments are securely processed via {gateway}. You can change your plan or cancel anytime from your dashboard."
+  related_surfaces: ["dp-auth-step5-plan-summary"]
+  recommendation: "'{gateway} handles your payment. Change or cancel anytime from your dashboard.' — active voice, shorter, less hand-wavy."
+  depends_on: null
+
+# ─── P1: Mobile-vendor verbose placeholder violates persona-tone ────────────
+
+- finding_id: BV-058
+  surface_id: mv-onb-kitchen-desc-ph
+  lens: brand-voice
+  severity: P2
+  issue: "'Describe your kitchen, specialties, and cooking style (min 50 characters)' — 12-word placeholder; chef persona-tone target is crisp (5-12 words). Min-char requirement embedded in placeholder is also UX anti-pattern."
+  evidence_excerpt: "Describe your kitchen, specialties, and cooking style (min 50 characters)"
+  related_surfaces: ["vp-onb-kitchen-blurb"]
+  recommendation: "Placeholder: 'A short story about your kitchen.' Helper line below: 'At least 50 characters.' Same pattern across web and mobile vendor."
+  depends_on: null
+
+# ─── P2: Driver-app "rupee" hardcoded  ──────────────────────────────────────
+
+- finding_id: BV-059
+  surface_id: dp-auth-step4-h
+  lens: brand-voice
+  severity: P2
+  issue: "'A small subscription to keep Fe3dr running — you keep every rupee you earn.' — 'rupee' hardcoded; not i18n-safe. Also slightly self-justifying tone."
+  evidence_excerpt: "A small subscription to keep Fe3dr running — you keep every rupee you earn."
+  related_surfaces: ["dp-auth-step4-zero-commission"]
+  recommendation: "'You keep 100% of what you earn from each delivery.' Drops 'rupee', drops the 'keep Fe3dr running' defensive note (admit it via the plan price itself, don't apologize for it). i18n-safe."
+  depends_on: null
+
+# ─── P3: AppRegister page metric inventory leakage ──────────────────────────
+
+- finding_id: BV-060
+  surface_id: web-auth-register-heading
+  lens: brand-voice
+  severity: P3
+  issue: "Confirmed: same '500+' AI-slop appears at HomePage line 88, HeroSection line 123, and RegisterPage line 10. Cross-surface drift of identical placeholder string indicates copy was duplicated without source-of-truth, not extracted to a shared metric. P0 already filed at BV-001; this is the trace."
+  evidence_excerpt: "RegisterPage:10 'Access to 500+ home chefs' / HomePage:88 '500+ Home Chefs Near You' / HomePage:155 '500+ Home Chefs' / HeroSection:123 value: '500+'"
+  related_surfaces: ["web-home-hero", "web-home-stats"]
+  recommendation: "Once chef count is live, expose a useChefCount() hook from API. Until then, delete ALL three duplicates. This is the kind of finding that should converge with a marketing-lens finding — link to the marketing BV file."
+  depends_on: null

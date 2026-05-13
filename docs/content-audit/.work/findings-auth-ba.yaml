@@ -1,0 +1,965 @@
+# BA Lens — AUTH-ONBOARDING findings
+# Auditor: business-analyst lens
+# Date: 2026-05-13
+# Scope: apps/web auth + vendor-portal auth+onboarding + delivery-portal auth+onboarding
+
+findings:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FAKE / UNVERIFIED TRUST SIGNALS — P0
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-001
+    surface_id: web-auth-register-benefits
+    lens: business-analyst
+    severity: P0
+    issue: "Hardcoded '500+ home chefs' claim on customer register page — fake metric"
+    evidence_excerpt: "const BENEFITS = ['Access to 500+ home chefs', ...]"
+    recommendation: >
+      Replace with live count from API, e.g. "Order from home chefs near you." or
+      render the count dynamically if the number is real. If the platform is early-stage
+      and 500+ is aspirational, remove the number entirely. The framing "near you" is
+      stronger — it sets delivery-zone expectations, not false scale.
+    metric_hypothesis: "trust score; customers who discover 500+ is hardcoded will churn and leave negative reviews"
+    depends_on: null
+
+  - finding_id: BA-002
+    surface_id: vendor-portal-register-benefits
+    lens: business-analyst
+    severity: P0
+    issue: "Hardcoded 'Join thousands of home chefs' on vendor register page — fake social proof"
+    evidence_excerpt: "Join thousands of home chefs earning with Fe3dr. Your kitchen, your recipes, your rules."
+    recommendation: >
+      Remove the unquantified "thousands" claim unless backed by live data. Replace with
+      a concrete, verifiable value statement: "Start earning from your kitchen. Zero
+      commission for your first month." This anchors the benefit (concrete, defensible)
+      instead of manufacturing social proof.
+    metric_hypothesis: "trust score; chef applicants who verify the claim is false will abandon and post negative word-of-mouth"
+    depends_on: null
+
+  - finding_id: BA-003
+    surface_id: web-auth-login-testimonial
+    lens: business-analyst
+    severity: P0
+    issue: "Fake testimonial ('Sarah M., Happy Customer') hardcoded on login page hero panel"
+    evidence_excerpt: |
+      "Fe3dr has changed how I eat. Finally, real homemade food that reminds me of my mom's cooking!"
+      <footer><p>Sarah M.</p><p>Happy Customer</p></footer>
+    recommendation: >
+      Either (a) replace with a real verified customer review pulled from API with name,
+      photo, and verified-purchase badge; or (b) remove the testimonial entirely and let
+      the food photography speak. A fabricated quote is legally a false endorsement and
+      undermines the brand's "trust" promise. "Happy Customer" as a role title is also
+      content-lite — it signals nothing.
+    metric_hypothesis: "trust score; customers who recognize the pattern of fake testimonials will abandon signup"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CUSTOMER REGISTER PAGE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-004
+    surface_id: web-auth-register-heading
+    lens: business-analyst
+    severity: P1
+    issue: "Register page H1 'Create your account' is utility language — no value prop for a hungry customer"
+    evidence_excerpt: "Create your account"
+    recommendation: >
+      For the customer register page, the headline should communicate why now, not what
+      to do. Example: "Your neighbourhood home chef is 20 minutes away." with subline
+      "Create an account to order." This gives the user a reason before asking for effort.
+    metric_hypothesis: "register page completion rate; value-prop-first headlines improve form start rates"
+    depends_on: null
+
+  - finding_id: BA-005
+    surface_id: web-auth-register-benefits
+    lens: business-analyst
+    severity: P2
+    issue: "Benefits panel copy is generic — 'Authentic homemade food' and 'Support local home chefs' could appear on any food app"
+    evidence_excerpt: "'Authentic homemade food', 'Fast & reliable delivery', 'Support local home chefs'"
+    recommendation: >
+      Replace generic bullets with differentiating proof points. Example:
+      "Cook-to-order — no pre-made batches sitting on shelves."
+      "Know exactly who made your food — every chef has a verified profile."
+      "Delivery from 1 km away, not a central cloud kitchen."
+      Each bullet should answer: why Fe3dr, not Swiggy?
+    metric_hypothesis: "register page → first order conversion; differentiated value props increase trial intent"
+    depends_on: null
+
+  - finding_id: BA-006
+    surface_id: web-auth-register-email-form
+    lens: business-analyst
+    severity: P2
+    issue: "5-field email registration form (First name, Last name, Email, Password, Confirm password) creates unnecessary friction at signup"
+    evidence_excerpt: "const [firstName, setFirstName] = useState(''); const [lastName, setLastName] = useState(''); const [email, setEmail] = useState('');"
+    recommendation: >
+      For customer signup, reduce to email + password (2 fields). Collect first/last name
+      post-signup during the address/profile setup flow. Splitting first/last name into two
+      fields adds friction for no immediate UX gain — the app can prompt for full name before
+      first order. Standard benchmark: every additional required field drops completion ~8-12%.
+    metric_hypothesis: "signup completion rate; reducing fields from 5 to 2 typically lifts completion 25-40%"
+    depends_on: null
+
+  - finding_id: BA-007
+    surface_id: web-auth-register-email-form
+    lens: business-analyst
+    severity: P2
+    issue: "Password confirmation field adds friction but no user-visible strength indicator or rule explanation before submission"
+    evidence_excerpt: "'Min. 8 characters' (placeholder only), error only fires post-submit 'Password must be at least 8 characters'"
+    recommendation: >
+      Either (a) replace the confirm-password field with real-time password strength
+      indicator (shows rules inline: green tick at 8+ chars) — industry data shows this
+      increases completion vs. a second field; or (b) keep the field but add inline
+      validation on blur so users don't discover errors only after hitting submit.
+    metric_hypothesis: "signup form completion rate; inline validation reduces abandonment on password fields by 15-20%"
+    depends_on: null
+
+  - finding_id: BA-008
+    surface_id: web-auth-register-tos
+    lens: business-analyst
+    severity: P2
+    issue: "Terms of Service consent is a tiny 12px text block — no explicit 'data use' reassurance for signup"
+    evidence_excerpt: "By signing up, you agree to our Terms of Service and Privacy Policy"
+    recommendation: >
+      Add a single reassurance line above or below: "We never sell your data or spam you.
+      Your email is only used for order updates." This is not a legal disclaimer (Legal
+      lens owns that) but a trust sentence that reduces signup abandonment driven by
+      privacy concerns. Research consistently shows 15-30% of form abandonment is
+      privacy-motivated.
+    metric_hypothesis: "signup completion rate; explicit no-spam reassurance reduces abandonment at the consent step"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CUSTOMER LOGIN PAGE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-009
+    surface_id: web-auth-login-heading
+    lens: business-analyst
+    severity: P3
+    issue: "'Welcome back' has no function pointer — nothing below it explains what the user is signing back in to do"
+    evidence_excerpt: "Welcome back / Don't have an account? Sign up"
+    recommendation: >
+      Replace the subline "Don't have an account? Sign up" with a value-reminder for
+      returning users: "Your orders are waiting." or "Your home chefs are ready." The
+      signup link can live at the bottom of the form where it is lower-friction to discover.
+      Showing it as the second sentence at the top promotes alternatives before the primary
+      goal (login) is even attempted.
+    metric_hypothesis: "login → order conversion; sub-headline optimisation for returning users"
+    depends_on: null
+
+  - finding_id: BA-010
+    surface_id: web-auth-login-error
+    lens: business-analyst
+    severity: P2
+    issue: "Generic auth error message 'Something went wrong. Please try again.' on non-session-expired OAuth failures gives no actionable path"
+    evidence_excerpt: "Something went wrong. Please try again."
+    recommendation: >
+      Differentiate OAuth failure from credential failure. If OAuth fails: "We couldn't
+      reach Google/Facebook. Try again, or sign in with email." This gives users a
+      concrete workaround and stops them abandoning entirely. The current copy is a dead end.
+    metric_hypothesis: "login completion rate after error; actionable error messages recover 20-30% of error-state users"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR PORTAL — REGISTER PAGE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-011
+    surface_id: vendor-portal-register-heading
+    lens: business-analyst
+    severity: P1
+    issue: "'Register your kitchen' as H1 is process-oriented, not value-oriented — no income promise in the first fold"
+    evidence_excerpt: "Register your kitchen / Create your vendor account to start selling home-cooked meals"
+    recommendation: >
+      Leads with income, not paperwork. Example H1: "Start earning from your kitchen."
+      Subline: "Create your account — takes 2 minutes." This reframes registration as the
+      first step to income, not a compliance form. For a chef deciding between Fe3dr and
+      Swiggy Minis, income framing is the primary differentiator.
+    metric_hypothesis: "vendor signup completion rate; income-first framing lifts chef supply acquisition"
+    depends_on: null
+
+  - finding_id: BA-012
+    surface_id: vendor-portal-register-benefits
+    lens: business-analyst
+    severity: P1
+    issue: "'Zero commission first month' benefit is buried 3rd item on the panel with no monetary anchor — chef doesn't know what normal commission is"
+    evidence_excerpt: "{ title: 'Zero commission first month', desc: 'Get started completely risk-free' }"
+    recommendation: >
+      Make the zero-commission benefit the first item AND anchor the normal commission rate
+      so the chef can calculate the savings. Example: "0% commission — for life. We charge
+      a flat subscription, never a cut of your orders." If the platform does take eventual
+      commission, be explicit: "0% commission for your first month, then X%." Hiding the
+      transition erodes trust when discovered.
+    metric_hypothesis: "vendor signup completion rate and D30 retention; income transparency drives quality chef supply"
+    depends_on: null
+
+  - finding_id: BA-013
+    surface_id: vendor-portal-register-tos
+    lens: business-analyst
+    severity: P1
+    issue: "Vendor registration TOS consent 'By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy' — no links, no actionable text"
+    evidence_excerpt: "By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy"
+    recommendation: >
+      The words "Vendor Terms" and "Privacy Policy" must be hyperlinks (they are not — the
+      text is plain). A chef who cannot read what they are agreeing to before registering
+      may abandon. Add links and add a one-line reassurance: "We never share your personal
+      details with customers." Missing links also create a legal exposure (Legal lens should
+      flag separately).
+    metric_hypothesis: "vendor signup completion rate; non-linked consent blocks legally cautious chefs"
+    depends_on: null
+
+  - finding_id: BA-014
+    surface_id: vendor-portal-register-email-cta
+    lens: business-analyst
+    severity: P2
+    issue: "Email registration CTA button reads 'Register with Email' — inconsistent with 'Sign up with Google/Facebook' pattern on same page"
+    evidence_excerpt: "'Register with Email' vs 'Sign up with Google' / 'Sign up with Facebook'"
+    recommendation: >
+      Normalise to 'Sign up with email' across all three buttons. Style-guide mandates
+      'Sign up' (verb form, two words). 'Register' is vocabulary that maps to bureaucratic
+      process; 'Sign up' is lighter. Consistency across three CTA buttons also reduces
+      cognitive friction when scanning the page.
+    metric_hypothesis: "vendor signup click-through; consistent CTA vocabulary reduces decision paralysis"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR PORTAL — LOGIN PAGE
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-015
+    surface_id: vendor-portal-login-heading
+    lens: business-analyst
+    severity: P2
+    issue: "Vendor login subline 'Sign in to manage your menu, orders, and earnings' is task-list, not motivating"
+    evidence_excerpt: "Sign in to manage your menu, orders, and earnings"
+    recommendation: >
+      Chef persona tone guide: functional, time-aware, operational. Better:
+      "You have orders waiting." (if session had prior activity) or contextually:
+      "Pick up where you left off." This is shorter, more urgent, and respects the
+      chef's time pressure. The list of three things (menu, orders, earnings) is
+      redundant — they know what the portal does.
+    metric_hypothesis: "vendor login completion rate; time-aware microcopy for chefs reduces bounce"
+    depends_on: null
+
+  - finding_id: BA-016
+    surface_id: vendor-portal-login-email-cta
+    lens: business-analyst
+    severity: P2
+    issue: "Email login button reads 'Sign in with Email' — sentence-cased but capitalises 'Email' (title case inconsistency)"
+    evidence_excerpt: "'Sign in with Email'"
+    recommendation: >
+      Style guide mandates sentence case for buttons: 'Sign in with email'. 'Email' is
+      not a proper noun in this context. Consistent casing signals polish and reduces
+      micro-friction that accumulates across a page.
+    metric_hypothesis: "vendor login click-through; casing consistency is a polish signal that builds subconscious trust"
+    depends_on: null
+
+  - finding_id: BA-017
+    surface_id: vendor-portal-login-access-denied
+    lens: business-analyst
+    severity: P1
+    issue: "Access-denied error 'This portal is only for vendor accounts. Please use the Fe3dr customer app.' gives no link or recovery path"
+    evidence_excerpt: "This portal is only for vendor accounts. Please use the Fe3dr customer app."
+    recommendation: >
+      Add a direct link to the customer app or the customer login URL. A chef who
+      accidentally tried to log in with a customer account is still in the funnel — the
+      current copy dead-ends them. Better: "This portal is for chefs only. Order food?
+      [Go to the customer app →]" with a real link. This recovers cross-portal misdirects
+      instead of losing them entirely.
+    metric_hypothesis: "error-state recovery rate; dead-end errors are unrecoverable abandonment"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING WIZARD — GENERAL
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-018
+    surface_id: vendor-portal-onboarding-header
+    lens: business-analyst
+    severity: P1
+    issue: "Wizard header copy 'Set Up Your Kitchen' + 'Step 3 of 5' gives no estimated completion time — chefs abandon unknown-length forms"
+    evidence_excerpt: "'Set Up Your Kitchen' / 'Step ${currentStep + 1} of ${TOTAL_DISPLAY_STEPS}'"
+    recommendation: >
+      Add time estimate to the header or below the progress indicator: "About 8 minutes
+      to complete." Disclosure of expected time is the single highest-leverage change for
+      multi-step form completion — meta-analyses show 25-35% reduction in abandonment when
+      time is disclosed. Chef persona is time-pressured; they need to know it's worth
+      starting before the lunch rush.
+    metric_hypothesis: "wizard start-to-complete rate; time-disclosure is the most consistently effective form-completion intervention"
+    depends_on: null
+
+  - finding_id: BA-019
+    surface_id: vendor-portal-onboarding-stepper
+    lens: business-analyst
+    severity: P2
+    issue: "Step 5 label 'Policies & Review' combines two distinct concerns in one step label — chef doesn't know which steps involve paperwork vs. review"
+    evidence_excerpt: "{ title: 'Policies & Review', description: 'Agreements & submit', icon: Shield }"
+    recommendation: >
+      The wizard actually has a separate review screen (StepReview) after StepPolicies.
+      The stepper should reflect this honestly: Step 5 = 'Agreements', Step 6 = 'Review
+      & submit'. Or relabel Step 5 as 'Agreements' with description 'Food safety checklist',
+      and 'Review' as a distinct step. Misrepresenting steps damages trust when chefs
+      discover there is more than they expected.
+    metric_hypothesis: "wizard completion rate; honest step labelling reduces drop-off on last step surprise"
+    depends_on: null
+
+  - finding_id: BA-020
+    surface_id: vendor-portal-onboarding-wizard
+    lens: business-analyst
+    severity: P1
+    issue: "Mobile step indicator shows numeric fraction '3/6' only — no step label on mobile, leaving chef without context for what they are completing"
+    evidence_excerpt: "<span>{showReview ? `${TOTAL_DISPLAY_STEPS + 1}` : `${currentStep + 1}`}/{TOTAL_DISPLAY_STEPS + 1}</span>"
+    recommendation: >
+      Mobile indicator must show the current step name alongside the fraction.
+      Current code shows only the fraction. The STEPS[currentStep]?.title is already
+      available and is already rendered for the left side — but only the fraction is
+      shown right-aligned. The fraction alone gives no semantic context: "3/6" is less
+      meaningful than "Step 3 of 6 — Kitchen Details". Chef cannot orient themselves on
+      mobile.
+    metric_hypothesis: "mobile wizard completion rate; step labels reduce disorientation abandonment on mobile"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — STEP 0: PERSONAL INFO
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-021
+    surface_id: vendor-portal-onboarding-step-personal
+    lens: business-analyst
+    severity: P1
+    issue: "Personal Info step has 8 required fields visible at once (full name, phone, email, address line 1, country, state, city, PIN) — field overload in step 1"
+    evidence_excerpt: "if (!data.fullName.trim()) errors.fullName = ... if (!data.phone.trim()) ... (6 required address subfields)"
+    recommendation: >
+      Split Step 1 into two sub-steps or progressive disclosure: (a) personal identity
+      (name, phone, email — 3 fields), then (b) kitchen address (unlocked after personal
+      info saves). Alternatively, default-fill country=India and auto-detect state/city
+      from PIN code to collapse 4 address fields into 1. Reducing perceived field count
+      on the first step is critical — first step abandonment is the highest-volume drop-off.
+    metric_hypothesis: "wizard step-1 completion rate; first-step field count is the primary predictor of wizard abandonment"
+    depends_on: null
+
+  - finding_id: BA-022
+    surface_id: vendor-portal-onboarding-step-personal
+    lens: business-analyst
+    severity: P2
+    issue: "Address Line 2 and Landmark are separate optional fields — creates clutter alongside 3 required dropdowns"
+    evidence_excerpt: "'Address Line 2 (Optional)', 'Landmark (Optional)', plus Country, State, City required dropdowns"
+    recommendation: >
+      Collapse into a single free-text "Landmark or area (optional)" field. Two optional
+      address fields increase perceived form length without proportionate data quality gain.
+      The landmark field is user-friendly (familiar in India) but two fields for the same
+      concept signals poor UX design to a chef who is trying to cook, not fill government
+      forms.
+    metric_hypothesis: "step-1 completion rate; reducing optional field count decreases perceived form length"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — STEP 1: KITCHEN DETAILS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-023
+    surface_id: vendor-portal-onboarding-step-kitchen
+    lens: business-analyst
+    severity: P2
+    issue: "Description field hint 'Min 20 characters. This is shown to customers on your profile.' provides no example of what good looks like"
+    evidence_excerpt: "hint='Min 20 characters. This is shown to customers on your profile.'"
+    recommendation: >
+      Add a concrete example inline: "e.g. 'I've been cooking Gujarati thali for 15 years.
+      Everything is freshly made the morning of your order.'" Chefs who stall on
+      open-ended text fields are a major drop-off point. Showing what good looks like
+      unlocks progress.
+    metric_hypothesis: "step-2 completion rate; example copy in free-text fields reduces stall abandonment"
+    depends_on: null
+
+  - finding_id: BA-024
+    surface_id: vendor-portal-onboarding-step-kitchen
+    lens: business-analyst
+    severity: P2
+    issue: "'Years of Cooking Experience' select defaults to empty 'Select experience' — no business rationale communicated to chef why this is asked"
+    evidence_excerpt: "<option value=''>Select experience</option>"
+    recommendation: >
+      Add a helper line below the field: "Shown on your profile — customers use this to
+      find experienced chefs." This explains why the information is collected and what the
+      chef gains by providing it (profile completeness = more orders). Without rationale,
+      discretionary fields that feel nosy cause friction.
+    metric_hypothesis: "step-2 completion rate; explaining why increases field fill rates on discretionary fields"
+    depends_on: null
+
+  - finding_id: BA-025
+    surface_id: vendor-portal-onboarding-step-kitchen
+    lens: business-analyst
+    severity: P3
+    issue: "'Meals You Can Prepare Daily' select — option '100+ meals' has no capacity implication explained"
+    evidence_excerpt: "'50-100 meals', '100+ meals'"
+    recommendation: >
+      Selecting capacity affects how the platform routes orders. Add a brief note:
+      "This helps us manage order volume so you're never overwhelmed." This framing is
+      both reassuring (we protect you) and explains the business logic.
+    metric_hypothesis: "chef D7 retention; chefs who are over-committed on capacity churn early"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — STEP 2: OPERATIONS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-026
+    surface_id: vendor-portal-onboarding-step-operations
+    lens: business-analyst
+    severity: P2
+    issue: "Delivery Radius field hint 'How far can you deliver or allow pickup from' is ambiguous — chef doesn't know if they need to deliver themselves"
+    evidence_excerpt: "hint='How far can you deliver or allow pickup from'"
+    recommendation: >
+      Clarify the logistics model before this field: "Fe3dr's delivery partners handle all
+      deliveries — you just set your kitchen's service radius." Many chefs drop off here
+      assuming they must personally deliver. Confirming platform delivery removes a major
+      barrier.
+    metric_hypothesis: "step-3 completion rate; logistics ambiguity is a primary chef onboarding drop-off driver"
+    depends_on: null
+
+  - finding_id: BA-027
+    surface_id: vendor-portal-onboarding-step-operations
+    lens: business-analyst
+    severity: P3
+    issue: "Delivery Fee field label says 'Delivery Fee' with no explanation of who sets it or whether Fe3dr overrides it"
+    evidence_excerpt: "Delivery Fee / Per order delivery charge"
+    recommendation: >
+      Add helper text: "This is the fee customers pay per delivery. Fe3dr drivers are paid
+      separately — you keep all of it." This clarifies the flow of money, which is a key
+      trust question for a new chef deciding whether the platform is exploitative.
+    metric_hypothesis: "chef signup completion and D30 retention; fee clarity is a top concern in seller-supply acquisition"
+    depends_on: null
+
+  - finding_id: BA-028
+    surface_id: vendor-portal-onboarding-step-operations
+    lens: business-analyst
+    severity: P2
+    issue: "Operating Hours grid shows 7 days with individual time pickers — all days start as Closed, forcing chef to click-enable every day they work"
+    evidence_excerpt: "toggleDay function: if (data.operatingHours[day]) updateHours(day, undefined); else updateHours(day, { open: '09:00', close: '21:00' })"
+    recommendation: >
+      Pre-select common working days (Mon-Sat enabled by default) with a note "You can
+      adjust or turn off any day." Most home chefs work Mon-Sat; forcing them to toggle
+      6 days adds 6 unnecessary interactions. Alternatively add a "Select all weekdays"
+      shortcut button.
+    metric_hypothesis: "step-3 completion rate; pre-filled defaults reduce interaction count and time-on-step"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — STEP 3: DOCUMENTS (KYC)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-029
+    surface_id: vendor-portal-onboarding-step-documents
+    lens: business-analyst
+    severity: P1
+    issue: "Documents step introduces PAN card, Aadhaar, kitchen photos — no upfront framing that explains the KYC obligation before the chef reaches this step"
+    evidence_excerpt: "REQUIRED_DOCS: pan_card 'Required for tax purposes and payouts', aadhaar_card 'For identity verification'"
+    recommendation: >
+      Insert a single-sentence preview of this step in the Step 3 stepper description or
+      on a modal before entering the step: "Step 4 requires identity documents (PAN +
+      Aadhaar) and kitchen photos. Have them ready." Surfacing document requirements
+      before the chef starts the wizard prevents mid-wizard abandonment when they discover
+      they need to find their PAN card. The current stepper description 'ID & kitchen
+      photos' is the only signal, which appears too late.
+    metric_hypothesis: "wizard steps 1-3 completion rate and return rate; pre-announcing document needs allows preparation"
+    depends_on: null
+
+  - finding_id: BA-030
+    surface_id: vendor-portal-onboarding-step-documents
+    lens: business-analyst
+    severity: P1
+    issue: "Trust framing for Aadhaar collection is minimal — 'For identity verification' provides no security assurance for a sensitive government ID"
+    evidence_excerpt: "aadhaar_card description: 'For identity verification'"
+    recommendation: >
+      Replace with: "Your Aadhaar is used only to verify you're who you say you are. It is
+      encrypted at upload, never visible to customers, and not shared with third parties."
+      Aadhaar is the most sensitive document an Indian citizen carries. Minimal framing
+      signals either inexperience or indifference — both erode trust at the moment of
+      highest friction. The existing info banner ('Your documents are encrypted and stored
+      securely') exists but is above the fold; it must be adjacent to each sensitive field.
+    metric_hypothesis: "step-4 document upload rate; trust framing adjacent to sensitive fields increases upload completion by 20-40%"
+    depends_on: null
+
+  - finding_id: BA-031
+    surface_id: vendor-portal-onboarding-step-documents
+    lens: business-analyst
+    severity: P1
+    issue: "Cancelled cheque optional document description 'For setting up direct payouts to your bank account (optional, can add later)' — payout setup is deferred with no clear timeline"
+    evidence_excerpt: "'Cancelled Cheque / Bank Proof', description: 'For setting up direct payouts to your bank account (optional, can add later)'"
+    recommendation: >
+      The StepPolicies file also defers payout setup: 'You can set up your bank account
+      or UPI details for receiving payouts from Settings after your kitchen is approved.'
+      This creates a gap: a chef who finishes the entire wizard still does not know when
+      they will receive their first payout. Add a clear SLA: "You can add bank details
+      now or within 7 days of approval — your first payout processes once you add them."
+      Unclear payout timelines are a top reason seller supply abandons platforms.
+    metric_hypothesis: "chef D30 retention and first-payout completion rate; deferred payout setup delays first success event"
+    depends_on: null
+
+  - finding_id: BA-032
+    surface_id: vendor-portal-onboarding-step-documents
+    lens: business-analyst
+    severity: P2
+    issue: "PAN number text field validates only client-side; no inline format mask or validation feedback while typing"
+    evidence_excerpt: "onChange={(e) => updateData({ panNumber: e.target.value.toUpperCase() })} hint='10-character alphanumeric PAN'"
+    recommendation: >
+      Add regex-based inline validation on blur: PAN format is `[A-Z]{5}[0-9]{4}[A-Z]{1}`.
+      Show a green tick when the format is valid, or an inline error immediately on blur
+      rather than waiting for the wizard Next button. Reducing end-of-step error surprises
+      is critical for KYC step completion.
+    metric_hypothesis: "step-4 validation error rate and completion rate; inline PAN validation reduces submission errors"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — STEP 4: POLICIES
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-033
+    surface_id: vendor-portal-onboarding-step-policies
+    lens: business-analyst
+    severity: P1
+    issue: "7-item compliance checklist (COMPLIANCE_ITEMS) displayed as a read-only list with no acknowledgement checkbox — chef cannot confirm they have read it"
+    evidence_excerpt: "COMPLIANCE_ITEMS = ['My kitchen has access to clean running water', ...7 items] — no checkbox, just read-only text blocks"
+    recommendation: >
+      Either (a) consolidate the 7 items into a single acknowledgement checkbox: "I confirm
+      my kitchen meets all food safety standards listed above", or (b) add a checkbox to
+      each item so the chef actively ticks them. A read-only bullet list creates no
+      commitment signal and no accountability. Also consider: 7 items + 3 policies = 10
+      items on this step — break into two cards with sub-section labels 'Kitchen Standards'
+      and 'Platform Agreements'.
+    metric_hypothesis: "step-5 completion rate; active acknowledgement increases policy acceptance rate and reduces future disputes"
+    depends_on: null
+
+  - finding_id: BA-034
+    surface_id: vendor-portal-onboarding-step-policies
+    lens: business-analyst
+    severity: P1
+    issue: "Terms of Service policy checkbox description says 'Fe3dr charges a platform commission on each order' — contradicts the vendor register page promise of 'Zero commission first month'"
+    evidence_excerpt: "'I understand that Fe3dr charges a platform commission on each order and that my payouts will be processed weekly'"
+    recommendation: >
+      This is a direct conversion-eroding conflict: the register page promises zero
+      commission, the TOS checkbox says commissions are charged. The chef discovers this
+      only at step 5 of a 6-step wizard, creating a trust collapse at the point of highest
+      investment. Resolve the messaging conflict: either (a) update the policy description
+      to reflect the actual commission model with specifics ("0% commission for your first
+      month, then X% thereafter") or (b) update the register page to reflect commissions
+      exist. This requires product/legal alignment but is a P1 conversion blocker.
+    metric_hypothesis: "wizard final-step abandonment rate; discovering unexpected costs at step 5 causes high-intent drop-off"
+    depends_on: BA-012
+
+  - finding_id: BA-035
+    surface_id: vendor-portal-onboarding-step-policies
+    lens: business-analyst
+    severity: P2
+    issue: "Platform TOS policy checkbox links 'Terms of Service, Privacy Policy, and Vendor Agreement' are plain text — no hyperlinks to read before accepting"
+    evidence_excerpt: "'I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement.'"
+    recommendation: >
+      All three documents must be linked. A chef cannot meaningfully agree to a document
+      they cannot read. This is also a legal risk (Legal lens owns this separately) but
+      from a conversion perspective: legally cautious chefs will abandon rather than agree
+      blind. Add links that open in a modal or new tab.
+    metric_hypothesis: "step-5 acceptance rate; non-linked agreements block completion for legally aware chefs"
+    depends_on: null
+
+  - finding_id: BA-036
+    surface_id: vendor-portal-onboarding-step-policies
+    lens: business-analyst
+    severity: P2
+    issue: "Payout Details card says 'You can set up your bank account or UPI details... after your kitchen is approved' — deferred payout with no timeline creates uncertainty"
+    evidence_excerpt: "'You can set up your bank account or UPI details for receiving payouts from Settings after your kitchen is approved.'"
+    recommendation: >
+      Add: "Payouts are processed weekly. Add your bank details within 7 days of approval
+      to receive your first payout." Vague deferral ('can do it later') is less motivating
+      than a concrete timeline. The chef has just completed 5 steps; giving them a clear
+      success path for money receipt increases D7 activation.
+    metric_hypothesis: "chef D7 activation and first-payout rate; specific payout timeline increases post-onboarding activation"
+    depends_on: BA-031
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — REVIEW + SUBMIT
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-037
+    surface_id: vendor-portal-onboarding-review
+    lens: business-analyst
+    severity: P2
+    issue: "Review step missing documents show technical slug names 'pan_card', 'aadhaar_card' rather than human-readable names"
+    evidence_excerpt: "Please go back to Step 4 and upload: {missingDocs.map((d) => d.replace(/_/g, ' ')).join(', ')}"
+    recommendation: >
+      The replace(/_/g, ' ') produces 'pan card' and 'aadhaar card' — lowercase, no
+      capitalisation, not the field labels shown in step 4 ('PAN Card', 'Aadhaar Card').
+      Use a label map (as already exists in delivery portal's StepReview docTypeLabels)
+      to show 'PAN Card' and 'Aadhaar Card'. Inconsistent naming between steps creates
+      cognitive mismatch.
+    metric_hypothesis: "review step completion rate; clear document names reduce back-navigation confusion"
+    depends_on: null
+
+  - finding_id: BA-038
+    surface_id: vendor-portal-onboarding-review
+    lens: business-analyst
+    severity: P1
+    issue: "Submit Application toast 'Application submitted! We'll review and get back to you within 24-48 hours.' — no next action, no guidance for what to do while waiting"
+    evidence_excerpt: "toast.success('Application submitted! We\\'ll review and get back to you within 24-48 hours.')"
+    recommendation: >
+      Redirect to an onboarding status page (like the delivery portal's OnboardingStatusPage)
+      and populate it with: (a) confirmation of the 24-48 hour SLA, (b) an actionable
+      step: "While you wait, start building your menu so you can launch the moment you're
+      approved." (c) the payout setup CTA. A transient toast that disappears after 5
+      seconds is insufficient for a high-stakes application event. The vendor portal
+      lacks the status page the delivery portal already has.
+    metric_hypothesis: "chef D1 and D7 activation; post-submission guidance drives pre-launch menu creation and reduces churn during wait period"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # VENDOR ONBOARDING — REJECTION MESSAGING
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-039
+    surface_id: vendor-portal-onboarding-rejection
+    lens: business-analyst
+    severity: P1
+    issue: "Rejection banner heading 'Application Rejected' is blunt — no empathetic framing, no reframe that rejection is fixable"
+    evidence_excerpt: "h3: 'Application Rejected' / p: 'Your previous application was not approved. Please review the feedback below and re-submit.'"
+    recommendation: >
+      Change heading to 'We need a few changes' and copy to: 'Your application needs a
+      small update before we can approve it. Review the note below, fix the items, and
+      resubmit — most applications are approved on second review.' This reframe reduces
+      the finality of 'rejected', signals effort will succeed, and maintains chef in the
+      funnel. 'Application Rejected' is demoralising language that guarantees a high
+      proportion of rejected chefs exit permanently.
+    metric_hypothesis: "rejected-chef resubmission rate; empathetic rejection framing increases resubmission by 30-50%"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — REGISTER
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-040
+    surface_id: delivery-portal-register-redirect
+    lens: business-analyst
+    severity: P0
+    issue: "Driver registration page is a blank redirect to login — drivers cannot self-register, creating invisible supply acquisition failure"
+    evidence_excerpt: "export default function RegisterPage() { return <Navigate to='/login' replace />; }"
+    recommendation: >
+      If driver registration is intentionally closed (invite-only or ops-managed),
+      communicate this on the page rather than silently redirecting: "Driver applications
+      are currently reviewed by our team. [Apply to become a driver →]" with a form or
+      email link. A silent redirect causes drivers who reach the register URL (e.g. from
+      a job board or a referral link) to land confused on the login page, with no path to
+      apply. This is a zero-conversion dead end for driver supply.
+    metric_hypothesis: "driver supply acquisition rate; silent redirect loses 100% of organic driver sign-up intent"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — ONBOARDING WIZARD HEADER
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-041
+    surface_id: delivery-portal-onboarding-header
+    lens: business-analyst
+    severity: P1
+    issue: "'Become a Delivery Partner' as wizard H1 with subline 'Complete your profile to start delivering' provides no income framing"
+    evidence_excerpt: "h1: 'Become a Delivery Partner' / p: 'Complete your profile to start delivering'"
+    recommendation: >
+      Driver's primary motivation is earnings, not completing a profile. Replace subline with
+      earnings anchor: "Complete your profile — start earning from your first delivery."
+      or "Most drivers complete this in 10 minutes." Time disclosure + income promise is the
+      most effective header combination for driver supply acquisition wizards.
+    metric_hypothesis: "driver wizard start-to-complete rate; income framing in wizard header reduces early-step abandonment"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — STEP PROGRESS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-042
+    surface_id: delivery-portal-onboarding-step-progress
+    lens: business-analyst
+    severity: P2
+    issue: "Step 4 is labelled 'Plan' in the StepProgress component — label is ambiguous; driver doesn't know it means a paid subscription plan"
+    evidence_excerpt: "{ number: 4, label: 'Plan' }"
+    recommendation: >
+      Rename to 'Subscription' or 'Billing plan'. 'Plan' could mean a delivery route plan,
+      a schedule plan, or a career plan. A driver who discovers step 4 requires paying for
+      a subscription without being pre-warned may abandon at that step. The label should
+      match the stake: 'Subscription' sets accurate expectations.
+    metric_hypothesis: "driver wizard step-4 completion rate; unexpected billing at step 4 causes high-intent abandonment"
+    depends_on: null
+
+  - finding_id: BA-043
+    surface_id: delivery-portal-onboarding-step-progress
+    lens: business-analyst
+    severity: P2
+    issue: "StepProgress has no estimated time per step or total time indication"
+    evidence_excerpt: "5-step progress bar with labels only, no time hints"
+    recommendation: >
+      Add a total time estimate to the wizard header or first step: "About 10 minutes total
+      — have your driving license and Aadhaar ready." This is especially important for the
+      delivery portal because Step 3 (Documents) requires physical documents that cannot be
+      uploaded without preparation. A driver who starts without their license ends up
+      abandoning mid-wizard.
+    metric_hypothesis: "driver wizard completion rate; upfront document preparation instruction prevents mid-wizard abandonment"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — SUBSCRIPTION STEP
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-044
+    surface_id: delivery-portal-onboarding-subscription
+    lens: business-analyst
+    severity: P1
+    issue: "Subscription step headline 'Choose Your Plan' appears at step 4 of 5 — driver has no prior warning in the wizard that the application requires payment"
+    evidence_excerpt: "h2: 'Choose Your Plan' / p: 'A small subscription to keep Fe3dr running — you keep every rupee you earn.'"
+    recommendation: >
+      Disclose the subscription model in the wizard header or a pre-wizard briefing screen:
+      "Heads up: once approved, a small monthly subscription starts after your first X days
+      free." A driver who reaches step 4 with 80% invested and then discovers payment is
+      required experiences a psychological bait-and-switch, dramatically increasing drop-off.
+      The "zero commission" promise does not substitute for subscription disclosure.
+    metric_hypothesis: "driver wizard step-4 completion rate; undisclosed payment at step 4 is the highest-risk drop-off in the funnel"
+    depends_on: null
+
+  - finding_id: BA-045
+    surface_id: delivery-portal-onboarding-subscription
+    lens: business-analyst
+    severity: P2
+    issue: "'No card needed' on trial CTA — trial card-skip promise is good but undermined because the plan selection button still shows payment framing"
+    evidence_excerpt: "'Try everything free. No card needed.' / button: 'Start with Monthly Plan'"
+    recommendation: >
+      The CTA button should reinforce the trial, not jump to the plan interval: change
+      'Start with Monthly Plan' to 'Start free trial' for first-time users during the trial
+      period. After trial, it should read 'Confirm Monthly Plan'. This prevents cognitive
+      dissonance between "no card needed" and a button that sounds like billing.
+    metric_hypothesis: "driver subscription step completion rate; trust-coherent CTA copy reduces payment anxiety abandonment"
+    depends_on: null
+
+  - finding_id: BA-046
+    surface_id: delivery-portal-onboarding-subscription
+    lens: business-analyst
+    severity: P2
+    issue: "Subscription 'how billing works' list item 2 says 'we won't charge you until your earnings cross {thresholdFormatted}' — if threshold=0 from API, this renders incorrectly"
+    evidence_excerpt: "'we won't charge you' until your earnings cross {thresholdFormatted} — if threshold=0, renders: 'until your earnings cross ₹0'"
+    recommendation: >
+      Guard the conditional: only render the threshold copy block when threshold > 0.
+      Rendering "cross ₹0" is confusing and undermines the credibility of the payment
+      model explanation. The existing code gates the UI card on threshold > 0 but the
+      prose list item does not — add the same guard to step 3 of the list.
+    metric_hypothesis: "driver subscription step comprehension rate; rendering nonsensical thresholds damages trust in the billing model"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — REVIEW STEP
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-047
+    surface_id: delivery-portal-onboarding-review
+    lens: business-analyst
+    severity: P2
+    issue: "Review step Terms checkbox is plain text 'Terms & Conditions' and 'Privacy Policy' with no hyperlinks"
+    evidence_excerpt: "'I agree to the Terms & Conditions, Privacy Policy, and confirm that all information provided is accurate'"
+    recommendation: >
+      'Terms & Conditions' and 'Privacy Policy' must be hyperlinked. This is consistent
+      with the vendor portal TOS finding (BA-035). A driver accepting unlinked terms
+      without being able to read them creates both a trust problem and a legal exposure.
+    metric_hypothesis: "driver review step completion rate; linked terms increase acceptance confidence"
+    depends_on: BA-035
+
+  - finding_id: BA-048
+    surface_id: delivery-portal-onboarding-review
+    lens: business-analyst
+    severity: P2
+    issue: "Subscription Plan review card shows static copy 'Plan selected. Payments handled securely via Razorpay.' regardless of which plan was selected or current gateway"
+    evidence_excerpt: "'Plan selected. Payments handled securely via Razorpay.' — hardcoded gateway name even though gateway is dynamic"
+    recommendation: >
+      Render the actual plan interval and amount selected in step 4: "Monthly plan — ₹X/month.
+      Payments via [gateway]." Confirming the specific price and plan at review prevents
+      surprise post-submission. Hardcoding 'Razorpay' when the gateway is configurable also
+      creates a correctness bug for non-Razorpay deployments.
+    metric_hypothesis: "driver review step confidence and post-approval satisfaction; showing specific billing details prevents billing surprise complaints"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — STATUS PAGE (WAITING / REJECTION)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-049
+    surface_id: delivery-portal-onboarding-status
+    lens: business-analyst
+    severity: P1
+    issue: "Status page 'Application Submitted' state shows no next action — driver is left in a pure waiting loop with no activation task"
+    evidence_excerpt: "'Your application has been received and will be reviewed shortly.' — no CTA for submitted/in-review state"
+    recommendation: >
+      Add an activation task for the waiting period: "While we review your application,
+      make sure your phone is ready to receive orders. [Download the driver app →]" or
+      "Check your email at [email] for approval updates." An idle waiting screen drives
+      7-day drop-off. Give drivers one meaningful action.
+    metric_hypothesis: "driver D7 retention during review period; idle waiting screens produce cold applicant drop-off"
+    depends_on: null
+
+  - finding_id: BA-050
+    surface_id: delivery-portal-onboarding-status
+    lens: business-analyst
+    severity: P1
+    issue: "Rejection state heading 'Application Needs Changes' with description 'Your application requires some changes before it can be approved' — CTA 'Fix & Resubmit' with no specific guidance"
+    evidence_excerpt: "'Application Needs Changes' / 'Fix & Resubmit' — no link to specific step or field to fix"
+    recommendation: >
+      The 'Fix & Resubmit' button takes the driver back to step 1 of the wizard
+      (currentStep=1 on rejected status). Without specific guidance on what to fix, the
+      driver must re-audit all 5 steps. The rejectionReason field is rendered if populated,
+      which is good — but add a secondary CTA: "Not sure what to fix? [Contact support →]"
+      Also rename 'Fix & Resubmit' to 'Update and resubmit' to match the platform's
+      lower-urgency tone.
+    metric_hypothesis: "rejected driver resubmission rate; specific fix guidance increases resubmission attempts"
+    depends_on: null
+
+  - finding_id: BA-051
+    surface_id: delivery-portal-onboarding-status
+    lens: business-analyst
+    severity: P2
+    issue: "'Auto-refreshing every 30 seconds' message is an internal system detail exposed to the driver — creates clock-watching anxiety"
+    evidence_excerpt: "'Auto-refreshing every 30 seconds'"
+    recommendation: >
+      Remove or replace with: "We'll notify you by email as soon as your application is
+      reviewed." The auto-refresh is a technical implementation detail. Telling the driver
+      the page is polling every 30 seconds implicitly encourages them to sit and stare at
+      the screen waiting for a status change — counterproductive for a multi-day review
+      process.
+    metric_hypothesis: "driver D7 retention; reducing screen-polling anxiety frees drivers to do other tasks while waiting"
+    depends_on: null
+
+  - finding_id: BA-052
+    surface_id: delivery-portal-onboarding-status
+    lens: business-analyst
+    severity: P2
+    issue: "Support contact for rejected driver shows only an email address — no expected response SLA"
+    evidence_excerpt: "'Contact us at support@fe3dr.com'"
+    recommendation: >
+      Add response time SLA: "Contact us at support@fe3dr.com — we respond within 1
+      business day." A bare email address without SLA gives no confidence that reaching
+      out will be effective. For a driver who has been rejected, uncertainty about support
+      responsiveness is a reason to not even try.
+    metric_hypothesis: "rejected driver re-engagement rate; SLA disclosure increases support contact rate which increases resubmission pipeline"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DELIVERY PORTAL — PAYOUT STEP
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-053
+    surface_id: delivery-portal-onboarding-payout
+    lens: business-analyst
+    severity: P1
+    issue: "Payout Details step has no security framing for bank account / IFSC submission — sensitive financial data collected without encryption reassurance"
+    evidence_excerpt: "h2: 'Payout Details' / p: 'How would you like to receive your earnings?' — no security statement"
+    recommendation: >
+      Add a security line before the form: "Your bank details are encrypted and only used
+      to transfer your earnings. We never store your full account number in plain text."
+      Bank detail collection without security framing is a leading cause of form abandonment
+      in India, where banking fraud awareness is high. The delivery portal has no equivalent
+      of the vendor portal's document info banner.
+    metric_hypothesis: "driver payout step completion rate; security framing on banking forms increases completion by 15-30%"
+    depends_on: null
+
+  - finding_id: BA-054
+    surface_id: delivery-portal-onboarding-payout
+    lens: business-analyst
+    severity: P2
+    issue: "Payout form CTA button says 'Continue' — no confirmation of what the driver is proceeding to do with their bank details"
+    evidence_excerpt: "'Continue' button after bank account form"
+    recommendation: >
+      Change to 'Save payout details' — matching the success toast 'Payout details saved'.
+      'Continue' is verb-generic; it provides no confirmation that the driver understands
+      their bank details are being saved. This also matches style-guide principle of
+      verb-first, action-specific button copy.
+    metric_hypothesis: "driver payout form completion rate; specific CTA copy reduces hesitation on financial data submission"
+    depends_on: null
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CROSS-CUTTING VOCABULARY / STYLE VIOLATIONS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - finding_id: BA-055
+    surface_id: vendor-portal-register-heading
+    lens: business-analyst
+    severity: P2
+    issue: "Vendor portal uses 'vendor' terminology in UI — style guide mandates 'chef' for chef-facing surfaces"
+    evidence_excerpt: "'Vendor Portal' (header label), 'Register as a vendor', 'Create your vendor account', 'Fe3dr's Vendor Terms'"
+    recommendation: >
+      Style guide: 'Chef' is the preferred term in chef-facing UI. 'Vendor' is internal/API
+      terminology. Rename 'Vendor Portal' to 'Chef Portal' in all chef-facing copy (the
+      portal sub-label, the register heading, the TOS reference). Calling chefs 'vendors'
+      misaligns with the brand's positioning ("home chefs" not "vendors") and may alienate
+      pride-of-craft cooks who don't identify as sellers.
+    metric_hypothesis: "vendor signup completion rate; identity-aligned terminology improves conversion for culinary-identity chefs"
+    depends_on: null
+
+  - finding_id: BA-056
+    surface_id: vendor-portal-onboarding-wizard
+    lens: business-analyst
+    severity: P3
+    issue: "Wizard submit toast uses an escaped apostrophe in inline string: 'We\\'ll review' — suggests raw string concatenation risk"
+    evidence_excerpt: "toast.success('Application submitted! We\\'ll review and get back to you within 24-48 hours.')"
+    recommendation: >
+      Use double quotes for the outer string: "Application submitted! We'll review and get
+      back to you within 24-48 hours." — eliminates the escape. This is a code quality
+      issue but surfaces in production if a linter doesn't catch it; log as minor.
+    metric_hypothesis: "content correctness; rendering artefacts erode trust in platform quality"
+    depends_on: null
+
+  - finding_id: BA-057
+    surface_id: delivery-portal-onboarding-step-progress
+    lens: business-analyst
+    severity: P2
+    issue: "Payout step is listed in StepProgress labels but StepPayoutDetails is not in the delivery OnboardingPage step routing — step 4 routes to StepSubscriptionPlan, step 5 to StepReview"
+    evidence_excerpt: "StepProgress shows steps: Personal Info, Vehicle Details, Documents, Plan, Review — no Payout step. StepPayoutDetails exists but is not wired into the wizard."
+    recommendation: >
+      The driver payout step (StepPayoutDetails.tsx) exists as a component but is not
+      rendered in OnboardingPage.tsx — the wizard jumps from Documents (step 3) to
+      Subscription Plan (step 4) to Review (step 5). Payout is either (a) missing from
+      the wizard and must be added as step 5 between Plan and Review, or (b) has been
+      intentionally moved to post-approval settings. If (b), remove the file or add a
+      comment explaining the decision. If (a), this is a broken conversion path — drivers
+      submit without providing payout details.
+    metric_hypothesis: "driver first-payout rate; missing payout step means zero payout completions at onboarding"
+    depends_on: BA-053
+
+  - finding_id: BA-058
+    surface_id: web-auth-login-divider
+    lens: business-analyst
+    severity: P3
+    issue: "Social/email divider text is uppercase 'Or' on customer login, lowercase 'or' on vendor login and register — inconsistency across apps"
+    evidence_excerpt: "web LoginPage: 'Or' (capitalised) vs vendor-portal LoginPage: 'or' (lowercase)"
+    recommendation: >
+      Normalise to lowercase 'or' across all three apps (web, vendor-portal, delivery-portal).
+      Style guide implies sentence case; 'or' as a conjunction is not a proper noun.
+      Consistency signals a unified product, not three separate prototypes.
+    metric_hypothesis: "brand polish; inconsistency signals product immaturity to enterprise chefs comparing platforms"
+    depends_on: null
+
+  - finding_id: BA-059
+    surface_id: vendor-portal-onboarding-step-policies
+    lens: business-analyst
+    severity: P2
+    issue: "Completion state copy 'You're all set to submit your application!' uses an exclamation mark — violates style guide Rule 1 (no urgency exclamation marks except genuine celebration)"
+    evidence_excerpt: "'You're all set to submit your application!'"
+    recommendation: >
+      Change to 'You're all set. Review your application and submit.' — period, no
+      exclamation. The all-policies-accepted state is a functional milestone, not a
+      celebration event. Style guide: exclamation marks only in genuine celebration
+      (maximum 1 per page). This is a functional confirmation, not a celebration.
+    metric_hypothesis: "voice consistency; exclamation marks outside celebration contexts undermine the brand's 'quietly confident' positioning"
+    depends_on: null
+
+  - finding_id: BA-060
+    surface_id: delivery-portal-onboarding-review
+    lens: business-analyst
+    severity: P3
+    issue: "Delivery portal review step submit success toast says 'Application submitted successfully!' — exclamation mark violates style guide"
+    evidence_excerpt: "toast.success('Application submitted successfully!')"
+    recommendation: >
+      Change to 'Application submitted.' — plain past tense, no exclamation. The driver
+      is then immediately navigated to OnboardingStatusPage where the status is clearly
+      shown. The toast is transient and exclamation is redundant.
+    metric_hypothesis: "voice consistency"
+    depends_on: null
