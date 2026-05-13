@@ -88,31 +88,35 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
       </div>
 
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-3">Payout Method</label>
+        <div role="radiogroup" aria-labelledby="payout-method-label">
+          <span id="payout-method-label" className="block text-sm font-medium text-foreground mb-3">Payout Method</span>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
+              role="radio"
+              aria-checked={form.payoutMethod === 'bank_transfer'}
               onClick={() => updateField('payoutMethod', 'bank_transfer')}
-              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all ${
+              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 form.payoutMethod === 'bank_transfer'
                   ? 'border-primary bg-primary/5 text-primary'
                   : 'border-border hover:border-primary/30'
               }`}
             >
-              <Banknote className="h-5 w-5" />
+              <Banknote aria-hidden="true" className="h-5 w-5" />
               <span className="text-sm font-medium">Bank Transfer</span>
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={form.payoutMethod === 'upi'}
               onClick={() => updateField('payoutMethod', 'upi')}
-              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all ${
+              className={`flex items-center gap-3 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 form.payoutMethod === 'upi'
                   ? 'border-primary bg-primary/5 text-primary'
                   : 'border-border hover:border-primary/30'
               }`}
             >
-              <Smartphone className="h-5 w-5" />
+              <Smartphone aria-hidden="true" className="h-5 w-5" />
               <span className="text-sm font-medium">UPI</span>
             </button>
           </div>
@@ -121,11 +125,15 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
         {form.payoutMethod === 'bank_transfer' ? (
           <>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="payout-bank-name" className="block text-sm font-medium text-foreground mb-1.5">
                 Account Holder Name <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
+                id="payout-bank-name"
                 type="text"
+                autoComplete="name"
+                required
+                aria-required="true"
                 value={form.bankAccountName}
                 onChange={(e) => updateField('bankAccountName', e.target.value)}
                 placeholder="Name as on bank account"
@@ -133,11 +141,15 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="payout-bank-number" className="block text-sm font-medium text-foreground mb-1.5">
                 Account Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
+                id="payout-bank-number"
                 type="text"
+                inputMode="numeric"
+                required
+                aria-required="true"
                 value={form.bankAccountNumber}
                 onChange={(e) => updateField('bankAccountNumber', e.target.value)}
                 placeholder="Enter account number"
@@ -145,11 +157,14 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="payout-bank-ifsc" className="block text-sm font-medium text-foreground mb-1.5">
                 IFSC Code <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
+                id="payout-bank-ifsc"
                 type="text"
+                required
+                aria-required="true"
                 value={form.bankIFSC}
                 onChange={(e) => updateField('bankIFSC', e.target.value)}
                 placeholder="e.g., SBIN0001234"
@@ -159,11 +174,14 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
           </>
         ) : (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="payout-upi-id" className="block text-sm font-medium text-foreground mb-1.5">
               UPI ID <span aria-hidden="true" className="text-muted-foreground">*</span>
             </label>
             <input
+              id="payout-upi-id"
               type="text"
+              required
+              aria-required="true"
               value={form.upiId}
               onChange={(e) => updateField('upiId', e.target.value)}
               placeholder="e.g., name@upi"

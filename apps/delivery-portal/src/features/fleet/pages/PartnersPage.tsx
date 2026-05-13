@@ -83,9 +83,12 @@ export default function PartnersPage() {
       {/* Search & Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="partners-search" className="sr-only">Search partners</label>
+          <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            type="text"
+            id="partners-search"
+            type="search"
+            aria-label="Search partners by name, email, or vehicle"
             placeholder="Search by name, email, or vehicle..."
             value={search}
             onChange={(e) => {
@@ -95,11 +98,14 @@ export default function PartnersPage() {
             className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+        <div role="radiogroup" aria-label="Filter partners by status" className="flex items-center gap-2">
+          <Filter aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
           {statusOptions.map((opt) => (
             <button
               key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={status === opt.value}
               onClick={() => {
                 setStatus(opt.value);
                 setPage(1);

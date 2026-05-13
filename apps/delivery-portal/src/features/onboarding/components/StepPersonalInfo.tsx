@@ -108,11 +108,15 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
+          <label htmlFor="onboarding-city" className="block text-sm font-medium text-foreground mb-1.5">
             City <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
+            id="onboarding-city"
             type="text"
+            autoComplete="address-level2"
+            required
+            aria-required="true"
             value={form.city}
             onChange={(e) => updateField('city', e.target.value)}
             placeholder="e.g., Bangalore"
@@ -121,11 +125,15 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
+          <label htmlFor="onboarding-emergency-name" className="block text-sm font-medium text-foreground mb-1.5">
             Emergency Contact Name <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
+            id="onboarding-emergency-name"
             type="text"
+            autoComplete="name"
+            required
+            aria-required="true"
             value={form.emergencyContact}
             onChange={(e) => updateField('emergencyContact', e.target.value)}
             placeholder="Full name"
@@ -134,11 +142,16 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
+          <label htmlFor="onboarding-emergency-phone" className="block text-sm font-medium text-foreground mb-1.5">
             Emergency Phone <span aria-hidden="true" className="text-muted-foreground">*</span>
           </label>
           <input
+            id="onboarding-emergency-phone"
             type="tel"
+            autoComplete="tel"
+            inputMode="tel"
+            required
+            aria-required="true"
             value={form.emergencyPhone}
             onChange={(e) => updateField('emergencyPhone', e.target.value)}
             placeholder="+91 9876543210"
@@ -147,34 +160,39 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">Date of Birth</label>
+          <label htmlFor="onboarding-dob" className="block text-sm font-medium text-foreground mb-1.5">Date of Birth</label>
           <input
+            id="onboarding-dob"
             type="date"
+            autoComplete="bday"
             value={form.dateOfBirth}
             onChange={(e) => updateField('dateOfBirth', e.target.value)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-3">
+        <div role="radiogroup" aria-labelledby="onboarding-vehicle-type-label">
+          <span id="onboarding-vehicle-type-label" className="block text-sm font-medium text-foreground mb-3">
             Vehicle Type <span aria-hidden="true" className="text-muted-foreground">*</span>
-          </label>
+          </span>
           <div className="grid grid-cols-3 gap-3">
             {vehicleTypes.map((type) => {
               const Icon = type.icon;
+              const isSelected = form.vehicleType === type.value;
               return (
                 <button
                   key={type.value}
                   type="button"
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => updateField('vehicleType', type.value)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
-                    form.vehicleType === type.value
+                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                    isSelected
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border hover:border-primary/30'
                   }`}
                 >
-                  <Icon className="h-6 w-6" />
+                  <Icon aria-hidden="true" className="h-6 w-6" />
                   <span className="text-xs font-medium">{type.label}</span>
                 </button>
               );
@@ -183,9 +201,10 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">Referral Code</label>
+          <label htmlFor="onboarding-referral-code" className="block text-sm font-medium text-foreground mb-1.5">Referral Code</label>
           <div className="flex gap-2">
             <input
+              id="onboarding-referral-code"
               type="text"
               value={form.referralCode}
               onChange={(e) => updateField('referralCode', e.target.value)}

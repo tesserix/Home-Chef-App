@@ -241,12 +241,15 @@ export default function StaffPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground">
-                    Email *
+                  <label htmlFor="staff-invite-email" className="mb-1.5 block text-sm font-medium text-foreground">
+                    Email <span aria-hidden="true" className="text-muted-foreground">*</span>
                   </label>
                   <input
+                    id="staff-invite-email"
                     type="email"
+                    autoComplete="email"
                     required
+                    aria-required="true"
                     value={form.email}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, email: e.target.value }))
@@ -256,10 +259,13 @@ export default function StaffPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground">
-                    Role *
+                  <label htmlFor="staff-invite-role" className="mb-1.5 block text-sm font-medium text-foreground">
+                    Role <span aria-hidden="true" className="text-muted-foreground">*</span>
                   </label>
                   <select
+                    id="staff-invite-role"
+                    required
+                    aria-required="true"
                     value={form.role}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, role: e.target.value }))
@@ -293,10 +299,11 @@ export default function StaffPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                  <label htmlFor="staff-invite-department" className="mb-1.5 block text-sm font-medium text-foreground">
                     Department
                   </label>
                   <input
+                    id="staff-invite-department"
                     type="text"
                     value={form.department}
                     onChange={(e) =>
@@ -307,10 +314,11 @@ export default function StaffPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                  <label htmlFor="staff-invite-title" className="mb-1.5 block text-sm font-medium text-foreground">
                     Title
                   </label>
                   <input
+                    id="staff-invite-title"
                     type="text"
                     value={form.title}
                     onChange={(e) =>
@@ -322,10 +330,11 @@ export default function StaffPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-foreground">
+                <label htmlFor="staff-invite-message" className="mb-1.5 block text-sm font-medium text-foreground">
                   Message (optional)
                 </label>
                 <textarea
+                  id="staff-invite-message"
                   value={form.message}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, message: e.target.value }))

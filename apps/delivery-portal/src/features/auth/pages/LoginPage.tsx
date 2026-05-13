@@ -149,7 +149,7 @@ export default function LoginPage() {
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-3">
                   {error && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    <div role="alert" aria-live="polite" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                       {error}
                     </div>
                   )}
@@ -162,6 +162,7 @@ export default function LoginPage() {
                       type="email"
                       autoComplete="email"
                       required
+                      aria-required="true"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="mt-1 block w-full rounded-xl border border-border bg-card px-3 py-2.5 text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -178,6 +179,7 @@ export default function LoginPage() {
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
+                        aria-required="true"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="block w-full rounded-xl border border-border bg-card px-3 py-2.5 pr-10 text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -185,10 +187,12 @@ export default function LoginPage() {
                       />
                       <button
                         type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                        className="absolute inset-y-0 right-0 flex items-center rounded pr-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
@@ -260,7 +264,7 @@ export default function LoginPage() {
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-3">
                   {error && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    <div role="alert" aria-live="polite" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                       {error}
                     </div>
                   )}
@@ -273,6 +277,7 @@ export default function LoginPage() {
                       type="email"
                       autoComplete="email"
                       required
+                      aria-required="true"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="mt-1 block w-full rounded-xl border border-border bg-card px-3 py-2.5 text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -289,6 +294,7 @@ export default function LoginPage() {
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
+                        aria-required="true"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="block w-full rounded-xl border border-border bg-card px-3 py-2.5 pr-10 text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -296,10 +302,12 @@ export default function LoginPage() {
                       />
                       <button
                         type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                        className="absolute inset-y-0 right-0 flex items-center rounded pr-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff aria-hidden="true" className="h-4 w-4" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>

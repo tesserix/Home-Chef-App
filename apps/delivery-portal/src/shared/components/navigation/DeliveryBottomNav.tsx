@@ -28,7 +28,7 @@ export function DeliveryBottomNav() {
               aria-current={active ? 'page' : undefined}
               className={`${active ? 'bottom-nav-item-active' : 'bottom-nav-item'} relative touch-target-lg`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon aria-hidden="true" className="h-5 w-5" />
               <span>{item.name}</span>
               {active && (
                 <motion.span

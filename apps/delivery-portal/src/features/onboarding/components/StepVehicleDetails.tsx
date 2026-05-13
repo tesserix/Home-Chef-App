@@ -109,8 +109,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
             {/* Bicycle-specific fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Bicycle Brand</label>
+                <label htmlFor="vehicle-bike-brand" className="block text-sm font-medium text-foreground mb-1.5">Bicycle Brand</label>
                 <input
+                  id="vehicle-bike-brand"
                   type="text"
                   value={form.vehicleMake}
                   onChange={(e) => updateField('vehicleMake', e.target.value)}
@@ -119,8 +120,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Bicycle Model</label>
+                <label htmlFor="vehicle-bike-model" className="block text-sm font-medium text-foreground mb-1.5">Bicycle Model</label>
                 <input
+                  id="vehicle-bike-model"
                   type="text"
                   value={form.vehicleModel}
                   onChange={(e) => updateField('vehicleModel', e.target.value)}
@@ -131,8 +133,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Bicycle Color</label>
+              <label htmlFor="vehicle-bike-color" className="block text-sm font-medium text-foreground mb-1.5">Bicycle Color</label>
               <input
+                id="vehicle-bike-color"
                 type="text"
                 value={form.vehicleColor}
                 onChange={(e) => updateField('vehicleColor', e.target.value)}
@@ -141,18 +144,20 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-3">
+            <div role="radiogroup" aria-labelledby="vehicle-bike-carrier-label">
+              <span id="vehicle-bike-carrier-label" className="block text-sm font-medium text-foreground mb-3">
                 Can your bicycle carry a delivery box / bag? <span aria-hidden="true" className="text-muted-foreground">*</span>
-              </label>
+              </span>
               <p className="mb-3 text-xs text-muted-foreground">
                 You'll need a carrier rack or basket to hold the delivery bag securely.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={form.hasDeliveryBoxSpace === 'yes'}
                   onClick={() => updateField('hasDeliveryBoxSpace', 'yes')}
-                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     form.hasDeliveryBoxSpace === 'yes'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border hover:border-primary/30'
@@ -162,8 +167,10 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={form.hasDeliveryBoxSpace === 'no'}
                   onClick={() => updateField('hasDeliveryBoxSpace', 'no')}
-                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all ${
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     form.hasDeliveryBoxSpace === 'no'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border hover:border-primary/30'
@@ -184,8 +191,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
             {/* Motor vehicle fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Vehicle Make</label>
+                <label htmlFor="vehicle-make" className="block text-sm font-medium text-foreground mb-1.5">Vehicle Make</label>
                 <input
+                  id="vehicle-make"
                   type="text"
                   value={form.vehicleMake}
                   onChange={(e) => updateField('vehicleMake', e.target.value)}
@@ -194,8 +202,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Vehicle Model</label>
+                <label htmlFor="vehicle-model" className="block text-sm font-medium text-foreground mb-1.5">Vehicle Model</label>
                 <input
+                  id="vehicle-model"
                   type="text"
                   value={form.vehicleModel}
                   onChange={(e) => updateField('vehicleModel', e.target.value)}
@@ -207,9 +216,11 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Vehicle Year</label>
+                <label htmlFor="vehicle-year" className="block text-sm font-medium text-foreground mb-1.5">Vehicle Year</label>
                 <input
+                  id="vehicle-year"
                   type="number"
+                  inputMode="numeric"
                   value={form.vehicleYear}
                   onChange={(e) => updateField('vehicleYear', e.target.value)}
                   placeholder="e.g., 2022"
@@ -219,8 +230,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Vehicle Color</label>
+                <label htmlFor="vehicle-color" className="block text-sm font-medium text-foreground mb-1.5">Vehicle Color</label>
                 <input
+                  id="vehicle-color"
                   type="text"
                   value={form.vehicleColor}
                   onChange={(e) => updateField('vehicleColor', e.target.value)}
@@ -231,11 +243,14 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="vehicle-reg-number" className="block text-sm font-medium text-foreground mb-1.5">
                 Vehicle Registration Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
+                id="vehicle-reg-number"
                 type="text"
+                required
+                aria-required="true"
                 value={form.vehicleNumber}
                 onChange={(e) => updateField('vehicleNumber', e.target.value)}
                 placeholder="e.g., KA01AB1234"
@@ -244,11 +259,14 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="vehicle-license-number" className="block text-sm font-medium text-foreground mb-1.5">
                 Driving License Number <span aria-hidden="true" className="text-muted-foreground">*</span>
               </label>
               <input
+                id="vehicle-license-number"
                 type="text"
+                required
+                aria-required="true"
                 value={form.licenseNumber}
                 onChange={(e) => updateField('licenseNumber', e.target.value)}
                 placeholder="e.g., DL1234567890"
