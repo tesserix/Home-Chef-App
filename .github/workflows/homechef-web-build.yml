@@ -91,10 +91,15 @@ jobs:
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
           cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
 
-      # No GKE deploy step here. Cluster rollout is owned by Kargo:
-      # the kargo-homechef Project's prod Stage discovers the new
-      # main-<sha7> tag in the GAR mirror, emits a Freight, and writes
-      # the homechef-web Argo CD Application's helm.parameters.image.tag.
+      # Image push only — the deploy bump happens in the `bump-k8s` job
+      # below, which writes the new main-<sha7> tag (and Knative
+      # updateTimestamp) into argocd/prod/apps/homechef/homechef-web.yaml
+      # in tesserix-k8s. Argo CD picks up the commit and syncs.
+      #
+      # When kargo-homechef is wired (Project + Warehouse + Stage in
+      # tesserix/kargo-manifests), bump-k8s here can be retired in favour
+      # of Kargo discovering the GAR-mirrored tag and writing the same
+      # helm.parameters field via a PromotionTemplate.
 
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
@@ -129,7 +134,7 @@ jobs:
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             echo "**Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Deploy:** Kargo (kargo-homechef:prod) auto-promotes within ~5 min" >> $GITHUB_STEP_SUMMARY
+            echo "**Deploy:** bump-k8s job updates argocd/prod/apps/homechef/homechef-web.yaml on push to main" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -138,6 +143,95 @@ jobs:
           else
             echo "**Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
           fi
+
+  # ─── Bump tesserix-k8s ArgoCD app to new image tag ──────────────────
+  # After the image push succeeds, write the new main-<sha7> tag (and a
+  # fresh Knative updateTimestamp annotation to force a new revision)
+  # into the homechef-web Argo CD Application in tesserix-k8s. Argo CD
+  # auto-syncs on the resulting commit.
+  #
+  # Runs only on push to main. Requires the TESSERIX_K8S_BOT repo secret
+  # — a classic PAT with `repo` scope on tesserix/tesserix-k8s (the
+  # default GITHUB_TOKEN cannot push to a different private repo).
+  bump-k8s:
+    name: Bump tesserix-k8s image tag
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build]
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tesserix-k8s
+        uses: actions/checkout@v4
+        with:
+          repository: tesserix/tesserix-k8s
+          token: ${{ secrets.TESSERIX_K8S_BOT }}
+          path: tesserix-k8s
+          ref: main
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          if command -v yq >/dev/null; then
+            yq --version
+            exit 0
+          fi
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Bump image tag and Knative updateTimestamp
+        env:
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+        run: |
+          set -euo pipefail
+          FILE="tesserix-k8s/argocd/prod/apps/homechef/homechef-web.yaml"
+          TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          NEW_TAG="main-${SHORT_SHA}"
+
+          # Update image.tag parameter
+          yq -i '(.spec.source.helm.parameters[] | select(.name == "image.tag")).value = strenv(NEW_TAG)' "$FILE"
+          # Update Knative updateTimestamp parameter (matches by suffix so the
+          # escaped dot-notation name doesn't have to be quoted in the filter)
+          NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' "$FILE"
+
+          echo "Updated $FILE → image.tag=$NEW_TAG, updateTimestamp=$TIMESTAMP"
+          grep -A1 "image\.tag\|updateTimestamp" "$FILE" | head -10
+
+      - name: Commit & push to tesserix-k8s main
+        working-directory: tesserix-k8s
+        run: |
+          set -euo pipefail
+          git config user.name "tesserix-bot"
+          git config user.email "tesserix-bot@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No image tag changes to commit."
+            exit 0
+          fi
+          git add argocd/prod/apps/homechef/homechef-web.yaml
+          git commit -m "chore(homechef): bump homechef-web to main-${{ steps.sha.outputs.short }}"
+          # Retry on push race (another CI run landing first).
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed — rebasing and retrying."
+            git pull --rebase origin main
+          done
+          echo "Push failed after retries." >&2
+          exit 1
+
+      - name: Bump Summary
+        if: always()
+        run: |
+          echo "## Bump Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** tesserix-k8s argocd/prod/apps/homechef/homechef-web.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**New tag:** \`main-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Source commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   test:
     name: Run Tests
