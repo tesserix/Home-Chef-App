@@ -1,25 +1,31 @@
-import { OttoWidget } from '@tesserix/otto-widget';
+import { OttoWidget, type ReasonOption } from '@tesserix/otto-widget';
 
 import '@tesserix/otto-widget/styles/otto.css';
 
 import { useAuth } from '@/app/providers/AuthProvider';
 
-// HomeChef support chat — thin wrapper around the canonical Otto widget
-// published as @tesserix/otto-widget from slm-support-platform. Pulls the
-// signed-in customer identity from HomeChef's AuthProvider so the widget
-// can prefill name/email and skip the OTP step for logged-in users.
+// HomeChef support chat — thin wrapper around @tesserix/otto-widget.
+// Pulls signed-in identity from the existing AuthProvider so logged-in
+// customers skip OTP. The `reasons` and `tenantId` props tell the
+// backend which per-product SLM + MCP knowledge base to use.
 //
-// REST traffic goes to /api/otto, which apps/web/nginx.conf proxies to
-// support-platform-otto.support-platform.svc.cluster.local:8089 in prod.
-// The WebSocket path leaves nginx and goes straight to otto through the
-// Istio gateway (matching the mark8ly storefront pattern).
-//
-// This replaces a previous bespoke 200-line polling component. The
-// canonical widget brings WebSocket transport, intake reasons,
-// OTP for anonymous users, and reconnect logic. Brand/design-token
-// alignment (herb / paper / Inter) is a follow-up on the widget itself —
-// styling there belongs in @tesserix/otto-widget so every product picks
-// it up rather than diverging again.
+// /api/otto/* is proxied to support-platform-otto via the Istio gateway
+// (see nginx.conf for the SPA routing rules); the WebSocket leaves
+// Next.js entirely and connects directly to otto at
+// /api/v1/storefront/otto/conversations/:id/ws.
+
+// Food-delivery shape — order tracking, delivery problems, chef
+// questions. DOB is unnecessary because HomeChef identifies orders by
+// the signed-in account, not by birthday lookup.
+const HOMECHEF_REASONS: readonly ReasonOption[] = [
+  { value: 'order_tracking', label: 'Order tracking / ETA' },
+  { value: 'delivery_issue', label: 'Delivery problem' },
+  { value: 'refund', label: 'Refund request' },
+  { value: 'chef_question', label: 'Question about a chef or dish' },
+  { value: 'account_issue', label: 'Account / login issue' },
+  { value: 'other', label: 'Something else' },
+];
+
 export function OttoChat() {
   const { user } = useAuth();
 
@@ -33,6 +39,8 @@ export function OttoChat() {
       apiBaseUrl="/api/otto"
       buildWsUrl={buildConversationWsUrl}
       productName="HomeChef Support"
+      tenantId="homechef"
+      reasons={HOMECHEF_REASONS}
       customerName={displayName}
       customerEmail={user?.email ?? undefined}
     />
