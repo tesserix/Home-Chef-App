@@ -440,36 +440,6 @@
   }
   .logo-tagline { @apply text-xs text-muted-foreground; }
 
-  /* Buttons — Ink primary (Cash App / Stripe pattern), Herb accent for go-actions */
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-foreground px-6 py-3
-           text-sm font-medium text-background shadow-card transition-colors
-           hover:bg-ink-soft active:bg-ink
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
-  }
-  .btn-accent {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-herb px-6 py-3
-           text-sm font-medium text-paper shadow-card transition-colors
-           hover:bg-herb-soft active:bg-herb
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
-  }
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border
-           bg-bone px-6 py-3 text-sm font-medium text-foreground transition-colors
-           hover:bg-muted
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
-  }
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-6 py-3
-           text-sm font-medium text-foreground transition-colors hover:bg-muted
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2;
-  }
-  .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-paprika px-6 py-3
-           text-sm font-medium text-paper transition-colors hover:opacity-90 active:opacity-80
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paprika focus-visible:ring-offset-2;
-  }
-
   /* Form inputs — hairline border, herb focus */
   .input-base {
     @apply w-full rounded-md border border-input bg-bone px-3 py-2.5 text-sm text-foreground

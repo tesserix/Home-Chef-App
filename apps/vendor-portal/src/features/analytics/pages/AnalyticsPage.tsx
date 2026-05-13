@@ -76,7 +76,7 @@ export default function AnalyticsPage() {
       {/* Order Trends */}
       <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="mb-4 flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-herb" />
+          <BarChart3 aria-hidden="true" className="h-5 w-5 text-herb" />
           <h2 className="text-lg font-semibold text-ink">Order Trends</h2>
         </div>
         <div className="flex items-end gap-2" style={{ height: 200 }}>
@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
       {/* Revenue Trends */}
       <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-herb" />
+          <TrendingUp aria-hidden="true" className="h-5 w-5 text-herb" />
           <h2 className="text-lg font-semibold text-ink">Revenue Trends</h2>
         </div>
         <div className="flex items-end gap-2" style={{ height: 200 }}>
@@ -181,11 +181,12 @@ export default function AnalyticsPage() {
       {/* Peak Hours */}
       <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
         <div className="mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-amber" />
+          <Clock aria-hidden="true" className="h-5 w-5 text-amber" />
           <h2 className="text-lg font-semibold text-ink">Peak Hours</h2>
         </div>
         <div className="flex items-end gap-1 overflow-x-auto" style={{ height: 200 }}>
           {peakHours.map((item) => (
+            // min-w-[40px] is intentional: keeps hour-by-hour bars legible on narrow viewports (overflow-x-auto handles spillover).
             <div key={item.hour} className="flex min-w-[40px] flex-1 flex-col items-center gap-1">
               <span className="text-xs font-medium text-ink-soft">{item.orders}</span>
               <div
