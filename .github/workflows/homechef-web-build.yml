@@ -150,25 +150,25 @@ jobs:
   # into the homechef-web Argo CD Application in tesserix-k8s. Argo CD
   # auto-syncs on the resulting commit.
   #
-  # Runs only on push to main. Requires the TESSERIX_K8S_BOT repo secret
-  # — a classic PAT with `repo` scope on tesserix/tesserix-k8s (the
-  # default GITHUB_TOKEN cannot push to a different private repo).
+  # Uses the GitHub Contents API directly (PUT /contents/{path}) instead
+  # of git clone + push because git-over-HTTPS in the Actions runner has
+  # auth quirks with fine-grained PATs (a pre-installed credential helper
+  # intercepts and overrides the token). The API is the supported path
+  # for fine-grained PATs and works with the same TESSERIX_K8S_BOT secret.
   bump-k8s:
-    name: Bump tesserix-k8s image tag
+    name: Bump tesserix-k8s image tag via API
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build]
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    env:
+      GH_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
+      REPO: tesserix/tesserix-k8s
+      FILE_PATH: argocd/prod/apps/homechef/homechef-web.yaml
+      SERVICE: homechef-web
     steps:
       - name: Compute short SHA
         id: sha
         run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
-
-      # Clone tesserix-k8s anonymously — the repo is public so no auth
-      # is needed for read. Auth is only needed at push time, applied
-      # explicitly below. This avoids actions/checkout's basic-auth
-      # header format, which fine-grained PATs reject.
-      - name: Clone tesserix-k8s (public, no auth)
-        run: git clone --depth=1 -b main https://github.com/tesserix/tesserix-k8s.git tesserix-k8s
 
       - name: Install yq
         run: |
@@ -182,57 +182,50 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Bump image tag and Knative updateTimestamp
+      - name: Bump image tag and Knative updateTimestamp via API
         env:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
           set -euo pipefail
-          FILE="tesserix-k8s/argocd/prod/apps/homechef/homechef-web.yaml"
-          TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           NEW_TAG="main-${SHORT_SHA}"
+          TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-          # Update image.tag parameter
-          yq -i '(.spec.source.helm.parameters[] | select(.name == "image.tag")).value = strenv(NEW_TAG)' "$FILE"
-          # Update Knative updateTimestamp parameter (matches by suffix so the
-          # escaped dot-notation name doesn't have to be quoted in the filter)
-          NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' "$FILE"
-
-          echo "Updated $FILE → image.tag=$NEW_TAG, updateTimestamp=$TIMESTAMP"
-          grep -A1 "image\.tag\|updateTimestamp" "$FILE" | head -10
-
-      - name: Commit & push to tesserix-k8s main
-        working-directory: tesserix-k8s
-        env:
-          BOT_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
-        run: |
-          set -euo pipefail
-          git config user.name "tesserix-bot"
-          git config user.email "tesserix-bot@users.noreply.github.com"
-          if git diff --quiet; then
-            echo "No image tag changes to commit."
-            exit 0
-          fi
-          git add argocd/prod/apps/homechef/homechef-web.yaml
-          git commit -m "chore(homechef): bump homechef-web to main-${{ steps.sha.outputs.short }}"
-          # Fine-grained PATs require username "x-access-token" in basic auth.
-          # We send the header directly via http.extraheader and explicitly
-          # disable any credential helper the runner pre-installs — without
-          # the override, the runner's helper intercepts and replaces our
-          # token with GITHUB_TOKEN (which has no access to tesserix-k8s).
-          AUTH_B64="$(printf '%s' "x-access-token:${BOT_TOKEN}" | base64 -w0)"
-          PUSH_ARGS=(
-            -c credential.helper=
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_B64}"
-          )
           for attempt in 1 2 3; do
-            if git "${PUSH_ARGS[@]}" push origin HEAD:main; then
+            echo "::group::Attempt ${attempt}: fetch → bump → PUT"
+            # Fetch current file metadata (blob sha for optimistic concurrency
+            # + base64-encoded content)
+            gh api "/repos/${REPO}/contents/${FILE_PATH}?ref=main" > /tmp/meta.json
+            BLOB_SHA="$(jq -r .sha /tmp/meta.json)"
+            jq -r .content /tmp/meta.json | base64 -d > /tmp/current.yaml
+
+            # Apply the two parameter bumps
+            yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
+            NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' /tmp/current.yaml
+
+            echo "New values:"
+            grep -A1 "image\.tag\|updateTimestamp" /tmp/current.yaml | head -8
+
+            # PUT updated file. The `sha` field is the current blob sha —
+            # if another commit lands between our GET and PUT, the API
+            # returns 409 Conflict and we retry the loop.
+            NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
+            if gh api -X PUT "/repos/${REPO}/contents/${FILE_PATH}" \
+                -f message="chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
+                -f content="${NEW_CONTENT}" \
+                -f sha="${BLOB_SHA}" \
+                -f branch="main" \
+                --jq '.commit.sha' > /tmp/commit.sha 2> /tmp/err; then
+              echo "Committed tesserix-k8s@$(cat /tmp/commit.sha)"
+              echo "::endgroup::"
               exit 0
             fi
-            echo "Push attempt $attempt failed — rebasing and retrying."
-            git "${PUSH_ARGS[@]}" fetch origin main
-            git rebase origin/main
+            echo "PUT failed:"
+            cat /tmp/err || true
+            echo "::endgroup::"
+            sleep 2
           done
-          echo "Push failed after retries." >&2
+
+          echo "Failed to bump after 3 attempts." >&2
           exit 1
 
       - name: Bump Summary
