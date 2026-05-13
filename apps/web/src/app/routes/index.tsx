@@ -73,6 +73,12 @@ const DeliveryDashboardPage = lazyWithRetry(() => import('@/features/delivery/pa
 const DeliveryOrdersPage = lazyWithRetry(() => import('@/features/delivery/pages/OrdersPage'));
 const DeliveryEarningsPage = lazyWithRetry(() => import('@/features/delivery/pages/EarningsPage'));
 
+// Legal pages
+const TermsPage = lazyWithRetry(() => import('@/features/legal/pages/TermsPage'));
+const PrivacyPolicyPage = lazyWithRetry(() => import('@/features/legal/pages/PrivacyPolicyPage'));
+const RefundPolicyPage = lazyWithRetry(() => import('@/features/legal/pages/RefundPolicyPage'));
+const CookiePolicyPage = lazyWithRetry(() => import('@/features/legal/pages/CookiePolicyPage'));
+
 // Protected route wrapper
 function ProtectedRoute({
   children,
@@ -123,6 +129,12 @@ export function AppRoutes() {
           <Route path="chefs/:id" element={<ChefDetailPage />} />
           <Route path="feed" element={<SocialFeedPage />} />
           <Route path="favorites" element={<FavoritesPage />} />
+
+          {/* Legal pages — public, under MainLayout shell */}
+          <Route path="terms" element={<TermsPage />} />
+          <Route path="privacy" element={<PrivacyPolicyPage />} />
+          <Route path="refund" element={<RefundPolicyPage />} />
+          <Route path="cookies" element={<CookiePolicyPage />} />
           <Route
             path="cart"
             element={
