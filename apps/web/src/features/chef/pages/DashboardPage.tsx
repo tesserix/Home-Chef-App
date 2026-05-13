@@ -81,7 +81,7 @@ export default function ChefDashboardPage() {
       >
         <div>
           <p className="text-sm text-ink-soft">Today's revenue</p>
-          <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+          <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-foreground sm:text-5xl">
             {fp(stats?.todayRevenue || 0)}
           </p>
           {revenueChange !== undefined && (

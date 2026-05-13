@@ -130,7 +130,7 @@ export default function DeliveryDashboardPage() {
       {/* Lead block — Today's earnings (dominant) */}
       <section>
         <p className="text-sm text-ink-soft">Today's earnings</p>
-        <p className="mt-1 text-5xl font-semibold tabular-nums tracking-tight text-foreground sm:text-6xl">
+        <p className="mt-1 text-4xl font-semibold tabular-nums tracking-tight text-foreground sm:text-5xl">
           {fp(stats?.todayEarnings || 0)}
         </p>
         <p className="mt-2 text-sm text-ink-soft tabular-nums">
