@@ -187,43 +187,51 @@ jobs:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
           set -euo pipefail
-          # Override the runner-injected GITHUB_TOKEN which gh CLI would
-          # otherwise prefer over our GH_TOKEN (set via env above).
-          unset GITHUB_TOKEN
+          # Use plain curl + Bearer header. We tried gh CLI but it ignores
+          # GH_TOKEN inside the Actions runner (auth gets shadowed by the
+          # auto-injected GITHUB_TOKEN even after unset). Direct curl with
+          # the bot PAT via Authorization header is deterministic.
+          BOT_TOKEN="${GH_TOKEN}"
           NEW_TAG="main-${SHORT_SHA}"
           TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          API="https://api.github.com/repos/${REPO}/contents/${FILE_PATH}"
+          AUTH_HDR=(-H "Authorization: Bearer ${BOT_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
 
           for attempt in 1 2 3; do
             echo "::group::Attempt ${attempt}: fetch → bump → PUT"
-            # Fetch current file metadata (blob sha for optimistic concurrency
-            # + base64-encoded content)
-            gh api "/repos/${REPO}/contents/${FILE_PATH}?ref=main" > /tmp/meta.json
-            BLOB_SHA="$(jq -r .sha /tmp/meta.json)"
-            jq -r .content /tmp/meta.json | base64 -d > /tmp/current.yaml
+            RESP="$(curl -sS "${AUTH_HDR[@]}" "${API}?ref=main")"
+            BLOB_SHA="$(echo "$RESP" | jq -r '.sha // empty')"
+            if [ -z "$BLOB_SHA" ]; then
+              echo "GET failed:"
+              echo "$RESP" | jq -r '.message // .' | head -5
+              echo "::endgroup::"
+              sleep 2
+              continue
+            fi
+            echo "$RESP" | jq -r .content | base64 -d > /tmp/current.yaml
 
-            # Apply the two parameter bumps
             yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
             NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' /tmp/current.yaml
-
             echo "New values:"
             grep -A1 "image\.tag\|updateTimestamp" /tmp/current.yaml | head -8
 
-            # PUT updated file. The `sha` field is the current blob sha —
-            # if another commit lands between our GET and PUT, the API
-            # returns 409 Conflict and we retry the loop.
             NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
-            if gh api -X PUT "/repos/${REPO}/contents/${FILE_PATH}" \
-                -f message="chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
-                -f content="${NEW_CONTENT}" \
-                -f sha="${BLOB_SHA}" \
-                -f branch="main" \
-                --jq '.commit.sha' > /tmp/commit.sha 2> /tmp/err; then
-              echo "Committed tesserix-k8s@$(cat /tmp/commit.sha)"
+            PAYLOAD="$(jq -nc \
+              --arg msg "chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
+              --arg content "${NEW_CONTENT}" \
+              --arg sha "${BLOB_SHA}" \
+              --arg branch main \
+              '{message:$msg, content:$content, sha:$sha, branch:$branch}')"
+
+            PUT_RESP="$(curl -sS -X PUT "${AUTH_HDR[@]}" -H "Content-Type: application/json" -d "$PAYLOAD" "$API")"
+            COMMIT_SHA="$(echo "$PUT_RESP" | jq -r '.commit.sha // empty')"
+            if [ -n "$COMMIT_SHA" ]; then
+              echo "Committed tesserix-k8s@${COMMIT_SHA}"
               echo "::endgroup::"
               exit 0
             fi
             echo "PUT failed:"
-            cat /tmp/err || true
+            echo "$PUT_RESP" | jq -r '.message // .' | head -5
             echo "::endgroup::"
             sleep 2
           done
