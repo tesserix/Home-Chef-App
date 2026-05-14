@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"log"
 	"os"
 	"strconv"
@@ -23,19 +24,16 @@ type Config struct {
 	DBName      string
 	DBSSLMode   string
 
-	// JWT
-	JWTSecret          string
-	JWTExpirationHours int
-	RefreshTokenDays   int
+	// BFF trust — apps/auth-bff signs every inbound request with this
+	// shared HMAC; the API rejects anything missing or stale.
+	BFFInternalHMACKey []byte
+	BFFAuthTSWindow    time.Duration
 
-	// OAuth
-	GoogleClientID     string
-	GoogleClientSecret string
-	FacebookAppID      string
-	FacebookAppSecret  string
-	AppleClientID      string
-	AppleTeamID        string
-	AppleKeyID         string
+	// OAuth (public client IDs only — the OIDC handshake lives in
+	// apps/auth-bff via Google Identity Platform). Kept here because
+	// some frontends still receive the public ID from server config.
+	GoogleClientID string
+	FacebookAppID  string
 
 	// GCS Storage
 	GCSProjectID     string
@@ -48,14 +46,14 @@ type Config struct {
 	StripePublishableKey string
 
 	// Razorpay
-	RazorpayKeyID        string
-	RazorpayKeySecret    string
+	RazorpayKeyID         string
+	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
 
 	// SendGrid
-	SendGridAPIKey   string
-	FromEmail        string
-	FromName         string
+	SendGridAPIKey string
+	FromEmail      string
+	FromName       string
 
 	// Twilio
 	TwilioAccountSID  string
@@ -84,28 +82,42 @@ func Load() {
 		log.Println("No .env file found, using environment variables")
 	}
 
-	jwtExpiration, _ := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
-	refreshTokenDays, _ := strconv.Atoi(getEnv("REFRESH_TOKEN_DAYS", "30"))
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
-
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		if isProd {
-			log.Fatal("JWT_SECRET is required in production")
-		}
-		log.Println("WARNING: JWT_SECRET not set — using ephemeral dev secret. DO NOT USE IN PROD.")
-		jwtSecret = "dev-only-do-not-use-in-prod-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	}
-	if isProd && len(jwtSecret) < 32 {
-		log.Fatal("JWT_SECRET must be at least 32 characters in production")
-	}
 
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbURL := os.Getenv("DATABASE_URL")
 	if isProd && dbPassword == "" && dbURL == "" {
 		log.Fatal("DB_PASSWORD or DATABASE_URL is required in production")
+	}
+
+	// BFF HMAC key — required in every environment. apps/auth-bff and the
+	// API must share the exact same value; the k8s ExternalSecret
+	// (prod-homechef-bff-internal-hmac-key) wires the same secret into
+	// both pods.
+	hmacRaw := os.Getenv("BFF_INTERNAL_HMAC_KEY")
+	if hmacRaw == "" {
+		log.Fatal("BFF_INTERNAL_HMAC_KEY required (base64, 16+ bytes)")
+	}
+	hmacKey, err := base64.StdEncoding.DecodeString(hmacRaw)
+	if err != nil {
+		log.Fatalf("BFF_INTERNAL_HMAC_KEY must be valid base64: %v", err)
+	}
+	if len(hmacKey) < 16 {
+		log.Fatal("BFF_INTERNAL_HMAC_KEY must decode to at least 16 bytes")
+	}
+
+	// Clock-skew window for the X-Auth-Ts header. Default 60s — same as
+	// what auth-bff stamps with. Operators can widen it for laggy
+	// cross-region environments.
+	windowSecs := 60
+	if v := os.Getenv("BFF_AUTH_TS_WINDOW_SECONDS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			log.Fatal("BFF_AUTH_TS_WINDOW_SECONDS must be a positive integer")
+		}
+		windowSecs = n
 	}
 
 	AppConfig = &Config{
@@ -122,19 +134,13 @@ func Load() {
 		DBName:      getEnv("DB_NAME", "homechef"),
 		DBSSLMode:   getEnv("DB_SSLMODE", "disable"),
 
-		// JWT
-		JWTSecret:          jwtSecret,
-		JWTExpirationHours: jwtExpiration,
-		RefreshTokenDays:   refreshTokenDays,
+		// BFF trust
+		BFFInternalHMACKey: hmacKey,
+		BFFAuthTSWindow:    time.Duration(windowSecs) * time.Second,
 
-		// OAuth
-		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-		FacebookAppID:      getEnv("FACEBOOK_APP_ID", ""),
-		FacebookAppSecret:  getEnv("FACEBOOK_APP_SECRET", ""),
-		AppleClientID:      getEnv("APPLE_CLIENT_ID", ""),
-		AppleTeamID:        getEnv("APPLE_TEAM_ID", ""),
-		AppleKeyID:         getEnv("APPLE_KEY_ID", ""),
+		// OAuth public IDs (secrets removed — owned by auth-bff/GIP)
+		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+		FacebookAppID:  getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage
 		GCSProjectID:     getEnv("GCS_PROJECT_ID", "tesseracthub-480811"),

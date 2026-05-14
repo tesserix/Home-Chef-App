@@ -1,8 +1,6 @@
 package routes
 
 import (
-	"encoding/base64"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -17,42 +15,23 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// loadBFFHMACKey reads the shared HMAC key used to verify identity headers
-// signed by apps/auth-bff. Required in every environment; the server fails
-// fast at boot when it's missing or too short so we never accept unsigned
-// upstream traffic.
-//
-// TODO(task-2.7): move this read into config.Load() and surface it as
-// config.AppConfig.BFFInternalHMACKey alongside the other secrets.
-func loadBFFHMACKey() []byte {
-	raw := os.Getenv("BFF_INTERNAL_HMAC_KEY")
-	if raw == "" {
-		log.Fatal("BFF_INTERNAL_HMAC_KEY required (base64, 16+ bytes)")
-	}
-	key, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || len(key) < 16 {
-		log.Fatal("BFF_INTERNAL_HMAC_KEY required (base64, 16+ bytes)")
-	}
-	return key
-}
-
 // bffAuth returns a fresh BFFAuth middleware configured with the loaded HMAC
-// key and a 60-second freshness window. Called from each route group so the
-// closure captures the key once at boot.
-func bffAuth(key []byte) gin.HandlerFunc {
+// key and freshness window pulled from config. Called from each route group
+// so the closure captures the key once at boot.
+func bffAuth(key []byte, window time.Duration) gin.HandlerFunc {
 	return middleware.BFFAuth(middleware.BFFAuthConfig{
 		HMACKey: key,
-		Window:  time.Minute,
+		Window:  window,
 	})
 }
 
 // bffAuthOptional is the optional-auth counterpart to bffAuth — used for
 // surfaces that render publicly but enrich the response when a signed
 // identity is attached (chef listings, social feed).
-func bffAuthOptional(key []byte) gin.HandlerFunc {
+func bffAuthOptional(key []byte, window time.Duration) gin.HandlerFunc {
 	return middleware.BFFAuthOptional(middleware.BFFAuthConfig{
 		HMACKey: key,
-		Window:  time.Minute,
+		Window:  window,
 	})
 }
 
@@ -125,8 +104,11 @@ func SetupRouter() *gin.Engine {
 	r.Use(cors.New(corsConfig))
 
 	// Shared HMAC key for verifying BFF-signed identity headers. Loaded once
-	// here so the same []byte is captured by every protected route group.
-	bffKey := loadBFFHMACKey()
+	// at config.Load() so the same []byte is captured by every protected
+	// route group; the matching value is wired into apps/auth-bff via the
+	// same k8s ExternalSecret.
+	bffKey := config.AppConfig.BFFInternalHMACKey
+	bffWindow := config.AppConfig.BFFAuthTSWindow
 
 	// Initialize handlers. Note: the legacy AuthHandler was removed in the
 	// GIP migration (Task 2.6) — all auth flows now live in apps/auth-bff.
@@ -183,7 +165,7 @@ func SetupRouter() *gin.Engine {
 	// signs the upgrade request via its mesh path; we verify the same HMAC
 	// here so a hijacked browser session can't open a socket directly.
 	wsGroup := r.Group("/ws")
-	wsGroup.Use(bffAuth(bffKey))
+	wsGroup.Use(bffAuth(bffKey, bffWindow))
 	{
 		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
 		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
@@ -194,7 +176,7 @@ func SetupRouter() *gin.Engine {
 	// with the shared HMAC; nothing else should ever reach this group.
 	internalUsersHandler := handlers.NewInternalUsersHandler(database.DB)
 	internal := r.Group("/internal")
-	internal.Use(bffAuth(bffKey))
+	internal.Use(bffAuth(bffKey, bffWindow))
 	{
 		internal.POST("/users/upsert", internalUsersHandler.Upsert)
 	}
@@ -251,7 +233,7 @@ func SetupRouter() *gin.Engine {
 		// Staff invitation acceptance — the auth-bff session is required so
 		// the invitee is bound to a real GIP identity at accept time.
 		staffInvite := v1.Group("/staff/invitations")
-		staffInvite.Use(bffAuth(bffKey))
+		staffInvite.Use(bffAuth(bffKey, bffWindow))
 		{
 			staffInvite.POST("/accept", staffHandler.AcceptInvitation)
 		}
@@ -260,7 +242,7 @@ func SetupRouter() *gin.Engine {
 		// identity from the BFF lets us surface per-user state (favorites,
 		// hidden chefs, etc.) when present.
 		chefs := v1.Group("/chefs")
-		chefs.Use(bffAuthOptional(bffKey))
+		chefs.Use(bffAuthOptional(bffKey, bffWindow))
 		{
 			chefs.GET("", chefHandler.ListChefs)
 			chefs.GET("/:id", chefHandler.GetChef)
@@ -270,7 +252,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef onboarding (authenticated, but no chef role required — user is becoming a chef)
 		chefOnboarding := v1.Group("/chef")
-		chefOnboarding.Use(bffAuth(bffKey))
+		chefOnboarding.Use(bffAuth(bffKey, bffWindow))
 		{
 			chefOnboarding.GET("/onboarding/status", uploadHandler.GetOnboardingStatus)
 		chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
@@ -284,7 +266,7 @@ func SetupRouter() *gin.Engine {
 
 		// Menu management routes (authenticated — accessible during onboarding and after)
 		chefMenu := v1.Group("/chef/menu")
-		chefMenu.Use(bffAuth(bffKey))
+		chefMenu.Use(bffAuth(bffKey, bffWindow))
 		{
 			chefMenu.GET("", menuHandler.GetChefMenuItems)
 			chefMenu.GET("/categories", menuHandler.GetCategories)
@@ -301,7 +283,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef dashboard routes (chef only)
 		chefDashboard := v1.Group("/chef")
-		chefDashboard.Use(bffAuth(bffKey), middleware.RequireChef())
+		chefDashboard.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
@@ -328,7 +310,7 @@ func SetupRouter() *gin.Engine {
 
 		// Customer order routes
 		orders := v1.Group("/orders")
-		orders.Use(bffAuth(bffKey))
+		orders.Use(bffAuth(bffKey, bffWindow))
 		{
 			orders.POST("", orderHandler.CreateOrder)
 			orders.GET("", orderHandler.GetOrders)
@@ -343,7 +325,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chat routes (authenticated)
 		chat := v1.Group("/chat")
-		chat.Use(bffAuth(bffKey))
+		chat.Use(bffAuth(bffKey, bffWindow))
 		{
 			chat.GET("/rooms", chatHandler.ListChatRooms)
 			chat.GET("/:roomId/messages", chatHandler.GetMessages)
@@ -353,7 +335,7 @@ func SetupRouter() *gin.Engine {
 
 		// Support ticket routes (authenticated)
 		support := v1.Group("/support")
-		support.Use(bffAuth(bffKey))
+		support.Use(bffAuth(bffKey, bffWindow))
 		{
 			support.POST("/tickets", supportHandler.CreateTicket)
 			support.GET("/tickets", supportHandler.GetMyTickets)
@@ -364,14 +346,14 @@ func SetupRouter() *gin.Engine {
 
 		// Promo code validation (authenticated)
 		promo := v1.Group("/promo")
-		promo.Use(bffAuth(bffKey))
+		promo.Use(bffAuth(bffKey, bffWindow))
 		{
 			promo.POST("/validate", promoHandler.ValidatePromoCode)
 		}
 
 		// Cart routes
 		cart := v1.Group("/cart")
-		cart.Use(bffAuth(bffKey))
+		cart.Use(bffAuth(bffKey, bffWindow))
 		{
 			// cart.GET("", cartHandler.GetCart)
 			// cart.POST("/items", cartHandler.AddItem)
@@ -383,7 +365,7 @@ func SetupRouter() *gin.Engine {
 		// Social feed routes — anonymous-friendly; like/comment are gated
 		// inside the handlers by checking for a userID on the context.
 		social := v1.Group("/social")
-		social.Use(bffAuthOptional(bffKey))
+		social.Use(bffAuthOptional(bffKey, bffWindow))
 		{
 			social.GET("/feed", socialHandler.GetFeed)
 			social.GET("/posts/:id", socialHandler.GetPost)
@@ -393,7 +375,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef social posts (chef only)
 		chefSocial := v1.Group("/chef/posts")
-		chefSocial.Use(bffAuth(bffKey), middleware.RequireChef())
+		chefSocial.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefSocial.GET("", socialHandler.GetChefPosts)
 			chefSocial.POST("", socialHandler.CreatePost)
@@ -403,7 +385,7 @@ func SetupRouter() *gin.Engine {
 
 		// Catering routes
 		catering := v1.Group("/catering")
-		catering.Use(bffAuth(bffKey))
+		catering.Use(bffAuth(bffKey, bffWindow))
 		{
 			catering.POST("/requests", cateringHandler.CreateRequest)
 			catering.GET("/requests", cateringHandler.GetMyRequests)
@@ -414,7 +396,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef catering (chef only)
 		chefCatering := v1.Group("/chef/catering")
-		chefCatering.Use(bffAuth(bffKey), middleware.RequireChef())
+		chefCatering.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
 			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
@@ -423,7 +405,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery partner onboarding (authenticated, no delivery role required)
 		deliveryOnboarding := v1.Group("/delivery")
-		deliveryOnboarding.Use(bffAuth(bffKey))
+		deliveryOnboarding.Use(bffAuth(bffKey, bffWindow))
 		{
 			deliveryOnboarding.GET("/onboarding/status", deliveryHandler.GetOnboardingStatus)
 			deliveryOnboarding.POST("/onboarding", deliveryHandler.Onboarding)
@@ -431,7 +413,7 @@ func SetupRouter() *gin.Engine {
 
 		// Driver onboarding (authenticated, no role required — user is becoming a driver)
 		driverOnboarding := v1.Group("/driver")
-		driverOnboarding.Use(bffAuth(bffKey))
+		driverOnboarding.Use(bffAuth(bffKey, bffWindow))
 		{
 			driverOnboarding.GET("/onboarding/status", driverHandler.GetDriverOnboardingStatus)
 			driverOnboarding.POST("/onboarding/personal", driverHandler.DriverOnboardingPersonal)
@@ -448,7 +430,7 @@ func SetupRouter() *gin.Engine {
 
 		// Driver referral routes (delivery role required)
 		driverReferral := v1.Group("/driver/referral")
-		driverReferral.Use(bffAuth(bffKey), middleware.RequireDelivery())
+		driverReferral.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
 		{
 			driverReferral.GET("/code", driverHandler.GetReferralCode)
 			driverReferral.GET("/stats", driverHandler.GetReferralStats)
@@ -456,7 +438,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery staff routes — enforced with granular staff permissions
 		deliveryStaff := v1.Group("/delivery/staff")
-		deliveryStaff.Use(bffAuth(bffKey), middleware.RequireDelivery())
+		deliveryStaff.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
 		{
 			deliveryStaff.GET("/me", staffHandler.GetMyStaffProfile)   // No permission needed — own profile
 			deliveryStaff.GET("/roles", staffHandler.GetStaffRoles)    // No permission needed — role definitions
@@ -481,7 +463,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery partner routes (delivery role required)
 		delivery := v1.Group("/delivery")
-		delivery.Use(bffAuth(bffKey), middleware.RequireDelivery())
+		delivery.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
 		{
 			delivery.GET("/stats", deliveryHandler.GetStats)
 			delivery.GET("/profile", deliveryHandler.GetProfile)
@@ -508,7 +490,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef promotion routes (featured ads)
 		chefPromotion := v1.Group("/chef/promotion")
-		chefPromotion.Use(bffAuth(bffKey), middleware.RequireChef())
+		chefPromotion.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefPromotion.GET("/pricing", promotionHandler.GetFeaturedAdPricing)
 			chefPromotion.POST("/purchase", promotionHandler.PurchaseFeaturedAd)
@@ -518,7 +500,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef subscription routes (chef role required)
 		chefSubscription := v1.Group("/chef/subscription")
-		chefSubscription.Use(bffAuth(bffKey), middleware.RequireChef())
+		chefSubscription.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
 		{
 			chefSubscription.GET("", subscriptionHandler.GetSubscription)
 			chefSubscription.GET("/plans", subscriptionHandler.GetAvailablePlans)
@@ -534,7 +516,7 @@ func SetupRouter() *gin.Engine {
 		// Note: /plans and /plan are registered in the onboarding group above (auth-only)
 		// to allow plan selection during onboarding before delivery role is assigned
 		driverSubscription := v1.Group("/driver/subscription")
-		driverSubscription.Use(bffAuth(bffKey), middleware.RequireDelivery())
+		driverSubscription.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
 		{
 			driverSubscription.GET("", subscriptionHandler.GetSubscription)
 			driverSubscription.POST("/choose-plan", subscriptionHandler.ChoosePlan)
@@ -550,7 +532,7 @@ func SetupRouter() *gin.Engine {
 		// idempotent.
 		paymentLimit := middleware.RateLimitByUser(2, 5) // 2 rps sustained, 5 burst per user
 		orderPayments := v1.Group("/payments")
-		orderPayments.Use(bffAuth(bffKey), paymentLimit)
+		orderPayments.Use(bffAuth(bffKey, bffWindow), paymentLimit)
 		{
 			orderPayments.POST("/order/:orderId/create", paymentHandler.CreateOrderPayment)
 			orderPayments.POST("/order/:orderId/verify", paymentHandler.VerifyPayment)
@@ -559,7 +541,7 @@ func SetupRouter() *gin.Engine {
 
 		// Admin routes
 		admin := v1.Group("/admin")
-		admin.Use(bffAuth(bffKey), middleware.RequireAdmin())
+		admin.Use(bffAuth(bffKey, bffWindow), middleware.RequireAdmin())
 		{
 			// Dashboard
 			admin.GET("/stats", adminHandler.GetStats)
@@ -694,7 +676,7 @@ func SetupRouter() *gin.Engine {
 
 		// Addresses
 		addresses := v1.Group("/addresses")
-		addresses.Use(bffAuth(bffKey))
+		addresses.Use(bffAuth(bffKey, bffWindow))
 		{
 			addresses.GET("", addressHandler.GetAddresses)
 			addresses.POST("", addressHandler.CreateAddress)
@@ -704,7 +686,7 @@ func SetupRouter() *gin.Engine {
 
 		// Payment methods
 		payments := v1.Group("/payment-methods")
-		payments.Use(bffAuth(bffKey))
+		payments.Use(bffAuth(bffKey, bffWindow))
 		{
 			// payments.GET("", paymentHandler.GetPaymentMethods)
 			// payments.POST("", paymentHandler.AddPaymentMethod)
@@ -714,7 +696,7 @@ func SetupRouter() *gin.Engine {
 
 		// Customer profile & onboarding
 		customer := v1.Group("/customer")
-		customer.Use(bffAuth(bffKey))
+		customer.Use(bffAuth(bffKey, bffWindow))
 		{
 			customer.GET("/profile", customerHandler.GetCustomerProfile)
 			customer.PUT("/profile", customerHandler.UpdateCustomerProfile)
@@ -727,14 +709,14 @@ func SetupRouter() *gin.Engine {
 
 		// Reviews (authenticated customers)
 		reviews := v1.Group("/reviews")
-		reviews.Use(bffAuth(bffKey))
+		reviews.Use(bffAuth(bffKey, bffWindow))
 		{
 			reviews.POST("", reviewHandler.CreateReview)
 		}
 
 		// Favorites (authenticated customers)
 		favorites := v1.Group("/favorites")
-		favorites.Use(bffAuth(bffKey))
+		favorites.Use(bffAuth(bffKey, bffWindow))
 		{
 			favorites.GET("/chefs", favoriteHandler.ListFavoriteChefs)
 			favorites.GET("/chefs/ids", favoriteHandler.ListFavoriteChefIDs)
@@ -744,7 +726,7 @@ func SetupRouter() *gin.Engine {
 
 		// Notifications
 		notifications := v1.Group("/notifications")
-		notifications.Use(bffAuth(bffKey))
+		notifications.Use(bffAuth(bffKey, bffWindow))
 		{
 			notifications.GET("", notificationHandler.GetNotifications)
 			notifications.GET("/unread-count", notificationHandler.GetUnreadCount)
