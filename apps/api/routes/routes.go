@@ -3,7 +3,6 @@ package routes
 import (
 	"encoding/base64"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -54,15 +54,6 @@ func bffAuthOptional(key []byte) gin.HandlerFunc {
 		HMACKey: key,
 		Window:  time.Minute,
 	})
-}
-
-// upsertUserStub is the temporary handler mounted at POST /internal/users/upsert.
-// The real implementation (idempotent user upsert keyed on GIP UID) lands in
-// Task 2.2 — this stub exists only so apps/auth-bff has a route to call once
-// signing is wired up. Returning a fixed user_id keeps integration tests happy
-// without lying about DB state.
-func upsertUserStub(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"user_id": "stub"})
 }
 
 // allowedOrigins resolves the CORS allowlist. In production we ONLY trust the
@@ -201,10 +192,11 @@ func SetupRouter() *gin.Engine {
 	// Internal endpoints — invoked by apps/auth-bff to materialize user
 	// rows when a new GIP identity logs in. The BFF signs every request
 	// with the shared HMAC; nothing else should ever reach this group.
+	internalUsersHandler := handlers.NewInternalUsersHandler(database.DB)
 	internal := r.Group("/internal")
 	internal.Use(bffAuth(bffKey))
 	{
-		internal.POST("/users/upsert", upsertUserStub)
+		internal.POST("/users/upsert", internalUsersHandler.Upsert)
 	}
 
 	// API v1 routes
