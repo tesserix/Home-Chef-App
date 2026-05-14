@@ -73,6 +73,9 @@ export default function PrivacyPolicyPage() {
                 {readingTime}
               </span>
             </div>
+            <p className="mt-4 text-sm text-ink-soft">
+              Fe3dr is a product of <strong>Tesserix Pty Ltd</strong> (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. Day-to-day operations are conducted from Mumbai, India and Sydney, Australia.
+            </p>
           </header>
 
           {/* Plain-language summary */}
@@ -129,11 +132,8 @@ export default function PrivacyPolicyPage() {
               1. Who we are
             </h2>
             <p className="text-ink leading-relaxed mb-4">
-              <strong>[Legal Entity Name]</strong> (a company registered under
-              the Companies Act 2013, with registered office at{' '}
-              <strong>[Address]</strong>, CIN <strong>[CIN]</strong>) operates
-              Home Chef. In this policy we call ourselves &quot;we,&quot;
-              &quot;us,&quot; or Home Chef. We call you &quot;you.&quot;
+              <strong>Tesserix Pty Ltd</strong> (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia, with operations in Mumbai, India and Sydney, Australia, operates Fe3dr. In this policy we call ourselves &quot;we,&quot;
+              &quot;us,&quot; or Fe3dr. We call you &quot;you.&quot;
             </p>
             <p className="text-ink leading-relaxed mb-4">
               Under the Digital Personal Data Protection Act, 2023 (the{' '}
@@ -159,7 +159,7 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="text-ink leading-relaxed mb-4">
               We collect different categories of personal data depending on
-              how you use Home Chef. We collect only what we need.
+              how you use Fe3dr. We collect only what we need.
             </p>
 
             <h3 className="text-lg font-semibold text-ink mt-6 mb-2">
@@ -255,7 +255,7 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="text-ink leading-relaxed mb-4">
               We do not sell your personal data. We share it only with the
-              partners who help us run Home Chef, and only for the purpose
+              partners who help us run Fe3dr, and only for the purpose
               we collected it.
             </p>
 
@@ -593,7 +593,7 @@ export default function PrivacyPolicyPage() {
                     We do not knowingly collect data from minors under 18
                   </h3>
                   <p className="text-ink leading-relaxed mb-3">
-                    Home Chef is intended for adults. Under Section 9 of the
+                    Fe3dr is intended for adults. Under Section 9 of the
                     DPDP Act, processing a child&apos;s personal data requires
                     verifiable parental consent, and we do not have a parental
                     consent mechanism today.
@@ -655,12 +655,13 @@ export default function PrivacyPolicyPage() {
                   </p>
                 </div>
               </div>
+              {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
               <dl className="grid gap-y-3 sm:grid-cols-[160px_1fr] text-ink">
                 <dt className="font-semibold">Name</dt>
                 <dd>[Grievance Officer Name]</dd>
 
                 <dt className="font-semibold">Designation</dt>
-                <dd>Grievance Officer, [Legal Entity Name]</dd>
+                <dd>Grievance Officer, Tesserix Pty Ltd</dd>
 
                 <dt className="font-semibold inline-flex items-center gap-1.5">
                   <Mail aria-hidden="true" className="h-4 w-4" /> Email
@@ -677,10 +678,10 @@ export default function PrivacyPolicyPage() {
                 <dt className="font-semibold inline-flex items-center gap-1.5">
                   <Phone aria-hidden="true" className="h-4 w-4" /> Phone
                 </dt>
-                <dd>[+91 XXXXX XXXXX] (Mon–Fri, 10:00–18:00 IST)</dd>
+                <dd>[Grievance Officer Phone] (Mon–Fri, 10:00–18:00 IST)</dd>
 
                 <dt className="font-semibold">Postal address</dt>
-                <dd>[Registered Office Address]</dd>
+                <dd>Tesserix Pty Ltd, New South Wales, Australia (operations: Mumbai, India and Sydney, Australia)</dd>
 
                 <dt className="font-semibold">Response time</dt>
                 <dd>Acknowledgement within 24 hours, resolution within 15 days</dd>

@@ -3,7 +3,7 @@ import { AlertTriangle, Cookie, Mail, ExternalLink } from 'lucide-react';
 import { Badge, Card } from '@/shared/components/ui';
 
 /**
- * Cookie Policy — customer-facing page for the Home Chef web app.
+ * Cookie Policy — customer-facing page for the Fe3dr web app.
  *
  * Covers DPDP Act §5 (Notice) requirements + best-practice cookie disclosures:
  * cookie categories, third-party cookies (Razorpay/Stripe), how to manage
@@ -63,6 +63,9 @@ export default function CookiePolicyPage() {
                 <dd className="tabular-nums">{effectiveDate}</dd>
               </div>
             </dl>
+            <p className="mt-4 text-sm text-ink-soft">
+              Fe3dr is a product of <strong>Tesserix Pty Ltd</strong> (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. Day-to-day operations are conducted from Mumbai, India and Sydney, Australia.
+            </p>
           </div>
         </div>
       </section>
@@ -587,13 +590,14 @@ export default function CookiePolicyPage() {
                 Questions about cookies, or want to file a complaint about
                 how we handle them? Reach our Grievance Officer.
               </p>
+              {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
               <Card variant="filled" padding="md" className="mt-6">
                 <dl className="space-y-3 text-sm">
                   <div className="flex flex-wrap gap-x-3">
                     <dt className="font-medium text-ink">
                       Grievance Officer:
                     </dt>
-                    <dd className="text-ink-soft">[Name to be appointed]</dd>
+                    <dd className="text-ink-soft">[Grievance Officer Name]</dd>
                   </div>
                   <div className="flex flex-wrap gap-x-3">
                     <dt className="font-medium text-ink">Email:</dt>

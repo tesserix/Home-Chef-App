@@ -49,7 +49,7 @@ export default function RegisterPage() {
       return;
     }
     if (!confirmAge) {
-      setError('You must be at least 18 to use Home Chef.');
+      setError('You must be at least 18 to use Fe3dr.');
       return;
     }
     setLoading(true);

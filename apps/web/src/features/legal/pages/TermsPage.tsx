@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, Info, ShieldAlert, Clock } from 'lucide-react';
 
 /**
- * Terms of Service — Home Chef customer web app.
+ * Terms of Service — Fe3dr customer web app.
  *
  * DRAFT. This page is plain-language working copy intended for legal review.
  * It is not legal advice and is not binding until reviewed and signed off by
@@ -11,7 +11,7 @@ import { AlertTriangle, Info, ShieldAlert, Clock } from 'lucide-react';
  */
 export default function TermsPage() {
   useEffect(() => {
-    document.title = 'Terms of Service — Home Chef';
+    document.title = 'Terms of Service — Fe3dr';
   }, []);
 
   return (
@@ -44,7 +44,10 @@ export default function TermsPage() {
               <Clock aria-hidden="true" className="h-4 w-4" />8 minute read
             </span>
             <span aria-hidden="true">·</span>
-            <span>Applies to customers of Home Chef in India</span>
+            <span>Applies to customers of Fe3dr in India</span>
+          </p>
+          <p className="mt-4 text-sm text-ink-soft">
+            Fe3dr is a product of <strong>Tesserix Pty Ltd</strong> (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. Day-to-day operations are conducted from Mumbai, India and Sydney, Australia.
           </p>
         </header>
 
@@ -60,7 +63,7 @@ export default function TermsPage() {
                 Here's what this page covers, in one paragraph
               </h2>
               <p className="mt-2 text-sm text-ink-soft">
-                Home Chef is a marketplace that connects you with home cooks in your city. We
+                Fe3dr is a marketplace that connects you with home cooks in your city. We
                 do not cook your food. When you place an order, your contract for the meal is
                 with the chef, and your contract for the ride is with the driver. We hold your
                 payment safely until your order is delivered, and we refund you within seven
@@ -81,7 +84,7 @@ export default function TermsPage() {
             </h2>
             <p className="mt-3">
               These terms form a contract between you and us. They apply every time you visit
-              our website, create an account, or place an order. By using Home Chef, you agree
+              our website, create an account, or place an order. By using Fe3dr, you agree
               to these terms. If you do not agree, please do not use the service.
             </p>
             <p className="mt-3">
@@ -95,13 +98,13 @@ export default function TermsPage() {
             </p>
           </section>
 
-          {/* 2. What Home Chef does */}
+          {/* 2. What Fe3dr does */}
           <section aria-labelledby="what-we-do">
             <h2 id="what-we-do" className="text-xl font-semibold text-ink">
-              2. What Home Chef does
+              2. What Fe3dr does
             </h2>
             <p className="mt-3">
-              <strong className="font-semibold text-ink">Home Chef</strong> is a technology
+              <strong className="font-semibold text-ink">Fe3dr</strong> is a technology
               platform. We connect customers who want home-cooked food with independent home
               cooks (each a <strong className="font-semibold text-ink">Chef</strong>) and
               independent delivery partners (each a <strong className="font-semibold text-ink">Driver</strong>).
@@ -126,7 +129,7 @@ export default function TermsPage() {
               3. Your account
             </h2>
             <p className="mt-3">
-              You must be at least 18 years old to use Home Chef. If you are between 13 and 18,
+              You must be at least 18 years old to use Fe3dr. If you are between 13 and 18,
               a parent or guardian must open the account and place orders for you. We do not
               knowingly serve children under 13.
             </p>
@@ -300,7 +303,7 @@ export default function TermsPage() {
             </Callout>
 
             <p className="mt-3">
-              Every chef on Home Chef must hold the food-business registration or licence
+              Every chef on Fe3dr must hold the food-business registration or licence
               required by the Food Safety and Standards Authority of India (FSSAI). We check
               that registration before a chef can list a menu. If you suspect a chef is
               breaching FSSAI rules, please tell us via the grievance route in section 16.
@@ -318,10 +321,10 @@ export default function TermsPage() {
               relevant to the order.
             </p>
             <p className="mt-3">
-              When you post a review, photo, or comment on Home Chef, you keep ownership of
+              When you post a review, photo, or comment on Fe3dr, you keep ownership of
               what you wrote and what you uploaded. You give us a worldwide, non-exclusive,
-              royalty-free licence to host, display, and share that content on Home Chef and in
-              our marketing of Home Chef. You can ask us to take down a review you wrote by
+              royalty-free licence to host, display, and share that content on Fe3dr and in
+              our marketing of Fe3dr. You can ask us to take down a review you wrote by
               contacting our grievance officer.
             </p>
             <p className="mt-3">
@@ -343,7 +346,7 @@ export default function TermsPage() {
               9. Prohibited use
             </h2>
             <p className="mt-3">
-              When you use Home Chef, please do not:
+              When you use Fe3dr, please do not:
             </p>
             <ul className="ml-5 mt-3 list-disc space-y-2 marker:text-ink-muted">
               <li>place an order you do not intend to pay for or receive;</li>
@@ -368,12 +371,12 @@ export default function TermsPage() {
                 threatening or abusive messages;
               </li>
               <li>
-                use Home Chef to break any law, including tax law, food-safety law, and
+                use Fe3dr to break any law, including tax law, food-safety law, and
                 consumer-protection law.
               </li>
             </ul>
             <p className="mt-3">
-              If we believe you have used Home Chef for any of the above, we may pause your
+              If we believe you have used Fe3dr for any of the above, we may pause your
               account, refuse future orders, and report you to the relevant authorities.
             </p>
           </section>
@@ -411,7 +414,7 @@ export default function TermsPage() {
               will do our best to help you recover from them.
             </p>
             <p className="mt-3">
-              We do our best to keep Home Chef available. We may have to take the service down
+              We do our best to keep Fe3dr available. We may have to take the service down
               for maintenance, security work, or to respond to an incident. We do not promise
               the service will be uninterrupted or error-free.
             </p>
@@ -423,7 +426,7 @@ export default function TermsPage() {
               11. Intermediary status
             </h2>
             <p className="mt-3">
-              We operate Home Chef as an intermediary under section 79 of the Information
+              We operate Fe3dr as an intermediary under section 79 of the Information
               Technology Act, 2000 and the Information Technology (Intermediary Guidelines and
               Digital Media Ethics Code) Rules, 2021. We host content that chefs, drivers, and
               customers post. We do not author menus, reviews, or driver messages, and we are
@@ -431,13 +434,13 @@ export default function TermsPage() {
             </p>
             <p className="mt-3">
               Chefs and drivers are independent. They are not our employees. We do not direct
-              how a chef cooks or how a driver rides. They use Home Chef as a tool. They are
+              how a chef cooks or how a driver rides. They use Fe3dr as a tool. They are
               responsible for their own tax, their own insurance, and their own compliance with
               the law.
             </p>
             <p className="mt-3">
               We follow the takedown process the Intermediary Rules require. If you believe
-              content on Home Chef is unlawful, you can report it to our grievance officer (see
+              content on Fe3dr is unlawful, you can report it to our grievance officer (see
               section 16). We respond within the timelines those rules require.
             </p>
           </section>
@@ -448,10 +451,7 @@ export default function TermsPage() {
               12. Governing law and jurisdiction
             </h2>
             <p className="mt-3">
-              These terms are governed by the laws of India. The courts of Bengaluru, Karnataka
-              have exclusive jurisdiction over any dispute that arises out of or in connection
-              with these terms or your use of Home Chef, subject to the dispute-resolution
-              process in section 13.
+              These terms are governed by the laws of New South Wales, Australia for matters relating to the company, and by the laws of India for matters relating to the platform's operations in India, food safety (FSSAI), payments (RBI), and tax (GST). Disputes are heard by the Courts of New South Wales, Australia (for matters governed by Australian law) and the courts of Mumbai, India (for matters governed by Indian law), subject to the dispute-resolution process in section 13.
             </p>
             <p className="mt-3">
               If you are a consumer, this clause does not stop you from bringing a complaint to
@@ -494,7 +494,7 @@ export default function TermsPage() {
             </ul>
             <p className="mt-3">
               For commercial disputes that are not consumer matters, we agree to arbitration in
-              India under the Arbitration and Conciliation Act, 1996. The seat is Bengaluru.
+              India under the Arbitration and Conciliation Act, 1996. The seat is Mumbai.
               There is a single arbitrator, appointed by mutual agreement. The language is
               English. Each side pays its own costs unless the arbitrator decides otherwise.
               This clause does not apply to a consumer dispute that you choose to take to a
@@ -528,7 +528,7 @@ export default function TermsPage() {
               them.
             </p>
             <p className="mt-3">
-              By using Home Chef, you confirm that you have read the Privacy Policy. You can
+              By using Fe3dr, you confirm that you have read the Privacy Policy. You can
               withdraw your consent for optional uses (such as marketing emails) from your
               account settings at any time. Withdrawing consent does not affect the legality of
               what we did before you withdrew it.
@@ -547,7 +547,7 @@ export default function TermsPage() {
             <p className="mt-3">
               For material changes — for example, a change to how we handle refunds, how
               disputes are resolved, or what fees you pay — we give you 30 days' notice by
-              email and through a banner in the app. If you continue to use Home Chef after the
+              email and through a banner in the app. If you continue to use Fe3dr after the
               notice period, you accept the new terms. If you do not accept them, you can close
               your account.
             </p>
@@ -576,10 +576,11 @@ export default function TermsPage() {
               For complaints, data-protection requests, and notices that need a formal response,
               please contact our grievance officer:
             </p>
+            {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
             <div className="mt-4 rounded-md border border-border bg-bone p-4 text-sm text-ink">
-              <p className="font-semibold">Grievance officer, Home Chef</p>
+              <p className="font-semibold">Grievance officer, Fe3dr</p>
               <p className="mt-1">Email: grievance@homechef.in</p>
-              <p>Postal: [Registered office address — to be confirmed before publication]</p>
+              <p>Postal: Tesserix Pty Ltd, New South Wales, Australia (operations: Mumbai, India and Sydney, Australia)</p>
               <p className="mt-2 text-ink-soft">
                 We acknowledge complaints within 48 hours and aim to resolve them within
                 30 days, in line with the Consumer Protection (E-Commerce) Rules, 2020 and the

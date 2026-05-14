@@ -164,7 +164,7 @@ export function CookieBanner() {
               <Cookie aria-hidden="true" className="mt-0.5 h-5 w-5 flex-shrink-0 text-herb" />
               <div className="space-y-1 text-sm">
                 <h2 id="cookie-banner-title" className="font-medium text-ink">
-                  Cookies on Home Chef
+                  Cookies on Fe3dr
                 </h2>
                 <p id="cookie-banner-body" className="text-ink-soft">
                   We use strictly necessary cookies to keep you signed in and your cart

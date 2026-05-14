@@ -428,13 +428,15 @@ export function MainLayout() {
               <div>
                 <h3 className="text-sm font-medium text-ink-soft mb-1">Data Fiduciary</h3>
                 <address className="not-italic">
-                  [Legal Entity Name]<br />
-                  [Registered Office Address]<br />
-                  CIN: [CIN]
+                  Tesserix Pty Ltd<br />
+                  ACN 694 070 865 · ABN 59 694 070 865<br />
+                  Registered in New South Wales, Australia<br />
+                  Operations: Mumbai, India · Sydney, Australia
                 </address>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-ink-soft mb-1">Grievance Officer</h3>
+                {/* TODO: replace [Grievance Officer Name] and phone with the real appointed person before public launch (DPDP §13 requirement) */}
                 <address className="not-italic">
                   [Grievance Officer Name]<br />
                   <a href="mailto:grievance@homechef.in" className="text-herb hover:underline">grievance@homechef.in</a><br />
@@ -458,7 +460,7 @@ export function MainLayout() {
           </div>
 
           <div className="mt-8 border-t border-mist pt-8 text-center text-sm text-ink-muted">
-            <p>&copy; {new Date().getFullYear()} Fe3dr. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} Fe3dr, a product of Tesserix Pty Ltd. All rights reserved.</p>
           </div>
         </div>
       </footer>

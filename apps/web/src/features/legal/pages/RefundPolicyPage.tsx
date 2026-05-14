@@ -12,7 +12,7 @@ import { Card } from '@/shared/components/ui';
 /**
  * Refund and Cancellation Policy — customer-facing legal page.
  *
- * Plain-language refund and cancellation policy for the Home Chef platform.
+ * Plain-language refund and cancellation policy for the Fe3dr platform.
  * Aligns with:
  * - RBI Payment Aggregator Master Direction (17 Mar 2020), §8 — refund timeline
  * - Consumer Protection (E-Commerce) Rules 2020, Rule 5(3)(g) — disclosure
@@ -48,6 +48,9 @@ export default function RefundPolicyPage() {
           </h1>
           <p className="mt-3 text-sm text-ink-soft">
             Last updated: 13 May 2026 · Effective: 13 May 2026
+          </p>
+          <p className="mt-4 text-sm text-ink-soft">
+            Fe3dr is a product of <strong>Tesserix Pty Ltd</strong> (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. Day-to-day operations are conducted from Mumbai, India and Sydney, Australia.
           </p>
         </header>
 
@@ -767,7 +770,7 @@ export default function RefundPolicyPage() {
                 <div className="grid grid-cols-[110px_1fr] gap-y-1">
                   <dt className="font-medium text-ink">Name:</dt>
                   <dd className="text-ink-soft">
-                    Grievance Officer, Home Chef
+                    Grievance Officer, Fe3dr
                   </dd>
                   <dt className="font-medium text-ink">Email:</dt>
                   <dd className="text-ink-soft">grievance@homechef.in</dd>
