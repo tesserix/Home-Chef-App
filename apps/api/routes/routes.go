@@ -1,8 +1,12 @@
 package routes
 
 import (
+	"encoding/base64"
+	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -12,6 +16,54 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// loadBFFHMACKey reads the shared HMAC key used to verify identity headers
+// signed by apps/auth-bff. Required in every environment; the server fails
+// fast at boot when it's missing or too short so we never accept unsigned
+// upstream traffic.
+//
+// TODO(task-2.7): move this read into config.Load() and surface it as
+// config.AppConfig.BFFInternalHMACKey alongside the other secrets.
+func loadBFFHMACKey() []byte {
+	raw := os.Getenv("BFF_INTERNAL_HMAC_KEY")
+	if raw == "" {
+		log.Fatal("BFF_INTERNAL_HMAC_KEY required (base64, 16+ bytes)")
+	}
+	key, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || len(key) < 16 {
+		log.Fatal("BFF_INTERNAL_HMAC_KEY required (base64, 16+ bytes)")
+	}
+	return key
+}
+
+// bffAuth returns a fresh BFFAuth middleware configured with the loaded HMAC
+// key and a 60-second freshness window. Called from each route group so the
+// closure captures the key once at boot.
+func bffAuth(key []byte) gin.HandlerFunc {
+	return middleware.BFFAuth(middleware.BFFAuthConfig{
+		HMACKey: key,
+		Window:  time.Minute,
+	})
+}
+
+// bffAuthOptional is the optional-auth counterpart to bffAuth — used for
+// surfaces that render publicly but enrich the response when a signed
+// identity is attached (chef listings, social feed).
+func bffAuthOptional(key []byte) gin.HandlerFunc {
+	return middleware.BFFAuthOptional(middleware.BFFAuthConfig{
+		HMACKey: key,
+		Window:  time.Minute,
+	})
+}
+
+// upsertUserStub is the temporary handler mounted at POST /internal/users/upsert.
+// The real implementation (idempotent user upsert keyed on GIP UID) lands in
+// Task 2.2 — this stub exists only so apps/auth-bff has a route to call once
+// signing is wired up. Returning a fixed user_id keeps integration tests happy
+// without lying about DB state.
+func upsertUserStub(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"user_id": "stub"})
+}
 
 // allowedOrigins resolves the CORS allowlist. In production we ONLY trust the
 // CORS_ORIGINS env var (comma-separated, https only — matches what argocd
@@ -81,8 +133,12 @@ func SetupRouter() *gin.Engine {
 	corsConfig.MaxAge = 600
 	r.Use(cors.New(corsConfig))
 
-	// Initialize handlers
-	authHandler := handlers.NewAuthHandler()
+	// Shared HMAC key for verifying BFF-signed identity headers. Loaded once
+	// here so the same []byte is captured by every protected route group.
+	bffKey := loadBFFHMACKey()
+
+	// Initialize handlers. Note: the legacy AuthHandler was removed in the
+	// GIP migration (Task 2.6) — all auth flows now live in apps/auth-bff.
 	chefHandler := handlers.NewChefHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
@@ -132,13 +188,23 @@ func SetupRouter() *gin.Engine {
 	// WebSocket endpoints live at top-level /ws/* so the per-portal Istio
 	// VirtualServices (fe3dr.com, vendors.fe3dr.com, admin.fe3dr.com, …)
 	// can route /ws/ directly to the API at the 3600s upgrade timeout,
-	// bypassing the auth-bff which can't proxy WS upgrades. Auth on these
-	// endpoints uses the same middleware; JWT comes in via ?token=.
+	// bypassing the auth-bff which can't proxy WS upgrades. The BFF still
+	// signs the upgrade request via its mesh path; we verify the same HMAC
+	// here so a hijacked browser session can't open a socket directly.
 	wsGroup := r.Group("/ws")
-	wsGroup.Use(middleware.AuthMiddleware())
+	wsGroup.Use(bffAuth(bffKey))
 	{
 		wsGroup.GET("/notifications", notificationHandler.StreamNotificationsWS)
 		wsGroup.GET("/orders/:id/track", orderHandler.TrackOrderWS)
+	}
+
+	// Internal endpoints — invoked by apps/auth-bff to materialize user
+	// rows when a new GIP identity logs in. The BFF signs every request
+	// with the shared HMAC; nothing else should ever reach this group.
+	internal := r.Group("/internal")
+	internal.Use(bffAuth(bffKey))
+	{
+		internal.POST("/users/upsert", upsertUserStub)
 	}
 
 	// API v1 routes
@@ -175,72 +241,34 @@ func SetupRouter() *gin.Engine {
 		taxHandler := handlers.NewTaxHandler()
 		v1.GET("/tax-rates/lookup", taxHandler.GetPublicTaxRate)
 
-		// Auth routes (public) — aggressive per-IP rate limiting to throttle
-		// credential stuffing, password-reset abuse, and email enumeration.
-		// 5 rps sustained / 10 burst is far above legit traffic but pinches
-		// any automated abuse hard.
+		// Auth routes (public). All credential, session, OAuth, password-reset,
+		// email-verification, and TOTP flows moved to apps/auth-bff in the
+		// GIP migration (Task 2.6). The only thing that stays here is the
+		// public password-policy lookup — the registration UI in the BFF
+		// still calls into our SecurityPolicy table to render live rules.
 		authLimit := middleware.RateLimit(5, 10)
 		auth := v1.Group("/auth")
 		auth.Use(authLimit)
 		{
-			auth.POST("/register", authHandler.Register)
-			auth.POST("/login", authHandler.Login)
-			auth.POST("/oauth", authHandler.OAuthLogin)
-			auth.POST("/refresh", authHandler.RefreshToken)
-			auth.POST("/logout", authHandler.Logout)
-			auth.POST("/forgot-password", authHandler.ForgotPassword)
-			auth.POST("/reset-password", authHandler.ResetPassword)
-			auth.GET("/verify-email", authHandler.VerifyEmail)
-			auth.POST("/resend-verification", middleware.AuthMiddleware(), authHandler.ResendVerification)
-
-			// Password policy (public — clients use it to render live rules)
 			auth.GET("/password-policy", securityHandler.GetPasswordPolicy)
-
-			// 2FA (TOTP) login-flow continuation & forced enrollment.
-			// Path segment is "totp" rather than "2fa" because the auth-bff
-			// in front of our API reserves /*/2fa/* for its own (Keycloak-
-			// backed) TOTP handling — anything under /2fa/ never reaches us.
-			auth.POST("/totp/verify", securityHandler.VerifyTOTP)
-			auth.POST("/totp/enroll-start", securityHandler.ForcedEnrollTOTPStart)
-			auth.POST("/totp/enroll-verify", securityHandler.ForcedEnrollTOTPVerify)
-		}
-
-		// Authenticated-user security endpoints: own-sessions + TOTP setup.
-		security := v1.Group("/security")
-		security.Use(middleware.AuthMiddleware())
-		{
-			security.POST("/totp/enroll", securityHandler.StartTOTPEnrollment)
-			security.POST("/totp/confirm", securityHandler.VerifyTOTPEnrollment)
-			security.POST("/totp/disable", securityHandler.DisableTOTP)
-
-			security.GET("/sessions", securityHandler.ListMySessions)
-			security.DELETE("/sessions/:sessionId", securityHandler.RevokeMySession)
-			security.POST("/sessions/revoke-all", securityHandler.RevokeAllMySessions)
 		}
 
 		// Staff invitation routes (public - token validates)
 		v1.GET("/staff/invitations/validate", staffHandler.ValidateInvitation)
 
-		// Staff invitation acceptance (requires auth via OptionalAuth for info, Auth for accept)
+		// Staff invitation acceptance — the auth-bff session is required so
+		// the invitee is bound to a real GIP identity at accept time.
 		staffInvite := v1.Group("/staff/invitations")
-		staffInvite.Use(middleware.OptionalAuthMiddleware())
+		staffInvite.Use(bffAuth(bffKey))
 		{
 			staffInvite.POST("/accept", staffHandler.AcceptInvitation)
 		}
 
-		// Profile routes (authenticated)
-		profile := v1.Group("/profile")
-		profile.Use(middleware.AuthMiddleware())
-		{
-			profile.GET("", authHandler.GetProfile)
-			profile.PUT("", authHandler.UpdateProfile)
-			profile.PUT("/password", authHandler.ChangePassword)
-			profile.PUT("/device-token", authHandler.UpdateDeviceToken)
-		}
-
-		// Public chef routes
+		// Public chef routes — anonymous browsing is allowed, but a signed
+		// identity from the BFF lets us surface per-user state (favorites,
+		// hidden chefs, etc.) when present.
 		chefs := v1.Group("/chefs")
-		chefs.Use(middleware.OptionalAuthMiddleware())
+		chefs.Use(bffAuthOptional(bffKey))
 		{
 			chefs.GET("", chefHandler.ListChefs)
 			chefs.GET("/:id", chefHandler.GetChef)
@@ -250,7 +278,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef onboarding (authenticated, but no chef role required — user is becoming a chef)
 		chefOnboarding := v1.Group("/chef")
-		chefOnboarding.Use(middleware.AuthMiddleware())
+		chefOnboarding.Use(bffAuth(bffKey))
 		{
 			chefOnboarding.GET("/onboarding/status", uploadHandler.GetOnboardingStatus)
 		chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
@@ -264,7 +292,7 @@ func SetupRouter() *gin.Engine {
 
 		// Menu management routes (authenticated — accessible during onboarding and after)
 		chefMenu := v1.Group("/chef/menu")
-		chefMenu.Use(middleware.AuthMiddleware())
+		chefMenu.Use(bffAuth(bffKey))
 		{
 			chefMenu.GET("", menuHandler.GetChefMenuItems)
 			chefMenu.GET("/categories", menuHandler.GetCategories)
@@ -281,7 +309,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef dashboard routes (chef only)
 		chefDashboard := v1.Group("/chef")
-		chefDashboard.Use(middleware.AuthMiddleware(), middleware.RequireChef())
+		chefDashboard.Use(bffAuth(bffKey), middleware.RequireChef())
 		{
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
@@ -308,7 +336,7 @@ func SetupRouter() *gin.Engine {
 
 		// Customer order routes
 		orders := v1.Group("/orders")
-		orders.Use(middleware.AuthMiddleware())
+		orders.Use(bffAuth(bffKey))
 		{
 			orders.POST("", orderHandler.CreateOrder)
 			orders.GET("", orderHandler.GetOrders)
@@ -323,7 +351,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chat routes (authenticated)
 		chat := v1.Group("/chat")
-		chat.Use(middleware.AuthMiddleware())
+		chat.Use(bffAuth(bffKey))
 		{
 			chat.GET("/rooms", chatHandler.ListChatRooms)
 			chat.GET("/:roomId/messages", chatHandler.GetMessages)
@@ -333,7 +361,7 @@ func SetupRouter() *gin.Engine {
 
 		// Support ticket routes (authenticated)
 		support := v1.Group("/support")
-		support.Use(middleware.AuthMiddleware())
+		support.Use(bffAuth(bffKey))
 		{
 			support.POST("/tickets", supportHandler.CreateTicket)
 			support.GET("/tickets", supportHandler.GetMyTickets)
@@ -344,14 +372,14 @@ func SetupRouter() *gin.Engine {
 
 		// Promo code validation (authenticated)
 		promo := v1.Group("/promo")
-		promo.Use(middleware.AuthMiddleware())
+		promo.Use(bffAuth(bffKey))
 		{
 			promo.POST("/validate", promoHandler.ValidatePromoCode)
 		}
 
 		// Cart routes
 		cart := v1.Group("/cart")
-		cart.Use(middleware.AuthMiddleware())
+		cart.Use(bffAuth(bffKey))
 		{
 			// cart.GET("", cartHandler.GetCart)
 			// cart.POST("/items", cartHandler.AddItem)
@@ -360,9 +388,10 @@ func SetupRouter() *gin.Engine {
 			// cart.DELETE("", cartHandler.ClearCart)
 		}
 
-		// Social feed routes
+		// Social feed routes — anonymous-friendly; like/comment are gated
+		// inside the handlers by checking for a userID on the context.
 		social := v1.Group("/social")
-		social.Use(middleware.OptionalAuthMiddleware())
+		social.Use(bffAuthOptional(bffKey))
 		{
 			social.GET("/feed", socialHandler.GetFeed)
 			social.GET("/posts/:id", socialHandler.GetPost)
@@ -372,7 +401,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef social posts (chef only)
 		chefSocial := v1.Group("/chef/posts")
-		chefSocial.Use(middleware.AuthMiddleware(), middleware.RequireChef())
+		chefSocial.Use(bffAuth(bffKey), middleware.RequireChef())
 		{
 			chefSocial.GET("", socialHandler.GetChefPosts)
 			chefSocial.POST("", socialHandler.CreatePost)
@@ -382,7 +411,7 @@ func SetupRouter() *gin.Engine {
 
 		// Catering routes
 		catering := v1.Group("/catering")
-		catering.Use(middleware.AuthMiddleware())
+		catering.Use(bffAuth(bffKey))
 		{
 			catering.POST("/requests", cateringHandler.CreateRequest)
 			catering.GET("/requests", cateringHandler.GetMyRequests)
@@ -393,7 +422,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef catering (chef only)
 		chefCatering := v1.Group("/chef/catering")
-		chefCatering.Use(middleware.AuthMiddleware(), middleware.RequireChef())
+		chefCatering.Use(bffAuth(bffKey), middleware.RequireChef())
 		{
 			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
 			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
@@ -402,7 +431,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery partner onboarding (authenticated, no delivery role required)
 		deliveryOnboarding := v1.Group("/delivery")
-		deliveryOnboarding.Use(middleware.AuthMiddleware())
+		deliveryOnboarding.Use(bffAuth(bffKey))
 		{
 			deliveryOnboarding.GET("/onboarding/status", deliveryHandler.GetOnboardingStatus)
 			deliveryOnboarding.POST("/onboarding", deliveryHandler.Onboarding)
@@ -410,7 +439,7 @@ func SetupRouter() *gin.Engine {
 
 		// Driver onboarding (authenticated, no role required — user is becoming a driver)
 		driverOnboarding := v1.Group("/driver")
-		driverOnboarding.Use(middleware.AuthMiddleware())
+		driverOnboarding.Use(bffAuth(bffKey))
 		{
 			driverOnboarding.GET("/onboarding/status", driverHandler.GetDriverOnboardingStatus)
 			driverOnboarding.POST("/onboarding/personal", driverHandler.DriverOnboardingPersonal)
@@ -427,7 +456,7 @@ func SetupRouter() *gin.Engine {
 
 		// Driver referral routes (delivery role required)
 		driverReferral := v1.Group("/driver/referral")
-		driverReferral.Use(middleware.AuthMiddleware(), middleware.RequireDelivery())
+		driverReferral.Use(bffAuth(bffKey), middleware.RequireDelivery())
 		{
 			driverReferral.GET("/code", driverHandler.GetReferralCode)
 			driverReferral.GET("/stats", driverHandler.GetReferralStats)
@@ -435,7 +464,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery staff routes — enforced with granular staff permissions
 		deliveryStaff := v1.Group("/delivery/staff")
-		deliveryStaff.Use(middleware.AuthMiddleware(), middleware.RequireDelivery())
+		deliveryStaff.Use(bffAuth(bffKey), middleware.RequireDelivery())
 		{
 			deliveryStaff.GET("/me", staffHandler.GetMyStaffProfile)   // No permission needed — own profile
 			deliveryStaff.GET("/roles", staffHandler.GetStaffRoles)    // No permission needed — role definitions
@@ -460,7 +489,7 @@ func SetupRouter() *gin.Engine {
 
 		// Delivery partner routes (delivery role required)
 		delivery := v1.Group("/delivery")
-		delivery.Use(middleware.AuthMiddleware(), middleware.RequireDelivery())
+		delivery.Use(bffAuth(bffKey), middleware.RequireDelivery())
 		{
 			delivery.GET("/stats", deliveryHandler.GetStats)
 			delivery.GET("/profile", deliveryHandler.GetProfile)
@@ -487,7 +516,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef promotion routes (featured ads)
 		chefPromotion := v1.Group("/chef/promotion")
-		chefPromotion.Use(middleware.AuthMiddleware(), middleware.RequireChef())
+		chefPromotion.Use(bffAuth(bffKey), middleware.RequireChef())
 		{
 			chefPromotion.GET("/pricing", promotionHandler.GetFeaturedAdPricing)
 			chefPromotion.POST("/purchase", promotionHandler.PurchaseFeaturedAd)
@@ -497,7 +526,7 @@ func SetupRouter() *gin.Engine {
 
 		// Chef subscription routes (chef role required)
 		chefSubscription := v1.Group("/chef/subscription")
-		chefSubscription.Use(middleware.AuthMiddleware(), middleware.RequireChef())
+		chefSubscription.Use(bffAuth(bffKey), middleware.RequireChef())
 		{
 			chefSubscription.GET("", subscriptionHandler.GetSubscription)
 			chefSubscription.GET("/plans", subscriptionHandler.GetAvailablePlans)
@@ -513,7 +542,7 @@ func SetupRouter() *gin.Engine {
 		// Note: /plans and /plan are registered in the onboarding group above (auth-only)
 		// to allow plan selection during onboarding before delivery role is assigned
 		driverSubscription := v1.Group("/driver/subscription")
-		driverSubscription.Use(middleware.AuthMiddleware(), middleware.RequireDelivery())
+		driverSubscription.Use(bffAuth(bffKey), middleware.RequireDelivery())
 		{
 			driverSubscription.GET("", subscriptionHandler.GetSubscription)
 			driverSubscription.POST("/choose-plan", subscriptionHandler.ChoosePlan)
@@ -529,7 +558,7 @@ func SetupRouter() *gin.Engine {
 		// idempotent.
 		paymentLimit := middleware.RateLimitByUser(2, 5) // 2 rps sustained, 5 burst per user
 		orderPayments := v1.Group("/payments")
-		orderPayments.Use(middleware.AuthMiddleware(), paymentLimit)
+		orderPayments.Use(bffAuth(bffKey), paymentLimit)
 		{
 			orderPayments.POST("/order/:orderId/create", paymentHandler.CreateOrderPayment)
 			orderPayments.POST("/order/:orderId/verify", paymentHandler.VerifyPayment)
@@ -538,7 +567,7 @@ func SetupRouter() *gin.Engine {
 
 		// Admin routes
 		admin := v1.Group("/admin")
-		admin.Use(middleware.AuthMiddleware(), middleware.RequireAdmin())
+		admin.Use(bffAuth(bffKey), middleware.RequireAdmin())
 		{
 			// Dashboard
 			admin.GET("/stats", adminHandler.GetStats)
@@ -673,7 +702,7 @@ func SetupRouter() *gin.Engine {
 
 		// Addresses
 		addresses := v1.Group("/addresses")
-		addresses.Use(middleware.AuthMiddleware())
+		addresses.Use(bffAuth(bffKey))
 		{
 			addresses.GET("", addressHandler.GetAddresses)
 			addresses.POST("", addressHandler.CreateAddress)
@@ -683,7 +712,7 @@ func SetupRouter() *gin.Engine {
 
 		// Payment methods
 		payments := v1.Group("/payment-methods")
-		payments.Use(middleware.AuthMiddleware())
+		payments.Use(bffAuth(bffKey))
 		{
 			// payments.GET("", paymentHandler.GetPaymentMethods)
 			// payments.POST("", paymentHandler.AddPaymentMethod)
@@ -693,7 +722,7 @@ func SetupRouter() *gin.Engine {
 
 		// Customer profile & onboarding
 		customer := v1.Group("/customer")
-		customer.Use(middleware.AuthMiddleware())
+		customer.Use(bffAuth(bffKey))
 		{
 			customer.GET("/profile", customerHandler.GetCustomerProfile)
 			customer.PUT("/profile", customerHandler.UpdateCustomerProfile)
@@ -706,14 +735,14 @@ func SetupRouter() *gin.Engine {
 
 		// Reviews (authenticated customers)
 		reviews := v1.Group("/reviews")
-		reviews.Use(middleware.AuthMiddleware())
+		reviews.Use(bffAuth(bffKey))
 		{
 			reviews.POST("", reviewHandler.CreateReview)
 		}
 
 		// Favorites (authenticated customers)
 		favorites := v1.Group("/favorites")
-		favorites.Use(middleware.AuthMiddleware())
+		favorites.Use(bffAuth(bffKey))
 		{
 			favorites.GET("/chefs", favoriteHandler.ListFavoriteChefs)
 			favorites.GET("/chefs/ids", favoriteHandler.ListFavoriteChefIDs)
@@ -723,7 +752,7 @@ func SetupRouter() *gin.Engine {
 
 		// Notifications
 		notifications := v1.Group("/notifications")
-		notifications.Use(middleware.AuthMiddleware())
+		notifications.Use(bffAuth(bffKey))
 		{
 			notifications.GET("", notificationHandler.GetNotifications)
 			notifications.GET("/unread-count", notificationHandler.GetUnreadCount)

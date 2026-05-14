@@ -112,10 +112,12 @@ func TestAutoLogin_TokenInvalid_401(t *testing.T) {
 }
 
 func TestAutoLogin_RoleClaim_Overrides(t *testing.T) {
+	// The Go API's UserRole enum has no "driver" — drivers map to "delivery".
+	// Assert the claim override flows through with a value the API accepts.
 	deps := newDeps(t,
 		&fakeGIP{tok: &gip.VerifiedToken{
 			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Business-xxxxx", Provider: "google.com",
-			Claims: map[string]any{"role": "driver"},
+			Claims: map[string]any{"role": "delivery"},
 		}},
 		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
 		&fakeSessions{encoded: "sess"},
@@ -129,7 +131,7 @@ func TestAutoLogin_RoleClaim_Overrides(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	require.Equal(t, 200, w.Code)
-	assert.Contains(t, w.Body.String(), `"role":"driver"`)
+	assert.Contains(t, w.Body.String(), `"role":"delivery"`)
 }
 
 func TestAutoLogin_InvalidBody_400(t *testing.T) {

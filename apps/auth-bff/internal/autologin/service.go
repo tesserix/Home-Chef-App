@@ -123,7 +123,10 @@ func defaultRoleForPool(pool string) string {
 	case "customer":
 		return "customer"
 	case "business":
-		return "vendor" // default; can be overridden by claim
+		// Business pool default. The Go API's UserRole enum uses "chef"
+		// (the catering operator) rather than "vendor"; a request can
+		// still override via the role claim (e.g., "delivery").
+		return "chef"
 	case "internal":
 		return "admin"
 	default:

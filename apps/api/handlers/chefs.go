@@ -665,23 +665,20 @@ func (h *ChefHandler) GetChefSettings(c *gin.Context) {
 		database.DB.Create(&settings)
 	}
 
-	// Load user to get auth provider
-	var user models.User
-	database.DB.First(&user, "id = ?", userID)
-
-	// Return in the shape the frontend expects
+	// Return in the shape the frontend expects. AuthProvider used to be
+	// surfaced here for the legacy local-auth UI; with GIP owning auth the
+	// frontend reads provider details from the auth-bff session instead.
 	c.JSON(http.StatusOK, gin.H{
 		"notifications": gin.H{
-			"pushNewOrder":     settings.PushNewOrder,
-			"pushOrderUpdate":  settings.PushOrderUpdate,
+			"pushNewOrder":      settings.PushNewOrder,
+			"pushOrderUpdate":   settings.PushOrderUpdate,
 			"emailDailySummary": settings.EmailDailySummary,
 			"emailWeeklyReport": settings.EmailWeeklyReport,
-			"smsNewOrder":      settings.SmsNewOrder,
+			"smsNewOrder":       settings.SmsNewOrder,
 		},
 		"autoAcceptOrders":    settings.AutoAcceptOrders,
 		"autoAcceptThreshold": settings.AutoAcceptThreshold,
 		"acceptingOrders":     chef.AcceptingOrders,
-		"authProvider":        string(user.AuthProvider),
 	})
 }
 

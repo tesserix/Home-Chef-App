@@ -66,11 +66,10 @@ func Migrate() error {
 	log.Println("Running database migrations...")
 
 	err := DB.AutoMigrate(
-		// Users & Auth
+		// Users. Auth tokens (refresh/password-reset/email-verification) are
+		// no longer owned by this service — apps/auth-bff handles all session
+		// + verification flows via Google Identity Platform.
 		&models.User{},
-		&models.RefreshToken{},
-		&models.PasswordResetToken{},
-		&models.EmailVerificationToken{},
 		&models.CustomerProfile{},
 		&models.PreferenceOption{},
 

@@ -80,7 +80,7 @@ func (h *ExportsHandler) ExportUsers(c *gin.Context) {
 	w := writeHeaders(c, "homechef-users")
 	defer flushAndLog(w, "users")
 
-	_ = w.Write([]string{"id", "email", "first_name", "last_name", "phone", "role", "is_active", "email_verified", "created_at", "last_login_at"})
+	_ = w.Write([]string{"id", "email", "first_name", "last_name", "phone", "role", "is_active", "created_at", "last_login_at"})
 
 	for rows.Next() {
 		var u models.User
@@ -99,7 +99,6 @@ func (h *ExportsHandler) ExportUsers(c *gin.Context) {
 			u.Phone,
 			string(u.Role),
 			strconv.FormatBool(u.IsActive),
-			strconv.FormatBool(u.EmailVerified),
 			u.CreatedAt.UTC().Format(time.RFC3339),
 			last,
 		})
