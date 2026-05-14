@@ -1,5 +1,4 @@
 import { forwardRef } from 'react';
-import { Avatar as DSAvatar } from '@tesserix/web';
 import { cn } from '@tesserix/web';
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
@@ -50,26 +49,6 @@ export interface AvatarProps
 
 const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, size, shape, ring, src, alt, fallback, fallbackClassName, ...props }, ref) => {
-    // For simple DS-compatible usage (circle, no ring, standard sizes, no custom fallback)
-    const dsCompatibleSizes = ['sm', 'md', 'lg', 'xl'] as const;
-    type DSSizeType = typeof dsCompatibleSizes[number];
-    const isDSSize = !size || dsCompatibleSizes.includes(size as DSSizeType);
-    const isSimple = isDSSize && shape !== 'square' && ring === 'none' && !fallbackClassName;
-
-    if (isSimple) {
-      return (
-        <DSAvatar
-          ref={ref}
-          src={src}
-          alt={alt}
-          fallback={fallback || getInitials(alt)}
-          size={size === 'md' || !size ? 'default' : (size as 'sm' | 'lg' | 'xl')}
-          className={className}
-          {...(props as React.ComponentPropsWithoutRef<typeof DSAvatar>)}
-        />
-      );
-    }
-
     return (
       <AvatarPrimitive.Root
         ref={ref}
