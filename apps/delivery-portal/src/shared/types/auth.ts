@@ -43,7 +43,11 @@ export interface SessionResponse {
   error?: string;
 }
 
-export type SocialProvider = 'google' | 'facebook';
+/**
+ * Supported social login providers for the delivery portal.
+ * Drivers sign in with Google or phone — no Apple, no Facebook (business pool).
+ */
+export type SocialProvider = 'google' | 'phone';
 
 export type Permission =
   | 'delivery:read'

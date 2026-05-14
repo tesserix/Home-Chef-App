@@ -46,8 +46,11 @@ export interface SessionResponse {
   error?: string;
 }
 
-/** Supported social login providers (Keycloak IDP aliases) */
-export type SocialProvider = 'google' | 'facebook';
+/**
+ * Supported social login providers for the vendor portal.
+ * Vendors sign in with Google, Apple, or phone — no Facebook (business pool).
+ */
+export type SocialProvider = 'google' | 'apple' | 'phone';
 
 // Permission types for RBAC
 export type Permission =

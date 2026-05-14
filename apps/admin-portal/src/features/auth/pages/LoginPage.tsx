@@ -17,14 +17,6 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-function MetaIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2.04C6.5 2.04 2 6.53 2 12.06c0 5 3.66 9.13 8.44 9.88v-6.99H7.9v-2.89h2.54V9.85c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.45 2.89h-2.33v6.99C18.34 21.19 22 17.06 22 12.06c0-5.53-4.5-10.02-10-10.02z" fill="#1877F2" />
-    </svg>
-  );
-}
-
 const FEATURES = [
   'User & role management',
   'Chef verification & approvals',
@@ -61,6 +53,19 @@ export default function LoginPage() {
     | null
   >(null);
   const [totpCode, setTotpCode] = useState('');
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await login('google');
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -219,28 +224,18 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          {/* Social login buttons */}
+          {/* Social login buttons — admin portal supports Google only. */}
           <motion.div variants={fadeInUp} className={`space-y-3 ${twoFactor ? 'hidden' : ''}`}>
             <Button
               variant="outline"
               size="xl"
               fullWidth
               leftIcon={<GoogleIcon className="h-5 w-5" />}
-              onClick={() => login('google')}
+              onClick={handleGoogleLogin}
+              disabled={loading}
               className="justify-center rounded-xl border-border hover:bg-secondary/60"
             >
               Continue with Google
-            </Button>
-
-            <Button
-              variant="outline"
-              size="xl"
-              fullWidth
-              leftIcon={<MetaIcon className="h-5 w-5" />}
-              onClick={() => login('facebook')}
-              className="justify-center rounded-xl border-border hover:bg-secondary/60"
-            >
-              Continue with Facebook
             </Button>
           </motion.div>
 

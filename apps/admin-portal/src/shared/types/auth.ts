@@ -19,6 +19,13 @@ export interface SessionResponse {
   error?: string;
 }
 
+/**
+ * Supported social login providers for the admin portal.
+ * Internal staff sign in with Google only — no Apple, Facebook, or phone.
+ * The internal allowlist is enforced server-side at the BFF.
+ */
+export type SocialProvider = 'google';
+
 export type Permission =
   | 'users:read'
   | 'users:write'

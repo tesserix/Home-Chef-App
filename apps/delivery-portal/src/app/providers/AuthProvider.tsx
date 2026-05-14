@@ -7,30 +7,14 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
-import type { SessionUser } from '@/shared/types/auth';
-
-// Both driver and staff use the customer Keycloak realm (homechef).
-// Staff are 3rd party fleet managers, NOT platform admins — they register
-// alongside drivers in the same realm. Platform admins use admin.fe3dr.com.
-// The /bff/ and /driver-bff/ routes on delivery.fe3dr.com both default to
-// the customer realm (no x-auth-context header).
-const BFF_URL = (() => {
-  const env = import.meta.env.VITE_BFF_URL;
-  if (env) return env;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}/bff`;
-  }
-  return '/bff';
-})();
+import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 
 interface AuthContextValue {
   user: SessionUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   csrfToken: string | null;
-  authMode: 'staff' | 'driver' | null;
-  loginStaff: (provider?: 'google' | 'facebook') => void;
-  loginDriver: (provider?: 'google' | 'facebook') => void;
+  login: (provider?: SocialProvider) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => Promise<void>;
@@ -45,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated,
     isLoading,
     csrfToken,
-    authMode,
     clearAuth,
     initialize,
   } = useAuthStore();
@@ -54,24 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialize();
   }, [initialize]);
 
-  const loginStaff = useCallback((provider?: 'google' | 'facebook') => {
-    localStorage.setItem('fe3dr-auth-mode', 'staff');
-    const params = new URLSearchParams();
-    params.set('returnTo', `${window.location.origin}/dashboard`);
-    if (provider) {
-      params.set('kc_idp_hint', provider);
-    }
-    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
-  }, []);
-
-  const loginDriver = useCallback((provider?: 'google' | 'facebook') => {
-    localStorage.setItem('fe3dr-auth-mode', 'driver');
-    const params = new URLSearchParams();
-    params.set('returnTo', `${window.location.origin}/dashboard`);
-    if (provider) {
-      params.set('kc_idp_hint', provider);
-    }
-    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
+  const login = useCallback(async (_provider?: SocialProvider) => {
+    // Phone sign-in requires its own UI (reCAPTCHA + code entry), so this
+    // helper handles Google only; phone flows live in the LoginPage.
+    const svc = await import('@/features/auth/services/auth-service');
+    const session = await svc.signInWithGoogle();
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(svc.toSessionUser(session), '', '');
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
@@ -89,34 +61,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Revoke API JWT if present
-    const { refreshToken: rt } = useAuthStore.getState();
-    if (rt) {
-      const { authService } = await import('@/features/auth/services/auth-service');
-      await authService.logoutApi(rt);
-    }
-    const bffUrl = BFF_URL;
-    try {
-      await fetch(`${bffUrl}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Ignore - clear local state regardless
-    }
-    localStorage.removeItem('fe3dr-auth-mode');
+    const { authService } = await import('@/features/auth/services/auth-service');
+    await authService.logout();
     clearAuth();
     navigate('/login');
-  }, [authMode, clearAuth, navigate]);
+  }, [clearAuth, navigate]);
 
   const value: AuthContextValue = {
     user,
     isAuthenticated,
     isLoading,
     csrfToken,
-    authMode,
-    loginStaff,
-    loginDriver,
+    login,
     loginWithEmail,
     registerWithEmail,
     logout,

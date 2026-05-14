@@ -7,25 +7,15 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
-import type { SessionUser } from '@/shared/types/auth';
+import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 import type { LoginResult } from '@/features/auth/services/auth-service';
-
-// Same-origin /bff/ proxy — Istio routes /bff/* to auth-bff with x-auth-context: admin
-const BFF_URL = (() => {
-  const env = import.meta.env.VITE_BFF_URL;
-  if (env) return env;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}/bff`;
-  }
-  return '/bff';
-})();
 
 interface AuthContextValue {
   user: SessionUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   csrfToken: string | null;
-  login: (provider?: 'google' | 'facebook') => void;
+  login: (provider?: SocialProvider) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<LoginResult>;
   completeTotpLogin: (
     challengeToken: string,
@@ -52,15 +42,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialize();
   }, [initialize]);
 
-  const login = useCallback((provider?: 'google' | 'facebook') => {
-    const params = new URLSearchParams();
-    params.set('returnTo', `${window.location.origin}/dashboard`);
-    if (provider) {
-      params.set('kc_idp_hint', provider);
-    }
-    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
-  }, []);
-
   const finalizeSuccess = useCallback(
     (user: SessionUser, accessToken: string, refreshToken: string) => {
       // API returns role as singular string (user.role) not array (user.roles).
@@ -79,6 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const login = useCallback(async (_provider?: SocialProvider) => {
+    // Admin portal supports Google only; the BFF allowlist enforces
+    // membership server-side, so a successful exchange always means the
+    // signed-in account is authorized.
+    const svc = await import('@/features/auth/services/auth-service');
+    const session = await svc.signInWithGoogle();
+    const sessionUser = svc.toSessionUser(session);
+    finalizeSuccess(sessionUser, '', '');
+  }, [finalizeSuccess]);
 
   const loginWithEmail = useCallback(
     async (email: string, password: string): Promise<LoginResult> => {
@@ -109,20 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    // Revoke API JWT if present
-    const { refreshToken: rt } = useAuthStore.getState();
-    if (rt) {
-      const { authService } = await import('@/features/auth/services/auth-service');
-      await authService.logoutApi(rt);
-    }
-    try {
-      await fetch(`${BFF_URL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Ignore - clear local state regardless
-    }
+    const { authService } = await import('@/features/auth/services/auth-service');
+    await authService.logout();
     clearAuth();
     navigate('/login');
   }, [clearAuth, navigate]);
