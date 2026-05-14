@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Star,
@@ -52,14 +52,15 @@ export default function ChefDetailPage() {
   const fp = useFormatPrice();
   const cart = useCartStore();
   const cartItemCount = cart.getItemCount();
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = id ? isFavorite(id) : false;
 
   const handleFavorite = async () => {
     if (!isAuthenticated) {
       toast.error('Please log in to save favorites');
-      login();
+      navigate('/login');
       return;
     }
     if (!id) return;
@@ -68,7 +69,7 @@ export default function ChefDetailPage() {
       toast.error('You can save up to 7 favorite chefs. Remove one first.');
     } else if (result === 'unauthorized') {
       toast.error('Please log in to save favorites');
-      login();
+      navigate('/login');
     } else if (result === 'error') {
       toast.error('Something went wrong. Please try again.');
     }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -377,7 +377,8 @@ export default function BrowseChefsPage() {
 }
 
 function ChefCardItem({ chef }: { chef: Chef }) {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = isFavorite(chef.id);
 
@@ -387,7 +388,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
 
     if (!isAuthenticated) {
       toast.error('Please log in to save favorites');
-      login();
+      navigate('/login');
       return;
     }
 
@@ -396,7 +397,7 @@ function ChefCardItem({ chef }: { chef: Chef }) {
       toast.error('You can save up to 7 favorite chefs. Remove one first.');
     } else if (result === 'unauthorized') {
       toast.error('Please log in to save favorites');
-      login();
+      navigate('/login');
     } else if (result === 'error') {
       toast.error('Something went wrong. Please try again.');
     }

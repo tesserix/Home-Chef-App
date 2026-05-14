@@ -71,6 +71,19 @@ export default function RegisterPage() {
     }
   };
 
+  const handleSocialSignup = async (provider: 'google' | 'facebook') => {
+    setError('');
+    setLoading(true);
+    try {
+      await login(provider);
+      navigate('/user-info');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign-up failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen">
       {/* Left side - Image & Benefits */}
@@ -162,7 +175,7 @@ export default function RegisterPage() {
             <Button
               variant="outline"
               size="lg"
-              onClick={() => login('google')}
+              onClick={() => handleSocialSignup('google')}
               className="w-full justify-center gap-3 py-3"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -177,7 +190,7 @@ export default function RegisterPage() {
             <Button
               variant="outline"
               size="lg"
-              onClick={() => login('facebook')}
+              onClick={() => handleSocialSignup('facebook')}
               className="w-full justify-center gap-3 py-3"
             >
               <svg className="h-5 w-5 text-info" fill="currentColor" viewBox="0 0 24 24">

@@ -47,8 +47,8 @@ export interface SessionResponse {
   error?: string;
 }
 
-/** Supported social login providers (Keycloak IDP aliases) */
-export type SocialProvider = 'google' | 'facebook';
+/** Supported social login providers (Firebase / GIP provider IDs, abbreviated). */
+export type SocialProvider = 'google' | 'facebook' | 'apple' | 'phone';
 
 // Permission types for RBAC
 export type Permission =

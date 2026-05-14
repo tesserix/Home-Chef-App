@@ -13,24 +13,13 @@ import { apiClient, AUTH_EXPIRED_EVENT } from '@/shared/services/api-client';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
 import type { OnboardingStatus, CustomerProfile } from '@/shared/types';
 
-const BFF_URL = (() => {
-  const env = import.meta.env.VITE_BFF_URL;
-  if (env) return env;
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return `${window.location.origin}/bff`;
-  }
-  return '/bff';
-})();
-const _isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-const BFF_FETCH = _isLocal ? BFF_URL : '/bff';
-
 interface AuthContextValue {
   user: SessionUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   csrfToken: string | null;
-  login: (provider?: SocialProvider) => void;
-  register: () => void;
+  login: (provider?: SocialProvider) => Promise<void>;
+  register: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
   logout: () => Promise<void>;
@@ -123,20 +112,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, [isAuthenticated, isLoading, onboardingCompleted, navigate, location.pathname, setOnboardingCompleted]);
 
-  const login = useCallback((provider?: SocialProvider) => {
-    const params = new URLSearchParams();
-    params.set('returnTo', window.location.origin);
-    if (provider) {
-      params.set('kc_idp_hint', provider);
-    }
-    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
+  const login = useCallback(async (provider?: SocialProvider) => {
+    const svc = await import('@/features/auth/services/auth-service');
+    const session =
+      provider === 'facebook'
+        ? await svc.signInWithFacebook()
+        : provider === 'apple'
+          ? await svc.signInWithApple()
+          : await svc.signInWithGoogle();
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(svc.toSessionUser(session), '', '');
   }, []);
 
-  const register = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set('returnTo', window.location.origin);
-    params.set('kc_action', 'register');
-    window.location.href = `${BFF_URL}/auth/login?${params.toString()}`;
+  const register = useCallback(async () => {
+    // Registration via social provider mirrors login; email/password
+    // registration is handled by RegisterPage via `registerWithEmail`.
+    const svc = await import('@/features/auth/services/auth-service');
+    const session = await svc.signInWithGoogle();
+    const { setApiAuth } = useAuthStore.getState();
+    setApiAuth(svc.toSessionUser(session), '', '');
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
@@ -154,14 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch(`${BFF_FETCH}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Ignore - clear local state regardless
-    }
+    const { authService } = await import('@/features/auth/services/auth-service');
+    await authService.logout();
     clearAuth();
     navigate('/login');
   }, [clearAuth, navigate]);
