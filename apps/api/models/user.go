@@ -17,6 +17,21 @@ const (
 	RoleFleetManager UserRole = "fleet_manager"
 )
 
+// AuthPool identifies which Google Identity Platform tenant pool a user
+// belongs to. Multiple users can share the same email across different
+// pools (e.g., a chef who also orders as a customer).
+type AuthPool string
+
+const (
+	PoolCustomer AuthPool = "customer"
+	PoolBusiness AuthPool = "business"
+	PoolInternal AuthPool = "internal"
+)
+
+// AuthProvider is the legacy provider enum from the Keycloak/local-auth era.
+// It is no longer referenced from the User struct, but the type and its
+// constants are kept here so the soon-to-be-deleted handlers in
+// handlers/auth.go and friends still compile until Task 2.6 removes them.
 type AuthProvider string
 
 const (
@@ -27,28 +42,30 @@ const (
 )
 
 type User struct {
-	ID            uuid.UUID    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Email         string       `gorm:"uniqueIndex;not null" json:"email"`
-	Password      string       `gorm:"" json:"-"`
-	FirstName     string       `gorm:"not null" json:"firstName"`
-	LastName      string       `gorm:"not null" json:"lastName"`
-	Phone         string       `gorm:"" json:"phone"`
-	Avatar        string       `gorm:"" json:"avatar"`
-	Role          UserRole     `gorm:"type:varchar(20);default:'customer'" json:"role"`
-	AuthProvider  AuthProvider `gorm:"type:varchar(20);default:'email'" json:"authProvider"`
-	ProviderID    string       `gorm:"" json:"-"`
-	IsActive      bool         `gorm:"default:true" json:"isActive"`
-	EmailVerified bool         `gorm:"default:false" json:"emailVerified"`
-	PhoneVerified bool         `gorm:"default:false" json:"phoneVerified"`
-	FCMToken      string       `gorm:"column:fcm_token" json:"-"`
-	// 2FA (TOTP). The actual shared secret is stored in GCP Secret Manager
-	// keyed by user ID; only a flag lives in the DB.
-	TOTPEnabled    bool       `gorm:"default:false" json:"totpEnabled"`
-	TOTPVerifiedAt *time.Time `gorm:"" json:"totpVerifiedAt,omitempty"`
-	LastLoginAt   *time.Time   `gorm:"" json:"lastLoginAt"`
-	CreatedAt     time.Time    `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt     time.Time    `gorm:"autoUpdateTime" json:"updatedAt"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Email     string    `gorm:"not null" json:"email"`
+	FirstName string    `gorm:"not null" json:"firstName"`
+	LastName  string    `gorm:"not null" json:"lastName"`
+	Phone     string    `gorm:"" json:"phone"`
+	Avatar    string    `gorm:"" json:"avatar"`
+	Role      UserRole  `gorm:"type:varchar(20);default:'customer'" json:"role"`
+
+	// GIP identity. Populated when apps/auth-bff upserts a user after a
+	// successful Google Identity Platform sign-in. See migration
+	// 20260514000002_add_gip_identity_to_users.up.sql.
+	GIPUid      string   `gorm:"column:gip_uid;uniqueIndex" json:"gipUid,omitempty"`
+	GIPTenantID string   `gorm:"column:gip_tenant_id" json:"gipTenantId,omitempty"`
+	GIPProvider string   `gorm:"column:gip_provider" json:"gipProvider,omitempty"`
+	AuthPool    AuthPool `gorm:"column:auth_pool;type:varchar(16)" json:"authPool,omitempty"`
+
+	IsActive      bool   `gorm:"default:true" json:"isActive"`
+	PhoneVerified bool   `gorm:"default:false" json:"phoneVerified"`
+	FCMToken      string `gorm:"column:fcm_token" json:"-"`
+
+	LastLoginAt *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
+	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
 	CustomerProfile *CustomerProfile `gorm:"foreignKey:UserID" json:"customerProfile,omitempty"`
@@ -132,23 +149,21 @@ type UserResponse struct {
 	Avatar              string    `json:"avatar,omitempty"`
 	Role                UserRole  `json:"role"`
 	IsActive            bool      `json:"isActive"`
-	EmailVerified       bool      `json:"emailVerified"`
 	OnboardingCompleted bool      `json:"onboardingCompleted"`
 	CreatedAt           time.Time `json:"createdAt"`
 }
 
 func (u *User) ToResponse() UserResponse {
 	resp := UserResponse{
-		ID:            u.ID,
-		Email:         u.Email,
-		FirstName:     u.FirstName,
-		LastName:      u.LastName,
-		Phone:         u.Phone,
-		Avatar:        u.Avatar,
-		Role:          u.Role,
-		IsActive:      u.IsActive,
-		EmailVerified: u.EmailVerified,
-		CreatedAt:     u.CreatedAt,
+		ID:        u.ID,
+		Email:     u.Email,
+		FirstName: u.FirstName,
+		LastName:  u.LastName,
+		Phone:     u.Phone,
+		Avatar:    u.Avatar,
+		Role:      u.Role,
+		IsActive:  u.IsActive,
+		CreatedAt: u.CreatedAt,
 	}
 	if u.CustomerProfile != nil {
 		resp.OnboardingCompleted = u.CustomerProfile.OnboardingCompleted

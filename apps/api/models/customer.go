@@ -76,6 +76,11 @@ func (cp *CustomerProfile) ToResponse(user *User) CustomerProfileResponse {
 		OnboardingCompleted: cp.OnboardingCompleted,
 		OnboardingStep:      cp.OnboardingStep,
 		PreferredCurrency:   cp.PreferredCurrency,
-		AuthProvider:        user.AuthProvider,
+		// AuthProvider is no longer tracked on the User model — auth is
+		// now owned by apps/auth-bff via Google Identity Platform. The
+		// response field is kept as an empty value for backward-compat
+		// with mobile clients until they migrate; will be removed in
+		// Task 2.6 along with the legacy auth handlers.
+		AuthProvider: "",
 	}
 }
