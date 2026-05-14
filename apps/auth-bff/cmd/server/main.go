@@ -17,12 +17,14 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/homechef/auth-bff/internal/apiclient"
+	"github.com/homechef/auth-bff/internal/audit"
 	"github.com/homechef/auth-bff/internal/autologin"
 	"github.com/homechef/auth-bff/internal/config"
 	gippkg "github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/headerproxy"
 	oidcpkg "github.com/homechef/auth-bff/internal/oidc"
 	"github.com/homechef/auth-bff/internal/productregistry"
+	"github.com/homechef/auth-bff/internal/ratelimit"
 	"github.com/homechef/auth-bff/internal/session"
 )
 
@@ -69,6 +71,9 @@ func main() {
 		log.Fatalf("oauth build: %v", err)
 	}
 
+	auditClient := audit.New(cfg.AuditEndpoint) // ok if cfg.AuditEndpoint is ""
+	_ = auditClient                             // currently unused by handlers; placeholder for future emit calls
+
 	r := gin.Default()
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
@@ -81,11 +86,20 @@ func main() {
 		Sessions:    mgr,
 		StateStore:  oidcpkg.NewMemStateStore(),
 	}
-	oidcH.Register(r)
 
-	autologin.NewHandler(&autologin.Deps{
+	// Rate-limit login-style endpoints: brute-force / resource-exhaustion targets.
+	// Session-lifecycle endpoints (session/logout/refresh/csrf) are NOT
+	// rate-limited because they're called by authenticated UI on every page nav.
+	rl := ratelimit.New(5.0, 10) // 5 rps per IP, burst 10
+	rateLimited := r.Group("/auth", rl.Middleware())
+	rateLimited.GET("/login", oidcH.Login)
+	rateLimited.GET("/callback", oidcH.Callback)
+	rateLimited.POST("/exchange", oidcH.Exchange)
+
+	autoH := autologin.NewHandler(&autologin.Deps{
 		GIP: verifier, Sessions: mgr, Registry: reg, API: api,
-	}).Register(r)
+	})
+	rateLimited.POST("/auto-login", autoH.PostHandler())
 
 	(&session.Handler{Mgr: mgr}).Register(r)
 

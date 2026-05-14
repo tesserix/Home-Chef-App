@@ -33,3 +33,8 @@ func (h *Handler) post(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 	}
 }
+
+// PostHandler returns the raw HandlerFunc for callers (e.g. main.go) that
+// want to mount the endpoint on a custom Gin group (rate-limited, etc.)
+// rather than via Register's default routing.
+func (h *Handler) PostHandler() gin.HandlerFunc { return h.post }
