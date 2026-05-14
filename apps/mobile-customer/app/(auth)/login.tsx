@@ -4,13 +4,61 @@ import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LoginScreen } from '@homechef/mobile-shared/screens';
-import { loginWithEmail, oauthLogin } from '@homechef/mobile-shared/api';
+import {
+  signInWithGoogleCredential,
+  signInWithAppleCredential,
+  signInWithEmail,
+  useAuth,
+  autoLogin,
+  getIdToken,
+} from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken, authenticateWithBiometrics } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
+import type { AuthResponse } from '@homechef/mobile-shared/types';
+
+const BFF_URL = process.env.EXPO_PUBLIC_BFF_URL ?? '';
+const GIP_TENANT_ID = process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? '';
+
+/**
+ * Convert a BFF auto-login response into the legacy AuthResponse shape so the
+ * existing Zustand auth-store + axios api client keep working unchanged.
+ * The session_token from the BFF replaces the previous JWT access token.
+ */
+function bffToAuthResponse(body: {
+  session_token: string;
+  user: { id: string; email: string; role: string };
+}): AuthResponse {
+  return {
+    user: {
+      id: body.user.id,
+      email: body.user.email,
+      firstName: '',
+      lastName: '',
+      phone: '',
+      role: body.user.role as AuthResponse['user']['role'],
+      avatar: null,
+      fcmToken: null,
+      createdAt: '',
+      updatedAt: '',
+    },
+    accessToken: body.session_token,
+    refreshToken: '',
+  };
+}
+
+async function completeBFFLogin(): Promise<AuthResponse> {
+  const idToken = await getIdToken();
+  if (!idToken) throw new Error('no_id_token_after_sign_in');
+  const body = await autoLogin(BFF_URL, idToken, GIP_TENANT_ID);
+  return bffToAuthResponse(body);
+}
 
 export default function LoginPage() {
-  const { setAuthResponse, biometricsEnabled, accessToken } = useAuthStore();
+  const { setAuthResponse, biometricsEnabled } = useAuthStore();
+  // useAuth is wired via <AuthProvider> in _layout.tsx; ensures BFF session
+  // is mirrored into AuthContext state.
+  const { completeSignIn } = useAuth();
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -20,10 +68,13 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    const { data } = await GoogleSignin.signIn();
-    if (!data?.idToken) throw new Error('Google sign-in failed: no ID token');
-    const response = await oauthLogin(api, { provider: 'google', token: data.idToken });
+    const result = (await GoogleSignin.signIn()) as { data?: { idToken?: string | null }; idToken?: string | null };
+    const googleIdToken = result?.data?.idToken ?? result?.idToken;
+    if (!googleIdToken) throw new Error('Google sign-in failed: no ID token');
+    await signInWithGoogleCredential(googleIdToken);
+    const response = await completeBFFLogin();
     await setAuthResponse(response);
+    await completeSignIn();
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);
@@ -39,8 +90,13 @@ export default function LoginPage() {
       ],
     });
     if (!cred.identityToken) throw new Error('Apple sign-in failed: no identity token');
-    const response = await oauthLogin(api, { provider: 'apple', token: cred.identityToken });
+    // Apple credential exchange in Firebase requires the same rawNonce used in the request;
+    // Expo's signInAsync does not surface a raw nonce — pass empty string and rely on Firebase
+    // to accept the token. For strict nonce verification a custom nonce should be generated.
+    await signInWithAppleCredential(cred.identityToken, '');
+    const response = await completeBFFLogin();
     await setAuthResponse(response);
+    await completeSignIn();
     try {
       const fcmToken = await getRawFCMToken();
       if (fcmToken) await registerDeviceToken(api, fcmToken);
@@ -62,8 +118,10 @@ export default function LoginPage() {
     <LoginScreen
       title="Welcome back"
       onLogin={async ({ email, password }) => {
-        const response = await loginWithEmail(api, { email, password });
+        await signInWithEmail(email, password);
+        const response = await completeBFFLogin();
         await setAuthResponse(response);
+        await completeSignIn();
         // Register FCM token after auth (D-09: raw FCM token)
         try {
           const fcmToken = await getRawFCMToken();

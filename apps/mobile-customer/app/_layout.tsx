@@ -6,6 +6,7 @@ import { Stack, router } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from '@homechef/mobile-shared/auth';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
@@ -131,11 +132,16 @@ export default function RootLayout() {
   }, [isAuthenticated, isLoading, onboardingComplete]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <View style={{ flex: 1 }}>
-        <OfflineBanner />
-        <Stack screenOptions={{ headerShown: false }} />
-      </View>
-    </QueryClientProvider>
+    <AuthProvider
+      bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+      tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+    >
+      <QueryClientProvider client={queryClient}>
+        <View style={{ flex: 1 }}>
+          <OfflineBanner />
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
+      </QueryClientProvider>
+    </AuthProvider>
   );
 }

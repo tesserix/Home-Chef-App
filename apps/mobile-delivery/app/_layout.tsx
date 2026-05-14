@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosResponse } from 'axios';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { AuthProvider } from '@homechef/mobile-shared/auth';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
@@ -164,12 +165,17 @@ function AppNavigator() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <BottomSheetModalProvider>
-          <AppNavigator />
-        </BottomSheetModalProvider>
-      </QueryClientProvider>
-    </GestureHandlerRootView>
+    <AuthProvider
+      bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+      tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+    >
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <QueryClientProvider client={queryClient}>
+          <BottomSheetModalProvider>
+            <AppNavigator />
+          </BottomSheetModalProvider>
+        </QueryClientProvider>
+      </GestureHandlerRootView>
+    </AuthProvider>
   );
 }
