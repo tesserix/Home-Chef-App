@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
+    "./auth": "./src/auth/index.ts",
     "./hooks": "./src/hooks/index.ts",
     "./types": "./src/types/index.ts",
     "./utils": "./src/utils/index.ts",
@@ -36,5 +37,9 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.9",
     "zod": "^3.25.33"
+  },
+  "dependencies": {
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/auth": "^24.0.0"
   }
 }
