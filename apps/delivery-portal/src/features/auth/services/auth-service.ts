@@ -234,16 +234,15 @@ export async function fetchCsrfToken(): Promise<string | null> {
 
 // =============================================================================
 // Legacy `authService` object — preserves the shape that existing callers
-// import. Keycloak redirect URL builders are gone; Firebase handles social
-// sign-in directly on the page, so getLoginUrl now returns null and callers
-// must use the typed helpers above (signInWithGoogle, etc).
+// import. Firebase handles social sign-in directly on the page, so
+// getLoginUrl returns null and callers use the typed helpers above
+// (signInWithGoogle, etc).
 // =============================================================================
 
 export const authService = {
   /**
-   * Legacy. Keycloak redirect URLs no longer exist; callers should call
-   * `signInWithGoogle()` directly. Returns null so existing callsites can
-   * detect the new auth flow and adapt.
+   * Deprecated. Callers should call `signInWithGoogle()` directly. Returns
+   * null so existing callsites can detect the new auth flow and adapt.
    */
   getLoginUrl(_options?: { provider?: SocialProvider; returnTo?: string }): null {
     return null;

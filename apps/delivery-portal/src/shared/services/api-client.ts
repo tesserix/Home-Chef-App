@@ -1,6 +1,6 @@
 import type { ApiError } from '@/shared/types';
 
-// Both driver and staff use the same customer realm BFF (/bff/).
+// Both driver and staff sign in through the customer-facing BFF (/bff/).
 // Staff are 3rd party fleet managers, not platform admins.
 function getApiUrl(): string {
   const env = import.meta.env.VITE_BFF_URL;

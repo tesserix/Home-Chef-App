@@ -10,11 +10,6 @@ import {
 import { firebaseAuth } from '@/lib/firebase';
 import type { SessionResponse, SessionUser, SocialProvider } from '@/shared/types/auth';
 
-export type LoginResult =
-  | { kind: 'success'; user: SessionUser; accessToken: string; refreshToken: string }
-  | { kind: '2fa_required'; challengeToken: string }
-  | { kind: '2fa_enrollment_required'; enrollmentToken: string };
-
 // BFF_URL resolution:
 //   1. VITE_BFF_URL env var (escape hatch)
 //   2. Same-origin /bff in any non-localhost browser context (Istio
@@ -205,17 +200,15 @@ export async function fetchCsrfToken(): Promise<string | null> {
 }
 
 // =============================================================================
-// Legacy `authService` object — preserves the shape callers import. Keycloak
-// redirect URL builders are gone; Firebase handles social sign-in directly.
-// 2FA endpoints (/api/v1/auth/totp/*) are unchanged — they live on the Go
-// API and gate admin logins after the password step.
+// Legacy `authService` object — preserves the shape callers import. Firebase
+// handles social sign-in directly. MFA is deferred (per migration spec); the
+// admin allowlist is enforced server-side at the BFF on /auth/exchange.
 // =============================================================================
 
 export const authService = {
   /**
-   * Legacy. Keycloak redirect URLs no longer exist; callers should call
-   * `signInWithGoogle()` directly. Returns null so existing callsites can
-   * detect the new auth flow and adapt.
+   * Deprecated. Callers should call `signInWithGoogle()` directly. Returns
+   * null so existing callsites can detect the new auth flow and adapt.
    */
   getLoginUrl(_options?: { provider?: SocialProvider; returnTo?: string }): null {
     return null;
@@ -255,92 +248,15 @@ export const authService = {
   },
 
   // ---------------------------------------------------------------------------
-  // Email/password — now backed by Firebase instead of the direct API JWT path.
-  // The 2FA gates (verifyTotp / enrollTotpDuringLogin / confirmTotpDuringLogin)
-  // still call the Go API, which keeps the existing TOTP enrollment + verify
-  // endpoints. Admins must clear the password step (Firebase) AND pass 2FA
-  // (Go API) before the local store flips to authenticated.
+  // Email/password — backed by Firebase + BFF exchange. MFA is deferred per
+  // the migration spec; the admin allowlist is enforced server-side on
+  // /auth/exchange, so a successful exchange always means the user is
+  // authorized.
   // ---------------------------------------------------------------------------
 
-  async loginWithEmail(email: string, password: string): Promise<LoginResult> {
-    // Firebase handles the password step. If the server then requires 2FA we
-    // surface the challenge to the caller before completing the BFF exchange.
-    // To support the existing 2FA gating we forward the email + Firebase ID
-    // token to the API's login endpoint, which decides whether the admin
-    // still needs to clear TOTP enrollment/verification.
+  async loginWithEmail(email: string, password: string): Promise<AuthSession> {
     const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const idToken = await cred.user.getIdToken();
-    const res = await fetch('/api/v1/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Auth-Token': idToken,
-      },
-      body: JSON.stringify({ email, idToken }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Invalid email or password');
-    if (data.twoFactorRequired) {
-      return { kind: '2fa_required', challengeToken: data.challengeToken as string };
-    }
-    if (data.twoFactorEnrollmentRequired) {
-      return {
-        kind: '2fa_enrollment_required',
-        enrollmentToken: data.enrollmentToken as string,
-      };
-    }
-    // No 2FA gating — finalize the BFF session.
-    const session = await postExchange(idToken);
-    return {
-      kind: 'success',
-      user: toSessionUser(session),
-      accessToken: idToken,
-      refreshToken: cred.user.refreshToken,
-    };
-  },
-
-  /** Complete 2FA login by submitting the 6-digit TOTP code. */
-  async verifyTotp(challengeToken: string, code: string) {
-    const res = await fetch('/api/v1/auth/totp/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ challengeToken, code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Invalid code');
-    return data as {
-      user: SessionUser;
-      accessToken: string;
-      refreshToken: string;
-    };
-  },
-
-  /** Begin TOTP enrollment during a forced-enrollment login flow. */
-  async enrollTotpDuringLogin(enrollmentToken: string) {
-    const res = await fetch('/api/v1/auth/totp/enroll-start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enrollmentToken }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to start enrollment');
-    return data as { secret: string; otpAuthUrl: string; qrCodeBase64: string };
-  },
-
-  /** Complete forced enrollment; returns real session tokens. */
-  async confirmTotpDuringLogin(enrollmentToken: string, code: string) {
-    const res = await fetch('/api/v1/auth/totp/enroll-verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enrollmentToken, code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Invalid code');
-    return data as {
-      user: SessionUser;
-      accessToken: string;
-      refreshToken: string;
-    };
+    return postExchange(await cred.user.getIdToken());
   },
 
   /**

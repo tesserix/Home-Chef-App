@@ -20,7 +20,7 @@ function lazyWithRetry(factory: () => Promise<{ default: React.ComponentType }>)
   );
 }
 
-// Auth pages (login only - no registration, uses internal Keycloak realm)
+// Auth pages (login only — drivers are pre-provisioned, no self-registration)
 const LoginPage = lazyWithRetry(() => import('@/features/auth/pages/LoginPage'));
 
 // Onboarding pages (outside DeliveryLayout)

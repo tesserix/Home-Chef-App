@@ -8,7 +8,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 import type { SessionUser, SocialProvider } from '@/shared/types/auth';
-import type { LoginResult } from '@/features/auth/services/auth-service';
 
 interface AuthContextValue {
   user: SessionUser | null;
@@ -16,12 +15,7 @@ interface AuthContextValue {
   isLoading: boolean;
   csrfToken: string | null;
   login: (provider?: SocialProvider) => Promise<void>;
-  loginWithEmail: (email: string, password: string) => Promise<LoginResult>;
-  completeTotpLogin: (
-    challengeToken: string,
-    code: string,
-    mode: 'verify' | 'enroll',
-  ) => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -72,29 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [finalizeSuccess]);
 
   const loginWithEmail = useCallback(
-    async (email: string, password: string): Promise<LoginResult> => {
-      const { authService } = await import('@/features/auth/services/auth-service');
-      const result = await authService.loginWithEmail(email, password);
-      if (result.kind === 'success') {
-        finalizeSuccess(result.user, result.accessToken, result.refreshToken);
-      }
-      return result;
-    },
-    [finalizeSuccess],
-  );
-
-  // completeTotpLogin finishes a login that needed a 2FA code. `mode` picks
-  // which backend path we hit:
-  //   - verify: the user already has TOTP enrolled; just validate the code
-  //   - enroll: forced enrollment flow; the code is from their newly-scanned QR
-  const completeTotpLogin = useCallback(
-    async (challengeToken: string, code: string, mode: 'verify' | 'enroll') => {
-      const { authService } = await import('@/features/auth/services/auth-service');
-      const result =
-        mode === 'verify'
-          ? await authService.verifyTotp(challengeToken, code)
-          : await authService.confirmTotpDuringLogin(challengeToken, code);
-      finalizeSuccess(result.user, result.accessToken, result.refreshToken);
+    async (email: string, password: string): Promise<void> => {
+      // MFA is deferred per the migration spec; a successful BFF exchange
+      // already enforces the admin allowlist server-side.
+      const svc = await import('@/features/auth/services/auth-service');
+      const session = await svc.authService.loginWithEmail(email, password);
+      const sessionUser = svc.toSessionUser(session);
+      finalizeSuccess(sessionUser, '', '');
     },
     [finalizeSuccess],
   );
@@ -113,7 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     csrfToken,
     login,
     loginWithEmail,
-    completeTotpLogin,
     logout,
   };
 

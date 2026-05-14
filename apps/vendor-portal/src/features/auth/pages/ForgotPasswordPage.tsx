@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom';
 import { sendPasswordReset } from '@/features/auth/services/auth-service';
 
 /**
- * Password reset is handled by Firebase (GIP). The BFF / Keycloak redirect
- * flow is gone; the user submits their email here and Firebase emails them
- * a reset link directly.
+ * Password reset is handled by Firebase (GIP). The user submits their email
+ * here and Firebase emails them a reset link directly.
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
