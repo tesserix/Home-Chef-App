@@ -68,18 +68,38 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-paper">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-bone py-20 lg:py-32">
-        {/* Decorative background — herb-tinted radial ambience.
-            Stays within the single-accent rule; gives dark mode a warm,
-            restaurant-interior feel rather than flat black. */}
-        <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 hero-ambience" />
-          <div className="absolute -left-32 -top-32 h-72 w-72 rounded-full bg-herb-tint/40 blur-3xl" />
-          <div className="absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-herb-tint/30 blur-3xl" />
+      {/* Hero Section — photo-forward, the food carries the brand.
+          Per the design system: "Food and faces carry the brand. UI chrome
+          shrinks." The hero uses an Indian home-cooked spread as the
+          backdrop, a three-stop scrim for text legibility, and a subtle
+          herb-tinted ambience to tie the photo to the brand accent. */}
+      <section className="relative isolate overflow-hidden">
+        {/* Photo backdrop */}
+        <div aria-hidden="true" className="absolute inset-0 -z-10">
+          <img
+            src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=2200&h=1400&fit=crop&q=85"
+            alt=""
+            width={2200}
+            height={1400}
+            fetchPriority="high"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+          {/* Theme-invariant 3-stop scrim — keeps text readable on any photo
+              in any theme. Mirrors the .scrim-bottom utility but covers the
+              whole hero so the headline anchors strongly. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, oklch(0.10 0.012 60 / 0.55) 0%, oklch(0.10 0.012 60 / 0.55) 35%, oklch(0.10 0.012 60 / 0.78) 100%)',
+            }}
+          />
+          {/* Herb-tinted ambience — single-accent brand tie-in. */}
+          <div className="absolute inset-0 hero-ambience opacity-90" />
         </div>
 
-        <div className="container-app relative">
+        <div className="container-app relative py-24 lg:py-32">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -87,29 +107,30 @@ export default function HomePage() {
             className="mx-auto max-w-3xl text-center"
           >
             <motion.div variants={fadeInUp}>
-              <Badge variant="premium" size="lg" className="mb-6">
-                <Sparkles className="h-4 w-4 mr-1" />
+              <span className="chip-on-photo-accent mb-6 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium">
+                <Sparkles aria-hidden="true" className="h-4 w-4" />
                 500+ Home Chefs Near You
-              </Badge>
+              </span>
             </motion.div>
 
             <motion.h1
               variants={fadeInUp}
-              className="font-display text-display-lg md:text-display-xl lg:text-display-2xl text-ink"
+              className="text-on-photo mt-6 font-display text-display-lg md:text-display-xl lg:text-display-2xl"
             >
               Homemade Food,{' '}
-              <span className="text-herb">Delivered Fresh</span>
+              <span className="text-on-photo-accent">Delivered Fresh</span>
             </motion.h1>
 
             <motion.p
               variants={fadeInUp}
-              className="mt-6 text-lg text-ink-soft max-w-2xl mx-auto"
+              className="text-on-photo-soft mx-auto mt-6 max-w-2xl text-lg"
             >
               Discover talented home chefs in your neighborhood and enjoy authentic,
               homemade meals delivered right to your doorstep.
             </motion.p>
 
-            {/* Search Bar */}
+            {/* Search Bar — sits on top of the photo, uses theme tokens so
+                inputs keep their normal contrast in either mode. */}
             <motion.div variants={fadeInUp} className="mt-10">
               <Card variant="elevated" padding="sm" className="shadow-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center p-2">
@@ -150,21 +171,19 @@ export default function HomePage() {
               </Card>
             </motion.div>
 
-            {/* Trust Badges */}
+            {/* Trust Badges — on-photo chips so they read in any theme. */}
             <motion.div
               variants={fadeInUp}
-              className="mt-12 flex flex-wrap items-center justify-center gap-8"
+              className="mt-12 flex flex-wrap items-center justify-center gap-3 sm:gap-4"
             >
               {[
                 { icon: ChefHat, label: '500+ Home Chefs' },
                 { icon: Star, label: '4.8 Average Rating' },
                 { icon: Clock, label: '30-45 min Delivery' },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-ink-soft">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-herb-tint">
-                    <Icon className="h-5 w-5 text-herb" />
-                  </div>
-                  <span className="font-medium">{label}</span>
+                <div key={label} className="chip-on-photo flex items-center gap-2 rounded-full px-4 py-2">
+                  <Icon aria-hidden="true" className="h-4 w-4" />
+                  <span className="text-sm font-medium">{label}</span>
                 </div>
               ))}
             </motion.div>
