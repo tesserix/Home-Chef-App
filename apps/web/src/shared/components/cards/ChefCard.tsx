@@ -56,23 +56,20 @@ export function ChefCard({
   const overflowCount = (cuisines?.length ?? 0) - visibleCuisines.length;
 
   return (
-    <Card
-      variant="default"
-      padding="none"
-      hover="lift"
-      className={cn('overflow-hidden group', className)}
-    >
-      {/* Cover Image */}
-      <div className="relative h-32 overflow-hidden">
+    <article className={cn('card-hive group h-full overflow-hidden', className)}>
+      {/* Cover Image — banner-fallback underlay so a missing photo still
+          reads as a brand-tinted cell rather than flat black. */}
+      <div className="banner-fallback relative h-32 overflow-hidden">
         <img
           src={coverUrl}
           alt=""
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           onError={(e) => {
             const img = e.currentTarget;
             if (img.src !== coverFallback) img.src = coverFallback;
+            else img.style.display = 'none';
           }}
         />
         <div className="absolute inset-0 scrim-bottom" />
@@ -185,7 +182,7 @@ export function ChefCard({
           <Link to={`/chefs/${id}`}>View Menu</Link>
         </Button>
       </div>
-    </Card>
+    </article>
   );
 }
 

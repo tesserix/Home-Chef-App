@@ -338,6 +338,97 @@
     border: 1px solid oklch(0.78 0.16 145 / 0.55);
   }
 
+  /* Hive card — an elevated "cell" that visibly lifts off the section.
+     Use for spotlight / featured surfaces (e.g. Featured Chefs) where a
+     default Card would sit at the same value as the section background
+     and disappear. Multi-layer shadow with a hairline herb tint gives
+     the lifted-cell feel; hover deepens the shadow and brightens the
+     herb edge. Stays within design rules: hairlines not borders, one
+     accent (herb), entrance-only motion via the standard easing curve. */
+  .card-hive {
+    background: var(--bone);
+    border: 1px solid var(--mist);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.04),
+      0 8px 24px -8px oklch(0 0 0 / 0.12),
+      0 0 0 1px oklch(0.48 0.13 145 / 0.03);
+    transition:
+      transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 250ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .card-hive:hover {
+    transform: translateY(-2px);
+    border-color: var(--herb-soft);
+    box-shadow:
+      0 2px 4px oklch(0 0 0 / 0.05),
+      0 16px 40px -12px oklch(0 0 0 / 0.18),
+      0 0 0 1px oklch(0.48 0.13 145 / 0.10);
+  }
+  :root.dark .card-hive,
+  .dark .card-hive {
+    background: oklch(0.24 0.005 80);
+    border-color: oklch(0.30 0.005 80);
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.3),
+      0 12px 32px -8px oklch(0 0 0 / 0.55),
+      0 0 0 1px oklch(0.62 0.14 145 / 0.06);
+  }
+  :root.dark .card-hive:hover,
+  .dark .card-hive:hover {
+    background: oklch(0.27 0.006 80);
+    border-color: oklch(0.62 0.14 145 / 0.45);
+    box-shadow:
+      0 2px 4px oklch(0 0 0 / 0.35),
+      0 20px 48px -10px oklch(0 0 0 / 0.65),
+      0 0 0 1px oklch(0.62 0.14 145 / 0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) .card-hive {
+      background: oklch(0.24 0.005 80);
+      border-color: oklch(0.30 0.005 80);
+      box-shadow:
+        0 1px 2px oklch(0 0 0 / 0.3),
+        0 12px 32px -8px oklch(0 0 0 / 0.55),
+        0 0 0 1px oklch(0.62 0.14 145 / 0.06);
+    }
+    :root:not(.light) .card-hive:hover {
+      background: oklch(0.27 0.006 80);
+      border-color: oklch(0.62 0.14 145 / 0.45);
+      box-shadow:
+        0 2px 4px oklch(0 0 0 / 0.35),
+        0 20px 48px -10px oklch(0 0 0 / 0.65),
+        0 0 0 1px oklch(0.62 0.14 145 / 0.18);
+    }
+  }
+
+  /* Banner fallback — used when a chef/cuisine has no banner photo. A
+     herb-tinted radial wash that quietly suggests "food" without inventing
+     a second accent color. Pair with the chef's initials over the top.
+     Light-first per the design system; dark overrides below. */
+  .banner-fallback {
+    background:
+      radial-gradient(60% 80% at 30% 30%, oklch(0.78 0.10 145 / 0.45) 0%, transparent 70%),
+      radial-gradient(50% 70% at 80% 80%, oklch(0.55 0.10 145 / 0.30) 0%, transparent 70%),
+      linear-gradient(135deg, oklch(0.92 0.04 145) 0%, oklch(0.85 0.04 145) 100%);
+  }
+  :root.dark .banner-fallback,
+  .dark .banner-fallback {
+    background:
+      radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 145 / 0.28) 0%, transparent 70%),
+      radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 145 / 0.20) 0%, transparent 70%),
+      linear-gradient(135deg, oklch(0.22 0.018 60) 0%, oklch(0.16 0.012 60) 100%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) .banner-fallback {
+      background:
+        radial-gradient(60% 80% at 30% 30%, oklch(0.62 0.14 145 / 0.28) 0%, transparent 70%),
+        radial-gradient(50% 70% at 80% 80%, oklch(0.48 0.13 145 / 0.20) 0%, transparent 70%),
+        linear-gradient(135deg, oklch(0.22 0.018 60) 0%, oklch(0.16 0.012 60) 100%);
+    }
+  }
+
   /* Hero ambience — single-accent (herb) radial wash for richer hero tone.
      Used as a decorative aria-hidden backdrop; never as a foreground gradient.
      Stays within the "one accent, photo-forward" design rule.

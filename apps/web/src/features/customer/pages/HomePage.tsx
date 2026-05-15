@@ -510,10 +510,19 @@ export default function HomePage() {
   );
 }
 
+function chefInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return (words[0]!.slice(0, 2)).toUpperCase();
+  return ((words[0]![0] ?? '') + (words[1]![0] ?? '')).toUpperCase();
+}
+
 function FeaturedChefCard({ chef }: { chef: Chef }) {
   const { isAuthenticated, login } = useAuth();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = isFavorite(chef.id);
+  const bannerSrc = chef.bannerImage || chef.profileImage;
+  const initials = chefInitials(chef.businessName);
 
   const handleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -537,28 +546,39 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
   };
 
   return (
-    <Link to={`/chefs/${chef.id}`}>
-      <Card
-        variant="default"
-        padding="none"
-        hover="lift"
-        className="overflow-hidden group"
-      >
-        {/* Banner */}
-        <div className="relative h-32 overflow-hidden">
-          <img
-            src={chef.bannerImage || chef.profileImage}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
-          />
+    <Link
+      to={`/chefs/${chef.id}`}
+      className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+    >
+      <article className="card-hive group h-full overflow-hidden">
+        {/* Banner — uses .banner-fallback as the underlay so a missing image
+            still reads as a brand-tinted cell, never flat black. */}
+        <div className="banner-fallback relative h-40 overflow-hidden">
+          {bannerSrc ? (
+            <img
+              src={bannerSrc}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 flex items-center justify-center font-display text-5xl font-semibold text-on-photo-accent"
+            >
+              {initials}
+            </span>
+          )}
           <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
 
           {chef.verified && (
-            <Badge variant="success" size="sm" className="absolute top-3 left-3">
+            <span className="chip-on-photo-accent absolute top-3 left-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium">
               Verified
-            </Badge>
+            </span>
           )}
 
           {/* Favorite button */}
@@ -567,13 +587,14 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
             onClick={handleFavorite}
             aria-label={favorited ? `Remove ${chef.businessName} from favorites` : `Save ${chef.businessName} to favorites`}
             aria-pressed={favorited}
-            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-bone shadow-1 transition-all hover:bg-bone hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
+            className="chip-on-photo absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
           >
             <Heart
               aria-hidden="true"
-              className={`h-4 w-4 transition-colors ${
-                favorited ? 'fill-paprika text-paprika' : 'text-ink-soft'
-              }`}
+              className={cn(
+                'h-4 w-4 transition-colors',
+                favorited ? 'fill-paprika text-paprika' : 'text-on-photo'
+              )}
             />
           </button>
 
@@ -582,16 +603,16 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
               src={chef.profileImage}
               alt={chef.businessName}
               size="xl"
-              className="border-4 border-bone shadow-elevated"
+              className="border-4 border-[var(--bone)] shadow-2"
             />
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-4 pt-12">
-          <div className="flex items-start justify-between">
+        <div className="p-5 pt-10">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-ink truncate group-hover:text-herb transition-colors">
+              <h3 className="font-display text-lg font-semibold text-ink truncate group-hover:text-herb transition-colors">
                 {chef.businessName}
               </h3>
               <p className="mt-1 text-sm text-ink-muted truncate">
@@ -620,7 +641,7 @@ function FeaturedChefCard({ chef }: { chef: Chef }) {
             )}
           </div>
         </div>
-      </Card>
+      </article>
     </Link>
   );
 }
