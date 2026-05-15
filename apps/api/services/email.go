@@ -119,9 +119,16 @@ func (s *EmailService) send(to, subject, htmlBody string) error {
 	return nil
 }
 
-// SendOrderConfirmation sends a branded order confirmation email to the customer
-func (s *EmailService) SendOrderConfirmation(to, orderNumber string, items []OrderItemSummary, total float64) error {
-	subject, html := OrderConfirmationHTML(orderNumber, items, total)
+// SendOrderConfirmation sends a branded order confirmation email to the customer.
+// details is optional — when populated, the email renders a CGST §31-compliant
+// invoice (GST breakup, HSN/SAC, supplier particulars, chef + ETA + address);
+// when nil, the email falls back to the legacy minimal layout so existing
+// callers keep working.
+//
+// TODO(CW-01e-backend): wire the order pipeline to pass invoice details so
+// the confirmation email is invoice-shaped end-to-end.
+func (s *EmailService) SendOrderConfirmation(to, orderNumber string, items []OrderItemSummary, total float64, details *OrderInvoiceDetails) error {
+	subject, html := OrderConfirmationHTML(orderNumber, items, total, details)
 	return s.send(to, subject, html)
 }
 

@@ -23,6 +23,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.36.0
+	gorm.io/driver/sqlite v1.6.0
 )
 
 require (
@@ -109,5 +110,4 @@ require (
 	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/driver/sqlite v1.6.0 // indirect
 )

@@ -892,7 +892,12 @@ func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
 	case "order_confirmation":
 		orderNumber, _ := notif.Data["order_number"].(string)
 		total, _ := notif.Data["total"].(float64)
-		if err := emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total); err != nil {
+		// TODO(CW-01e-backend): populate OrderInvoiceDetails (GST breakup,
+		// HSN/SAC, chef name + FSSAI, delivery address, ETA, supplier
+		// particulars) from the order so the confirmation email satisfies
+		// CGST Act 2017 §31 + Rule 46. Passing nil keeps the legacy
+		// minimal layout until the order pipeline is wired through.
+		if err := emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total, nil); err != nil {
 			log.Printf("Failed to send order confirmation email: %v", err)
 		}
 	case "order_status":

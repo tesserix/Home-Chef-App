@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Copy,
   RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -106,6 +107,26 @@ export default function OrderDetailPage() {
     if (order) {
       navigator.clipboard.writeText(order.orderNumber);
       toast.success('Order number copied');
+    }
+  };
+
+  // CW-01e: customers are legally entitled to a GST invoice under CGST Act
+  // 2017 §31 once an order is fulfilled or refunded. We surface the existing
+  // /orders/:id/invoice endpoint here; backend still owes the PDF rendering
+  // and full CGST §31/Rule 46 particulars (HSN/SAC, GST breakup, supplier).
+  // TODO(CW-01e-backend): replace the JSON fetch with a signed PDF download
+  // URL once the invoice-generation service ships.
+  const [isInvoiceLoading, setIsInvoiceLoading] = useState(false);
+  const handleDownloadInvoice = async () => {
+    if (!order || isInvoiceLoading) return;
+    setIsInvoiceLoading(true);
+    try {
+      await apiClient.get(`/orders/${order.id}/invoice`);
+      toast.success('Invoice generated — PDF download coming soon');
+    } catch {
+      toast.error('Invoice is not yet available — please contact support');
+    } finally {
+      setIsInvoiceLoading(false);
     }
   };
 
@@ -326,6 +347,20 @@ export default function OrderDetailPage() {
           {order.status === 'delivered' && (
             <Button asChild variant="primary" leftIcon={<Star aria-hidden="true" className="h-4 w-4" />}>
               <Link to={`/orders/${order.id}/review`}>Leave a Review</Link>
+            </Button>
+          )}
+
+          {/* CW-01e: GST invoice download — shown only once the order is in a
+              terminal state with payment captured (delivered or refunded). */}
+          {(order.status === 'delivered' || order.status === 'refunded') && (
+            <Button
+              variant="outline"
+              onClick={handleDownloadInvoice}
+              disabled={isInvoiceLoading}
+              isLoading={isInvoiceLoading}
+              leftIcon={<FileText aria-hidden="true" className="h-4 w-4" />}
+            >
+              Download invoice
             </Button>
           )}
 

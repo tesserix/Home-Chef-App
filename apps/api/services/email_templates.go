@@ -139,9 +139,50 @@ func PasswordResetHTML(resetURL string) (subject, html string) {
 	return
 }
 
-// OrderConfirmationHTML returns the order confirmation email
-func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total float64) (subject, html string) {
+// OrderInvoiceDetails carries optional invoice + fulfilment metadata for the
+// order-confirmation email so the message can satisfy CGST Act 2017 §31 +
+// Rule 46 particulars (HSN/SAC, GST breakup, supplier, place of supply) for
+// B2C food orders. All fields are optional; missing data is rendered as a
+// graceful fallback so existing callers that pass nil keep working.
+//
+// TODO(CW-01e-backend): wire the order pipeline to populate these fields when
+// dispatching the confirmation notification (currently the caller in
+// services/notifications.go passes nil items + only the total).
+type OrderInvoiceDetails struct {
+	// Tax breakdown
+	Subtotal    float64
+	DeliveryFee float64
+	ServiceFee  float64
+	Discount    float64
+	CGSTAmount  float64 // intra-state component
+	SGSTAmount  float64 // intra-state component
+	IGSTAmount  float64 // inter-state (set when CGST/SGST are zero)
+	GSTRatePct  float64 // e.g. 5 for prepared food via e-commerce
+	HSNCode     string  // SAC for service; defaults to "996331" (food via e-commerce)
+
+	// Fulfilment context
+	ChefName        string
+	ChefFSSAI       string
+	DeliveryAddress string
+	ETA             string // human-readable window e.g. "Today, 7:30–8:00 PM"
+
+	// Marketplace operator (Tesserix / Fe3dr Pty Ltd) — used as supplier of
+	// record for B2C invoices under §9(5).
+	SupplierName    string
+	SupplierAddress string
+	SupplierGSTIN   string
+	PlaceOfSupply   string // state name of the recipient
+	InvoiceNumber   string // consecutive invoice series; empty if not yet allocated
+}
+
+// OrderConfirmationHTML returns the order confirmation email. When details is
+// non-nil and populated, the email renders a full CGST §31-compliant invoice
+// (GST breakup, HSN, supplier particulars, chef, delivery address, ETA,
+// allergen reminder, refund policy link). When details is nil, the email
+// renders the legacy minimal layout so existing callers keep working.
+func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total float64, details *OrderInvoiceDetails) (subject, html string) {
 	subject = fmt.Sprintf("Order #%s confirmed — Fe3dr", orderNumber)
+
 	rows := ""
 	for _, item := range items {
 		rows += fmt.Sprintf(`<tr>
@@ -150,9 +191,16 @@ func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total f
             <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#374151;text-align:right;">₹%.2f</td>
           </tr>`, item.Name, item.Quantity, item.Price)
 	}
+
+	// Resolve invoice details with safe defaults so the template stays
+	// readable even when individual fields are missing.
+	d := orderInvoiceDetailsOrDefault(details)
+
 	body := fmt.Sprintf(`
           <h2>Order Confirmed!</h2>
-          <p>Your order <strong>#%s</strong> has been placed successfully. Your home chef is preparing your meal!</p>
+          <p><strong>Order #%s</strong> — your home chef is preparing your meal.</p>
+          %s
+          %s
           <table width="100%%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
             <tr style="background:#f9fafb;">
               <th style="padding:10px 0;text-align:left;color:#6b7280;font-size:13px;font-weight:600;">Item</th>
@@ -160,15 +208,150 @@ func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total f
               <th style="padding:10px 0;text-align:right;color:#6b7280;font-size:13px;font-weight:600;">Price</th>
             </tr>
             %s
+          </table>
+          %s
+          <table width="100%%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px 0;">
             <tr>
-              <td colspan="2" style="padding:12px 0;font-weight:700;color:#111827;">Total</td>
-              <td style="padding:12px 0;text-align:right;font-weight:700;color:#FF6B35;font-size:18px;">₹%.2f</td>
+              <td colspan="2" style="padding:12px 0;border-top:2px solid #111827;font-weight:700;color:#111827;font-size:16px;">Grand total</td>
+              <td style="padding:12px 0;border-top:2px solid #111827;text-align:right;font-weight:700;color:#FF6B35;font-size:18px;">₹%.2f</td>
             </tr>
           </table>
           <a href="https://fe3dr.com/orders" class="btn">Track Your Order</a>
-`, orderNumber, rows, total)
+          <div class="info-box" style="background:#FEF3C7;border-color:#F59E0B;">
+            <p style="color:#92400E;"><strong>Allergy notice:</strong> If you have any allergies or dietary restrictions, please contact your chef immediately via the order chat. Home kitchens may handle nuts, dairy, gluten, eggs and other allergens.</p>
+          </div>
+          %s
+          %s
+          <hr class="divider">
+          <p class="muted">Need help? Visit <a href="https://fe3dr.com/refund" style="color:#FF6B35;">our refund policy</a> or reply to this email. This is a computer-generated invoice — no signature is required.</p>
+`,
+		orderNumber,
+		renderInvoiceHeader(d),
+		renderFulfilmentBlock(d),
+		rows,
+		renderInvoiceSummary(d),
+		total,
+		renderSupplierFooter(d),
+		renderRefundBlurb(),
+	)
+
 	html = emailBase(subject, fmt.Sprintf("Order #%s confirmed — your meal is being prepared", orderNumber), body)
 	return
+}
+
+// orderInvoiceDetailsOrDefault returns a non-nil details struct with safe
+// fallbacks so the email template never panics on missing data.
+func orderInvoiceDetailsOrDefault(details *OrderInvoiceDetails) *OrderInvoiceDetails {
+	if details == nil {
+		return &OrderInvoiceDetails{
+			HSNCode:         "996331",
+			SupplierName:    "Fe3dr by HomeChef",
+			SupplierAddress: "Mumbai, India",
+			GSTRatePct:      5,
+		}
+	}
+	// Return a copy so callers cannot observe template-side mutation.
+	c := *details
+	if c.HSNCode == "" {
+		c.HSNCode = "996331" // SAC for prepared food supplied via e-commerce
+	}
+	if c.SupplierName == "" {
+		c.SupplierName = "Fe3dr by HomeChef"
+	}
+	if c.SupplierAddress == "" {
+		c.SupplierAddress = "Mumbai, India"
+	}
+	return &c
+}
+
+// renderInvoiceHeader returns the invoice number + HSN block. Empty when
+// neither is set so the legacy minimal email stays unchanged.
+func renderInvoiceHeader(d *OrderInvoiceDetails) string {
+	if d.InvoiceNumber == "" && d.SupplierGSTIN == "" {
+		return ""
+	}
+	parts := ""
+	if d.InvoiceNumber != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Invoice no.</strong> %s</p>`, d.InvoiceNumber)
+	}
+	if d.SupplierGSTIN != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>GSTIN:</strong> %s</p>`, d.SupplierGSTIN)
+	}
+	if d.HSNCode != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>HSN/SAC:</strong> %s (prepared food via e-commerce)</p>`, d.HSNCode)
+	}
+	if d.PlaceOfSupply != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Place of supply:</strong> %s</p>`, d.PlaceOfSupply)
+	}
+	return fmt.Sprintf(`<div style="background:#f9fafb;border-radius:8px;padding:12px 16px;margin:16px 0;">%s</div>`, parts)
+}
+
+// renderFulfilmentBlock returns chef + address + ETA. Empty when nothing set.
+func renderFulfilmentBlock(d *OrderInvoiceDetails) string {
+	if d.ChefName == "" && d.DeliveryAddress == "" && d.ETA == "" {
+		return ""
+	}
+	parts := ""
+	if d.ChefName != "" {
+		fssai := ""
+		if d.ChefFSSAI != "" {
+			fssai = fmt.Sprintf(` <span class="muted">(FSSAI %s)</span>`, d.ChefFSSAI)
+		}
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Chef:</strong> %s%s</p>`, d.ChefName, fssai)
+	}
+	if d.DeliveryAddress != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Delivering to:</strong> %s</p>`, d.DeliveryAddress)
+	}
+	if d.ETA != "" {
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Expected by:</strong> %s</p>`, d.ETA)
+	}
+	return fmt.Sprintf(`<div style="border-left:3px solid #FF6B35;padding:8px 12px;margin:16px 0;">%s</div>`, parts)
+}
+
+// renderInvoiceSummary returns the GST breakup rows. Empty when no GST data
+// is supplied so the legacy "total only" email stays unchanged.
+func renderInvoiceSummary(d *OrderInvoiceDetails) string {
+	hasBreakdown := d.Subtotal > 0 || d.DeliveryFee > 0 || d.ServiceFee > 0 ||
+		d.CGSTAmount > 0 || d.SGSTAmount > 0 || d.IGSTAmount > 0
+	if !hasBreakdown {
+		return ""
+	}
+	rows := ""
+	rowFmt := `<tr><td style="padding:6px 0;color:#4b5563;font-size:14px;">%s</td><td style="padding:6px 0;text-align:right;color:#374151;font-size:14px;">₹%.2f</td></tr>`
+	if d.Subtotal > 0 {
+		rows += fmt.Sprintf(rowFmt, "Subtotal", d.Subtotal)
+	}
+	if d.DeliveryFee > 0 {
+		rows += fmt.Sprintf(rowFmt, "Delivery fee", d.DeliveryFee)
+	}
+	if d.ServiceFee > 0 {
+		rows += fmt.Sprintf(rowFmt, "Service / platform fee", d.ServiceFee)
+	}
+	if d.Discount > 0 {
+		rows += fmt.Sprintf(`<tr><td style="padding:6px 0;color:#15803D;font-size:14px;">Discount</td><td style="padding:6px 0;text-align:right;color:#15803D;font-size:14px;">-₹%.2f</td></tr>`, d.Discount)
+	}
+	if d.CGSTAmount > 0 {
+		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("CGST @ %.1f%%", d.GSTRatePct/2), d.CGSTAmount)
+	}
+	if d.SGSTAmount > 0 {
+		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("SGST @ %.1f%%", d.GSTRatePct/2), d.SGSTAmount)
+	}
+	if d.IGSTAmount > 0 {
+		rows += fmt.Sprintf(rowFmt, fmt.Sprintf("IGST @ %.1f%%", d.GSTRatePct), d.IGSTAmount)
+	}
+	return fmt.Sprintf(`<table width="100%%" cellpadding="0" cellspacing="0" style="margin:0 0 8px 0;">%s</table>`, rows)
+}
+
+// renderSupplierFooter returns the supplier of record block required by
+// CGST Rule 46 (name + address of supplier). Always rendered with sensible
+// defaults so the email is invoice-shaped even when the caller passes nil.
+func renderSupplierFooter(d *OrderInvoiceDetails) string {
+	return fmt.Sprintf(`<p class="muted" style="margin-top:24px;">Supplied by <strong>%s</strong>, %s.</p>`, d.SupplierName, d.SupplierAddress)
+}
+
+// renderRefundBlurb returns the short cancellation/refund policy line.
+func renderRefundBlurb() string {
+	return `<p class="muted">Cancellations and refunds are handled per our <a href="https://fe3dr.com/refund" style="color:#FF6B35;">refund policy</a>. Contact support within 24 hours if anything is wrong with your order.</p>`
 }
 
 // OrderStatusUpdateHTML returns the order status update email
