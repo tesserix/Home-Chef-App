@@ -16,10 +16,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
-import { ChevronLeft, MapPin, Plus } from 'lucide-react-native';
+import { Check, ChevronLeft, Clock, FileText, MapPin, Plus } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -75,6 +75,8 @@ export default function CheckoutScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pollingOrderId, setPollingOrderId] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  // CW-01d: explicit per-order T&C + Refund Policy consent for RBI PA disclosure.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Pre-select default address when addresses load
   useEffect(() => {
@@ -176,6 +178,10 @@ export default function CheckoutScreen() {
 
   async function handlePlaceOrder() {
     if (!selectedAddressId || cartStore.items.length === 0 || !cartStore.chefId) return;
+    if (!acceptedTerms) {
+      setError('Please accept the Terms of Service and Refund Policy to continue.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -229,7 +235,8 @@ export default function CheckoutScreen() {
     cartStore.items.length > 0 &&
     !!selectedAddressId &&
     !!cartStore.chefId &&
-    !isLoading;
+    !isLoading &&
+    acceptedTerms;
 
   function formatAddress(addr: Address): string {
     const parts = [addr.addressLine1];
@@ -485,6 +492,73 @@ export default function CheckoutScreen() {
               <Text className="text-base font-medium text-ink">₹{total.toFixed(2)}</Text>
             </View>
           </View>
+        </View>
+
+        {/* ── Payment & refund summary (CW-01d / RBI PA MD §8) ── */}
+        <View className="mx-4 mt-4 bg-bone rounded-2xl p-4 gap-3">
+          <View>
+            <Text className="text-sm font-semibold text-ink mb-1">Payment & refund summary</Text>
+            <Text className="text-sm text-ink-soft leading-5">
+              Payments are processed by Razorpay (RBI-licensed payment aggregator).
+              Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
+              order proceeds go to your chef minus the platform commission.
+            </Text>
+          </View>
+          <View className="flex-row items-start gap-2">
+            <Clock size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <Text className="text-sm text-ink-soft flex-1 leading-5">
+              Refunds return to your original payment method within{' '}
+              <Text className="font-semibold text-ink">7 working days</Text> per RBI Payment
+              Aggregator Master Direction §8.
+            </Text>
+          </View>
+          <View className="flex-row items-start gap-2">
+            <FileText size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <Text className="text-sm text-ink-soft flex-1 leading-5">
+              See our{' '}
+              <Link href="/refund" className="text-herb underline">
+                Refund Policy
+              </Link>{' '}
+              for cancellation rules by order stage.
+            </Text>
+          </View>
+          <View className="flex-row items-start gap-2">
+            <Clock size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <Text className="text-sm text-ink-soft flex-1 leading-5">
+              Estimated delivery: 30–45 minutes after the chef accepts your order.
+              Actual time depends on the chef's preparation and your driver's route.
+            </Text>
+          </View>
+        </View>
+
+        {/* ── T&C + Refund consent (CW-01d) ── */}
+        <View className="mx-4 mt-4">
+          <Pressable
+            onPress={() => setAcceptedTerms((prev: boolean) => !prev)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: acceptedTerms }}
+            accessibilityLabel="I agree to the Terms of Service and Refund Policy for this order"
+            className="flex-row items-start gap-3 bg-bone rounded-2xl p-4"
+          >
+            <View
+              className={`w-5 h-5 rounded border-2 items-center justify-center mt-0.5 ${
+                acceptedTerms ? 'border-herb bg-herb' : 'border-mist-strong bg-paper'
+              }`}
+            >
+              {acceptedTerms && <Check size={14} color="#fafaf7" />}
+            </View>
+            <Text className="flex-1 text-sm text-ink-soft leading-5">
+              I agree to the{' '}
+              <Link href="/terms" className="text-herb underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/refund" className="text-herb underline">
+                Refund Policy
+              </Link>{' '}
+              for this order.
+            </Text>
+          </Pressable>
         </View>
 
         {/* ── Note (optional) ── */}

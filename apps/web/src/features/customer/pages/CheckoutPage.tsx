@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +9,7 @@ import {
   Clock,
   ChevronRight,
   Check,
-
+  FileText,
   Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -70,6 +70,10 @@ export default function CheckoutPage() {
   const [tip, setTip] = useState<number>(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  // CW-01d: explicit T&C + Refund Policy consent is required per order
+  // (not just at signup) for RBI PA disclosure compliance. The Place Order
+  // CTA stays disabled until this is checked.
+  const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
 
   // The currency of the amounts on this page is the chef's settlement
   // currency — that's what the backend will charge the customer in. Falls
@@ -117,6 +121,10 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     if (!cart.chefId || !selectedAddress) {
       toast.error('Please select a delivery address');
+      return;
+    }
+    if (!acceptedTerms) {
+      toast.error('Please accept the Terms of Service and Refund Policy to continue');
       return;
     }
 
@@ -487,7 +495,10 @@ export default function CheckoutPage() {
                   />
                   <div>
                     <span className="font-medium text-ink">As soon as possible</span>
-                    <p className="text-sm text-ink-muted">Usually 30-45 minutes</p>
+                    <p className="text-sm text-ink-muted">
+                      Estimated 30-45 minutes after the chef accepts your order.
+                      Actual time depends on chef preparation and driver route.
+                    </p>
                   </div>
                 </label>
                 <label
@@ -549,6 +560,39 @@ export default function CheckoutPage() {
                   <p className="text-xs text-ink-muted">
                     Pay securely via UPI, cards, net banking, or wallets
                   </p>
+                </div>
+              </div>
+
+              {/* CW-01d: RBI Payment Aggregator disclosure block. Per RBI PA
+                  Master Direction §8, refund timeline and merchant-of-record
+                  must be disclosed at the point of payment. */}
+              <div className="mt-4 space-y-3 rounded-md border border-mist bg-paper p-4 text-sm text-ink-soft">
+                <div>
+                  <div className="mb-1 font-medium text-ink">Payment &amp; refund summary</div>
+                  <p>
+                    Payments are processed by Razorpay (RBI-licensed payment aggregator).
+                    Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
+                    order proceeds go to your chef minus the platform commission.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb" aria-hidden="true" />
+                    <p>
+                      Refunds return to your original payment method within{' '}
+                      <strong>7 working days</strong> per RBI Payment Aggregator Master Direction §8.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb" aria-hidden="true" />
+                    <p>
+                      See our{' '}
+                      <Link to="/refund" className="text-herb hover:underline">
+                        Refund Policy
+                      </Link>{' '}
+                      for cancellation rules by order stage.
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
@@ -648,9 +692,14 @@ export default function CheckoutPage() {
                   <span>Service fee</span>
                   <span>{fp(serviceFee, { currency: orderCurrency })}</span>
                 </div>
+                {/* CW-01d / LEG-COREUX-031: Clarify GST line for IN orders.
+                    TODO(CW-01e): backend to split out GST line with HSN/SAC
+                    code per CGST Act 2017 §31 — currently we render whatever
+                    label the backend returns and fall back to "GST" for IN
+                    orders so customers see the legally-required name. */}
                 <div className="flex justify-between text-ink-soft">
                   <span>
-                    {taxRule?.taxName || 'Tax'}
+                    {taxRule?.taxName || (taxCountry === 'IN' ? 'GST' : 'Tax')}
                     {rate > 0 ? ` (${rate}%${isInclusive ? ' incl.' : ''})` : ''}
                   </span>
                   <span>{fp(tax, { currency: orderCurrency })}</span>
@@ -668,22 +717,46 @@ export default function CheckoutPage() {
                 <span>{fp(total, { currency: orderCurrency })}</span>
               </div>
 
+              {/* CW-01d: explicit per-order T&C + Refund Policy consent.
+                  Place Order CTA stays disabled until checked. */}
+              <label
+                htmlFor="checkout-accept-terms"
+                className="mt-6 flex items-start gap-2 text-sm text-ink-soft"
+              >
+                <input
+                  id="checkout-accept-terms"
+                  type="checkbox"
+                  required
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  aria-describedby="checkout-accept-terms-help"
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 text-herb focus-visible:ring-herb"
+                />
+                <span id="checkout-accept-terms-help">
+                  I agree to the{' '}
+                  <Link to="/terms" className="text-herb hover:underline">
+                    Terms of Service
+                  </Link>{' '}
+                  and{' '}
+                  <Link to="/refund" className="text-herb hover:underline">
+                    Refund Policy
+                  </Link>{' '}
+                  for this order.
+                </span>
+              </label>
+
               <Button
                 variant="primary"
                 size="lg"
                 fullWidth
                 isLoading={isProcessing}
                 onClick={handlePlaceOrder}
-                disabled={isProcessing || !selectedAddress}
+                disabled={isProcessing || !selectedAddress || !acceptedTerms}
                 rightIcon={!isProcessing ? <ChevronRight aria-hidden="true" className="h-5 w-5" /> : undefined}
-                className="mt-6"
+                className="mt-4"
               >
                 {isProcessing ? 'Placing Order...' : `Place Order - ${fp(total, { currency: orderCurrency })}`}
               </Button>
-
-              <p className="mt-4 text-center text-xs text-ink-muted">
-                By placing this order, you agree to our Terms of Service
-              </p>
             </div>
           </div>
         </div>
