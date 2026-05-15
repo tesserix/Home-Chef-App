@@ -284,12 +284,61 @@
     display: none;
   }
 
-  /* Photo legibility scrim — the only allowed gradient */
+  /* Photo legibility scrim — the only allowed gradient.
+     Theme-invariant: always darkens toward warm-black so overlay text reads
+     regardless of light/dark mode. Three-stop ramp gives a softer falloff
+     than a 2-stop linear and avoids the visible band line. */
   .scrim-bottom {
-    background: linear-gradient(180deg, transparent 0%, oklch(0.18 0.01 80 / 0.7) 100%);
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      oklch(0.14 0.012 60 / 0.35) 45%,
+      oklch(0.10 0.012 60 / 0.88) 100%
+    );
   }
   .scrim-top {
-    background: linear-gradient(180deg, oklch(0.18 0.01 80 / 0.4) 0%, transparent 100%);
+    background: linear-gradient(
+      180deg,
+      oklch(0.10 0.012 60 / 0.6) 0%,
+      oklch(0.14 0.012 60 / 0.2) 55%,
+      transparent 100%
+    );
+  }
+
+  /* Text that always sits on top of photos / dark scrims.
+     Theme-invariant — does NOT flip in dark mode, unlike `text-paper`. */
+  .text-on-photo {
+    color: oklch(0.99 0 0);
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.45);
+  }
+  .text-on-photo-soft {
+    color: oklch(0.95 0.003 80);
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.40);
+  }
+
+  /* Hero ambience — single-accent (herb) radial wash for richer hero tone.
+     Used as a decorative aria-hidden backdrop; never as a foreground gradient.
+     Stays within the "one accent, photo-forward" design rule.
+     Tuned per-mode: subtle wash on light, richer ambient glow on dark. */
+  .hero-ambience {
+    background:
+      radial-gradient(55% 60% at 8% 20%, oklch(0.48 0.13 145 / 0.10) 0%, transparent 65%),
+      radial-gradient(45% 55% at 95% 90%, oklch(0.48 0.13 145 / 0.07) 0%, transparent 70%);
+  }
+  :root.dark .hero-ambience,
+  .dark .hero-ambience {
+    background:
+      radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 145 / 0.22) 0%, transparent 65%),
+      radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 145 / 0.16) 0%, transparent 70%),
+      radial-gradient(80% 60% at 50% 100%, oklch(0.22 0.025 60 / 0.5) 0%, transparent 70%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) .hero-ambience {
+      background:
+        radial-gradient(55% 60% at 8% 20%, oklch(0.62 0.14 145 / 0.22) 0%, transparent 65%),
+        radial-gradient(45% 55% at 95% 90%, oklch(0.62 0.14 145 / 0.16) 0%, transparent 70%),
+        radial-gradient(80% 60% at 50% 100%, oklch(0.22 0.025 60 / 0.5) 0%, transparent 70%);
+    }
   }
 
   /* Touch-friendly sizing */

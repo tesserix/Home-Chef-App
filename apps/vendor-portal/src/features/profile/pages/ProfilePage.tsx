@@ -278,7 +278,7 @@ export default function ProfilePage() {
               isLoading={bannerMutation.isPending}
               disabled={bannerMutation.isPending}
               onClick={() => bannerInputRef.current?.click()}
-              className="absolute bottom-3 right-3 rounded-full bg-ink/40 text-paper hover:bg-ink/60 hover:text-paper"
+              className="absolute bottom-3 right-3 rounded-full bg-black/45 text-on-photo backdrop-blur-sm hover:bg-black/60"
             >
               <Camera className="h-4 w-4" />
             </Button>

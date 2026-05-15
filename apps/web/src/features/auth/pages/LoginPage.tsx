@@ -265,13 +265,13 @@ export default function LoginPage() {
           loading="lazy"
           decoding="async"
         />
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/20 to-transparent" />
+        <div aria-hidden="true" className="absolute inset-0 scrim-top" />
         <div className="absolute bottom-0 left-0 right-0 scrim-bottom p-12">
           <motion.blockquote
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
-            className="text-paper"
+            className="text-on-photo"
           >
             <p className="font-display text-xl font-medium leading-relaxed">
               "Fe3dr has changed how I eat. Finally, real homemade food that
@@ -279,7 +279,7 @@ export default function LoginPage() {
             </p>
             <footer className="mt-4">
               <p className="font-semibold">Sarah M.</p>
-              <p className="text-sm text-paper/80">Happy Customer</p>
+              <p className="text-on-photo-soft text-sm">Happy Customer</p>
             </footer>
           </motion.blockquote>
         </div>

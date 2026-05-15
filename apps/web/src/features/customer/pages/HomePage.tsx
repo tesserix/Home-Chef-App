@@ -70,9 +70,13 @@ export default function HomePage() {
     <div className="min-h-screen bg-paper">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-bone py-20 lg:py-32">
-        {/* Decorative background element — single tinted wash, not a multi-stop gradient */}
+        {/* Decorative background — herb-tinted radial ambience.
+            Stays within the single-accent rule; gives dark mode a warm,
+            restaurant-interior feel rather than flat black. */}
         <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
-          <div className="absolute -left-32 -top-32 h-64 w-64 rounded-full bg-herb-tint/50 blur-3xl" />
+          <div className="absolute inset-0 hero-ambience" />
+          <div className="absolute -left-32 -top-32 h-72 w-72 rounded-full bg-herb-tint/40 blur-3xl" />
+          <div className="absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-herb-tint/30 blur-3xl" />
         </div>
 
         <div className="container-app relative">
@@ -259,7 +263,7 @@ export default function HomePage() {
                 <motion.div key={cuisine.name} variants={scaleIn}>
                   <Link
                     to={`/chefs?cuisine=${cuisine.name}`}
-                    className="group relative block overflow-hidden rounded-2xl shadow-1 hover:shadow-2 transition-all duration-300"
+                    className="group relative block overflow-hidden rounded-2xl shadow-1 hover:shadow-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-herb focus-visible:ring-offset-2"
                   >
                     <div className="aspect-[4/3]">
                       <img
@@ -269,12 +273,12 @@ export default function HomePage() {
                         height={200}
                         loading="lazy"
                         decoding="async"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                       />
                     </div>
                     <div aria-hidden="true" className="absolute inset-0 scrim-bottom" />
                     <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <h3 className="font-semibold text-paper">{cuisine.name}</h3>
+                      <h3 className="text-on-photo font-display text-lg font-semibold tracking-tight">{cuisine.name}</h3>
                     </div>
                   </Link>
                 </motion.div>

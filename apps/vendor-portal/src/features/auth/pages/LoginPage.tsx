@@ -88,26 +88,26 @@ export default function LoginPage() {
             transition={{ delay: 0.3, duration: 0.6 }}
           >
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bone/20">
-                <ChefHat className="h-5 w-5 text-paper" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                <ChefHat className="h-5 w-5 text-on-photo" />
               </div>
-              <span className="text-xl font-semibold text-paper font-display">Fe3dr</span>
+              <span className="text-on-photo text-xl font-semibold font-display">Fe3dr</span>
             </div>
 
-            <h2 className="max-w-md font-display text-3xl font-semibold tabular-nums leading-tight text-paper xl:text-4xl">
+            <h2 className="text-on-photo max-w-md font-display text-3xl font-semibold tabular-nums leading-tight xl:text-4xl">
               Grow your home kitchen business
             </h2>
-            <p className="mt-3 max-w-md text-base text-paper/80">
+            <p className="text-on-photo-soft mt-3 max-w-md text-base">
               Manage menus, track orders, view earnings — all from one dashboard.
             </p>
 
             <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3">
               {FEATURES.map((feature) => (
                 <div key={feature} className="flex items-center gap-2.5">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bone/20">
-                    <Check className="h-3 w-3 text-paper" />
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                    <Check className="h-3 w-3 text-on-photo" />
                   </div>
-                  <span className="text-sm text-paper/90">{feature}</span>
+                  <span className="text-on-photo-soft text-sm">{feature}</span>
                 </div>
               ))}
             </div>

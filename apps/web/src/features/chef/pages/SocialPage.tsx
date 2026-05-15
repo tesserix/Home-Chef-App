@@ -145,7 +145,7 @@ function PostCard({
             className="h-full w-full object-cover" loading="lazy" decoding="async"
           />
           {post.images.length > 1 && (
-            <div className="absolute bottom-2 right-2 rounded-full bg-ink/50 px-2 py-0.5 text-xs text-paper">
+            <div className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-xs text-on-photo backdrop-blur-sm">
               +{post.images.length - 1} more
             </div>
           )}
