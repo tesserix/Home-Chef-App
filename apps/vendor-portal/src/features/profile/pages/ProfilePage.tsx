@@ -629,12 +629,40 @@ interface ChefDocument {
   createdAt: string;
 }
 
+// FSSAI is required by FSS Act §31 before a chef can publish menu items.
+// Copy mirrors the onboarding step (StepDocuments.tsx) so chefs see a consistent
+// story across signup and operational settings.
 const DOCUMENT_TYPES = [
-  { type: 'fssai_license', label: 'FSSAI License', description: 'Food Safety and Standards Authority certificate', required: true },
-  { type: 'pan_card', label: 'PAN Card', description: 'Permanent Account Number card', required: true },
-  { type: 'aadhaar_card', label: 'Aadhaar Card', description: 'Aadhaar identity card', required: true },
-  { type: 'food_safety_cert', label: 'Food Safety Certificate', description: 'Food safety training certificate', required: false },
-  { type: 'cancelled_cheque', label: 'Cancelled Cheque', description: 'For bank account verification', required: false },
+  {
+    type: 'fssai_license',
+    label: 'FSSAI licence',
+    description: 'Required by Indian food-safety law (FSS Act §31) before you can publish menu items',
+    required: true,
+  },
+  {
+    type: 'pan_card',
+    label: 'PAN card',
+    description: 'Permanent Account Number card — required for tax and payouts',
+    required: true,
+  },
+  {
+    type: 'aadhaar_card',
+    label: 'Aadhaar card',
+    description: 'For identity verification',
+    required: true,
+  },
+  {
+    type: 'food_safety_cert',
+    label: 'Food safety certificate',
+    description: 'Food safety training certificate (optional)',
+    required: false,
+  },
+  {
+    type: 'cancelled_cheque',
+    label: 'Cancelled cheque',
+    description: 'For bank account verification',
+    required: false,
+  },
 ];
 
 function DocumentsSection({ chefId }: { chefId?: string }) {

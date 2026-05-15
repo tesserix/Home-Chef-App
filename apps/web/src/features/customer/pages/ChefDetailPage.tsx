@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -149,6 +150,17 @@ export default function ChefDetailPage() {
                     )}
                   </div>
                   <p className="mt-1 text-ink-soft">{chef.cuisines.join(' • ')}</p>
+                  {/* FSSAI licence — surfaces statutory compliance (FSS Act §31) to customers. */}
+                  {/* TODO(CW-01c): Backend must expose `fssaiLicenseNumber` on /chefs/:id. */}
+                  {chef.fssaiLicenseNumber ? (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-ink-soft">
+                      <ShieldCheck className="h-4 w-4 text-herb" aria-hidden="true" />
+                      <span>
+                        FSSAI licence:{' '}
+                        <span className="font-mono">{chef.fssaiLicenseNumber}</span>
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Actions */}

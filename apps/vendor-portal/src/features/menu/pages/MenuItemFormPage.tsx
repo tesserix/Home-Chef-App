@@ -55,7 +55,12 @@ const menuItemSchema = z.object({
     .max(9999.99, 'Price must be under ₹10,000'),
   categoryId: z.string().min(1, 'Category is required'),
   dietaryTags: z.array(z.string()).min(1, 'Select at least one dietary tag'),
-  allergens: z.array(z.string()).default([]),
+  // Allergen disclosure is mandatory: chefs must either list allergens or
+  // explicitly mark the dish as having none. Customers depend on this to avoid
+  // anaphylaxis. See content audit LEG-COREUX-021..026.
+  allergens: z
+    .array(z.string())
+    .min(1, 'Declare allergens or mark "none" — required for customer safety'),
   prepTime: z
     .number({ invalid_type_error: 'Prep time is required' })
     .min(1, 'Prep time must be at least 1 minute')
@@ -124,13 +129,39 @@ function AllergenTagInput({
   const helpId = 'allergen-tag-help';
   const errorId = 'allergen-tag-error';
 
+  const hasNoneTag = value.includes('none');
+  const handleMarkNone = () => {
+    // Toggle the "none" sentinel; clears any other allergens when set.
+    if (hasNoneTag) {
+      onChange(value.filter((t) => t !== 'none'));
+    } else {
+      onChange(['none']);
+    }
+  };
+
   return (
     <div>
-      <label htmlFor={inputId} className="mb-1.5 block text-sm font-medium text-foreground">Allergens</label>
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor={inputId} className="block text-sm font-medium text-foreground">
+          Allergens <span className="text-destructive">*</span>
+        </label>
+        <button
+          type="button"
+          onClick={handleMarkNone}
+          className={`rounded-full px-3 py-0.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+            hasNoneTag
+              ? 'bg-herb-tint text-herb'
+              : 'border border-input text-muted-foreground hover:bg-mist'
+          }`}
+          aria-pressed={hasNoneTag}
+        >
+          {hasNoneTag ? 'Marked as no common allergens' : 'No common allergens in this dish'}
+        </button>
+      </div>
       <div
         className={`flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-lg border-2 px-3 py-2 transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/20 ${
           error ? 'border-destructive' : 'border-input hover:border-primary/30'
-        }`}
+        } ${hasNoneTag ? 'opacity-60' : ''}`}
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((tag) => (
@@ -157,17 +188,20 @@ function AllergenTagInput({
           id={inputId}
           type="text"
           value={input}
+          disabled={hasNoneTag}
           aria-describedby={error ? `${helpId} ${errorId}` : helpId}
           aria-invalid={Boolean(error)}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={() => { if (input.trim()) addTag(input); }}
-          placeholder={value.length === 0 ? 'Type an allergen and press Enter' : ''}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+          placeholder={value.length === 0 ? 'Type an allergen and press Enter (e.g. peanuts, dairy, gluten)' : ''}
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed"
         />
       </div>
       <p id={helpId} className="mt-1 text-xs text-muted-foreground">
-        Type each allergen and press Enter to add
+        Allergen disclosure is required by customer-safety policy. List each allergen
+        (peanuts, tree nuts, dairy, eggs, gluten, soy, sesame, shellfish, fish) and
+        press Enter, or mark the dish as having no common allergens.
       </p>
       {error && <p id={errorId} className="mt-1.5 text-sm text-destructive">{error}</p>}
     </div>

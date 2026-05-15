@@ -412,9 +412,13 @@ export default function HomePage() {
             >
               {([
                 {
+                  // Honest accuracy over marketing claim — we can only assert
+                  // chefs upload FSSAI licences before publishing, not that every
+                  // chef on the platform has been independently verified.
                   icon: ChefHat,
-                  title: 'Verified Chefs',
-                  description: 'All our home chefs are verified for food safety and quality',
+                  title: 'Licensed home chefs',
+                  description:
+                    'Home chefs upload their FSSAI food-safety licence before publishing menu items, in line with Indian law.',
                   tone: 'herb',
                 },
                 {

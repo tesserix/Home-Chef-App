@@ -25,6 +25,9 @@ interface DocSection {
   description: string;
   accept: string;
   required: boolean;
+  // Optional badge override — used for documents that are not required at signup
+  // but become required at a later operational gate (e.g. FSSAI before publishing).
+  badge?: { label: string; tone: 'destructive' | 'warning' };
   icon: React.ReactNode;
 }
 
@@ -74,18 +77,24 @@ const KITCHEN_PHOTOS: DocSection[] = [
   },
 ];
 
+// FSSAI sits in its own section: chefs may complete signup without it,
+// but it is required by Indian food-safety law (FSS Act §31) before any menu
+// item can be published to customers. Treat it as a deferred-required document.
+const FSSAI_DOC: DocSection = {
+  type: 'fssai_license',
+  label: 'FSSAI license',
+  description:
+    'Required by Indian food-safety law (FSS Act §31) before you can list menu items for customers. You can add this later from Settings, but your menu will stay in draft until it is uploaded.',
+  accept: '.jpg,.jpeg,.png,.pdf',
+  required: false,
+  badge: { label: 'Required before publishing', tone: 'warning' },
+  icon: <ShieldCheck className="h-5 w-5" />,
+};
+
 const OPTIONAL_DOCS: DocSection[] = [
   {
-    type: 'fssai_license',
-    label: 'FSSAI License',
-    description: 'If you have one — gives your profile a verified badge. You can add this later.',
-    accept: '.jpg,.jpeg,.png,.pdf',
-    required: false,
-    icon: <ShieldCheck className="h-5 w-5" />,
-  },
-  {
     type: 'food_safety_cert',
-    label: 'Food Safety Training Certificate',
+    label: 'Food safety training certificate',
     description: 'Any food handling or safety certification (optional)',
     accept: '.jpg,.jpeg,.png,.pdf',
     required: false,
@@ -93,7 +102,7 @@ const OPTIONAL_DOCS: DocSection[] = [
   },
   {
     type: 'cancelled_cheque',
-    label: 'Cancelled Cheque / Bank Proof',
+    label: 'Cancelled cheque / bank proof',
     description: 'For setting up direct payouts to your bank account (optional, can add later)',
     accept: '.jpg,.jpeg,.png,.pdf',
     required: false,
@@ -147,6 +156,17 @@ function DocUploadCard({ section }: { section: DocSection }) {
                 Required
               </span>
             )}
+            {!section.required && section.badge && (
+              <span
+                className={
+                  section.badge.tone === 'destructive'
+                    ? 'rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive'
+                    : 'rounded-full bg-amber-tint px-2 py-0.5 text-xs font-medium text-amber'
+                }
+              >
+                {section.badge.label}
+              </span>
+            )}
             {isUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             {existing && !isUploading && (
               <CheckCircle2 className="h-4 w-4 text-herb" />
@@ -183,8 +203,9 @@ export function StepDocuments({ errors }: Props) {
             Documents help us verify your kitchen and enable payouts
           </p>
           <p className="mt-1 text-xs text-info">
-            Your documents are encrypted and stored securely. They are only used for verification.
-            FSSAI license is optional — many home chefs start without one and add it later.
+            Your documents are encrypted and stored securely. You can start your application
+            without an FSSAI license, but you will need a valid licence number before you can
+            publish menu items to customers (FSS Act §31).
           </p>
         </div>
       </div>
@@ -225,10 +246,34 @@ export function StepDocuments({ errors }: Props) {
         </div>
       </Card>
 
+      {/* FSSAI license — deferred-required (FSS Act §31) */}
+      <Card>
+        <h3 className="text-lg font-semibold text-foreground">
+          FSSAI licence
+          <span className="ml-2 text-sm font-normal text-amber">(Required before publishing)</span>
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Indian food-safety law requires every food business to hold an FSSAI registration or
+          licence (FSS Act §31). You can submit your application without it, but your menu items
+          will stay in draft until you provide a valid licence number.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          <Input
+            label="FSSAI licence number"
+            placeholder="e.g. 12345678901234"
+            value={data.fssaiLicenseNumber || ''}
+            onChange={(e) => updateData({ fssaiLicenseNumber: e.target.value })}
+            hint="14-digit FSSAI number. You can add this later from Settings, before you publish your first menu item."
+          />
+          <DocUploadCard section={FSSAI_DOC} />
+        </div>
+      </Card>
+
       {/* Optional Documents */}
       <Card>
         <h3 className="text-lg font-semibold text-foreground">
-          Additional Documents
+          Additional documents
           <span className="ml-2 text-sm font-normal text-muted-foreground">(Optional)</span>
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -236,13 +281,6 @@ export function StepDocuments({ errors }: Props) {
         </p>
 
         <div className="mt-4 space-y-4">
-          <Input
-            label="FSSAI License Number (Optional)"
-            placeholder="e.g. 12345678901234"
-            value={data.fssaiLicenseNumber || ''}
-            onChange={(e) => updateData({ fssaiLicenseNumber: e.target.value })}
-            hint="14-digit FSSAI number. You can add this later from your profile settings."
-          />
           {OPTIONAL_DOCS.map((doc) => (
             <DocUploadCard key={doc.type} section={doc} />
           ))}

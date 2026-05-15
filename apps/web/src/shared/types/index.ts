@@ -59,6 +59,11 @@ export interface Chef {
   operatingHours: OperatingHours;
   verified: boolean;
   verifiedAt?: string;
+  // TODO(CW-01c): Expose chef FSSAI licence number on the public /chefs/:id API
+  // payload. Backend currently stores it on the chef profile (vendor-portal) but
+  // does not surface it to the customer storefront. Until then this is undefined
+  // and the badge falls back to a neutral state.
+  fssaiLicenseNumber?: string;
   createdAt: string;
 }
 
