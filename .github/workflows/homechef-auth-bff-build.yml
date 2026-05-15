@@ -1,0 +1,253 @@
+name: HomeChef Auth BFF - CI Build
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'hotfix/**'
+    paths:
+      - 'apps/auth-bff/**'
+      - '.github/workflows/homechef-auth-bff-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/auth-bff/**'
+      - '.github/workflows/homechef-auth-bff-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tesserix/home-chef-app/homechef-auth-bff
+
+jobs:
+  build:
+    name: Build and Push HomeChef Auth BFF
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Build and Push to GHCR (auto-mirrored to GAR ghcr-remote) ---
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Only emit `main-<sha7>` on main. No `:latest` — the bump-k8s
+          # job below writes the new tag into the homechef-auth-bff Argo CD
+          # App's helm.parameters in tesserix-k8s. The branch tag is kept
+          # so feature branches still produce a referenceable artifact.
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=homechef-auth-bff
+            org.opencontainers.image.description=HomeChef Auth BFF (GIP)
+
+      - name: Compute cache ref
+        id: cache
+        run: echo "ref=$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        id: build_push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/auth-bff
+          file: apps/auth-bff/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
+          cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
+
+      # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
+      - name: Run Trivy vulnerability scanner
+        id: trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** HomeChef Auth BFF" >> $GITHUB_STEP_SUMMARY
+          echo "**Architecture:** AMD64" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "**Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Deploy:** bump-k8s job updates argocd/prod/apps/homechef/homechef-auth-bff.yaml on push to main" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ─── Bump tesserix-k8s ArgoCD app to new image tag ──────────────────
+  # Uses the GitHub Contents API directly (PUT /contents/{path}) — same
+  # pattern as homechef-api-build.yml.
+  bump-k8s:
+    name: Bump tesserix-k8s image tag via API
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build]
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    env:
+      GH_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
+      REPO: tesserix/tesserix-k8s
+      FILE_PATH: argocd/prod/apps/homechef/homechef-auth-bff.yaml
+      SERVICE: homechef-auth-bff
+    steps:
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          if command -v yq >/dev/null; then
+            yq --version
+            exit 0
+          fi
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Bump image tag via API
+        env:
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+        run: |
+          set -euo pipefail
+          BOT_TOKEN="${GH_TOKEN}"
+          NEW_TAG="main-${SHORT_SHA}"
+          API="https://api.github.com/repos/${REPO}/contents/${FILE_PATH}"
+          AUTH_HDR=(-H "Authorization: Bearer ${BOT_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+
+          for attempt in 1 2 3; do
+            echo "::group::Attempt ${attempt}: fetch → bump → PUT"
+            RESP="$(curl -sS "${AUTH_HDR[@]}" "${API}?ref=main")"
+            BLOB_SHA="$(echo "$RESP" | jq -r '.sha // empty')"
+            if [ -z "$BLOB_SHA" ]; then
+              echo "GET failed:"
+              echo "$RESP" | jq -r '.message // .' | head -5
+              echo "::endgroup::"
+              sleep 2
+              continue
+            fi
+            echo "$RESP" | jq -r .content | base64 -d > /tmp/current.yaml
+
+            yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
+            echo "New values:"
+            grep -A1 "image\.tag" /tmp/current.yaml | head -4
+
+            NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
+            PAYLOAD="$(jq -nc \
+              --arg msg "chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
+              --arg content "${NEW_CONTENT}" \
+              --arg sha "${BLOB_SHA}" \
+              --arg branch main \
+              '{message:$msg, content:$content, sha:$sha, branch:$branch}')"
+
+            PUT_RESP="$(curl -sS -X PUT "${AUTH_HDR[@]}" -H "Content-Type: application/json" -d "$PAYLOAD" "$API")"
+            COMMIT_SHA="$(echo "$PUT_RESP" | jq -r '.commit.sha // empty')"
+            if [ -n "$COMMIT_SHA" ]; then
+              echo "Committed tesserix-k8s@${COMMIT_SHA}"
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "PUT failed:"
+            echo "$PUT_RESP" | jq -r '.message // .' | head -5
+            echo "::endgroup::"
+            sleep 2
+          done
+
+          echo "Failed to bump after 3 attempts." >&2
+          exit 1
+
+      - name: Bump Summary
+        if: always()
+        run: |
+          echo "## Bump Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** tesserix-k8s argocd/prod/apps/homechef/homechef-auth-bff.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**New tag:** \`main-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Source commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  test:
+    name: Run Tests
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Run unit tests
+        working-directory: apps/auth-bff
+        run: go test -race -coverprofile=coverage.out ./internal/...
+
+      - name: Run integration tests
+        working-directory: apps/auth-bff
+        run: go test -race -tags=integration ./internal/... -run TestEndToEnd
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-bff-coverage
+          path: apps/auth-bff/coverage.out
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** HomeChef Auth BFF" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** Unit + integration tests completed" >> $GITHUB_STEP_SUMMARY
