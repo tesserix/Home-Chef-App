@@ -6,7 +6,7 @@ products:
     apps:
       - name: web
         hosts: ["fe3dr.com", "www.fe3dr.com", "localhost:5173"]
-        gipTenantId: HomeChef-Customer-xxxxx
+        gipTenantId: HomeChef-Customer-rqg8a
         oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
         clientSecretEnv: HOMECHEF_CUSTOMER_CLIENT_SECRET
         sessionCookie: hc_session
@@ -21,7 +21,7 @@ products:
 
       - name: vendor-portal
         hosts: ["vendors.fe3dr.com", "localhost:5174"]
-        gipTenantId: HomeChef-Business-xxxxx
+        gipTenantId: HomeChef-Business-8s8ql
         oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
         clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
         sessionCookie: hc_vendor_session
@@ -34,7 +34,7 @@ products:
 
       - name: delivery-portal
         hosts: ["delivery.fe3dr.com", "localhost:5175"]
-        gipTenantId: HomeChef-Business-xxxxx
+        gipTenantId: HomeChef-Business-8s8ql
         oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
         clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
         sessionCookie: hc_driver_session
@@ -47,7 +47,7 @@ products:
 
       - name: admin-portal
         hosts: ["admin.fe3dr.com", "localhost:5176"]
-        gipTenantId: HomeChef-Internal-xxxxx
+        gipTenantId: HomeChef-Internal-gyofe
         oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
         clientSecretEnv: HOMECHEF_INTERNAL_CLIENT_SECRET
         sessionCookie: hc_admin_session
@@ -60,5 +60,5 @@ products:
         allowedOrigins: ["https://admin.fe3dr.com", "http://localhost:5176"]
 
 mobileTenantAllowlist:
-  - HomeChef-Customer-xxxxx
-  - HomeChef-Business-xxxxx
+  - HomeChef-Customer-rqg8a
+  - HomeChef-Business-8s8ql

@@ -87,7 +87,7 @@ func TestLogin_Redirects(t *testing.T) {
 	loc := w.Header().Get("Location")
 	assert.Contains(t, loc, "https://example.com/oauth/authorize")
 	assert.Contains(t, loc, "state=")
-	assert.Contains(t, loc, "tenantId=HomeChef-Customer-xxxxx")
+	assert.Contains(t, loc, "tenantId=HomeChef-Customer-rqg8a")
 	assert.Contains(t, loc, "nonce=")
 }
 
@@ -104,11 +104,11 @@ func TestLogin_UnknownHost_400(t *testing.T) {
 func TestExchange_Happy(t *testing.T) {
 	ver := &fakeVerifier{
 		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-xxxxx", Provider: "password",
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-rqg8a", Provider: "password",
 			Claims: map[string]any{
 				"sub":      "g1",
 				"email":    "x@y.com",
-				"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Customer-xxxxx"},
+				"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Customer-rqg8a"},
 			},
 		},
 	}

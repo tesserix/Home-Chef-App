@@ -34,7 +34,7 @@ func TestRegistry_UnknownHost_Errors(t *testing.T) {
 
 func TestRegistry_MobileTenantAllowlist(t *testing.T) {
 	r, _ := Load("../../homechef-products.yaml")
-	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Customer-xxxxx"))
-	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Business-xxxxx"))
-	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Internal-xxxxx"))
+	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Customer-rqg8a"))
+	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Business-8s8ql"))
+	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Internal-gyofe"))
 }

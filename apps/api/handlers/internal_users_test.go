@@ -81,7 +81,7 @@ func TestUpsert_NewUser_Inserts(t *testing.T) {
 	h := NewInternalUsersHandler(db)
 	w := postUpsert(t, h, UpsertUserRequest{
 		GIPUid:      "gip-1",
-		GIPTenantID: "HomeChef-Customer-xxxxx",
+		GIPTenantID: "HomeChef-Customer-rqg8a",
 		GIPProvider: "google.com",
 		AuthPool:    "customer",
 		Email:       "Alice@Example.com",
@@ -100,7 +100,7 @@ func TestUpsert_NewUser_Inserts(t *testing.T) {
 	assert.Equal(t, "alice@example.com", got.Email, "email should be lowercased")
 	assert.Equal(t, "Alice", got.FirstName)
 	assert.Equal(t, "Anderson", got.LastName)
-	assert.Equal(t, "HomeChef-Customer-xxxxx", got.GIPTenantID)
+	assert.Equal(t, "HomeChef-Customer-rqg8a", got.GIPTenantID)
 	assert.Equal(t, models.AuthPool("customer"), got.AuthPool)
 	assert.Equal(t, models.UserRole("customer"), got.Role)
 	assert.True(t, got.IsActive, "new users should be active by default")

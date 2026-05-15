@@ -57,14 +57,14 @@ func newDeps(t *testing.T, gipResult *fakeGIP, apiResult *fakeAPI, sessResult *f
 
 func TestAutoLogin_Happy(t *testing.T) {
 	deps := newDeps(t,
-		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-xxxxx", Provider: "google.com", Claims: map[string]any{}}},
+		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-rqg8a", Provider: "google.com", Claims: map[string]any{}}},
 		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
 		&fakeSessions{encoded: "sess-abc"},
 	)
 	r := gin.New()
 	NewHandler(deps).Register(r)
 
-	body := `{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-xxxxx"}`
+	body := `{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-rqg8a"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestAutoLogin_TenantNotAllowedForMobile_403(t *testing.T) {
 	)
 	r := gin.New()
 	NewHandler(deps).Register(r)
-	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Internal-xxxxx"}`
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Internal-gyofe"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestAutoLogin_TokenInvalid_401(t *testing.T) {
 	)
 	r := gin.New()
 	NewHandler(deps).Register(r)
-	body := `{"id_token":"bad","expected_tenant_id":"HomeChef-Customer-xxxxx"}`
+	body := `{"id_token":"bad","expected_tenant_id":"HomeChef-Customer-rqg8a"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestAutoLogin_RoleClaim_Overrides(t *testing.T) {
 	// Assert the claim override flows through with a value the API accepts.
 	deps := newDeps(t,
 		&fakeGIP{tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Business-xxxxx", Provider: "google.com",
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Business-8s8ql", Provider: "google.com",
 			Claims: map[string]any{"role": "delivery"},
 		}},
 		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
@@ -124,7 +124,7 @@ func TestAutoLogin_RoleClaim_Overrides(t *testing.T) {
 	)
 	r := gin.New()
 	NewHandler(deps).Register(r)
-	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Business-xxxxx"}`
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Business-8s8ql"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

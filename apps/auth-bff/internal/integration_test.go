@@ -127,7 +127,7 @@ func TestEndToEnd_MobileAutoLogin(t *testing.T) {
 	defer jwks.srv.Close()
 
 	projectID := "tesseracthub-480811"
-	tenantID := "HomeChef-Customer-xxxxx" // matches homechef-products.yaml
+	tenantID := "HomeChef-Customer-rqg8a" // matches homechef-products.yaml
 	hmacKey := make([]byte, 32)
 	_, _ = rand.Read(hmacKey)
 
@@ -235,8 +235,8 @@ func TestEndToEnd_MobileAutoLogin_WrongTenant_Rejected(t *testing.T) {
 	autologin.NewHandler(&autologin.Deps{GIP: verifier, Sessions: mgr, Registry: reg, API: apiClient}).Register(r)
 
 	// Token claims a Customer tenant but request says Business → tenant mismatch (401 invalid_token)
-	idTok := jwks.signIDToken(t, projectID, "HomeChef-Customer-xxxxx", "sub", "x@y.com", "google.com")
-	body := map[string]string{"id_token": idTok, "expected_tenant_id": "HomeChef-Business-xxxxx"}
+	idTok := jwks.signIDToken(t, projectID, "HomeChef-Customer-rqg8a", "sub", "x@y.com", "google.com")
+	body := map[string]string{"id_token": idTok, "expected_tenant_id": "HomeChef-Business-8s8ql"}
 	bodyJSON, _ := json.Marshal(body)
 	req := httptest.NewRequest("POST", "/auth/auto-login", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
@@ -266,7 +266,7 @@ func TestEndToEnd_MobileAutoLogin_InternalTenantBlocked(t *testing.T) {
 	r := gin.New()
 	autologin.NewHandler(&autologin.Deps{GIP: verifier, Sessions: mgr, Registry: reg, API: apiClient}).Register(r)
 
-	body := `{"id_token":"any","expected_tenant_id":"HomeChef-Internal-xxxxx"}`
+	body := `{"id_token":"any","expected_tenant_id":"HomeChef-Internal-gyofe"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
