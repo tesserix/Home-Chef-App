@@ -61,17 +61,33 @@ interface BffSessionResponse extends ExchangeResponse {
 }
 
 /**
+ * Optional metadata threaded through /auth/exchange. Currently carries the
+ * DPDP §6 marketing-consent opt-in collected by RegisterPage (CW-01b); the
+ * BFF forwards this to /internal/users/upsert which only honors it on
+ * first-user creation.
+ */
+interface ExchangeOptions {
+  marketingConsent?: boolean;
+}
+
+/**
  * POST a Firebase ID token to the BFF's /auth/exchange endpoint.
  * The BFF verifies the token with GIP, upserts the user, and sets an
  * encrypted session cookie (HttpOnly, Secure, SameSite=Lax). Returns the
  * normalized session for the local store.
  */
-async function postExchange(idToken: string): Promise<AuthSession> {
+async function postExchange(
+  idToken: string,
+  options: ExchangeOptions = {},
+): Promise<AuthSession> {
   const res = await fetch(`${BFF_FETCH_BASE}/auth/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify({
+      id_token: idToken,
+      marketing_consent: options.marketingConsent ?? false,
+    }),
   });
   if (!res.ok) {
     throw new Error(`exchange_failed_${res.status}`);
@@ -140,10 +156,11 @@ export async function signInWithEmail(
 export async function registerWithEmail(
   email: string,
   password: string,
+  marketingConsent: boolean = false,
 ): Promise<AuthSession> {
   const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
   const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
+  return postExchange(idToken, { marketingConsent });
 }
 
 export async function startPhoneSignIn(
@@ -334,6 +351,12 @@ export const authService = {
     password: string;
     firstName: string;
     lastName: string;
+    /**
+     * DPDP §6 marketing-consent opt-in collected on RegisterPage (CW-01b).
+     * Defaults to false when callers omit it so legacy consumers keep
+     * working with safe-by-default behavior.
+     */
+    marketingConsent?: boolean;
   }) {
     const cred = await createUserWithEmailAndPassword(
       firebaseAuth,
@@ -341,7 +364,9 @@ export const authService = {
       input.password,
     );
     const accessToken = await cred.user.getIdToken();
-    const session = await postExchange(accessToken);
+    const session = await postExchange(accessToken, {
+      marketingConsent: input.marketingConsent ?? false,
+    });
     return {
       user: {
         ...toSessionUser(session),

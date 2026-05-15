@@ -20,6 +20,10 @@ type UpsertUserRequest struct {
 	Email       string `json:"email"`
 	Name        string `json:"name"`
 	Role        string `json:"role"`
+	// MarketingConsent forwards the DPDP §6 opt-in collected at registration
+	// to apps/api. Forwarded as a JSON boolean; omitting it (e.g., from the
+	// social-login / OIDC callback path) defaults to false on the API side.
+	MarketingConsent bool `json:"marketing_consent"`
 }
 
 type UpsertUserResponse struct {

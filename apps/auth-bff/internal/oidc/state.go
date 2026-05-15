@@ -11,11 +11,17 @@ import (
 // authorize -> callback round-trip. It carries the resolved app name, the
 // nonce we'll later verify against the id_token, and an optional post-login
 // return URL captured at /auth/login time.
+//
+// MarketingConsent is the DPDP §6 opt-in collected at the SPA — only the
+// /auth/exchange path threads it through (callback flows are pure sign-in
+// where consent isn't applicable). It is forwarded once to the API on
+// first-user creation; subsequent logins ignore it.
 type StateEntry struct {
-	AppName  string
-	Nonce    string
-	ReturnTo string
-	Created  time.Time
+	AppName          string
+	Nonce            string
+	ReturnTo         string
+	MarketingConsent bool
+	Created          time.Time
 }
 
 // StateStore is a minimal one-shot store: Put writes an entry, Take returns

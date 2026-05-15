@@ -33,24 +33,26 @@ func setupDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE users (
-			id              TEXT PRIMARY KEY,
-			email           TEXT NOT NULL,
-			first_name      TEXT NOT NULL DEFAULT '',
-			last_name       TEXT NOT NULL DEFAULT '',
-			phone           TEXT NOT NULL DEFAULT '',
-			avatar          TEXT NOT NULL DEFAULT '',
-			role            TEXT NOT NULL DEFAULT 'customer',
-			gip_uid         TEXT,
-			gip_tenant_id   TEXT,
-			gip_provider    TEXT,
-			auth_pool       TEXT,
-			is_active       INTEGER NOT NULL DEFAULT 1,
-			phone_verified  INTEGER NOT NULL DEFAULT 0,
-			fcm_token       TEXT NOT NULL DEFAULT '',
-			last_login_at   DATETIME,
-			created_at      DATETIME,
-			updated_at      DATETIME,
-			deleted_at      DATETIME
+			id                    TEXT PRIMARY KEY,
+			email                 TEXT NOT NULL,
+			first_name            TEXT NOT NULL DEFAULT '',
+			last_name             TEXT NOT NULL DEFAULT '',
+			phone                 TEXT NOT NULL DEFAULT '',
+			avatar                TEXT NOT NULL DEFAULT '',
+			role                  TEXT NOT NULL DEFAULT 'customer',
+			gip_uid               TEXT,
+			gip_tenant_id         TEXT,
+			gip_provider          TEXT,
+			auth_pool             TEXT,
+			is_active             INTEGER NOT NULL DEFAULT 1,
+			phone_verified        INTEGER NOT NULL DEFAULT 0,
+			fcm_token             TEXT NOT NULL DEFAULT '',
+			marketing_consent     INTEGER NOT NULL DEFAULT 0,
+			marketing_consent_at  DATETIME,
+			last_login_at         DATETIME,
+			created_at            DATETIME,
+			updated_at            DATETIME,
+			deleted_at            DATETIME
 		)
 	`).Error)
 	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX idx_users_gip_uid ON users(gip_uid)`).Error)

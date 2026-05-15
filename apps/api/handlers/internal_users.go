@@ -44,6 +44,14 @@ type UpsertUserRequest struct {
 	Email       string `json:"email" binding:"required,email"`
 	Name        string `json:"name"`
 	Role        string `json:"role" binding:"required"`
+	// MarketingConsent is the user's DPDP §6 opt-in for promotional email,
+	// captured at registration. Optional in the request body so legacy
+	// callers (and social sign-in paths that have no checkbox) default to
+	// false. Only honored on NEW user creation — re-login does not flip
+	// the flag in either direction.
+	// TODO(CW-01b): expose a separate /users/:id/preferences endpoint for
+	// updating consent post-registration.
+	MarketingConsent bool `json:"marketing_consent"`
 }
 
 // UpsertUserResponse returns the canonical user_id (UUID string) so the BFF
@@ -78,17 +86,23 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 	case errors.Is(res.Error, gorm.ErrRecordNotFound):
 		first, last := splitName(req.Name)
 		u = models.User{
-			ID:          uuid.New(),
-			Email:       strings.ToLower(req.Email),
-			FirstName:   first,
-			LastName:    last,
-			GIPUid:      req.GIPUid,
-			GIPTenantID: req.GIPTenantID,
-			GIPProvider: req.GIPProvider,
-			AuthPool:    models.AuthPool(req.AuthPool),
-			Role:        models.UserRole(req.Role),
-			LastLoginAt: &now,
-			IsActive:    true,
+			ID:               uuid.New(),
+			Email:            strings.ToLower(req.Email),
+			FirstName:        first,
+			LastName:         last,
+			GIPUid:           req.GIPUid,
+			GIPTenantID:      req.GIPTenantID,
+			GIPProvider:      req.GIPProvider,
+			AuthPool:         models.AuthPool(req.AuthPool),
+			Role:             models.UserRole(req.Role),
+			LastLoginAt:      &now,
+			IsActive:         true,
+			MarketingConsent: req.MarketingConsent,
+		}
+		// Only stamp the consent timestamp if the user actually opted in.
+		// Leaving it null preserves the "never granted" signal for DPDP audits.
+		if req.MarketingConsent {
+			u.MarketingConsentAt = &now
 		}
 		if err := h.DB.Create(&u).Error; err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

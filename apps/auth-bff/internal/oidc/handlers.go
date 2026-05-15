@@ -124,8 +124,13 @@ func (h *Handlers) Callback(c *gin.Context) {
 // ExchangeRequest is the body shape POSTed by the SPA after a successful
 // Firebase email/password sign-in. The browser has already obtained the
 // id_token client-side; the BFF just verifies it and issues a session.
+//
+// MarketingConsent is the DPDP §6 opt-in captured by RegisterPage (CW-01b).
+// It's optional — login flows omit it and it defaults to false, which the API
+// only consumes on first-user creation (re-logins never flip the flag).
 type ExchangeRequest struct {
-	IDToken string `json:"id_token" binding:"required"`
+	IDToken          string `json:"id_token" binding:"required"`
+	MarketingConsent bool   `json:"marketing_consent"`
 }
 
 // Exchange handles the email/password sign-in path. The SPA signs in to
@@ -147,7 +152,9 @@ func (h *Handlers) Exchange(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "id_token_invalid"})
 		return
 	}
-	h.issueSession(c, app, map[string]any(vt.Claims), StateEntry{})
+	h.issueSession(c, app, map[string]any(vt.Claims), StateEntry{
+		MarketingConsent: req.MarketingConsent,
+	})
 }
 
 // issueSession is the shared tail of both the Callback (GET) and Exchange
@@ -167,12 +174,13 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 		}
 	}
 	upsert, err := h.API.UpsertUser(c.Request.Context(), apiclient.UpsertUserRequest{
-		GIPUid:      getStr(claims, "sub"),
-		GIPTenantID: app.GIPTenantID,
-		GIPProvider: provider,
-		AuthPool:    pool,
-		Email:       getStr(claims, "email"),
-		Role:        role,
+		GIPUid:           getStr(claims, "sub"),
+		GIPTenantID:      app.GIPTenantID,
+		GIPProvider:      provider,
+		AuthPool:         pool,
+		Email:            getStr(claims, "email"),
+		Role:             role,
+		MarketingConsent: entry.MarketingConsent,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "upsert_failed"})

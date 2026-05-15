@@ -21,7 +21,7 @@ interface AuthContextValue {
   login: (provider?: SocialProvider) => Promise<void>;
   register: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
-  registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string }) => Promise<void>;
+  registerWithEmail: (data: { email: string; password: string; firstName: string; lastName: string; marketingConsent?: boolean }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiAuth(result.user, result.accessToken, result.refreshToken);
   }, []);
 
-  const registerWithEmail = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string }) => {
+  const registerWithEmail = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; marketingConsent?: boolean }) => {
     const { authService } = await import('@/features/auth/services/auth-service');
     const result = await authService.registerWithEmail(data);
     const { setApiAuth } = useAuthStore.getState();

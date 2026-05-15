@@ -60,8 +60,7 @@ export default function RegisterPage() {
         password,
         firstName,
         lastName,
-        // TODO(CW-01b): backend to accept and record this consent flag per DPDP §6
-        // marketingConsent: optInMarketing,
+        marketingConsent: optInMarketing,
       });
       navigate('/user-info');
     } catch (err) {

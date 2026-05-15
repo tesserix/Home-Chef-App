@@ -49,6 +49,12 @@ type User struct {
 	PhoneVerified bool   `gorm:"default:false" json:"phoneVerified"`
 	FCMToken      string `gorm:"column:fcm_token" json:"-"`
 
+	// DPDP §6 marketing-consent state. MarketingConsent records the user's
+	// opt-in for promotional emails; MarketingConsentAt is the timestamp the
+	// consent was granted. See migration 20260515000001 (CW-01b).
+	MarketingConsent   bool       `gorm:"column:marketing_consent;not null;default:false" json:"marketingConsent"`
+	MarketingConsentAt *time.Time `gorm:"column:marketing_consent_at" json:"marketingConsentAt,omitempty"`
+
 	LastLoginAt *time.Time     `gorm:"column:last_login_at" json:"lastLoginAt,omitempty"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
