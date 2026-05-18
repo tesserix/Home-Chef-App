@@ -22,10 +22,12 @@ interface GoogleSignInButtonProps {
 
 /**
  * Renders the official Google Identity Services button inline. On click,
- * Google's FedCM modal collects the user's consent, returns a Google
- * credential JWT, which we exchange (via Identity Toolkit signInWithIdp)
- * for a GIP id_token in the configured tenant pool, then POST to the
- * BFF /auth/exchange endpoint to mint the session cookie.
+ * Google's FedCM modal (or popup, depending on browser) collects the
+ * user's consent, returns a Google credential JWT, which we exchange via
+ * Identity Toolkit signInWithIdp for a GIP id_token in the configured
+ * tenant pool, then POST to the BFF /auth/exchange endpoint to mint the
+ * session cookie. Also fires One Tap as a passive enhancement so users
+ * with an active Google session can sign in from the top-right card.
  *
  * Browser-only. Avoids both signInWithPopup (COOP-incompatible) and the
  * default Firebase auth handler (which exposes <projectId>.firebaseapp.com).
@@ -40,6 +42,18 @@ export function GoogleSignInButton({
   const [status, setStatus] = useState<'idle' | 'ready' | 'exchanging'>(
     'idle',
   );
+
+  // Stash callbacks in refs so the mount effect can read the latest values
+  // without rerunning when the parent passes new inline lambdas every render.
+  // Without this, every LoginPage render would call gsi.initialize() again,
+  // GSI logs a warning, and concurrent FedCM requests collide with
+  // NotAllowedError ("only one navigator.credentials.get at a time").
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -61,7 +75,7 @@ export function GoogleSignInButton({
           },
           onError: (err) => {
             if (cancelled) return;
-            onError?.(err.message);
+            onErrorRef.current?.(err.message);
           },
         });
         if (cancelled) {
@@ -72,7 +86,9 @@ export function GoogleSignInButton({
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
-        onError?.(err instanceof Error ? err.message : 'Sign-in unavailable');
+        onErrorRef.current?.(
+          err instanceof Error ? err.message : 'Sign-in unavailable',
+        );
       }
     })();
 
@@ -81,7 +97,7 @@ export function GoogleSignInButton({
       try {
         const gip = await signInWithGoogleCredential(googleCred);
         if (gip.kind === 'needConfirmation') {
-          onError?.(
+          onErrorRef.current?.(
             'This email already has an account. Sign in with your password to link Google.',
           );
           setStatus('ready');
@@ -90,18 +106,17 @@ export function GoogleSignInButton({
         const session = await postExchange(gip.idToken);
         // Sync the global auth store before navigating so the header,
         // route guards, and protected pages see the user as signed in.
-        // Mirrors the wiring done in AuthProvider.login() for other providers.
         useAuthStore.getState().setApiAuth(toSessionUser(session), '', '');
-        onSuccess(session);
+        onSuccessRef.current(session);
       } catch (err) {
         if (err instanceof GIPError) {
-          onError?.(
+          onErrorRef.current?.(
             err.code === 'config_missing'
               ? 'Google sign-in is not available right now.'
               : 'Google sign-in failed. Please try again.',
           );
         } else {
-          onError?.(
+          onErrorRef.current?.(
             err instanceof Error ? err.message : 'Google sign-in failed.',
           );
         }
@@ -113,7 +128,9 @@ export function GoogleSignInButton({
       cancelled = true;
       teardown?.();
     };
-  }, [buttonText, onError, onSuccess, width]);
+    // Intentionally exclude onSuccess/onError — accessed via refs above to
+    // avoid re-running the mount effect on every parent render.
+  }, [buttonText, width]);
 
   return (
     <div className="flex justify-center">

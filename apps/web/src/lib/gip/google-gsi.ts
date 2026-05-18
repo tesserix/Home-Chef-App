@@ -141,10 +141,6 @@ export async function mountGoogleButton(
     auto_select: false,
     cancel_on_tap_outside: true,
     use_fedcm_for_prompt: true,
-    // Force button-click flow through FedCM (in-page modal) instead of a
-    // popup window. Chrome/Edge with FedCM enabled only; other browsers
-    // gracefully fall back to the popup.
-    use_fedcm_for_button: true,
   });
 
   gsi.renderButton(opts.buttonContainer, {
