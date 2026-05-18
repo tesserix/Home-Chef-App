@@ -4,8 +4,12 @@ import {
   signInWithGoogleCredential,
   GIPError,
 } from '@/lib/gip/customer-signin';
-import { postExchange } from '@/features/auth/services/auth-service';
+import {
+  postExchange,
+  toSessionUser,
+} from '@/features/auth/services/auth-service';
 import type { AuthSession } from '@/features/auth/services/auth-service';
+import { useAuthStore } from '@/store/auth-store';
 
 interface GoogleSignInButtonProps {
   onSuccess: (session: AuthSession) => void;
@@ -84,6 +88,10 @@ export function GoogleSignInButton({
           return;
         }
         const session = await postExchange(gip.idToken);
+        // Sync the global auth store before navigating so the header,
+        // route guards, and protected pages see the user as signed in.
+        // Mirrors the wiring done in AuthProvider.login() for other providers.
+        useAuthStore.getState().setApiAuth(toSessionUser(session), '', '');
         onSuccess(session);
       } catch (err) {
         if (err instanceof GIPError) {
