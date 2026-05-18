@@ -9,7 +9,7 @@ import {
   toSessionUser,
 } from '@/features/auth/services/auth-service';
 import type { AuthSession } from '@/features/auth/services/auth-service';
-import { useAuthStore } from '@/store/auth-store';
+import { useAuthStore } from '@/app/store/auth-store';
 
 interface GoogleSignInButtonProps {
   onSuccess: (session: AuthSession) => void;
