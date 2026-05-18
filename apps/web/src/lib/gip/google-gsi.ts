@@ -31,6 +31,8 @@ interface GsiAccountsId {
     auto_select?: boolean;
     cancel_on_tap_outside?: boolean;
     use_fedcm_for_prompt?: boolean;
+    /** When true, the rendered button click flow uses FedCM (in-page modal) instead of opening a popup window. Chrome-only, requires recent GSI. */
+    use_fedcm_for_button?: boolean;
   }): void;
   prompt(callback?: (n: GsiNotification) => void): void;
   cancel(): void;
@@ -139,6 +141,10 @@ export async function mountGoogleButton(
     auto_select: false,
     cancel_on_tap_outside: true,
     use_fedcm_for_prompt: true,
+    // Force button-click flow through FedCM (in-page modal) instead of a
+    // popup window. Chrome/Edge with FedCM enabled only; other browsers
+    // gracefully fall back to the popup.
+    use_fedcm_for_button: true,
   });
 
   gsi.renderButton(opts.buttonContainer, {
