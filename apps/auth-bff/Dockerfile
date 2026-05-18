@@ -6,7 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/auth-bff ./cmd/server
 
-FROM alpine:3.19
+FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=build /out/auth-bff /usr/local/bin/auth-bff
 COPY homechef-products.yaml /etc/auth-bff/homechef-products.yaml
