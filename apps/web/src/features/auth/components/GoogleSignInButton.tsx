@@ -50,6 +50,7 @@ export function GoogleSignInButton({
           buttonContainer: container,
           buttonText,
           width,
+          tryOneTap: true,
           onCredential: (googleCred) => {
             if (cancelled) return;
             void handleCredential(googleCred);
