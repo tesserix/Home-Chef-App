@@ -90,6 +90,7 @@ jobs:
             VITE_GIP_PROJECT_ID=tesseracthub-480811
             VITE_GIP_AUTH_DOMAIN=tesseracthub-480811.firebaseapp.com
             VITE_GIP_TENANT_ID=HomeChef-Business-8s8ql
+            VITE_GOOGLE_CLIENT_ID=849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}

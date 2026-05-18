@@ -1,6 +1,5 @@
 import {
   signInWithPopup,
-  GoogleAuthProvider,
   OAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -65,7 +64,7 @@ interface BffSessionResponse extends ExchangeResponse {
  * encrypted session cookie (HttpOnly, Secure, SameSite=Lax). Returns the
  * normalized session for the local store.
  */
-async function postExchange(idToken: string): Promise<AuthSession> {
+export async function postExchange(idToken: string): Promise<AuthSession> {
   const res = await fetch(`${BFF_FETCH_BASE}/auth/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -108,9 +107,11 @@ export function toSessionUser(session: AuthSession): SessionUser {
 // =============================================================================
 
 export async function signInWithGoogle(): Promise<AuthSession> {
-  const cred = await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
+  // Google sign-in runs through GSI (<GoogleSignInButton/>) — avoids
+  // signInWithPopup's COOP failure + hides the firebaseapp.com URL.
+  throw new Error(
+    'signInWithGoogle() is no longer supported — mount <GoogleSignInButton/> directly.',
+  );
 }
 
 export async function signInWithApple(): Promise<AuthSession> {

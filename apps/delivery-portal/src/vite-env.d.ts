@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_GIP_PROJECT_ID: string;
   readonly VITE_GIP_AUTH_DOMAIN: string;
   readonly VITE_GIP_TENANT_ID: string;
+  readonly VITE_GOOGLE_CLIENT_ID: string;
 }
 
 interface ImportMeta {
