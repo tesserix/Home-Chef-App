@@ -85,6 +85,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_API_URL=${{ vars.VITE_API_URL || 'https://api.fe3dr.com/api/v1' }}
+            VITE_GIP_API_KEY=${{ secrets.GIP_WEB_API_KEY }}
+            VITE_GIP_PROJECT_ID=tesseracthub-480811
+            VITE_GIP_AUTH_DOMAIN=tesseracthub-480811.firebaseapp.com
+            VITE_GIP_TENANT_ID=HomeChef-Business-8s8ql
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
