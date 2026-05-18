@@ -124,9 +124,21 @@ export function toSessionUser(session: AuthSession): SessionUser {
 // =============================================================================
 
 export async function signInWithGoogle(): Promise<AuthSession> {
-  const cred = await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
-  const idToken = await cred.user.getIdToken();
-  return postExchange(idToken);
+  // Server-side redirect flow via BFF /auth/login. Avoids the COOP/popup
+  // failure mode of signInWithPopup and keeps the user on fe3dr.com (no
+  // <projectId>.firebaseapp.com URL exposure). The BFF handles the OAuth
+  // dance with home-chief-web, then sets hc_session and 302-redirects
+  // back to `return_to`. The page navigates away before this promise
+  // can resolve — we return a never-resolving promise so callers don't
+  // proceed with stale state.
+  const returnTo =
+    typeof window !== 'undefined'
+      ? window.location.pathname + window.location.search
+      : '/';
+  if (typeof window !== 'undefined') {
+    window.location.href = `${BFF_FETCH_BASE}/auth/login?return_to=${encodeURIComponent(returnTo)}`;
+  }
+  return new Promise<AuthSession>(() => {});
 }
 
 export async function signInWithApple(): Promise<AuthSession> {
