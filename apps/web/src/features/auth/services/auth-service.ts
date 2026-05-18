@@ -75,7 +75,7 @@ interface ExchangeOptions {
  * encrypted session cookie (HttpOnly, Secure, SameSite=Lax). Returns the
  * normalized session for the local store.
  */
-async function postExchange(
+export async function postExchange(
   idToken: string,
   options: ExchangeOptions = {},
 ): Promise<AuthSession> {
@@ -123,21 +123,14 @@ export function toSessionUser(session: AuthSession): SessionUser {
 // =============================================================================
 
 export async function signInWithGoogle(): Promise<AuthSession> {
-  // Server-side redirect flow via BFF /auth/login. Avoids the COOP/popup
-  // failure mode of signInWithPopup and keeps the user on fe3dr.com (no
-  // <projectId>.firebaseapp.com URL exposure). The BFF handles the OAuth
-  // dance with home-chief-web, then sets hc_session and 302-redirects
-  // back to `return_to`. The page navigates away before this promise
-  // can resolve — we return a never-resolving promise so callers don't
-  // proceed with stale state.
-  const returnTo =
-    typeof window !== 'undefined'
-      ? window.location.pathname + window.location.search
-      : '/';
-  if (typeof window !== 'undefined') {
-    window.location.href = `${BFF_FETCH_BASE}/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-  }
-  return new Promise<AuthSession>(() => {});
+  // Google sign-in now runs through Google Identity Services (GSI) rendered
+  // inline on the LoginPage via <GoogleSignInButton/>. That flow avoids
+  // signInWithPopup's COOP failure and never exposes the firebaseapp.com
+  // auth handler URL. This helper is kept as a guarded stub so any stray
+  // caller surfaces immediately rather than silently falling back.
+  throw new Error(
+    'signInWithGoogle() is no longer supported — mount <GoogleSignInButton/> directly.',
+  );
 }
 
 export async function signInWithApple(): Promise<AuthSession> {
