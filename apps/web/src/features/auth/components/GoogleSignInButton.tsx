@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { mountGoogleButton } from '@/lib/gip/google-gsi';
 import {
   signInWithGoogleCredential,
@@ -31,7 +31,7 @@ export function GoogleSignInButton({
   onError,
   width,
   buttonText,
-}: GoogleSignInButtonProps): JSX.Element {
+}: GoogleSignInButtonProps): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'idle' | 'ready' | 'exchanging'>(
     'idle',
