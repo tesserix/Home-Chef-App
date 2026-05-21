@@ -25,7 +25,8 @@ const securityPolicyKey = "security_policy"
 // and the whole policy is one round-trip to fetch.
 type SecurityPolicy struct {
 	// Password rules — enforced at register / change-password / reset-password
-	// (for paths that hit our API directly; BFF/Keycloak logins enforce their own).
+	// (for paths that hit our API directly; GIP-backed BFF logins enforce
+	// their own rules via Firebase Auth).
 	PasswordMinLength      int  `json:"passwordMinLength"`
 	PasswordRequireUpper   bool `json:"passwordRequireUpper"`
 	PasswordRequireLower   bool `json:"passwordRequireLower"`

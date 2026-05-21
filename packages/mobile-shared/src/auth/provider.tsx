@@ -36,6 +36,17 @@ export interface AuthProviderProps {
 }
 
 export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) {
+  if (!bffUrl) {
+    throw new Error(
+      "AuthProvider: bffUrl prop is empty. Set EXPO_PUBLIC_BFF_URL in your .env.local or EAS build profile."
+    );
+  }
+  if (!tenantId) {
+    throw new Error(
+      "AuthProvider: tenantId prop is empty. Set EXPO_PUBLIC_GIP_TENANT_ID in your .env.local or EAS build profile."
+    );
+  }
+
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 

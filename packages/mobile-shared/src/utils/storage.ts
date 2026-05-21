@@ -21,12 +21,25 @@ export async function getRefreshToken(): Promise<string | null> {
 
 export async function setTokens(tokens: {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
 }): Promise<void> {
-  await Promise.all([
+  // In the GIP/BFF model the BFF owns refresh; the client only persists the
+  // session token. The refreshToken field is kept optional for any caller
+  // that still has one (e.g. test fixtures, legacy flows). SecureStore
+  // rejects empty strings, so skip the write when refreshToken is falsy.
+  const writes: Promise<void>[] = [
     SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.accessToken),
-    SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refreshToken),
-  ]);
+  ];
+  if (tokens.refreshToken) {
+    writes.push(
+      SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refreshToken)
+    );
+  } else {
+    // Clear any stale refresh token from a prior session so the api client's
+    // 401 handler never reads a value that no longer matches the access token.
+    writes.push(SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN));
+  }
+  await Promise.all(writes);
 }
 
 export async function clearTokens(): Promise<void> {

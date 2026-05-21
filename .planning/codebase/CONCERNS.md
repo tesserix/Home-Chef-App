@@ -1,22 +1,21 @@
 # Codebase Concerns
 
-> Generated: 2026-04-05
+> Generated: 2026-04-05 (pre-GIP-migration snapshot)
+> Updated: 2026-05-19 — Sections 1 and 2 partially resolved by the Keycloak→GIP migration. Resolved items are marked **RESOLVED**. Live concerns are kept as-is.
 > Focus: Technical debt, known issues, security, performance, fragile areas
 
 ---
 
 ## 1. Security Concerns
 
-### CRITICAL: No JWT Signature Verification on Fallback Path
-- **Location:** `apps/api/middleware/auth.go:123-220`
-- **Issue:** When using `x-jwt-claim-sub` header fallback, the middleware trusts the header value without verifying the source. The comment says "BFF is trusted" but there's no verification that the request actually came from the BFF vs. a direct external call.
-- **Impact:** If the API is accessible directly (not behind Istio/BFF), any attacker can set `x-jwt-claim-sub` to impersonate any user.
-- **Remediation:** Add source validation (e.g., check for Istio-injected headers, verify request origin, or enforce network-level isolation).
+### RESOLVED: No JWT Signature Verification on Fallback Path
+- **Was:** `apps/api/middleware/auth.go:123-220` trusted `x-jwt-claim-sub` without source validation.
+- **Resolution:** The legacy auth middleware was removed in the GIP migration (Task 2.6). The API now accepts only HMAC-signed identity headers from `apps/auth-bff` via `middleware/bff_auth.go`. Header spoofing is mitigated by the HMAC check.
+- **Residual risk:** An Istio `AuthorizationPolicy` should still ensure the API is unreachable directly — confirm `homechef-api` only accepts traffic from the BFF service account.
 
-### CRITICAL: Keycloak JWT Decoded Without Signature Verification
-- **Location:** `apps/api/middleware/auth.go:18-72` (`extractKeycloakRoles`)
-- **Issue:** JWT payload is base64-decoded and roles extracted without cryptographic verification. Comment says "safe because BFF already validated" but this allows role escalation if the header is spoofed.
-- **Impact:** An attacker who can reach the API directly can craft a JWT with `super_admin` role.
+### RESOLVED: Keycloak JWT Decoded Without Signature Verification
+- **Was:** `apps/api/middleware/auth.go:18-72` (`extractKeycloakRoles`) decoded JWT payload without cryptographic verification.
+- **Resolution:** The function and its callers were deleted in the GIP migration. The API no longer parses JWTs at all — role claims arrive as HMAC-signed headers from the BFF.
 
 ### HIGH: Super Admin Email Auto-Escalation
 - **Location:** `apps/api/middleware/auth.go:213-215`
@@ -48,9 +47,9 @@
 - `apps/api/handlers/staff.go:323` — `TODO: Send email via SendGrid when integrated`
 - `apps/vendor-portal/src/features/dashboard/pages/DashboardPage.tsx:509-514` — Accept/reject order mutations not implemented (hardcoded TODOs)
 
-### Keycloak References in GIP-Migrated Codebase
-- **Location:** `apps/api/middleware/auth.go` — Function named `extractKeycloakRoles`, comments reference "Keycloak"
-- **Issue:** The project migrated to Google Identity Platform (GIP) but auth middleware still references Keycloak naming and patterns. This creates confusion about the actual auth provider.
+### RESOLVED: Keycloak References in GIP-Migrated Codebase
+- **Was:** `apps/api/middleware/auth.go` contained `extractKeycloakRoles` and Keycloak comments.
+- **Resolution:** Function and Keycloak-named code deleted. Remaining `Keycloak-era` references in source comments are intentionally retained as historical context (see `apps/api/handlers/security.go:21`, `apps/api/middleware/auth.go:9`) to explain why endpoints/middleware were removed.
 
 ### Type Assertions Without Safety Checks
 - **Location:** `apps/api/middleware/auth.go:313,318,328`
@@ -141,13 +140,13 @@
 
 | Priority | Issue | Effort |
 |----------|-------|--------|
-| P0 | JWT/header auth bypass risk | Medium |
+| ~~P0~~ | ~~JWT/header auth bypass risk~~ — resolved by GIP migration (HMAC headers from BFF) | — |
 | P0 | Zero test coverage | High |
 | P1 | No rate limiting (most endpoints) | Medium |
 | P1 | CSRF tokens sent but never validated | Low |
 | P1 | Auto-migrate in production | Medium |
 | P2 | DB query per auth request | Medium |
-| P2 | Keycloak naming confusion | Low |
+| ~~P2~~ | ~~Keycloak naming confusion~~ — resolved (2026-05-19 cleanup pass) | — |
 | P2 | In-memory rate limiter races | Low |
 | P3 | No structured logging | Medium |
 | P3 | Missing health check depth | Low |

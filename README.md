@@ -20,7 +20,7 @@ Istio.
 | Backend API    | Go 1.26.1, Gin, GORM, PostgreSQL 16, Redis 7, NATS 2.10 JS  |
 | Web apps       | React 19, Vite 6, Tailwind v4, Radix UI, TanStack Query     |
 | Mobile         | Expo (React Native), `@tesserix/native` design system       |
-| Auth           | Dual Keycloak (customer + internal realms) via auth-bff     |
+| Auth           | Google Identity Platform (GIP) via `apps/auth-bff` (3 tenant pools) |
 | Payments       | Razorpay Route (split payments)                             |
 | Messaging      | NATS JetStream — `orders.*`, `chef.*`, `delivery.*`, etc.   |
 | Storage        | GCS (images), GCP Secret Manager (secrets)                  |
@@ -98,6 +98,34 @@ pnpm dev:mobile-vendor
 pnpm dev:mobile-delivery
 ```
 
+### Mobile auth (GIP / Firebase) setup — one-time
+
+Each mobile app authenticates against Google Identity Platform via
+`@react-native-firebase/auth` and `@react-native-google-signin/google-signin`.
+Before you can run any mobile app you need:
+
+1. **Per-app env vars.** Copy `apps/mobile-{customer,vendor,delivery}/.env.example`
+   to `.env.local` in the same directory and fill in:
+   - `EXPO_PUBLIC_BFF_URL` — the auth-bff base URL (local: `http://localhost:8081`)
+   - `EXPO_PUBLIC_GIP_TENANT_ID` — already set per-app in the example file
+   - `EXPO_PUBLIC_GIP_API_KEY` — `gcloud secrets versions access latest --secret=prod-homechef-gip-web-api-key`
+   - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` —
+     from GCP Console → APIs & Services → Credentials → `home-chief-web`.
+
+2. **Firebase config files** (one per app per platform). These are NOT in the
+   repo. From the Firebase Console (project `tesseracthub-480811`):
+   - Download `google-services.json` and place at
+     `apps/mobile-{customer,vendor,delivery}/google-services.json` (Android).
+   - Download `GoogleService-Info.plist` and place at
+     `apps/mobile-{customer,vendor,delivery}/GoogleService-Info.plist` (iOS).
+   - Reference both in each app's `app.config.ts` under the `android` /
+     `ios` blocks.
+
+3. **EAS builds.** Expo Application Services does not read `.env*` files at
+   build time. Mirror every `EXPO_PUBLIC_*` var into the build profile's
+   `env` block in each `eas.json`. Firebase config files can be committed
+   (they contain no real secrets) or injected via `eas secrets`.
+
 ## Lint / typecheck / test
 
 ```bash
@@ -157,15 +185,12 @@ attestation).
 | `admin.fe3dr.com`                 | `homechef-admin-portal`                    |
 | `delivery.fe3dr.com`              | `homechef-delivery-portal`                 |
 | `api.fe3dr.com`                   | `homechef-api`                             |
-| `identity.fe3dr.com`              | Keycloak customer realm (`homechef`)       |
-| `internal-identity.fe3dr.com`     | Keycloak internal realm (`tesserix-internal`) |
 
-Path prefixes on `fe3dr.com`:
+Path prefixes on `fe3dr.com` (and the other portal domains):
 
-- `/bff/` → customer auth BFF
-- `/auth/` → Keycloak auth callback
-- `/driver-bff/` → driver auth
-- `/api/*` → API service
+- `/bff/` → `homechef-auth-bff` (session bootstrap, used by SPA fetch proxy)
+- `/auth/*` → `homechef-auth-bff` (GIP exchange, auto-login, session, logout, refresh, csrf)
+- `/api/*` → `homechef-api`
 - `/ws/*` → WebSocket (3600s timeout)
 
 ---

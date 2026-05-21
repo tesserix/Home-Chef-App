@@ -34,7 +34,6 @@ function bffToAuthResponse(
       updatedAt: '',
     },
     accessToken: body.session_token,
-    refreshToken: '',
   };
 }
 

@@ -38,7 +38,6 @@ function bffToAuthResponse(body: {
       updatedAt: '',
     },
     accessToken: body.session_token,
-    refreshToken: '',
   };
 }
 
@@ -54,8 +53,13 @@ export default function LoginPage() {
   const { completeSignIn } = useAuth();
 
   useEffect(() => {
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    if (!webClientId) {
+      throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not configured');
+    }
     GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
+      webClientId,
+      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     });
   }, []);
 

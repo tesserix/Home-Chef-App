@@ -160,7 +160,7 @@ if err := database.Connect(); err != nil {
 **JSDoc/TSDoc Format:**
 - Used extensively in service files (e.g., `auth-service.ts`, `api-client.ts`)
 - Format: `/** @param ... @returns ... */` for functions with complex signatures
-- Example: `/** Build the OIDC login URL. Redirects to Keycloak via BFF. @param provider - Optional social provider @param returnTo - URL to redirect back to after login */`
+- Example: `/** Build the GIP sign-in URL. Routes through apps/auth-bff for cookie/session bootstrap. @param provider - Optional social provider @param returnTo - URL to redirect back to after login */`
 
 **Go Comments:**
 - Exported types/functions must have comment starting with function/type name

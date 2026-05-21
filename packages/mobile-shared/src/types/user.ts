@@ -17,7 +17,12 @@ export interface User {
 export interface AuthResponse {
   user: User;
   accessToken: string;
-  refreshToken: string;
+  /**
+   * Optional — the GIP/BFF session model does not return a refresh token to
+   * the client (refresh is BFF-owned). Kept optional for any legacy caller
+   * that still produces one.
+   */
+  refreshToken?: string;
 }
 
 export interface LoginRequest {

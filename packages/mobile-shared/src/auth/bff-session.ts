@@ -26,6 +26,23 @@ export async function autoLogin(
   idToken: string,
   expectedTenantId: string
 ): Promise<BFFAutoLoginResponse> {
+  // Catch missing-env-var silent failures before they become a mysterious
+  // network error against `//auth/auto-login`. The most common cause is a
+  // forgotten EXPO_PUBLIC_BFF_URL / EXPO_PUBLIC_GIP_TENANT_ID in the EAS
+  // build profile.
+  if (!bffUrl) {
+    throw new Error(
+      "autoLogin: bffUrl is empty. Set EXPO_PUBLIC_BFF_URL in your .env.local or EAS build profile."
+    );
+  }
+  if (!expectedTenantId) {
+    throw new Error(
+      "autoLogin: expectedTenantId is empty. Set EXPO_PUBLIC_GIP_TENANT_ID in your .env.local or EAS build profile."
+    );
+  }
+  if (!idToken) {
+    throw new Error("autoLogin: idToken is empty");
+  }
   const r = await fetch(`${bffUrl}/auth/auto-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

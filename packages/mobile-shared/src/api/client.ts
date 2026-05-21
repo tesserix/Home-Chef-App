@@ -1,23 +1,24 @@
 // API client factory — creates an axios instance with auth interceptors
-// Pattern: adapted from apps/vendor-portal/src/shared/services/api-client.ts
+// for the GIP/BFF session model: the BFF mints a session token at
+// auto-login time and owns refresh; the client has no separate refresh
+// token. On 401 we clear local tokens and signal onAuthFailure so the
+// app can route back to the login screen.
 
 import axios, {
   AxiosInstance,
   AxiosError,
   InternalAxiosRequestConfig,
 } from 'axios';
-import { getRefreshToken, setTokens, clearTokens } from '../utils/storage';
+import { clearTokens } from '../utils/storage';
+import { clearStoredSession } from '../auth/bff-session';
 
 export interface ApiClientOptions {
   baseURL: string;
   /** Returns current access token synchronously from Zustand store */
   getToken: () => string | null;
-  /** Called when refresh fails — app should navigate to login */
+  /** Called on 401 after tokens are cleared — app should navigate to login */
   onAuthFailure?: () => void;
 }
-
-// Track ongoing refresh to avoid concurrent refresh calls
-let refreshPromise: Promise<string> | null = null;
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
   const { baseURL, getToken, onAuthFailure } = options;
@@ -28,7 +29,7 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     timeout: 15000,
   });
 
-  // Request interceptor: inject Bearer token (D-05)
+  // Request interceptor: inject Bearer session token
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       const token = getToken();
@@ -40,50 +41,23 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     (error) => Promise.reject(error)
   );
 
-  // Response interceptor: handle 401 with token refresh (D-06)
+  // Response interceptor: 401 → clear session and bubble up.
+  // We do NOT attempt a client-side refresh: the BFF session_token has no
+  // matching refresh token on the client. If the Firebase user is still
+  // signed in, the app can call AuthProvider.completeSignIn() to mint a
+  // fresh session. Otherwise the user must re-authenticate.
   instance.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
-      const originalRequest = error.config as InternalAxiosRequestConfig & {
-        _retry?: boolean;
-      };
-
-      if (error.response?.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
-
+      if (error.response?.status === 401) {
         try {
-          // Deduplicate concurrent 401s — only one refresh in flight
-          if (!refreshPromise) {
-            refreshPromise = (async () => {
-              const storedRefresh = await getRefreshToken();
-              if (!storedRefresh) throw new Error('no_refresh_token');
-
-              const res = await axios.post<{
-                accessToken: string;
-                refreshToken: string;
-              }>(`${baseURL}/auth/refresh`, { refreshToken: storedRefresh });
-
-              await setTokens({
-                accessToken: res.data.accessToken,
-                refreshToken: res.data.refreshToken,
-              });
-
-              return res.data.accessToken;
-            })().finally(() => {
-              refreshPromise = null;
-            });
-          }
-
-          const newToken = await refreshPromise;
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return instance(originalRequest);
-        } catch {
           await clearTokens();
-          onAuthFailure?.();
-          return Promise.reject(error);
+          await clearStoredSession();
+        } catch {
+          // best-effort
         }
+        onAuthFailure?.();
       }
-
       return Promise.reject(error);
     }
   );

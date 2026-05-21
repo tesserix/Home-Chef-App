@@ -167,11 +167,11 @@
 - API contracts: TypeScript types in frontend enforce request/response shapes
 
 **Authentication:**
-- Provider: Custom JWT-based (no external provider like Keycloak in this version)
-- Token format: JWT with claims: `sub` (user ID), `tenant_id`, `email`, `roles`
-- Verification: JWT signature validation in middleware (see `middleware/auth.go`)
-- Sessions: Encrypted cookie store (browser-level, no server-side session DB)
-- MFA/2FA: Not detected in codebase
+- Provider: Google Identity Platform (GIP) fronted by `apps/auth-bff`. Three GIP tenant pools (`HomeChef-Customer-rqg8a`, `HomeChef-Business-8s8ql`, `HomeChef-Internal-gyofe`) segment customer / vendor+driver / admin audiences.
+- Token flow: Browser/mobile authenticates with GIP → BFF exchanges GIP ID token for either an encrypted session cookie (web) or a bearer session token (mobile).
+- API trust model: The Go API (`apps/api`) does NOT validate GIP tokens directly. It accepts only HMAC-signed identity headers from the BFF via `middleware/bff_auth.go`.
+- Sessions: Encrypted cookie (web) or `SecureStore`-persisted bearer token (mobile). No server-side session DB.
+- MFA/2FA: Provided by GIP (SMS / WebAuthn) when enabled in the GIP tenant config; the API enforces a forced-2FA policy for admins via `services/platform_config.go`.
 
 **Authorization:**
 - Pattern: Role-based (extracted from JWT claims)
