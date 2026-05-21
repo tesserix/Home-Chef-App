@@ -12,6 +12,8 @@
     "ios": {
       "bundleIdentifier": "com.homechef.vendor",
       "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
         "NSCameraUsageDescription": "Used to take photos"
@@ -19,6 +21,7 @@
     },
     "android": {
       "package": "com.homechef.vendor",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -36,8 +39,11 @@
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",
+      "expo-apple-authentication",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       ["expo-build-properties", {
-        "ios": { "newArchEnabled": true },
+        "ios": { "useFrameworks": "static", "newArchEnabled": true },
         "android": { "newArchEnabled": true }
       }]
     ],

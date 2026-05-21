@@ -12,6 +12,8 @@
     "ios": {
       "bundleIdentifier": "com.homechef.delivery",
       "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
         "NSCameraUsageDescription": "Used to take photos",
@@ -22,6 +24,7 @@
     },
     "android": {
       "package": "com.homechef.delivery",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -46,13 +49,16 @@
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",
+      "expo-apple-authentication",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       ["expo-location", {
         "locationAlwaysAndWhenInUsePermission": "HomeChef Delivery tracks your location during deliveries to keep customers updated.",
         "isAndroidBackgroundLocationEnabled": true,
         "isAndroidForegroundServiceEnabled": true
       }],
       ["expo-build-properties", {
-        "ios": { "newArchEnabled": true },
+        "ios": { "useFrameworks": "static", "newArchEnabled": true },
         "android": { "newArchEnabled": true }
       }]
     ],
