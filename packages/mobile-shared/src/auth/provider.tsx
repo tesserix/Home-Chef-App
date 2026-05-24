@@ -51,23 +51,44 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    configureFirebaseAuth(tenantId);
-    const unsub = auth().onAuthStateChanged(async (fb) => {
-      if (!fb) {
-        await clearStoredSession();
-        setUser(null);
+    // configureFirebaseAuth is async in @react-native-firebase/auth v22+
+    // (uses setTenantId() instead of the old read-only tenantId setter).
+    // We chain onAuthStateChanged after the tenant is pinned so the listener
+    // never observes a stale tenant.
+    let cancelled = false;
+    let unsub: (() => void) | null = null;
+
+    (async () => {
+      try {
+        await configureFirebaseAuth(tenantId);
+      } catch (err) {
+        // Don't let a tenant-set failure crash the app; surface in the
+        // loading state instead. The user can still retry sign-in.
+        console.warn("configureFirebaseAuth failed:", err);
+      }
+      if (cancelled) return;
+
+      unsub = auth().onAuthStateChanged(async (fb) => {
+        if (!fb) {
+          await clearStoredSession();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        const s = await fetchSessionUser(bffUrl);
+        if (s) {
+          setUser({ id: s.user_id, email: s.email, role: s.role, pool: s.pool });
+        } else {
+          setUser(null);
+        }
         setLoading(false);
-        return;
-      }
-      const s = await fetchSessionUser(bffUrl);
-      if (s) {
-        setUser({ id: s.user_id, email: s.email, role: s.role, pool: s.pool });
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-    return () => unsub();
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
   }, [bffUrl, tenantId]);
 
   const completeSignIn = async () => {
