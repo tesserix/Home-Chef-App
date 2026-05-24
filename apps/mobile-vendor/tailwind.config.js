@@ -15,38 +15,39 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Paper · Ink · Herb tokens — mirror web/src/styles/globals.css and
-        // mobile-customer/global.css. Keep in sync.
-        paper: 'var(--paper)',
-        bone: 'var(--bone)',
+        // Paper · Ink · Herb tokens — inlined as hex (was var(--*) refs into
+        // global.css, but nativewind 5 + lightningcss can't process the CSS
+        // file. Light-mode values only; dark-mode handling deferred.
+        paper: '#fafaf7',
+        bone: '#f3f2ee',
         mist: {
-          DEFAULT: 'var(--mist)',
-          strong: 'var(--mist-strong)',
+          DEFAULT: '#e6e5e0',
+          strong: '#d4d3ce',
         },
         ink: {
-          DEFAULT: 'var(--ink)',
-          soft: 'var(--ink-soft)',
-          muted: 'var(--ink-muted)',
+          DEFAULT: '#1a1a18',
+          soft: '#4a4a47',
+          muted: '#7a7a76',
         },
         herb: {
-          DEFAULT: 'var(--herb)',
-          soft: 'var(--herb-soft)',
-          tint: 'var(--herb-tint)',
+          DEFAULT: '#3e6b3c',
+          soft: '#558257',
+          tint: '#dde9d8',
         },
         paprika: {
-          DEFAULT: 'var(--paprika)',
-          tint: 'var(--paprika-tint)',
+          DEFAULT: '#c95b3e',
+          tint: '#f3dcd2',
         },
         amber: {
-          DEFAULT: 'var(--amber)',
-          tint: 'var(--amber-tint)',
+          DEFAULT: '#d1a64a',
+          tint: '#f0e3c0',
         },
         info: {
-          DEFAULT: 'var(--info)',
-          tint: 'var(--info-tint)',
+          DEFAULT: '#4a73a3',
+          tint: '#dde5ee',
         },
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
+        background: '#fafaf7',
+        foreground: '#1a1a18',
 
         // Legacy `brand` alias → herb scale (mirror web tailwind.config.js)
         brand: {
