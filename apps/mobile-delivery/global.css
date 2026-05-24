@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /*
  * Home Chef — Paper · Ink · Herb tokens for React Native (NativeWind).
