@@ -18,7 +18,8 @@
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-gfdc29lb318pf3vs9fcu7451uibog34m.apps.googleusercontent.com",
-        "EXPO_PUBLIC_BACKGROUND_LOCATION": "true"
+        "EXPO_PUBLIC_BACKGROUND_LOCATION": "true",
+        "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
     "development": {

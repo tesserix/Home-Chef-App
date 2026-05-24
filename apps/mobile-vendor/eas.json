@@ -17,7 +17,8 @@
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com",
+        "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
     "development": {
