@@ -7,8 +7,10 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "assetBundlePatterns": ["**/*"],
+    "newArchEnabled": false,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.homechef.delivery",
       "supportsTablet": false,
@@ -19,7 +21,10 @@
         "NSCameraUsageDescription": "Used to take photos",
         "NSLocationWhenInUseUsageDescription": "HomeChef Delivery needs your location to show your position on the delivery map.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "android": {
@@ -34,14 +39,28 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "homechef-delivery" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "homechef-delivery"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -52,18 +71,36 @@
       "expo-apple-authentication",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      ["expo-location", {
-        "locationAlwaysAndWhenInUsePermission": "HomeChef Delivery tracks your location during deliveries to keep customers updated.",
-        "isAndroidBackgroundLocationEnabled": true,
-        "isAndroidForegroundServiceEnabled": true
-      }],
-      ["expo-build-properties", {
-        "ios": { "useFrameworks": "static", "newArchEnabled": true },
-        "android": { "newArchEnabled": true }
-      }]
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "HomeChef Delivery tracks your location during deliveries to keep customers updated.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "newArchEnabled": false
+          },
+          "android": {
+            "newArchEnabled": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1b94eac9-a018-45a3-aa5b-89aa9d88f6da"
+      }
+    },
+    "owner": "unidevidp"
   }
 }

@@ -4,6 +4,22 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "local-sim": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:8080/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Customer-rqg8a",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-sntbom5dttgot368focuh9k0quplg0pu.apps.googleusercontent.com"
+      }
+    },
     "development": {
       "developmentClient": true,
       "distribution": "internal",
@@ -13,9 +29,9 @@
         "EXPO_PUBLIC_API_URL": "http://localhost:8080/api/v1",
         "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Customer-rqg8a",
-        "EXPO_PUBLIC_GIP_API_KEY": "REPLACE_WITH_FIREBASE_WEB_API_KEY",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "REPLACE_WITH_WEB_OAUTH_CLIENT_ID",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "REPLACE_WITH_IOS_OAUTH_CLIENT_ID"
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-sntbom5dttgot368focuh9k0quplg0pu.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -39,9 +55,6 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": { "appleId": "" },
-      "android": { "serviceAccountKeyPath": "" }
-    }
+    "production": {}
   }
 }
