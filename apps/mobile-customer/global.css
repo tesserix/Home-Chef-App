@@ -1,8 +1,10 @@
-@import "tailwindcss";
-
 /*
  * Home Chef — Paper · Ink · Herb tokens for React Native (NativeWind).
  * Mirrors the web globals.css token set. Source of truth: /.impeccable.md.
+ *
+ * Tailwind utility processing is handled by the nativewind/babel preset
+ * (see babel.config.js). This file holds only the custom CSS variables
+ * that the tailwind theme refers to via var(--token).
  */
 
 :root {
