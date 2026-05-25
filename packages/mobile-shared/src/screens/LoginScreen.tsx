@@ -1,15 +1,82 @@
-// LoginScreen — uses NativeWind primitives for buttons so brand colors apply
-// on React Native. The @tesserix/native Button reads CSS variables via
-// `document.documentElement`, which is a web-only DOM API; in RN it always
-// falls through to a hardcoded iOS-blue default. Inputs/headings stay on
-// @tesserix/native because their fallback colors (white/black) are neutral.
+// LoginScreen — buttons use explicit StyleSheet objects so they render
+// correctly on RN. NativeWind v5 preview doesn't reliably transform
+// className on Pressable, and @tesserix/native Button reads DOM APIs that
+// don't exist on RN (defaults to iOS blue). Inline styles are the
+// pragmatic fix; tokens mirror tailwind.config.js paper/ink/herb scale.
 
 import React, { useState } from 'react';
-import { View, Pressable, Text as RNText } from 'react-native';
+import { View, Pressable, Text as RNText, StyleSheet } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Input, Text, H1 } from '@tesserix/native';
+
+const BRAND = {
+  bone: '#f3f2ee',
+  ink: '#1a1a18',
+  inkSoft: '#4a4a47',
+  inkMuted: '#7a7a76',
+  herb: '#3e6b3c',
+  herbSoft: '#558257',
+  herbTint: '#dde9d8',
+  mist: '#e6e5e0',
+  paprika: '#c95b3e',
+  paprikaTint: '#f3dcd2',
+  white: '#ffffff',
+} as const;
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: BRAND.bone, paddingHorizontal: 24, paddingTop: 64 },
+  errorBanner: {
+    backgroundColor: BRAND.paprikaTint,
+    borderColor: BRAND.paprika,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  field: { marginBottom: 16 },
+  fieldLast: { marginBottom: 24 },
+  forgotRow: { marginBottom: 16, alignItems: 'flex-end' },
+  ghostText: { color: BRAND.herb, fontSize: 14 },
+  ctaPrimary: {
+    backgroundColor: BRAND.herb,
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  ctaPrimaryDisabled: {
+    backgroundColor: BRAND.herbSoft,
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  ctaOutline: {
+    borderColor: BRAND.herb,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+  },
+  ctaDark: {
+    backgroundColor: BRAND.ink,
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+  },
+  ctaPrimaryText: { color: BRAND.white, fontSize: 16, fontWeight: '600' },
+  ctaOutlineText: { color: BRAND.herb, fontSize: 16, fontWeight: '600' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: BRAND.mist },
+  dividerLabel: { marginHorizontal: 16 },
+  signupRow: { marginTop: 24, alignItems: 'center' },
+});
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -21,7 +88,6 @@ type LoginFormData = z.infer<typeof loginSchema>;
 interface LoginScreenProps {
   onLogin: (data: LoginFormData) => Promise<void>;
   onNavigateToRegister?: () => void;
-  /** Vendor-only: show forgot password link */
   onNavigateToForgotPassword?: () => void;
   onGoogleSignIn?: () => Promise<void>;
   onAppleSignIn?: () => Promise<void>;
@@ -50,30 +116,29 @@ export function LoginScreen({
     try {
       await onLogin(data);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Login failed. Please try again.';
-      setError(msg);
+      setError(e instanceof Error ? e.message : 'Login failed. Please try again.');
     }
   };
 
-  const runAsyncHandler = (handler: () => Promise<void>, fallbackMsg: string) => async () => {
+  const wrap = (handler: () => Promise<void>, fallback: string) => async () => {
     setError(null);
     try {
       await handler();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : fallbackMsg);
+      setError(e instanceof Error ? e.message : fallback);
     }
   };
 
   return (
-    <View className="flex-1 bg-bone px-6 pt-16">
-      <H1 className="mb-2">{title}</H1>
-      <Text size="base" color="#7a7a76" className="mb-8">
+    <View style={styles.screen}>
+      <H1 style={{ marginBottom: 8 }}>{title}</H1>
+      <Text size="base" color={BRAND.inkMuted} style={{ marginBottom: 32 }}>
         Sign in to continue
       </Text>
 
       {error ? (
-        <View className="bg-paprika-tint border border-paprika/30 rounded-lg p-3 mb-4">
-          <Text size="sm" color="#c95b3e">{error}</Text>
+        <View style={styles.errorBanner}>
+          <Text size="sm" color={BRAND.paprika}>{error}</Text>
         </View>
       ) : null}
 
@@ -81,7 +146,7 @@ export function LoginScreen({
         control={control}
         name="email"
         render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-4">
+          <View style={styles.field}>
             <Input
               label="Email"
               placeholder="you@example.com"
@@ -102,7 +167,7 @@ export function LoginScreen({
         control={control}
         name="password"
         render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-6">
+          <View style={styles.fieldLast}>
             <Input
               label="Password"
               placeholder="••••••••"
@@ -119,9 +184,9 @@ export function LoginScreen({
       />
 
       {onNavigateToForgotPassword ? (
-        <View className="mb-4 items-end">
-          <Pressable onPress={onNavigateToForgotPassword} className="py-2">
-            <RNText className="text-herb text-sm">Forgot password?</RNText>
+        <View style={styles.forgotRow}>
+          <Pressable onPress={onNavigateToForgotPassword} hitSlop={8}>
+            <RNText style={styles.ghostText}>Forgot password?</RNText>
           </Pressable>
         </View>
       ) : null}
@@ -129,56 +194,45 @@ export function LoginScreen({
       <Pressable
         onPress={handleSubmit(onSubmit)}
         disabled={isSubmitting}
-        className={`rounded-lg py-4 items-center w-full ${
-          isSubmitting ? 'bg-herb-soft' : 'bg-herb active:bg-herb-soft'
-        }`}
+        style={isSubmitting ? styles.ctaPrimaryDisabled : styles.ctaPrimary}
       >
-        <RNText className="text-white text-base font-semibold">
+        <RNText style={styles.ctaPrimaryText}>
           {isSubmitting ? 'Signing in…' : 'Sign in'}
         </RNText>
       </Pressable>
 
       {(onGoogleSignIn || onAppleSignIn || onBiometricLogin) ? (
         <>
-          <View className="flex-row items-center my-6">
-            <View className="flex-1 h-px bg-mist" />
-            <Text size="sm" color="#7a7a76" className="mx-4">or</Text>
-            <View className="flex-1 h-px bg-mist" />
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text size="sm" color={BRAND.inkMuted} style={styles.dividerLabel}>or</Text>
+            <View style={styles.dividerLine} />
           </View>
 
           {onGoogleSignIn ? (
-            <Pressable
-              onPress={runAsyncHandler(onGoogleSignIn, 'Google sign-in failed')}
-              className="border border-herb rounded-lg py-4 items-center w-full mb-3 active:bg-herb-tint"
-            >
-              <RNText className="text-herb text-base font-semibold">Continue with Google</RNText>
+            <Pressable onPress={wrap(onGoogleSignIn, 'Google sign-in failed')} style={styles.ctaOutline}>
+              <RNText style={styles.ctaOutlineText}>Continue with Google</RNText>
             </Pressable>
           ) : null}
 
           {onAppleSignIn ? (
-            <Pressable
-              onPress={runAsyncHandler(onAppleSignIn, 'Apple sign-in failed')}
-              className="bg-ink rounded-lg py-4 items-center w-full mb-3 active:bg-ink-soft"
-            >
-              <RNText className="text-white text-base font-semibold">Continue with Apple</RNText>
+            <Pressable onPress={wrap(onAppleSignIn, 'Apple sign-in failed')} style={styles.ctaDark}>
+              <RNText style={styles.ctaPrimaryText}>Continue with Apple</RNText>
             </Pressable>
           ) : null}
 
           {onBiometricLogin ? (
-            <Pressable
-              onPress={runAsyncHandler(onBiometricLogin, 'Biometric auth failed')}
-              className="border border-herb rounded-lg py-3 items-center w-full active:bg-herb-tint"
-            >
-              <RNText className="text-herb text-base font-semibold">Use Face ID / Touch ID</RNText>
+            <Pressable onPress={wrap(onBiometricLogin, 'Biometric auth failed')} style={styles.ctaOutline}>
+              <RNText style={styles.ctaOutlineText}>Use Face ID / Touch ID</RNText>
             </Pressable>
           ) : null}
         </>
       ) : null}
 
       {onNavigateToRegister ? (
-        <View className="mt-6 items-center">
-          <Pressable onPress={onNavigateToRegister} className="py-2">
-            <RNText className="text-herb text-sm">Don't have an account? Sign up</RNText>
+        <View style={styles.signupRow}>
+          <Pressable onPress={onNavigateToRegister} hitSlop={8}>
+            <RNText style={styles.ghostText}>Don't have an account? Sign up</RNText>
           </Pressable>
         </View>
       ) : null}
