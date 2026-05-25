@@ -66,7 +66,7 @@ function FavoriteChefCard({
           <View
             style={[
               styles.openBadge,
-              { backgroundColor: chef.isOpen ? '#3e6b3c' : '#7a7a76' },
+              { backgroundColor: chef.isOpen ? '#C2410C' : '#7a7a76' },
             ]}
           >
             <Text style={styles.openBadgeText}>
@@ -119,7 +119,7 @@ export default function FavoritesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       </SafeAreaView>
     );
@@ -146,7 +146,7 @@ export default function FavoritesScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={() => void refetch()}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
         ListEmptyComponent={

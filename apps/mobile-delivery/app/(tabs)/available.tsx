@@ -141,7 +141,7 @@ export default function AvailableScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor="#3e6b3c"
+              tintColor="#C2410C"
             />
           }
           ListEmptyComponent={

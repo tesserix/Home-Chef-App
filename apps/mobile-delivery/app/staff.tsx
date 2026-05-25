@@ -213,7 +213,7 @@ export default function StaffScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -251,7 +251,7 @@ export default function StaffScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
           }
           ListHeaderComponent={
             <View className="flex-row items-center justify-between pt-4 pb-2">

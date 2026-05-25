@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@tesserix/native':
-    hash: byooazmczrko3qsrhy4cba2l3a
+    hash: ornfqpi2yj2fyvmvxpbj5ida6a
     path: patches/@tesserix__native.patch
 
 importers:
@@ -356,7 +356,7 @@ importers:
         version: 5.90.12(react@19.2.0)
       '@tesserix/native':
         specifier: ^1.0.0
-        version: 1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
+        version: 1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
       axios:
         specifier: ^1.13.0
         version: 1.14.0
@@ -489,7 +489,7 @@ importers:
         version: 5.90.12(react@19.2.0)
       '@tesserix/native':
         specifier: ^1.0.0
-        version: 1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
+        version: 1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
       axios:
         specifier: ^1.13.0
         version: 1.14.0
@@ -631,7 +631,7 @@ importers:
         version: 5.90.12(react@19.2.0)
       '@tesserix/native':
         specifier: ^1.0.0
-        version: 1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
+        version: 1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
       axios:
         specifier: ^1.13.0
         version: 1.14.0
@@ -1075,7 +1075,7 @@ importers:
         version: 24.0.0(@react-native-firebase/app@24.0.0(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3))(react@19.2.3))(expo@55.0.26)
       '@tesserix/native':
         specifier: ^1.0.0
-        version: 1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3))(react@19.2.3)
+        version: 1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3))(react@19.2.3)
       expo-device:
         specifier: ~7.1.4
         version: 7.1.4(expo@55.0.26)
@@ -12017,7 +12017,7 @@ snapshots:
     dependencies:
       react: 19.2.3
 
-  '@tesserix/native@1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3))(react@19.2.3)':
+  '@tesserix/native@1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@tesserix/hooks': 1.0.0(react@19.2.3)
       '@tesserix/tokens': 1.0.0
@@ -12025,7 +12025,7 @@ snapshots:
       react: 19.2.3
       react-native: 0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.0.14)(react@19.2.3)
 
-  '@tesserix/native@1.0.0(patch_hash=byooazmczrko3qsrhy4cba2l3a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)':
+  '@tesserix/native@1.0.0(patch_hash=ornfqpi2yj2fyvmvxpbj5ida6a)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)':
     dependencies:
       '@tesserix/hooks': 1.0.0(react@19.2.0)
       '@tesserix/tokens': 1.0.0

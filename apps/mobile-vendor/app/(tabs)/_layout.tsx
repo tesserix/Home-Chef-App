@@ -7,7 +7,7 @@ export default function VendorTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: { height: 64, paddingBottom: 8 },
-        tabBarActiveTintColor: '#3e6b3c',
+        tabBarActiveTintColor: '#C2410C',
         tabBarInactiveTintColor: '#7a7a76',
       }}
     >

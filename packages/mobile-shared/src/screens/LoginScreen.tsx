@@ -16,9 +16,11 @@ const BRAND = {
   ink: '#1a1a18',
   inkSoft: '#4a4a47',
   inkMuted: '#7a7a76',
-  herb: '#3e6b3c',
-  herbSoft: '#558257',
-  herbTint: '#dde9d8',
+  // Persimmon (warm editorial orange) — token names kept as `herb*` to avoid
+  // wide-scope renames; render orange. See apps/mobile-*/tailwind.config.js.
+  herb: '#C2410C',
+  herbSoft: '#9A3412',
+  herbTint: '#FFEDD5',
   mist: '#e6e5e0',
   paprika: '#c95b3e',
   paprikaTint: '#f3dcd2',

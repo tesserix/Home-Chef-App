@@ -136,7 +136,7 @@ export default function DriverProfileScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -160,7 +160,7 @@ export default function DriverProfileScreen() {
       <ScrollView
         className="flex-1"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
         }
         contentContainerStyle={{ paddingBottom: 32 }}
       >
@@ -183,7 +183,7 @@ export default function DriverProfileScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <User size={40} color="#558257" />
+                <User size={40} color="#9A3412" />
               )}
             </View>
             <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-herb items-center justify-center border-2 border-bone">

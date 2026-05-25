@@ -277,13 +277,13 @@ export default function CheckoutScreen() {
         {/* ── Delivery Address ── */}
         <View className="mx-4 mt-4 bg-bone rounded-2xl overflow-hidden">
           <View className="flex-row items-center px-4 pt-4 pb-2 gap-2">
-            <MapPin size={18} color="#3e6b3c" />
+            <MapPin size={18} color="#C2410C" />
             <Text className="text-base font-semibold text-ink">Delivery Address</Text>
           </View>
 
           {addressLoading ? (
             <View className="px-4 pb-4">
-              <ActivityIndicator size="small" color="#3e6b3c" />
+              <ActivityIndicator size="small" color="#C2410C" />
             </View>
           ) : (
             <>
@@ -325,7 +325,7 @@ export default function CheckoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Add new address"
               >
-                <Plus size={16} color="#3e6b3c" />
+                <Plus size={16} color="#C2410C" />
                 <Text className="text-sm text-herb font-medium">Add New Address</Text>
               </Pressable>
 
@@ -505,7 +505,7 @@ export default function CheckoutScreen() {
             </Text>
           </View>
           <View className="flex-row items-start gap-2">
-            <Clock size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <Clock size={16} color="#C2410C" style={{ marginTop: 2 }} />
             <Text className="text-sm text-ink-soft flex-1 leading-5">
               Refunds return to your original payment method within{' '}
               <Text className="font-semibold text-ink">7 working days</Text> per RBI Payment
@@ -513,7 +513,7 @@ export default function CheckoutScreen() {
             </Text>
           </View>
           <View className="flex-row items-start gap-2">
-            <FileText size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <FileText size={16} color="#C2410C" style={{ marginTop: 2 }} />
             <Text className="text-sm text-ink-soft flex-1 leading-5">
               See our{' '}
               <Link href="/refund" className="text-herb underline">
@@ -523,7 +523,7 @@ export default function CheckoutScreen() {
             </Text>
           </View>
           <View className="flex-row items-start gap-2">
-            <Clock size={16} color="#3e6b3c" style={{ marginTop: 2 }} />
+            <Clock size={16} color="#C2410C" style={{ marginTop: 2 }} />
             <Text className="text-sm text-ink-soft flex-1 leading-5">
               Estimated delivery: 30–45 minutes after the chef accepts your order.
               Actual time depends on the chef's preparation and your driver's route.

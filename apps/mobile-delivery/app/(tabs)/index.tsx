@@ -74,7 +74,7 @@ export default function DashboardScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
       >
@@ -108,7 +108,7 @@ export default function DashboardScreen() {
           <Switch
             value={isOnline}
             onValueChange={handleToggleOnline}
-            trackColor={{ false: '#7a7a76', true: '#3e6b3c' }}
+            trackColor={{ false: '#7a7a76', true: '#C2410C' }}
             thumbColor="white"
             disabled={toggleOnlineMutation.isPending}
           />

@@ -140,7 +140,7 @@ export default function OrdersScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
         onEndReached={handleLoadMore}
@@ -149,7 +149,7 @@ export default function OrdersScreen() {
           isLoadingMore ? (
             <ActivityIndicator
               size="small"
-              color="#3e6b3c"
+              color="#C2410C"
               style={styles.footerLoader}
             />
           ) : null
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
   },
   filterChipText: {
     fontSize: 14,

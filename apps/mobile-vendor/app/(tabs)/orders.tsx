@@ -83,8 +83,8 @@ function LiveQueue() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#3e6b3c"
-            colors={['#3e6b3c']}
+            tintColor="#C2410C"
+            colors={['#C2410C']}
           />
         }
         renderItem={({ item }) => (
@@ -128,7 +128,7 @@ function HistoryList() {
         <RefreshControl
           refreshing={isRefetching}
           onRefresh={() => { setPage(1); refetch(); }}
-          tintColor="#3e6b3c"
+          tintColor="#C2410C"
         />
       }
       onEndReachedThreshold={0.3}

@@ -75,7 +75,7 @@ export default function OperationsScreen() {
                 value={!dayData.closed}
                 onValueChange={(val) => toggleDay(day, !val)}
                 trackColor={{ false: '#d4d3ce', true: '#FED7AA' }}
-                thumbColor={!dayData.closed ? '#3e6b3c' : '#7a7a76'}
+                thumbColor={!dayData.closed ? '#C2410C' : '#7a7a76'}
               />
               {!dayData.closed ? (
                 <View className="flex-row items-center ml-3 gap-2">

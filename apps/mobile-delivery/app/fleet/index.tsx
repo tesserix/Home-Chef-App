@@ -133,7 +133,7 @@ export default function FleetScreen() {
   if (fleetLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -178,7 +178,7 @@ export default function FleetScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetchFleet}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
         ListHeaderComponent={

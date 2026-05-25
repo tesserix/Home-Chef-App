@@ -169,7 +169,7 @@ export default function NewMenuItemScreen() {
                 className="flex-1 flex-row items-center justify-center gap-2 border border-herb rounded-xl py-3"
                 activeOpacity={0.7}
               >
-                <Camera size={18} color="#3e6b3c" />
+                <Camera size={18} color="#C2410C" />
                 <Text className="text-herb font-medium text-sm">Take Photo</Text>
               </TouchableOpacity>
               <TouchableOpacity

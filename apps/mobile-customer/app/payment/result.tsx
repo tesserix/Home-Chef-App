@@ -23,7 +23,7 @@ export default function PaymentResult() {
 
   return (
     <View className="flex-1 items-center justify-center bg-bone">
-      <ActivityIndicator size="large" color="#3e6b3c" />
+      <ActivityIndicator size="large" color="#C2410C" />
       <Text className="text-ink-muted mt-3 text-sm">Confirming payment...</Text>
     </View>
   );

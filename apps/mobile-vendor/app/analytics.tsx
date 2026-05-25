@@ -88,7 +88,7 @@ export default function AnalyticsScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       ) : isError ? (
         <View className="flex-1 items-center justify-center px-6">

@@ -61,7 +61,7 @@ export default function PendingScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-bone items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -108,7 +108,7 @@ export default function PendingScreen() {
           <>
             {/* Pending review state */}
             <View className="w-20 h-20 bg-herb-tint rounded-full items-center justify-center mb-6">
-              <ActivityIndicator size="large" color="#3e6b3c" />
+              <ActivityIndicator size="large" color="#C2410C" />
             </View>
             <Text className="font-display text-2xl font-semibold text-ink text-center mb-3">
               Application Under Review

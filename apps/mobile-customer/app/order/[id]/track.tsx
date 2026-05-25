@@ -39,7 +39,7 @@ export default function TrackOrderScreen() {
   if (isLoading || !tracking) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </View>
     );
   }

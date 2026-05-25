@@ -154,7 +154,7 @@ export default function DocumentsScreen() {
 
         {uploadState.uploading ? (
           <View className="items-center py-4">
-            <ActivityIndicator color="#3e6b3c" />
+            <ActivityIndicator color="#C2410C" />
             <Text className="text-sm text-ink-muted mt-2">Uploading...</Text>
           </View>
         ) : (

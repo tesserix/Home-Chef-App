@@ -29,10 +29,13 @@ module.exports = {
           soft: '#4a4a47',
           muted: '#7a7a76',
         },
+        // Brand accent: Persimmon (warm editorial orange).
+        // Token name kept as `herb` to avoid a 49-file rename across the apps;
+        // class names (`bg-herb`, `text-herb`) now render orange.
         herb: {
-          DEFAULT: '#3e6b3c',
-          soft: '#558257',
-          tint: '#dde9d8',
+          DEFAULT: '#C2410C',
+          soft: '#9A3412',
+          tint: '#FFEDD5',
         },
         paprika: {
           DEFAULT: '#c95b3e',
@@ -49,19 +52,19 @@ module.exports = {
         background: '#fafaf7',
         foreground: '#1a1a18',
 
-        // Legacy `brand` alias → herb scale (mirror web tailwind.config.js)
+        // Legacy `brand` alias → persimmon scale (mirror web tailwind.config.js)
         brand: {
-          50: '#dde9d8',
-          100: '#c8dcc1',
-          200: '#abc8a3',
-          300: '#8db285',
-          400: '#6f9c67',
-          500: '#3e6b3c',
-          600: '#365e34',
-          700: '#2d4f2c',
-          800: '#244023',
-          900: '#1a301a',
-          950: '#0c1f0c',
+          50: '#FFF7ED',
+          100: '#FFEDD5',
+          200: '#FED7AA',
+          300: '#FDBA74',
+          400: '#FB923C',
+          500: '#C2410C',
+          600: '#9A3412',
+          700: '#7C2D12',
+          800: '#5C1F0A',
+          900: '#3F1409',
+          950: '#2A0C06',
         },
       },
       fontFamily: {

@@ -172,7 +172,7 @@ export default function EditMenuItemScreen() {
   if (!item) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -227,7 +227,7 @@ export default function EditMenuItemScreen() {
                       className="w-[90px] h-[42px] bg-herb-tint border border-herb-tint rounded-xl items-center justify-center"
                       activeOpacity={0.7}
                     >
-                      <Camera size={16} color="#3e6b3c" />
+                      <Camera size={16} color="#C2410C" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleAddPhoto}
@@ -242,7 +242,7 @@ export default function EditMenuItemScreen() {
             </ScrollView>
             {uploadMutation.isPending && (
               <View className="flex-row items-center gap-2 mt-2">
-                <ActivityIndicator size="small" color="#3e6b3c" />
+                <ActivityIndicator size="small" color="#C2410C" />
                 <Text className="text-sm text-ink-muted">Uploading photo...</Text>
               </View>
             )}

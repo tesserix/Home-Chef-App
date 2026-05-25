@@ -377,12 +377,12 @@ Three audiences on their own apps, one brand: **customers** (hungry, distracted,
 
 ### Aesthetic Direction — Refined consumer (Stripe Atlas / Cash App / Apple Food)
 - **Light-first, dark supported.** Both modes must work; driver/vendor often dark in low light.
-- **Palette: Paper · Ink · Herb.**
+- **Palette: Paper · Ink · Persimmon.** (Pivoted from herb-green to persimmon-orange 2026-05-25; mobile tailwind token name kept as `herb` to avoid a 49-file rename, but renders orange.)
   - **Paper** `oklch(0.985 0.003 80)` — warm off-white page background (never `#fff`)
   - **Ink** `oklch(0.18 0.01 80)` — near-black warm-tinted (never `#000`)
-  - **Herb** `oklch(0.48 0.13 145)` — deep green, **the single brand accent.** Primary CTA, focus, success, selected. Reads "fresh food" without the red-saturated competitor look.
+  - **Persimmon** `#C2410C` (≈ `oklch(0.56 0.18 38)`) — deep warm editorial orange, **the single brand accent.** Primary CTA, focus, success, selected. Reads "appetizing" without crossing into the Swiggy/Zomato/DoorDash red-saturated delivery-app look. Hover: `#9A3412`. Tint: `#FFEDD5`.
   - **Bone / Mist** — elevated surfaces and hairlines.
-  - **Functional only:** `Paprika` (destructive), `Amber` (warning). Never decorative.
+  - **Functional only:** Destructive `#B22B0E` (deep paprika red, never used for branding), `Amber` (warning). Never decorative.
 - **Anti-references — explicitly avoid:** the legacy terracotta/cream/amber/Playfair artisanal system, red-saturated delivery-app look (Swiggy/Zomato/DoorDash), AI slop palette (cyan-on-dark, purple-blue gradients), glassmorphism, 2018 indie ecommerce, hero metric layouts, generic SaaS dashboards.
 
 ### Typography
@@ -403,11 +403,11 @@ Three audiences on their own apps, one brand: **customers** (hungry, distracted,
 - `prefers-reduced-motion` honored everywhere.
 
 ### Accessibility
-WCAG 2.1 AA baseline. AAA for body text where practical. Skip link first on web. Semantic landmarks always. Visible 2px herb focus ring with 2px offset (never `outline: none`). Driver app: 7:1 contrast floor, all type ≥16px. Form errors via `aria-describedby` / `aria-invalid`.
+WCAG 2.1 AA baseline. AAA for body text where practical. Skip link first on web. Semantic landmarks always. Visible 2px persimmon focus ring with 2px offset (never `outline: none`). Driver app: 7:1 contrast floor, all type ≥16px. Form errors via `aria-describedby` / `aria-invalid`.
 
 ### Design Principles
 1. **Photo-forward, chrome-light.** Food and faces carry the brand. UI chrome shrinks.
-2. **One accent, used sparingly.** Herb is for primary action, focus, success — nothing decorative. More than one herb element per screen competing for the eye = one is wrong.
+2. **One accent, used sparingly.** Persimmon is for primary action, focus, success — nothing decorative. More than one persimmon element per screen competing for the eye = one is wrong.
 3. **Confidence through restraint.** No bounce, no glass, no gradient text, no decorative shadows, no hero metrics. If it feels loud, it's wrong.
 4. **Per-role density, shared language.** Customer breathes, vendor packs, driver strips down. Tokens shared, layouts adapt.
 5. **Trust the system.** Use the tokens, `@tesserix/web` primitives, Geist + Inter, the easing curve. Don't invent per-feature colors/radii/motion.

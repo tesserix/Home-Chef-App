@@ -118,7 +118,7 @@ export default function MenuScreen() {
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
         }
         ListEmptyComponent={
           <View className="items-center justify-center py-16">

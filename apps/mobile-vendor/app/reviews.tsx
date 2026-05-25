@@ -90,7 +90,7 @@ export default function ReviewsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -157,7 +157,7 @@ export default function ReviewsScreen() {
         renderItem={({ item }) => <ReviewCard review={item} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
         }
         ListEmptyComponent={
           <View className="items-center justify-center py-16">

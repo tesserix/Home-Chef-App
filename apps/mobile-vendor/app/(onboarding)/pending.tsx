@@ -44,7 +44,7 @@ export default function PendingScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-bone items-center justify-center">
-        <ActivityIndicator color="#3e6b3c" size="large" />
+        <ActivityIndicator color="#C2410C" size="large" />
       </SafeAreaView>
     );
   }

@@ -189,7 +189,7 @@ export default function DriverHistoryScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
         onEndReached={handleEndReached}
@@ -205,7 +205,7 @@ export default function DriverHistoryScreen() {
         ListFooterComponent={
           isFetchingNextPage ? (
             <View className="py-4 items-center">
-              <ActivityIndicator size="small" color="#3e6b3c" />
+              <ActivityIndicator size="small" color="#C2410C" />
             </View>
           ) : null
         }

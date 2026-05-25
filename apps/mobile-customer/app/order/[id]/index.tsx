@@ -34,7 +34,7 @@ function getStatusStyle(status: Order['status']): StatusColor {
     case 'picked_up':
       return { bg: '#DCFCE7', text: '#166534', label: 'On the Way' };
     case 'delivered':
-      return { bg: '#F0FDF4', text: '#3e6b3c', label: 'Delivered' };
+      return { bg: '#F0FDF4', text: '#C2410C', label: 'Delivered' };
     case 'cancelled':
       return { bg: '#f3dcd2', text: '#991B1B', label: 'Cancelled' };
     default:
@@ -62,7 +62,7 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       </SafeAreaView>
     );
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   backButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     borderRadius: 8,
   },
   backButtonText: {
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   trackButton: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

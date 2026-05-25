@@ -69,7 +69,7 @@ export async function startTracking(): Promise<void> {
       // Android only — required for background on Android (D-05)
       notificationTitle: 'HomeChef Delivery',
       notificationBody: 'Tracking your location during delivery',
-      notificationColor: '#3e6b3c',
+      notificationColor: '#C2410C',
     },
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true, // iOS blue status bar indicator

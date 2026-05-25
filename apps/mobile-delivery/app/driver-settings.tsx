@@ -137,7 +137,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={newDelivery}
               onValueChange={handleToggleNewDelivery}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
               thumbColor="white"
             />
           }
@@ -149,7 +149,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={earningsPayout}
               onValueChange={handleToggleEarningsPayout}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
               thumbColor="white"
             />
           }
@@ -164,7 +164,7 @@ export default function DriverSettingsScreen() {
             <Switch
               value={defaultOnline}
               onValueChange={handleToggleDefaultOnline}
-              trackColor={{ false: '#d4d3ce', true: '#3e6b3c' }}
+              trackColor={{ false: '#d4d3ce', true: '#C2410C' }}
               thumbColor="white"
             />
           }

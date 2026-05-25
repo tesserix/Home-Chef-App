@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     height: 10,
   },
   connectorActive: {
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
   },
   connectorPending: {
     backgroundColor: '#d4d3ce',
@@ -148,10 +148,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   circleCompleted: {
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
   },
   circleCurrent: {
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
   },
   circleText: {
     fontSize: 11,
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   labelCurrent: {
-    color: '#3e6b3c',
+    color: '#C2410C',
     fontWeight: '600',
   },
 });

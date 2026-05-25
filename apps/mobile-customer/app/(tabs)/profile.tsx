@@ -126,7 +126,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       </SafeAreaView>
     );
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 16,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -395,15 +395,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafaf7',
   },
   chipSelected: {
-    backgroundColor: '#dde9d8',
-    borderColor: '#3e6b3c',
+    backgroundColor: '#FFEDD5',
+    borderColor: '#C2410C',
   },
   chipText: {
     fontSize: 13,
     color: '#7a7a76',
   },
   chipTextSelected: {
-    color: '#3e6b3c',
+    color: '#C2410C',
     fontWeight: '600',
   },
   moreRow: {

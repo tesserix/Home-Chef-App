@@ -1,5 +1,127 @@
+diff --git a/dist/index.js b/dist/index.js
+index 213c823fee3b48225cc7d38cbac0ade571732e4d..199183ddf79ad37963069c40b42c4e0ea89ba708 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -426,6 +426,29 @@ var cssVarTokenMap = {
+   "--input": "input",
+   "--ring": "ring"
+ };
++// HomeChef brand mapping for React Native (no DOM). Keep in sync with
++// patches/@tesserix__native.patch src/utils/getThemeColor.ts. Accent: Persimmon #C2410C.
++const homeChefBrandMap = {
++  "--background": "#FBFAF7",
++  "--foreground": "#1A1A18",
++  "--card": "#FFFFFF",
++  "--card-foreground": "#1A1A18",
++  "--popover": "#FFFFFF",
++  "--popover-foreground": "#1A1A18",
++  "--primary": "#C2410C",
++  "--primary-foreground": "#FFFFFF",
++  "--secondary": "#1A1A18",
++  "--secondary-foreground": "#FFFFFF",
++  "--muted": "#F0EDE8",
++  "--muted-foreground": "#6B6B66",
++  "--accent": "#C2410C",
++  "--accent-foreground": "#FFFFFF",
++  "--destructive": "#B22B0E",
++  "--destructive-foreground": "#FFFFFF",
++  "--border": "#E8E5DE",
++  "--input": "#E8E5DE",
++  "--ring": "#C2410C"
++};
+ function getThemeColor(cssVar, fallback) {
+   const tokenKey = cssVarTokenMap[cssVar];
+   if (typeof document !== "undefined" && tokenKey) {
+@@ -464,6 +487,11 @@ function getThemeColor(cssVar, fallback) {
+       console.warn(`Failed to read CSS variable ${cssVar}:`, e);
+     }
+   }
++  // React Native path: project HomeChef brand tokens.
++  const brand = homeChefBrandMap[cssVar];
++  if (brand) {
++    return brand;
++  }
+   return fallback;
+ }
+ function useStorybookThemeVersion() {
+@@ -534,10 +562,10 @@ var Button = React106__default.default.forwardRef(
+       ...fullWidth && { width: "100%" },
+       ...disabled && { opacity: 0.5 }
+     };
+-    const primaryColor = getThemeColor("--primary", "#3b82f6");
+-    const errorColor = getThemeColor("--destructive", "#ef4444");
+-    const successColor = getThemeColor("--primary", "#10b981");
+-    const secondaryColor = getThemeColor("--secondary", "#6b7280");
++    const primaryColor = getThemeColor("--primary", "#C2410C");
++    const errorColor = getThemeColor("--destructive", "#B22B0E");
++    const successColor = getThemeColor("--primary", "#C2410C");
++    const secondaryColor = getThemeColor("--secondary", "#1A1A18");
+     const foregroundColor = getThemeColor("--primary-foreground", "#ffffff");
+     const schemeColor = resolvedColorScheme === "primary" ? primaryColor : resolvedColorScheme === "error" ? errorColor : resolvedColorScheme === "success" ? successColor : secondaryColor;
+     const variantStyles = variant === "solid" ? { backgroundColor: schemeColor } : variant === "outline" ? {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index ce7721ad66dc1575e31e9054741534ee94a8b294..17f6d160dee8085e22bb431e4004295ef70cc605 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -420,6 +420,29 @@ var cssVarTokenMap = {
+   "--input": "input",
+   "--ring": "ring"
+ };
++// HomeChef brand mapping for React Native (no DOM). Keep in sync with
++// patches/@tesserix__native.patch src/utils/getThemeColor.ts. Accent: Persimmon #C2410C.
++const homeChefBrandMap = {
++  "--background": "#FBFAF7",
++  "--foreground": "#1A1A18",
++  "--card": "#FFFFFF",
++  "--card-foreground": "#1A1A18",
++  "--popover": "#FFFFFF",
++  "--popover-foreground": "#1A1A18",
++  "--primary": "#C2410C",
++  "--primary-foreground": "#FFFFFF",
++  "--secondary": "#1A1A18",
++  "--secondary-foreground": "#FFFFFF",
++  "--muted": "#F0EDE8",
++  "--muted-foreground": "#6B6B66",
++  "--accent": "#C2410C",
++  "--accent-foreground": "#FFFFFF",
++  "--destructive": "#B22B0E",
++  "--destructive-foreground": "#FFFFFF",
++  "--border": "#E8E5DE",
++  "--input": "#E8E5DE",
++  "--ring": "#C2410C"
++};
+ function getThemeColor(cssVar, fallback) {
+   const tokenKey = cssVarTokenMap[cssVar];
+   if (typeof document !== "undefined" && tokenKey) {
+@@ -458,6 +481,11 @@ function getThemeColor(cssVar, fallback) {
+       console.warn(`Failed to read CSS variable ${cssVar}:`, e);
+     }
+   }
++  // React Native path: project HomeChef brand tokens.
++  const brand = homeChefBrandMap[cssVar];
++  if (brand) {
++    return brand;
++  }
+   return fallback;
+ }
+ function useStorybookThemeVersion() {
+@@ -528,10 +556,10 @@ var Button = React106.forwardRef(
+       ...fullWidth && { width: "100%" },
+       ...disabled && { opacity: 0.5 }
+     };
+-    const primaryColor = getThemeColor("--primary", "#3b82f6");
+-    const errorColor = getThemeColor("--destructive", "#ef4444");
+-    const successColor = getThemeColor("--primary", "#10b981");
+-    const secondaryColor = getThemeColor("--secondary", "#6b7280");
++    const primaryColor = getThemeColor("--primary", "#C2410C");
++    const errorColor = getThemeColor("--destructive", "#B22B0E");
++    const successColor = getThemeColor("--primary", "#C2410C");
++    const secondaryColor = getThemeColor("--secondary", "#1A1A18");
+     const foregroundColor = getThemeColor("--primary-foreground", "#ffffff");
+     const schemeColor = resolvedColorScheme === "primary" ? primaryColor : resolvedColorScheme === "error" ? errorColor : resolvedColorScheme === "success" ? successColor : secondaryColor;
+     const variantStyles = variant === "solid" ? { backgroundColor: schemeColor } : variant === "outline" ? {
 diff --git a/src/components/Button/Button.tsx b/src/components/Button/Button.tsx
-index c33dff5a69a865c432028bd1d608c0afa671ff5c..8288f6b7cfb8a035e32785aed83f9bdd807ef6d3 100644
+index c33dff5a69a865c432028bd1d608c0afa671ff5c..7a325b27492b3fa49ffa7454b829b40b688d638e 100644
 --- a/src/components/Button/Button.tsx
 +++ b/src/components/Button/Button.tsx
 @@ -83,11 +83,13 @@ export const Button = React.forwardRef<React.ElementRef<typeof TouchableOpacity>
@@ -14,51 +136,51 @@ index c33dff5a69a865c432028bd1d608c0afa671ff5c..8288f6b7cfb8a035e32785aed83f9bdd
 +    // Get theme colors (uses CSS variables in Storybook, falls through to
 +    // HomeChef brand map in getThemeColor for native; fallback hexes kept
 +    // brand-correct as defense-in-depth in case the cssVar lookup is missed.)
-+    const primaryColor = getThemeColor('--primary', '#3E6B3C')
-+    const errorColor = getThemeColor('--destructive', '#C95B3E')
-+    const successColor = getThemeColor('--primary', '#3E6B3C')
++    const primaryColor = getThemeColor('--primary', '#C2410C')
++    const errorColor = getThemeColor('--destructive', '#B22B0E')
++    const successColor = getThemeColor('--primary', '#C2410C')
 +    const secondaryColor = getThemeColor('--secondary', '#1A1A18')
      const foregroundColor = getThemeColor('--primary-foreground', '#ffffff')
  
      const schemeColor =
 diff --git a/src/utils/getThemeColor.ts b/src/utils/getThemeColor.ts
-index 7afc4732e187e765295d57815954238f62967962..79be971f321522742ef0821e1953b8a00920488a 100644
+index 7afc4732e187e765295d57815954238f62967962..de2de53458c86794c305afcf63d7786211be65ec 100644
 --- a/src/utils/getThemeColor.ts
 +++ b/src/utils/getThemeColor.ts
-@@ -22,6 +22,32 @@ const cssVarTokenMap = {
-   '--ring': 'ring',
- } as const
+@@ -1,5 +1,32 @@
+ import { getThemeColors, oklchToRgba, themes, type ColorMode, type ThemeName } from '@tesserix/tokens'
  
 +// HomeChef brand mapping for React Native (no DOM). When this library is
 +// consumed by the HomeChef mobile apps, getThemeColor cannot read CSS vars,
 +// so we project the brand tokens directly. Keep in sync with
 +// apps/mobile-*/tailwind.config.js and Home-Chef-App/CLAUDE.md design context.
++// Accent: Persimmon #C2410C (warm editorial orange).
 +const homeChefBrandMap: Record<string, string> = {
-+  '--background': '#FBFAF7',          // paper
-+  '--foreground': '#1A1A18',          // ink
-+  '--card': '#FFFFFF',                // bone (elevated)
++  '--background': '#FBFAF7',
++  '--foreground': '#1A1A18',
++  '--card': '#FFFFFF',
 +  '--card-foreground': '#1A1A18',
 +  '--popover': '#FFFFFF',
 +  '--popover-foreground': '#1A1A18',
-+  '--primary': '#3E6B3C',             // herb — primary CTA
++  '--primary': '#C2410C',
 +  '--primary-foreground': '#FFFFFF',
-+  '--secondary': '#1A1A18',           // ink — secondary CTA (Apple button)
++  '--secondary': '#1A1A18',
 +  '--secondary-foreground': '#FFFFFF',
-+  '--muted': '#F0EDE8',               // mist
-+  '--muted-foreground': '#6B6B66',    // warm muted gray
-+  '--accent': '#3E6B3C',              // herb
++  '--muted': '#F0EDE8',
++  '--muted-foreground': '#6B6B66',
++  '--accent': '#C2410C',
 +  '--accent-foreground': '#FFFFFF',
-+  '--destructive': '#C95B3E',         // paprika
++  '--destructive': '#B22B0E',
 +  '--destructive-foreground': '#FFFFFF',
-+  '--border': '#E8E5DE',              // hairline
++  '--border': '#E8E5DE',
 +  '--input': '#E8E5DE',
-+  '--ring': '#3E6B3C',                // herb focus ring
++  '--ring': '#C2410C',
 +}
 +
- /**
-  * Get theme color from CSS variables when running in web (Storybook)
-  * Falls back to default color for native platforms
-@@ -77,5 +103,14 @@ export function getThemeColor(cssVar: string, fallback: string): string {
+ const cssVarTokenMap = {
+   '--background': 'background',
+   '--foreground': 'foreground',
+@@ -77,5 +104,14 @@ export function getThemeColor(cssVar: string, fallback: string): string {
        // Fall back to default if CSS var reading fails
      }
    }

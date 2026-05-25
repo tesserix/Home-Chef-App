@@ -25,7 +25,7 @@ function getStatusStyle(status: Order['status']): StatusColor {
     case 'picked_up':
       return { bg: '#DCFCE7', text: '#166534', label: 'Picked Up' };
     case 'delivered':
-      return { bg: '#F0FDF4', text: '#3e6b3c', label: 'Delivered' };
+      return { bg: '#F0FDF4', text: '#C2410C', label: 'Delivered' };
     case 'cancelled':
       return { bg: '#f3dcd2', text: '#991B1B', label: 'Cancelled' };
     default:

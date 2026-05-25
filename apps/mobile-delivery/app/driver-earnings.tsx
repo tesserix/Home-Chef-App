@@ -73,7 +73,7 @@ export default function DriverEarningsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -97,7 +97,7 @@ export default function DriverEarningsScreen() {
       <ScrollView
         className="flex-1"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
         }
         contentContainerStyle={{ paddingBottom: 32 }}
       >

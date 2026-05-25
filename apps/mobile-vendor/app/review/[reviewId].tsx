@@ -111,7 +111,7 @@ export default function ReviewDetailScreen() {
             </View>
           ) : (
             <View className="bg-bone rounded-2xl shadow-sm p-4 mb-4 items-center">
-              <ActivityIndicator size="small" color="#3e6b3c" />
+              <ActivityIndicator size="small" color="#C2410C" />
             </View>
           )}
 

@@ -89,7 +89,7 @@ export default function SettingsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </SafeAreaView>
     );
   }
@@ -133,8 +133,8 @@ export default function SettingsScreen() {
             <Switch
               value={notificationPrefs.newOrderNotifications}
               onValueChange={(v) => handleNotificationToggle('newOrderNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
-              thumbColor={notificationPrefs.newOrderNotifications ? '#3e6b3c' : '#7a7a76'}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
+              thumbColor={notificationPrefs.newOrderNotifications ? '#C2410C' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
@@ -149,8 +149,8 @@ export default function SettingsScreen() {
             <Switch
               value={notificationPrefs.payoutNotifications}
               onValueChange={(v) => handleNotificationToggle('payoutNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
-              thumbColor={notificationPrefs.payoutNotifications ? '#3e6b3c' : '#7a7a76'}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
+              thumbColor={notificationPrefs.payoutNotifications ? '#C2410C' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
@@ -165,8 +165,8 @@ export default function SettingsScreen() {
             <Switch
               value={notificationPrefs.reviewNotifications}
               onValueChange={(v) => handleNotificationToggle('reviewNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
-              thumbColor={notificationPrefs.reviewNotifications ? '#3e6b3c' : '#7a7a76'}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
+              thumbColor={notificationPrefs.reviewNotifications ? '#C2410C' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>
@@ -187,8 +187,8 @@ export default function SettingsScreen() {
             <Switch
               value={acceptingOrders}
               onValueChange={handleAcceptingOrdersToggle}
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
-              thumbColor={acceptingOrders ? '#3e6b3c' : '#7a7a76'}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
+              thumbColor={acceptingOrders ? '#C2410C' : '#7a7a76'}
               disabled={updateMutation.isPending}
             />
           </View>

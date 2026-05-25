@@ -148,7 +148,7 @@ export default function SocialScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       </SafeAreaView>
     );
@@ -168,7 +168,7 @@ export default function SocialScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor="#3e6b3c"
+            tintColor="#C2410C"
           />
         }
         onEndReached={handleLoadMore}
@@ -177,7 +177,7 @@ export default function SocialScreen() {
           isLoadingMore ? (
             <ActivityIndicator
               size="small"
-              color="#3e6b3c"
+              color="#C2410C"
               style={styles.footerLoader}
             />
           ) : null
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   hashtags: {
     fontSize: 13,
-    color: '#3e6b3c',
+    color: '#C2410C',
     marginBottom: 10,
   },
   actionsRow: {

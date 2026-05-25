@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: 4,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     borderRadius: 2,
   },
   title: { fontSize: 24, fontWeight: '700', color: '#1a1a18', marginBottom: 8 },
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 12, color: '#c95b3e', marginBottom: 12 },
   button: {
     height: 52,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

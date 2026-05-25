@@ -64,8 +64,8 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
               onValueChange={(value) =>
                 toggleMutation.mutate({ itemId: item.id, isAvailable: value })
               }
-              trackColor={{ false: '#d4d3ce', true: '#558257' }}
-              thumbColor={item.isAvailable ? '#3e6b3c' : '#7a7a76'}
+              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
+              thumbColor={item.isAvailable ? '#C2410C' : '#7a7a76'}
               disabled={toggleMutation.isPending}
             />
             <Text className="text-xs text-ink-muted">

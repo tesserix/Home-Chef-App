@@ -46,7 +46,7 @@ export default function ChefDetailScreen() {
   if (chefLoading || menuLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-bone">
-        <ActivityIndicator size="large" color="#3e6b3c" />
+        <ActivityIndicator size="large" color="#C2410C" />
       </View>
     );
   }

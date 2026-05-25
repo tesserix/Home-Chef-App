@@ -68,7 +68,7 @@ function statusLabel(status: CateringRequest['status']): {
     case 'quoted':
       return { label: 'Quoted', color: '#d1a64a' };
     case 'accepted':
-      return { label: 'Accepted', color: '#3e6b3c' };
+      return { label: 'Accepted', color: '#C2410C' };
     case 'completed':
       return { label: 'Completed', color: '#7a7a76' };
     case 'cancelled':
@@ -374,7 +374,7 @@ export default function CateringScreen() {
         <RequestForm onSuccess={() => setActiveTab('my-requests')} />
       ) : isLoading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3e6b3c" />
+          <ActivityIndicator size="large" color="#C2410C" />
         </View>
       ) : (
         <FlatList
@@ -474,15 +474,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   eventTypeChipSelected: {
-    backgroundColor: '#dde9d8',
-    borderColor: '#3e6b3c',
+    backgroundColor: '#FFEDD5',
+    borderColor: '#C2410C',
   },
   eventTypeChipText: {
     fontSize: 13,
     color: '#7a7a76',
   },
   eventTypeChipTextSelected: {
-    color: '#3e6b3c',
+    color: '#C2410C',
     fontWeight: '600',
   },
   input: {
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 24,
-    backgroundColor: '#3e6b3c',
+    backgroundColor: '#C2410C',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
   },
   viewQuoteHint: {
     fontSize: 12,
-    color: '#3e6b3c',
+    color: '#C2410C',
     fontWeight: '500',
     marginTop: 6,
   },

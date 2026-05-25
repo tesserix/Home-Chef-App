@@ -65,7 +65,7 @@ export default function DashboardScreen() {
         className="flex-1"
         contentContainerClassName="px-4 pb-8"
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3e6b3c" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
         }
       >
         {/* Header */}
@@ -125,7 +125,7 @@ export default function DashboardScreen() {
           <Switch
             value={dashboard?.acceptingOrders ?? false}
             onValueChange={(v) => toggleMutation.mutate(v)}
-            trackColor={{ false: '#d4d3ce', true: '#3e6b3c' }}
+            trackColor={{ false: '#d4d3ce', true: '#C2410C' }}
             thumbColor="#fafaf7"
             disabled={toggleMutation.isPending || isLoading}
           />

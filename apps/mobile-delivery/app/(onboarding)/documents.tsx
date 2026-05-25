@@ -176,7 +176,7 @@ export default function DocumentsScreen() {
             {/* Upload buttons */}
             {uploading === slot.type ? (
               <View className="items-center py-2">
-                <ActivityIndicator color="#3e6b3c" />
+                <ActivityIndicator color="#C2410C" />
                 <Text className="text-ink-muted text-sm mt-1">Uploading...</Text>
               </View>
             ) : (

@@ -6,7 +6,7 @@ export default function DriverTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#3e6b3c',
+        tabBarActiveTintColor: '#C2410C',
         tabBarInactiveTintColor: '#7a7a76',
         tabBarStyle: { height: 64, paddingBottom: 8 },
       }}
