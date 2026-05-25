@@ -1,0 +1,75 @@
+diff --git a/src/components/Button/Button.tsx b/src/components/Button/Button.tsx
+index c33dff5a69a865c432028bd1d608c0afa671ff5c..8288f6b7cfb8a035e32785aed83f9bdd807ef6d3 100644
+--- a/src/components/Button/Button.tsx
++++ b/src/components/Button/Button.tsx
+@@ -83,11 +83,13 @@ export const Button = React.forwardRef<React.ElementRef<typeof TouchableOpacity>
+       ...(disabled && { opacity: 0.5 }),
+     }
+ 
+-    // Get theme colors (uses CSS variables in Storybook, fallback to hardcoded values in native)
+-    const primaryColor = getThemeColor('--primary', '#3b82f6')
+-    const errorColor = getThemeColor('--destructive', '#ef4444')
+-    const successColor = getThemeColor('--primary', '#10b981')
+-    const secondaryColor = getThemeColor('--secondary', '#6b7280')
++    // Get theme colors (uses CSS variables in Storybook, falls through to
++    // HomeChef brand map in getThemeColor for native; fallback hexes kept
++    // brand-correct as defense-in-depth in case the cssVar lookup is missed.)
++    const primaryColor = getThemeColor('--primary', '#3E6B3C')
++    const errorColor = getThemeColor('--destructive', '#C95B3E')
++    const successColor = getThemeColor('--primary', '#3E6B3C')
++    const secondaryColor = getThemeColor('--secondary', '#1A1A18')
+     const foregroundColor = getThemeColor('--primary-foreground', '#ffffff')
+ 
+     const schemeColor =
+diff --git a/src/utils/getThemeColor.ts b/src/utils/getThemeColor.ts
+index 7afc4732e187e765295d57815954238f62967962..79be971f321522742ef0821e1953b8a00920488a 100644
+--- a/src/utils/getThemeColor.ts
++++ b/src/utils/getThemeColor.ts
+@@ -22,6 +22,32 @@ const cssVarTokenMap = {
+   '--ring': 'ring',
+ } as const
+ 
++// HomeChef brand mapping for React Native (no DOM). When this library is
++// consumed by the HomeChef mobile apps, getThemeColor cannot read CSS vars,
++// so we project the brand tokens directly. Keep in sync with
++// apps/mobile-*/tailwind.config.js and Home-Chef-App/CLAUDE.md design context.
++const homeChefBrandMap: Record<string, string> = {
++  '--background': '#FBFAF7',          // paper
++  '--foreground': '#1A1A18',          // ink
++  '--card': '#FFFFFF',                // bone (elevated)
++  '--card-foreground': '#1A1A18',
++  '--popover': '#FFFFFF',
++  '--popover-foreground': '#1A1A18',
++  '--primary': '#3E6B3C',             // herb — primary CTA
++  '--primary-foreground': '#FFFFFF',
++  '--secondary': '#1A1A18',           // ink — secondary CTA (Apple button)
++  '--secondary-foreground': '#FFFFFF',
++  '--muted': '#F0EDE8',               // mist
++  '--muted-foreground': '#6B6B66',    // warm muted gray
++  '--accent': '#3E6B3C',              // herb
++  '--accent-foreground': '#FFFFFF',
++  '--destructive': '#C95B3E',         // paprika
++  '--destructive-foreground': '#FFFFFF',
++  '--border': '#E8E5DE',              // hairline
++  '--input': '#E8E5DE',
++  '--ring': '#3E6B3C',                // herb focus ring
++}
++
+ /**
+  * Get theme color from CSS variables when running in web (Storybook)
+  * Falls back to default color for native platforms
+@@ -77,5 +103,14 @@ export function getThemeColor(cssVar: string, fallback: string): string {
+       // Fall back to default if CSS var reading fails
+     }
+   }
++
++  // React Native path: no DOM, no Storybook globals. Project HomeChef brand
++  // tokens so components render with the correct palette instead of the
++  // generic web fallbacks (#3b82f6 etc.) baked into individual components.
++  const brand = homeChefBrandMap[cssVar]
++  if (brand) {
++    return brand
++  }
++
+   return fallback
+ }

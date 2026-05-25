@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "description": "HomeChef - Connect with home chefs for authentic homemade food",
-  "keywords": ["food-delivery", "home-chef", "catering", "homemade-food"],
+  "keywords": [
+    "food-delivery",
+    "home-chef",
+    "catering",
+    "homemade-food"
+  ],
   "license": "UNLICENSED",
   "author": "HomeChef Team",
   "scripts": {
@@ -53,5 +58,10 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@tesserix/native": "patches/@tesserix__native.patch"
+    }
   }
 }
