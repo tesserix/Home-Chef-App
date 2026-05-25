@@ -1,8 +1,22 @@
-import { View, Text, ScrollView, Switch, RefreshControl, Pressable } from 'react-native';
+import { useEffect } from 'react';
+import { View, Text, ScrollView, Switch, RefreshControl, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { useVendorDashboard, useToggleAcceptingOrders } from '../../hooks/useVendorDashboard';
 import { useAuthStore } from '../../store/auth-store';
 import { DashboardStatsCard } from '../../components/vendor/DashboardStatsCard';
+
+// Inline brand fallback — NativeWind className doesn't reach this error
+// branch consistently when the dashboard query errors before tailwind
+// styles hydrate. See task: Fix NativeWind v5 className not applying.
+const ERR = StyleSheet.create({
+  screen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: '#FBFAF7' },
+  msg: { textAlign: 'center', fontSize: 16, color: '#B22B0E', marginBottom: 16 },
+  ctaPrimary: { marginTop: 16, borderRadius: 12, backgroundColor: '#C2410C', paddingHorizontal: 24, paddingVertical: 12 },
+  ctaPrimaryText: { color: '#FFFFFF', fontWeight: '600' },
+  ctaSecondary: { marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1A1A18', paddingHorizontal: 24, paddingVertical: 12 },
+  ctaSecondaryText: { color: '#1A1A18', fontWeight: '600' },
+});
 
 function SkeletonBox({ className }: { className: string }) {
   return <View className={`animate-pulse rounded-2xl bg-mist ${className}`} />;
@@ -31,7 +45,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function DashboardScreen() {
   const user = useAuthStore((s) => s.user);
-  const { data: dashboard, isLoading, isRefetching, refetch, isError } = useVendorDashboard();
+  const { data: dashboard, isLoading, isRefetching, refetch, isError, error } = useVendorDashboard();
   const toggleMutation = useToggleAcceptingOrders();
 
   const greeting = (() => {
@@ -45,15 +59,26 @@ export default function DashboardScreen() {
     ?? (user as { email?: string } | null)?.email
     ?? 'Chef';
 
+  // Dashboard 404 with "Chef profile not found" means the user signed in but
+  // never completed onboarding. Auto-redirect to the onboarding wizard
+  // instead of stranding them on a Retry button that will never succeed.
+  useEffect(() => {
+    if (!isError) return;
+    const status = (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+    if (status === 'Chef profile not found') {
+      router.replace('/(onboarding)/personal-info');
+    }
+  }, [isError, error]);
+
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-paper px-6">
-        <Text className="text-center text-base text-paprika">Failed to load dashboard</Text>
-        <Pressable
-          onPress={() => refetch()}
-          className="mt-4 rounded-xl bg-herb px-6 py-3 active:opacity-80"
-        >
-          <Text className="font-semibold text-paper">Retry</Text>
+      <SafeAreaView style={ERR.screen}>
+        <Text style={ERR.msg}>Failed to load dashboard</Text>
+        <Pressable onPress={() => refetch()} style={ERR.ctaPrimary}>
+          <Text style={ERR.ctaPrimaryText}>Retry</Text>
+        </Pressable>
+        <Pressable onPress={() => router.replace('/(onboarding)/personal-info')} style={ERR.ctaSecondary}>
+          <Text style={ERR.ctaSecondaryText}>Complete onboarding</Text>
         </Pressable>
       </SafeAreaView>
     );

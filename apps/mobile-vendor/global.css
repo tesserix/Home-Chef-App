@@ -1,1 +1,19 @@
-/* HomeChef Vendor — minimal global.css. NativeWind 5 handles utilities via babel. */
+@import "tailwindcss";
+
+/* HomeChef brand tokens. NativeWind v5 + Tailwind v4 reads these through
+ * tailwind.config.js (theme.extend.colors.herb etc.) — this file just needs
+ * to import tailwindcss so the metro plugin has utility source to compile.
+ *
+ * Earlier commit 546ec13 dropped this import because lightningcss choked
+ * with "expected an object-like struct named Specifier". That error was
+ * superseded by the upgrade to nativewind 5.0.0-preview.3 + tailwindcss
+ * 4.1.11; if it returns, fall back to the v3 directive form:
+ *
+ *   @tailwind base;
+ *   @tailwind components;
+ *   @tailwind utilities;
+ *
+ * Without one of these directives, every `className="..."` in the per-app
+ * screens (Dashboard, Orders, Menu, Profile, etc.) renders unstyled and
+ * the persimmon brand only shows where styles are inline.
+ */
