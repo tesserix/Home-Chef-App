@@ -1,15 +1,15 @@
-// FOUND-03: Uses @tesserix/native components for all interactive UI and text.
-// API note: @tesserix/native exports `Button` (variant: 'solid'|'outline'|'ghost', colorScheme: 'primary'|'secondary',
-// isLoading), `Input` (errorMessage, isInvalid, isDisabled), `Text` (size, weight), `H1`/`H2` for headings.
-// Plan spec referenced `Typography` + `variant="primary"` + `loading` — adjusted to actual package API.
+// LoginScreen — uses NativeWind primitives for buttons so brand colors apply
+// on React Native. The @tesserix/native Button reads CSS variables via
+// `document.documentElement`, which is a web-only DOM API; in RN it always
+// falls through to a hardcoded iOS-blue default. Inputs/headings stay on
+// @tesserix/native because their fallback colors (white/black) are neutral.
 
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { View, Pressable, Text as RNText } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-// FOUND-03: use @tesserix/native components — not raw RN primitives for interactive UI
-import { Button, Input, Text, H1 } from '@tesserix/native';
+import { Input, Text, H1 } from '@tesserix/native';
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -50,9 +50,17 @@ export function LoginScreen({
     try {
       await onLogin(data);
     } catch (e: unknown) {
-      // T-03-02: show generic message to avoid leaking "email not found" vs "wrong password"
       const msg = e instanceof Error ? e.message : 'Login failed. Please try again.';
       setError(msg);
+    }
+  };
+
+  const runAsyncHandler = (handler: () => Promise<void>, fallbackMsg: string) => async () => {
+    setError(null);
+    try {
+      await handler();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : fallbackMsg);
     }
   };
 
@@ -111,30 +119,27 @@ export function LoginScreen({
       />
 
       {onNavigateToForgotPassword ? (
-        <View className="mb-6 items-end">
-          <Button
-            variant="ghost"
-            onPress={onNavigateToForgotPassword}
-          >
-            Forgot password?
-          </Button>
+        <View className="mb-4 items-end">
+          <Pressable onPress={onNavigateToForgotPassword} className="py-2">
+            <RNText className="text-herb text-sm">Forgot password?</RNText>
+          </Pressable>
         </View>
       ) : null}
 
-      <Button
-        variant="solid"
-        colorScheme="primary"
+      <Pressable
         onPress={handleSubmit(onSubmit)}
         disabled={isSubmitting}
-        isLoading={isSubmitting}
-        fullWidth
+        className={`rounded-lg py-4 items-center w-full ${
+          isSubmitting ? 'bg-herb-soft' : 'bg-herb active:bg-herb-soft'
+        }`}
       >
-        Sign in
-      </Button>
+        <RNText className="text-white text-base font-semibold">
+          {isSubmitting ? 'Signing in…' : 'Sign in'}
+        </RNText>
+      </Pressable>
 
       {(onGoogleSignIn || onAppleSignIn || onBiometricLogin) ? (
         <>
-          {/* Divider */}
           <View className="flex-row items-center my-6">
             <View className="flex-1 h-px bg-mist" />
             <Text size="sm" color="#7a7a76" className="mx-4">or</Text>
@@ -142,60 +147,39 @@ export function LoginScreen({
           </View>
 
           {onGoogleSignIn ? (
-            <View className="mb-3">
-              <Button
-                variant="outline"
-                fullWidth
-                onPress={async () => {
-                  setError(null);
-                  try { await onGoogleSignIn(); }
-                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Google sign-in failed'); }
-                }}
-              >
-                Continue with Google
-              </Button>
-            </View>
+            <Pressable
+              onPress={runAsyncHandler(onGoogleSignIn, 'Google sign-in failed')}
+              className="border border-herb rounded-lg py-4 items-center w-full mb-3 active:bg-herb-tint"
+            >
+              <RNText className="text-herb text-base font-semibold">Continue with Google</RNText>
+            </Pressable>
           ) : null}
 
           {onAppleSignIn ? (
-            <View className="mb-3">
-              <Button
-                variant="solid"
-                colorScheme="secondary"
-                fullWidth
-                onPress={async () => {
-                  setError(null);
-                  try { await onAppleSignIn(); }
-                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Apple sign-in failed'); }
-                }}
-              >
-                Continue with Apple
-              </Button>
-            </View>
+            <Pressable
+              onPress={runAsyncHandler(onAppleSignIn, 'Apple sign-in failed')}
+              className="bg-ink rounded-lg py-4 items-center w-full mb-3 active:bg-ink-soft"
+            >
+              <RNText className="text-white text-base font-semibold">Continue with Apple</RNText>
+            </Pressable>
           ) : null}
 
           {onBiometricLogin ? (
-            <View className="items-center py-3">
-              <Button
-                variant="outline"
-                onPress={async () => {
-                  setError(null);
-                  try { await onBiometricLogin(); }
-                  catch (e: unknown) { setError(e instanceof Error ? e.message : 'Biometric auth failed'); }
-                }}
-              >
-                Use Face ID / Touch ID
-              </Button>
-            </View>
+            <Pressable
+              onPress={runAsyncHandler(onBiometricLogin, 'Biometric auth failed')}
+              className="border border-herb rounded-lg py-3 items-center w-full active:bg-herb-tint"
+            >
+              <RNText className="text-herb text-base font-semibold">Use Face ID / Touch ID</RNText>
+            </Pressable>
           ) : null}
         </>
       ) : null}
 
       {onNavigateToRegister ? (
         <View className="mt-6 items-center">
-          <Button variant="outline" onPress={onNavigateToRegister}>
-            Don't have an account? Sign up
-          </Button>
+          <Pressable onPress={onNavigateToRegister} className="py-2">
+            <RNText className="text-herb text-sm">Don't have an account? Sign up</RNText>
+          </Pressable>
         </View>
       ) : null}
     </View>
