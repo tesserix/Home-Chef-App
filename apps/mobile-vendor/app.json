@@ -60,6 +60,7 @@
         {
           "ios": {
             "useFrameworks": "static",
+            "deploymentTarget": "18.0",
             "newArchEnabled": false
           },
           "android": {
