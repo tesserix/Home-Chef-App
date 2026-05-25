@@ -29,6 +29,12 @@ type Config struct {
 	BFFInternalHMACKey []byte
 	BFFAuthTSWindow    time.Duration
 
+	// BFFSessionURL, when set, enables a Bearer-token fallback in the
+	// BFFAuth middleware. Dev convenience for mobile/SPA clients that
+	// haven't been rebuilt to route every request through the BFF proxy.
+	// Leave empty in production: enforces HMAC-only access.
+	BFFSessionURL string
+
 	// OAuth (public client IDs only — the OIDC handshake lives in
 	// apps/auth-bff via Google Identity Platform). Kept here because
 	// some frontends still receive the public ID from server config.
@@ -137,6 +143,7 @@ func Load() {
 		// BFF trust
 		BFFInternalHMACKey: hmacKey,
 		BFFAuthTSWindow:    time.Duration(windowSecs) * time.Second,
+		BFFSessionURL:      getEnv("BFF_SESSION_URL", ""),
 
 		// OAuth public IDs (secrets removed — owned by auth-bff/GIP)
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),

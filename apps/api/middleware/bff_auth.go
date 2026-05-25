@@ -5,11 +5,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +54,17 @@ type BFFIdentity struct {
 type BFFAuthConfig struct {
 	HMACKey []byte
 	Window  time.Duration // default 60s
+
+	// BFFSessionURL, when non-empty, enables a Bearer-token fallback path.
+	// If the HMAC verification fails and the request carries an
+	// `Authorization: Bearer <token>` header, the middleware will validate
+	// the token by calling `<BFFSessionURL>` (typically
+	// "http://auth-bff:8090/auth/session") and populate the identity from
+	// that response. Intended for mobile/SPA clients that hold a BFF
+	// session token directly instead of routing every API call through the
+	// BFF proxy. Leave empty in production deployments where every request
+	// is expected to come via the BFF and be HMAC-signed.
+	BFFSessionURL string
 }
 
 // BFFAuthOptional behaves like BFFAuth when the signature header is present —
@@ -90,6 +103,7 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 	if cfg.Window == 0 {
 		cfg.Window = 60 * time.Second
 	}
+	bearerClient := &http.Client{Timeout: 5 * time.Second}
 	return func(c *gin.Context) {
 		// Read the body so we can re-hash it, then restore it for downstream handlers.
 		var body []byte
@@ -104,8 +118,19 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 		}
 		id, err := verify(c.Request, body, cfg.HMACKey, cfg.Window)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bff_auth_failed"})
-			return
+			// HMAC path failed. Fall back to Bearer validation against the
+			// BFF if configured (mobile/SPA clients). Production deployments
+			// leave BFFSessionURL empty and short-circuit here.
+			if cfg.BFFSessionURL == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bff_auth_failed"})
+				return
+			}
+			bearerID, bearerErr := verifyBearer(c.Request, cfg.BFFSessionURL, bearerClient)
+			if bearerErr != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bff_auth_failed"})
+				return
+			}
+			id = bearerID
 		}
 		// New-style context keys (raw header values).
 		c.Set(CtxUserID, id.UserID)
@@ -180,4 +205,47 @@ func compute(method, path string, body []byte, ts string, key []byte) string {
 	m := hmac.New(sha256.New, key)
 	fmt.Fprintf(m, "%s\n%s\n%s\n%s", method, path, hex.EncodeToString(bodyHash[:]), ts)
 	return hex.EncodeToString(m.Sum(nil))
+}
+
+// verifyBearer validates a Bearer token by calling the BFF's /auth/session
+// endpoint. Returns the BFF identity on success. Used as a fallback path for
+// mobile/SPA clients that hold a session token directly instead of routing
+// through the BFF's HMAC-signing proxy.
+func verifyBearer(r *http.Request, bffSessionURL string, client *http.Client) (*BFFIdentity, error) {
+	auth := r.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if !strings.HasPrefix(auth, prefix) {
+		return nil, errors.New("no_bearer_token")
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, bffSessionURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", auth)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("bff_session_unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bff_session_status_%d", resp.StatusCode)
+	}
+	var body struct {
+		UserID string `json:"user_id"`
+		Email  string `json:"email"`
+		Role   string `json:"role"`
+		Pool   string `json:"pool"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("bff_session_decode: %w", err)
+	}
+	if body.UserID == "" {
+		return nil, errors.New("bff_session_no_user_id")
+	}
+	return &BFFIdentity{
+		UserID: body.UserID,
+		Email:  body.Email,
+		Role:   body.Role,
+		Pool:   body.Pool,
+	}, nil
 }

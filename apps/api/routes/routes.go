@@ -20,8 +20,9 @@ import (
 // so the closure captures the key once at boot.
 func bffAuth(key []byte, window time.Duration) gin.HandlerFunc {
 	return middleware.BFFAuth(middleware.BFFAuthConfig{
-		HMACKey: key,
-		Window:  window,
+		HMACKey:       key,
+		Window:        window,
+		BFFSessionURL: config.AppConfig.BFFSessionURL,
 	})
 }
 
@@ -30,8 +31,9 @@ func bffAuth(key []byte, window time.Duration) gin.HandlerFunc {
 // identity is attached (chef listings, social feed).
 func bffAuthOptional(key []byte, window time.Duration) gin.HandlerFunc {
 	return middleware.BFFAuthOptional(middleware.BFFAuthConfig{
-		HMACKey: key,
-		Window:  window,
+		HMACKey:       key,
+		Window:        window,
+		BFFSessionURL: config.AppConfig.BFFSessionURL,
 	})
 }
 
