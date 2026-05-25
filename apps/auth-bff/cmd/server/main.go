@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/homechef/auth-bff/internal/apiclient"
+	"github.com/homechef/auth-bff/internal/apiproxy"
 	"github.com/homechef/auth-bff/internal/audit"
 	"github.com/homechef/auth-bff/internal/autologin"
 	"github.com/homechef/auth-bff/internal/config"
@@ -102,6 +103,17 @@ func main() {
 	rateLimited.POST("/auto-login", autoH.PostHandler())
 
 	(&session.Handler{Mgr: mgr}).Register(r)
+
+	// Mobile clients hold a BFF session token but the upstream API only
+	// accepts HMAC-signed requests. Catch-all /api/v1/* proxies validated
+	// Bearer-token requests upstream, attaching the X-Internal-Auth + identity
+	// headers via the existing headerproxy.Signer.
+	apiProxyH := apiproxy.Handler(&apiproxy.Deps{
+		APIBaseURL: cfg.APIBaseURL,
+		Sessions:   mgr,
+		Signer:     signer,
+	})
+	r.Any("/api/v1/*proxyPath", apiProxyH)
 
 	srv := &http.Server{Addr: ":" + cfg.HTTPPort, Handler: r, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
