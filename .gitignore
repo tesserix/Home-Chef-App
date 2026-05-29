@@ -59,6 +59,9 @@ apps/mobile-*/ios/
 apps/mobile-*/android/
 apps/mobile-*/.expo/
 
+# Local kind secrets (copy of k8s/secrets.example.yaml)
+k8s/secrets.yaml
+
 # TypeScript
 *.tsbuildinfo
 
