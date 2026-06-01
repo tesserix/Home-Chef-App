@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, User } from 'lucide-react-native';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
 
 interface DriverProfile {
@@ -63,9 +64,7 @@ function useUploadProfileImage() {
       const filename = uri.split('/').pop() ?? 'profile.jpg';
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
-      return api.post('/delivery/profile-image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post('/delivery/profile-image', formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['driver', 'profile'] });

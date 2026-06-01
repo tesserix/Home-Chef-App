@@ -18,7 +18,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Camera, Image as ImageIcon, ChevronLeft } from 'lucide-react-native';
-import { useVendorMenu, useCreateMenuItem, useUploadMenuPhoto } from '../../hooks/useVendorMenu';
+import { useVendorMenu, useCreateMenuItem, useUploadMenuPhoto, useCreateCategory } from '../../hooks/useVendorMenu';
 
 const PREP_TIME_OPTIONS = [5, 10, 15, 30, 45, 60];
 
@@ -31,7 +31,7 @@ const schema = z.object({
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0 && Number(v) <= 10000, {
       message: 'Price must be between ₹1 and ₹10,000',
     }),
-  category: z.string().min(1, 'Please select a category'),
+  categoryId: z.string().min(1, 'Please select a category'),
   isVeg: z.boolean(),
   preparationTime: z.number(),
 });
@@ -41,6 +41,7 @@ type FormValues = z.infer<typeof schema>;
 export default function NewMenuItemScreen() {
   const { data: menuData } = useVendorMenu();
   const createMutation = useCreateMenuItem();
+  const createCategoryMutation = useCreateCategory();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploadItemId, setUploadItemId] = useState<string | null>(null);
   const uploadMutation = useUploadMenuPhoto(uploadItemId ?? '');
@@ -56,13 +57,15 @@ export default function NewMenuItemScreen() {
       name: '',
       description: '',
       price: '',
-      category: '',
+      categoryId: '',
       isVeg: true,
       preparationTime: 15,
     },
   });
 
-  const selectedCategory = watch('category');
+  const selectedCategoryId = watch('categoryId');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
   async function handleTakePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -99,7 +102,7 @@ export default function NewMenuItemScreen() {
         name: values.name,
         description: values.description,
         price: Number(values.price),
-        category: values.category,
+        categoryId: values.categoryId,
         isVeg: values.isVeg,
         preparationTime: values.preparationTime,
       });
@@ -118,12 +121,14 @@ export default function NewMenuItemScreen() {
       }
 
       router.back();
-    } catch {
-      Alert.alert('Error', 'Failed to create menu item. Please try again.');
+    } catch (error: unknown) {
+      const serverError = (error as { response?: { data?: { error?: string } } } | null)
+        ?.response?.data?.error;
+      Alert.alert('Error', serverError ?? 'Failed to create menu item. Please try again.');
     }
   }
 
-  const categories = menuData?.categories?.map((c) => c.name) ?? [];
+  const categories = menuData?.categories ?? [];
   const isSubmitting = createMutation.isPending || uploadMutation.isPending;
 
   return (
@@ -262,36 +267,97 @@ export default function NewMenuItemScreen() {
               <Text className="text-sm font-medium text-ink-soft mb-2">Category *</Text>
               <Controller
                 control={control}
-                name="category"
+                name="categoryId"
                 render={({ field: { onChange } }) => (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View className="flex-row gap-2">
-                      {categories.map((cat) => (
+                  <>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ flexGrow: 0, flexShrink: 0 }}
+                      contentContainerStyle={{ alignItems: 'flex-start' }}
+                    >
+                      <View className="flex-row gap-2">
+                        {categories.map((cat) => (
+                          <TouchableOpacity
+                            key={cat.id}
+                            onPress={() => onChange(cat.id)}
+                            className={`px-4 py-2 rounded-full border ${
+                              selectedCategoryId === cat.id
+                                ? 'bg-herb border-herb'
+                                : 'bg-bone border-mist'
+                            }`}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              className={`text-sm font-medium ${
+                                selectedCategoryId === cat.id ? 'text-paper' : 'text-ink-soft'
+                              }`}
+                            >
+                              {cat.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
                         <TouchableOpacity
-                          key={cat}
-                          onPress={() => onChange(cat)}
-                          className={`px-4 py-2 rounded-full border ${
-                            selectedCategory === cat
-                              ? 'bg-herb border-herb'
-                              : 'bg-bone border-mist'
-                          }`}
+                          onPress={() => setShowNewCategoryInput((v) => !v)}
+                          className="px-4 py-2 rounded-full border border-dashed border-herb bg-bone"
                           activeOpacity={0.7}
                         >
-                          <Text
-                            className={`text-sm font-medium ${
-                              selectedCategory === cat ? 'text-paper' : 'text-ink-soft'
-                            }`}
-                          >
-                            {cat}
-                          </Text>
+                          <Text className="text-sm font-medium text-herb">+ New</Text>
                         </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
+                      </View>
+                    </ScrollView>
+
+                    {showNewCategoryInput && (
+                      <View className="flex-row gap-2 mt-3">
+                        <TextInput
+                          value={newCategoryName}
+                          onChangeText={setNewCategoryName}
+                          placeholder="Category name (e.g. Starters)"
+                          placeholderTextColor="#7a7a76"
+                          className="flex-1 border border-mist rounded-xl px-4 py-3 text-base text-ink"
+                          autoCapitalize="words"
+                          maxLength={40}
+                        />
+                        <TouchableOpacity
+                          disabled={
+                            createCategoryMutation.isPending || newCategoryName.trim().length < 2
+                          }
+                          onPress={async () => {
+                            const name = newCategoryName.trim();
+                            if (name.length < 2) return;
+                            try {
+                              const created = await createCategoryMutation.mutateAsync(name);
+                              onChange(created.id);
+                              setNewCategoryName('');
+                              setShowNewCategoryInput(false);
+                            } catch (error: unknown) {
+                              const serverError = (error as { response?: { data?: { error?: string } } } | null)
+                                ?.response?.data?.error;
+                              Alert.alert(
+                                'Could not add category',
+                                serverError ?? 'Please try again.',
+                              );
+                            }
+                          }}
+                          className={`px-4 py-3 rounded-xl ${
+                            createCategoryMutation.isPending || newCategoryName.trim().length < 2
+                              ? 'bg-mist'
+                              : 'bg-herb'
+                          }`}
+                        >
+                          {createCategoryMutation.isPending ? (
+                            <ActivityIndicator color="#fff" />
+                          ) : (
+                            <Text className="text-paper font-semibold">Add</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
                 )}
               />
-              {errors.category && (
-                <Text className="text-paprika text-xs mt-1">{errors.category.message}</Text>
+              {errors.categoryId && (
+                <Text className="text-paprika text-xs mt-1">{errors.categoryId.message}</Text>
               )}
             </View>
 

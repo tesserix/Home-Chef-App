@@ -19,17 +19,30 @@ export default function ReviewScreen() {
     setSubmitting(true);
     try {
       await api.post('/chef/onboarding', {
-        personalInfo,
-        kitchenDetails,
-        operations,
-        policies,
+        fullName: personalInfo.fullName,
+        phone: personalInfo.phone,
+        email: personalInfo.email,
+        businessName: kitchenDetails.businessName,
+        description: kitchenDetails.description,
+        cuisines: kitchenDetails.cuisines,
+        kitchenAddress: {
+          line1: kitchenDetails.addressLine1,
+          line2: kitchenDetails.addressLine2,
+          city: kitchenDetails.city,
+          state: kitchenDetails.state,
+          postalCode: kitchenDetails.postalCode,
+        },
+        prepTime: operations.prepTime,
+        serviceRadius: operations.serviceRadius,
+        operatingHours: operations.operatingHours,
+        acceptedTerms: policies.acceptedTerms,
       });
       store.reset();
       router.replace('/(onboarding)/pending');
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Submission failed. Please try again.';
-      Alert.alert('Submission Error', message);
+      const serverError = (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+      const fallback = error instanceof Error ? error.message : 'Submission failed. Please try again.';
+      Alert.alert('Submission Error', serverError ?? fallback);
     } finally {
       setSubmitting(false);
     }
@@ -75,9 +88,21 @@ export default function ReviewScreen() {
             <Text className="text-xs text-ink-muted">Cuisines</Text>
             <Text className="text-sm text-ink font-medium">{kitchenDetails.cuisines.join(', ')}</Text>
           </View>
-          <View>
+          <View className="mb-2">
             <Text className="text-xs text-ink-muted">Description</Text>
             <Text className="text-sm text-ink" numberOfLines={3}>{kitchenDetails.description}</Text>
+          </View>
+          <View>
+            <Text className="text-xs text-ink-muted">Address</Text>
+            <Text className="text-sm text-ink font-medium">
+              {[
+                kitchenDetails.addressLine1,
+                kitchenDetails.addressLine2,
+                kitchenDetails.city,
+                kitchenDetails.state,
+                kitchenDetails.postalCode,
+              ].filter(Boolean).join(', ')}
+            </Text>
           </View>
         </View>
 

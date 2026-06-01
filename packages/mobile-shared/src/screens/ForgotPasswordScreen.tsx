@@ -1,14 +1,20 @@
-// FOUND-03: Uses @tesserix/native components for all interactive UI and text.
-// API note: @tesserix/native Button uses `isLoading` not `loading`, Input uses `errorMessage` not `error`.
-// T-03-06: Go API returns generic success regardless of email existence — prevents enumeration.
-
-import React, { useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-// FOUND-03: use @tesserix/native components — not raw RN primitives for interactive UI
-import { Button, Input, Text, H1 } from '@tesserix/native';
+import { Screen } from '../ui/Screen';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { EmptyState } from '../ui/EmptyState';
+import { theme } from '../theme/tokens';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -20,20 +26,47 @@ interface ForgotPasswordScreenProps {
   onForgotPassword: (data: ForgotPasswordFormData) => Promise<void>;
   onNavigateToLogin?: () => void;
   title?: string;
+  subtitle?: string;
+  brand?: string;
 }
 
 export function ForgotPasswordScreen({
   onForgotPassword,
   onNavigateToLogin,
   title = 'Reset password',
+  subtitle = "Enter your email and we'll send you a reset link",
+  brand,
 }: ForgotPasswordScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const errorOpacity = useRef(new Animated.Value(0)).current;
+  const errorTranslate = useRef(new Animated.Value(-8)).current;
+
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<ForgotPasswordFormData>({ resolver: zodResolver(forgotPasswordSchema) });
+  } = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: '' },
+  });
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(errorOpacity, {
+        toValue: error ? 1 : 0,
+        duration: theme.motion.duration.default,
+        easing: Easing.bezier(...theme.motion.easing.entrance),
+        useNativeDriver: true,
+      }),
+      Animated.timing(errorTranslate, {
+        toValue: error ? 0 : -8,
+        duration: theme.motion.duration.default,
+        easing: Easing.bezier(...theme.motion.easing.entrance),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [error, errorOpacity, errorTranslate]);
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setError(null);
@@ -46,74 +79,143 @@ export function ForgotPasswordScreen({
     }
   };
 
+  // The Go API returns a generic success regardless of whether the email
+  // exists — anti-enumeration. So the success screen makes no claim about
+  // an account: it just says "if there's an account, a link is on the way."
   if (success) {
     return (
-      <View className="flex-1 bg-bone px-6 pt-16">
-        <H1 className="mb-4">Check your inbox</H1>
-        <Text size="base" color="#4a4a47" className="mb-8">
-          Check your email for a reset link
-        </Text>
-        {onNavigateToLogin ? (
-          <Button variant="outline" onPress={onNavigateToLogin}>
-            Back to sign in
-          </Button>
-        ) : null}
-      </View>
+      <Screen paddingX={theme.spacing[6]}>
+        <EmptyState
+          title="Check your inbox"
+          body="If an account exists for that email, we've sent a reset link. It can take a couple of minutes."
+          ctaLabel={onNavigateToLogin ? 'Back to sign in' : undefined}
+          onCtaPress={onNavigateToLogin}
+        />
+      </Screen>
     );
   }
 
   return (
-    <View className="flex-1 bg-bone px-6 pt-16">
-      <H1 className="mb-2">{title}</H1>
-      <Text size="base" color="#7a7a76" className="mb-8">
-        Enter your email address and we'll send you a reset link
-      </Text>
+    <Screen scroll paddingX={theme.spacing[6]}>
+      <View style={styles.topGap} />
 
-      {error ? (
-        <View className="bg-paprika-tint border border-paprika/30 rounded-lg p-3 mb-4">
-          <Text size="sm" color="#c95b3e">{error}</Text>
-        </View>
-      ) : null}
+      {brand ? <Text style={styles.brand}>{brand}</Text> : null}
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+
+      <Animated.View
+        style={[
+          styles.errorBannerWrap,
+          {
+            opacity: errorOpacity,
+            transform: [{ translateY: errorTranslate }],
+            height: error ? undefined : 0,
+            marginBottom: error ? theme.spacing[4] : 0,
+          },
+        ]}
+        pointerEvents={error ? 'auto' : 'none'}
+      >
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </Animated.View>
 
       <Controller
         control={control}
         name="email"
         render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-6">
-            <Input
-              label="Email"
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              isInvalid={!!errors.email}
-              errorMessage={errors.email?.message}
-            />
-          </View>
+          <Input
+            label="Email"
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            error={errors.email?.message}
+          />
         )}
       />
 
-      <Button
-        variant="solid"
-        colorScheme="primary"
-        onPress={handleSubmit(onSubmit)}
-        disabled={isSubmitting}
-        isLoading={isSubmitting}
-        fullWidth
-      >
-        Send reset link
-      </Button>
+      <View style={styles.primaryAction}>
+        <Button
+          label={isSubmitting ? 'Sending…' : 'Send reset link'}
+          onPress={handleSubmit(onSubmit)}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+        />
+      </View>
 
       {onNavigateToLogin ? (
-        <View className="mt-6 items-center">
-          <Button variant="outline" onPress={onNavigateToLogin}>
-            Back to sign in
-          </Button>
+        <View style={styles.backRow}>
+          <Pressable onPress={onNavigateToLogin} hitSlop={8}>
+            <Text style={styles.backText}>Back to sign in</Text>
+          </Pressable>
         </View>
       ) : null}
-    </View>
+
+      <View style={styles.bottomGap} />
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  topGap: { height: theme.spacing[8] },
+  bottomGap: { height: theme.spacing[8] },
+
+  brand: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: theme.spacing[6],
+  },
+  title: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.display.size,
+    lineHeight:
+      theme.typography.size.display.size *
+      theme.typography.size.display.lineHeight,
+    letterSpacing: theme.typography.size.display.letterSpacing,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[1],
+  },
+  subtitle: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[6],
+  },
+
+  errorBannerWrap: { overflow: 'hidden' },
+  errorBanner: {
+    backgroundColor: theme.colors.destructive.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.destructive.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+  },
+  errorText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+
+  primaryAction: { marginTop: theme.spacing[2] },
+
+  backRow: {
+    alignItems: 'center',
+    marginTop: theme.spacing[5],
+  },
+  backText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    textDecorationLine: 'underline',
+  },
+});

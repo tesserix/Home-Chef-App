@@ -1,20 +1,27 @@
-// FOUND-03: Uses @tesserix/native components for all interactive UI and text.
-// API note: @tesserix/native Button uses `isLoading` not `loading`, Input uses `errorMessage` not `error`.
-
-import React, { useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-// FOUND-03: use @tesserix/native components — not raw RN primitives for interactive UI
-import { Button, Input, Text, H1 } from '@tesserix/native';
+import { Screen } from '../ui/Screen';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { theme } from '../theme/tokens';
+import { resolveAuthErrorMessage } from '../auth/bff-session';
 
 const registerSchema = z.object({
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(8, 'Minimum 8 characters'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Enter a valid email'),
   phone: z.string().optional(),
+  password: z.string().min(8, 'Minimum 8 characters'),
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -22,102 +29,172 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 interface RegisterScreenProps {
   onRegister: (data: RegisterFormData) => Promise<void>;
   onNavigateToLogin?: () => void;
+  /** When provided, a "Continue with Google" outline button appears below
+   *  the form under an "or" divider. Lets new users skip the email/password
+   *  flow. The OAuth handler is expected to create the account and route
+   *  the user into the app on success. */
+  onGoogleSignIn?: () => Promise<void>;
+  /** Same pattern as `onGoogleSignIn`, iOS only — callers should gate by
+   *  `Platform.OS === 'ios'`. */
+  onAppleSignIn?: () => Promise<void>;
   title?: string;
+  subtitle?: string;
+  brand?: string;
 }
 
 export function RegisterScreen({
   onRegister,
   onNavigateToLogin,
+  onGoogleSignIn,
+  onAppleSignIn,
   title = 'Create account',
+  subtitle = 'A few details to get you cooking',
+  brand,
 }: RegisterScreenProps) {
   const [error, setError] = useState<string | null>(null);
+  const errorOpacity = useRef(new Animated.Value(0)).current;
+  const errorTranslate = useRef(new Animated.Value(-8)).current;
+
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<RegisterFormData>({ resolver: zodResolver(registerSchema) });
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { firstName: '', lastName: '', email: '', phone: '', password: '' },
+  });
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(errorOpacity, {
+        toValue: error ? 1 : 0,
+        duration: theme.motion.duration.default,
+        easing: Easing.bezier(...theme.motion.easing.entrance),
+        useNativeDriver: true,
+      }),
+      Animated.timing(errorTranslate, {
+        toValue: error ? 0 : -8,
+        duration: theme.motion.duration.default,
+        easing: Easing.bezier(...theme.motion.easing.entrance),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [error, errorOpacity, errorTranslate]);
 
   const onSubmit = async (data: RegisterFormData) => {
     setError(null);
     try {
       await onRegister(data);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Registration failed. Please try again.';
-      setError(msg);
+      setError(resolveAuthErrorMessage(e));
+    }
+  };
+
+  const wrap = (handler: () => Promise<void>) => async () => {
+    setError(null);
+    try {
+      await handler();
+    } catch (e: unknown) {
+      setError(resolveAuthErrorMessage(e));
     }
   };
 
   return (
-    <View className="flex-1 bg-bone px-6 pt-16">
-      <H1 className="mb-2">{title}</H1>
-      <Text size="base" color="#7a7a76" className="mb-8">
-        Fill in your details to get started
-      </Text>
+    <Screen scroll paddingX={theme.spacing[6]}>
+      <View style={styles.topGap} />
 
-      {error ? (
-        <View className="bg-paprika-tint border border-paprika/30 rounded-lg p-3 mb-4">
-          <Text size="sm" color="#c95b3e">{error}</Text>
+      {brand ? <Text style={styles.brand}>{brand}</Text> : null}
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+
+      <Animated.View
+        style={[
+          styles.errorBannerWrap,
+          {
+            opacity: errorOpacity,
+            transform: [{ translateY: errorTranslate }],
+            height: error ? undefined : 0,
+            marginBottom: error ? theme.spacing[4] : 0,
+          },
+        ]}
+        pointerEvents={error ? 'auto' : 'none'}
+      >
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </Animated.View>
+
+      <View style={styles.nameRow}>
+        <View style={styles.nameField}>
+          <Controller
+            control={control}
+            name="firstName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="First name"
+                autoCapitalize="words"
+                autoComplete="given-name"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                error={errors.firstName?.message}
+              />
+            )}
+          />
         </View>
-      ) : null}
-
-      <Controller
-        control={control}
-        name="firstName"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-4">
-            <Input
-              label="First name"
-              placeholder="First name"
-              autoCapitalize="words"
-              autoComplete="given-name"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              isInvalid={!!errors.firstName}
-              errorMessage={errors.firstName?.message}
-            />
-          </View>
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="lastName"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-4">
-            <Input
-              label="Last name"
-              placeholder="Last name"
-              autoCapitalize="words"
-              autoComplete="family-name"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              isInvalid={!!errors.lastName}
-              errorMessage={errors.lastName?.message}
-            />
-          </View>
-        )}
-      />
+        <View style={styles.nameField}>
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Last name"
+                autoCapitalize="words"
+                autoComplete="family-name"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                error={errors.lastName?.message}
+              />
+            )}
+          />
+        </View>
+      </View>
 
       <Controller
         control={control}
         name="email"
         render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-4">
-            <Input
-              label="Email"
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              isInvalid={!!errors.email}
-              errorMessage={errors.email?.message}
-            />
-          </View>
+          <Input
+            label="Email"
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            error={errors.email?.message}
+          />
+        )}
+      />
+
+      <Controller
+        control={control}
+        name="phone"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Phone (optional)"
+            placeholder="+91 98765 43210"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value ?? ''}
+            helper="We use this only for order issues — never shared."
+          />
         )}
       />
 
@@ -125,40 +202,161 @@ export function RegisterScreen({
         control={control}
         name="password"
         render={({ field: { onChange, onBlur, value } }) => (
-          <View className="mb-6">
-            <Input
-              label="Password"
-              placeholder="Minimum 8 characters"
-              secureTextEntry
-              autoComplete="new-password"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              isInvalid={!!errors.password}
-              errorMessage={errors.password?.message}
-            />
-          </View>
+          <Input
+            label="Password"
+            placeholder="At least 8 characters"
+            secureTextEntry
+            passwordPeek
+            autoComplete="new-password"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            error={errors.password?.message}
+            helper="At least 8 characters. Mix letters and numbers."
+          />
         )}
       />
 
-      <Button
-        variant="solid"
-        colorScheme="primary"
-        onPress={handleSubmit(onSubmit)}
-        disabled={isSubmitting}
-        isLoading={isSubmitting}
-        fullWidth
-      >
-        Create account
-      </Button>
+      <View style={styles.primaryAction}>
+        <Button
+          label={isSubmitting ? 'Creating account…' : 'Create account'}
+          onPress={handleSubmit(onSubmit)}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+        />
+      </View>
+
+      {onGoogleSignIn || onAppleSignIn ? (
+        <>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerLabel}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.socialActions}>
+            {onGoogleSignIn ? (
+              <Button
+                label="Continue with Google"
+                variant="secondary"
+                onPress={wrap(onGoogleSignIn)}
+              />
+            ) : null}
+            {onAppleSignIn ? (
+              <Button
+                label="Continue with Apple"
+                variant="secondary"
+                onPress={wrap(onAppleSignIn)}
+              />
+            ) : null}
+          </View>
+        </>
+      ) : null}
 
       {onNavigateToLogin ? (
-        <View className="mt-6 items-center">
-          <Button variant="outline" onPress={onNavigateToLogin}>
-            Already have an account? Sign in
-          </Button>
+        <View style={styles.signinRow}>
+          <Pressable onPress={onNavigateToLogin} hitSlop={8}>
+            <Text style={styles.signinPrompt}>
+              Already have an account?{' '}
+              <Text style={styles.signinCTA}>Sign in</Text>
+            </Text>
+          </Pressable>
         </View>
       ) : null}
-    </View>
+
+      <View style={styles.bottomGap} />
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  topGap: { height: theme.spacing[6] },
+  bottomGap: { height: theme.spacing[8] },
+
+  brand: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: theme.spacing[6],
+  },
+  title: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.display.size,
+    lineHeight:
+      theme.typography.size.display.size *
+      theme.typography.size.display.lineHeight,
+    letterSpacing: theme.typography.size.display.letterSpacing,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[1],
+  },
+  subtitle: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[6],
+  },
+
+  errorBannerWrap: { overflow: 'hidden' },
+  errorBanner: {
+    backgroundColor: theme.colors.destructive.tint,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.destructive.DEFAULT,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+  },
+  errorText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+
+  nameRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+  },
+  nameField: { flex: 1 },
+
+  primaryAction: { marginTop: theme.spacing[2] },
+
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing[5],
+    marginBottom: theme.spacing[4],
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+  dividerLabel: {
+    marginHorizontal: theme.spacing[3],
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  socialActions: {
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
+
+  signinRow: {
+    alignItems: 'center',
+    marginTop: theme.spacing[5],
+  },
+  signinPrompt: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+  },
+  signinCTA: {
+    fontFamily: 'Inter-SemiBold',
+    color: theme.colors.ink.DEFAULT,
+    textDecorationLine: 'underline',
+  },
+});

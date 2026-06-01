@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
 
 export interface MenuItemImage {
@@ -11,7 +12,7 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
-  category: string;
+  categoryId: string | null;
   isAvailable: boolean;
   isVeg: boolean;
   images: MenuItemImage[];
@@ -32,7 +33,7 @@ export interface CreateMenuItemPayload {
   name: string;
   description: string;
   price: number;
-  category: string;
+  categoryId: string;
   isVeg: boolean;
   preparationTime: number;
 }
@@ -48,6 +49,17 @@ export function useVendorMenu() {
     queryKey: MENU_KEY,
     queryFn: () => api.get<MenuResponse>('/chef/menu').then((r) => r.data),
     staleTime: 30_000,
+  });
+}
+
+export function useCreateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      api.post<Category>('/chef/menu/categories', { name }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MENU_KEY });
+    },
   });
 }
 
@@ -105,9 +117,7 @@ export function useUploadMenuPhoto(itemId: string) {
       const filename = uri.split('/').pop() ?? 'menu-photo.jpg';
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
-      return api.post(`/chef/menu/items/${itemId}/images`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post(`/chef/menu/items/${itemId}/images`, formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MENU_KEY });

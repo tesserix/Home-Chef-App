@@ -23,6 +23,11 @@ const schema = z.object({
     .string()
     .min(50, 'Description must be at least 50 characters')
     .max(500, 'Description must be at most 500 characters'),
+  addressLine1: z.string().min(3, 'Address line 1 is required'),
+  addressLine2: z.string(),
+  city: z.string().min(2, 'City is required'),
+  state: z.string().min(2, 'State is required'),
+  postalCode: z.string().min(4, 'Postal code is required'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -42,6 +47,11 @@ export default function KitchenDetailsScreen() {
       businessName: '',
       cuisines: [],
       description: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      postalCode: '',
     },
   });
 
@@ -149,6 +159,105 @@ export default function KitchenDetailsScreen() {
           <Text className="text-paprika text-xs mb-3">{errors.description.message}</Text>
         )}
         {!errors.description && <View className="mb-3" />}
+
+        <Text className="text-base font-semibold text-ink mt-2 mb-3">Kitchen Address</Text>
+
+        <Text className="text-sm font-medium text-ink-soft mb-1">Address Line 1 *</Text>
+        <Controller
+          control={control}
+          name="addressLine1"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
+              placeholder="House / building, street"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              autoCapitalize="words"
+            />
+          )}
+        />
+        {errors.addressLine1 && (
+          <Text className="text-paprika text-xs mb-3">{errors.addressLine1.message}</Text>
+        )}
+        {!errors.addressLine1 && <View className="mb-3" />}
+
+        <Text className="text-sm font-medium text-ink-soft mb-1">Address Line 2</Text>
+        <Controller
+          control={control}
+          name="addressLine2"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-3"
+              placeholder="Apartment, suite (optional)"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value ?? ''}
+              autoCapitalize="words"
+            />
+          )}
+        />
+
+        <Text className="text-sm font-medium text-ink-soft mb-1">City *</Text>
+        <Controller
+          control={control}
+          name="city"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
+              placeholder="City"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              autoCapitalize="words"
+            />
+          )}
+        />
+        {errors.city && (
+          <Text className="text-paprika text-xs mb-3">{errors.city.message}</Text>
+        )}
+        {!errors.city && <View className="mb-3" />}
+
+        <Text className="text-sm font-medium text-ink-soft mb-1">State *</Text>
+        <Controller
+          control={control}
+          name="state"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
+              placeholder="State"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              autoCapitalize="words"
+            />
+          )}
+        />
+        {errors.state && (
+          <Text className="text-paprika text-xs mb-3">{errors.state.message}</Text>
+        )}
+        {!errors.state && <View className="mb-3" />}
+
+        <Text className="text-sm font-medium text-ink-soft mb-1">Postal Code *</Text>
+        <Controller
+          control={control}
+          name="postalCode"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
+              placeholder="Postal / PIN code"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+          )}
+        />
+        {errors.postalCode && (
+          <Text className="text-paprika text-xs mb-3">{errors.postalCode.message}</Text>
+        )}
+        {!errors.postalCode && <View className="mb-3" />}
 
         <TouchableOpacity
           className="bg-herb rounded-xl py-4 items-center mt-2"

@@ -25,15 +25,24 @@ func NewMenuHandler() *MenuHandler {
 
 // ---------- Menu Items ----------
 
-// GetChefMenuItems returns all menu items for the authenticated chef.
-// GET /chef/menu
+// GetChefMenuItems returns all menu items + categories for the authenticated
+// chef. GET /chef/menu
+//
+// Response shape: {"items": [...], "categories": [...]} — the mobile app
+// reads both arrays from the same call to render the menu list and the
+// category picker without a second round-trip.
 func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
+	emptyResponse := gin.H{
+		"items":      []models.MenuItem{},
+		"categories": []models.MenuCategory{},
+	}
+
 	var chef models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
-		// No profile yet = no menu items
-		c.JSON(http.StatusOK, []models.MenuItem{})
+		// No profile yet = no menu items, no categories.
+		c.JSON(http.StatusOK, emptyResponse)
 		return
 	}
 
@@ -58,7 +67,17 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, items)
+	var categories []models.MenuCategory
+	database.DB.Where("chef_id = ? AND is_active = true", chef.ID).
+		Order("sort_order ASC, name ASC").Find(&categories)
+	if categories == nil {
+		categories = []models.MenuCategory{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":      items,
+		"categories": categories,
+	})
 }
 
 // GetMenuItem returns a single menu item by ID (must belong to authenticated chef).
@@ -172,7 +191,7 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		"chef_id": chef.ID.String(), "title": approvalReq.Title,
 	})
 
-	c.JSON(http.StatusCreated, item)
+	c.JSON(http.StatusCreated, gin.H{"item": item})
 }
 
 // UpdateMenuItem updates an existing menu item.
@@ -308,7 +327,7 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 		item.Ingredients = pq.StringArray{}
 	}
 
-	c.JSON(http.StatusOK, item)
+	c.JSON(http.StatusOK, gin.H{"item": item})
 }
 
 // DeleteMenuItem soft-deletes a menu item.

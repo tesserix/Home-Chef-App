@@ -31,14 +31,16 @@ function SkeletonCard() {
 export default function MenuScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useVendorMenu();
   const deleteMutation = useDeleteMenuItem();
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // 'All' is a sentinel — real category IDs are uuids, so collision is safe.
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('All');
 
-  const categories = ['All', ...(data?.categories?.map((c) => c.name) ?? [])];
+  const categories = data?.categories ?? [];
+  const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
 
   const filteredItems: MenuItem[] =
-    selectedCategory === 'All'
+    selectedCategoryId === 'All'
       ? (data?.items ?? [])
-      : (data?.items ?? []).filter((item) => item.category === selectedCategory);
+      : (data?.items ?? []).filter((item) => item.categoryId === selectedCategoryId);
 
   if (isLoading) {
     return (
@@ -80,15 +82,16 @@ export default function MenuScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
         className="px-4 mb-2"
-        contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+        contentContainerStyle={{ gap: 8, paddingRight: 16, alignItems: 'flex-start' }}
       >
-        {categories.map((cat) => (
+        {[{ id: 'All', name: 'All' }, ...categories].map((cat) => (
           <TouchableOpacity
-            key={cat}
-            onPress={() => setSelectedCategory(cat)}
+            key={cat.id}
+            onPress={() => setSelectedCategoryId(cat.id)}
             className={`px-4 py-2 rounded-full border ${
-              selectedCategory === cat
+              selectedCategoryId === cat.id
                 ? 'bg-herb border-herb'
                 : 'bg-bone border-mist'
             }`}
@@ -96,10 +99,10 @@ export default function MenuScreen() {
           >
             <Text
               className={`text-sm font-medium ${
-                selectedCategory === cat ? 'text-paper' : 'text-ink-soft'
+                selectedCategoryId === cat.id ? 'text-paper' : 'text-ink-soft'
               }`}
             >
-              {cat}
+              {cat.name}
             </Text>
           </TouchableOpacity>
         ))}
@@ -112,6 +115,7 @@ export default function MenuScreen() {
         renderItem={({ item }) => (
           <MenuItemCard
             item={item}
+            categoryName={item.categoryId ? categoryNameById.get(item.categoryId) : undefined}
             onEdit={() => router.push(`/menu/${item.id}/edit` as never)}
             onDelete={() => deleteMutation.mutate(item.id)}
           />

@@ -5,6 +5,7 @@ import { sendPasswordResetEmail } from '@homechef/mobile-shared/auth';
 export default function ForgotPasswordPage() {
   return (
     <ForgotPasswordScreen
+      brand="Home Chef · Vendor"
       onForgotPassword={async ({ email }) => {
         // Firebase handles password reset email delivery (GIP-backed).
         // Screen shows success message internally after resolve (T-03-06: generic response).

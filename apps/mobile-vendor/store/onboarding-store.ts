@@ -12,6 +12,11 @@ interface KitchenDetails {
   businessName: string;
   cuisines: string[];
   description: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
 }
 
 interface Operations {
@@ -61,7 +66,16 @@ const DEFAULT_HOURS: Record<string, DayHours> = {
 const initialState = {
   currentStep: 1,
   personalInfo: { fullName: '', phone: '', email: '' },
-  kitchenDetails: { businessName: '', cuisines: [], description: '' },
+  kitchenDetails: {
+    businessName: '',
+    cuisines: [],
+    description: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+  },
   operations: {
     operatingHours: DEFAULT_HOURS,
     prepTime: '30min',

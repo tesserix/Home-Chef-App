@@ -6,12 +6,15 @@ import { useToggleAvailability } from '../../hooks/useVendorMenu';
 
 interface MenuItemCardProps {
   item: MenuItem;
+  categoryName?: string;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
+export function MenuItemCard({ item, categoryName, onEdit, onDelete }: MenuItemCardProps) {
   const toggleMutation = useToggleAvailability();
+  const images = item.images ?? [];
+  const priceLabel = Number.isFinite(item.price) ? Number(item.price).toFixed(2) : '0.00';
 
   function handleDelete() {
     Alert.alert('Delete Item', 'Are you sure you want to delete this menu item?', [
@@ -24,9 +27,9 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
     <View className="bg-bone rounded-2xl shadow-sm p-3 mb-2 flex-row">
       {/* Item image */}
       <View className="w-20 h-20 rounded-xl overflow-hidden bg-mist mr-3 flex-shrink-0">
-        {item.images[0]?.url ? (
+        {images[0]?.url ? (
           <Image
-            source={{ uri: item.images[0].url }}
+            source={{ uri: images[0].url }}
             style={{ width: 80, height: 80 }}
             contentFit="cover"
           />
@@ -48,13 +51,16 @@ export function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardProps) {
         </View>
 
         <Text className="text-herb font-semibold text-sm mb-1">
-          ₹{item.price.toFixed(2)}
+          ₹{priceLabel}
         </Text>
 
-        {/* Category badge */}
-        <View className="self-start bg-herb-tint px-2 py-0.5 rounded-full mb-2">
-          <Text className="text-xs text-herb">{item.category}</Text>
-        </View>
+        {categoryName ? (
+          <View className="self-start bg-herb-tint px-2 py-0.5 rounded-full mb-2">
+            <Text className="text-xs text-herb">{categoryName}</Text>
+          </View>
+        ) : (
+          <View className="mb-2" />
+        )}
 
         {/* Bottom row: availability toggle + action buttons */}
         <View className="flex-row items-center justify-between">

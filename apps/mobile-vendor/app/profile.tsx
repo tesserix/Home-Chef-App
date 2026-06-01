@@ -15,6 +15,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Plus, User, ChevronLeft } from 'lucide-react-native';
+import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
 
 interface ChefProfile {
@@ -60,9 +61,7 @@ function useUploadProfileImage() {
       const filename = uri.split('/').pop() ?? 'profile.jpg';
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
-      return api.post('/chef/profile-image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post('/chef/profile-image', formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'profile'] });
@@ -78,9 +77,7 @@ function useUploadKitchenPhoto() {
       const filename = uri.split('/').pop() ?? 'kitchen.jpg';
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
-      return api.post('/chef/kitchen-photos', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      return api.post('/chef/kitchen-photos', formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'profile'] });
@@ -116,7 +113,8 @@ export default function ProfileScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       uploadProfileImageMutation.mutate(result.assets[0].uri, {
-        onError: () => Alert.alert('Error', 'Failed to upload profile photo.'),
+        onError: (err) =>
+          Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload profile photo.')),
       });
     }
   }
@@ -130,7 +128,8 @@ export default function ProfileScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       uploadKitchenPhotoMutation.mutate(result.assets[0].uri, {
-        onError: () => Alert.alert('Error', 'Failed to upload kitchen photo.'),
+        onError: (err) =>
+          Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload kitchen photo.')),
       });
     }
   }
@@ -147,8 +146,8 @@ export default function ProfileScreen() {
           setIsEditing(false);
           Alert.alert('Success', 'Profile updated successfully.');
         },
-        onError: () => {
-          Alert.alert('Error', 'Failed to update profile. Please try again.');
+        onError: (err) => {
+          Alert.alert('Error', getServerErrorMessage(err, 'Failed to update profile.'));
         },
       },
     );

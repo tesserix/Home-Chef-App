@@ -7,6 +7,7 @@
 import axios, {
   AxiosInstance,
   AxiosError,
+  AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from 'axios';
 import { clearTokens } from '../utils/storage';
@@ -63,4 +64,26 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
   );
 
   return instance;
+}
+
+// React Native's XHR only appends a multipart boundary to the
+// Content-Type header when the header isn't already set. Our axios
+// instance defaults to `application/json`, so every multipart upload
+// would otherwise ship without a boundary and the Go server's
+// ParseMultipartForm would reject the body.
+//
+// Pass this as the third arg to api.post(...) for any FormData upload:
+//   await api.post('/chef/documents', formData, multipartConfig());
+export function multipartConfig(extra: AxiosRequestConfig = {}): AxiosRequestConfig {
+  return {
+    ...extra,
+    transformRequest: (data, headers) => {
+      if (headers) {
+        const h = headers as Record<string, unknown>;
+        delete h['Content-Type'];
+        delete h['content-type'];
+      }
+      return data;
+    },
+  };
 }

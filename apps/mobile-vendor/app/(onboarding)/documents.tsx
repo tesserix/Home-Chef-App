@@ -11,6 +11,7 @@ import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
@@ -51,9 +52,7 @@ export default function DocumentsScreen() {
         type: mimeType,
       } as unknown as Blob);
 
-      await api.post('/chef/documents', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await api.post('/chef/documents', formData, multipartConfig());
 
       if (docType === 'id_proof') {
         updateDocuments({ idProofUri: uri, idProofType: fileType });
@@ -62,8 +61,9 @@ export default function DocumentsScreen() {
       }
       setUploadState(docType, { uploading: false, error: null });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
-      setUploadState(docType, { uploading: false, error: message });
+      const serverError = (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+      const fallback = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+      setUploadState(docType, { uploading: false, error: serverError ?? fallback });
     }
   }
 

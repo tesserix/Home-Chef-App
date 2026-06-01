@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
 
@@ -33,9 +34,7 @@ async function uploadDocument(uri: string, type: DocumentType, mimeType?: string
     type: mimeType ?? 'image/jpeg',
   } as unknown as Blob);
   // CRITICAL: upload to /driver/onboarding/documents (not /delivery/documents)
-  await api.post('/driver/onboarding/documents', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  await api.post('/driver/onboarding/documents', formData, multipartConfig());
 }
 
 export default function DocumentsScreen() {

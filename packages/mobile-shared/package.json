@@ -13,7 +13,8 @@
     "./types": "./src/types/index.ts",
     "./utils": "./src/utils/index.ts",
     "./theme": "./src/theme/index.ts",
-    "./screens": "./src/screens/index.ts"
+    "./screens": "./src/screens/index.ts",
+    "./ui": "./src/ui/index.ts"
   },
   "scripts": {
     "test": "vitest run",

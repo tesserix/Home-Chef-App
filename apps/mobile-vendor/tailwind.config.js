@@ -1,4 +1,11 @@
 /** @type {import('tailwindcss').Config} */
+//
+// Source of truth: .impeccable.md at repo root.
+// TS bridge:        packages/mobile-shared/src/theme/tokens.ts
+//
+// Keep the three in lockstep. Token values below MUST equal those in
+// tokens.ts so a screen can switch between `className="bg-herb"` and
+// `style={{ backgroundColor: colors.herb.DEFAULT }}` with no surprise.
 module.exports = {
   // Auto-follows OS color scheme on mobile. User-override toggle is in
   // settings → switches via NativeWind's `useColorScheme()` setter.
@@ -14,28 +21,32 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      // --- COLORS -----------------------------------------------------------
+      // Paper · Ink · Persimmon. See .impeccable.md.
+      // Names match packages/mobile-shared/src/theme/tokens.ts.colors keys.
       colors: {
-        // Paper · Ink · Herb tokens — inlined as hex (was var(--*) refs into
-        // global.css, but nativewind 5 + lightningcss can't process the CSS
-        // file. Light-mode values only; dark-mode handling deferred.
-        paper: '#fafaf7',
-        bone: '#f3f2ee',
+        paper: '#FFFFFF',
+        bone: '#F5F5F4',
         mist: {
-          DEFAULT: '#e6e5e0',
-          strong: '#d4d3ce',
+          DEFAULT: '#E5E5E5',
+          strong: '#D6D6D6',
         },
         ink: {
-          DEFAULT: '#1a1a18',
-          soft: '#4a4a47',
-          muted: '#7a7a76',
+          DEFAULT: '#0E0E0C',
+          soft: '#525252',
+          muted: '#888888',
         },
-        // Brand accent: Persimmon (warm editorial orange).
-        // Token name kept as `herb` to avoid a 49-file rename across the apps;
-        // class names (`bg-herb`, `text-herb`) now render orange.
+        // Brand accent: Persimmon. Token name `herb` kept for back-compat
+        // with the existing class names across 49 files.
         herb: {
           DEFAULT: '#C2410C',
           soft: '#9A3412',
           tint: '#FFEDD5',
+        },
+        // Functional only — never decorative.
+        destructive: {
+          DEFAULT: '#B22B0E',
+          tint: '#FBE8E1',
         },
         paprika: {
           DEFAULT: '#c95b3e',
@@ -49,10 +60,8 @@ module.exports = {
           DEFAULT: '#4a73a3',
           tint: '#dde5ee',
         },
-        background: '#fafaf7',
-        foreground: '#1a1a18',
-
-        // Legacy `brand` alias → persimmon scale (mirror web tailwind.config.js)
+        background: '#FFFFFF',
+        foreground: '#0E0E0C',
         brand: {
           50: '#FFF7ED',
           100: '#FFEDD5',
@@ -67,9 +76,74 @@ module.exports = {
           950: '#2A0C06',
         },
       },
+
+      // --- TYPOGRAPHY ------------------------------------------------------
+      // Geist for display, Inter for UI. Fonts must be loaded via
+      // expo-font at app boot (apps/mobile-vendor/app/_layout.tsx) — until
+      // then the platform falls back to the System sans.
       fontFamily: {
+        // RN selects fonts by family name only (fontWeight does not pick
+        // a different family for non-system fonts). So each weight is a
+        // separate family registered via expo-font in app/_layout.tsx.
+        //
+        //   font-sans            → body / UI               (Inter 400)
+        //   font-sans-medium     → slight emphasis         (Inter 500)
+        //   font-sans-semibold   → buttons, strong labels  (Inter 600)
+        //   font-display         → headlines, brand        (Geist 600)
+        //   font-display-bold    → hero, large numerals    (Geist 700)
+        //   font-mono            → IDs / receipts / addrs  (system mono)
         sans: ['Inter', 'System'],
+        'sans-medium': ['Inter-Medium', 'Inter', 'System'],
+        'sans-semibold': ['Inter-SemiBold', 'Inter', 'System'],
         display: ['Geist', 'Inter', 'System'],
+        'display-bold': ['Geist-Bold', 'Geist', 'System'],
+        mono: ['Menlo', 'Courier New'],
+      },
+
+      // Type ramp. Numbers are absolute pt (RN). Line-height multiplier.
+      // Letter-spacing is in em-equivalent (RN treats as pixels).
+      fontSize: {
+        // Display — Geist
+        display: ['32px', { lineHeight: '35px', letterSpacing: '-0.5px' }],
+        h1: ['26px', { lineHeight: '30px', letterSpacing: '-0.3px' }],
+        h2: ['20px', { lineHeight: '24px', letterSpacing: '-0.2px' }],
+        // Body — Inter
+        body: ['16px', { lineHeight: '24px', letterSpacing: '0px' }],
+        'body-sm': ['14px', { lineHeight: '20px', letterSpacing: '0px' }],
+        label: ['13px', { lineHeight: '18px', letterSpacing: '0.1px' }],
+        caption: ['11px', { lineHeight: '14px', letterSpacing: '0.2px' }],
+      },
+
+      // --- RADII -----------------------------------------------------------
+      // 4 / 8 / 12 / 16 / full. No super-round 24px friendly pills.
+      borderRadius: {
+        none: '0px',
+        sm: '4px',
+        DEFAULT: '8px',
+        md: '12px',
+        lg: '16px', // sheets / modals
+        full: '9999px', // dots, avatars, FABs only
+      },
+
+      // --- SHADOWS --------------------------------------------------------
+      // iOS-only — NativeWind translates these to shadowColor/Offset etc.
+      // On Android, `elevation` must be set per-component via tokens.ts.
+      boxShadow: {
+        'elev-1': '0 1px 2px rgba(26, 26, 24, 0.04)',
+        'elev-2': '0 2px 6px rgba(26, 26, 24, 0.06)',
+        'elev-3': '0 8px 24px rgba(26, 26, 24, 0.12)',
+      },
+
+      // --- TOUCH TARGETS --------------------------------------------------
+      // 44pt minimum for customer/vendor. Driver app overrides to 48 in
+      // its own config. Use as `min-h-touch` on every Pressable.
+      minHeight: {
+        touch: '44px',
+        'touch-lg': '48px',
+      },
+      minWidth: {
+        touch: '44px',
+        'touch-lg': '48px',
       },
     },
   },

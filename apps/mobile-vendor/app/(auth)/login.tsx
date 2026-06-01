@@ -108,7 +108,9 @@ export default function LoginPage() {
 
   return (
     <LoginScreen
+      brand="Home Chef · Vendor"
       title="Welcome back"
+      subtitle="Sign in to keep your kitchen running"
       onLogin={async ({ email, password }) => {
         await signInWithEmail(email, password);
         const response = await completeBFFLogin();

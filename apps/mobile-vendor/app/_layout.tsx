@@ -1,8 +1,8 @@
 import '../global.css';
 
 import { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { ActivityIndicator, Platform, View } from 'react-native';
+import { Stack, router, usePathname } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -15,6 +15,14 @@ import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { ToastProvider, UndoSnackbarProvider } from '@homechef/mobile-shared/ui';
+import { useFonts } from 'expo-font';
+import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
+import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 
 interface OnboardingStatusResponse {
   status: 'not_started' | 'in_progress' | 'pending_review' | 'submitted' | 'verified' | 'rejected';
@@ -43,6 +51,19 @@ Notifications.setNotificationHandler({
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 function AppNavigator() {
+  // Load Geist + Inter at boot. Until these resolve every Text falls back
+  // to the platform System font, so we delay rendering until ready.
+  // Naming convention: weight is encoded in the family key so consumers
+  // pick by family name (`Inter-Medium`) instead of by fontWeight, which
+  // RN doesn't reliably honor for non-system fonts.
+  const [fontsLoaded] = useFonts({
+    Geist: Geist_600SemiBold, // default Geist = 600 (semibold) for display
+    'Geist-Bold': Geist_700Bold,
+    Inter: Inter_400Regular, // default Inter = 400 (regular) for body
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+  });
+
   const { isAuthenticated, isLoading, hydrateFromStorage } = useAuthStore();
 
   // Cleanup ref for push subscription teardown.
@@ -193,43 +214,118 @@ function AppNavigator() {
     };
   }, [isAuthenticated, isLoading]);
 
+  // A coarse identifier for the auth state. Flips on real transitions
+  // (login, logout, onboarding moving from in_progress → verified, etc).
+  // We use it to decide when the splash should re-appear: it covers the
+  // gap between auth state changing and the URL actually swapping under us.
+  const authKey: string = (() => {
+    if (isLoading || onboardingLoading) return 'resolving';
+    if (!isAuthenticated) return 'unauth';
+    if (!onboardingStatus) return 'resolving';
+    return `auth:${onboardingStatus.data.status}`;
+  })();
+
+  // Where we believe the user should land right now. null while still
+  // resolving — the splash stays up in that case.
+  const expectedPath: string | null = (() => {
+    if (authKey === 'resolving') return null;
+    if (authKey === 'unauth') return '/(auth)/login';
+    if (!onboardingStatus) return null;
+    const status = onboardingStatus.data.status;
+    if (status === 'verified') return '/(tabs)';
+    if (status === 'not_started') return '/(onboarding)/personal-info';
+    return '/(onboarding)/pending';
+  })();
+
+  const pathname = usePathname();
+
+  // The auth state we've last successfully routed for. While this lags
+  // behind authKey we know the URL hasn't caught up to the latest auth
+  // decision yet, so the splash should stay up.
+  const routedFor = useRef<string | null>(null);
+
+  // Normalize an Expo Router target path so it can be compared against
+  // `usePathname()` (which strips group `(...)` segments and emits `/`
+  // for the group root). Without this, `/(tabs)` would normalize to ''
+  // while the actual landed pathname is `/`, and the splash latch never
+  // fires.
+  function normalize(p: string): string {
+    const stripped = p.replace(/\/\([^)]+\)/g, '');
+    return stripped === '' ? '/' : stripped;
+  }
+
   useEffect(() => {
-    if (isLoading || onboardingLoading) return;
-    if (!isAuthenticated) {
-      router.replace('/(auth)/login');
-    } else if (!onboardingStatus) {
-      return; // still fetching
-    } else if (onboardingStatus.data.status === 'verified') {
-      router.replace('/(tabs)');
-    } else if (onboardingStatus.data.status === 'not_started') {
-      router.replace('/(onboarding)/personal-info');
-    } else {
-      // pending_review, submitted, rejected, in_progress
-      router.replace('/(onboarding)/pending');
+    if (!expectedPath) return;
+    router.replace(expectedPath as never);
+  }, [expectedPath]);
+
+  useEffect(() => {
+    if (!expectedPath) return;
+    const target = normalize(expectedPath);
+    const here = normalize(pathname || '');
+    // For the `(tabs)` group, any tab path counts as "arrived" — once
+    // we're past the redirect, in-app tab navigation should not bring
+    // back the splash.
+    const matched = target === '/'
+      ? !here.startsWith('/login') &&
+        !here.startsWith('/personal-info') &&
+        !here.startsWith('/pending')
+      : here === target;
+    if (matched) {
+      routedFor.current = authKey;
     }
-  }, [isAuthenticated, isLoading, onboardingStatus, onboardingLoading]);
+  }, [pathname, expectedPath, authKey]);
+
+  // Keep splash up until the OTF/TTF files are available — otherwise we
+  // render a frame of System font then snap to Geist/Inter when fonts
+  // arrive, which is jarringly visible on the login + dashboard.
+  const isRouting =
+    !fontsLoaded || authKey === 'resolving' || routedFor.current !== authKey;
 
   return (
     <View style={{ flex: 1 }}>
       <OfflineBanner />
       <Stack screenOptions={{ headerShown: false }} />
+      {isRouting && (
+        <View
+          pointerEvents="auto"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <ActivityIndicator color="#0E0E0C" size="large" />
+        </View>
+      )}
     </View>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider
-      bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
-      tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
-    >
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <QueryClientProvider client={queryClient}>
-          <BottomSheetModalProvider>
-            <AppNavigator />
-          </BottomSheetModalProvider>
-        </QueryClientProvider>
-      </GestureHandlerRootView>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider
+        bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+        tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <QueryClientProvider client={queryClient}>
+            <BottomSheetModalProvider>
+              <ToastProvider>
+                <UndoSnackbarProvider>
+                  <AppNavigator />
+                </UndoSnackbarProvider>
+              </ToastProvider>
+            </BottomSheetModalProvider>
+          </QueryClientProvider>
+        </GestureHandlerRootView>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

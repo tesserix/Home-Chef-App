@@ -23,6 +23,7 @@ import {
   useUpdateMenuItem,
   useUploadMenuPhoto,
 } from '../../../hooks/useVendorMenu';
+import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { api } from '../../../lib/api';
 
 const PREP_TIME_OPTIONS = [5, 10, 15, 30, 45, 60];
@@ -36,7 +37,7 @@ const schema = z.object({
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0 && Number(v) <= 10000, {
       message: 'Price must be between ₹1 and ₹10,000',
     }),
-  category: z.string().min(1, 'Please select a category'),
+  categoryId: z.string().min(1, 'Please select a category'),
   isVeg: z.boolean(),
   preparationTime: z.number(),
 });
@@ -50,7 +51,7 @@ export default function EditMenuItemScreen() {
   const uploadMutation = useUploadMenuPhoto(itemId ?? '');
 
   const item = menuData?.items?.find((i) => i.id === itemId);
-  const categories = menuData?.categories?.map((c) => c.name) ?? [];
+  const categories = menuData?.categories ?? [];
 
   const [originalPrice, setOriginalPrice] = useState<string>('');
   const [showPriceChangeBanner, setShowPriceChangeBanner] = useState(false);
@@ -67,26 +68,26 @@ export default function EditMenuItemScreen() {
       name: '',
       description: '',
       price: '',
-      category: '',
+      categoryId: '',
       isVeg: true,
       preparationTime: 15,
     },
   });
 
-  const selectedCategory = watch('category');
+  const selectedCategoryId = watch('categoryId');
   const currentPrice = watch('price');
 
   useEffect(() => {
     if (item) {
-      const priceStr = String(item.price);
+      const priceStr = String(item.price ?? 0);
       setOriginalPrice(priceStr);
       reset({
-        name: item.name,
-        description: item.description,
+        name: item.name ?? '',
+        description: item.description ?? '',
         price: priceStr,
-        category: item.category,
-        isVeg: item.isVeg,
-        preparationTime: item.preparationTime,
+        categoryId: item.categoryId ?? '',
+        isVeg: item.isVeg ?? true,
+        preparationTime: item.preparationTime ?? 15,
       });
     }
   }, [item, reset]);
@@ -108,7 +109,7 @@ export default function EditMenuItemScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       uploadMutation.mutate(result.assets[0].uri, {
-        onError: () => Alert.alert('Error', 'Failed to upload photo. Please try again.'),
+        onError: (err) => Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload photo.')),
       });
     }
   }
@@ -127,7 +128,7 @@ export default function EditMenuItemScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       uploadMutation.mutate(result.assets[0].uri, {
-        onError: () => Alert.alert('Error', 'Failed to upload photo. Please try again.'),
+        onError: (err) => Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload photo.')),
       });
     }
   }
@@ -141,8 +142,8 @@ export default function EditMenuItemScreen() {
         onPress: async () => {
           try {
             await api.delete(`/chef/menu/items/${itemId}/images/${imageId}`);
-          } catch {
-            Alert.alert('Error', 'Failed to delete photo.');
+          } catch (err: unknown) {
+            Alert.alert('Error', getServerErrorMessage(err, 'Failed to delete photo.'));
           }
         },
       },
@@ -158,14 +159,16 @@ export default function EditMenuItemScreen() {
           name: values.name,
           description: values.description,
           price: Number(values.price),
-          category: values.category,
+          categoryId: values.categoryId,
           isVeg: values.isVeg,
           preparationTime: values.preparationTime,
         },
       });
       router.back();
-    } catch {
-      Alert.alert('Error', 'Failed to update menu item. Please try again.');
+    } catch (error: unknown) {
+      const serverError = (error as { response?: { data?: { error?: string } } } | null)
+        ?.response?.data?.error;
+      Alert.alert('Error', serverError ?? 'Failed to update menu item. Please try again.');
     }
   }
 
@@ -178,7 +181,7 @@ export default function EditMenuItemScreen() {
   }
 
   const isSubmitting = updateMutation.isPending;
-  const existingPhotos = item.images.slice(0, 5);
+  const existingPhotos = (item.images ?? []).slice(0, 5);
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
@@ -335,16 +338,21 @@ export default function EditMenuItemScreen() {
               <Text className="text-sm font-medium text-ink-soft mb-2">Category *</Text>
               <Controller
                 control={control}
-                name="category"
+                name="categoryId"
                 render={({ field: { onChange } }) => (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ flexGrow: 0, flexShrink: 0 }}
+                    contentContainerStyle={{ alignItems: 'flex-start' }}
+                  >
                     <View className="flex-row gap-2">
                       {categories.map((cat) => (
                         <TouchableOpacity
-                          key={cat}
-                          onPress={() => onChange(cat)}
+                          key={cat.id}
+                          onPress={() => onChange(cat.id)}
                           className={`px-4 py-2 rounded-full border ${
-                            selectedCategory === cat
+                            selectedCategoryId === cat.id
                               ? 'bg-herb border-herb'
                               : 'bg-bone border-mist'
                           }`}
@@ -352,10 +360,10 @@ export default function EditMenuItemScreen() {
                         >
                           <Text
                             className={`text-sm font-medium ${
-                              selectedCategory === cat ? 'text-paper' : 'text-ink-soft'
+                              selectedCategoryId === cat.id ? 'text-paper' : 'text-ink-soft'
                             }`}
                           >
-                            {cat}
+                            {cat.name}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -363,8 +371,8 @@ export default function EditMenuItemScreen() {
                   </ScrollView>
                 )}
               />
-              {errors.category && (
-                <Text className="text-paprika text-xs mt-1">{errors.category.message}</Text>
+              {errors.categoryId && (
+                <Text className="text-paprika text-xs mt-1">{errors.categoryId.message}</Text>
               )}
             </View>
 
