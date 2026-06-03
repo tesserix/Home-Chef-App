@@ -223,28 +223,6 @@ const chipStyles = StyleSheet.create({
 
 // ---- Sub-components -----------------------------------------------------
 
-interface LabeledRowProps {
-  label: string;
-  value: string;
-  hasBorderBottom?: boolean;
-}
-
-function LabeledRow({ label, value, hasBorderBottom = true }: LabeledRowProps) {
-  return (
-    <View
-      style={[
-        styles.dataRow,
-        hasBorderBottom && styles.rowBorderBottom,
-      ]}
-    >
-      <Text style={styles.dataLabel}>{label}</Text>
-      <Text style={styles.dataValue} numberOfLines={3}>
-        {value || '—'}
-      </Text>
-    </View>
-  );
-}
-
 interface EditableFieldProps {
   label: string;
   value: string;
@@ -907,30 +885,6 @@ const styles = StyleSheet.create({
   rowBorderBottom: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
-  },
-
-  // Read-only labeled row
-  dataRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing[4],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    minHeight: 44,
-  },
-  dataLabel: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    width: 124,
-    paddingTop: 1,
-  },
-  dataValue: {
-    flex: 1,
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    lineHeight: 20,
   },
 
   // Editable field

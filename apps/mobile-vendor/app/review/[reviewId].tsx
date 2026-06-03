@@ -16,6 +16,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { z } from 'zod';
 import { theme } from '@homechef/mobile-shared/theme';
+import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../../lib/api';
 import { useReviews } from '../reviews';
 
@@ -57,11 +58,11 @@ export default function ReviewDetailScreen() {
   const { reviewId } = useLocalSearchParams<{ reviewId: string }>();
   const { data: reviewsData } = useReviews();
   const replyMutation = useReplyToReview(reviewId ?? '');
+  const { show: showToast } = useToast();
 
   const [replyText, setReplyText] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [validationError, setValidationError] = useState('');
-  const [networkError, setNetworkError] = useState('');
   // Input expands as content grows, but we cap it at 180 before scrolling
   const [inputHeight, setInputHeight] = useState(120);
 
@@ -73,7 +74,6 @@ export default function ReviewDetailScreen() {
   function handleChangeText(text: string) {
     setReplyText(text);
     if (validationError) setValidationError('');
-    if (networkError) setNetworkError('');
   }
 
   function handleSend() {
@@ -83,20 +83,22 @@ export default function ReviewDetailScreen() {
       return;
     }
     setValidationError('');
-    setNetworkError('');
 
     replyMutation.mutate(replyText.trim(), {
       onSuccess: () => {
+        showToast({ message: 'Reply sent', tone: 'success' });
         router.back();
       },
       onError: () => {
-        setNetworkError('Failed to send reply. Check your connection and try again.');
+        showToast({
+          message: 'Failed to send reply. Check your connection and try again.',
+          tone: 'error',
+        });
       },
     });
   }
 
-  const isError = Boolean(validationError || networkError);
-  const sendDisabled = replyMutation.isPending || isError;
+  const sendDisabled = replyMutation.isPending || Boolean(validationError);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -184,7 +186,7 @@ export default function ReviewDetailScreen() {
                 style={[
                   styles.inputContainer,
                   inputFocused && styles.inputContainerFocused,
-                  isError && styles.inputContainerError,
+                  validationError && styles.inputContainerError,
                 ]}
               >
                 <TextInput
@@ -207,11 +209,10 @@ export default function ReviewDetailScreen() {
                 />
               </View>
 
-              {/* Inline error — validation or network, one at a time */}
+              {/* Validation error stays inline for immediate typing feedback.
+                  Network failures surface as a toast (see handleSend). */}
               {validationError ? (
                 <Text style={styles.errorText}>{validationError}</Text>
-              ) : networkError ? (
-                <Text style={styles.errorText}>{networkError}</Text>
               ) : null}
             </>
           )}

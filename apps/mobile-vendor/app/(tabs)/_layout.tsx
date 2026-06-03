@@ -26,12 +26,11 @@ export default function VendorTabsLayout() {
         tabBarInactiveTintColor: theme.colors.ink.muted,
         tabBarLabelStyle: {
           fontFamily: 'Inter-SemiBold',
-          fontSize: 10,
+          fontSize: 11,
           letterSpacing: 0,
           marginTop: 2,
-        },
-        tabBarItemStyle: {
-          paddingHorizontal: 2,
+          textAlign: 'center',
+          includeFontPadding: false,
         },
       }}
     >
