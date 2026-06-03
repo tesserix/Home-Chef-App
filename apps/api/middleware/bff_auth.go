@@ -207,21 +207,31 @@ func compute(method, path string, body []byte, ts string, key []byte) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// verifyBearer validates a Bearer token by calling the BFF's /auth/session
+// verifyBearer validates a session token by calling the BFF's /auth/session
 // endpoint. Returns the BFF identity on success. Used as a fallback path for
 // mobile/SPA clients that hold a session token directly instead of routing
 // through the BFF's HMAC-signing proxy.
+//
+// Accepts the token from either `X-Session-Token` (preferred — bypasses
+// the istio-ingress Keycloak `RequestAuthentication` filter that rejects
+// any non-Keycloak `Authorization: Bearer`) or `Authorization: Bearer`
+// (legacy mobile builds). Forwards it to the BFF as X-Session-Token so the
+// shared header convention holds end-to-end.
 func verifyBearer(r *http.Request, bffSessionURL string, client *http.Client) (*BFFIdentity, error) {
-	auth := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if !strings.HasPrefix(auth, prefix) {
-		return nil, errors.New("no_bearer_token")
+	token := r.Header.Get("X-Session-Token")
+	if token == "" {
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			token = strings.TrimPrefix(auth, "Bearer ")
+		}
+	}
+	if token == "" {
+		return nil, errors.New("no_session_token")
 	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, bffSessionURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", auth)
+	req.Header.Set("X-Session-Token", token)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("bff_session_unreachable: %w", err)

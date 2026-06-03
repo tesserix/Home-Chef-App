@@ -70,11 +70,21 @@ func (h *Handler) csrf(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"csrf_token": tok})
 }
 
-// read pulls the session payload from either the session cookie or
-// an Authorization: Bearer header (mobile).
+// read pulls the session payload from (in order):
+//
+//  1. The session cookie (web clients).
+//  2. The X-Session-Token header (mobile clients — preferred path,
+//     bypasses the istio-ingress RequestAuthentication filter that
+//     rejects any non-Keycloak `Authorization: Bearer`).
+//  3. The Authorization: Bearer header (legacy mobile clients still on
+//     the old shape; retained so a stale build continues to work until
+//     the user updates).
 func (h *Handler) read(c *gin.Context) (*Payload, error) {
 	if ck, err := c.Request.Cookie(h.Mgr.CookieName()); err == nil {
 		return h.Mgr.Decode(ck.Value)
+	}
+	if tok := c.GetHeader("X-Session-Token"); tok != "" {
+		return h.Mgr.Decode(tok)
 	}
 	if a := c.GetHeader("Authorization"); strings.HasPrefix(a, "Bearer ") {
 		return h.Mgr.Decode(strings.TrimPrefix(a, "Bearer "))

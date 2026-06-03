@@ -114,8 +114,11 @@ export async function clearStoredSession(): Promise<void> {
 export async function fetchSessionUser(bffUrl: string): Promise<BFFSessionUser | null> {
   const tok = await getStoredSession();
   if (!tok) return null;
+  // X-Session-Token rather than Authorization: Bearer — see api/client.ts
+  // for the full rationale (Istio gateway-level Keycloak JWT validation
+  // rejects any Bearer that isn't a legacy Keycloak JWT).
   const r = await fetch(`${bffUrl}/auth/session`, {
-    headers: { Authorization: `Bearer ${tok}` },
+    headers: { "X-Session-Token": tok },
   });
   if (r.status === 401) {
     await clearStoredSession();
@@ -131,7 +134,7 @@ export async function logoutBFF(bffUrl: string): Promise<void> {
     try {
       await fetch(`${bffUrl}/auth/logout`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${tok}` },
+        headers: { "X-Session-Token": tok },
       });
     } catch {
       // best-effort

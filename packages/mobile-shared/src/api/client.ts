@@ -30,12 +30,19 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     timeout: 15000,
   });
 
-  // Request interceptor: inject Bearer session token
+  // Request interceptor: inject BFF session token as X-Session-Token.
+  // We deliberately do NOT use `Authorization: Bearer` because the Istio
+  // ingress runs a RequestAuthentication filter that rejects any Bearer
+  // token whose issuer doesn't match the legacy Keycloak realms — and the
+  // BFF mints an AES-GCM-encrypted blob, not a JWT, so Istio kills every
+  // mobile request at the gateway before it can reach the upstream service.
+  // A header outside Istio's `fromHeaders` config bypasses that filter
+  // cleanly. The auth-bff and api middlewares accept both headers.
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       const token = getToken();
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers['X-Session-Token'] = token;
       }
       return config;
     },
