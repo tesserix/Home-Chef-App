@@ -90,8 +90,12 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 		// otherwise reject the INSERT and surface a 502 to the BFF,
 		// which is how this manifested for users who re-signed in via
 		// a different identity provider or whose GIP tenant changed.
-		if email != "" {
-			byEmail := h.DB.Where("email = ?", email).First(&u)
+		// Scope the email lookup by auth_pool so we don't collapse a
+		// customer-pool row into the chef-pool row when the same human uses
+		// the same email across products. The unique constraint on email
+		// is per-pool, not global — see TestUpsert_SameEmailDifferentPool.
+		if email != "" && req.AuthPool != "" {
+			byEmail := h.DB.Where("email = ? AND auth_pool = ?", email, req.AuthPool).First(&u)
 			if byEmail.Error == nil {
 				// Existing row found by email — re-bind it to the new
 				// GIP identity and stamp last-login. This is the "same
