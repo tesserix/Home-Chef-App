@@ -71,3 +71,7 @@ temp/
 .tmp/
 .temp/
 NEXT-SESSION-PROMPT.md
+
+# build artifacts + harness state
+apps/mobile-vendor/build-*.tar.gz
+.claude/scheduled_tasks.lock

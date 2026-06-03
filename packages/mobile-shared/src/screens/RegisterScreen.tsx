@@ -1,3 +1,5 @@
+// packages/mobile-shared/src/screens/RegisterScreen.tsx
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -15,6 +17,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { theme } from '../theme/tokens';
 import { resolveAuthErrorMessage } from '../auth/bff-session';
+import { SocialIconButton, GoogleGlyph, AppleGlyph } from './_socialIcons';
 
 const registerSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -29,17 +32,18 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 interface RegisterScreenProps {
   onRegister: (data: RegisterFormData) => Promise<void>;
   onNavigateToLogin?: () => void;
-  /** When provided, a "Continue with Google" outline button appears below
-   *  the form under an "or" divider. Lets new users skip the email/password
-   *  flow. The OAuth handler is expected to create the account and route
-   *  the user into the app on success. */
+  /** When provided, the social icon row appears below the form under an
+   *  "or continue with" hairline divider — same pattern as LoginScreen.
+   *  The OAuth handler is expected to create the account and route the
+   *  user into the app on success. */
   onGoogleSignIn?: () => Promise<void>;
   /** Same pattern as `onGoogleSignIn`, iOS only — callers should gate by
    *  `Platform.OS === 'ios'`. */
   onAppleSignIn?: () => Promise<void>;
+  /** Optional brand wordmark. When provided, renders above the title. */
+  brand?: string;
   title?: string;
   subtitle?: string;
-  brand?: string;
 }
 
 export function RegisterScreen({
@@ -113,6 +117,7 @@ export function RegisterScreen({
           {
             opacity: errorOpacity,
             transform: [{ translateY: errorTranslate }],
+            // Reserve no space when error is null, so layout doesn't jump.
             height: error ? undefined : 0,
             marginBottom: error ? theme.spacing[4] : 0,
           },
@@ -217,7 +222,7 @@ export function RegisterScreen({
         )}
       />
 
-      <View style={styles.primaryAction}>
+      <View style={styles.primaryActions}>
         <Button
           label={isSubmitting ? 'Creating account…' : 'Create account'}
           onPress={handleSubmit(onSubmit)}
@@ -230,23 +235,23 @@ export function RegisterScreen({
         <>
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>or</Text>
+            <Text style={styles.dividerLabel}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          <View style={styles.socialActions}>
+          <View style={styles.socialIconRow}>
             {onGoogleSignIn ? (
-              <Button
+              <SocialIconButton
                 label="Continue with Google"
-                variant="secondary"
                 onPress={wrap(onGoogleSignIn)}
+                icon={<GoogleGlyph />}
               />
             ) : null}
             {onAppleSignIn ? (
-              <Button
+              <SocialIconButton
                 label="Continue with Apple"
-                variant="secondary"
                 onPress={wrap(onAppleSignIn)}
+                icon={<AppleGlyph />}
               />
             ) : null}
           </View>
@@ -291,10 +296,12 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     marginBottom: theme.spacing[1],
   },
+  // ink.soft (not ink.muted) — subtitle is secondary, not tertiary.
+  // Matches LoginScreen's subtitle style exactly.
   subtitle: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
+    color: theme.colors.ink.soft,
     marginBottom: theme.spacing[6],
   },
 
@@ -319,12 +326,14 @@ const styles = StyleSheet.create({
   },
   nameField: { flex: 1 },
 
-  primaryAction: { marginTop: theme.spacing[2] },
+  primaryActions: {
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[6],
+  },
 
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: theme.spacing[5],
     marginBottom: theme.spacing[4],
   },
   dividerLine: {
@@ -340,14 +349,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  socialActions: {
-    gap: theme.spacing[2],
-    marginBottom: theme.spacing[2],
+
+  socialIconRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+    justifyContent: 'center',
+    marginBottom: theme.spacing[6],
   },
 
   signinRow: {
     alignItems: 'center',
-    marginTop: theme.spacing[5],
+    marginTop: theme.spacing[2],
   },
   signinPrompt: {
     fontFamily: 'Inter',

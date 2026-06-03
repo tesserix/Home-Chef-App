@@ -1,50 +1,127 @@
 import { useEffect, useRef } from 'react';
-import { View, Text, Pressable, Animated } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text } from 'react-native';
+import { theme } from '@homechef/mobile-shared/theme';
 import type { PendingUndo } from '../../hooks/useVendorOrders';
 
 interface UndoSnackbarProps {
   pendingUndo: PendingUndo | null;
   onUndo: () => void;
+  /** When provided, the snackbar surfaces a retry state instead of an
+   *  undo state — used to recover from a failed accept/reject mutation. */
+  errorMessage?: string | null;
+  onRetry?: () => void;
 }
 
-export function UndoSnackbar({ pendingUndo, onUndo }: UndoSnackbarProps) {
-  const translateY = useRef(new Animated.Value(100)).current;
+/**
+ * The post-action transient bar.
+ *
+ * Two roles:
+ *  - **Undo:** ink background, "Order accepted/rejected" + UNDO. The
+ *    3s grace window before the mutation commits.
+ *  - **Retry:** destructive background, "Could not [action]" + RETRY.
+ *    Surfaces when the optimistic action errors out.
+ *
+ * Motion: pure timing on the entrance/exit, not spring. The brand lock
+ * explicitly forbids bounce / overshoot — the prior spring overshot by
+ * a few pixels on entry.
+ */
+export function UndoSnackbar({
+  pendingUndo,
+  onUndo,
+  errorMessage,
+  onRetry,
+}: UndoSnackbarProps) {
+  const translateY = useRef(new Animated.Value(120)).current;
+  const isVisible = !!pendingUndo || !!errorMessage;
 
   useEffect(() => {
-    if (pendingUndo) {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 10,
-      }).start();
-    } else {
-      Animated.timing(translateY, {
-        toValue: 100,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [pendingUndo, translateY]);
+    Animated.timing(translateY, {
+      toValue: isVisible ? 0 : 120,
+      duration: 250,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [isVisible, translateY]);
 
-  if (!pendingUndo) return null;
+  if (!isVisible) return null;
 
-  const isAccepted = pendingUndo.action === 'accepted';
-  const bgClass = isAccepted ? 'bg-herb' : 'bg-paprika';
-  const label = isAccepted ? 'Order accepted' : 'Order rejected';
+  const isError = !!errorMessage;
+  const label = isError
+    ? errorMessage
+    : pendingUndo?.action === 'accepted'
+      ? 'Order accepted'
+      : 'Order rejected';
+  const actionLabel = isError ? 'RETRY' : 'UNDO';
+  const onPressAction = isError ? onRetry : onUndo;
 
   return (
     <Animated.View
-      style={{ transform: [{ translateY }] }}
-      className={`absolute bottom-4 left-4 right-4 z-50 flex-row items-center justify-between rounded-xl px-4 py-3 shadow-lg ${bgClass}`}
+      style={[
+        styles.root,
+        isError ? styles.rootError : styles.rootUndo,
+        { transform: [{ translateY }] },
+      ]}
+      accessibilityLiveRegion="polite"
     >
-      <Text className="flex-1 text-sm font-medium text-paper">{label}</Text>
-      <Pressable
-        onPress={onUndo}
-        className="ml-4 rounded-md bg-bone/20 px-3 py-1.5 active:bg-bone/30"
-      >
-        <Text className="text-sm font-medium text-paper">UNDO</Text>
-      </Pressable>
+      <Text style={styles.label} numberOfLines={2}>
+        {label}
+      </Text>
+      {onPressAction ? (
+        <Pressable
+          onPress={onPressAction}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.action,
+            pressed && { opacity: 0.7 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={isError ? 'Retry' : 'Undo'}
+        >
+          <Text style={styles.actionLabel}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    position: 'absolute',
+    bottom: theme.spacing[4],
+    left: theme.spacing[4],
+    right: theme.spacing[4],
+    zIndex: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[3],
+    ...theme.shadow[2],
+  },
+  rootUndo: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  rootError: {
+    backgroundColor: theme.colors.destructive.DEFAULT,
+  },
+  label: {
+    flex: 1,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
+  },
+  action: {
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  actionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
+    letterSpacing: 0.5,
+  },
+});

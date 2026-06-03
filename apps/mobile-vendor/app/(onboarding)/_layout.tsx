@@ -35,7 +35,7 @@ export default function OnboardingLayout() {
       />
       <Stack.Screen
         name="pending"
-        options={{ title: 'Application Status', gestureEnabled: false }}
+        options={{ headerShown: false, gestureEnabled: false }}
       />
     </Stack>
   );

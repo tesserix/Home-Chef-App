@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import {
   LayoutDashboard,
@@ -17,7 +18,7 @@ export default function VendorTabsLayout() {
           paddingBottom: 8,
           paddingTop: 6,
           backgroundColor: theme.colors.paper,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: theme.colors.mist.DEFAULT,
           elevation: 0,
         },
@@ -25,8 +26,12 @@ export default function VendorTabsLayout() {
         tabBarInactiveTintColor: theme.colors.ink.muted,
         tabBarLabelStyle: {
           fontFamily: 'Inter-SemiBold',
-          fontSize: 11,
-          letterSpacing: 0.2,
+          fontSize: 10,
+          letterSpacing: 0,
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 2,
         },
       }}
     >

@@ -60,6 +60,11 @@ module.exports = {
           DEFAULT: '#4a73a3',
           tint: '#dde5ee',
         },
+        // Diet indicator colors — FSSAI-style veg/non-veg icons only.
+        diet: {
+          veg: '#2A9D3E',
+          'non-veg': '#B22B0E',
+        },
         background: '#FFFFFF',
         foreground: '#0E0E0C',
         brand: {

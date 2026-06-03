@@ -2,28 +2,55 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import * as Notifications from 'expo-notifications';
+import { theme } from '@homechef/mobile-shared/theme';
+import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { useVendorPendingOrders } from '../hooks/useVendorOrders';
 
+// ---- Types ------------------------------------------------------------------
+
+// Matches the backend shape from GET /chef/settings. The earlier version of
+// this file modelled a `notificationPrefs.newOrderNotifications` shape that
+// the backend never returned — once `data` arrived from the API the screen
+// would crash reading those undefined fields. Naming kept aligned with
+// chefs.go so future edits stay grep-able across stacks.
 interface NotificationPrefs {
-  newOrderNotifications: boolean;
-  payoutNotifications: boolean;
-  reviewNotifications: boolean;
+  pushNewOrder: boolean;
+  pushOrderUpdate: boolean;
+  emailDailySummary: boolean;
+  emailWeeklyReport: boolean;
+  smsNewOrder: boolean;
 }
 
 interface ChefSettings {
-  notificationPrefs: NotificationPrefs;
+  notifications: NotificationPrefs;
+  autoAcceptOrders: boolean;
+  autoAcceptThreshold: number;
   acceptingOrders: boolean;
 }
+
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  pushNewOrder: true,
+  pushOrderUpdate: true,
+  emailDailySummary: true,
+  emailWeeklyReport: true,
+  smsNewOrder: false,
+};
+
+// ---- Hooks (co-located — no dedicated file exists yet) ----------------------
 
 function useChefSettings() {
   return useQuery<ChefSettings>({
@@ -33,54 +60,230 @@ function useChefSettings() {
   });
 }
 
+// PUT shape mirrors GET — the backend's UpdateChefSettings handler expects
+// the full notifications object plus the autoAccept + acceptingOrders flags.
+interface UpdateSettingsPayload {
+  notifications?: NotificationPrefs;
+  autoAcceptOrders?: boolean;
+  autoAcceptThreshold?: number;
+  acceptingOrders?: boolean;
+}
+
 function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<ChefSettings>) => api.put('/chef/settings', payload),
+    mutationFn: (payload: UpdateSettingsPayload) =>
+      api.put('/chef/settings', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'settings'] });
     },
   });
 }
 
+// ---- Sub-components ---------------------------------------------------------
+
+interface ToggleRowProps {
+  label: string;
+  caption: string;
+  value: boolean;
+  disabled?: boolean;
+  onValueChange: (next: boolean) => void;
+  hasBorderBottom?: boolean;
+}
+
+function ToggleRow({
+  label,
+  caption,
+  value,
+  disabled,
+  onValueChange,
+  hasBorderBottom = true,
+}: ToggleRowProps) {
+  return (
+    <View
+      style={[
+        styles.toggleRow,
+        hasBorderBottom && styles.rowBorderBottom,
+      ]}
+    >
+      <View style={styles.toggleText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowCaption}>{caption}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{
+          false: theme.colors.mist.strong,
+          true: theme.colors.ink.DEFAULT,
+        }}
+        thumbColor={theme.colors.paper}
+        ios_backgroundColor={theme.colors.mist.strong}
+      />
+    </View>
+  );
+}
+
+interface NavRowProps {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  hasBorderBottom?: boolean;
+}
+
+function NavRow({
+  label,
+  onPress,
+  destructive = false,
+  hasBorderBottom = true,
+}: NavRowProps) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button">
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.navRow,
+            hasBorderBottom && styles.rowBorderBottom,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <Text
+            style={[styles.rowLabel, destructive && styles.destructiveLabel]}
+          >
+            {label}
+          </Text>
+          {!destructive && (
+            <ChevronRight
+              size={18}
+              color={theme.colors.ink.muted}
+              strokeWidth={1.75}
+            />
+          )}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+// ---- Screen -----------------------------------------------------------------
+
+// Schedules a local notification that mimics the FCM payload shape used by
+// the backend's new-order push. Confirms (1) foreground alert handler is
+// firing, (2) Android channel + iOS category are registered, (3) tap
+// routing reads the orderId and lands on the detail screen. The Accept /
+// Reject lock-screen actions exercise the SecureStore + fetch path.
+async function triggerTestNotification(orderId: string | null): Promise<void> {
+  // Honor permission state first — schedule on a denied permission silently
+  // no-ops and the chef thinks the button is broken.
+  const settings = await Notifications.getPermissionsAsync();
+  if (settings.status !== 'granted') {
+    Alert.alert(
+      'Notifications blocked',
+      'Enable notifications for HomeChef Vendor in Settings to test.',
+    );
+    return;
+  }
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'New order',
+      body: orderId
+        ? 'Tap to open the most recent pending order'
+        : 'Tap to open the queue (no pending orders cached)',
+      data: {
+        type: 'new_order',
+        // When no real pending orderId is available the detail screen will
+        // show the "Couldn't load this order" fallback — itself useful for
+        // testing the cold-cache deep-link path.
+        orderId: orderId ?? 'test-no-cache',
+      },
+      sound: 'default',
+      categoryIdentifier: Platform.OS === 'ios' ? 'new_order' : undefined,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 2,
+      channelId: Platform.OS === 'android' ? 'new-orders' : undefined,
+    },
+  });
+}
+
+// Show the developer test row in any build pointed at localhost or a non-prod
+// host. `__DEV__` alone is false under the Release-config local-sim profile
+// so we fall back to the API URL — `vendors.fe3dr.com` (preview/production)
+// hides the section, anything else (localhost, ngrok, internal staging) keeps
+// it visible for debugging the push pipeline.
+const SHOW_DEV_TOOLS =
+  __DEV__ ||
+  !(process.env.EXPO_PUBLIC_API_URL ?? '').includes('vendors.fe3dr.com');
+
 export default function SettingsScreen() {
   const { data, isLoading, isError } = useChefSettings();
   const updateMutation = useUpdateSettings();
+  const { data: pendingResp } = useVendorPendingOrders();
+  const { show: showToast } = useToast();
 
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>({
-    newOrderNotifications: true,
-    payoutNotifications: true,
-    reviewNotifications: true,
-  });
-  const [acceptingOrders, setAcceptingOrders] = useState(true);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(
+    DEFAULT_NOTIFICATION_PREFS,
+  );
+  const [acceptingOrders, setAcceptingOrders] = useState(false);
 
   useEffect(() => {
-    if (data) {
-      setNotificationPrefs(data.notificationPrefs);
-      setAcceptingOrders(data.acceptingOrders);
-    }
+    if (!data) return;
+    // Defend against a partial payload — e.g. a half-migrated backend that
+    // omits the notifications block. Without this guard the screen crashed
+    // on `notifPrefs.pushNewOrder` after data arrived undefined.
+    setNotifPrefs({
+      ...DEFAULT_NOTIFICATION_PREFS,
+      ...(data.notifications ?? {}),
+    });
+    setAcceptingOrders(data.acceptingOrders ?? false);
   }, [data]);
 
-  function handleNotificationToggle(key: keyof NotificationPrefs, value: boolean) {
-    const updated = { ...notificationPrefs, [key]: value };
-    setNotificationPrefs(updated);
-    updateMutation.mutate({ notificationPrefs: updated });
+  function handleNotifToggle(key: keyof NotificationPrefs, value: boolean) {
+    const previous = { ...notifPrefs };
+    const updated = { ...notifPrefs, [key]: value };
+    setNotifPrefs(updated);
+    updateMutation.mutate(
+      { notifications: updated },
+      {
+        onError: () => {
+          // Roll back optimistic update on failure and surface error to chef.
+          setNotifPrefs(previous);
+          showToast({ message: 'Could not update preference. Try again.', tone: 'error' });
+        },
+      },
+    );
   }
 
   function handleAcceptingOrdersToggle(value: boolean) {
+    const previous = acceptingOrders;
     setAcceptingOrders(value);
-    updateMutation.mutate({ acceptingOrders: value });
+    updateMutation.mutate(
+      { acceptingOrders: value },
+      {
+        onError: () => {
+          setAcceptingOrders(previous);
+          showToast({ message: 'Could not update availability. Try again.', tone: 'error' });
+        },
+      },
+    );
   }
 
   function handleDeleteAccount() {
     Alert.alert(
-      'Delete Account',
-      'To delete your account, please contact our support team. This action cannot be undone.',
+      'Delete account',
+      'To delete your account, contact our support team. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Contact Support',
-          onPress: () => Alert.alert('Support', 'Please email support@homechef.app to delete your account.'),
+          text: 'Contact support',
+          onPress: () =>
+            Alert.alert(
+              'Support',
+              'Email support@homechef.app to request account deletion.',
+            ),
         },
       ],
     );
@@ -88,136 +291,313 @@ export default function SettingsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#C2410C" />
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <View style={styles.commandBar}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ChevronLeft
+              size={24}
+              color={theme.colors.ink.DEFAULT}
+              strokeWidth={1.75}
+            />
+          </Pressable>
+          <Text style={styles.commandTitle}>Settings</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
+        </View>
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
-        <Text className="text-ink-muted text-base mb-4">Failed to load settings</Text>
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <View style={styles.commandBar}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={styles.backBtn}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ChevronLeft
+              size={24}
+              color={theme.colors.ink.DEFAULT}
+              strokeWidth={1.75}
+            />
+          </Pressable>
+          <Text style={styles.commandTitle}>Settings</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>Failed to load settings</Text>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={styles.errorBack}
+            accessibilityRole="button"
+          >
+            <Text style={styles.errorBackLabel}>Go back</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-paper">
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
-        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#4a4a47" />
-        </TouchableOpacity>
-        <Text className="text-lg font-semibold text-ink">Settings</Text>
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      {/* Command bar — back chevron left, Geist-Bold 28pt title */}
+      <View style={styles.commandBar}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={styles.backBtn}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <ChevronLeft
+            size={24}
+            color={theme.colors.ink.DEFAULT}
+            strokeWidth={1.75}
+          />
+        </Pressable>
+        <Text style={styles.commandTitle}>Settings</Text>
       </View>
 
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Notification Preferences */}
-        <View className="bg-bone rounded-2xl shadow-sm mb-4 overflow-hidden">
-          <View className="px-4 py-3 border-b border-mist">
-            <Text className="text-sm font-semibold text-ink-soft">Notification Preferences</Text>
-          </View>
-
-          <View className="flex-row items-center justify-between px-4 py-4 border-b border-mist">
-            <View className="flex-1 mr-4">
-              <Text className="text-base text-ink">New Order Notifications</Text>
-              <Text className="text-xs text-ink-muted mt-0.5">
-                Get notified when a new order arrives
-              </Text>
-            </View>
-            <Switch
-              value={notificationPrefs.newOrderNotifications}
-              onValueChange={(v) => handleNotificationToggle('newOrderNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
-              thumbColor={notificationPrefs.newOrderNotifications ? '#C2410C' : '#7a7a76'}
-              disabled={updateMutation.isPending}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between px-4 py-4 border-b border-mist">
-            <View className="flex-1 mr-4">
-              <Text className="text-base text-ink">Payout Notifications</Text>
-              <Text className="text-xs text-ink-muted mt-0.5">
-                Get notified when payouts are processed
-              </Text>
-            </View>
-            <Switch
-              value={notificationPrefs.payoutNotifications}
-              onValueChange={(v) => handleNotificationToggle('payoutNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
-              thumbColor={notificationPrefs.payoutNotifications ? '#C2410C' : '#7a7a76'}
-              disabled={updateMutation.isPending}
-            />
-          </View>
-
-          <View className="flex-row items-center justify-between px-4 py-4">
-            <View className="flex-1 mr-4">
-              <Text className="text-base text-ink">Review Notifications</Text>
-              <Text className="text-xs text-ink-muted mt-0.5">
-                Get notified when customers leave reviews
-              </Text>
-            </View>
-            <Switch
-              value={notificationPrefs.reviewNotifications}
-              onValueChange={(v) => handleNotificationToggle('reviewNotifications', v)}
-              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
-              thumbColor={notificationPrefs.reviewNotifications ? '#C2410C' : '#7a7a76'}
-              disabled={updateMutation.isPending}
-            />
-          </View>
+        {/* NOTIFICATION PREFERENCES section. Labels match the backend
+            channels the chef-settings endpoint actually persists; the
+            previous "Payouts" / "Reviews" toggles weren't wired to any
+            real backend field. */}
+        <Text style={styles.sectionLabel}>NOTIFICATION PREFERENCES</Text>
+        <View style={styles.sectionGroup}>
+          <ToggleRow
+            label="New orders"
+            caption="Push notification when a new order arrives"
+            value={notifPrefs.pushNewOrder}
+            disabled={updateMutation.isPending}
+            onValueChange={(v) => handleNotifToggle('pushNewOrder', v)}
+          />
+          <ToggleRow
+            label="Order updates"
+            caption="Push when an order changes status"
+            value={notifPrefs.pushOrderUpdate}
+            disabled={updateMutation.isPending}
+            onValueChange={(v) => handleNotifToggle('pushOrderUpdate', v)}
+          />
+          <ToggleRow
+            label="Daily summary email"
+            caption="One email each evening with the day's orders"
+            value={notifPrefs.emailDailySummary}
+            disabled={updateMutation.isPending}
+            onValueChange={(v) => handleNotifToggle('emailDailySummary', v)}
+          />
+          <ToggleRow
+            label="Weekly summary email"
+            caption="Weekly performance recap email"
+            value={notifPrefs.emailWeeklyReport}
+            disabled={updateMutation.isPending}
+            onValueChange={(v) => handleNotifToggle('emailWeeklyReport', v)}
+          />
+          <ToggleRow
+            label="SMS for new orders"
+            caption="Text message in addition to the push"
+            value={notifPrefs.smsNewOrder}
+            disabled={updateMutation.isPending}
+            onValueChange={(v) => handleNotifToggle('smsNewOrder', v)}
+            hasBorderBottom={false}
+          />
         </View>
 
-        {/* Availability */}
-        <View className="bg-bone rounded-2xl shadow-sm mb-4 overflow-hidden">
-          <View className="px-4 py-3 border-b border-mist">
-            <Text className="text-sm font-semibold text-ink-soft">Availability</Text>
-          </View>
-          <View className="flex-row items-center justify-between px-4 py-4">
-            <View className="flex-1 mr-4">
-              <Text className="text-base text-ink">Accepting Orders</Text>
-              <Text className="text-xs text-ink-muted mt-0.5">
-                Toggle to start or pause accepting orders
-              </Text>
-            </View>
-            <Switch
-              value={acceptingOrders}
-              onValueChange={handleAcceptingOrdersToggle}
-              trackColor={{ false: '#d4d3ce', true: '#9A3412' }}
-              thumbColor={acceptingOrders ? '#C2410C' : '#7a7a76'}
-              disabled={updateMutation.isPending}
-            />
-          </View>
+        {/* AVAILABILITY section
+            The "Accepting Orders" toggle is retained here as a settings-level
+            audit point — the dashboard's Open/Closed button is the operational
+            shortcut for a running session, while this toggle persists the
+            preference across sessions (e.g. set to Off at end of day and it
+            stays off on next launch). Both write to the same backend field. */}
+        <Text style={styles.sectionLabel}>AVAILABILITY</Text>
+        <View style={styles.sectionGroup}>
+          <ToggleRow
+            label="Accepting orders"
+            caption="Persists across sessions — use dashboard button for quick toggle"
+            value={acceptingOrders}
+            disabled={updateMutation.isPending}
+            onValueChange={handleAcceptingOrdersToggle}
+            hasBorderBottom={false}
+          />
         </View>
 
-        {/* Account */}
-        <View className="bg-bone rounded-2xl shadow-sm overflow-hidden">
-          <View className="px-4 py-3 border-b border-mist">
-            <Text className="text-sm font-semibold text-ink-soft">Account</Text>
-          </View>
-
-          <TouchableOpacity
-            className="flex-row items-center justify-between px-4 py-4 border-b border-mist"
-            activeOpacity={0.7}
+        {/* ACCOUNT section — navigation rows, no bone card backer */}
+        <Text style={styles.sectionLabel}>ACCOUNT</Text>
+        <View style={styles.sectionGroup}>
+          <NavRow
+            label="Change password"
             onPress={() => router.push('/(auth)/forgot-password' as never)}
-          >
-            <Text className="text-base text-ink">Change Password</Text>
-            <Text className="text-ink-muted text-lg">›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="px-4 py-4"
-            activeOpacity={0.7}
+          />
+          <NavRow
+            label="Delete account"
             onPress={handleDeleteAccount}
-          >
-            <Text className="text-base text-paprika">Delete Account</Text>
-          </TouchableOpacity>
+            destructive
+            hasBorderBottom={false}
+          />
         </View>
+
+        {/* DEVELOPER section — local-sim + dev builds only. Lets us exercise
+            the push pipeline without waiting for a real order to come in.
+            Hidden in preview/production builds via SHOW_DEV_TOOLS gate. */}
+        {SHOW_DEV_TOOLS ? (
+          <>
+            <Text style={styles.sectionLabel}>DEVELOPER</Text>
+            <View style={styles.sectionGroup}>
+              <NavRow
+                label="Send test notification"
+                onPress={() => {
+                  const firstPending = pendingResp?.orders?.[0]?.id ?? null;
+                  triggerTestNotification(firstPending).catch((err: unknown) => {
+                    Alert.alert(
+                      'Test notification failed',
+                      err instanceof Error ? err.message : 'Unknown error',
+                    );
+                  });
+                }}
+                hasBorderBottom={false}
+              />
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ---- Styles -----------------------------------------------------------------
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: theme.colors.paper,
+  },
+
+  // Command bar — matches dashboard/orders/more geometry
+  commandBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+    gap: theme.spacing[2],
+  },
+  backBtn: {
+    marginRight: theme.spacing[1],
+  },
+  commandTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.3,
+    color: theme.colors.ink.DEFAULT,
+  },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingBottom: theme.spacing[10],
+  },
+
+  // Section label — ALL-CAPS caption-spaced, matches `IN PROGRESS` on dashboard
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[6],
+    paddingBottom: theme.spacing[2],
+  },
+
+  // Section group — hairline top and bottom, no card radius or shadow
+  sectionGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+
+  // Shared row border
+  rowBorderBottom: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+
+  // Toggle row
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    gap: theme.spacing[4],
+  },
+  toggleText: {
+    flex: 1,
+  },
+
+  // Nav row (chevron rows)
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+  },
+
+  // Row text
+  rowLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  rowCaption: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  destructiveLabel: {
+    color: theme.colors.destructive.DEFAULT,
+    fontFamily: 'Inter',
+  },
+
+  // Loading / error states
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[4],
+  },
+  errorBack: {
+    paddingVertical: theme.spacing[2],
+  },
+  errorBackLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    textDecorationLine: 'underline',
+  },
+});

@@ -1,16 +1,23 @@
+// apps/mobile-vendor/app/(onboarding)/documents.tsx
+// Step 4/6 — Upload ID proof + FSSAI license.
+// StyleSheet only — no NativeWind className.
+// Upload slots: bone bg / mist border. When uploaded: filename row + remove ×.
+
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
+import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
@@ -20,6 +27,15 @@ type DocumentType = 'id_proof' | 'fssai_license';
 interface UploadState {
   uploading: boolean;
   error: string | null;
+}
+
+// Derive a display-safe filename from a file URI.
+function uriToFilename(uri: string, fileType: 'image' | 'pdf' | null): string {
+  if (!fileType) return 'document';
+  const segments = uri.split('/');
+  const last = segments[segments.length - 1] ?? '';
+  if (last.length > 0 && last.length < 50) return last;
+  return fileType === 'pdf' ? 'document.pdf' : 'document.jpg';
 }
 
 export default function DocumentsScreen() {
@@ -61,16 +77,26 @@ export default function DocumentsScreen() {
       }
       setUploadState(docType, { uploading: false, error: null });
     } catch (error: unknown) {
-      const serverError = (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
-      const fallback = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+      const serverError =
+        (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+      const fallback =
+        error instanceof Error ? error.message : 'Upload failed. Please try again.';
       setUploadState(docType, { uploading: false, error: serverError ?? fallback });
+    }
+  }
+
+  function removeDocument(docType: DocumentType): void {
+    if (docType === 'id_proof') {
+      updateDocuments({ idProofUri: null, idProofType: null });
+    } else {
+      updateDocuments({ fssaiUri: null, fssaiType: null });
     }
   }
 
   async function handleCamera(docType: DocumentType): Promise<void> {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission Required', 'Camera permission is needed to take photos.');
+      Alert.alert('Permission required', 'Camera access is needed to take a photo.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -87,7 +113,7 @@ export default function DocumentsScreen() {
   async function handleGallery(docType: DocumentType): Promise<void> {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission Required', 'Gallery permission is needed to select photos.');
+      Alert.alert('Permission required', 'Gallery access is needed to select a photo.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -114,7 +140,10 @@ export default function DocumentsScreen() {
 
   function onNext(): void {
     if (!documents.idProofUri || !documents.fssaiUri) {
-      Alert.alert('Documents Required', 'Please upload both ID proof and FSSAI license to continue.');
+      Alert.alert(
+        'Documents required',
+        'Please upload both ID proof and FSSAI license to continue.',
+      );
       return;
     }
     setStep(5);
@@ -124,92 +153,301 @@ export default function DocumentsScreen() {
   const bothUploaded = Boolean(documents.idProofUri && documents.fssaiUri);
 
   function renderUploadSlot(
-    label: string,
+    title: string,
+    subtitle: string,
     docType: DocumentType,
     uri: string | null,
     fileType: 'image' | 'pdf' | null,
     uploadState: UploadState,
   ): React.ReactElement {
-    return (
-      <View className="mb-6 border border-mist rounded-xl p-4">
-        <Text className="text-sm font-semibold text-ink mb-3">{label}</Text>
+    const isUploaded = uri !== null;
 
-        {uri ? (
-          <View className="items-center mb-3">
+    return (
+      <View style={styles.slot}>
+        {/* Slot header */}
+        <View style={styles.slotHeader}>
+          <Text style={styles.slotTitle}>{title}</Text>
+          <Text style={styles.slotSubtitle}>{subtitle}</Text>
+        </View>
+
+        {/* Uploaded state — preview + filename + remove */}
+        {isUploaded ? (
+          <View style={styles.uploadedBlock}>
             {fileType === 'image' ? (
               <Image
                 source={{ uri }}
-                className="w-full h-40 rounded-lg"
+                style={styles.previewImage}
                 resizeMode="cover"
+                accessibilityLabel={`${title} preview`}
               />
             ) : (
-              <View className="w-full h-24 bg-mist rounded-lg items-center justify-center">
-                <Text className="text-3xl">📄</Text>
-                <Text className="text-sm text-ink-muted mt-1">PDF uploaded</Text>
+              <View style={styles.pdfPreview}>
+                {/* Simple PDF representation — no emoji, just type indicator */}
+                <Text style={styles.pdfTypeLabel}>PDF</Text>
               </View>
             )}
-            <Text className="text-xs text-herb font-medium mt-2">Uploaded successfully</Text>
+
+            {/* Filename + remove row */}
+            <View style={styles.filenameRow}>
+              <View style={styles.filenameDot} />
+              <Text style={styles.filenameText} numberOfLines={1}>
+                {uriToFilename(uri, fileType)}
+              </Text>
+              <Pressable
+                onPress={() => removeDocument(docType)}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.removeBtn,
+                  pressed && styles.removeBtnPressed,
+                ]}
+                accessibilityLabel={`Remove ${title}`}
+                accessibilityRole="button"
+              >
+                <Text style={styles.removeIcon}>×</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
+        {/* Uploading spinner */}
         {uploadState.uploading ? (
-          <View className="items-center py-4">
-            <ActivityIndicator color="#C2410C" />
-            <Text className="text-sm text-ink-muted mt-2">Uploading...</Text>
+          <View style={styles.uploadingRow}>
+            <ActivityIndicator
+              size="small"
+              color={theme.colors.ink.DEFAULT}
+            />
+            <Text style={styles.uploadingLabel}>Uploading…</Text>
           </View>
-        ) : (
-          <View className="flex-row gap-2">
-            <TouchableOpacity
-              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
-              onPress={() => handleCamera(docType)}
-            >
-              <Text className="text-sm text-ink-soft">Camera</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
-              onPress={() => handleGallery(docType)}
-            >
-              <Text className="text-sm text-ink-soft">Gallery</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 border border-mist-strong rounded-lg py-2.5 items-center"
-              onPress={() => handlePdf(docType)}
-            >
-              <Text className="text-sm text-ink-soft">PDF</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        ) : null}
 
+        {/* Upload action buttons — only shown when not yet uploaded and not uploading */}
+        {!isUploaded && !uploadState.uploading ? (
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={() => handleCamera(docType)}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.actionBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Take photo for ${title}`}
+            >
+              <Text style={styles.actionBtnLabel}>Camera</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handleGallery(docType)}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.actionBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Choose from gallery for ${title}`}
+            >
+              <Text style={styles.actionBtnLabel}>Gallery</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handlePdf(docType)}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.actionBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Upload PDF for ${title}`}
+            >
+              <Text style={styles.actionBtnLabel}>PDF</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Error */}
         {uploadState.error ? (
-          <Text className="text-paprika text-xs mt-2">{uploadState.error}</Text>
+          <Text style={styles.errorText}>{uploadState.error}</Text>
         ) : null}
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-bone">
-      <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-mist mb-6">
-          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(4 / 6) * 100}%` }} />
-        </View>
+    <OnboardingScaffold
+      step={4}
+      total={6}
+      title="Documents"
+      subtitle="We need these to verify your kitchen before you go live."
+      primaryLabel="Continue"
+      onPrimary={onNext}
+      primaryDisabled={!bothUploaded}
+    >
+      {renderUploadSlot(
+        'ID proof',
+        'Aadhaar, PAN, or Passport',
+        'id_proof',
+        documents.idProofUri,
+        documents.idProofType,
+        idUpload,
+      )}
 
-        <Text className="font-display text-2xl font-semibold text-ink mb-1">Documents</Text>
-        <Text className="text-sm text-ink-muted mb-6">Upload your identity and FSSAI documents</Text>
+      {renderUploadSlot(
+        'FSSAI license',
+        'Food safety registration certificate',
+        'fssai_license',
+        documents.fssaiUri,
+        documents.fssaiType,
+        fssaiUpload,
+      )}
 
-        {renderUploadSlot('ID Proof', 'id_proof', documents.idProofUri, documents.idProofType, idUpload)}
-        {renderUploadSlot('FSSAI License', 'fssai_license', documents.fssaiUri, documents.fssaiType, fssaiUpload)}
-
-        <TouchableOpacity
-          className={`rounded-xl py-4 items-center ${bothUploaded ? 'bg-herb' : 'bg-mist-strong'}`}
-          onPress={onNext}
-          disabled={!bothUploaded}
-        >
-          <Text className={`font-semibold text-base ${bothUploaded ? 'text-paper' : 'text-ink-muted'}`}>
-            Next
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      <View style={styles.bottomSpacer} />
+    </OnboardingScaffold>
   );
 }
+
+const styles = StyleSheet.create({
+  // Upload slot — bone background, mist border.
+  slot: {
+    backgroundColor: theme.colors.bone,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    padding: theme.spacing[4],
+    gap: theme.spacing[3],
+  },
+
+  slotHeader: {
+    gap: theme.spacing[0.5],
+  },
+
+  slotTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+
+  slotSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+  },
+
+  uploadedBlock: {
+    gap: theme.spacing[2],
+  },
+
+  previewImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+
+  pdfPreview: {
+    width: '100%',
+    height: 64,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.strong,
+  },
+
+  pdfTypeLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.soft,
+    letterSpacing: 1,
+  },
+
+  // Filename + remove × row below the preview.
+  filenameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
+
+  filenameDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.herb.DEFAULT,
+  },
+
+  filenameText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+  },
+
+  removeBtn: {
+    padding: theme.spacing[1],
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  removeBtnPressed: {
+    backgroundColor: theme.colors.mist.strong,
+  },
+
+  removeIcon: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: theme.colors.ink.soft,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+
+  uploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[3],
+  },
+
+  uploadingLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+  },
+
+  // Three equal action buttons — Camera / Gallery / PDF.
+  actionRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+  },
+
+  actionBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.sm,
+    paddingVertical: theme.spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: theme.touchTarget.vendor,
+    backgroundColor: theme.colors.paper,
+  },
+
+  actionBtnPressed: {
+    backgroundColor: theme.colors.bone,
+    borderColor: theme.colors.ink.DEFAULT,
+  },
+
+  actionBtnLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+
+  errorText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+
+  bottomSpacer: {
+    height: theme.spacing[2],
+  },
+});

@@ -1,4 +1,4 @@
-import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -10,56 +10,62 @@ import {
   Star,
   User,
 } from 'lucide-react-native';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
 
-interface NavItem {
+interface NavRow {
   label: string;
+  caption?: string;
   route: string;
-  icon: React.ReactNode;
+  Icon: typeof User;
+}
+
+const NAV_ROWS: NavRow[] = [
+  { label: 'Profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
+  { label: 'Earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
+  { label: 'Analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
+  { label: 'Reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
+  { label: 'Settings', caption: 'Notifications, account', route: '/settings', Icon: Settings },
+];
+
+function deriveDisplayName(
+  user: { name?: string; email?: string } | null | undefined,
+): string {
+  if (user?.name && user.name.trim().length > 0) return user.name.trim();
+  const email = user?.email ?? '';
+  if (email.includes('@')) {
+    const local = email.split('@')[0]?.split('+')[0] ?? '';
+    if (local.length > 0) {
+      return local
+        .split(/[._-]/)
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+    }
+  }
+  return 'Chef';
+}
+
+function deriveInitials(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'C';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return ((parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')).toUpperCase();
 }
 
 export default function MoreScreen() {
   const { logout, user } = useAuthStore();
-
+  const displayName = deriveDisplayName(
+    user as { name?: string; email?: string } | null,
+  );
+  const initials = deriveInitials(displayName);
   const email = user?.email ?? '';
-  const initials = email
-    .split('@')[0]
-    ?.slice(0, 2)
-    .toUpperCase() ?? '??';
-
-  const NAV_ITEMS: NavItem[] = [
-    {
-      label: 'Profile',
-      route: '/profile',
-      icon: <User size={20} color="#7a7a76" />,
-    },
-    {
-      label: 'Earnings',
-      route: '/earnings',
-      icon: <DollarSign size={20} color="#7a7a76" />,
-    },
-    {
-      label: 'Analytics',
-      route: '/analytics',
-      icon: <BarChart2 size={20} color="#7a7a76" />,
-    },
-    {
-      label: 'Reviews',
-      route: '/reviews',
-      icon: <Star size={20} color="#7a7a76" />,
-    },
-    {
-      label: 'Settings',
-      route: '/settings',
-      icon: <Settings size={20} color="#7a7a76" />,
-    },
-  ];
 
   function handleLogout() {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
+    Alert.alert('Log out?', 'You can sign back in any time.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
+        text: 'Log out',
         style: 'destructive',
         onPress: () => {
           logout();
@@ -70,56 +76,220 @@ export default function MoreScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-paper">
-      {/* User info header */}
-      <View className="bg-bone px-4 pt-4 pb-4 border-b border-mist">
-        <View className="flex-row items-center gap-3">
-          <View className="w-12 h-12 rounded-full bg-herb items-center justify-center">
-            <Text className="text-paper font-semibold text-base">{initials}</Text>
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Zone A — Command bar (matches dashboard/orders/menu) */}
+        <View style={styles.commandBar}>
+          <Text style={styles.commandTitle}>Account</Text>
+        </View>
+
+        {/* Identity block — single hairline-divided row, no card chrome */}
+        <View style={styles.identityRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarLabel}>{initials}</Text>
           </View>
-          <View>
-            <Text className="text-base font-semibold text-ink">My Account</Text>
-            <Text className="text-sm text-ink-muted" numberOfLines={1}>
-              {email}
+          <View style={styles.identityText}>
+            <Text style={styles.identityName} numberOfLines={1}>
+              {displayName}
             </Text>
+            {email ? (
+              <Text style={styles.identityEmail} numberOfLines={1}>
+                {email}
+              </Text>
+            ) : null}
           </View>
         </View>
-      </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="bg-bone mx-4 mt-4 rounded-2xl shadow-sm overflow-hidden">
-          {NAV_ITEMS.map((item, index) => (
-            <TouchableOpacity
-              key={item.route}
-              className={`flex-row items-center px-4 py-4 ${
-                index < NAV_ITEMS.length - 1 ? 'border-b border-mist' : ''
-              }`}
-              onPress={() => router.push(item.route as never)}
-              activeOpacity={0.7}
-            >
-              <View className="w-8 h-8 rounded-lg bg-mist items-center justify-center mr-3">
-                {item.icon}
-              </View>
-              <Text className="flex-1 text-base text-ink font-medium">{item.label}</Text>
-              <ChevronRight size={18} color="#7a7a76" />
-            </TouchableOpacity>
+        {/* Nav rows — borderless hairline rows, no card-in-card */}
+        <View style={styles.navGroup}>
+          {NAV_ROWS.map((row) => (
+            <NavRowItem key={row.route} row={row} />
           ))}
         </View>
 
-        {/* Logout */}
-        <View className="bg-bone mx-4 mt-4 rounded-2xl shadow-sm overflow-hidden mb-8">
-          <TouchableOpacity
-            className="flex-row items-center px-4 py-4"
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <View className="w-8 h-8 rounded-lg bg-paprika-tint items-center justify-center mr-3">
-              <LogOut size={20} color="#c95b3e" />
-            </View>
-            <Text className="flex-1 text-base text-paprika font-medium">Logout</Text>
-          </TouchableOpacity>
+        {/* Log out — same row chrome as the nav group above so it doesn't
+            read as an orphaned text link. Differentiated as an action (not
+            navigation) by destructive label tone, LogOut icon, no caption,
+            no chevron. Matches the Delete-account row pattern in Settings. */}
+        <View style={styles.logoutGroup}>
+          <Pressable onPress={handleLogout} accessibilityRole="button">
+            {({ pressed }) => (
+              // Inner-View pattern — keeps iOS Pressable flex layout intact.
+              <View
+                style={[
+                  styles.navRow,
+                  styles.logoutRow,
+                  pressed && { backgroundColor: theme.colors.bone },
+                ]}
+              >
+                <View style={styles.navIcon}>
+                  <LogOut
+                    size={20}
+                    color={theme.colors.destructive.DEFAULT}
+                    strokeWidth={1.75}
+                  />
+                </View>
+                <View style={styles.navText}>
+                  <Text style={styles.logoutLabel}>Log out</Text>
+                </View>
+              </View>
+            )}
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+interface NavRowItemProps {
+  row: NavRow;
+}
+
+function NavRowItem({ row }: NavRowItemProps) {
+  const { Icon, label, caption, route } = row;
+  return (
+    <Pressable
+      onPress={() => router.push(route as never)}
+      accessibilityRole="button"
+    >
+      {({ pressed }) => (
+        // Visual layer on an inner View. iOS Pressable with a
+        // function-based `style` prop strips flexbox under some
+        // conditions — same trick used by the dashboard status button.
+        <View
+          style={[
+            styles.navRow,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={styles.navIcon}>
+            <Icon size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
+          </View>
+          <View style={styles.navText}>
+            <Text style={styles.navLabel}>{label}</Text>
+            {caption ? (
+              <Text style={styles.navCaption}>{caption}</Text>
+            ) : null}
+          </View>
+          <ChevronRight
+            size={18}
+            color={theme.colors.ink.muted}
+            strokeWidth={1.75}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.paper },
+  scrollContent: {
+    paddingBottom: theme.spacing[10],
+  },
+
+  // Zone A — Command bar
+  commandBar: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+  },
+  commandTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.3,
+    color: theme.colors.ink.DEFAULT,
+  },
+
+  // Identity row
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    marginBottom: theme.spacing[6],
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.ink.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
+    letterSpacing: 0.5,
+  },
+  identityText: { flex: 1 },
+  identityName: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  identityEmail: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+  },
+
+  // Nav group + rows
+  navGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+    minHeight: 60,
+  },
+  navIcon: {
+    width: 28,
+    alignItems: 'center',
+  },
+  navText: { flex: 1 },
+  navLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  navCaption: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+  },
+
+  // Logout — separate group below navGroup with its own hairline top so
+  // the section reads as a distinct action surface, not a tail of the nav.
+  logoutGroup: {
+    marginTop: theme.spacing[6],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  logoutRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+  logoutLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+});

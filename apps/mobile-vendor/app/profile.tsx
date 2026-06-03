@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,26 +17,76 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, Plus, User, ChevronLeft } from 'lucide-react-native';
+import { Camera, ChevronLeft, Plus } from 'lucide-react-native';
 import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
+import { theme } from '@homechef/mobile-shared/theme';
+import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+
+// ---- Data types -----------------------------------------------------------
+// Matches the backend GET /chef/profile response.
 
 interface ChefProfile {
   id: string;
-  displayName: string;
-  bio: string;
-  phone: string;
-  kitchenName: string;
-  cuisineTypes: string[];
-  profileImageUrl?: string;
-  kitchenPhotos: { id: string; url: string }[];
+  businessName: string;
+  description: string;
+  profileImage?: string;
+  bannerImage?: string;
+  cuisines: string[];
+  specialties: string[];
+  prepTime: string;
+  minimumOrder: number;
+  serviceRadius: number;
+  acceptingOrders: boolean;
+  kitchenPhotos: string[];
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  verified: boolean;
 }
 
-interface UpdateProfilePayload {
-  displayName: string;
-  bio: string;
-  phone: string;
+interface UpdateChefProfilePayload {
+  businessName?: string;
+  description?: string;
+  cuisines?: string[];
+  prepTime?: string;
+  minimumOrder?: number;
+  serviceRadius?: number;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
 }
+
+// Preset lists — chip selectors instead of free-text input wherever the
+// space is small enough that a chef shouldn't have to type. Keeps profile
+// fast on a phone, eliminates spelling drift across kitchens.
+const CUISINE_OPTIONS = [
+  'North Indian',
+  'South Indian',
+  'Chinese',
+  'Continental',
+  'Bakery',
+  'Snacks',
+  'Beverages',
+  'Other',
+] as const;
+
+const PREP_TIME_OPTIONS = ['15 min', '20 min', '30 min', '45 min', '60 min'] as const;
+
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
+  'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim',
+  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+] as const;
 
 function useChefProfile() {
   return useQuery<ChefProfile>({
@@ -46,7 +99,8 @@ function useChefProfile() {
 function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: UpdateProfilePayload) => api.put('/chef/profile', payload),
+    mutationFn: (payload: UpdateChefProfilePayload) =>
+      api.put('/chef/profile', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'profile'] });
     },
@@ -85,24 +139,318 @@ function useUploadKitchenPhoto() {
   });
 }
 
+// ---- Helpers ------------------------------------------------------------
+
+function deriveInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'C';
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (
+    (parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')
+  ).toUpperCase();
+}
+
+function parseNumber(input: string): number {
+  const n = Number(input.replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+interface ChipProps {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}
+
+// Outlined-pill chip — ink border + ink fill when selected, mist hairline
+// border + ink-soft label when unselected. Matches the onboarding
+// kitchen-details cuisine row.
+function Chip({ label, selected, onPress }: ChipProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            chipStyles.root,
+            selected && chipStyles.rootSelected,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text
+            style={[
+              chipStyles.label,
+              selected && chipStyles.labelSelected,
+            ]}
+          >
+            {label}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  root: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    backgroundColor: theme.colors.paper,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  rootSelected: {
+    borderColor: theme.colors.ink.DEFAULT,
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  label: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    letterSpacing: 0.1,
+  },
+  labelSelected: {
+    color: theme.colors.paper,
+  },
+});
+
+// ---- Sub-components -----------------------------------------------------
+
+interface LabeledRowProps {
+  label: string;
+  value: string;
+  hasBorderBottom?: boolean;
+}
+
+function LabeledRow({ label, value, hasBorderBottom = true }: LabeledRowProps) {
+  return (
+    <View
+      style={[
+        styles.dataRow,
+        hasBorderBottom && styles.rowBorderBottom,
+      ]}
+    >
+      <Text style={styles.dataLabel}>{label}</Text>
+      <Text style={styles.dataValue} numberOfLines={3}>
+        {value || '—'}
+      </Text>
+    </View>
+  );
+}
+
+interface EditableFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'phone-pad' | 'decimal-pad';
+  placeholder?: string;
+  hasBorderBottom?: boolean;
+}
+
+function EditableField({
+  label,
+  value,
+  onChangeText,
+  multiline = false,
+  keyboardType = 'default',
+  placeholder,
+  hasBorderBottom = true,
+}: EditableFieldProps) {
+  return (
+    <View style={[styles.editRow, hasBorderBottom && styles.rowBorderBottom]}>
+      <Text style={styles.editLabel}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        multiline={multiline}
+        numberOfLines={multiline ? 4 : 1}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.ink.muted}
+        style={[styles.editInput, multiline && styles.editInputMultiline]}
+      />
+    </View>
+  );
+}
+
+// ---- Screen -------------------------------------------------------------
+
 export default function ProfileScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useChefProfile();
   const updateMutation = useUpdateProfile();
   const uploadProfileImageMutation = useUploadProfileImage();
   const uploadKitchenPhotoMutation = useUploadKitchenPhoto();
+  const { show: showToast } = useToast();
 
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
-  const [phone, setPhone] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
+  // Once a save succeeds, flip this flag so handleBack doesn't re-prompt
+  // before the query invalidation refreshes `data`. Cleared in the data
+  // useEffect when fresh server values arrive.
+  const savedRef = useRef(false);
 
+  // Profile is always-editable inline (no separate Edit mode) — closer to
+  // iOS Settings + Notes than to a CMS dashboard. The save button stays
+  // visible at the bottom and back prompts if dirty.
+  const [businessName, setBusinessName] = useState('');
+  const [description, setDescription] = useState('');
+  const [cuisines, setCuisines] = useState<string[]>([]);
+  const [prepTime, setPrepTime] = useState('');
+  const [minimumOrder, setMinimumOrder] = useState('');
+  const [serviceRadius, setServiceRadius] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+
+  // Dirty against last-known server values — drives the disabled state of
+  // the always-visible save button and the back-discard prompt.
+  const isDirty =
+    !savedRef.current &&
+    data !== undefined &&
+    (businessName.trim() !== (data.businessName ?? '') ||
+      description.trim() !== (data.description ?? '') ||
+      JSON.stringify([...cuisines].sort()) !==
+        JSON.stringify([...(data.cuisines ?? [])].sort()) ||
+      prepTime.trim() !== (data.prepTime ?? '') ||
+      parseNumber(minimumOrder) !== (data.minimumOrder ?? 0) ||
+      parseNumber(serviceRadius) !== (data.serviceRadius ?? 0) ||
+      addressLine1.trim() !== (data.addressLine1 ?? '') ||
+      addressLine2.trim() !== (data.addressLine2 ?? '') ||
+      city.trim() !== (data.city ?? '') ||
+      stateName.trim() !== (data.state ?? '') ||
+      postalCode.trim() !== (data.postalCode ?? ''));
+
+  // Sync local form state when data loads (including after a successful save
+  // which invalidates the query and re-fetches). Clear savedRef so that
+  // subsequent edits are tracked correctly against the fresh server values.
   useEffect(() => {
     if (data) {
-      setDisplayName(data.displayName);
-      setBio(data.bio);
-      setPhone(data.phone);
+      setBusinessName(data.businessName ?? '');
+      setDescription(data.description ?? '');
+      setCuisines(data.cuisines ?? []);
+      setPrepTime(data.prepTime ?? '');
+      setMinimumOrder(
+        data.minimumOrder ? String(data.minimumOrder) : '',
+      );
+      setServiceRadius(
+        data.serviceRadius ? String(data.serviceRadius) : '',
+      );
+      setAddressLine1(data.addressLine1 ?? '');
+      setAddressLine2(data.addressLine2 ?? '');
+      setCity(data.city ?? '');
+      setStateName(data.state ?? '');
+      setPostalCode(data.postalCode ?? '');
+      savedRef.current = false;
     }
   }, [data]);
+
+  function toggleCuisine(name: string) {
+    setCuisines((prev) =>
+      prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name],
+    );
+  }
+
+  function handleSave() {
+    if (!businessName.trim()) {
+      Alert.alert(
+        'Business name required',
+        'Enter the name customers will see on the storefront.',
+      );
+      return;
+    }
+    const payload: UpdateChefProfilePayload = {
+      businessName: businessName.trim(),
+      description: description.trim(),
+      cuisines,
+      prepTime: prepTime.trim(),
+      minimumOrder: parseNumber(minimumOrder),
+      serviceRadius: parseNumber(serviceRadius),
+      addressLine1: addressLine1.trim(),
+      addressLine2: addressLine2.trim(),
+      city: city.trim(),
+      state: stateName.trim(),
+      postalCode: postalCode.trim(),
+    };
+    updateMutation.mutate(payload, {
+      onSuccess: () => {
+        // Mark clean immediately so isDirty evaluates false. The query
+        // invalidation will re-fetch and reset savedRef via the data
+        // useEffect, but that happens asynchronously — the toast and any
+        // subsequent back press must not see stale dirty state.
+        savedRef.current = true;
+        showToast({ message: 'Profile saved', tone: 'success' });
+      },
+      onError: (err) =>
+        Alert.alert('Save failed', getServerErrorMessage(err, 'Please try again.')),
+    });
+  }
+
+  // Back press: if there are unsaved edits, give the chef a choice. The
+  // "Save" option saves AND navigates back — no modal stacking. Discard
+  // rolls form state to the last server values. Stay-on-page = cancel.
+  function handleBack() {
+    if (!isDirty) {
+      router.back();
+      return;
+    }
+    Alert.alert(
+      'Save changes?',
+      'You have unsaved profile edits. Save them before going back?',
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            router.back();
+          },
+        },
+        {
+          text: 'Save',
+          onPress: () => {
+            if (!businessName.trim()) {
+              Alert.alert(
+                'Business name required',
+                'Enter the name customers will see on the storefront.',
+              );
+              return;
+            }
+            const payload: UpdateChefProfilePayload = {
+              businessName: businessName.trim(),
+              description: description.trim(),
+              cuisines,
+              prepTime: prepTime.trim(),
+              minimumOrder: parseNumber(minimumOrder),
+              serviceRadius: parseNumber(serviceRadius),
+              addressLine1: addressLine1.trim(),
+              addressLine2: addressLine2.trim(),
+              city: city.trim(),
+              state: stateName.trim(),
+              postalCode: postalCode.trim(),
+            };
+            updateMutation.mutate(payload, {
+              onSuccess: () => {
+                savedRef.current = true;
+                showToast({ message: 'Profile saved', tone: 'success' });
+                router.back();
+              },
+              onError: (err) =>
+                Alert.alert('Save failed', getServerErrorMessage(err, 'Please try again.')),
+            });
+          },
+        },
+      ],
+    );
+  }
 
   async function handlePickProfileImage() {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -114,7 +462,7 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       uploadProfileImageMutation.mutate(result.assets[0].uri, {
         onError: (err) =>
-          Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload profile photo.')),
+          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
       });
     }
   }
@@ -129,237 +477,586 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       uploadKitchenPhotoMutation.mutate(result.assets[0].uri, {
         onError: (err) =>
-          Alert.alert('Error', getServerErrorMessage(err, 'Failed to upload kitchen photo.')),
+          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
       });
     }
   }
 
-  function handleSave() {
-    if (!displayName.trim()) {
-      Alert.alert('Validation', 'Display name is required.');
-      return;
-    }
-    updateMutation.mutate(
-      { displayName: displayName.trim(), bio: bio.trim(), phone: phone.trim() },
-      {
-        onSuccess: () => {
-          setIsEditing(false);
-          Alert.alert('Success', 'Profile updated successfully.');
-        },
-        onError: (err) => {
-          Alert.alert('Error', getServerErrorMessage(err, 'Failed to update profile.'));
-        },
-      },
-    );
-  }
+  // ---- Loading & error states -------------------------------------------
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-paper items-center justify-center">
-        <ActivityIndicator size="large" color="#C2410C" />
+      <SafeAreaView style={styles.centeredFill} edges={['top', 'left', 'right']}>
+        <ActivityIndicator size="large" color={theme.colors.ink.DEFAULT} />
       </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-paper items-center justify-center px-6">
-        <Text className="text-ink-muted text-base mb-4">Failed to load profile</Text>
-        <TouchableOpacity
+      <SafeAreaView style={styles.centeredFill} edges={['top', 'left', 'right']}>
+        <Text style={styles.errorBody}>Failed to load profile</Text>
+        <Pressable
           onPress={() => refetch()}
-          className="bg-herb px-6 py-3 rounded-xl"
+          style={({ pressed }) => [styles.errorBtn, pressed && { opacity: 0.85 }]}
         >
-          <Text className="text-paper font-semibold">Retry</Text>
-        </TouchableOpacity>
+          <Text style={styles.errorBtnLabel}>Retry</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
 
+  const initials = deriveInitials(data?.businessName ?? 'Chef');
+
+  // ---- Render ------------------------------------------------------------
+
   return (
-    <SafeAreaView className="flex-1 bg-paper">
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 bg-bone border-b border-mist">
-        <TouchableOpacity accessibilityLabel="Go back" accessibilityRole="button" onPress={() => router.back()} activeOpacity={0.7} className="mr-3">
-          <ChevronLeft size={24} color="#4a4a47" />
-        </TouchableOpacity>
-        <Text className="text-lg font-semibold text-ink">Profile</Text>
-      </View>
-
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#C2410C" />
-        }
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
-        {/* Profile photo */}
-        <View className="items-center mb-6">
-          <TouchableOpacity
-            onPress={handlePickProfileImage}
-            disabled={uploadProfileImageMutation.isPending}
-            activeOpacity={0.8}
+        {/* Command bar: back left, title center, no right action (the
+            sticky Save footer below replaces the Edit/Cancel toggle).
+            Back uses handleBack so dirty edits prompt before navigation. */}
+        <View style={styles.commandBar}>
+          <Pressable
+            onPress={handleBack}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
-            <View className="w-24 h-24 rounded-full overflow-hidden bg-herb-tint items-center justify-center border-2 border-herb-tint">
-              {data?.profileImageUrl ? (
+            {({ pressed }) => (
+              <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
+                <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+              </View>
+            )}
+          </Pressable>
+          <Text style={styles.commandTitle}>Profile</Text>
+          <View style={styles.commandSpacer} />
+        </View>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              tintColor={theme.colors.ink.DEFAULT}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Identity block */}
+          <View style={styles.identityBlock}>
+            <Pressable
+              onPress={handlePickProfileImage}
+              disabled={uploadProfileImageMutation.isPending}
+              style={({ pressed }) => [
+                styles.avatarWrapper,
+                pressed && { opacity: 0.85 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+            >
+              {data?.profileImage ? (
                 <Image
-                  source={{ uri: data.profileImageUrl }}
-                  style={{ width: 96, height: 96 }}
+                  source={{ uri: data.profileImage }}
+                  style={styles.avatarImage}
                   contentFit="cover"
                 />
               ) : (
-                <User size={40} color="#9A3412" />
-              )}
-            </View>
-            <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-herb items-center justify-center border-2 border-bone">
-              {uploadProfileImageMutation.isPending ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Camera size={14} color="white" />
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Basic info */}
-        <View className="bg-bone rounded-2xl shadow-sm p-4 mb-4">
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-base font-semibold text-ink-soft">Personal Info</Text>
-            {!isEditing && (
-              <TouchableOpacity
-                onPress={() => setIsEditing(true)}
-                activeOpacity={0.7}
-              >
-                <Text className="text-sm text-herb font-medium">Edit</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View className="mb-3">
-            <Text className="text-xs text-ink-muted mb-1">Display Name</Text>
-            {isEditing ? (
-              <TextInput
-                value={displayName}
-                onChangeText={setDisplayName}
-                className="border border-mist rounded-xl px-4 py-3 text-base text-ink"
-                placeholderTextColor="#7a7a76"
-              />
-            ) : (
-              <Text className="text-base text-ink">{data?.displayName ?? ''}</Text>
-            )}
-          </View>
-
-          <View className="mb-3">
-            <Text className="text-xs text-ink-muted mb-1">Bio</Text>
-            {isEditing ? (
-              <TextInput
-                value={bio}
-                onChangeText={setBio}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                className="border border-mist rounded-xl px-4 py-3 text-base text-ink min-h-[80px]"
-                placeholderTextColor="#7a7a76"
-              />
-            ) : (
-              <Text className="text-base text-ink">{data?.bio ?? ''}</Text>
-            )}
-          </View>
-
-          <View>
-            <Text className="text-xs text-ink-muted mb-1">Phone</Text>
-            {isEditing ? (
-              <TextInput
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                className="border border-mist rounded-xl px-4 py-3 text-base text-ink"
-                placeholderTextColor="#7a7a76"
-              />
-            ) : (
-              <Text className="text-base text-ink">{data?.phone ?? ''}</Text>
-            )}
-          </View>
-
-          {isEditing && (
-            <View className="flex-row gap-3 mt-4">
-              <TouchableOpacity
-                onPress={() => setIsEditing(false)}
-                className="flex-1 py-3 rounded-xl items-center border border-mist-strong"
-                activeOpacity={0.8}
-              >
-                <Text className="text-ink-soft font-semibold">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSave}
-                disabled={updateMutation.isPending}
-                className={`flex-1 py-3 rounded-xl items-center ${
-                  updateMutation.isPending ? 'bg-herb-soft' : 'bg-herb'
-                }`}
-                activeOpacity={0.8}
-              >
-                {updateMutation.isPending ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-paper font-semibold">Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Kitchen info (read-only) */}
-        <View className="bg-bone rounded-2xl shadow-sm p-4 mb-4">
-          <Text className="text-base font-semibold text-ink-soft mb-4">Kitchen Info</Text>
-
-          <View className="mb-3">
-            <Text className="text-xs text-ink-muted mb-1">Kitchen Name</Text>
-            <Text className="text-base text-ink">{data?.kitchenName ?? '—'}</Text>
-          </View>
-
-          <View>
-            <Text className="text-xs text-ink-muted mb-1">Cuisine Types</Text>
-            <View className="flex-row flex-wrap gap-2 mt-1">
-              {data?.cuisineTypes?.map((cuisine) => (
-                <View key={cuisine} className="bg-herb-tint px-3 py-1 rounded-full">
-                  <Text className="text-xs text-herb">{cuisine}</Text>
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitials}>{initials}</Text>
                 </View>
-              ))}
+              )}
+              <View style={styles.avatarBadge}>
+                {uploadProfileImageMutation.isPending ? (
+                  <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
+                ) : (
+                  <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+                )}
+              </View>
+            </Pressable>
+
+            <View style={styles.identityText}>
+              <Text style={styles.identityName} numberOfLines={1}>
+                {data?.businessName || 'Your kitchen'}
+              </Text>
+              <Text style={styles.identityCaption} numberOfLines={1}>
+                {data?.verified ? 'Verified chef' : 'Pending verification'}
+              </Text>
             </View>
           </View>
-        </View>
 
-        {/* Kitchen photos */}
-        <View className="bg-bone rounded-2xl shadow-sm p-4">
-          <Text className="text-base font-semibold text-ink-soft mb-3">Kitchen Photos</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row gap-3">
-              {data?.kitchenPhotos?.slice(0, 5).map((photo) => (
-                <Image
-                  key={photo.id}
-                  source={{ uri: photo.url }}
-                  style={{ width: 90, height: 90, borderRadius: 12 }}
-                  contentFit="cover"
-                />
-              ))}
-              {(data?.kitchenPhotos?.length ?? 0) < 5 && (
-                <TouchableOpacity
-                  onPress={handleAddKitchenPhoto}
-                  disabled={uploadKitchenPhotoMutation.isPending}
-                  className="w-[90px] h-[90px] bg-mist border-2 border-dashed border-mist-strong rounded-xl items-center justify-center"
-                  activeOpacity={0.7}
-                >
-                  {uploadKitchenPhotoMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#C2410C" />
-                  ) : (
-                    <Plus size={24} color="#7a7a76" />
-                  )}
-                </TouchableOpacity>
-              )}
+          {/* BUSINESS section — name + description, what customers see */}
+          <Text style={styles.sectionLabel}>BUSINESS</Text>
+          <View style={styles.hairlineGroup}>
+            <EditableField
+              label="Business name"
+              value={businessName}
+              onChangeText={setBusinessName}
+              placeholder="The name customers see"
+            />
+            <EditableField
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              placeholder="One or two sentences about your kitchen"
+              hasBorderBottom={false}
+            />
+          </View>
+
+          {/* KITCHEN section — cuisines + prep time as preset pills,
+              minimum order + service radius as small numeric inputs. Less
+              typing, less spelling drift. */}
+          <Text style={styles.sectionLabel}>KITCHEN</Text>
+          <View style={styles.hairlineGroup}>
+            <View style={styles.chipFieldRow}>
+              <Text style={styles.chipFieldLabel}>Cuisines</Text>
+              <View style={styles.chipWrap}>
+                {CUISINE_OPTIONS.map((cuisine) => (
+                  <Chip
+                    key={cuisine}
+                    label={cuisine}
+                    selected={cuisines.includes(cuisine)}
+                    onPress={() => toggleCuisine(cuisine)}
+                  />
+                ))}
+              </View>
             </View>
+            <View style={styles.chipFieldRow}>
+              <Text style={styles.chipFieldLabel}>Prep time</Text>
+              <View style={styles.chipWrap}>
+                {PREP_TIME_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt}
+                    label={opt}
+                    selected={prepTime === opt}
+                    onPress={() => setPrepTime(opt)}
+                  />
+                ))}
+              </View>
+            </View>
+            <EditableField
+              label="Minimum order (₹)"
+              value={minimumOrder}
+              onChangeText={setMinimumOrder}
+              keyboardType="decimal-pad"
+              placeholder="0"
+            />
+            <EditableField
+              label="Service radius (km)"
+              value={serviceRadius}
+              onChangeText={setServiceRadius}
+              keyboardType="decimal-pad"
+              placeholder="10"
+              hasBorderBottom={false}
+            />
+          </View>
+
+          {/* ADDRESS section — editable post-onboarding now that the
+              backend's UpdateChefProfileRequest accepts the address
+              pointer fields. State is a horizontal scrollable chip strip
+              to avoid free-text spelling drift. */}
+          <Text style={styles.sectionLabel}>ADDRESS</Text>
+          <View style={styles.hairlineGroup}>
+            <EditableField
+              label="Address line 1"
+              value={addressLine1}
+              onChangeText={setAddressLine1}
+              placeholder="Street, building, area"
+            />
+            <EditableField
+              label="Address line 2 (optional)"
+              value={addressLine2}
+              onChangeText={setAddressLine2}
+              placeholder="Landmark, floor, apartment"
+            />
+            <EditableField
+              label="City"
+              value={city}
+              onChangeText={setCity}
+              placeholder="e.g. Bengaluru"
+            />
+            <View style={styles.chipFieldRow}>
+              <Text style={styles.chipFieldLabel}>State</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipStateRow}
+              >
+                {INDIAN_STATES.map((s) => (
+                  <Chip
+                    key={s}
+                    label={s}
+                    selected={stateName === s}
+                    onPress={() => setStateName(s)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+            <EditableField
+              label="Postal code"
+              value={postalCode}
+              onChangeText={setPostalCode}
+              keyboardType="decimal-pad"
+              placeholder="6-digit PIN"
+              hasBorderBottom={false}
+            />
+          </View>
+
+          {/* KITCHEN PHOTOS */}
+          <Text style={styles.sectionLabel}>KITCHEN PHOTOS</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoStrip}
+          >
+            {(data?.kitchenPhotos ?? []).slice(0, 5).map((url, idx) => (
+              <Image
+                key={`kp-${idx}-${url}`}
+                source={{ uri: url }}
+                style={styles.photoThumb}
+                contentFit="cover"
+              />
+            ))}
+            {(data?.kitchenPhotos?.length ?? 0) < 5 && (
+              <Pressable
+                onPress={handleAddKitchenPhoto}
+                disabled={uploadKitchenPhotoMutation.isPending}
+                style={({ pressed }) => [
+                  styles.photoAddSlot,
+                  pressed && { opacity: 0.7 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Add kitchen photo"
+              >
+                {uploadKitchenPhotoMutation.isPending ? (
+                  <ActivityIndicator size="small" color={theme.colors.ink.soft} />
+                ) : (
+                  <Plus size={22} color={theme.colors.ink.muted} strokeWidth={1.75} />
+                )}
+              </Pressable>
+            )}
           </ScrollView>
+        </ScrollView>
+
+        {/* Always-visible save footer. Disabled state when nothing
+            changed yet — the chef can see the button is there waiting,
+            no hunting for an Edit toggle. */}
+        <View style={styles.stickyFooter}>
+          <SafeAreaView edges={['bottom']} style={styles.stickyFooterInner}>
+            <Pressable
+              onPress={handleSave}
+              disabled={updateMutation.isPending || !isDirty}
+              style={({ pressed }) => [
+                styles.saveBtn,
+                !isDirty && styles.saveBtnDisabled,
+                (pressed || updateMutation.isPending) && { opacity: 0.85 },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !isDirty }}
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator color={theme.colors.paper} />
+              ) : (
+                <Text
+                  style={[
+                    styles.saveBtnLabel,
+                    !isDirty && styles.saveBtnLabelDisabled,
+                  ]}
+                >
+                  {isDirty ? 'Save changes' : 'No changes to save'}
+                </Text>
+              )}
+            </Pressable>
+          </SafeAreaView>
         </View>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// ---- Styles -------------------------------------------------------------
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.paper },
+  centeredFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[6],
+    backgroundColor: theme.colors.paper,
+  },
+
+  // Command bar
+  commandBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+  },
+  backBtn: {
+    minWidth: 48,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  commandTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: 'Geist-Bold',
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.3,
+    color: theme.colors.ink.DEFAULT,
+  },
+  commandSpacer: { width: 48 },
+
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingBottom: 120,
+  },
+
+  // Identity block
+  identityBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[5],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    marginBottom: theme.spacing[6],
+  },
+  avatarWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.radius.full,
+    overflow: 'visible',
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.radius.full,
+  },
+  avatarFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.ink.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 20,
+    color: theme.colors.paper,
+    letterSpacing: 0.5,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.colors.bone,
+    borderWidth: 1.5,
+    borderColor: theme.colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identityText: { flex: 1 },
+  identityName: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  identityCaption: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    paddingHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+  },
+
+  // Hairline group
+  hairlineGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+    marginBottom: theme.spacing[6],
+  },
+  rowBorderBottom: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+
+  // Read-only labeled row
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+  },
+  dataLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    width: 124,
+    paddingTop: 1,
+  },
+  dataValue: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    lineHeight: 20,
+  },
+
+  // Editable field
+  editRow: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+  },
+  editLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 0.3,
+    marginBottom: theme.spacing[1],
+  },
+  editInput: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    minHeight: 44,
+    paddingVertical: theme.spacing[2],
+  },
+  editInputMultiline: {
+    minHeight: 88,
+    lineHeight: 22,
+  },
+
+  // Kitchen photo strip
+  photoStrip: {
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[4],
+    gap: theme.spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  photoThumb: {
+    width: 90,
+    height: 90,
+    borderRadius: theme.radius.DEFAULT,
+  },
+  photoAddSlot: {
+    width: 90,
+    height: 90,
+    borderRadius: theme.radius.DEFAULT,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.mist.strong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.paper,
+  },
+
+  // Sticky Save footer
+  stickyFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.paper,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  stickyFooterInner: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+  },
+  saveBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing[4],
+    alignItems: 'center',
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  saveBtnDisabled: {
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+  saveBtnLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.paper,
+    letterSpacing: 0.2,
+  },
+  saveBtnLabelDisabled: {
+    color: theme.colors.ink.muted,
+  },
+
+  // Chip field — label above a wrapping flex row of Chip pills
+  chipFieldRow: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+  },
+  chipFieldLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    letterSpacing: 0.3,
+    marginBottom: theme.spacing[2],
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing[2],
+  },
+  chipStateRow: {
+    gap: theme.spacing[2],
+    paddingRight: theme.spacing[4],
+  },
+
+  // Error state
+  errorBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[4],
+  },
+  errorBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[6],
+    paddingVertical: theme.spacing[3],
+  },
+  errorBtnLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.paper,
+  },
+});

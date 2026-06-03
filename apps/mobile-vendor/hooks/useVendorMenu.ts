@@ -14,9 +14,23 @@ export interface MenuItem {
   price: number;
   categoryId: string | null;
   isAvailable: boolean;
+  // Backend has no `isVeg` field — it stores `dietaryTags: string[]`.
+  // We derive `isVeg` from the array on the way in (see `useVendorMenu`
+  // below) and write back as a tag on mutations. Keeping the boolean on
+  // the public type so UI code stays simple.
   isVeg: boolean;
+  dietaryTags: string[];
   images: MenuItemImage[];
   preparationTime: number;
+}
+
+// Treat any of these tag strings as "vegetarian". Lowercased + trimmed
+// match — defensive against backend casing inconsistencies.
+const VEG_TAG_VALUES = new Set(['veg', 'vegetarian', 'pure-veg', 'pure veg']);
+
+function deriveIsVeg(tags: string[] | null | undefined): boolean {
+  if (!tags || tags.length === 0) return false;
+  return tags.some((t) => VEG_TAG_VALUES.has(t.trim().toLowerCase()));
 }
 
 export interface Category {
@@ -34,8 +48,16 @@ export interface CreateMenuItemPayload {
   description: string;
   price: number;
   categoryId: string;
+  // Frontend convenience flag. The mutation translates this into a
+  // `dietaryTags: ['vegetarian']` array before hitting the backend.
   isVeg: boolean;
   preparationTime: number;
+}
+
+// Translate the frontend `isVeg` boolean to the backend's tag array.
+// Returns the canonical lowercase tag string.
+function tagsForIsVeg(isVeg: boolean): string[] {
+  return isVeg ? ['vegetarian'] : ['non-vegetarian'];
 }
 
 export interface UpdateMenuItemPayload extends Partial<CreateMenuItemPayload> {
@@ -44,10 +66,36 @@ export interface UpdateMenuItemPayload extends Partial<CreateMenuItemPayload> {
 
 const MENU_KEY = ['chef', 'menu'] as const;
 
+// Normalize an item from the API: backend returns `dietaryTags` + `prepTime`,
+// frontend consumes `dietaryTags` + derived `isVeg` + `preparationTime`.
+// The prep-time field-name mismatch was silently swallowing every form
+// edit — backend ignored `preparationTime`, sent back `prepTime` which the
+// frontend then ignored. Map both directions here.
+function normalizeItem(
+  item: MenuItem & {
+    dietaryTags?: string[] | null;
+    prepTime?: number;
+    preparationTime?: number;
+  },
+): MenuItem {
+  const tags = item.dietaryTags ?? [];
+  const prep = item.preparationTime ?? item.prepTime ?? 15;
+  return {
+    ...item,
+    dietaryTags: tags,
+    isVeg: deriveIsVeg(tags),
+    preparationTime: prep,
+  };
+}
+
 export function useVendorMenu() {
   return useQuery<MenuResponse>({
     queryKey: MENU_KEY,
-    queryFn: () => api.get<MenuResponse>('/chef/menu').then((r) => r.data),
+    queryFn: () =>
+      api.get<MenuResponse>('/chef/menu').then((r) => ({
+        ...r.data,
+        items: (r.data.items ?? []).map(normalizeItem),
+      })),
     staleTime: 30_000,
   });
 }
@@ -66,8 +114,17 @@ export function useCreateCategory() {
 export function useCreateMenuItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateMenuItemPayload) =>
-      api.post<{ item: MenuItem }>('/chef/menu/items', payload).then((r) => r.data),
+    mutationFn: (payload: CreateMenuItemPayload) => {
+      const { isVeg, preparationTime, ...rest } = payload;
+      const body = {
+        ...rest,
+        dietaryTags: tagsForIsVeg(isVeg),
+        prepTime: preparationTime,
+      };
+      return api
+        .post<{ item: MenuItem }>('/chef/menu/items', body)
+        .then((r) => r.data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MENU_KEY });
     },
@@ -77,8 +134,29 @@ export function useCreateMenuItem() {
 export function useUpdateMenuItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ itemId, payload }: { itemId: string; payload: UpdateMenuItemPayload }) =>
-      api.put<{ item: MenuItem }>(`/chef/menu/items/${itemId}`, payload).then((r) => r.data),
+    mutationFn: ({
+      itemId,
+      payload,
+    }: {
+      itemId: string;
+      payload: UpdateMenuItemPayload;
+    }) => {
+      // Translate the frontend convenience fields to the backend shape:
+      //  - `isVeg` → `dietaryTags`
+      //  - `preparationTime` → `prepTime` (backend never read the former,
+      //    so prep time changes were silently dropped before this fix).
+      const { isVeg, preparationTime, ...rest } = payload;
+      const body: Record<string, unknown> = { ...rest };
+      if (typeof isVeg === 'boolean') {
+        body.dietaryTags = tagsForIsVeg(isVeg);
+      }
+      if (typeof preparationTime === 'number') {
+        body.prepTime = preparationTime;
+      }
+      return api
+        .put<{ item: MenuItem }>(`/chef/menu/items/${itemId}`, body)
+        .then((r) => r.data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MENU_KEY });
     },

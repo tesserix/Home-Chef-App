@@ -1,111 +1,190 @@
-# Next session — Home Chef mobile redesign continuation
+# Next session — Home Chef vendor app continuation
 
-## Where we left off (2026-06-01)
+## Where we are (2026-06-02, end of build #10)
 
-**Brand direction locked:** Uber-like utility UI for vendor + driver; Airbnb-style cream/coral for customer when we get there. See `~/.claude/projects/-Users-Mahesh-Sangawar-personal-tesserix-new-Home-Chef-App/memory/feedback_no_editorial_style.md` for the full rationale.
+The **vendor app** has been redesigned end-to-end against the Uber-like brand
+direction (white + ink + persimmon accent only). The customer + delivery apps
+still use old tokens and remain untouched. This doc picks up the vendor app
+for the next sprint.
 
-**Tokens (Uber-faithful):**
-- `paper: #FFFFFF` · `bone: #F5F5F4` · `mist: #E5E5E5 / #D6D6D6`
-- `ink: #0E0E0C / #525252 / #888888`
-- `herb (persimmon): #C2410C / #9A3412 / #FFEDD5` — **accent only**, NEVER a primary CTA
-- Primary `<Button>` variant fills with **ink** (not persimmon)
-- Links render as **ink underlined SemiBold** (not persimmon)
-- Geist-Bold display + Inter 400/500/600 body
+### Brand direction (locked)
+- Source of truth: `~/.claude/projects/-Users-Mahesh-Sangawar-personal-tesserix-new-Home-Chef-App/memory/feedback_no_editorial_style.md`
+- Tokens: `packages/mobile-shared/src/theme/tokens.ts` (mirrored in `apps/mobile-vendor/tailwind.config.js`)
+- Geist-Bold display, Inter body. Ink (#0E0E0C) primary CTAs. Persimmon
+  (#C2410C / `herb.DEFAULT`) is STRICTLY accent — never a primary fill.
+- Light-first; dark mode not yet built.
 
-Source of truth: `packages/mobile-shared/src/theme/tokens.ts`. Mirrored in `apps/mobile-vendor/tailwind.config.js`. 8 tests in `packages/mobile-shared/src/__tests__/theme-tokens.test.ts` lock the values.
+### Redesigned in current pass
+All in **StyleSheet (no NativeWind)**, with the dashboard v3.1 / orders v3 /
+menu v3 as the visual reference set:
 
-**Shared primitives live in `packages/mobile-shared/src/ui/`:**
-- `<Screen>` · `<Button>` · `<Input>` · `<EmptyState>` · `<Skeleton>` / `<SkeletonGroup>` · `<ToastProvider>` + `useToast()` · `<Sheet>` (gorhom) · `<UndoSnackbarProvider>` + `useUndoSnackbar()` · `<OnboardingScaffold>`
-- All exported via `@homechef/mobile-shared/ui`
-- `resolveAuthErrorMessage()` in `@homechef/mobile-shared/auth` maps cryptic auth errors to plain English
+| Screen | File | Notes |
+|---|---|---|
+| Dashboard | `app/(tabs)/index.tsx` | 4-zone: command bar / action queue / in-progress / today strip. PendingOrderCard extracted to shared. |
+| Orders | `app/(tabs)/orders.tsx` | Queue / History as bare-text underline tabs. History hairline rows grouped by date. Surge banner reused. |
+| Menu | `app/(tabs)/menu.tsx` | Header `+ Add` (FAB killed). Category underline tabs. MenuItemRow with 44pt thumb + DietIcon + inline ink switch. |
+| More | `app/(tabs)/more.tsx` | "Account" Geist title. 44pt ink avatar + email. Hairline nav rows with captions + chevrons. Ink underlined Log out. |
+| Profile | `app/profile.tsx` | 72pt ink avatar. 3-col command bar: ChevronLeft / title / Edit-or-Cancel. Hairline LabeledRow / EditableField. Sticky Save when dirty. |
+| Settings | `app/settings.tsx` | Caption-spaced section labels (NOTIFICATION PREFERENCES / AVAILABILITY / ACCOUNT). Switches ink track + paper thumb. |
+| Earnings | `app/earnings.tsx` | Geist 44pt ₹ hero. Week/Month/All underline tabs. Hairline transaction rows grouped by date. Payout account row → `/profile`. |
+| Analytics | `app/analytics.tsx` | Chart DROPPED (no honest baseline data). Today-strip summary + hairline popular-items rows. |
+| Reviews | `app/reviews.tsx` | No hero. Compact `4.7 ★ · 38 reviews` inline. Filter underline tabs (All / 5★ / 4★ / 3★ / ≤2★). |
+| Review reply | `app/review/[reviewId].tsx` | Review hero first. Compact ★ N /5. Growing TextInput cap 180pt. Inline errors. |
+| Menu form | `app/menu/MenuItemForm.tsx` (+ `new.tsx`, `[itemId]/edit.tsx`) | Shared 1006-line form. `onBack` prop wired. |
+| Onboarding wizard | `app/(onboarding)/{kitchen-details,operations,documents,policies,review,pending}.tsx` | All use `<OnboardingScaffold>`. Cuisine + prep-time as ink-bordered pills. Ink checkboxes/radios. |
+| Pending / app status | `app/(onboarding)/pending.tsx` | 3-step timeline (Submitted → Reviewing → Approved). "WHAT YOU'LL GET" preview. Visible Check status button. |
+| Auth shared | `packages/mobile-shared/src/screens/{LoginScreen,RegisterScreen,ForgotPasswordScreen}.tsx` | Side-by-side SocialIconButtons (Google G + Apple silhouette, both SVG via `_socialIcons.tsx`). |
+| Tab bar | `app/(tabs)/_layout.tsx` | `letterSpacing 0` + `fontSize 10` (was truncating "Menu" → "Me…"). |
 
-**UX policy:** `docs/UX-PATTERNS.md` covers feedback channels, save policy, loading ladder, destructive checklist.
+### Shared components added
+- `components/vendor/PendingOrderCard.tsx` — used by dashboard + orders queue. `showInstructions` prop surfaces special instructions on orders tab only.
+- `components/vendor/MenuItemRow.tsx` — replaces old MenuItemCard.
+- `components/vendor/DietIcon.tsx` — FSSAI-style square outline + centered dot. Green for veg, paprika for non-veg.
+- `components/vendor/UndoSnackbar.tsx` — patched: `Animated.spring` → `Animated.timing` with `motion.entrance`. Now supports `errorMessage` + `onRetry`.
+- `packages/mobile-shared/src/screens/_socialIcons.tsx` — `SocialIconButton`, `GoogleGlyph`, `AppleGlyph` (SVG via `react-native-svg`). Apple path sourced from Tesserix design system.
 
-## Done in vendor app
+### Tokens added
+- `theme.colors.diet.veg = '#2A9D3E'` and `theme.colors.diet.nonVeg = '#B22B0E'`. Used ONLY by DietIcon.
 
-| Screen | State |
-|---|---|
-| `(auth)/login` | ✅ Uber-faithful: black CTA, ink underlined links, persimmon dropped |
-| `(auth)/register` | ✅ Same, with Google + Apple |
-| `(auth)/forgot-password` | ✅ Same |
-| `(onboarding)/personal-info` | ✅ Uses `<OnboardingScaffold>` |
-| `(tabs)/_layout` | ✅ Ink active / muted inactive, hairline top border |
-| `(tabs)/index` (dashboard) | ⚠️ Tokens migrated but user said **"looks basic"** — needs structural rethink, see below |
-| Splash overlay | ✅ White bg, ink spinner, proper auth-key-keyed routing |
-| `ErrorBoundary` | ✅ Wraps RootLayout |
-| `multipartConfig()` helper | ✅ Used by all 5 upload sites |
+### Auth / routing hard-lock (in `app/_layout.tsx`)
+- Onboarding-status query: `retry: false`, `refetchOnMount: 'always'`, `staleTime: 0`. No more stale `verified` data letting non-verified chefs roam.
+- Routing useEffect now strict-redirects on ANY pathname drift from `expectedPath`. Back gesture / deep link from `/pending` gets yanked back to pending.
+- Approval toast: when status transitions to `verified` mid-session, fires `"Your kitchen is approved. Welcome aboard."` via ToastProvider.
+- Splash overlay shows `"Setting up your kitchen…"` during the post-Google-sign-in chain so it doesn't read as stuck.
 
-## Not yet redesigned
+### Veg-bug hack (frontend-only, needs proper backend fix)
+Backend `MenuItem` model has NO `IsVeg` boolean — it stores `DietaryTags []string`.
+The frontend pretends `isVeg: boolean` exists via:
+- `useVendorMenu` derives `isVeg` from `dietaryTags.includes('vegetarian')` (case-insensitive).
+- `useCreateMenuItem` / `useUpdateMenuItem` translate `isVeg: true/false` →
+  `dietaryTags: ['vegetarian' | 'non-vegetarian']` before POST/PUT.
+This works but is fragile. Add a real `is_veg` column when convenient.
 
-**Onboarding wizard (6 screens — apply OnboardingScaffold pattern):**
-- `(onboarding)/kitchen-details.tsx` — 9 fields incl. address; consider chunking via Scaffold subsections
-- `(onboarding)/operations.tsx`
-- `(onboarding)/documents.tsx`
-- `(onboarding)/policies.tsx`
-- `(onboarding)/review.tsx`
-- `(onboarding)/pending.tsx`
+### iOS Pressable function-style guard
+**Recurring bug**: iOS strips `backgroundColor` / `borderWidth` / `flexDirection`
+from a Pressable with a function-based `style={({ pressed }) => [...]}` prop
+under certain conditions. Every row-shaped Pressable in this codebase uses the
+**inner-View pattern**:
 
-**Main app tabs:**
-- `(tabs)/orders.tsx` — order list, accept/reject actions, status flows
-- `(tabs)/menu.tsx` — list of items + category filter (button card + create flow are already mostly working)
-- `(tabs)/more.tsx` — likely a settings/profile menu
+```tsx
+<Pressable onPress={...}>
+  {({ pressed }) => (
+    <View style={[styles.row, pressed && { backgroundColor: bone }]}>
+      ...children
+    </View>
+  )}
+</Pressable>
+```
 
-**Secondary screens:**
-- `analytics.tsx` · `earnings.tsx` · `reviews.tsx` · `review/[reviewId].tsx`
-- `menu/new.tsx` · `menu/[itemId]/edit.tsx`
-- `profile.tsx` · `settings.tsx`
+When adding new Pressables, always use this pattern unless it's a tiny
+button with no flex children.
 
-## What the user said about dashboard
+### Approving / verifying a chef (dev)
+The backend chef_profiles table uses `state: text` + `is_verified: bool` +
+`verified_at: timestamp`. To approve via direct DB:
 
-> "looks basic"
+```bash
+docker exec homechef-db psql -U homechef -d homechef -c \
+  "UPDATE chef_profiles SET state='verified', is_verified=true, verified_at=NOW() WHERE user_id=(SELECT id FROM users WHERE email='you@example.com');"
+```
 
-It's currently a stack of: greeting → optional next-action → 2×2 stat grid → toggle → recent orders. The structure is fine for Uber's compact ops surface, but lacks visual rhythm. Things to try in restructure:
+Admin endpoint exists at `PUT /admin/approvals/:id/approve` (requires admin auth).
 
-1. **Hero stat** — make today's orders or earnings the single hero number at the top (40-50pt Geist Bold), then small chips for the other 3 stats below. Right now all four numbers compete equally.
-2. **Time-of-day context** — morning shows prep window for lunch; evening shows tomorrow's prep window. The "what's next" should be temporal, not just queue-based.
-3. **Order velocity sparkline** — a tiny inline chart showing the last 7 days, ink hairline strokes. Gives the screen something visual without going decorative.
-4. **Combined toggle + status** — replace the standalone "Accepting orders" row with a top-right status pill ("Open" / "Closed") that's tappable. Saves a row, reads more pro.
-5. **Smarter recent orders** — show pending orders as actionable rows (Accept / Reject inline) rather than just status badges. Pending orders are the only thing the chef actually clicks on the dashboard.
+### Backend prerequisites still pending
+- **Real `is_veg` boolean** on MenuItem (remove the dietaryTags hack).
+- **`packaging_fee`, `min_order_value`, `service_radius_km`** columns on `chef_profiles` (the kitchen rules). Default `serviceRadius` already lives in `operations`, just needs to flow into `chef_profiles` on submit.
+- **GST split** on order totals (compute backend, surface on Earnings + customer checkout). User signaled GST-inclusive MRP pricing.
+- **`?q=` search** on `/chef/orders`, `/chef/menu/items`, `/chef/reviews` for Sprint 3.
 
-User signaled openness to "complete restructure" — not just visual restyle. Don't be timid.
+---
 
-## Open backend items
+## Plan: next 4 sprints
 
-- Customer + delivery mobile apps still build but use old tokens + Button — port the same patterns when redesigning those.
-- Need to wire customer app with Airbnb cream/coral theme via per-app token override (not yet implemented; mobile-shared's `theme` is Uber for now).
-- Apple Sign-In: client + GIP configured for vendor's bundle ID. Customer + delivery will need same setup.
-- `auto_login_502` resolved — root cause was Docker postgres being stopped. If it returns, check `docker ps` first.
+### Sprint 1 — Foundations (≈2.5 days)
+1. **Order detail screen** `app/orders/[orderId].tsx` (new file)
+   - Hero: customer + total + status pill + age
+   - Hairline sections: items list, delivery address, special instructions, customer contact
+   - Footer actions vary by status (Accept/Reject pending → Mark preparing → Mark ready)
+   - Linked from queue + history rows in `(tabs)/orders.tsx`
 
-## How to continue
+2. **Onboarding draft persistence** `store/onboarding-store.ts`
+   - Add Zustand `persist` middleware with `createJSONStorage(() => AsyncStorage)`
+   - Wizard resumes wherever chef left off
+   - `store.reset()` already clears on submit — no change needed
+   - ~5 lines
 
-1. Read this file
-2. Read `~/.claude/projects/-Users-Mahesh-Sangawar-personal-tesserix-new-Home-Chef-App/memory/feedback_no_editorial_style.md` for the brand direction
-3. Read `packages/mobile-shared/src/theme/tokens.ts` for the design tokens
-4. Pick a starting surface — recommendation: **redesign the dashboard structurally first** (user pain point), then onboarding wizard (next surface a vendor sees), then orders tab (highest-frequency usage)
-5. Per redesigned screen: import primitives from `@homechef/mobile-shared/ui`, use `theme` from `@homechef/mobile-shared/theme`, no NativeWind className for new code (use StyleSheet for consistency with the new screens)
-6. After each screen: build via `cd apps/mobile-vendor && find . -maxdepth 1 -name 'build-*.tar.gz' -delete && EXPO_NO_TELEMETRY=1 npx eas-cli build --local --platform ios --profile local-sim --non-interactive`
-7. Install on iPhone 17 Pro sim: `xcrun simctl install AD109A46-2F99-43C3-8AAA-FEE68DC8499E /tmp/hcv-app/HomeChefVendor.app`
+3. **Push notifications end-to-end audit**
+   - Verify FCM token registration post-login
+   - Verify Android channel registration
+   - Test foreground notification UI
+   - Verify tap → routes to `/(tabs)/orders` with orderId param
+   - Lock-screen Accept/Reject actions already coded in `_layout.tsx:160-200`
+   - Add a "Test notification" button in dev-only Settings section
 
-## Suggested next-session prompt to paste
+### Sprint 2 — Quality of life (≈3–4 days)
+4. **Address autocomplete** in `(onboarding)/kitchen-details.tsx`
+   - `react-native-google-places-autocomplete` package
+   - Needs `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY`
+   - Replaces 5 manual text fields with 1 search + parse
+
+5. **Preview as customer**
+   - "Preview" right-side link on Menu command bar
+   - Opens bottom sheet rendering kitchen page as customers see it
+   - Use existing customer menu endpoint OR add `/chef/preview` server-side
+   - Photos + name + cuisines + sorted menu with prices/descriptions/DietIcon
+
+### Sprint 3 — Scale (≈2 days)
+6. **Search** on orders history, menu, reviews
+   - Backend: add `q` param to 3 endpoints (`WHERE LOWER(name) ILIKE '%' || $q || '%'`)
+   - Frontend: search field in each list's command bar, 300ms debounce, re-fetch on change
+
+7. **Reply templates** on review reply screen
+   - Bottom sheet with 5 templates ("Thank you for the kind words!", "We're sorry to hear that…", etc.)
+   - Tap populates the TextInput
+
+### Sprint 4 — Dark mode (≈3–5 days, own cycle)
+8. Extend `theme.colors` with `light` + `dark` variants
+9. Root-level `useColorScheme()` hook drives token resolution
+10. Audit every screen for hardcoded `paper`/`ink` references
+11. Validate WCAG AA contrast in dark mode
+12. Toggle in Settings + system follow
+
+---
+
+## Bigger deferrals
+- **Customer + delivery apps** still on old tokens. Major parallel effort eventually needed for brand cohesion.
+- **i18n / Hindi** — `expo-localization` + `i18next`. Doubles addressable market in India.
+- **Offline / poor network handling** — `OfflineBanner` exists in `mobile-shared` but isn't wired anywhere visible. Queue+retry pattern for orders accept/reject when offline.
+- **Bank account verification** — needs Razorpay/Cashfree integration for payouts.
+- **FSSAI number validation** — backend regex.
+
+## Build + install workflow
+```bash
+cd apps/mobile-vendor
+find . -maxdepth 1 -name 'build-*.tar.gz' -delete
+EXPO_NO_TELEMETRY=1 npx eas-cli build --local --platform ios --profile local-sim --non-interactive
+# When done:
+BUILD=$(ls -t build-*.tar.gz | head -1)
+rm -rf /tmp/hcv-app && mkdir -p /tmp/hcv-app
+tar -xzf "$BUILD" -C /tmp/hcv-app
+xcrun simctl terminate AD109A46-2F99-43C3-8AAA-FEE68DC8499E com.homechef.vendor 2>/dev/null
+xcrun simctl install AD109A46-2F99-43C3-8AAA-FEE68DC8499E /tmp/hcv-app/HomeChefVendor.app
+xcrun simctl launch AD109A46-2F99-43C3-8AAA-FEE68DC8499E com.homechef.vendor
+```
+
+Each build takes ~5–10 min. Bundle multiple changes into one build whenever possible.
+
+## Suggested next-session prompt
 
 ```
-Continue the Home Chef mobile redesign. Read NEXT-SESSION.md and
+Continue the Home Chef vendor app. Read NEXT-SESSION.md and
 ~/.claude/projects/-Users-Mahesh-Sangawar-personal-tesserix-new-Home-Chef-App/memory/feedback_no_editorial_style.md
-before starting. Direction is locked: Uber-like (white + ink + persimmon
-accent only) for vendor and driver, Airbnb-style for customer later.
+before starting. The full design pass landed in build #10 — verify it
+installs cleanly, then start Sprint 1: Order detail screen + Onboarding
+draft persistence + Push notifications audit. All three are independent
+and ship together in one build.
 
-Start with a structural redesign of the vendor dashboard
-(apps/mobile-vendor/app/(tabs)/index.tsx) — the user said it "looks basic"
-and is open to a complete restructure, not just visual polish. Use the
-suggestions in NEXT-SESSION.md as a starting menu, but feel free to
-propose your own composition. The screen should reward a chef glancing
-at it during prep, surface the one thing they need to act on, and feel
-like a pro tool — not a generic SaaS stat grid.
-
-After dashboard, move to the onboarding wizard (6 remaining screens —
-apply <OnboardingScaffold>), then the main tabs (orders, menu, more),
-then the long tail (profile, settings, analytics, earnings, reviews).
-
-Build + install on iPhone 17 Pro (sim id AD109A46-2F99-43C3-8AAA-FEE68DC8499E)
-after every screen so we catch regressions early.
+Use the inner-View Pressable pattern, hairline rows for non-action data,
+bone cards only for things demanding a decision. Ink primary CTAs;
+persimmon is accent only.
 ```

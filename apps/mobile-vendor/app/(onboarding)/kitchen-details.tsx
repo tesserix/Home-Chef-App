@@ -1,8 +1,14 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+// apps/mobile-vendor/app/(onboarding)/kitchen-details.tsx
+// Step 2/6 — Kitchen name, cuisine multi-select, description, address.
+// StyleSheet only — no NativeWind className.
+
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
+import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
 const CUISINE_OPTIONS = [
@@ -56,13 +62,14 @@ export default function KitchenDetailsScreen() {
   });
 
   const selectedCuisines = watch('cuisines');
+  const descriptionValue = watch('description');
 
   function toggleCuisine(cuisine: string): void {
     const current = selectedCuisines ?? [];
     if (current.includes(cuisine)) {
-      setValue('cuisines', current.filter((c) => c !== cuisine));
+      setValue('cuisines', current.filter((c) => c !== cuisine), { shouldValidate: true });
     } else {
-      setValue('cuisines', [...current, cuisine]);
+      setValue('cuisines', [...current, cuisine], { shouldValidate: true });
     }
   }
 
@@ -72,203 +79,285 @@ export default function KitchenDetailsScreen() {
     router.push('/(onboarding)/operations');
   }
 
+  function onInvalid(errs: typeof errors): void {
+    const firstError = Object.values(errs)[0];
+    if (firstError?.message) Alert.alert('Check your details', firstError.message);
+  }
+
   return (
-    <ScrollView className="flex-1 bg-bone">
-      <View className="px-6 pt-4 pb-8">
-        <View className="h-1.5 rounded-full bg-mist mb-6">
-          <View className="h-1.5 rounded-full bg-herb" style={{ width: `${(2 / 6) * 100}%` }} />
-        </View>
-
-        <Text className="font-display text-2xl font-semibold text-ink mb-1">Kitchen Details</Text>
-        <Text className="text-sm text-ink-muted mb-6">Tell us about your kitchen</Text>
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">Business Name *</Text>
-        <Controller
-          control={control}
-          name="businessName"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
-              placeholder="Your kitchen / business name"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-            />
-          )}
-        />
-        {errors.businessName && (
-          <Text className="text-paprika text-xs mb-3">{errors.businessName.message}</Text>
+    <OnboardingScaffold
+      step={2}
+      total={6}
+      title="Your kitchen"
+      subtitle="Name, style, and address — what your customers will find."
+      primaryLabel="Continue"
+      onPrimary={handleSubmit(onSubmit, onInvalid)}
+    >
+      {/* Business name */}
+      <Controller
+        control={control}
+        name="businessName"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Kitchen / business name"
+            placeholder="e.g. Amma's Kitchen"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            autoCapitalize="words"
+            error={errors.businessName?.message}
+          />
         )}
-        {!errors.businessName && <View className="mb-3" />}
+      />
 
-        <Text className="text-sm font-medium text-ink-soft mb-2">Cuisine Types *</Text>
-        <View className="flex-row flex-wrap gap-2 mb-1">
+      {/* Cuisine chips — outlined pill pattern, ink border active */}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Cuisine types</Text>
+        <View style={styles.chipRow}>
           {CUISINE_OPTIONS.map((cuisine) => {
             const selected = selectedCuisines?.includes(cuisine) ?? false;
             return (
-              <TouchableOpacity
+              <View
                 key={cuisine}
-                onPress={() => toggleCuisine(cuisine)}
-                className={`px-3 py-1.5 rounded-full border ${
-                  selected
-                    ? 'bg-herb border-herb'
-                    : 'bg-bone border-mist-strong'
-                }`}
+                style={[styles.chip, selected && styles.chipActive]}
               >
-                <Text className={`text-sm ${selected ? 'text-paper font-medium' : 'text-ink-soft'}`}>
+                {/* Pressable wraps only the text so hitSlop stays tight */}
+                <Text
+                  style={[styles.chipLabel, selected && styles.chipLabelActive]}
+                  onPress={() => toggleCuisine(cuisine)}
+                  suppressHighlighting
+                >
                   {cuisine}
                 </Text>
-              </TouchableOpacity>
+              </View>
             );
           })}
         </View>
-        {errors.cuisines && (
-          <Text className="text-paprika text-xs mb-3">{errors.cuisines.message}</Text>
-        )}
-        {!errors.cuisines && <View className="mb-3" />}
+        {errors.cuisines ? (
+          <Text style={styles.fieldError}>{errors.cuisines.message}</Text>
+        ) : null}
+      </View>
 
-        <Text className="text-sm font-medium text-ink-soft mb-1">Description *</Text>
+      {/* Description */}
+      <View style={styles.fieldGroup}>
         <Controller
           control={control}
           name="description"
           render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
+            <Input
+              label="About your kitchen"
               placeholder="Describe your kitchen, specialties, and cooking style (min 50 characters)"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               multiline
               numberOfLines={4}
-              textAlignVertical="top"
-              style={{ minHeight: 100 }}
+              inputStyle={styles.textArea}
+              error={errors.description?.message}
             />
           )}
         />
-        <Controller
-          control={control}
-          name="description"
-          render={({ field: { value } }) => (
-            <Text className="text-xs text-ink-muted text-right mb-1">
-              {(value ?? '').length} / 500
-            </Text>
-          )}
-        />
-        {errors.description && (
-          <Text className="text-paprika text-xs mb-3">{errors.description.message}</Text>
-        )}
-        {!errors.description && <View className="mb-3" />}
-
-        <Text className="text-base font-semibold text-ink mt-2 mb-3">Kitchen Address</Text>
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">Address Line 1 *</Text>
-        <Controller
-          control={control}
-          name="addressLine1"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
-              placeholder="House / building, street"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-            />
-          )}
-        />
-        {errors.addressLine1 && (
-          <Text className="text-paprika text-xs mb-3">{errors.addressLine1.message}</Text>
-        )}
-        {!errors.addressLine1 && <View className="mb-3" />}
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">Address Line 2</Text>
-        <Controller
-          control={control}
-          name="addressLine2"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-3"
-              placeholder="Apartment, suite (optional)"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value ?? ''}
-              autoCapitalize="words"
-            />
-          )}
-        />
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">City *</Text>
-        <Controller
-          control={control}
-          name="city"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
-              placeholder="City"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-            />
-          )}
-        />
-        {errors.city && (
-          <Text className="text-paprika text-xs mb-3">{errors.city.message}</Text>
-        )}
-        {!errors.city && <View className="mb-3" />}
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">State *</Text>
-        <Controller
-          control={control}
-          name="state"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
-              placeholder="State"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-            />
-          )}
-        />
-        {errors.state && (
-          <Text className="text-paprika text-xs mb-3">{errors.state.message}</Text>
-        )}
-        {!errors.state && <View className="mb-3" />}
-
-        <Text className="text-sm font-medium text-ink-soft mb-1">Postal Code *</Text>
-        <Controller
-          control={control}
-          name="postalCode"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="border border-mist-strong rounded-lg px-4 py-3 text-base text-ink mb-1"
-              placeholder="Postal / PIN code"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
-          )}
-        />
-        {errors.postalCode && (
-          <Text className="text-paprika text-xs mb-3">{errors.postalCode.message}</Text>
-        )}
-        {!errors.postalCode && <View className="mb-3" />}
-
-        <TouchableOpacity
-          className="bg-herb rounded-xl py-4 items-center mt-2"
-          onPress={handleSubmit(onSubmit, (errs) => {
-            const firstError = Object.values(errs)[0];
-            if (firstError?.message) Alert.alert('Validation Error', firstError.message);
-          })}
-        >
-          <Text className="text-paper font-semibold text-base">Next</Text>
-        </TouchableOpacity>
+        <Text style={styles.charCount}>{(descriptionValue ?? '').length} / 500</Text>
       </View>
-    </ScrollView>
+
+      {/* Address divider */}
+      <View style={styles.sectionDivider}>
+        <View style={styles.hairline} />
+        <Text style={styles.sectionLabel}>Kitchen address</Text>
+        <View style={styles.hairline} />
+      </View>
+
+      {/* Address fields */}
+      <Controller
+        control={control}
+        name="addressLine1"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Address line 1"
+            placeholder="House / building, street"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            autoCapitalize="words"
+            error={errors.addressLine1?.message}
+          />
+        )}
+      />
+
+      <Controller
+        control={control}
+        name="addressLine2"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Address line 2"
+            placeholder="Apartment, suite (optional)"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value ?? ''}
+            autoCapitalize="words"
+          />
+        )}
+      />
+
+      {/* City + State side-by-side */}
+      <View style={styles.row}>
+        <View style={styles.rowHalf}>
+          <Controller
+            control={control}
+            name="city"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="City"
+                placeholder="City"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                error={errors.city?.message}
+              />
+            )}
+          />
+        </View>
+        <View style={styles.rowHalf}>
+          <Controller
+            control={control}
+            name="state"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="State"
+                placeholder="State"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                error={errors.state?.message}
+              />
+            )}
+          />
+        </View>
+      </View>
+
+      <Controller
+        control={control}
+        name="postalCode"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Postal / PIN code"
+            placeholder="6-digit PIN"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            keyboardType="number-pad"
+            maxLength={10}
+            error={errors.postalCode?.message}
+          />
+        )}
+      />
+
+      {/* Spacer so last field clears sticky CTA */}
+      <View style={styles.bottomSpacer} />
+    </OnboardingScaffold>
   );
 }
+
+const styles = StyleSheet.create({
+  fieldGroup: {
+    gap: theme.spacing[1],
+  },
+
+  fieldLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.soft,
+    marginBottom: theme.spacing[2],
+  },
+
+  fieldError: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+    marginTop: theme.spacing[1],
+  },
+
+  // Cuisine chips — outlined pill with ink-active state, 3–4 per row.
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing[2],
+  },
+
+  chip: {
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    minHeight: theme.touchTarget.vendor,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  chipActive: {
+    borderColor: theme.colors.ink.DEFAULT,
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+
+  chipLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+
+  chipLabelActive: {
+    fontFamily: 'Inter-Medium',
+    color: theme.colors.paper,
+  },
+
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+
+  charCount: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    textAlign: 'right',
+    marginTop: theme.spacing[1],
+  },
+
+  // Inline divider with centred label between form sections.
+  sectionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    marginVertical: theme.spacing[3],
+  },
+
+  hairline: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.soft,
+    letterSpacing: 0.4,
+  },
+
+  // Two-column row for city + state.
+  row: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+  },
+
+  rowHalf: {
+    flex: 1,
+  },
+
+  bottomSpacer: {
+    height: theme.spacing[2],
+  },
+});

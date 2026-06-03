@@ -7,6 +7,8 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
+  subtotal?: number;
+  notes?: string;
 }
 
 export interface Order {
@@ -18,6 +20,16 @@ export interface Order {
   createdAt: string;
   deliveryAddress: string;
   specialInstructions?: string;
+  // Optional pricing breakdown — only present on the detail/list ToResponse
+  // payload. Hero card + history row don't need these, but the detail screen
+  // surfaces them in the totals block.
+  subtotal?: number;
+  deliveryFee?: number;
+  serviceFee?: number;
+  tax?: number;
+  taxName?: string;
+  tip?: number;
+  discount?: number;
 }
 
 export interface OrdersResponse {
@@ -121,4 +133,98 @@ export function useOrderAction() {
   }
 
   return { triggerAction, handleUndo, pendingUndo, isLoading: mutation.isPending };
+}
+
+// Generic status mutation used by the order detail screen for the in-flight
+// transitions (accepted → preparing → ready). Unlike useOrderAction these
+// transitions don't get an undo timer — the chef wouldn't expect to "undo
+// marking ready" after the fact. Optimistic update on the detail cache so
+// the footer flips immediately.
+export function useUpdateOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      status,
+    }: {
+      orderId: string;
+      status: Order['status'];
+    }) => api.put(`/chef/orders/${orderId}/status`, { status }),
+    onMutate: async ({ orderId, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'detail', orderId] });
+      const previous = queryClient.getQueryData<Order>(['chef', 'orders', 'detail', orderId]);
+      if (previous) {
+        queryClient.setQueryData<Order>(['chef', 'orders', 'detail', orderId], {
+          ...previous,
+          status,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, { orderId }, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['chef', 'orders', 'detail', orderId], context.previous);
+      }
+    },
+    onSettled: () => {
+      // Refresh dashboard + queue + history so card moves between tabs
+      queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
+      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+    },
+  });
+}
+
+// Lookup an order by id. Cache-first across the pending + history page
+// caches, falling back to a targeted fetch when the detail is opened from
+// a deep link (push notification). The detail screen consumes this hook.
+//
+// NOTE: backend has no GET /chef/orders/:orderId endpoint yet, so we can't
+// refetch the single order directly — we paginate the lists. Acceptable for
+// Sprint 1 because the only deep-link entry today is push notifications,
+// and those always represent a pending order (cache hit guaranteed within
+// the 10s polling window).
+export function useVendorOrderDetail(orderId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useQuery<Order>({
+    queryKey: ['chef', 'orders', 'detail', orderId],
+    enabled: !!orderId,
+    queryFn: async () => {
+      if (!orderId) throw new Error('orderId required');
+
+      // 1. Peek pending cache.
+      const pending = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
+      const hitPending = pending?.orders.find((o) => o.id === orderId);
+      if (hitPending) return hitPending;
+
+      // 2. Peek any history page cache.
+      const historyEntries = queryClient.getQueriesData<OrdersResponse>({
+        queryKey: ['chef', 'orders', 'history'],
+      });
+      for (const [, data] of historyEntries) {
+        const hit = data?.orders.find((o) => o.id === orderId);
+        if (hit) return hit;
+      }
+
+      // 3. Refetch pending. Covers the push-notification deep-link case
+      // where the cache was cold (app launched from a kill state).
+      const freshPending = await api
+        .get<OrdersResponse>('/chef/orders?status=pending&page=1')
+        .then((r) => r.data);
+      const hitFreshPending = freshPending.orders.find((o) => o.id === orderId);
+      queryClient.setQueryData(['chef', 'orders', 'pending'], freshPending);
+      if (hitFreshPending) return hitFreshPending;
+
+      // 4. Refetch the first page of history. Covers a chef opening their
+      // most recent completed order from history.
+      const freshHistory = await api
+        .get<OrdersResponse>('/chef/orders?page=1')
+        .then((r) => r.data);
+      const hitFreshHistory = freshHistory.orders.find((o) => o.id === orderId);
+      if (hitFreshHistory) return hitFreshHistory;
+
+      throw new Error('Order not found in cache or recent history');
+    },
+    staleTime: 5_000,
+  });
 }

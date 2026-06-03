@@ -1,7 +1,7 @@
 import '../global.css';
 
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { Stack, router, usePathname } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
@@ -16,7 +16,7 @@ import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { ToastProvider, UndoSnackbarProvider } from '@homechef/mobile-shared/ui';
+import { ToastProvider, UndoSnackbarProvider, useToast } from '@homechef/mobile-shared/ui';
 import { useFonts } from 'expo-font';
 import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
 import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
@@ -103,11 +103,26 @@ function AppNavigator() {
     });
   }, []);
 
-  const { data: onboardingStatus, isLoading: onboardingLoading } = useQuery({
+  const {
+    data: onboardingStatus,
+    isLoading: onboardingLoading,
+    isError: onboardingError,
+  } = useQuery({
     queryKey: ['chef', 'onboarding', 'status'],
     queryFn: () => api.get<OnboardingStatusResponse>('/chef/onboarding/status'),
     enabled: isAuthenticated && !isLoading,
-    staleTime: 60_000,
+    // Force a refetch on every mount — a stale "verified" payload was
+    // what let a chef whose application was actually rolled back to
+    // "submitted" navigate freely into tabs that then 401'd. Cached
+    // data is still returned for the first paint (so the splash isn't
+    // any longer), but the network truth wins by the second tick.
+    refetchOnMount: 'always',
+    staleTime: 0,
+    // A 401 from this endpoint means the stored token is dead. Retrying
+    // costs 5-30s of splash time and can't fix it; the response
+    // interceptor already cleared the token and flipped isAuthenticated
+    // to false, so we just want the next render to route to /login.
+    retry: false,
   });
 
   // Register Android channels and FCM token after auth is confirmed.
@@ -188,9 +203,15 @@ function AppNavigator() {
             return; // do not navigate
           }
 
-          // Default tap: open orders tab.
+          // Default tap: open the specific order detail when we have an
+          // orderId, otherwise drop the chef onto the queue tab. Detail
+          // screen falls back to the queue if the orderId can't resolve.
           if (data?.type === 'new_order') {
-            router.push('/orders');
+            if (data?.orderId) {
+              router.push(`/orders/${data.orderId}`);
+            } else {
+              router.push('/(tabs)/orders');
+            }
           }
         }
       );
@@ -214,14 +235,38 @@ function AppNavigator() {
     };
   }, [isAuthenticated, isLoading]);
 
+  // Watch for status transitioning into 'verified'. When admin approves
+  // a chef while their app is open, the next status refetch flips the
+  // bit — surface a single celebratory toast so the chef understands
+  // why they suddenly have access to the kitchen tools.
+  const prevStatusRef = useRef<string | null>(null);
+  const { show: showToast } = useToast();
+  useEffect(() => {
+    const currentStatus = onboardingStatus?.data?.status ?? null;
+    if (
+      prevStatusRef.current &&
+      prevStatusRef.current !== 'verified' &&
+      currentStatus === 'verified'
+    ) {
+      showToast({
+        message: 'Your kitchen is approved. Welcome aboard.',
+        tone: 'success',
+      });
+    }
+    prevStatusRef.current = currentStatus;
+  }, [onboardingStatus, showToast]);
+
   // A coarse identifier for the auth state. Flips on real transitions
   // (login, logout, onboarding moving from in_progress → verified, etc).
   // We use it to decide when the splash should re-appear: it covers the
   // gap between auth state changing and the URL actually swapping under us.
   const authKey: string = (() => {
-    if (isLoading || onboardingLoading) return 'resolving';
+    if (isLoading) return 'resolving';
     if (!isAuthenticated) return 'unauth';
-    if (!onboardingStatus) return 'resolving';
+    if (onboardingLoading) return 'resolving';
+    // Query errored (most often: token expired → 401). Drop to login
+    // instead of holding the splash forever.
+    if (onboardingError || !onboardingStatus) return 'unauth';
     return `auth:${onboardingStatus.data.status}`;
   })();
 
@@ -254,18 +299,15 @@ function AppNavigator() {
     return stripped === '' ? '/' : stripped;
   }
 
-  useEffect(() => {
-    if (!expectedPath) return;
-    router.replace(expectedPath as never);
-  }, [expectedPath]);
-
+  // Single routing effect — fires on every pathname / expectedPath
+  // change. If the user is where they should be we update routedFor
+  // and lift the splash. If they've drifted (back gesture, deep link,
+  // status change mid-session) we replace back to expectedPath. This is
+  // the hard lock that keeps a non-verified chef out of the tabs.
   useEffect(() => {
     if (!expectedPath) return;
     const target = normalize(expectedPath);
     const here = normalize(pathname || '');
-    // For the `(tabs)` group, any tab path counts as "arrived" — once
-    // we're past the redirect, in-app tab navigation should not bring
-    // back the splash.
     const matched = target === '/'
       ? !here.startsWith('/login') &&
         !here.startsWith('/personal-info') &&
@@ -273,14 +315,40 @@ function AppNavigator() {
       : here === target;
     if (matched) {
       routedFor.current = authKey;
+    } else {
+      router.replace(expectedPath as never);
     }
   }, [pathname, expectedPath, authKey]);
 
   // Keep splash up until the OTF/TTF files are available — otherwise we
   // render a frame of System font then snap to Geist/Inter when fonts
   // arrive, which is jarringly visible on the login + dashboard.
+  //
+  // Splash safety net: if any of the auth/routing conditions never
+  // settle (status webhook race, slow network, edge case in the routing
+  // effect), force-lift after 5s instead of holding the user hostage on
+  // a spinner. Worst case is a brief flash of the wrong screen, which
+  // the routing effect will then correct.
+  const [forceLift, setForceLift] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setForceLift(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
   const isRouting =
-    !fontsLoaded || authKey === 'resolving' || routedFor.current !== authKey;
+    !forceLift &&
+    (!fontsLoaded ||
+      authKey === 'resolving' ||
+      routedFor.current !== authKey);
+
+  // Surface what we're waiting on so the splash reads as "in progress",
+  // not "stuck". After a Google sign-in the auth → session → onboarding
+  // chain can take 2-3s and a bare spinner makes that feel longer.
+  const splashLabel = !fontsLoaded
+    ? null
+    : isAuthenticated && (onboardingLoading || routedFor.current !== authKey)
+      ? 'Setting up your kitchen…'
+      : 'Loading…';
 
   return (
     <View style={{ flex: 1 }}>
@@ -301,6 +369,19 @@ function AppNavigator() {
           }}
         >
           <ActivityIndicator color="#0E0E0C" size="large" />
+          {splashLabel && (
+            <Text
+              style={{
+                marginTop: 16,
+                fontFamily: 'Inter',
+                fontSize: 13,
+                color: '#888888',
+                letterSpacing: 0.2,
+              }}
+            >
+              {splashLabel}
+            </Text>
+          )}
         </View>
       )}
     </View>

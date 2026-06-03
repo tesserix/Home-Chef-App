@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type DayHours = { open: string; close: string; closed: boolean };
 
@@ -90,35 +92,54 @@ const initialState = {
   policies: { acceptedTerms: false, cancellationPolicy: '' },
 };
 
-export const useVendorOnboardingStore = create<VendorOnboardingState>((set) => ({
-  ...initialState,
+export const useVendorOnboardingStore = create<VendorOnboardingState>()(
+  persist(
+    (set) => ({
+      ...initialState,
 
-  setStep: (step) => set({ currentStep: step }),
+      setStep: (step) => set({ currentStep: step }),
 
-  updatePersonalInfo: (data) =>
-    set((state) => ({
-      personalInfo: { ...state.personalInfo, ...data },
-    })),
+      updatePersonalInfo: (data) =>
+        set((state) => ({
+          personalInfo: { ...state.personalInfo, ...data },
+        })),
 
-  updateKitchenDetails: (data) =>
-    set((state) => ({
-      kitchenDetails: { ...state.kitchenDetails, ...data },
-    })),
+      updateKitchenDetails: (data) =>
+        set((state) => ({
+          kitchenDetails: { ...state.kitchenDetails, ...data },
+        })),
 
-  updateOperations: (data) =>
-    set((state) => ({
-      operations: { ...state.operations, ...data },
-    })),
+      updateOperations: (data) =>
+        set((state) => ({
+          operations: { ...state.operations, ...data },
+        })),
 
-  updateDocuments: (data) =>
-    set((state) => ({
-      documents: { ...state.documents, ...data },
-    })),
+      updateDocuments: (data) =>
+        set((state) => ({
+          documents: { ...state.documents, ...data },
+        })),
 
-  updatePolicies: (data) =>
-    set((state) => ({
-      policies: { ...state.policies, ...data },
-    })),
+      updatePolicies: (data) =>
+        set((state) => ({
+          policies: { ...state.policies, ...data },
+        })),
 
-  reset: () => set({ ...initialState }),
-}));
+      reset: () => set({ ...initialState }),
+    }),
+    {
+      name: 'vendor-onboarding-draft',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only persist user-entered draft data — not the action methods.
+      // Document URIs are local file paths and may dangle across cold
+      // starts; the documents step re-validates them on focus.
+      partialize: (state) => ({
+        currentStep: state.currentStep,
+        personalInfo: state.personalInfo,
+        kitchenDetails: state.kitchenDetails,
+        operations: state.operations,
+        documents: state.documents,
+        policies: state.policies,
+      }),
+    },
+  ),
+);

@@ -15,6 +15,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { theme } from '../theme/tokens';
 import { resolveAuthErrorMessage } from '../auth/bff-session';
+import { SocialIconButton, GoogleGlyph, AppleGlyph } from './_socialIcons';
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -208,23 +209,23 @@ export function LoginScreen({
         <>
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>or</Text>
+            <Text style={styles.dividerLabel}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          <View style={styles.socialActions}>
+          <View style={styles.socialIconRow}>
             {onGoogleSignIn ? (
-              <Button
+              <SocialIconButton
                 label="Continue with Google"
-                variant="secondary"
                 onPress={wrap(onGoogleSignIn)}
+                icon={<GoogleGlyph />}
               />
             ) : null}
             {onAppleSignIn ? (
-              <Button
+              <SocialIconButton
                 label="Continue with Apple"
-                variant="secondary"
                 onPress={wrap(onAppleSignIn)}
+                icon={<AppleGlyph />}
               />
             ) : null}
           </View>
@@ -246,6 +247,7 @@ export function LoginScreen({
     </Screen>
   );
 }
+
 
 const styles = StyleSheet.create({
   topGap: { height: theme.spacing[6] },
@@ -326,8 +328,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  socialActions: {
-    gap: theme.spacing[2],
+  socialIconRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+    justifyContent: 'center',
     marginBottom: theme.spacing[6],
   },
 

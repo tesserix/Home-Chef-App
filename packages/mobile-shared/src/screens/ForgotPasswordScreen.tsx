@@ -1,3 +1,5 @@
+// packages/mobile-shared/src/screens/ForgotPasswordScreen.tsx
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -13,8 +15,8 @@ import { z } from 'zod';
 import { Screen } from '../ui/Screen';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { EmptyState } from '../ui/EmptyState';
 import { theme } from '../theme/tokens';
+import { resolveAuthErrorMessage } from '../auth/bff-session';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -25,9 +27,10 @@ type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 interface ForgotPasswordScreenProps {
   onForgotPassword: (data: ForgotPasswordFormData) => Promise<void>;
   onNavigateToLogin?: () => void;
+  /** Optional brand wordmark. When provided, renders above the title. */
+  brand?: string;
   title?: string;
   subtitle?: string;
-  brand?: string;
 }
 
 export function ForgotPasswordScreen({
@@ -74,23 +77,40 @@ export function ForgotPasswordScreen({
       await onForgotPassword(data);
       setSuccess(true);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
-      setError(msg);
+      setError(resolveAuthErrorMessage(e));
     }
   };
 
   // The Go API returns a generic success regardless of whether the email
-  // exists — anti-enumeration. So the success screen makes no claim about
-  // an account: it just says "if there's an account, a link is on the way."
+  // exists — anti-enumeration. The success panel makes no claim about an
+  // account: it says "if there's one, a link is on the way."
   if (success) {
     return (
       <Screen paddingX={theme.spacing[6]}>
-        <EmptyState
-          title="Check your inbox"
-          body="If an account exists for that email, we've sent a reset link. It can take a couple of minutes."
-          ctaLabel={onNavigateToLogin ? 'Back to sign in' : undefined}
-          onCtaPress={onNavigateToLogin}
-        />
+        <View style={styles.successWrap}>
+          {/* Envelope glyph — drawn from Views to avoid svg dep */}
+          <View style={styles.envelopeIcon}>
+            <View style={styles.envelopeBody}>
+              <View style={styles.envelopeFlapLeft} />
+              <View style={styles.envelopeFlapRight} />
+            </View>
+          </View>
+
+          <Text style={styles.successTitle}>Check your inbox</Text>
+          <Text style={styles.successBody}>
+            If an account exists for that email, we've sent a reset link. It can take a couple of minutes.
+          </Text>
+
+          {onNavigateToLogin ? (
+            <View style={styles.successBackRow}>
+              <Button
+                label="Back to sign in"
+                variant="ghost"
+                onPress={onNavigateToLogin}
+              />
+            </View>
+          ) : null}
+        </View>
       </Screen>
     );
   }
@@ -109,6 +129,7 @@ export function ForgotPasswordScreen({
           {
             opacity: errorOpacity,
             transform: [{ translateY: errorTranslate }],
+            // Reserve no space when error is null, so layout doesn't jump.
             height: error ? undefined : 0,
             marginBottom: error ? theme.spacing[4] : 0,
           },
@@ -187,8 +208,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.muted,
-    marginBottom: theme.spacing[6],
+    color: theme.colors.ink.soft,
+    marginBottom: theme.spacing[8],
   },
 
   errorBannerWrap: { overflow: 'hidden' },
@@ -206,16 +227,92 @@ const styles = StyleSheet.create({
     color: theme.colors.destructive.DEFAULT,
   },
 
-  primaryAction: { marginTop: theme.spacing[2] },
-
-  backRow: {
-    alignItems: 'center',
-    marginTop: theme.spacing[5],
+  primaryAction: {
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[5],
   },
+
+  backRow: { alignItems: 'center' },
   backText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     textDecorationLine: 'underline',
+  },
+
+  // ---- Success state ----------------------------------------------------------
+  // Not using EmptyState — that component reads as "nothing here yet" (list
+  // pages, search zero state). A reset-email confirmation is a deliberate
+  // outcome screen, so it gets its own inline treatment that reads as
+  // positive completion rather than absence.
+
+  successWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[6],
+    gap: theme.spacing[4],
+  },
+
+  // Envelope drawn from Views — no SVG dep, matches the AppleGlyph
+  // approach used in the social row. 40×30pt target so it reads at a
+  // glance without dominating.
+  envelopeIcon: {
+    marginBottom: theme.spacing[2],
+  },
+  envelopeBody: {
+    width: 40,
+    height: 28,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink.DEFAULT,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  envelopeFlapLeft: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 22,
+    height: 18,
+    borderBottomRightRadius: 12,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: theme.colors.ink.DEFAULT,
+    transform: [{ rotate: '-8deg' }, { translateX: -4 }, { translateY: -4 }],
+  },
+  envelopeFlapRight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 22,
+    height: 18,
+    borderBottomLeftRadius: 12,
+    borderLeftWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: theme.colors.ink.DEFAULT,
+    transform: [{ rotate: '8deg' }, { translateX: 4 }, { translateY: -4 }],
+  },
+
+  successTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.h1.size,
+    lineHeight:
+      theme.typography.size.h1.size * theme.typography.size.h1.lineHeight,
+    letterSpacing: theme.typography.size.h1.letterSpacing,
+    color: theme.colors.ink.DEFAULT,
+    textAlign: 'center',
+  },
+  successBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    lineHeight:
+      theme.typography.size.body.size * theme.typography.size.body.lineHeight,
+    color: theme.colors.ink.soft,
+    textAlign: 'center',
+  },
+  successBackRow: {
+    marginTop: theme.spacing[2],
+    alignSelf: 'stretch',
   },
 });

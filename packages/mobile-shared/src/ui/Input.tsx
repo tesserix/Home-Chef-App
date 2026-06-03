@@ -2,9 +2,11 @@ import { useState, type ReactNode } from 'react';
 import {
   Pressable,
   StyleSheet,
+  type StyleProp,
   Text,
   TextInput,
   type TextInputProps,
+  type TextStyle,
   View,
 } from 'react-native';
 import { theme } from '../theme/tokens';
@@ -29,6 +31,11 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   leading?: ReactNode;
   /** Optional trailing element rendered before the password peek. */
   trailing?: ReactNode;
+  /** Per-field style override for the inner TextInput. Use sparingly —
+   *  most fields should stay on the default 44pt single-line height.
+   *  Pass `{ minHeight: N, textAlignVertical: 'top' }` to grow a textarea
+   *  in `multiline` fields. */
+  inputStyle?: StyleProp<TextStyle>;
 }
 
 /**
@@ -47,6 +54,7 @@ export function Input({
   passwordPeek = false,
   leading,
   trailing,
+  inputStyle,
   secureTextEntry,
   maxLength,
   value,
@@ -96,7 +104,7 @@ export function Input({
             input.onBlur?.(e);
           }}
           placeholderTextColor={theme.colors.ink.muted}
-          style={styles.input}
+          style={[styles.input, inputStyle]}
           accessibilityHint={error || undefined}
         />
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}

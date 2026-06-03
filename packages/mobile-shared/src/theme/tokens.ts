@@ -60,6 +60,16 @@ export const colors = {
     tint: '#f3dcd2',
   },
 
+  // Diet indicator colors — used ONLY for FSSAI-style veg/non-veg icons
+  // in the menu UI. The FSSAI convention (square outline + dot for veg /
+  // triangle for non-veg) is too dominant in Indian food UX to override
+  // with our neutral tokens. These colors are functional, not decorative,
+  // and should not appear anywhere outside DietIcon.
+  diet: {
+    veg: '#2A9D3E', // slightly muted FSSAI green
+    nonVeg: '#B22B0E', // same as destructive — FSSAI red-brown
+  },
+
   // Brand scale — used sparingly. Most surfaces should stick to the named
   // tokens above. Scale exists for gradients-from-nowhere or focus rings
   // where a single named value isn't enough.
