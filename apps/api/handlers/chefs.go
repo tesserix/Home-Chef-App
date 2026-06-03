@@ -274,7 +274,8 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 	}
 
 	resp := chef.ToResponse()
-	// Merge profile response with operating hours
+	// Merge profile response with operating hours. Address fields surface
+	// the full street address so the chef can correct it post-onboarding.
 	result := map[string]interface{}{
 		"id":              resp.ID,
 		"userId":          resp.UserID,
@@ -293,8 +294,11 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"verified":        resp.IsVerified,
 		"acceptingOrders": resp.AcceptingOrders,
 		"kitchenPhotos":   resp.KitchenPhotos,
-		"city":            resp.City,
-		"state":           resp.State,
+		"addressLine1":    chef.AddressLine1,
+		"addressLine2":    chef.AddressLine2,
+		"city":            chef.City,
+		"state":           chef.State,
+		"postalCode":      chef.PostalCode,
 		"operatingHours":  operatingHours,
 	}
 
@@ -350,19 +354,31 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	})
 }
 
-// UpdateChefProfileRequest represents chef profile update
+// UpdateChefProfileRequest represents chef profile update.
+// Pointer types let callers send `null`/omit fields to skip the update,
+// while sending an empty string or zero genuinely clears the value.
+// This unblocks clearing the description / address fields from the app.
 type UpdateChefProfileRequest struct {
-	BusinessName    string                       `json:"businessName"`
-	Description     string                       `json:"description"`
-	ProfileImage    string                       `json:"profileImage"`
-	BannerImage     string                       `json:"bannerImage"`
+	BusinessName    *string                      `json:"businessName"`
+	Description     *string                      `json:"description"`
+	ProfileImage    *string                      `json:"profileImage"`
+	BannerImage     *string                      `json:"bannerImage"`
 	Cuisines        []string                     `json:"cuisines"`
 	Specialties     []string                     `json:"specialties"`
-	PrepTime        string                       `json:"prepTime"`
-	MinimumOrder    float64                      `json:"minimumOrder"`
-	ServiceRadius   float64                      `json:"serviceRadius"`
+	PrepTime        *string                      `json:"prepTime"`
+	MinimumOrder    *float64                     `json:"minimumOrder"`
+	ServiceRadius   *float64                     `json:"serviceRadius"`
 	AcceptingOrders *bool                        `json:"acceptingOrders"`
 	OperatingHours  map[string]*DayHoursUpdate   `json:"operatingHours"`
+
+	// Address fields — added so the chef can edit their kitchen address
+	// post-onboarding. Backend previously only accepted these during the
+	// onboarding submit flow, leaving no surface for corrections.
+	AddressLine1 *string `json:"addressLine1"`
+	AddressLine2 *string `json:"addressLine2"`
+	City         *string `json:"city"`
+	State        *string `json:"state"`
+	PostalCode   *string `json:"postalCode"`
 }
 
 type DayHoursUpdate struct {
@@ -386,18 +402,21 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		return
 	}
 
-	// Update fields
-	if req.BusinessName != "" {
-		chef.BusinessName = req.BusinessName
+	// Apply each updatable field. Pointer types semantically mean
+	// "present in the payload" — sending nil skips the update, sending
+	// an empty string or zero clears the stored value. This is how the
+	// chef can legitimately blank their description or postal code.
+	if req.BusinessName != nil {
+		chef.BusinessName = *req.BusinessName
 	}
-	if req.Description != "" {
-		chef.Description = req.Description
+	if req.Description != nil {
+		chef.Description = *req.Description
 	}
-	if req.ProfileImage != "" {
-		chef.ProfileImage = req.ProfileImage
+	if req.ProfileImage != nil {
+		chef.ProfileImage = *req.ProfileImage
 	}
-	if req.BannerImage != "" {
-		chef.BannerImage = req.BannerImage
+	if req.BannerImage != nil {
+		chef.BannerImage = *req.BannerImage
 	}
 	if req.Cuisines != nil {
 		chef.Cuisines = req.Cuisines
@@ -405,17 +424,32 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	if req.Specialties != nil {
 		chef.Specialties = req.Specialties
 	}
-	if req.PrepTime != "" {
-		chef.PrepTime = req.PrepTime
+	if req.PrepTime != nil {
+		chef.PrepTime = *req.PrepTime
 	}
-	if req.MinimumOrder > 0 {
-		chef.MinimumOrder = req.MinimumOrder
+	if req.MinimumOrder != nil {
+		chef.MinimumOrder = *req.MinimumOrder
 	}
-	if req.ServiceRadius > 0 {
-		chef.ServiceRadius = req.ServiceRadius
+	if req.ServiceRadius != nil {
+		chef.ServiceRadius = *req.ServiceRadius
 	}
 	if req.AcceptingOrders != nil {
 		chef.AcceptingOrders = *req.AcceptingOrders
+	}
+	if req.AddressLine1 != nil {
+		chef.AddressLine1 = *req.AddressLine1
+	}
+	if req.AddressLine2 != nil {
+		chef.AddressLine2 = *req.AddressLine2
+	}
+	if req.City != nil {
+		chef.City = *req.City
+	}
+	if req.State != nil {
+		chef.State = *req.State
+	}
+	if req.PostalCode != nil {
+		chef.PostalCode = *req.PostalCode
 	}
 
 	if err := database.DB.Save(&chef).Error; err != nil {
