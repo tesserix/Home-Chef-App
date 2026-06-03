@@ -182,6 +182,39 @@ func Migrate() error {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
+	// Post-AutoMigrate DDL that AutoMigrate can't express. Idempotent — every
+	// statement is `IF EXISTS` / `IF NOT EXISTS` so it's a no-op after the
+	// first successful run.
+	//
+	// Background: the GIP cutover introduced per-pool email uniqueness so the
+	// same person can exist as both a customer and a chef. The legacy global
+	// unique on users.email (idx_users_email, possibly also a users_email_key
+	// constraint depending on table provenance) blocks that. AutoMigrate
+	// won't drop the old index — it only adds, never removes. Migration
+	// 20260514000002 was authored to do this swap but the API never ran
+	// golang-migrate SQL files; the .up.sql sat dead in the repo. This block
+	// is the live version that ships with the service.
+	postMigrate := []string{
+		// New schema. gip_uid is already covered by the model's uniqueIndex tag
+		// but stating it here keeps this block self-documenting.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_gip_uid ON users (gip_uid) WHERE gip_uid IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_users_email_pool ON users (email, auth_pool)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_per_pool ON users (lower(email), auth_pool) WHERE email IS NOT NULL AND auth_pool IS NOT NULL`,
+		// Drop the legacy global email uniqueness. Postgres unique constraints
+		// own their backing index, so dropping the constraint first is required;
+		// the bare DROP INDEX handles the case where the original was a plain
+		// CREATE UNIQUE INDEX with no owning constraint.
+		`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key`,
+		`ALTER TABLE users DROP CONSTRAINT IF EXISTS idx_users_email`,
+		`DROP INDEX IF EXISTS users_email_key`,
+		`DROP INDEX IF EXISTS idx_users_email`,
+	}
+	for _, stmt := range postMigrate {
+		if err := DB.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("post-migration DDL failed (%q): %w", stmt, err)
+		}
+	}
+
 	log.Println("Database migrations completed")
 	return nil
 }
