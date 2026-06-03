@@ -80,14 +80,49 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 	}
 
 	now := time.Now()
+	email := strings.ToLower(req.Email)
 	var u models.User
 	res := h.DB.Where("gip_uid = ?", req.GIPUid).First(&u)
 	switch {
 	case errors.Is(res.Error, gorm.ErrRecordNotFound):
+		// gip_uid miss — before creating a new row, look for an existing
+		// row by email. The unique idx_users_email constraint would
+		// otherwise reject the INSERT and surface a 502 to the BFF,
+		// which is how this manifested for users who re-signed in via
+		// a different identity provider or whose GIP tenant changed.
+		if email != "" {
+			byEmail := h.DB.Where("email = ?", email).First(&u)
+			if byEmail.Error == nil {
+				// Existing row found by email — re-bind it to the new
+				// GIP identity and stamp last-login. This is the "same
+				// human, new GIP uid" path.
+				u.GIPUid = req.GIPUid
+				u.GIPTenantID = req.GIPTenantID
+				u.GIPProvider = req.GIPProvider
+				if req.AuthPool != "" {
+					u.AuthPool = models.AuthPool(req.AuthPool)
+				}
+				u.LastLoginAt = &now
+				if req.Name != "" && u.FirstName == "" && u.LastName == "" {
+					u.FirstName, u.LastName = splitName(req.Name)
+				}
+				if err := h.DB.Save(&u).Error; err != nil {
+					c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(http.StatusOK, UpsertUserResponse{UserID: u.ID.String()})
+				return
+			}
+			if !errors.Is(byEmail.Error, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusBadGateway, gin.H{"error": byEmail.Error.Error()})
+				return
+			}
+		}
+
 		first, last := splitName(req.Name)
 		u = models.User{
 			ID:               uuid.New(),
-			Email:            strings.ToLower(req.Email),
+			Email:            email,
 			FirstName:        first,
 			LastName:         last,
 			GIPUid:           req.GIPUid,
@@ -112,10 +147,10 @@ func (h *InternalUsersHandler) Upsert(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": res.Error.Error()})
 		return
 	default:
-		// Found — bump last_login_at, and lazily backfill the name if the
-		// row was created before we started capturing one. We never
-		// overwrite an existing FirstName/LastName here: the user may have
-		// edited their profile and a re-login shouldn't clobber that.
+		// Found by gip_uid — bump last_login_at, and lazily backfill the
+		// name if the row was created before we started capturing one. We
+		// never overwrite an existing FirstName/LastName here: the user
+		// may have edited their profile and a re-login shouldn't clobber that.
 		u.LastLoginAt = &now
 		if req.Name != "" && u.FirstName == "" && u.LastName == "" {
 			u.FirstName, u.LastName = splitName(req.Name)
