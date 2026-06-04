@@ -37,6 +37,14 @@ func main() {
 	// via the /admin/tax-rates endpoint survive future restarts.
 	services.SeedTaxRates()
 
+	// Seed location reference data (India + 36 states + ~50 major cities +
+	// representative PIN codes). Idempotent — relies on ON CONFLICT DO
+	// NOTHING so re-runs are free. The schema is country-agnostic; the
+	// seeded scope is intentionally India-only for the initial release.
+	if err := services.SeedLocations(context.Background(), database.DB); err != nil {
+		log.Printf("Warning: Failed to seed location reference data: %v", err)
+	}
+
 	// Initialize GCS storage
 	if err := services.InitStorage(); err != nil {
 		log.Printf("Warning: Failed to initialize GCS storage: %v", err)

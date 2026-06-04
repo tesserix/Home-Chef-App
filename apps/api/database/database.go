@@ -65,6 +65,54 @@ func Connect() error {
 func Migrate() error {
 	log.Println("Running database migrations...")
 
+	// Pre-AutoMigrate: location reference tables were rewritten from the
+	// legacy UUID-keyed shape (countries.id uuid, states.id uuid, ...) to the
+	// mark8ly-style ISO-coded shape (countries.code char(2), states.id
+	// varchar(10), ...). GORM AutoMigrate cannot change a primary-key
+	// column's type in place, so we drop the old tables first. None of them
+	// were ever populated in homechef, so this is a no-op for data.
+	//
+	// Idempotent: the IF EXISTS guard makes this safe to run on first boot
+	// (where the tables don't exist yet) and on every subsequent boot.
+	preMigrateDrops := []string{
+		`DROP TABLE IF EXISTS postcodes CASCADE`,
+		`DROP TABLE IF EXISTS cities CASCADE`,
+		`DROP TABLE IF EXISTS states CASCADE`,
+		`DROP TABLE IF EXISTS countries CASCADE`,
+	}
+	for _, stmt := range preMigrateDrops {
+		// Only drop tables that match the legacy shape. We detect by checking
+		// for the `is_active` column that the new ISO-keyed schema doesn't
+		// carry. This way a re-run after the new schema is already in place
+		// does NOT clobber seeded data.
+		tableName := ""
+		switch stmt {
+		case `DROP TABLE IF EXISTS postcodes CASCADE`:
+			tableName = "postcodes"
+		case `DROP TABLE IF EXISTS cities CASCADE`:
+			tableName = "cities"
+		case `DROP TABLE IF EXISTS states CASCADE`:
+			tableName = "states"
+		case `DROP TABLE IF EXISTS countries CASCADE`:
+			tableName = "countries"
+		}
+		var hasIsActive bool
+		probe := DB.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = ? AND column_name = 'is_active'
+		)`, tableName).Scan(&hasIsActive)
+		if probe.Error != nil {
+			return fmt.Errorf("location pre-migrate probe failed (%q): %w", tableName, probe.Error)
+		}
+		if !hasIsActive {
+			continue // already on the new schema, leave seeded data alone
+		}
+		if err := DB.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("location pre-migrate drop failed (%q): %w", stmt, err)
+		}
+		log.Printf("dropped legacy location table %q (UUID-keyed schema)", tableName)
+	}
+
 	err := DB.AutoMigrate(
 		// Users. Auth tokens (refresh/password-reset/email-verification) are
 		// no longer owned by this service — apps/auth-bff handles all session
