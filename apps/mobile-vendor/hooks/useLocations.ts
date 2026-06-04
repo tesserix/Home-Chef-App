@@ -56,6 +56,19 @@ export interface PostcodeSearchResult {
   stateName: string;
 }
 
+// AddressSuggestion is the shape returned by /locations/autocomplete,
+// which proxies the Photon (OpenStreetMap) geocoder. Used by the
+// search panel to surface street-level addresses beyond the seeded
+// PIN registry.
+export interface AddressSuggestion {
+  description: string;
+  line1: string;
+  city: string;
+  region: string;
+  postal: string;
+  country: string;
+}
+
 interface Envelope<T> {
   data: T;
 }
@@ -122,5 +135,36 @@ export function usePostcodeSearch(query: string): UseQueryResult<PostcodeSearchR
     },
     enabled: debounced.length >= 2,
     staleTime: 60_000, // PIN data is stable; brief cache is fine
+  });
+}
+
+// useAddressAutocomplete debounces a free-text query and returns
+// street-level address suggestions from the backend's Photon proxy
+// (/locations/autocomplete). Photon needs a 3-char minimum to return
+// useful results, so we mirror that threshold here.
+//
+// Used in tandem with usePostcodeSearch — the seeded PIN registry
+// covers the high-traffic common case (chef types a known area name),
+// while Photon handles every other Indian street address.
+export function useAddressAutocomplete(query: string): UseQueryResult<AddressSuggestion[]> {
+  const trimmed = query.trim();
+  const [debounced, setDebounced] = useState(trimmed);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebounced(trimmed), 250);
+    return () => clearTimeout(handle);
+  }, [trimmed]);
+
+  return useQuery<AddressSuggestion[]>({
+    queryKey: ['locations', 'autocomplete', debounced],
+    queryFn: async () => {
+      if (debounced.length < 3) return [];
+      const r = await api.get<Envelope<AddressSuggestion[]>>(
+        `/locations/autocomplete?q=${encodeURIComponent(debounced)}`,
+      );
+      return r.data.data;
+    },
+    enabled: debounced.length >= 3,
+    staleTime: 60_000,
   });
 }

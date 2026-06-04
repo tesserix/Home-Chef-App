@@ -194,6 +194,10 @@ func SetupRouter() *gin.Engine {
 			locations.GET("/states/:stateCode/cities", locationHandler.GetCities)
 			locations.GET("/cities/:cityName/postcodes", locationHandler.GetPostcodes)
 			locations.GET("/postcodes/search", locationHandler.SearchPostcodes)
+			// Photon-backed worldwide address autocomplete, India-filtered.
+			// Complements /postcodes/search (which only knows our seeded PINs)
+			// so the mobile picker can resolve any Indian street address.
+			locations.GET("/autocomplete", locationHandler.AutocompleteAddresses)
 		}
 
 		// Preference options (public)

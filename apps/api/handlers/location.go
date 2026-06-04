@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -196,4 +201,152 @@ func (h *LocationHandler) SearchPostcodes(c *gin.Context) {
 		results = []PostcodeSearchResult{}
 	}
 	c.JSON(http.StatusOK, dataEnvelope{Data: results})
+}
+
+// photonClient is reused across requests so connection pooling kicks in.
+var photonClient = &http.Client{Timeout: 4 * time.Second}
+
+const (
+	photonAPI       = "https://photon.komoot.io/api/"
+	photonUserAgent = "homechef-api (+https://fe3dr.com)"
+)
+
+// photonProperties is the subset of Photon's per-feature properties we
+// consume. Photon's response shape: see https://photon.komoot.io/
+type photonProperties struct {
+	Name        string `json:"name,omitempty"`
+	Street      string `json:"street,omitempty"`
+	HouseNumber string `json:"housenumber,omitempty"`
+	Postcode    string `json:"postcode,omitempty"`
+	City        string `json:"city,omitempty"`
+	State       string `json:"state,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"countrycode,omitempty"`
+}
+
+type photonFeature struct {
+	Properties photonProperties `json:"properties"`
+}
+
+type photonResponse struct {
+	Features []photonFeature `json:"features"`
+}
+
+// AddressSuggestion is the flattened shape the mobile autocomplete
+// renders. Mirrors mark8ly/apps/storefront/app/api/locations/autocomplete
+// so a shared mobile-shared address picker can target both products.
+type AddressSuggestion struct {
+	Description string `json:"description"`
+	Line1       string `json:"line1"`
+	City        string `json:"city"`
+	Region      string `json:"region"`
+	Postal      string `json:"postal"`
+	Country     string `json:"country"`
+}
+
+// AutocompleteAddresses proxies the Photon (OpenStreetMap-backed)
+// geocoder so the mobile address picker has world-coverage autocomplete
+// suggestions on top of our seeded PIN registry. Photon is free,
+// requires no API key, and is the same backend mark8ly's address
+// fieldset uses.
+//
+// Country is forced to "IN" since HomeChef serves only India today —
+// surfacing foreign matches would let chefs pick an unusable address.
+// The mobile client doesn't get a knob to override.
+func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	if len(q) < 3 {
+		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+		return
+	}
+
+	// Build the Photon request. limit=8 mirrors mark8ly; any more and
+	// the mobile dropdown starts feeling overwhelming.
+	pu, err := url.Parse(photonAPI)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "photon_url", "message": err.Error()})
+		return
+	}
+	qs := pu.Query()
+	qs.Set("q", q)
+	qs.Set("limit", "8")
+	qs.Set("lang", "en")
+	pu.RawQuery = qs.Encode()
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pu.String(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "photon_request", "message": err.Error()})
+		return
+	}
+	req.Header.Set("User-Agent", photonUserAgent)
+
+	resp, err := photonClient.Do(req)
+	if err != nil {
+		// Photon outages shouldn't break our search box — return empty
+		// so the seeded /postcodes/search results stay usable.
+		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+		return
+	}
+
+	var body photonResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+		return
+	}
+
+	out := make([]AddressSuggestion, 0, len(body.Features))
+	for _, f := range body.Features {
+		p := f.Properties
+		// India-only guard.
+		if !strings.EqualFold(p.CountryCode, "IN") {
+			continue
+		}
+		s := AddressSuggestion{
+			Line1:   buildPhotonLine1(p),
+			City:    strings.TrimSpace(p.City),
+			Region:  strings.TrimSpace(p.State),
+			Postal:  strings.TrimSpace(p.Postcode),
+			Country: strings.ToUpper(p.CountryCode),
+		}
+		s.Description = buildPhotonDescription(s, p)
+		if s.Description == "" || (s.Line1 == "" && s.City == "") {
+			continue
+		}
+		out = append(out, s)
+	}
+	c.JSON(http.StatusOK, dataEnvelope{Data: out})
+}
+
+func buildPhotonLine1(p photonProperties) string {
+	num := strings.TrimSpace(p.HouseNumber)
+	street := strings.TrimSpace(p.Street)
+	if street == "" {
+		street = strings.TrimSpace(p.Name)
+	}
+	if num != "" && street != "" {
+		return fmt.Sprintf("%s %s", num, street)
+	}
+	if street != "" {
+		return street
+	}
+	return num
+}
+
+func buildPhotonDescription(s AddressSuggestion, p photonProperties) string {
+	parts := []string{s.Line1, s.City, s.Region, s.Postal, strings.TrimSpace(p.Country)}
+	cleaned := parts[:0]
+	for _, x := range parts {
+		x = strings.TrimSpace(x)
+		if x != "" {
+			cleaned = append(cleaned, x)
+		}
+	}
+	return strings.Join(cleaned, ", ")
 }

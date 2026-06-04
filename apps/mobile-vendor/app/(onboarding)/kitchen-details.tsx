@@ -31,9 +31,11 @@ import {
   useStates,
   useCities,
   usePostcodeSearch,
+  useAddressAutocomplete,
   type State,
   type City,
   type PostcodeSearchResult,
+  type AddressSuggestion,
 } from '../../hooks/useLocations';
 
 const CUISINE_OPTIONS = [
@@ -108,13 +110,14 @@ export default function KitchenDetailsScreen() {
   // is empty (until the user picks a result).
   const [postcodeQuery, setPostcodeQuery] = useReactState('');
   const postcodeSearch = usePostcodeSearch(postcodeQuery);
+  // Photon-backed worldwide autocomplete — runs in parallel with the
+  // seeded /postcodes/search so the panel surfaces both kinds of hits
+  // simultaneously.
+  const addressAutocomplete = useAddressAutocomplete(postcodeQuery);
   const [showPostcodeSuggestions, setShowPostcodeSuggestions] = useReactState(false);
 
   // Geolocation auto-fill state — drives the spinner on the CTA.
   const [locating, setLocating] = useReactState(false);
-  // Maps-fallback lookup state — drives the inline spinner inside the
-  // suggestions panel when the user taps "Search via Maps".
-  const [mapsLooking, setMapsLooking] = useReactState(false);
   const { show: showToast } = useToast();
 
   function toggleCuisine(cuisine: string): void {
@@ -149,100 +152,41 @@ export default function KitchenDetailsScreen() {
     setShowPostcodeSuggestions(false);
   }
 
-  // Maps-fallback lookup — fires when the user taps "Search via Maps"
-  // after /postcodes/search returns no hit. Uses the platform geocoder
-  // (Apple Maps on iOS, Google on Android) to resolve a free-form
-  // query into coords, reverse-geocodes those coords for the full
-  // address breakdown, then canonicalizes the PIN against our backend
-  // so state/city stay consistent with the seeded reference data.
-  async function handleMapsLookup(query: string): Promise<void> {
-    const q = query.trim();
-    if (q.length < 3 || mapsLooking) return;
-    setMapsLooking(true);
-    try {
-      // Bias the geocoder toward India by appending ", India" — keeps
-      // ambiguous strings (e.g. "Andheri", "Bandra") from resolving to
-      // foreign matches.
-      const biased = /,?\s*india$/i.test(q) ? q : `${q}, India`;
-      const perm = await Location.requestForegroundPermissionsAsync();
-      // geocodeAsync on iOS doesn't strictly require permission, but
-      // requesting it gives the system a stronger hint to use the
-      // higher-accuracy geocoder. If the user denies we still try.
-      void perm;
-      const coords = await Location.geocodeAsync(biased);
-      const first = coords[0];
-      if (!first) {
-        showToast({
-          message: `No address match for "${q}" — try a different query.`,
-          tone: 'error',
-        });
-        return;
-      }
-      const results = await Location.reverseGeocodeAsync({
-        latitude: first.latitude,
-        longitude: first.longitude,
-      });
-      const top = results[0];
-      if (!top) {
-        showToast({
-          message: 'Could not resolve that address — enter it manually.',
-          tone: 'error',
-        });
-        return;
-      }
-      if (top.isoCountryCode && top.isoCountryCode !== 'IN') {
-        showToast({
-          message: `HomeChef is India-only — that address looks ${top.country ?? 'foreign'}.`,
-          tone: 'error',
-        });
-        return;
-      }
-
-      // Address line 1 best-effort: building / street if either is present.
-      const line1 = [top.name, top.street].filter(Boolean).join(', ');
-      if (line1) setValue('addressLine1', line1, { shouldValidate: true });
-
-      // Canonicalize PIN → seeded state/city names. Fall through to
-      // reverse-geocode raw values when we don't have the PIN seeded.
-      let canonicalized = false;
-      if (top.postalCode) {
-        try {
-          const r = await api.get<{ data: PostcodeSearchResult[] }>(
-            `/locations/postcodes/search?q=${encodeURIComponent(top.postalCode)}`,
-          );
-          const hit = r.data.data.find((row) => row.code === top.postalCode);
-          if (hit) {
-            setValue('postalCode', hit.code, { shouldValidate: true });
-            setValue('city', hit.cityName, { shouldValidate: true });
-            setValue('state', hit.stateName, { shouldValidate: true });
-            setPostcodeQuery(hit.code);
-            canonicalized = true;
-          }
-        } catch {
-          // Network blip — fall through.
+  // pickAddressSuggestion handles a tap on a Photon-backed row from
+  // /locations/autocomplete. The Photon result already includes
+  // line1/city/region/postal, but we canonicalize the PIN against our
+  // seeded /postcodes/search whenever possible so state + city names
+  // match the chip-strip pickers (which only show seeded values).
+  async function pickAddressSuggestion(item: AddressSuggestion): Promise<void> {
+    if (item.line1) setValue('addressLine1', item.line1, { shouldValidate: true });
+    let canonicalized = false;
+    if (item.postal) {
+      try {
+        const r = await api.get<{ data: PostcodeSearchResult[] }>(
+          `/locations/postcodes/search?q=${encodeURIComponent(item.postal)}`,
+        );
+        const hit = r.data.data.find((row) => row.code === item.postal);
+        if (hit) {
+          setValue('postalCode', hit.code, { shouldValidate: true });
+          setValue('city', hit.cityName, { shouldValidate: true });
+          setValue('state', hit.stateName, { shouldValidate: true });
+          setPostcodeQuery(hit.code);
+          canonicalized = true;
         }
+      } catch {
+        // Network blip — fall through to raw Photon values.
       }
-      if (!canonicalized) {
-        if (top.postalCode) {
-          setValue('postalCode', top.postalCode, { shouldValidate: true });
-          setPostcodeQuery(top.postalCode);
-        }
-        if (top.city) setValue('city', top.city, { shouldValidate: true });
-        if (top.region) setValue('state', top.region, { shouldValidate: true });
-      }
-      setShowPostcodeSuggestions(false);
-      showToast({
-        message: 'Address filled from Maps — adjust as needed.',
-        tone: 'success',
-      });
-    } catch (err) {
-      showToast({
-        message: 'Maps lookup failed — enter your address manually.',
-        tone: 'error',
-      });
-    } finally {
-      setMapsLooking(false);
     }
+    if (!canonicalized) {
+      if (item.postal) {
+        setValue('postalCode', item.postal, { shouldValidate: true });
+        setPostcodeQuery(item.postal);
+      }
+      if (item.city) setValue('city', item.city, { shouldValidate: true });
+      if (item.region) setValue('state', item.region, { shouldValidate: true });
+    }
+    setShowPostcodeSuggestions(false);
+    showToast({ message: 'Address filled — adjust as needed.', tone: 'success' });
   }
 
   // GPS auto-fill. Asks for foreground location permission, reverse-
@@ -492,15 +436,17 @@ export default function KitchenDetailsScreen() {
         />
         {showPostcodeSuggestions && postcodeQuery.trim().length >= 2 ? (
           <View style={styles.suggestionsPanel}>
-            {postcodeSearch.isLoading ? (
+            {postcodeSearch.isLoading || addressAutocomplete.isLoading ? (
               <View style={styles.suggestionLoader}>
                 <ActivityIndicator size="small" color={theme.colors.ink.muted} />
               </View>
             ) : (
               <>
+                {/* Seeded PIN registry hits — fast, canonical state/city
+                    names that match our chip strips exactly. */}
                 {(postcodeSearch.data ?? []).map((item) => (
                   <Pressable
-                    key={item.code}
+                    key={`pin-${item.code}`}
                     onPress={() => pickPostcodeSuggestion(item)}
                     accessibilityRole="button"
                   >
@@ -520,53 +466,45 @@ export default function KitchenDetailsScreen() {
                   </Pressable>
                 ))}
 
-                {/* Maps fallback — shown whenever the user has typed
-                    enough for a meaningful platform-geocode query.
-                    Always offered (not just on zero seed results) so
-                    chefs can override the seeded answer with a more
-                    specific street-level address from Apple Maps if
-                    they want. */}
-                {postcodeQuery.trim().length >= 3 ? (
+                {/* Photon (OpenStreetMap) street-level matches. Same
+                    visual pattern as the PIN rows but with a map-pin
+                    glyph in the leading slot to signal "off-registry,
+                    from the world geocoder". */}
+                {(addressAutocomplete.data ?? []).map((item, idx) => (
                   <Pressable
-                    onPress={() => handleMapsLookup(postcodeQuery)}
-                    disabled={mapsLooking}
+                    key={`osm-${idx}-${item.description}`}
+                    onPress={() => {
+                      void pickAddressSuggestion(item);
+                    }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Search ${postcodeQuery} via Maps`}
+                    accessibilityLabel={item.description}
                   >
                     {({ pressed }) => (
                       <View
                         style={[
                           styles.suggestionRow,
-                          styles.mapsRow,
                           pressed && { backgroundColor: theme.colors.bone },
                         ]}
                       >
-                        {mapsLooking ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={theme.colors.ink.DEFAULT}
-                          />
-                        ) : (
-                          <MapPin
-                            size={18}
-                            color={theme.colors.herb.DEFAULT}
-                            strokeWidth={2.2}
-                          />
-                        )}
-                        <Text style={styles.suggestionMeta} numberOfLines={1}>
-                          {mapsLooking
-                            ? `Looking up "${postcodeQuery}"…`
-                            : `Search "${postcodeQuery}" via Maps`}
+                        <MapPin
+                          size={18}
+                          color={theme.colors.herb.DEFAULT}
+                          strokeWidth={2.2}
+                        />
+                        <Text style={styles.suggestionMeta} numberOfLines={2}>
+                          {item.description}
                         </Text>
                       </View>
                     )}
                   </Pressable>
-                ) : null}
+                ))}
 
                 {(postcodeSearch.data?.length ?? 0) === 0 &&
-                postcodeQuery.trim().length < 3 ? (
+                (addressAutocomplete.data?.length ?? 0) === 0 ? (
                   <Text style={styles.suggestionEmpty}>
-                    Type at least 3 characters.
+                    {postcodeQuery.trim().length < 3
+                      ? 'Type at least 3 characters.'
+                      : 'No match — fill the fields manually below.'}
                   </Text>
                 ) : null}
               </>
