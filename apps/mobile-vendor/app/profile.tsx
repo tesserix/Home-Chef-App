@@ -22,6 +22,7 @@ import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { useStates } from '../hooks/useLocations';
 
 // ---- Data types -----------------------------------------------------------
 // Matches the backend GET /chef/profile response.
@@ -77,16 +78,9 @@ const CUISINE_OPTIONS = [
 
 const PREP_TIME_OPTIONS = ['15 min', '20 min', '30 min', '45 min', '60 min'] as const;
 
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
-  'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim',
-  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
-  'West Bengal',
-  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
-] as const;
+// Indian state list is now driven by the /api/v1/locations/countries/IN/states
+// endpoint (see hooks/useLocations.ts) so we only maintain it in one place
+// (the backend seeder). The hook is invoked inside ProfileScreen below.
 
 function useChefProfile() {
   return useQuery<ChefProfile>({
@@ -268,6 +262,11 @@ export default function ProfileScreen() {
   const uploadProfileImageMutation = useUploadProfileImage();
   const uploadKitchenPhotoMutation = useUploadKitchenPhoto();
   const { show: showToast } = useToast();
+  // Indian states from the reference-data API. Falls back to an empty
+  // array until the request resolves — the chip strip just renders zero
+  // chips during that brief window, no layout pop.
+  const statesQuery = useStates();
+  const indianStates = statesQuery.data ?? [];
 
   // Once a save succeeds, flip this flag so handleBack doesn't re-prompt
   // before the query invalidation refreshes `data`. Cleared in the data
@@ -668,12 +667,12 @@ export default function ProfileScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.chipStateRow}
               >
-                {INDIAN_STATES.map((s) => (
+                {indianStates.map((s) => (
                   <Chip
-                    key={s}
-                    label={s}
-                    selected={stateName === s}
-                    onPress={() => setStateName(s)}
+                    key={s.id}
+                    label={s.name}
+                    selected={stateName === s.name}
+                    onPress={() => setStateName(s.name)}
                   />
                 ))}
               </ScrollView>
