@@ -299,6 +299,20 @@ function AppNavigator() {
     return stripped === '' ? '/' : stripped;
   }
 
+  // Paths inside the (onboarding) group. The backend status stays
+  // 'not_started' for the whole 6-step wizard (chef_profile only gets
+  // persisted at /review submit), so the guard must treat ANY of these
+  // as "user is where we want them" — otherwise pushing from step 1 to
+  // step 2 immediately snaps back to step 1.
+  const ONBOARDING_STEPS = [
+    '/personal-info',
+    '/kitchen-details',
+    '/operations',
+    '/documents',
+    '/policies',
+    '/review',
+  ];
+
   // Single routing effect — fires on every pathname / expectedPath
   // change. If the user is where they should be we update routedFor
   // and lift the splash. If they've drifted (back gesture, deep link,
@@ -312,7 +326,9 @@ function AppNavigator() {
       ? !here.startsWith('/login') &&
         !here.startsWith('/personal-info') &&
         !here.startsWith('/pending')
-      : here === target;
+      : ONBOARDING_STEPS.includes(target) && ONBOARDING_STEPS.includes(here)
+        ? true // any onboarding step counts as "on track" while wizard is mid-flight
+        : here === target;
     if (matched) {
       routedFor.current = authKey;
     } else {

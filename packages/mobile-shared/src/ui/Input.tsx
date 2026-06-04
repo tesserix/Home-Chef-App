@@ -66,6 +66,9 @@ export function Input({
   const obscured = secureTextEntry && !peek;
   const hasError = Boolean(error);
   const showLabel = label.length > 0;
+  // editable defaults to true if unset, so only the explicit false counts
+  // as the disabled state.
+  const isDisabled = input.editable === false;
 
   const showFooter = footer !== undefined || error || helper || showCounter;
 
@@ -87,6 +90,7 @@ export function Input({
           styles.field,
           focused && styles.fieldFocused,
           hasError && styles.fieldError,
+          isDisabled && styles.fieldDisabled,
         ]}
       >
         {leading ? <View style={styles.leading}>{leading}</View> : null}
@@ -104,7 +108,7 @@ export function Input({
             input.onBlur?.(e);
           }}
           placeholderTextColor={theme.colors.ink.muted}
-          style={[styles.input, inputStyle]}
+          style={[styles.input, isDisabled && styles.inputDisabled, inputStyle]}
           accessibilityHint={error || undefined}
         />
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
@@ -166,6 +170,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[3] - 1, // compensate for 2px border
   },
   fieldError: { borderColor: theme.colors.destructive.DEFAULT },
+  fieldDisabled: {
+    backgroundColor: theme.colors.bone,
+    borderColor: theme.colors.mist.DEFAULT,
+  },
   leading: { marginRight: theme.spacing[2] },
   trailing: { marginLeft: theme.spacing[2] },
   input: {
@@ -175,6 +183,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     paddingVertical: 0, // RN adds default vertical padding on Android
   },
+  inputDisabled: { color: theme.colors.ink.muted },
   peekToggle: { marginLeft: theme.spacing[2], padding: theme.spacing[1] },
   peekText: {
     fontFamily: 'Inter-SemiBold',
