@@ -21,7 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, UtensilsCrossed, FileText, Navigation } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -193,13 +193,6 @@ export default function KitchenDetailsScreen() {
   // geocodes the device's current position, and best-effort fills every
   // address field so the chef rarely has to type any of them. Manual
   // entry stays available regardless — this is purely additive.
-  //
-  // We canonicalize state + city against /locations/postcodes/search so
-  // the names match our seeded reference data (otherwise iOS might
-  // return "Bengaluru" while we serve "Bengaluru", or "Karnataka" vs
-  // "Karnatak"). When the canonicalize lookup misses we still fall
-  // through to the raw reverse-geocode values rather than leave fields
-  // blank — the chef can adjust either way.
   async function handleUseCurrentLocation(): Promise<void> {
     setLocating(true);
     try {
@@ -227,8 +220,7 @@ export default function KitchenDetailsScreen() {
         return;
       }
       // Block non-India locations: the address form, state list, and PIN
-      // validation are all India-only. Bailing here keeps the chef from
-      // saving an unusable address.
+      // validation are all India-only.
       if (top.isoCountryCode && top.isoCountryCode !== 'IN') {
         showToast({
           message: `HomeChef is India-only today — detected ${top.country ?? top.isoCountryCode}.`,
@@ -237,12 +229,9 @@ export default function KitchenDetailsScreen() {
         return;
       }
 
-      // addressLine1 — best-effort assembly of building + street.
       const line1 = [top.name, top.street].filter(Boolean).join(', ');
       if (line1) setValue('addressLine1', line1, { shouldValidate: true });
 
-      // Try the canonicalized path: PIN → /postcodes/search → matched
-      // state/city/PIN that align with our seed data.
       let canonicalized = false;
       if (top.postalCode) {
         try {
@@ -258,8 +247,7 @@ export default function KitchenDetailsScreen() {
             canonicalized = true;
           }
         } catch {
-          // Network hiccup — fall through to the raw reverse-geocode
-          // values below.
+          // Network hiccup — fall through.
         }
       }
 
@@ -276,7 +264,7 @@ export default function KitchenDetailsScreen() {
         message: 'Address filled from your location — adjust as needed.',
         tone: 'success',
       });
-    } catch (err) {
+    } catch (_err) {
       showToast({
         message: 'Location lookup failed — enter your address manually.',
         tone: 'error',
@@ -302,114 +290,128 @@ export default function KitchenDetailsScreen() {
       step={2}
       total={6}
       title="Your kitchen"
-      subtitle="Name, style, and address — what your customers will find."
+      subtitle="Name, cuisine, and where customers find you."
       primaryLabel="Continue"
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >
-      {/* Business name */}
-      <Controller
-        control={control}
-        name="businessName"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Kitchen / business name"
-            placeholder="e.g. Amma's Kitchen"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            autoCapitalize="words"
-            error={errors.businessName?.message}
-          />
-        )}
-      />
-
-      {/* Cuisine chips — outlined pill pattern, ink border active */}
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Cuisine types</Text>
-        <View style={styles.chipRow}>
-          {CUISINE_OPTIONS.map((cuisine) => {
-            const selected = selectedCuisines?.includes(cuisine) ?? false;
-            return (
-              <View
-                key={cuisine}
-                style={[styles.chip, selected && styles.chipActive]}
-              >
-                <Text
-                  style={[styles.chipLabel, selected && styles.chipLabelActive]}
-                  onPress={() => toggleCuisine(cuisine)}
-                  suppressHighlighting
-                >
-                  {cuisine}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-        {errors.cuisines ? (
-          <Text style={styles.fieldError}>{errors.cuisines.message}</Text>
-        ) : null}
+      {/* ── IDENTITY ──────────────────────────────────────────── */}
+      <View style={styles.sectionLabel}>
+        <UtensilsCrossed size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>KITCHEN IDENTITY</Text>
       </View>
 
-      {/* Description */}
-      <View style={styles.fieldGroup}>
+      <View style={styles.fieldCard}>
+        {/* Business name */}
         <Controller
           control={control}
-          name="description"
+          name="businessName"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="About your kitchen"
-              placeholder="Describe your kitchen, specialties, and cooking style (min 50 characters)"
+              label="Kitchen / business name"
+              placeholder="e.g. Amma's Kitchen"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
-              multiline
-              numberOfLines={4}
-              inputStyle={styles.textArea}
-              error={errors.description?.message}
+              autoCapitalize="words"
+              error={errors.businessName?.message}
             />
           )}
         />
-        <Text style={styles.charCount}>{(descriptionValue ?? '').length} / 500</Text>
+
+        <View style={styles.innerHairline} />
+
+        {/* Cuisine chips — outlined pill pattern, ink border active */}
+        <View>
+          <Text style={styles.fieldLabel}>Cuisine types</Text>
+          <View style={styles.chipRow}>
+            {CUISINE_OPTIONS.map((cuisine) => {
+              const selected = selectedCuisines?.includes(cuisine) ?? false;
+              return (
+                <View
+                  key={cuisine}
+                  style={[styles.chip, selected && styles.chipActive]}
+                >
+                  <Text
+                    style={[styles.chipLabel, selected && styles.chipLabelActive]}
+                    onPress={() => toggleCuisine(cuisine)}
+                    suppressHighlighting
+                  >
+                    {cuisine}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          {errors.cuisines ? (
+            <Text style={styles.fieldError}>{errors.cuisines.message}</Text>
+          ) : null}
+        </View>
+
+        <View style={styles.innerHairline} />
+
+        {/* Description */}
+        <View>
+          <Controller
+            control={control}
+            name="description"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="About your kitchen"
+                placeholder="Describe your kitchen, specialties, and cooking style (min 50 characters)"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                multiline
+                numberOfLines={4}
+                inputStyle={styles.textArea}
+                error={errors.description?.message}
+              />
+            )}
+          />
+          <Text style={styles.charCount}>{(descriptionValue ?? '').length} / 500</Text>
+        </View>
       </View>
 
-      {/* Kitchen address section — single clean header, no hairlines.
-          The section reads as: header → primary actions → manual fields. */}
-      <Text style={styles.sectionTitle}>Kitchen address</Text>
+      {/* ── ADDRESS ───────────────────────────────────────────── */}
+      <View style={styles.hairline} />
 
-      {/* GPS + search live in one tight group so they read as paired
-          "fast paths" before the manual fields begin. */}
-      <View style={styles.fastPathGroup}>
-        <Pressable
-          onPress={handleUseCurrentLocation}
-          disabled={locating}
-          accessibilityRole="button"
-          accessibilityLabel="Use my current location to fill the address"
-        >
-          {({ pressed }) => (
-            <View
-              style={[
-                styles.locateCta,
-                pressed && { opacity: 0.85 },
-                locating && { opacity: 0.7 },
-              ]}
-            >
-              {locating ? (
-                <ActivityIndicator size="small" color={theme.colors.paper} />
-              ) : (
-                <MapPin size={18} color={theme.colors.paper} strokeWidth={2.2} />
-              )}
-              <Text style={styles.locateCtaLabel}>
-                {locating ? 'Finding your address…' : 'Use my current location'}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+      <View style={styles.sectionLabel}>
+        <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>KITCHEN ADDRESS</Text>
+      </View>
 
-        {/* Search — no separate label, no helper. Placeholder carries
-            the affordance; the suggestions panel is the feedback. */}
+      {/* GPS fast-path — ink-filled primary affordance */}
+      <Pressable
+        onPress={handleUseCurrentLocation}
+        disabled={locating}
+        accessibilityRole="button"
+        accessibilityLabel="Use my current location to fill the address"
+      >
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.locateCta,
+              pressed && { opacity: 0.85 },
+              locating && { opacity: 0.7 },
+            ]}
+          >
+            {locating ? (
+              <ActivityIndicator size="small" color={theme.colors.paper} />
+            ) : (
+              <Navigation size={16} color={theme.colors.paper} strokeWidth={2.2} />
+            )}
+            <Text style={styles.locateCtaLabel}>
+              {locating ? 'Finding your address…' : 'Use my current location'}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+
+      {/* Search field */}
+      <View style={styles.searchWrap}>
         <Input
           label=""
-          placeholder="Search PIN, area, or street"
+          placeholder="Search PIN, area, or street name"
           value={postcodeQuery}
           onChangeText={(text) => {
             setPostcodeQuery(text);
@@ -417,8 +419,6 @@ export default function KitchenDetailsScreen() {
           }}
           onFocus={() => setShowPostcodeSuggestions(true)}
           onBlur={() => {
-            // Delay so a tap on a suggestion row registers before the
-            // panel closes (taps + onBlur race on iOS keyboards).
             setTimeout(() => setShowPostcodeSuggestions(false), 150);
           }}
           autoCapitalize="words"
@@ -432,8 +432,6 @@ export default function KitchenDetailsScreen() {
               </View>
             ) : (
               <>
-                {/* Seeded PIN registry hits — fast, canonical state/city
-                    names that match our chip strips exactly. */}
                 {(postcodeSearch.data ?? []).map((item) => (
                   <Pressable
                     key={`pin-${item.code}`}
@@ -456,16 +454,10 @@ export default function KitchenDetailsScreen() {
                   </Pressable>
                 ))}
 
-                {/* Photon (OpenStreetMap) street-level matches. Same
-                    visual pattern as the PIN rows but with a map-pin
-                    glyph in the leading slot to signal "off-registry,
-                    from the world geocoder". */}
                 {(addressAutocomplete.data ?? []).map((item, idx) => (
                   <Pressable
                     key={`osm-${idx}-${item.description}`}
-                    onPress={() => {
-                      void pickAddressSuggestion(item);
-                    }}
+                    onPress={() => { void pickAddressSuggestion(item); }}
                     accessibilityRole="button"
                     accessibilityLabel={item.description}
                   >
@@ -476,11 +468,7 @@ export default function KitchenDetailsScreen() {
                           pressed && { backgroundColor: theme.colors.bone },
                         ]}
                       >
-                        <MapPin
-                          size={18}
-                          color={theme.colors.herb.DEFAULT}
-                          strokeWidth={2.2}
-                        />
+                        <MapPin size={16} color={theme.colors.herb.DEFAULT} strokeWidth={2.2} />
                         <Text style={styles.suggestionMeta} numberOfLines={2}>
                           {item.description}
                         </Text>
@@ -503,189 +491,226 @@ export default function KitchenDetailsScreen() {
         ) : null}
       </View>
 
-      {/* Address fields */}
-      <Controller
-        control={control}
-        name="addressLine1"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Address line 1"
-            placeholder="House / building, street"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            autoCapitalize="words"
-            error={errors.addressLine1?.message}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="addressLine2"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Address line 2"
-            placeholder="Apartment, suite (optional)"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value ?? ''}
-            autoCapitalize="words"
-          />
-        )}
-      />
-
-      {/* State — Input is the canonical field (filled by GPS / Search /
-          chip / manual typing). The chip strip below offers quick taps. */}
-      <View style={styles.pickerField}>
+      {/* Manual address fields grouped in a card */}
+      <View style={styles.fieldCard}>
         <Controller
           control={control}
-          name="state"
+          name="addressLine1"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="State"
-              placeholder="Tap a state below or type"
+              label="Address line 1"
+              placeholder="House / building, street"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               autoCapitalize="words"
-              error={errors.state?.message}
+              error={errors.addressLine1?.message}
             />
           )}
         />
-        {states.isLoading ? null : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pickerStrip}
-          >
-            {(states.data ?? []).map((s) => {
-              const selected = s.name === selectedStateName;
-              return (
-                <Pressable
-                  key={s.id}
-                  onPress={() => pickState(s)}
-                  hitSlop={4}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.pickerChip,
-                        selected && styles.pickerChipActive,
-                        pressed && { opacity: 0.7 },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerChipLabel,
-                          selected && styles.pickerChipLabelActive,
-                        ]}
-                      >
-                        {s.name}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
 
-      {/* City — same pattern as State. The chip strip is gated on a
-          selected state since cities are seeded per-state; if we don't
-          have seeded cities for that state, the strip just stays empty
-          and the chef types into the Input directly. */}
-      <View style={styles.pickerField}>
+        <View style={styles.innerHairline} />
+
         <Controller
           control={control}
-          name="city"
+          name="addressLine2"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="City"
-              placeholder={
-                selectedStateCode
-                  ? 'Tap a city below or type'
-                  : 'Pick a state, then tap or type'
-              }
+              label="Address line 2"
+              placeholder="Apartment, suite (optional)"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value ?? ''}
+              autoCapitalize="words"
+            />
+          )}
+        />
+
+        <View style={styles.innerHairline} />
+
+        {/* State — Input + quick-pick chip strip */}
+        <View>
+          <Controller
+            control={control}
+            name="state"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="State"
+                placeholder="Tap a state below or type"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                error={errors.state?.message}
+              />
+            )}
+          />
+          {states.isLoading ? null : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.pickerStrip}
+            >
+              {(states.data ?? []).map((s) => {
+                const selected = s.name === selectedStateName;
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => pickState(s)}
+                    hitSlop={4}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    {({ pressed }) => (
+                      <View
+                        style={[
+                          styles.pickerChip,
+                          selected && styles.pickerChipActive,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pickerChipLabel,
+                            selected && styles.pickerChipLabelActive,
+                          ]}
+                        >
+                          {s.name}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
+        <View style={styles.innerHairline} />
+
+        {/* City — same pattern as State */}
+        <View>
+          <Controller
+            control={control}
+            name="city"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="City"
+                placeholder={
+                  selectedStateCode
+                    ? 'Tap a city below or type'
+                    : 'Pick a state, then tap or type'
+                }
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                error={errors.city?.message}
+              />
+            )}
+          />
+          {selectedStateCode && !cities.isLoading && (cities.data?.length ?? 0) > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.pickerStrip}
+            >
+              {(cities.data ?? []).map((c) => {
+                const selected = c.name === selectedCityName;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => pickCity(c)}
+                    hitSlop={4}
+                  >
+                    {({ pressed }) => (
+                      <View
+                        style={[
+                          styles.pickerChip,
+                          selected && styles.pickerChipActive,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pickerChipLabel,
+                            selected && styles.pickerChipLabelActive,
+                          ]}
+                        >
+                          {c.name}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+        </View>
+
+        <View style={styles.innerHairline} />
+
+        {/* PIN code */}
+        <Controller
+          control={control}
+          name="postalCode"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="PIN code"
+              placeholder="6-digit PIN"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
-              autoCapitalize="words"
-              error={errors.city?.message}
+              keyboardType="number-pad"
+              maxLength={6}
+              error={errors.postalCode?.message}
             />
           )}
         />
-        {selectedStateCode && !cities.isLoading && (cities.data?.length ?? 0) > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pickerStrip}
-          >
-            {(cities.data ?? []).map((c) => {
-              const selected = c.name === selectedCityName;
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => pickCity(c)}
-                  hitSlop={4}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.pickerChip,
-                        selected && styles.pickerChipActive,
-                        pressed && { opacity: 0.7 },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerChipLabel,
-                          selected && styles.pickerChipLabelActive,
-                        ]}
-                      >
-                        {c.name}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
       </View>
 
-      {/* PIN code — strict 6-digit input. Pre-filled by the GPS button
-          and the Search-address picker; the chef can still type it in
-          manually as the always-available fallback. */}
-      <Controller
-        control={control}
-        name="postalCode"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="PIN code"
-            placeholder="6-digit PIN"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            keyboardType="number-pad"
-            maxLength={6}
-            error={errors.postalCode?.message}
-          />
-        )}
-      />
-
-      {/* Spacer so last field clears sticky CTA */}
       <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  fieldGroup: {
+  // Section label row: small icon + caps text
+  sectionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: theme.spacing[1],
+    marginBottom: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  sectionLabelText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: theme.colors.ink.muted,
+  },
+
+  // Hairline separator between sections
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[4],
+  },
+
+  // Inner hairline between fields inside a card
+  innerHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[3],
+  },
+
+  // Grouped card — hairline border, no shadow
+  fieldCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.paper,
   },
 
   fieldLabel: {
@@ -702,7 +727,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
 
-  // Cuisine chips — outlined pill with ink-active state, 3–4 per row.
+  // Cuisine chips
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -749,28 +774,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
 
-  // Address section title — left-aligned, semibold body. No hairlines
-  // bracketing it; the GPS CTA + search input pair below carries enough
-  // visual weight to establish the section break on their own.
-  sectionTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
-    marginTop: theme.spacing[4],
-    marginBottom: theme.spacing[2],
-  },
-
-  // Fast-path group: GPS CTA + Search input + suggestion panel sit in
-  // one tight visual block, separated from the manual fields below by
-  // a single spacing unit so they read as paired primary actions.
-  fastPathGroup: {
-    gap: theme.spacing[2],
-    marginBottom: theme.spacing[2],
-  },
-
-  // GPS auto-fill CTA — ink-filled to read as a primary affordance
-  // (this is the fast path we want chefs to take), but smaller than
-  // the screen-level Continue button so it doesn't fight for attention.
+  // GPS CTA — ink-filled primary affordance
   locateCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -781,6 +785,7 @@ const styles = StyleSheet.create({
     minHeight: theme.touchTarget.vendor,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[2],
   },
   locateCtaLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -789,18 +794,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Wrapper for State / City — an Input followed by a quick-pick chip
-  // strip. No extra label (the Input owns its own); the chip strip
-  // adopts the same vertical rhythm as helper text below an input.
-  pickerField: {
-    gap: theme.spacing[2],
+  searchWrap: {
+    marginBottom: theme.spacing[3],
   },
 
-  // Picker strip — horizontally scrollable chip row used for State + City.
+  // Picker strip — horizontally scrollable chip row for State + City
   pickerStrip: {
     gap: theme.spacing[2],
     paddingRight: theme.spacing[4],
     paddingBottom: theme.spacing[1],
+    paddingTop: theme.spacing[2],
   },
   pickerChip: {
     paddingHorizontal: theme.spacing[3],
@@ -826,15 +829,14 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
   },
 
-  // Address suggestions panel — appears under the search Input while
-  // the user types. Capped to ~20 rows via the API limit so this can't
-  // grow arbitrarily tall.
+  // Address suggestions panel
   suggestionsPanel: {
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.paper,
     overflow: 'hidden',
+    marginTop: theme.spacing[1],
   },
   suggestionRow: {
     paddingHorizontal: theme.spacing[3],
@@ -870,6 +872,6 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: theme.spacing[2],
+    height: theme.spacing[4],
   },
 });

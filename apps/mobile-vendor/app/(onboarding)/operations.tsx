@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { Clock, Timer, MapPin } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
@@ -80,18 +81,18 @@ export default function OperationsScreen() {
       step={3}
       total={6}
       title="Operations"
-      subtitle="When you cook, how fast, and how far you deliver."
+      subtitle="When you cook, how fast, and how far."
       primaryLabel="Continue"
       onPrimary={onNext}
     >
-      {/* Operating hours — compact stacked list.
-          Rationale: 7 rows fits without horizontal scroll and the switch + hours
-          per row is the natural mental model ("is Monday open? yes — 9am–9pm").
-          Grouping by weekday/weekend adds a second navigation layer without
-          saving space. Compact stacked list wins. */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Operating hours</Text>
-        <Text style={styles.sectionHint}>Toggle to mark closed</Text>
+      {/* ── WHEN YOU COOK ──────────────────────────────────────── */}
+      <View style={styles.sectionLabel}>
+        <Clock size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>WHEN YOU COOK</Text>
+      </View>
+
+      <View style={styles.sectionHint}>
+        <Text style={styles.hintText}>Toggle days on or off, then set your hours.</Text>
       </View>
 
       <View style={styles.hoursCard}>
@@ -107,7 +108,7 @@ export default function OperationsScreen() {
               {/* Day label — fixed width keeps alignment across rows */}
               <Text style={styles.dayLabel}>{DAY_LABELS[day]}</Text>
 
-              {/* Switch — ink track / paper thumb (vendor density) */}
+              {/* Switch — ink track / paper thumb */}
               <Switch
                 value={!dayData.closed}
                 onValueChange={(val) => toggleDay(day, val)}
@@ -156,11 +157,15 @@ export default function OperationsScreen() {
         })}
       </View>
 
-      {/* Prep time chips */}
-      <View style={styles.sectionGap}>
-        <Text style={styles.sectionTitle}>Prep time</Text>
-        <Text style={styles.sectionHint}>Average time per order</Text>
+      {/* ── HOW FAST ───────────────────────────────────────────── */}
+      <View style={styles.hairline} />
+
+      <View style={styles.sectionLabel}>
+        <Timer size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>PREP TIME</Text>
       </View>
+      <Text style={styles.hintText}>Average time per order before it's ready.</Text>
+
       <View style={styles.chipRow}>
         {PREP_TIME_OPTIONS.map((option) => {
           const selected = prepTime === option;
@@ -181,8 +186,15 @@ export default function OperationsScreen() {
         })}
       </View>
 
-      {/* Service radius */}
-      <View style={styles.sectionGap}>
+      {/* ── HOW FAR ────────────────────────────────────────────── */}
+      <View style={styles.hairline} />
+
+      <View style={styles.sectionLabel}>
+        <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>DELIVERY AREA</Text>
+      </View>
+
+      <View style={styles.fieldCard}>
         <Input
           label="Service radius (km)"
           placeholder="1–50 km"
@@ -190,7 +202,7 @@ export default function OperationsScreen() {
           onChangeText={setServiceRadius}
           keyboardType="number-pad"
           maxLength={2}
-          helper="Maximum distance you will accept orders from."
+          helper="Maximum distance from your kitchen to accept orders."
         />
       </View>
 
@@ -200,37 +212,44 @@ export default function OperationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Section header: title left, hint right.
-  sectionHeader: {
+  // Section label row: small icon + caps text
+  sectionLabel: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: theme.spacing[1],
     marginBottom: theme.spacing[2],
   },
-
-  sectionGap: {
-    marginTop: theme.spacing[5],
-  },
-
-  sectionTitle: {
+  sectionLabelText: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
-  },
-
-  sectionHint: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
+    fontSize: 10,
+    letterSpacing: 1.2,
     color: theme.colors.ink.muted,
   },
 
-  // The 7-row hours block sits inside a hairline-bordered card. This
-  // groups the rows visually without adding heavy card elevation.
+  sectionHint: {
+    marginBottom: theme.spacing[2],
+  },
+  hintText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[2],
+  },
+
+  // Hairline separator between sections
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[4],
+  },
+
+  // The 7-row hours block — hairline-bordered card
   hoursCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
     overflow: 'hidden',
+    backgroundColor: theme.colors.paper,
   },
 
   dayRow: {
@@ -252,7 +271,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
-    width: 32, // fixed — keeps switch column aligned across all rows
+    width: 32,
   },
 
   hoursInputRow: {
@@ -267,7 +286,6 @@ const styles = StyleSheet.create({
     width: 64,
   },
 
-  // Compact time input — no label, centre-aligned value.
   timeInput: {
     textAlign: 'center',
     fontSize: theme.typography.size.bodySm.size,
@@ -290,12 +308,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // Prep time outlined pill chips — same pattern as kitchen-details cuisines.
+  // Prep time chips
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing[2],
-    marginTop: theme.spacing[2],
+    marginTop: theme.spacing[1],
   },
 
   chip: {
@@ -325,7 +343,16 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
   },
 
+  // Service radius field card
+  fieldCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.paper,
+  },
+
   bottomSpacer: {
-    height: theme.spacing[2],
+    height: theme.spacing[4],
   },
 });

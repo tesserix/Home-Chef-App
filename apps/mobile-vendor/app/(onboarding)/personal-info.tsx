@@ -1,8 +1,9 @@
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
+import { User, Phone, Mail } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
@@ -51,58 +52,84 @@ export default function PersonalInfoScreen() {
       step={1}
       total={6}
       title="Tell us about you"
-      subtitle="The chef behind the kitchen — your customers will see this."
+      subtitle="Your customers will see your name and contact details."
       primaryLabel="Continue"
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >
-      <Controller
-        control={control}
-        name="fullName"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Full name"
-            placeholder="Enter your full name"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            autoCapitalize="words"
-            error={errors.fullName?.message}
-          />
-        )}
-      />
+      {/* ── WHO YOU ARE ─────────────────────────────────────── */}
+      <View style={styles.sectionLabel}>
+        <User size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>IDENTITY</Text>
+      </View>
 
-      <Controller
-        control={control}
-        name="phone"
-        render={({ field: { onChange, onBlur, value } }) => (
-          <Input
-            label="Phone number"
-            placeholder="10-digit mobile number"
-            onBlur={onBlur}
-            onChangeText={onChange}
-            value={value}
-            keyboardType="phone-pad"
-            maxLength={10}
-            helper="We'll use this for delivery coordination only."
-            error={errors.phone?.message}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { value } }) => (
-          <View style={styles.lockedFieldWrap}>
+      <View style={styles.fieldCard}>
+        <Controller
+          control={control}
+          name="fullName"
+          render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Email"
+              label="Full name"
+              placeholder="Enter your full name"
+              onBlur={onBlur}
+              onChangeText={onChange}
               value={value}
-              editable={false}
+              autoCapitalize="words"
+              error={errors.fullName?.message}
             />
-            <Text style={styles.lockedHint}>Signed in with Google — cannot be changed.</Text>
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
+
+      {/* ── HOW WE REACH YOU ────────────────────────────────── */}
+      <View style={styles.hairline} />
+
+      <View style={styles.sectionLabel}>
+        <Phone size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>CONTACT</Text>
+      </View>
+
+      <View style={styles.fieldCard}>
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="Phone number"
+              placeholder="10-digit mobile number"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              keyboardType="phone-pad"
+              maxLength={10}
+              helper="Used for delivery coordination only."
+              error={errors.phone?.message}
+            />
+          )}
+        />
+
+        {/* Hairline between phone and email inside the contact group */}
+        <View style={styles.innerHairline} />
+
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { value } }) => (
+            <View style={styles.lockedWrap}>
+              <View style={styles.lockedLabelRow}>
+                <Mail size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+                <Text style={styles.lockedLabel}>EMAIL</Text>
+              </View>
+              <View style={styles.lockedField}>
+                <Text style={styles.lockedValue} numberOfLines={1}>{value}</Text>
+                <View style={styles.lockedBadge}>
+                  <Text style={styles.lockedBadgeText}>Locked</Text>
+                </View>
+              </View>
+              <Text style={styles.lockedHint}>Signed in with Google — cannot be changed here.</Text>
+            </View>
+          )}
+        />
+      </View>
 
       <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
@@ -110,11 +137,92 @@ export default function PersonalInfoScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Locked email field — wraps the Input with a small caption below it.
-  lockedFieldWrap: {
+  // Section label row: small icon + caps text
+  sectionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: theme.spacing[1],
+    marginBottom: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  sectionLabelText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: theme.colors.ink.muted,
   },
 
+  // Hairline separator between sections
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[4],
+  },
+
+  // Inner hairline — between fields inside the same group
+  innerHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[3],
+  },
+
+  // Card: hairline border, no shadow, no elevation
+  fieldCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    padding: theme.spacing[4],
+    backgroundColor: theme.colors.paper,
+    gap: theme.spacing[0],
+  },
+
+  // Locked email presentation
+  lockedWrap: {
+    gap: theme.spacing[1],
+  },
+  lockedLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    marginBottom: theme.spacing[1],
+  },
+  lockedLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.0,
+    color: theme.colors.ink.muted,
+  },
+  lockedField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    minHeight: theme.touchTarget.vendor,
+    gap: theme.spacing[2],
+  },
+  lockedValue: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.muted,
+  },
+  lockedBadge: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.mist.DEFAULT,
+  },
+  lockedBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: theme.colors.ink.soft,
+  },
   lockedHint: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
@@ -123,6 +231,6 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: theme.spacing[2],
+    height: theme.spacing[4],
   },
 });

@@ -1,7 +1,7 @@
 // apps/mobile-vendor/app/(onboarding)/review.tsx
 // Step 6/6 — Review submitted info + Submit Application.
 // StyleSheet only — no NativeWind className.
-// Layout: hairline-divided sections (not bordered cards).
+// Layout: hairline-divided sections with edit links.
 
 import {
   ActivityIndicator,
@@ -13,12 +13,12 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { Pencil, CheckCircle } from 'lucide-react-native';
 import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
-// Map the raw cancellation policy value to a human-readable label.
 const POLICY_LABELS: Record<string, string> = {
   no_cancellations: 'No cancellations after order accepted',
   up_to_1_hour: 'Up to 1 hour before prep start',
@@ -26,16 +26,16 @@ const POLICY_LABELS: Record<string, string> = {
 };
 
 const DAY_LABELS: Record<string, string> = {
-  monday: 'Monday',
-  tuesday: 'Tuesday',
-  wednesday: 'Wednesday',
-  thursday: 'Thursday',
-  friday: 'Friday',
-  saturday: 'Saturday',
-  sunday: 'Sunday',
+  monday: 'Mon',
+  tuesday: 'Tue',
+  wednesday: 'Wed',
+  thursday: 'Thu',
+  friday: 'Fri',
+  saturday: 'Sat',
+  sunday: 'Sun',
 };
 
-// RowItem — a label / value pair within a section.
+// RowItem — label / value pair within a section
 function RowItem({
   label,
   value,
@@ -55,30 +55,31 @@ function RowItem({
   );
 }
 
-// SectionHeader — uppercase label above a hairline-divided block.
-function SectionHeader({ title }: { title: string }): React.ReactElement {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
-
-// Section — groups a header and rows without a bordered card.
-// Rationale: the review screen is a long read, not an interactive surface.
-// Hairline-divided sections keep visual hierarchy without adding card chrome
-// on top of already-dense content. Bordered cards would create a nested
-// box-inside-box feel once the scaffold's outer scroll container is considered.
+// Section — caps label header + edit link + hairline-divided rows
 function Section({
   title,
+  editRoute,
   children,
 }: {
   title: string;
+  editRoute: string;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
     <View style={styles.section}>
-      <SectionHeader title={title} />
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Pressable
+          onPress={() => router.push(editRoute as Parameters<typeof router.push>[0])}
+          hitSlop={8}
+          style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${title}`}
+        >
+          <Pencil size={12} color={theme.colors.ink.soft} strokeWidth={2} />
+          <Text style={styles.editBtnLabel}>Edit</Text>
+        </Pressable>
+      </View>
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );
@@ -90,13 +91,11 @@ export default function ReviewScreen() {
 
   const { personalInfo, kitchenDetails, operations, documents, policies } = store;
 
-  // Format open-days string from the hours map.
-  const openDaysFull = Object.entries(operations.operatingHours)
+  const openDaysShort = Object.entries(operations.operatingHours)
     .filter(([, hours]) => !hours.closed)
     .map(([day]) => DAY_LABELS[day] ?? day)
     .join(', ');
 
-  // Build the full address string, filtering empty parts.
   const fullAddress = [
     kitchenDetails.addressLine1,
     kitchenDetails.addressLine2,
@@ -143,78 +142,76 @@ export default function ReviewScreen() {
     }
   }
 
+  // Document status pills
+  const idStatus = documents.idProofUri ? 'Uploaded' : 'Missing';
+  const fssaiStatus = documents.fssaiUri ? 'Uploaded' : 'Missing';
+  const docsComplete = Boolean(documents.idProofUri && documents.fssaiUri);
+
   return (
     <OnboardingScaffold
       step={6}
       total={6}
       title="Review & submit"
-      subtitle="Check everything looks right before sending your application."
+      subtitle="Confirm your details before sending the application."
       primaryLabel={submitting ? '' : 'Submit application'}
       onPrimary={onSubmit}
       primaryLoading={submitting}
       primaryDisabled={submitting}
     >
-      {/* Top editorial note */}
-      <View style={styles.noteBlock}>
-        <Text style={styles.noteText}>
-          Our team reviews applications within 24–48 hours. You'll receive a
-          notification once your kitchen is approved.
+      {/* Readiness indicator */}
+      <View style={[styles.readinessRow, docsComplete && styles.readinessComplete]}>
+        <CheckCircle
+          size={16}
+          color={docsComplete ? theme.colors.herb.DEFAULT : theme.colors.ink.muted}
+          strokeWidth={2}
+        />
+        <Text style={[styles.readinessText, docsComplete && styles.readinessTextComplete]}>
+          {docsComplete
+            ? 'All required documents uploaded. Ready to submit.'
+            : 'Missing required documents — go back to Documents to upload.'}
         </Text>
       </View>
 
-      {/* — Personal — */}
-      <Section title="Personal information">
+      {/* ── PERSONAL ─────────────────────────────────────────── */}
+      <Section title="PERSONAL" editRoute="/(onboarding)/personal-info">
         <RowItem label="Full name" value={personalInfo.fullName || '—'} />
         <RowItem label="Phone" value={personalInfo.phone || '—'} />
         <RowItem label="Email" value={personalInfo.email || '—'} isLast />
       </Section>
 
-      {/* — Kitchen — */}
-      <Section title="Kitchen">
+      {/* ── KITCHEN ──────────────────────────────────────────── */}
+      <Section title="KITCHEN" editRoute="/(onboarding)/kitchen-details">
         <RowItem label="Business name" value={kitchenDetails.businessName || '—'} />
         <RowItem
           label="Cuisines"
           value={kitchenDetails.cuisines.length > 0 ? kitchenDetails.cuisines.join(', ') : '—'}
         />
-        <RowItem
-          label="Description"
-          value={kitchenDetails.description || '—'}
-        />
+        <RowItem label="Description" value={kitchenDetails.description || '—'} />
         <RowItem label="Address" value={fullAddress || '—'} isLast />
       </Section>
 
-      {/* — Operations — */}
-      <Section title="Operations">
-        <RowItem
-          label="Open days"
-          value={openDaysFull.length > 0 ? openDaysFull : '—'}
-        />
+      {/* ── OPERATIONS ───────────────────────────────────────── */}
+      <Section title="OPERATIONS" editRoute="/(onboarding)/operations">
+        <RowItem label="Open days" value={openDaysShort.length > 0 ? openDaysShort : '—'} />
         <RowItem label="Prep time" value={operations.prepTime || '—'} />
         <RowItem
-          label="Service radius"
+          label="Radius"
           value={operations.serviceRadius > 0 ? `${operations.serviceRadius} km` : '—'}
           isLast
         />
       </Section>
 
-      {/* — Documents — */}
-      <Section title="Documents">
-        <RowItem
-          label="ID proof"
-          value={documents.idProofUri ? 'Uploaded' : 'Not uploaded'}
-        />
-        <RowItem
-          label="FSSAI license"
-          value={documents.fssaiUri ? 'Uploaded' : 'Not uploaded'}
-          isLast
-        />
+      {/* ── DOCUMENTS ────────────────────────────────────────── */}
+      <Section title="DOCUMENTS" editRoute="/(onboarding)/documents">
+        <RowItem label="ID proof" value={idStatus} />
+        <RowItem label="FSSAI license" value={fssaiStatus} isLast />
       </Section>
 
-      {/* — Policies — */}
-      <Section title="Policies">
-        <RowItem label="Terms accepted" value={policies.acceptedTerms ? 'Yes' : 'No'} />
+      {/* ── POLICIES ─────────────────────────────────────────── */}
+      <Section title="POLICIES" editRoute="/(onboarding)/policies">
+        <RowItem label="Terms" value={policies.acceptedTerms ? 'Accepted' : 'Not accepted'} />
         <RowItem
-          label="Cancellation policy"
+          label="Cancellation"
           value={
             policies.cancellationPolicy
               ? (POLICY_LABELS[policies.cancellationPolicy] ?? policies.cancellationPolicy)
@@ -224,7 +221,7 @@ export default function ReviewScreen() {
         />
       </Section>
 
-      {/* Loading indicator sits above the scaffold's sticky CTA when submitting. */}
+      {/* Submitting indicator */}
       {submitting ? (
         <View style={styles.submittingRow}>
           <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
@@ -238,47 +235,75 @@ export default function ReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Soft note block at top of the review.
-  noteBlock: {
-    backgroundColor: theme.colors.bone,
-    borderRadius: theme.radius.sm,
+  // Readiness indicator strip
+  readinessRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    borderLeftWidth: 2,
-    borderLeftColor: theme.colors.herb.DEFAULT,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.bone,
+    marginBottom: theme.spacing[2],
   },
-
-  noteText: {
+  readinessComplete: {
+    borderColor: theme.colors.herb.DEFAULT,
+    backgroundColor: 'rgba(194, 65, 12, 0.06)',
+  },
+  readinessText: {
+    flex: 1,
     fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    lineHeight: theme.typography.size.bodySm.size * 1.55,
+    fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.soft,
+    lineHeight: theme.typography.size.caption.size * 1.5,
+  },
+  readinessTextComplete: {
+    color: theme.colors.ink.DEFAULT,
+    fontFamily: 'Inter-Medium',
   },
 
-  // Section — no card, just spacing + hairline.
+  // Section — hairline top border + spacing
   section: {
-    marginTop: theme.spacing[5],
+    marginTop: theme.spacing[4],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.mist.DEFAULT,
   },
 
-  sectionHeader: {
-    paddingVertical: theme.spacing[3],
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[1],
   },
 
   sectionTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.label.size,
-    letterSpacing: 0.6,
+    fontSize: 10,
+    letterSpacing: 1.2,
     color: theme.colors.ink.muted,
-    textTransform: 'uppercase',
+  },
+
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  editBtnLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
   },
 
   sectionBody: {
-    // No extra padding — rows carry their own vertical rhythm.
+    // Rows carry their own vertical rhythm
   },
 
-  // Individual label / value row within a section.
+  // Label / value row
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -287,12 +312,10 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
     minHeight: theme.touchTarget.vendor,
   },
-
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
-
   rowLabel: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
@@ -301,7 +324,6 @@ const styles = StyleSheet.create({
     maxWidth: '38%',
     lineHeight: theme.typography.size.bodySm.size * 1.45,
   },
-
   rowValue: {
     fontFamily: 'Inter-Medium',
     fontSize: theme.typography.size.bodySm.size,
@@ -319,7 +341,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing[2],
     paddingVertical: theme.spacing[4],
   },
-
   submittingLabel: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
@@ -327,6 +348,6 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: theme.spacing[4],
+    height: theme.spacing[6],
   },
 });

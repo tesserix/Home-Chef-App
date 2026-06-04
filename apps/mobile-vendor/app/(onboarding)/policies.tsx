@@ -5,12 +5,14 @@
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { Check, RotateCcw } from 'lucide-react-native';
 import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
@@ -19,6 +21,15 @@ import {
   CANCELLATION_POLICY_OPTIONS,
   type CancellationPolicy,
 } from '../../constants/terms';
+
+// Bullet points extracted from the terms text for scannable display
+const TERMS_BULLETS = [
+  'Maintain food hygiene standards per FSSAI regulations',
+  'Ensure accurate menu descriptions and pricing',
+  'Prepare orders within your stated prep time',
+  'Comply with all applicable local food safety laws',
+  'HomeChef may suspend accounts for repeated hygiene complaints',
+];
 
 export default function PoliciesScreen() {
   const { policies, updatePolicies, setStep } = useVendorOnboardingStore();
@@ -49,42 +60,67 @@ export default function PoliciesScreen() {
       step={5}
       total={6}
       title="Policies"
-      subtitle="Read, agree, and choose how you handle cancellations."
+      subtitle="Agree to our terms and set how you handle cancellations."
       primaryLabel="Continue"
       onPrimary={onNext}
       primaryDisabled={!canContinue}
     >
-      {/* Terms box — hairline bordered, bone bg */}
-      <View style={styles.termsBox}>
-        <Text style={styles.termsText}>{VENDOR_TERMS_TEXT}</Text>
+      {/* ── TERMS & CONDITIONS ────────────────────────────────── */}
+      <View style={styles.sectionLabel}>
+        <Text style={styles.sectionLabelText}>TERMS & CONDITIONS</Text>
       </View>
 
-      {/* Terms checkbox — ink border unchecked, ink fill checked. NOT persimmon. */}
+      {/* Scannable bullets instead of a dense text block */}
+      <View style={styles.termsBulletCard}>
+        {TERMS_BULLETS.map((bullet, idx) => (
+          <View
+            key={idx}
+            style={[styles.bulletRow, idx < TERMS_BULLETS.length - 1 && styles.bulletRowBorder]}
+          >
+            <View style={styles.bulletDot} />
+            <Text style={styles.bulletText}>{bullet}</Text>
+          </View>
+        ))}
+        <View style={styles.termsFooterRow}>
+          <Text style={styles.termsFooterText}>
+            Full terms at{' '}
+            <Text style={styles.termsLink}>homechef.in/vendor-terms</Text>
+          </Text>
+        </View>
+      </View>
+
+      {/* Acceptance row — ink checkbox */}
       <Pressable
         onPress={() => setAcceptedTerms((prev) => !prev)}
         style={({ pressed }) => [
           styles.checkRow,
-          pressed && styles.checkRowPressed,
+          acceptedTerms && styles.checkRowAccepted,
+          pressed && { opacity: 0.75 },
         ]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
         accessibilityLabel="I accept the terms and conditions"
       >
         <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-          {acceptedTerms ? <Text style={styles.checkmark}>✓</Text> : null}
+          {acceptedTerms ? (
+            <Check size={12} color={theme.colors.paper} strokeWidth={3} />
+          ) : null}
         </View>
-        <Text style={styles.checkLabel}>I accept the terms and conditions</Text>
+        <Text style={[styles.checkLabel, acceptedTerms && styles.checkLabelAccepted]}>
+          I accept the terms and conditions
+        </Text>
       </Pressable>
 
-      {/* Section divider */}
-      <View style={styles.divider} />
+      {/* ── CANCELLATION POLICY ───────────────────────────────── */}
+      <View style={styles.hairline} />
 
-      {/* Cancellation policy — three radio rows with description.
-          Rationale: three choices each carry a meaningful description
-          ("Up to 1 hour before prep start" needs context). A chip row
-          truncates labels and forces the user to already know what each
-          means. Radio rows with the full label reads clearly at a glance. */}
-      <Text style={styles.policyLabel}>Cancellation policy</Text>
+      <View style={styles.sectionLabel}>
+        <RotateCcw size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+        <Text style={styles.sectionLabelText}>CANCELLATION POLICY</Text>
+      </View>
+      <Text style={styles.sectionHint}>
+        Choose how customers can cancel orders placed with you.
+      </Text>
 
       <View style={styles.radioGroup}>
         {CANCELLATION_POLICY_OPTIONS.map((option, idx) => {
@@ -98,13 +134,14 @@ export default function PoliciesScreen() {
               style={({ pressed }) => [
                 styles.radioRow,
                 !isLast && styles.radioRowBorder,
-                pressed && styles.radioRowPressed,
+                selected && styles.radioRowSelected,
+                pressed && !selected && styles.radioRowPressed,
               ]}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
               accessibilityLabel={option.label}
             >
-              {/* Radio circle — ink border, ink fill dot when selected. NOT persimmon. */}
+              {/* Radio circle */}
               <View style={[styles.radio, selected && styles.radioSelected]}>
                 {selected ? <View style={styles.radioDot} /> : null}
               </View>
@@ -123,34 +160,106 @@ export default function PoliciesScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Terms scroll box — bone bg, hairline border, constrained height.
-  termsBox: {
-    backgroundColor: theme.colors.bone,
+  // Section caps label
+  sectionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    marginBottom: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  sectionLabelText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: theme.colors.ink.muted,
+  },
+
+  sectionHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[3],
+  },
+
+  // Hairline separator
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[4],
+  },
+
+  // Terms bullets card
+  termsBulletCard: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
-    padding: theme.spacing[4],
-    maxHeight: 140,
+    backgroundColor: theme.colors.paper,
+    overflow: 'hidden',
+    marginBottom: theme.spacing[3],
   },
 
-  termsText: {
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+  },
+  bulletRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: theme.colors.ink.soft,
+    marginTop: 7,
+    flexShrink: 0,
+  },
+  bulletText: {
+    flex: 1,
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
-    lineHeight: theme.typography.size.bodySm.size * 1.55,
     color: theme.colors.ink.soft,
+    lineHeight: theme.typography.size.bodySm.size * 1.5,
   },
 
-  // Checkbox row.
+  termsFooterRow: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.bone,
+  },
+  termsFooterText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+  },
+  termsLink: {
+    fontFamily: 'Inter-Medium',
+    color: theme.colors.ink.soft,
+    textDecorationLine: 'underline',
+  },
+
+  // Checkbox acceptance row
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
     minHeight: theme.touchTarget.vendor,
+    backgroundColor: theme.colors.paper,
   },
-
-  checkRowPressed: {
-    opacity: 0.75,
+  checkRowAccepted: {
+    borderColor: theme.colors.ink.DEFAULT,
+    backgroundColor: theme.colors.bone,
   },
 
   checkbox: {
@@ -164,18 +273,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.paper,
     flexShrink: 0,
   },
-
   checkboxChecked: {
     backgroundColor: theme.colors.ink.DEFAULT,
     borderColor: theme.colors.ink.DEFAULT,
-  },
-
-  checkmark: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 12,
-    color: theme.colors.paper,
-    lineHeight: 14,
-    textAlign: 'center',
   },
 
   checkLabel: {
@@ -185,26 +285,18 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: theme.typography.size.bodySm.size * 1.45,
   },
-
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.mist.DEFAULT,
-    marginVertical: theme.spacing[2],
-  },
-
-  policyLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
+  checkLabelAccepted: {
+    fontFamily: 'Inter-Medium',
     color: theme.colors.ink.DEFAULT,
-    marginBottom: theme.spacing[2],
   },
 
-  // Radio group housed in a hairline card.
+  // Radio group — hairline card
   radioGroup: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
     overflow: 'hidden',
+    backgroundColor: theme.colors.paper,
   },
 
   radioRow: {
@@ -216,17 +308,17 @@ const styles = StyleSheet.create({
     minHeight: theme.touchTarget.vendor,
     backgroundColor: theme.colors.paper,
   },
-
   radioRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
-
+  radioRowSelected: {
+    backgroundColor: theme.colors.bone,
+  },
   radioRowPressed: {
     backgroundColor: theme.colors.bone,
   },
 
-  // Radio circle — 20×20, ink border, no fill until selected.
   radio: {
     width: 20,
     height: 20,
@@ -238,12 +330,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     backgroundColor: theme.colors.paper,
   },
-
   radioSelected: {
     borderColor: theme.colors.ink.DEFAULT,
   },
-
-  // Inner dot — ink fill, not persimmon.
   radioDot: {
     width: 10,
     height: 10,
@@ -258,13 +347,12 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: theme.typography.size.bodySm.size * 1.45,
   },
-
   radioLabelSelected: {
     fontFamily: 'Inter-Medium',
     color: theme.colors.ink.DEFAULT,
   },
 
   bottomSpacer: {
-    height: theme.spacing[2],
+    height: theme.spacing[4],
   },
 });
