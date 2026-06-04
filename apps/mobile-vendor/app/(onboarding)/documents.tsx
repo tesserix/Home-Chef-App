@@ -16,7 +16,7 @@ import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { OnboardingScaffold, useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
@@ -40,6 +40,7 @@ function uriToFilename(uri: string, fileType: 'image' | 'pdf' | null): string {
 
 export default function DocumentsScreen() {
   const { documents, updateDocuments, setStep } = useVendorOnboardingStore();
+  const { show: showToast } = useToast();
 
   const [idUpload, setIdUpload] = useState<UploadState>({ uploading: false, error: null });
   const [fssaiUpload, setFssaiUpload] = useState<UploadState>({ uploading: false, error: null });
@@ -62,11 +63,8 @@ export default function DocumentsScreen() {
     try {
       const formData = new FormData();
       formData.append('type', docType);
-      formData.append('file', {
-        uri,
-        name: fileType === 'pdf' ? 'document.pdf' : 'document.jpg',
-        type: mimeType,
-      } as unknown as Blob);
+      const filename = uri.split('/').pop() ?? (fileType === 'pdf' ? 'document.pdf' : 'document.jpg');
+      formData.append('file', { uri, name: filename, type: mimeType } as unknown as Blob);
 
       await api.post('/chef/documents', formData, multipartConfig());
 
@@ -76,12 +74,17 @@ export default function DocumentsScreen() {
         updateDocuments({ fssaiUri: uri, fssaiType: fileType });
       }
       setUploadState(docType, { uploading: false, error: null });
+      showToast({
+        message: docType === 'id_proof' ? 'ID proof uploaded.' : 'FSSAI license uploaded.',
+        tone: 'success',
+      });
     } catch (error: unknown) {
       const serverError =
         (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
-      const fallback =
-        error instanceof Error ? error.message : 'Upload failed. Please try again.';
-      setUploadState(docType, { uploading: false, error: serverError ?? fallback });
+      const message =
+        serverError ?? (error instanceof Error ? error.message : 'Upload failed. Please try again.');
+      setUploadState(docType, { uploading: false, error: message });
+      showToast({ message, tone: 'error' });
     }
   }
 
@@ -94,47 +97,59 @@ export default function DocumentsScreen() {
   }
 
   async function handleCamera(docType: DocumentType): Promise<void> {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission required', 'Camera access is needed to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsEditing: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      await uploadFile(asset.uri, 'image', 'image/jpeg', docType);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: 'Camera permission denied — tap Gallery to use a saved photo.', tone: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        await uploadFile(result.assets[0].uri, 'image', 'image/jpeg', docType);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Camera unavailable. Try Gallery.';
+      showToast({ message, tone: 'error' });
     }
   }
 
   async function handleGallery(docType: DocumentType): Promise<void> {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission required', 'Gallery access is needed to select a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsEditing: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      await uploadFile(asset.uri, 'image', 'image/jpeg', docType);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: 'Gallery permission denied — please allow photo access in Settings.', tone: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        await uploadFile(result.assets[0].uri, 'image', 'image/jpeg', docType);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not open gallery. Please try again.';
+      showToast({ message, tone: 'error' });
     }
   }
 
   async function handlePdf(docType: DocumentType): Promise<void> {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf'],
-      copyToCacheDirectory: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      await uploadFile(asset.uri, 'pdf', 'application/pdf', docType);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        await uploadFile(result.assets[0].uri, 'pdf', 'application/pdf', docType);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not open document picker. Please try again.';
+      showToast({ message, tone: 'error' });
     }
   }
 
