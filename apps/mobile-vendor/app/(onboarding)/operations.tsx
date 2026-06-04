@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
+    fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
   },
 

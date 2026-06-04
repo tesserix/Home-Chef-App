@@ -1,9 +1,10 @@
-import { Alert, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
@@ -40,10 +41,10 @@ export default function PersonalInfoScreen() {
     router.push('/(onboarding)/kitchen-details');
   }
 
-  const onInvalid = (errs: typeof errors) => {
+  function onInvalid(errs: typeof errors): void {
     const firstError = Object.values(errs)[0];
     if (firstError?.message) Alert.alert('Check your details', firstError.message);
-  };
+  }
 
   return (
     <OnboardingScaffold
@@ -92,16 +93,36 @@ export default function PersonalInfoScreen() {
         control={control}
         name="email"
         render={({ field: { value } }) => (
-          <Input
-            label="Email"
-            value={value}
-            editable={false}
-            helper="Pre-filled from your account."
-          />
+          <View style={styles.lockedFieldWrap}>
+            <Input
+              label="Email"
+              value={value}
+              editable={false}
+            />
+            <Text style={styles.lockedHint}>Signed in with Google — cannot be changed.</Text>
+          </View>
         )}
       />
 
-      <View />
+      <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
   );
 }
+
+const styles = StyleSheet.create({
+  // Locked email field — wraps the Input with a small caption below it.
+  lockedFieldWrap: {
+    gap: theme.spacing[1],
+  },
+
+  lockedHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    paddingHorizontal: theme.spacing[1],
+  },
+
+  bottomSpacer: {
+    height: theme.spacing[2],
+  },
+});
