@@ -372,53 +372,44 @@ export default function KitchenDetailsScreen() {
         <Text style={styles.charCount}>{(descriptionValue ?? '').length} / 500</Text>
       </View>
 
-      {/* Address divider */}
-      <View style={styles.sectionDivider}>
-        <View style={styles.hairline} />
-        <Text style={styles.sectionLabel}>Kitchen address</Text>
-        <View style={styles.hairline} />
-      </View>
+      {/* Kitchen address section — single clean header, no hairlines.
+          The section reads as: header → primary actions → manual fields. */}
+      <Text style={styles.sectionTitle}>Kitchen address</Text>
 
-      {/* GPS auto-fill CTA — the fast path. One tap pulls state, city,
-          PIN, and street from the device location; manual fields below
-          stay editable as the always-available fallback. */}
-      <Pressable
-        onPress={handleUseCurrentLocation}
-        disabled={locating}
-        accessibilityRole="button"
-        accessibilityLabel="Use my current location to fill the address"
-      >
-        {({ pressed }) => (
-          <View
-            style={[
-              styles.locateCta,
-              pressed && { opacity: 0.85 },
-              locating && { opacity: 0.7 },
-            ]}
-          >
-            {locating ? (
-              <ActivityIndicator size="small" color={theme.colors.paper} />
-            ) : (
-              <MapPin size={18} color={theme.colors.paper} strokeWidth={2.2} />
-            )}
-            <Text style={styles.locateCtaLabel}>
-              {locating ? 'Finding your address…' : 'Use my current location'}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-      <Text style={styles.locateCtaHelper}>
-        Or search your address below — or fill the fields manually.
-      </Text>
+      {/* GPS + search live in one tight group so they read as paired
+          "fast paths" before the manual fields begin. */}
+      <View style={styles.fastPathGroup}>
+        <Pressable
+          onPress={handleUseCurrentLocation}
+          disabled={locating}
+          accessibilityRole="button"
+          accessibilityLabel="Use my current location to fill the address"
+        >
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.locateCta,
+                pressed && { opacity: 0.85 },
+                locating && { opacity: 0.7 },
+              ]}
+            >
+              {locating ? (
+                <ActivityIndicator size="small" color={theme.colors.paper} />
+              ) : (
+                <MapPin size={18} color={theme.colors.paper} strokeWidth={2.2} />
+              )}
+              <Text style={styles.locateCtaLabel}>
+                {locating ? 'Finding your address…' : 'Use my current location'}
+              </Text>
+            </View>
+          )}
+        </Pressable>
 
-      {/* Address lookup — debounced search against /locations/postcodes/search.
-          Tapping a result fills state, city, and PIN; the chef still types
-          their building / street into Address line 1 below.
-          This is the middle path between "GPS" and "all manual".  */}
-      <View style={styles.fieldGroup}>
+        {/* Search — no separate label, no helper. Placeholder carries
+            the affordance; the suggestions panel is the feedback. */}
         <Input
-          label="Search address"
-          placeholder="PIN, neighborhood, or area (e.g. 560034 or Koramangala)"
+          label=""
+          placeholder="Search PIN, area, or street"
           value={postcodeQuery}
           onChangeText={(text) => {
             setPostcodeQuery(text);
@@ -432,7 +423,6 @@ export default function KitchenDetailsScreen() {
           }}
           autoCapitalize="words"
           maxLength={60}
-          helper="Type 6-digit PIN, neighborhood, or area name."
         />
         {showPostcodeSuggestions && postcodeQuery.trim().length >= 2 ? (
           <View style={styles.suggestionsPanel}>
@@ -545,14 +535,25 @@ export default function KitchenDetailsScreen() {
         )}
       />
 
-      {/* State picker — horizontal chip strip from /locations/IN/states */}
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>State</Text>
-        {states.isLoading ? (
-          <View style={styles.pickerLoader}>
-            <ActivityIndicator size="small" color={theme.colors.ink.muted} />
-          </View>
-        ) : (
+      {/* State — Input is the canonical field (filled by GPS / Search /
+          chip / manual typing). The chip strip below offers quick taps. */}
+      <View style={styles.pickerField}>
+        <Controller
+          control={control}
+          name="state"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="State"
+              placeholder="Tap a state below or type"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              autoCapitalize="words"
+              error={errors.state?.message}
+            />
+          )}
+        />
+        {states.isLoading ? null : (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -591,27 +592,33 @@ export default function KitchenDetailsScreen() {
             })}
           </ScrollView>
         )}
-        {errors.state ? (
-          <Text style={styles.fieldError}>{errors.state.message}</Text>
-        ) : null}
       </View>
 
-      {/* City picker — horizontal chip strip; only meaningful once a
-          state is selected, so we render a hint if not. Free-text entry
-          stays available via the fallback Input below the strip. */}
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>City</Text>
-        {!selectedStateCode ? (
-          <Text style={styles.fieldHint}>Pick a state first.</Text>
-        ) : cities.isLoading ? (
-          <View style={styles.pickerLoader}>
-            <ActivityIndicator size="small" color={theme.colors.ink.muted} />
-          </View>
-        ) : (cities.data?.length ?? 0) === 0 ? (
-          <Text style={styles.fieldHint}>
-            No seeded cities for this state yet — type your city below.
-          </Text>
-        ) : (
+      {/* City — same pattern as State. The chip strip is gated on a
+          selected state since cities are seeded per-state; if we don't
+          have seeded cities for that state, the strip just stays empty
+          and the chef types into the Input directly. */}
+      <View style={styles.pickerField}>
+        <Controller
+          control={control}
+          name="city"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="City"
+              placeholder={
+                selectedStateCode
+                  ? 'Tap a city below or type'
+                  : 'Pick a state, then tap or type'
+              }
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              autoCapitalize="words"
+              error={errors.city?.message}
+            />
+          )}
+        />
+        {selectedStateCode && !cities.isLoading && (cities.data?.length ?? 0) > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -647,24 +654,7 @@ export default function KitchenDetailsScreen() {
               );
             })}
           </ScrollView>
-        )}
-        {/* Free-text fallback — kept so chefs in cities we haven't seeded
-            yet aren't blocked from completing onboarding. */}
-        <Controller
-          control={control}
-          name="city"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label=""
-              placeholder="Or type city name"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-              error={errors.city?.message}
-            />
-          )}
-        />
+        ) : null}
       </View>
 
       {/* PIN code — strict 6-digit input. Pre-filled by the GPS button
@@ -709,13 +699,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.destructive.DEFAULT,
-    marginTop: theme.spacing[1],
-  },
-
-  fieldHint: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
     marginTop: theme.spacing[1],
   },
 
@@ -766,25 +749,23 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[1],
   },
 
-  // Inline divider with centred label between form sections.
-  sectionDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[3],
-    marginVertical: theme.spacing[3],
-  },
-
-  hairline: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.mist.DEFAULT,
-  },
-
-  sectionLabel: {
+  // Address section title — left-aligned, semibold body. No hairlines
+  // bracketing it; the GPS CTA + search input pair below carries enough
+  // visual weight to establish the section break on their own.
+  sectionTitle: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.label.size,
-    color: theme.colors.ink.soft,
-    letterSpacing: 0.4,
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    marginTop: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+  },
+
+  // Fast-path group: GPS CTA + Search input + suggestion panel sit in
+  // one tight visual block, separated from the manual fields below by
+  // a single spacing unit so they read as paired primary actions.
+  fastPathGroup: {
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[2],
   },
 
   // GPS auto-fill CTA — ink-filled to read as a primary affordance
@@ -800,7 +781,6 @@ const styles = StyleSheet.create({
     minHeight: theme.touchTarget.vendor,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.ink.DEFAULT,
-    marginBottom: theme.spacing[1],
   },
   locateCtaLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -808,12 +788,12 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
     letterSpacing: 0.2,
   },
-  locateCtaHelper: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
-    marginBottom: theme.spacing[3],
+
+  // Wrapper for State / City — an Input followed by a quick-pick chip
+  // strip. No extra label (the Input owns its own); the chip strip
+  // adopts the same vertical rhythm as helper text below an input.
+  pickerField: {
+    gap: theme.spacing[2],
   },
 
   // Picker strip — horizontally scrollable chip row used for State + City.
@@ -845,16 +825,11 @@ const styles = StyleSheet.create({
   pickerChipLabelActive: {
     color: theme.colors.paper,
   },
-  pickerLoader: {
-    paddingVertical: theme.spacing[3],
-    alignItems: 'flex-start',
-  },
 
-  // PIN autocomplete suggestion panel — appears under the input while
-  // the user types. Capped via the API limit (20) so this can't grow
-  // arbitrarily tall.
+  // Address suggestions panel — appears under the search Input while
+  // the user types. Capped to ~20 rows via the API limit so this can't
+  // grow arbitrarily tall.
   suggestionsPanel: {
-    marginTop: theme.spacing[2],
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.md,
@@ -869,14 +844,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-  },
-  // Maps-fallback row styled to read as a different "kind" of result
-  // — a faint persimmon tint on the icon, no border to suggest a
-  // terminal/final action, slightly muted backdrop so it visually
-  // separates from the seeded PIN registry rows above it.
-  mapsRow: {
-    backgroundColor: theme.colors.bone,
-    borderBottomWidth: 0,
   },
   suggestionCode: {
     fontFamily: 'Geist-Bold',
