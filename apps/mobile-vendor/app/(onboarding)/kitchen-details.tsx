@@ -94,7 +94,6 @@ export default function KitchenDetailsScreen() {
   const descriptionValue = watch('description');
   const selectedStateName = watch('state');
   const selectedCityName = watch('city');
-  const postalCodeValue = watch('postalCode');
 
   const states = useStates();
   // Resolve the local state code (e.g. "MH") from the selected state name
@@ -366,8 +365,68 @@ export default function KitchenDetailsScreen() {
         )}
       </Pressable>
       <Text style={styles.locateCtaHelper}>
-        Or fill the fields below manually.
+        Or search your address below — or fill the fields manually.
       </Text>
+
+      {/* Address lookup — debounced search against /locations/postcodes/search.
+          Tapping a result fills state, city, and PIN; the chef still types
+          their building / street into Address line 1 below.
+          This is the middle path between "GPS" and "all manual".  */}
+      <View style={styles.fieldGroup}>
+        <Input
+          label="Search address"
+          placeholder="PIN, neighborhood, or area (e.g. 560034 or Koramangala)"
+          value={postcodeQuery}
+          onChangeText={(text) => {
+            setPostcodeQuery(text);
+            setShowPostcodeSuggestions(true);
+          }}
+          onFocus={() => setShowPostcodeSuggestions(true)}
+          onBlur={() => {
+            // Delay so a tap on a suggestion row registers before the
+            // panel closes (taps + onBlur race on iOS keyboards).
+            setTimeout(() => setShowPostcodeSuggestions(false), 150);
+          }}
+          autoCapitalize="words"
+          maxLength={60}
+          helper="Type 6-digit PIN, neighborhood, or area name."
+        />
+        {showPostcodeSuggestions && postcodeQuery.trim().length >= 2 ? (
+          <View style={styles.suggestionsPanel}>
+            {postcodeSearch.isLoading ? (
+              <View style={styles.suggestionLoader}>
+                <ActivityIndicator size="small" color={theme.colors.ink.muted} />
+              </View>
+            ) : (postcodeSearch.data?.length ?? 0) === 0 ? (
+              <Text style={styles.suggestionEmpty}>
+                No match — fill the fields manually below.
+              </Text>
+            ) : (
+              (postcodeSearch.data ?? []).map((item) => (
+                <Pressable
+                  key={item.code}
+                  onPress={() => pickPostcodeSuggestion(item)}
+                  accessibilityRole="button"
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.suggestionRow,
+                        pressed && { backgroundColor: theme.colors.bone },
+                      ]}
+                    >
+                      <Text style={styles.suggestionCode}>{item.code}</Text>
+                      <Text style={styles.suggestionMeta} numberOfLines={1}>
+                        {item.areaName} · {item.cityName}, {item.stateName}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : null}
+      </View>
 
       {/* Address fields */}
       <Controller
@@ -523,76 +582,25 @@ export default function KitchenDetailsScreen() {
         />
       </View>
 
-      {/* PIN code with autocomplete. Suggestions panel hangs underneath
-          the input while the user is typing; tapping a row fills PIN,
-          city, AND state in one go. */}
-      <View style={styles.fieldGroup}>
-        <Controller
-          control={control}
-          name="postalCode"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="PIN code"
-              placeholder="6-digit PIN or area name"
-              onBlur={() => {
-                onBlur();
-                // Delay hiding so the Pressable above the keyboard has
-                // a chance to register its tap.
-                setTimeout(() => setShowPostcodeSuggestions(false), 150);
-              }}
-              onFocus={() => setShowPostcodeSuggestions(true)}
-              onChangeText={(text) => {
-                onChange(text);
-                setPostcodeQuery(text);
-                setShowPostcodeSuggestions(true);
-              }}
-              value={value}
-              keyboardType="default"
-              maxLength={40}
-              error={errors.postalCode?.message}
-              helper={value && !/^\d{6}$/.test(value) ? undefined : 'Tap a suggestion to autofill state + city.'}
-            />
-          )}
-        />
-        {showPostcodeSuggestions && postcodeQuery.trim().length >= 2 ? (
-          <View style={styles.suggestionsPanel}>
-            {postcodeSearch.isLoading ? (
-              <View style={styles.suggestionLoader}>
-                <ActivityIndicator size="small" color={theme.colors.ink.muted} />
-              </View>
-            ) : (postcodeSearch.data?.length ?? 0) === 0 ? (
-              <Text style={styles.suggestionEmpty}>
-                No match — type the 6-digit PIN manually.
-              </Text>
-            ) : (
-              (postcodeSearch.data ?? []).map((item) => (
-                <Pressable
-                  key={item.code}
-                  onPress={() => pickPostcodeSuggestion(item)}
-                  accessibilityRole="button"
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.suggestionRow,
-                        pressed && { backgroundColor: theme.colors.bone },
-                      ]}
-                    >
-                      <Text style={styles.suggestionCode}>{item.code}</Text>
-                      <Text style={styles.suggestionMeta} numberOfLines={1}>
-                        {item.areaName} · {item.cityName}, {item.stateName}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))
-            )}
-          </View>
-        ) : null}
-        {postalCodeValue && !/^\d{6}$/.test(postalCodeValue) ? (
-          <Text style={styles.fieldHint}>PIN code must be exactly 6 digits.</Text>
-        ) : null}
-      </View>
+      {/* PIN code — strict 6-digit input. Pre-filled by the GPS button
+          and the Search-address picker; the chef can still type it in
+          manually as the always-available fallback. */}
+      <Controller
+        control={control}
+        name="postalCode"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="PIN code"
+            placeholder="6-digit PIN"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            keyboardType="number-pad"
+            maxLength={6}
+            error={errors.postalCode?.message}
+          />
+        )}
+      />
 
       {/* Spacer so last field clears sticky CTA */}
       <View style={styles.bottomSpacer} />
