@@ -20,15 +20,20 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
+import * as Location from 'expo-location';
+import { MapPin } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+import { api } from '../../lib/api';
 import {
   useStates,
   useCities,
   usePostcodeSearch,
   type State,
   type City,
+  type PostcodeSearchResult,
 } from '../../hooks/useLocations';
 
 const CUISINE_OPTIONS = [
@@ -106,6 +111,10 @@ export default function KitchenDetailsScreen() {
   const postcodeSearch = usePostcodeSearch(postcodeQuery);
   const [showPostcodeSuggestions, setShowPostcodeSuggestions] = useReactState(false);
 
+  // Geolocation auto-fill state — drives the spinner on the CTA.
+  const [locating, setLocating] = useReactState(false);
+  const { show: showToast } = useToast();
+
   function toggleCuisine(cuisine: string): void {
     const current = selectedCuisines ?? [];
     if (current.includes(cuisine)) {
@@ -136,6 +145,103 @@ export default function KitchenDetailsScreen() {
     setValue('state', item.stateName, { shouldValidate: true });
     setPostcodeQuery(item.code);
     setShowPostcodeSuggestions(false);
+  }
+
+  // GPS auto-fill. Asks for foreground location permission, reverse-
+  // geocodes the device's current position, and best-effort fills every
+  // address field so the chef rarely has to type any of them. Manual
+  // entry stays available regardless — this is purely additive.
+  //
+  // We canonicalize state + city against /locations/postcodes/search so
+  // the names match our seeded reference data (otherwise iOS might
+  // return "Bengaluru" while we serve "Bengaluru", or "Karnataka" vs
+  // "Karnatak"). When the canonicalize lookup misses we still fall
+  // through to the raw reverse-geocode values rather than leave fields
+  // blank — the chef can adjust either way.
+  async function handleUseCurrentLocation(): Promise<void> {
+    setLocating(true);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.status !== 'granted') {
+        showToast({
+          message: 'Location permission denied — enter your address manually.',
+          tone: 'error',
+        });
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const results = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      const top = results[0];
+      if (!top) {
+        showToast({
+          message: "We couldn't read your address from GPS — enter it manually.",
+          tone: 'error',
+        });
+        return;
+      }
+      // Block non-India locations: the address form, state list, and PIN
+      // validation are all India-only. Bailing here keeps the chef from
+      // saving an unusable address.
+      if (top.isoCountryCode && top.isoCountryCode !== 'IN') {
+        showToast({
+          message: `HomeChef is India-only today — detected ${top.country ?? top.isoCountryCode}.`,
+          tone: 'error',
+        });
+        return;
+      }
+
+      // addressLine1 — best-effort assembly of building + street.
+      const line1 = [top.name, top.street].filter(Boolean).join(', ');
+      if (line1) setValue('addressLine1', line1, { shouldValidate: true });
+
+      // Try the canonicalized path: PIN → /postcodes/search → matched
+      // state/city/PIN that align with our seed data.
+      let canonicalized = false;
+      if (top.postalCode) {
+        try {
+          const r = await api.get<{ data: PostcodeSearchResult[] }>(
+            `/locations/postcodes/search?q=${encodeURIComponent(top.postalCode)}`,
+          );
+          const hit = r.data.data.find((row) => row.code === top.postalCode);
+          if (hit) {
+            setValue('postalCode', hit.code, { shouldValidate: true });
+            setValue('city', hit.cityName, { shouldValidate: true });
+            setValue('state', hit.stateName, { shouldValidate: true });
+            setPostcodeQuery(hit.code);
+            canonicalized = true;
+          }
+        } catch {
+          // Network hiccup — fall through to the raw reverse-geocode
+          // values below.
+        }
+      }
+
+      if (!canonicalized) {
+        if (top.postalCode) {
+          setValue('postalCode', top.postalCode, { shouldValidate: true });
+          setPostcodeQuery(top.postalCode);
+        }
+        if (top.city) setValue('city', top.city, { shouldValidate: true });
+        if (top.region) setValue('state', top.region, { shouldValidate: true });
+      }
+
+      showToast({
+        message: 'Address filled from your location — adjust as needed.',
+        tone: 'success',
+      });
+    } catch (err) {
+      showToast({
+        message: 'Location lookup failed — enter your address manually.',
+        tone: 'error',
+      });
+    } finally {
+      setLocating(false);
+    }
   }
 
   function onSubmit(data: FormValues): void {
@@ -231,13 +337,37 @@ export default function KitchenDetailsScreen() {
         <View style={styles.hairline} />
       </View>
 
-      {/* Country pill — India only today. Surfaces the constraint without
-          forcing the user through a one-option selector. */}
-      <View style={styles.countryBadge}>
-        <Text style={styles.countryBadgeFlag}>🇮🇳</Text>
-        <Text style={styles.countryBadgeLabel}>India</Text>
-        <Text style={styles.countryBadgeHint}>Country</Text>
-      </View>
+      {/* GPS auto-fill CTA — the fast path. One tap pulls state, city,
+          PIN, and street from the device location; manual fields below
+          stay editable as the always-available fallback. */}
+      <Pressable
+        onPress={handleUseCurrentLocation}
+        disabled={locating}
+        accessibilityRole="button"
+        accessibilityLabel="Use my current location to fill the address"
+      >
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.locateCta,
+              pressed && { opacity: 0.85 },
+              locating && { opacity: 0.7 },
+            ]}
+          >
+            {locating ? (
+              <ActivityIndicator size="small" color={theme.colors.paper} />
+            ) : (
+              <MapPin size={18} color={theme.colors.paper} strokeWidth={2.2} />
+            )}
+            <Text style={styles.locateCtaLabel}>
+              {locating ? 'Finding your address…' : 'Use my current location'}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+      <Text style={styles.locateCtaHelper}>
+        Or fill the fields below manually.
+      </Text>
 
       {/* Address fields */}
       <Controller
@@ -564,30 +694,33 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  // Country lock-in pill — flag + label + tiny caption clarifies
-  // what's locked without reading like an interactive input.
-  countryBadge: {
+  // GPS auto-fill CTA — ink-filled to read as a primary affordance
+  // (this is the fast path we want chefs to take), but smaller than
+  // the screen-level Continue button so it doesn't fight for attention.
+  locateCta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: theme.touchTarget.vendor,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bone,
-    marginBottom: theme.spacing[3],
+    backgroundColor: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[1],
   },
-  countryBadgeFlag: { fontSize: 18 },
-  countryBadgeLabel: {
+  locateCtaLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
+    color: theme.colors.paper,
+    letterSpacing: 0.2,
   },
-  countryBadgeHint: {
-    flex: 1,
-    textAlign: 'right',
+  locateCtaHelper: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
+    textAlign: 'center',
+    marginBottom: theme.spacing[3],
   },
 
   // Picker strip — horizontally scrollable chip row used for State + City.
