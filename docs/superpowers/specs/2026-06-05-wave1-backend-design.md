@@ -69,6 +69,10 @@ Response 400:
 - **Source of truth (v1):** env vars on the pod — `MIN_VERSION_VENDOR_IOS`, `MIN_VERSION_VENDOR_ANDROID`, `LATEST_VERSION_VENDOR_IOS`, `LATEST_VERSION_VENDOR_ANDROID`, `STORE_URL_VENDOR_IOS`, `STORE_URL_VENDOR_ANDROID`. Flipping min-version requires a pod restart (acceptable for v1 because we'll rev <1x/month).
 - **Source of truth (v2, deferred):** `mobile_versions` table (`platform, app, min_version, latest_version, store_url, updated_at`) with an admin UI to flip min-version without deploy. Decision deferred until the first time we need a no-deploy bump.
 
+<!-- 2026-06-05 push response answered §8 open question #1: Dependabot breakdown is 6 critical, 35 high, 38 moderate, 3 low = 82 total. §4.6 effort reset to ~3–4 days for critical+high (41 in scope for Wave 1); moderate+low deferred to a Wave 2 sweep. §4.7 Trivy gate flip stays in Wave 1 (still blocked-by §4.6 critical+high being clean). -->
+
+<!-- Cross-doc note: mobile plan currently spec'd to send ONLY X-App-Version, not X-Platform. Resolve in execution either by (a) mobile adding X-Platform header, or (b) backend inferring platform from User-Agent. (a) is cleaner; coordinate before middleware lands. -->
+
 ### 3.2 `X-App-Version` header enforcement
 
 - Mobile clients send `X-App-Version: 1.0.3` on every request.
