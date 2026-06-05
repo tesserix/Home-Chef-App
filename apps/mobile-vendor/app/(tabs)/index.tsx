@@ -351,6 +351,7 @@ export default function DashboardScreen() {
                   key={order.id}
                   order={order}
                   disabled={orderActionLoading}
+                  onOpenDetail={() => router.push(`/orders/${order.id}`)}
                   onAccept={() => triggerAction(order.id, 'accepted')}
                   onReject={() => triggerAction(order.id, 'rejected')}
                 />

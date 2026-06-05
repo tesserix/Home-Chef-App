@@ -108,18 +108,25 @@ export function PendingOrderCard({
         >
           <Text style={styles.rejectLabel}>Reject</Text>
         </Pressable>
+        {/* Outer Pressable carries only the pressed/disabled opacity AND
+            the flex:1 needed to fill the row. iOS strips flex AND
+            backgroundColor when style is returned as an array from the
+            function-style prop, which renders the Accept button as
+            invisible white-on-white shrink-wrapped to its text width.
+            See feedback_ios_pressable_array_style.md. */}
         <Pressable
           onPress={onAccept}
           disabled={disabled}
-          style={({ pressed }) => [
-            styles.acceptBtn,
-            pressed && { opacity: 0.85 },
-            disabled && { opacity: 0.4 },
-          ]}
+          style={({ pressed }) => ({
+            flex: 1,
+            opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+          })}
           accessibilityRole="button"
           accessibilityLabel={`Accept ₹${order.total.toFixed(0)} order from ${order.customerName}`}
         >
-          <Text style={styles.acceptLabel}>Accept</Text>
+          <View style={styles.acceptBtn}>
+            <Text style={styles.acceptLabel}>Accept</Text>
+          </View>
         </Pressable>
       </View>
     </View>
