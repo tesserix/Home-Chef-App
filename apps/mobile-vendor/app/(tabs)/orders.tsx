@@ -81,11 +81,24 @@ function dateBucketFor(iso: string): string {
 // ----- Queue tab (live pending orders) -----------------------------------
 
 function QueueTab() {
-  const { data, isLoading, isRefetching, refetch } = useVendorPendingOrders();
+  const { data, isLoading, refetch } = useVendorPendingOrders();
   const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } =
     useOrderAction();
   const orders = data?.orders ?? [];
   const isSurge = orders.length > 3;
+
+  // Pull-to-refresh spinner gated to USER action only. React Query's
+  // `isRefetching` also fires for background refetches (10s polling on
+  // this hook) and would leave the spinner permanently visible.
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setIsPulling(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -128,8 +141,8 @@ function QueueTab() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
+            refreshing={isPulling}
+            onRefresh={onPullRefresh}
             tintColor={theme.colors.ink.DEFAULT}
           />
         }
@@ -176,10 +189,20 @@ interface HistoryListItem {
 
 function HistoryTab() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isRefetching, refetch } =
-    useVendorOrderHistory(page);
+  const { data, isLoading, refetch } = useVendorOrderHistory(page);
   const orders = data?.orders ?? [];
   const hasMore = data ? page * (data.limit ?? 20) < data.total : false;
+
+  // User-initiated pull-to-refresh only (see QueueTab for the rationale).
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setIsPulling(false);
+    }
+  }
 
   // Group orders into a flat list of [header, order, order, header, ...]
   // entries. Sorted by createdAt desc within each bucket; buckets ordered
@@ -220,10 +243,10 @@ function HistoryTab() {
       contentContainerStyle={styles.historyList}
       refreshControl={
         <RefreshControl
-          refreshing={isRefetching}
+          refreshing={isPulling}
           onRefresh={() => {
             setPage(1);
-            refetch();
+            onPullRefresh();
           }}
           tintColor={theme.colors.ink.DEFAULT}
         />

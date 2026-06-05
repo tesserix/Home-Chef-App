@@ -67,23 +67,34 @@ export interface UpdateMenuItemPayload extends Partial<CreateMenuItemPayload> {
 const MENU_KEY = ['chef', 'menu'] as const;
 
 // Normalize an item from the API: backend returns `dietaryTags` + `prepTime`,
-// frontend consumes `dietaryTags` + derived `isVeg` + `preparationTime`.
+// frontend consumes `dietaryTags` + `isVeg` + `preparationTime`.
+//
 // The prep-time field-name mismatch was silently swallowing every form
 // edit — backend ignored `preparationTime`, sent back `prepTime` which the
 // frontend then ignored. Map both directions here.
+//
+// The `is_veg` column was added to `menu_items` in the chef-app v2 work.
+// Prefer the authoritative backend boolean when present; fall back to
+// deriving from dietary tags only for legacy items that predate the
+// column (those rows have NULL on the wire, omitted by `omitempty`).
 function normalizeItem(
   item: MenuItem & {
     dietaryTags?: string[] | null;
     prepTime?: number;
     preparationTime?: number;
+    isVeg?: boolean | null;
   },
 ): MenuItem {
   const tags = item.dietaryTags ?? [];
   const prep = item.preparationTime ?? item.prepTime ?? 15;
+  const isVeg =
+    item.isVeg === true || item.isVeg === false
+      ? item.isVeg
+      : deriveIsVeg(tags);
   return {
     ...item,
     dietaryTags: tags,
-    isVeg: deriveIsVeg(tags),
+    isVeg,
     preparationTime: prep,
   };
 }

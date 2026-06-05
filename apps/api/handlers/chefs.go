@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -341,16 +342,43 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND created_at >= CURRENT_DATE - INTERVAL '7 days' AND payment_status = ?", chef.ID, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
 
+	// Recent orders for the dashboard's in-flight + history-glance section.
+	// Mobile reads `recentOrders` and filters by status client-side. Preload
+	// Customer so we can populate `customerName` (the mobile dashboard renders
+	// it on the InFlightRow and the dead-screen reassurance copy reads
+	// `lastOrderIso` from `createdAt`).
+	var recent []models.Order
+	database.DB.Where("chef_id = ?", chef.ID).
+		Preload("Customer").
+		Order("created_at DESC").
+		Limit(10).
+		Find(&recent)
+
+	recentOrdersResp := make([]gin.H, len(recent))
+	for i, o := range recent {
+		recentOrdersResp[i] = gin.H{
+			"id":           o.ID,
+			"customerName": strings.TrimSpace(o.Customer.FirstName + " " + o.Customer.LastName),
+			"total":        o.Total,
+			"status":       o.Status,
+			"createdAt":    o.CreatedAt,
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"todayOrders":    todayOrders,
-		"todayRevenue":   todayRevenue,
-		"pendingOrders":  pendingOrders,
-		"weekOrders":     weekOrders,
-		"weekRevenue":    weekRevenue,
-		"rating":         chef.Rating,
-		"totalReviews":   chef.TotalReviews,
-		"totalOrders":    chef.TotalOrders,
+		"todayOrders":     todayOrders,
+		"todayRevenue":    todayRevenue,
+		// Mobile reads `todayEarnings`; keep `todayRevenue` for any other
+		// consumer.
+		"todayEarnings":   todayRevenue,
+		"pendingOrders":   pendingOrders,
+		"weekOrders":      weekOrders,
+		"weekRevenue":     weekRevenue,
+		"rating":          chef.Rating,
+		"totalReviews":    chef.TotalReviews,
+		"totalOrders":     chef.TotalOrders,
 		"acceptingOrders": chef.AcceptingOrders,
+		"recentOrders":    recentOrdersResp,
 	})
 }
 
@@ -525,14 +553,14 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		responses[i] = resp
 	}
 
+	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the
+	// `OrdersResponse` shape `{ orders, total, page, limit }`. Keep the
+	// envelope flat so the existing typed hooks don't need adapters.
 	c.JSON(http.StatusOK, gin.H{
-		"data": responses,
-		"pagination": gin.H{
-			"page":       page,
-			"limit":      limit,
-			"total":      total,
-			"totalPages": (total + int64(limit) - 1) / int64(limit),
-		},
+		"orders": responses,
+		"total":  total,
+		"page":   page,
+		"limit":  limit,
 	})
 }
 

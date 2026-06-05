@@ -25,7 +25,12 @@ type Period = 'week' | 'month' | 'year';
 interface PopularItem {
   name: string;
   orders: number;
-  revenue: number;
+  // The backend (apps/api/handlers/chefs.go:1089) returns `percentage` —
+  // share of the chef's total order count — and does NOT return `revenue`.
+  // `revenue` is kept here as optional for forward compatibility if the
+  // API later adds it; until then we render the percentage instead.
+  percentage?: number;
+  revenue?: number;
 }
 
 interface DailyRevenue {
@@ -113,7 +118,11 @@ function PopularItemRow({ item, rank, isLast }: PopularItemRowProps) {
       <View style={rowStyles.right}>
         <Text style={rowStyles.orders}>{item.orders} orders</Text>
         <Text style={rowStyles.revenue}>
-          ₹{item.revenue.toLocaleString('en-IN')}
+          {typeof item.revenue === 'number'
+            ? `₹${item.revenue.toLocaleString('en-IN')}`
+            : typeof item.percentage === 'number'
+              ? `${item.percentage}% of orders`
+              : ''}
         </Text>
       </View>
     </View>
