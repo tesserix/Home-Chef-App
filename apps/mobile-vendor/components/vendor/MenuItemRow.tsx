@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { theme } from '@homechef/mobile-shared/theme';
+import { useToast } from '@homechef/mobile-shared/ui';
 import type { MenuItem } from '../../hooks/useVendorMenu';
 import { useToggleAvailability } from '../../hooks/useVendorMenu';
 import { DietIcon } from './DietIcon';
@@ -24,6 +25,7 @@ interface MenuItemRowProps {
  */
 export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
   const toggleMutation = useToggleAvailability();
+  const { show: showToast } = useToast();
   const isDimmed = !item.isAvailable;
   const photo = item.images?.[0]?.url;
 
@@ -70,7 +72,17 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
           <Switch
             value={item.isAvailable}
             onValueChange={(v) =>
-              toggleMutation.mutate({ itemId: item.id, isAvailable: v })
+              toggleMutation.mutate(
+                { itemId: item.id, isAvailable: v },
+                {
+                  onError: () => {
+                    showToast({
+                      message: `Couldn't update ${item.name}. Try again.`,
+                      tone: 'error',
+                    });
+                  },
+                },
+              )
             }
             disabled={toggleMutation.isPending}
             trackColor={{

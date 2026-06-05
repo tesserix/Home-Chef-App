@@ -4,8 +4,8 @@
 
 import {
   Alert,
+  Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,10 +17,12 @@ import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 import {
-  VENDOR_TERMS_TEXT,
   CANCELLATION_POLICY_OPTIONS,
   type CancellationPolicy,
 } from '../../constants/terms';
+
+const VENDOR_TERMS_URL = 'https://fe3dr.com/vendor-terms';
+const VENDOR_TERMS_LABEL = 'fe3dr.com/vendor-terms';
 
 // Bullet points extracted from the terms text for scannable display
 const TERMS_BULLETS = [
@@ -84,31 +86,40 @@ export default function PoliciesScreen() {
         <View style={styles.termsFooterRow}>
           <Text style={styles.termsFooterText}>
             Full terms at{' '}
-            <Text style={styles.termsLink}>homechef.in/vendor-terms</Text>
+            <Text
+              style={styles.termsLink}
+              onPress={() => {
+                Linking.openURL(VENDOR_TERMS_URL).catch(() => undefined);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${VENDOR_TERMS_LABEL} in browser`}
+            >
+              {VENDOR_TERMS_LABEL}
+            </Text>
           </Text>
         </View>
       </View>
 
-      {/* Acceptance row — ink checkbox */}
+      {/* Acceptance row — ink checkbox. Outer Pressable carries only the
+          pressed opacity; inner View owns flex/bg/border. iOS drops those
+          styles when applied via the Pressable's function-style prop. */}
       <Pressable
         onPress={() => setAcceptedTerms((prev) => !prev)}
-        style={({ pressed }) => [
-          styles.checkRow,
-          acceptedTerms && styles.checkRowAccepted,
-          pressed && { opacity: 0.75 },
-        ]}
+        style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
         accessibilityLabel="I accept the terms and conditions"
       >
-        <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-          {acceptedTerms ? (
-            <Check size={12} color={theme.colors.paper} strokeWidth={3} />
-          ) : null}
+        <View style={[styles.checkRow, acceptedTerms && styles.checkRowAccepted]}>
+          <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+            {acceptedTerms ? (
+              <Check size={12} color={theme.colors.paper} strokeWidth={3} />
+            ) : null}
+          </View>
+          <Text style={[styles.checkLabel, acceptedTerms && styles.checkLabelAccepted]}>
+            I accept the terms and conditions
+          </Text>
         </View>
-        <Text style={[styles.checkLabel, acceptedTerms && styles.checkLabelAccepted]}>
-          I accept the terms and conditions
-        </Text>
       </Pressable>
 
       {/* ── CANCELLATION POLICY ───────────────────────────────── */}
@@ -131,24 +142,27 @@ export default function PoliciesScreen() {
             <Pressable
               key={option.value}
               onPress={() => setCancellationPolicy(option.value)}
-              style={({ pressed }) => [
-                styles.radioRow,
-                !isLast && styles.radioRowBorder,
-                selected && styles.radioRowSelected,
-                pressed && !selected && styles.radioRowPressed,
-              ]}
+              style={({ pressed }) => ({
+                opacity: pressed && !selected ? 0.85 : 1,
+              })}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
               accessibilityLabel={option.label}
             >
-              {/* Radio circle */}
-              <View style={[styles.radio, selected && styles.radioSelected]}>
-                {selected ? <View style={styles.radioDot} /> : null}
+              <View
+                style={[
+                  styles.radioRow,
+                  !isLast && styles.radioRowBorder,
+                  selected && styles.radioRowSelected,
+                ]}
+              >
+                <View style={[styles.radio, selected && styles.radioSelected]}>
+                  {selected ? <View style={styles.radioDot} /> : null}
+                </View>
+                <Text style={[styles.radioLabel, selected && styles.radioLabelSelected]}>
+                  {option.label}
+                </Text>
               </View>
-
-              <Text style={[styles.radioLabel, selected && styles.radioLabelSelected]}>
-                {option.label}
-              </Text>
             </Pressable>
           );
         })}
@@ -191,7 +205,7 @@ const styles = StyleSheet.create({
 
   // Terms bullets card
   termsBulletCard: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
     backgroundColor: theme.colors.paper,
@@ -207,7 +221,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   bulletRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
   bulletDot: {
@@ -229,7 +243,7 @@ const styles = StyleSheet.create({
   termsFooterRow: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.bone,
   },
@@ -240,8 +254,9 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     fontFamily: 'Inter-Medium',
-    color: theme.colors.ink.soft,
+    color: theme.colors.herb.DEFAULT,
     textDecorationLine: 'underline',
+    textDecorationColor: theme.colors.herb.DEFAULT,
   },
 
   // Checkbox acceptance row
@@ -249,10 +264,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
     borderWidth: 1,
-    borderColor: theme.colors.mist.DEFAULT,
+    borderColor: theme.colors.mist.strong,
     borderRadius: theme.radius.DEFAULT,
     minHeight: theme.touchTarget.vendor,
     backgroundColor: theme.colors.paper,
@@ -292,7 +307,7 @@ const styles = StyleSheet.create({
 
   // Radio group — hairline card
   radioGroup: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.DEFAULT,
     overflow: 'hidden',
@@ -309,13 +324,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.paper,
   },
   radioRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
   radioRowSelected: {
-    backgroundColor: theme.colors.bone,
-  },
-  radioRowPressed: {
     backgroundColor: theme.colors.bone,
   },
 

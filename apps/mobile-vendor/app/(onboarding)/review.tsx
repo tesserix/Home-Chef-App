@@ -13,11 +13,22 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, CheckCircle } from 'lucide-react-native';
 import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
+
+interface CachedOnboardingStatus {
+  data: {
+    status: string;
+    completed: boolean;
+    step: number;
+    chefId: string | null;
+    profile: object | null;
+  };
+}
 
 const POLICY_LABELS: Record<string, string> = {
   no_cancellations: 'No cancellations after order accepted',
@@ -87,6 +98,7 @@ function Section({
 
 export default function ReviewScreen() {
   const store = useVendorOnboardingStore();
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
   const { personalInfo, kitchenDetails, operations, documents, policies } = store;
@@ -129,6 +141,23 @@ export default function ReviewScreen() {
         acceptedTerms: policies.acceptedTerms,
         cancellationPolicy: policies.cancellationPolicy,
       });
+      // Optimistically flip the cached onboarding/status to pending_review
+      // so the global routing effect in _layout.tsx sees the user as
+      // post-submit immediately. Without this, the routing effect computes
+      // expectedPath from the stale `in_progress` cache, sees a mismatch
+      // with /pending, and bounces the chef back to /policies. Invalidate
+      // afterwards so the server's truth eventually reconciles.
+      queryClient.setQueryData<CachedOnboardingStatus>(
+        ['chef', 'onboarding', 'status'],
+        (old) =>
+          old
+            ? {
+                ...old,
+                data: { ...old.data, status: 'pending_review', completed: true },
+              }
+            : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ['chef', 'onboarding', 'status'] });
       store.reset();
       router.replace('/(onboarding)/pending');
     } catch (error: unknown) {

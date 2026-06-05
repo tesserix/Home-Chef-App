@@ -206,8 +206,10 @@ export function useUploadMenuPhoto(itemId: string) {
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Use the dedicated availability endpoint so the backend can apply
+    // any stock-management side effects independently of a full item update.
     mutationFn: ({ itemId, isAvailable }: { itemId: string; isAvailable: boolean }) =>
-      api.put(`/chef/menu/items/${itemId}`, { isAvailable }),
+      api.put(`/chef/menu/items/${itemId}/availability`, { isAvailable }),
     onMutate: async ({ itemId, isAvailable }) => {
       await queryClient.cancelQueries({ queryKey: MENU_KEY });
       const previous = queryClient.getQueryData<MenuResponse>(MENU_KEY);
@@ -223,6 +225,7 @@ export function useToggleAvailability() {
       return { previous };
     },
     onError: (_err, _vars, context) => {
+      // Rollback optimistic update on failure
       if (context?.previous) {
         queryClient.setQueryData(MENU_KEY, context.previous);
       }

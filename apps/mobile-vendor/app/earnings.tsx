@@ -14,39 +14,42 @@ import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import {
+  useEarningsBreakdown,
+  type BreakdownPeriod,
+  type EarningsBreakdownOrder,
+} from '../hooks/useEarningsBreakdown';
 
-// ----- Types ----------------------------------------------------------------
-
-interface BankAccount {
-  bankName: string;
-  accountNumber: string;
-  ifsc: string;
-}
+// ----- Types (payout account) -------------------------------------------------
 
 interface LastPayout {
   amount: number;
   date: string;
 }
 
-interface EarningsHistoryEntry {
-  week: string;
-  amount: number;
-}
-
 interface PayoutResponse {
-  bankAccount: BankAccount | null;
-  upiId: string | null;
-  totalEarnings: number;
-  pendingPayout: number;
-  lastPayout: LastPayout | null;
-  earningsHistory: EarningsHistoryEntry[];
+  payoutMethod: 'bank_transfer' | 'upi' | '';
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankIFSC: string;
+  upiId: string;
+  razorpayConnected: boolean;
+  stripeConnected: boolean;
+  pendingPayout?: number;
+  lastPayout?: LastPayout | null;
 }
 
 type Period = 'week' | 'month' | 'all';
 
-// ----- Hook -----------------------------------------------------------------
+/** Map the UI period tab to the API's `period` query param. */
+function toApiPeriod(p: Period): BreakdownPeriod {
+  if (p === 'all') return 'cycle';
+  return p;
+}
 
-function useEarnings() {
+// ----- Payout hook ------------------------------------------------------------
+
+function usePayoutDetails() {
   return useQuery<PayoutResponse>({
     queryKey: ['chef', 'payout'],
     queryFn: () => api.get<PayoutResponse>('/chef/payout').then((r) => r.data),
@@ -54,37 +57,23 @@ function useEarnings() {
   });
 }
 
-// ----- Helpers --------------------------------------------------------------
+// ----- Formatting helpers -----------------------------------------------------
 
-function maskAccount(accountNumber: string): string {
-  if (accountNumber.length <= 4) return accountNumber;
-  return '****' + accountNumber.slice(-4);
+function fmtInr(value: number): string {
+  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
 }
 
-// Filter `earningsHistory` client-side so we don't need a refetch on tab
-// change. The API returns all history; we slice by period here.
-function filterByPeriod(
-  entries: EarningsHistoryEntry[],
-  period: Period,
-): EarningsHistoryEntry[] {
-  if (period === 'all') return entries;
-  const limit = period === 'week' ? 1 : 4;
-  return entries.slice(0, limit);
+function fmtPct(rate: number): string {
+  return `${(rate * 100).toFixed(1)}%`;
 }
 
-// Sum amounts for a filtered set of entries.
-function sumEntries(entries: EarningsHistoryEntry[]): number {
-  return entries.reduce((acc, e) => acc + e.amount, 0);
+function fmtShortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-// Format a week label like "25 May – 31 May" from the API's `week` string
-// (which may already be formatted, e.g. "25 May – 31 May" or a date-range ISO).
-// We pass it through as-is and let the API own the label format.
-function formatWeekLabel(week: string): string {
-  return week;
-}
-
-// ----- Sub-components -------------------------------------------------------
+// ----- Sub-components ---------------------------------------------------------
 
 interface TabLabelProps {
   label: string;
@@ -104,64 +93,44 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
       <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
         {label}
       </Text>
-      <View
-        style={[tabStyles.indicator, active && tabStyles.indicatorActive]}
-      />
+      <View style={[tabStyles.indicator, active && tabStyles.indicatorActive]} />
     </Pressable>
   );
 }
 
-interface HistoryRowProps {
-  entry: EarningsHistoryEntry;
-  isPaid: boolean;
-}
-
-function HistoryRow({ entry, isPaid }: HistoryRowProps) {
-  return (
-    <View style={rowStyles.root}>
-      {/* Status dot: persimmon = paid (the only accent moment on this screen) */}
-      <View
-        style={[
-          rowStyles.dot,
-          {
-            backgroundColor: isPaid
-              ? theme.colors.herb.DEFAULT
-              : theme.colors.ink.muted,
-          },
-        ]}
-      />
-      <View style={rowStyles.labelBlock}>
-        <Text style={rowStyles.week} numberOfLines={1}>
-          {formatWeekLabel(entry.week)}
-        </Text>
-        <Text style={rowStyles.status}>{isPaid ? 'Paid' : 'Pending'}</Text>
-      </View>
-      <Text style={rowStyles.amount}>
-        ₹{entry.amount.toLocaleString('en-IN')}
-      </Text>
-    </View>
-  );
-}
-
-// Render the payout account as a single hairline row (no card).
-// Tappable to navigate to payout account settings screen.
 interface PayoutAccountRowProps {
-  bankAccount: BankAccount | null;
-  upiId: string | null;
+  payoutMethod: PayoutResponse['payoutMethod'];
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankIFSC: string;
+  upiId: string;
 }
 
-function PayoutAccountRow({ bankAccount, upiId }: PayoutAccountRowProps) {
-  const label = bankAccount
-    ? `${bankAccount.bankName} ****${bankAccount.accountNumber.slice(-4)}`
-    : upiId
-      ? upiId
-      : 'No payout account';
+function PayoutAccountRow({
+  payoutMethod,
+  bankAccountName,
+  bankAccountNumber,
+  bankIFSC,
+  upiId,
+}: PayoutAccountRowProps) {
+  const hasBank =
+    payoutMethod === 'bank_transfer' && bankAccountNumber.trim() !== '';
+  const hasUpi = payoutMethod === 'upi' && upiId.trim() !== '';
 
-  const sublabel = bankAccount
-    ? bankAccount.ifsc
-    : upiId
-      ? 'UPI'
-      : 'Tap to add a bank account or UPI ID';
+  let label: string;
+  let sublabel: string;
+  if (hasBank) {
+    label = bankAccountName
+      ? `${bankAccountName} · ${bankAccountNumber}`
+      : bankAccountNumber;
+    sublabel = bankIFSC ? `IFSC ${bankIFSC}` : 'Bank account';
+  } else if (hasUpi) {
+    label = upiId;
+    sublabel = 'UPI';
+  } else {
+    label = 'No payout account';
+    sublabel = 'Tap to add a bank account or UPI ID';
+  }
 
   return (
     <Pressable
@@ -181,11 +150,9 @@ function PayoutAccountRow({ bankAccount, upiId }: PayoutAccountRowProps) {
             <Text style={accountRowStyles.value} numberOfLines={1}>
               {label}
             </Text>
-            {sublabel ? (
-              <Text style={accountRowStyles.sub} numberOfLines={1}>
-                {sublabel}
-              </Text>
-            ) : null}
+            <Text style={accountRowStyles.sub} numberOfLines={1}>
+              {sublabel}
+            </Text>
           </View>
           <ChevronLeft
             size={16}
@@ -198,53 +165,254 @@ function PayoutAccountRow({ bankAccount, upiId }: PayoutAccountRowProps) {
   );
 }
 
-// ----- List item type -------------------------------------------------------
+// ---- Breakdown section -------------------------------------------------------
+
+interface BreakdownRowProps {
+  label: string;
+  value: string;
+  /** When true, renders the value in a muted/secondary style */
+  secondary?: boolean;
+  /** When true, renders the value in persimmon (positive net payout) */
+  accent?: boolean;
+  /** The right-side annotation shown in brackets after the label */
+  annotation?: string;
+}
+
+function BreakdownRow({
+  label,
+  value,
+  secondary,
+  accent,
+  annotation,
+}: BreakdownRowProps) {
+  return (
+    <View style={bkStyles.row}>
+      <Text style={bkStyles.rowLabel} numberOfLines={1}>
+        {label}
+        {annotation ? (
+          <Text style={bkStyles.rowAnnotation}> {annotation}</Text>
+        ) : null}
+      </Text>
+      <Text
+        style={[
+          bkStyles.rowValue,
+          secondary && bkStyles.rowValueSecondary,
+          accent && bkStyles.rowValueAccent,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const bkStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+    minHeight: 40,
+  },
+  rowLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    flex: 1,
+  },
+  rowAnnotation: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+  },
+  rowValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
+  rowValueSecondary: {
+    color: theme.colors.ink.muted,
+    fontFamily: 'Inter',
+  },
+  rowValueAccent: {
+    color: theme.colors.herb.DEFAULT,
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.body.size,
+  },
+});
+
+// ---- Order history row (tappable) -------------------------------------------
+
+interface OrderHistoryRowProps {
+  order: EarningsBreakdownOrder;
+  onPress: () => void;
+}
+
+function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open order ${order.orderNumber}`}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            orderRowStyles.root,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={orderRowStyles.leftBlock}>
+            <Text style={orderRowStyles.orderNumber} numberOfLines={1}>
+              #{order.orderNumber}
+            </Text>
+            <Text style={orderRowStyles.date}>
+              {fmtShortDate(order.completedAt)}
+            </Text>
+          </View>
+          <View style={orderRowStyles.rightBlock}>
+            <Text style={orderRowStyles.netPayout}>{fmtInr(order.netPayout)}</Text>
+            <Text style={orderRowStyles.gross}>
+              Gross {fmtInr(order.gross)}
+            </Text>
+          </View>
+          <ChevronLeft
+            size={14}
+            color={theme.colors.ink.muted}
+            style={{ transform: [{ rotate: '180deg' }] }}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const orderRowStyles = StyleSheet.create({
+  root: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    minHeight: 44,
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+  leftBlock: { flex: 1 },
+  orderNumber: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  date: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 2,
+  },
+  rightBlock: { alignItems: 'flex-end' },
+  netPayout: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+  gross: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 1,
+    fontVariant: ['tabular-nums'],
+  },
+});
+
+// ----- List item type ---------------------------------------------------------
 
 type ListItem =
   | { type: 'hero' }
   | { type: 'figures' }
   | { type: 'tabBar' }
-  | { type: 'historyHeader' }
-  | { type: 'entry'; entry: EarningsHistoryEntry; isPaid: boolean }
+  | { type: 'breakdown' }
+  | { type: 'orderListHeader' }
+  | { type: 'orderEntry'; order: EarningsBreakdownOrder }
   | { type: 'payoutRow' }
   | { type: 'empty' };
 
-// ----- Screen ---------------------------------------------------------------
+// ----- Screen -----------------------------------------------------------------
 
 export default function EarningsScreen() {
   const [period, setPeriod] = useState<Period>('week');
-  const { data, isLoading, isError, refetch, isRefetching } = useEarnings();
+  const apiPeriod = toApiPeriod(period);
 
-  const filteredHistory = useMemo(
-    () => filterByPeriod(data?.earningsHistory ?? [], period),
-    [data?.earningsHistory, period],
-  );
+  // Payout account details (bank/UPI + pending/last payout)
+  const {
+    data: payoutData,
+    isLoading: payoutLoading,
+    isError: payoutError,
+    refetch: refetchPayout,
+  } = usePayoutDetails();
 
-  const periodTotal = useMemo(
-    () => sumEntries(filteredHistory),
-    [filteredHistory],
-  );
+  // Earnings breakdown (new endpoint)
+  const {
+    data: breakdown,
+    isLoading: breakdownLoading,
+    refetch: refetchBreakdown,
+  } = useEarningsBreakdown(apiPeriod);
 
-  // The most recent entry is "pending" (current week hasn't been paid out yet).
-  // All others are considered paid. This is a reasonable heuristic until the
-  // API exposes a per-entry `status` field.
+  const isLoading = payoutLoading || breakdownLoading;
+  const isError = payoutError;
+
+  // User-initiated pull-to-refresh only — avoids the stuck-spinner bug
+  // when React Query's isRefetching goes true for background refetches.
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await Promise.all([refetchPayout(), refetchBreakdown()]);
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
+  const totals = breakdown?.totals;
+  const orders = breakdown?.orders ?? [];
+  const rates = breakdown?.rates;
+
+  // Period total for the hero: net payout from breakdown, fallback to 0
+  const periodTotal = totals?.netPayout ?? 0;
+
+  // GST display helper: show CGST+SGST combined when intra-state, IGST when
+  // inter-state (IGST > 0 signals inter-state supply).
+  const gstInterState = (totals?.igst ?? 0) > 0;
+  const gstCombined = (totals?.cgst ?? 0) + (totals?.sgst ?? 0);
+
   const listItems = useMemo<ListItem[]>(() => {
     const items: ListItem[] = [
       { type: 'hero' },
       { type: 'figures' },
       { type: 'tabBar' },
     ];
-    if (filteredHistory.length === 0) {
+
+    if (totals) {
+      items.push({ type: 'breakdown' });
+    }
+
+    if (orders.length === 0) {
       items.push({ type: 'empty' });
     } else {
-      items.push({ type: 'historyHeader' });
-      filteredHistory.forEach((entry, idx) => {
-        items.push({ type: 'entry', entry, isPaid: idx > 0 });
+      items.push({ type: 'orderListHeader' });
+      orders.forEach((order) => {
+        items.push({ type: 'orderEntry', order });
       });
     }
+
     items.push({ type: 'payoutRow' });
     return items;
-  }, [filteredHistory]);
+  }, [totals, orders]);
 
   if (isLoading) {
     return (
@@ -280,7 +448,7 @@ export default function EarningsScreen() {
           Check your connection and try again.
         </Text>
         <Pressable
-          onPress={() => refetch()}
+          onPress={() => refetchPayout()}
           style={styles.errorPrimary}
           accessibilityRole="button"
         >
@@ -302,9 +470,13 @@ export default function EarningsScreen() {
                   ? 'THIS MONTH'
                   : 'ALL TIME'}
             </Text>
-            <Text style={styles.heroAmount}>
-              ₹{periodTotal.toLocaleString('en-IN')}
-            </Text>
+            <Text style={styles.heroAmount}>{fmtInr(periodTotal)}</Text>
+            {breakdown && (
+              <Text style={styles.heroCycleDates}>
+                {fmtShortDate(breakdown.cycleStart)} –{' '}
+                {fmtShortDate(breakdown.cycleEnd)}
+              </Text>
+            )}
           </View>
         );
 
@@ -314,21 +486,21 @@ export default function EarningsScreen() {
             <View style={styles.figureItem}>
               <Text style={styles.figureLabel}>PENDING</Text>
               <Text style={styles.figureValue}>
-                ₹{(data?.pendingPayout ?? 0).toLocaleString('en-IN')}
+                {fmtInr(payoutData?.pendingPayout ?? 0)}
               </Text>
             </View>
             <View style={styles.figureDivider} />
-            {data?.lastPayout ? (
+            {payoutData?.lastPayout ? (
               <View style={styles.figureItem}>
                 <Text style={styles.figureLabel}>LAST PAYOUT</Text>
                 <Text style={styles.figureValue}>
-                  ₹{data.lastPayout.amount.toLocaleString('en-IN')}
+                  {fmtInr(payoutData.lastPayout.amount)}
                 </Text>
                 <Text style={styles.figureSub}>
-                  {new Date(data.lastPayout.date).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
+                  {new Date(payoutData.lastPayout.date).toLocaleDateString(
+                    'en-IN',
+                    { day: 'numeric', month: 'short' },
+                  )}
                 </Text>
               </View>
             ) : (
@@ -361,20 +533,89 @@ export default function EarningsScreen() {
           </View>
         );
 
-      case 'historyHeader':
+      case 'breakdown':
+        if (!totals || !rates) return null;
         return (
-          <Text style={styles.dateHeader}>WEEKLY BREAKDOWN</Text>
+          <View style={styles.breakdownSection}>
+            <Text style={styles.breakdownSectionLabel}>BREAKDOWN</Text>
+            <View style={styles.breakdownGroup}>
+              <BreakdownRow
+                label="Gross revenue"
+                value={fmtInr(totals.grossRevenue)}
+              />
+              <BreakdownRow
+                label="Platform commission"
+                annotation={`(${fmtPct(rates.platformCommission)})`}
+                value={`− ${fmtInr(totals.platformCommission)}`}
+                secondary
+              />
+              {gstInterState ? (
+                <>
+                  <BreakdownRow
+                    label="GST (IGST)"
+                    annotation={`(${fmtPct(rates.gst)})`}
+                    value={`− ${fmtInr(totals.igst)}`}
+                    secondary
+                  />
+                </>
+              ) : (
+                <>
+                  <BreakdownRow
+                    label="GST"
+                    annotation={`(${fmtPct(rates.gst)})`}
+                    value={`− ${fmtInr(gstCombined)}`}
+                    secondary
+                  />
+                  {gstCombined > 0 && (
+                    <View style={bkStyles.row}>
+                      <Text style={styles.gstSubRow}>
+                        CGST {fmtInr(totals.cgst)} + SGST {fmtInr(totals.sgst)}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+              <BreakdownRow
+                label="TDS"
+                annotation={`(${fmtPct(rates.tds)})`}
+                value={`− ${fmtInr(totals.tds)}`}
+                secondary
+              />
+              <BreakdownRow
+                label="Net payout"
+                value={fmtInr(totals.netPayout)}
+                accent={totals.netPayout > 0}
+              />
+            </View>
+            <Text style={styles.ordersCount}>
+              {totals.ordersCount} order{totals.ordersCount === 1 ? '' : 's'}{' '}
+              in period
+            </Text>
+          </View>
         );
 
-      case 'entry':
-        return <HistoryRow entry={item.entry} isPaid={item.isPaid} />;
+      case 'orderListHeader':
+        return (
+          <Text style={styles.dateHeader}>ORDER HISTORY</Text>
+        );
+
+      case 'orderEntry':
+        return (
+          <OrderHistoryRow
+            order={item.order}
+            onPress={() => router.push(`/orders/${item.order.orderId}`)}
+          />
+        );
 
       case 'payoutRow':
         return (
           <View style={styles.payoutSection}>
             <PayoutAccountRow
-              bankAccount={data?.bankAccount ?? null}
-              upiId={data?.upiId ?? null}
+              payoutMethod={payoutData?.payoutMethod ?? ''}
+              bankAccountName={payoutData?.bankAccountName ?? ''}
+              bankAccountNumber={payoutData?.bankAccountNumber ?? ''}
+              bankIFSC={payoutData?.bankIFSC ?? ''}
+              upiId={payoutData?.upiId ?? ''}
             />
           </View>
         );
@@ -382,9 +623,10 @@ export default function EarningsScreen() {
       case 'empty':
         return (
           <View style={styles.emptyBlock}>
-            <Text style={styles.emptyHeadline}>No history yet</Text>
+            <Text style={styles.emptyHeadline}>No orders in period</Text>
             <Text style={styles.emptyBody}>
-              Completed orders will appear here once your first week closes.
+              Completed orders will appear here after your first payout cycle
+              closes.
             </Text>
           </View>
         );
@@ -396,7 +638,6 @@ export default function EarningsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      {/* Command bar — back button left, title center-left. No bg-bone ribbon. */}
       <View style={styles.commandBar}>
         <Pressable
           onPress={() => router.back()}
@@ -413,14 +654,16 @@ export default function EarningsScreen() {
       <FlatList
         data={listItems}
         keyExtractor={(item, idx) =>
-          item.type === 'entry' ? item.entry.week : `${item.type}-${idx}`
+          item.type === 'orderEntry'
+            ? item.order.orderId
+            : `${item.type}-${idx}`
         }
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
+            refreshing={isPulling}
+            onRefresh={onPullRefresh}
             tintColor={theme.colors.ink.DEFAULT}
           />
         }
@@ -442,7 +685,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
   },
 
-  // Command bar — same pattern as orders.tsx, no bg-bone ribbon
   commandBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -465,13 +707,12 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // List content padding
   listContent: {
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
   },
 
-  // Hero block — period total is the single commanding number
+  // Hero block
   heroBlock: {
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[5],
@@ -491,8 +732,15 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
+  heroCycleDates: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
+  },
 
-  // Figures strip — pending + last payout, hairline-divided
+  // Figures strip
   figuresStrip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -502,9 +750,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.mist.DEFAULT,
     gap: theme.spacing[6],
   },
-  figureItem: {
-    flex: 1,
-  },
+  figureItem: { flex: 1 },
   figureLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
@@ -532,7 +778,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.mist.DEFAULT,
   },
 
-  // Tab bar — underline tabs, same as orders.tsx
+  // Tab bar
   tabBar: {
     flexDirection: 'row',
     gap: theme.spacing[6],
@@ -541,17 +787,46 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 
-  // Date header for history section
+  // Breakdown section
+  breakdownSection: {
+    marginTop: theme.spacing[5],
+  },
+  breakdownSectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[2],
+  },
+  breakdownGroup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  gstSubRow: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    paddingBottom: theme.spacing[2],
+    flex: 1,
+  },
+  ordersCount: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[2],
+  },
+
+  // Date header for order list
   dateHeader: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
-    marginTop: theme.spacing[4],
+    marginTop: theme.spacing[5],
     marginBottom: theme.spacing[2],
   },
 
-  // Payout account section separator
+  // Payout account section
   payoutSection: {
     marginTop: theme.spacing[6],
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -637,37 +912,6 @@ const tabStyles = StyleSheet.create({
   },
   indicatorActive: {
     backgroundColor: theme.colors.ink.DEFAULT,
-  },
-});
-
-const rowStyles = StyleSheet.create({
-  root: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[3],
-    minHeight: 44,
-    paddingVertical: theme.spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-  },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  labelBlock: { flex: 1 },
-  week: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-  },
-  status: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
-    marginTop: 1,
-  },
-  amount: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
   },
 });
 

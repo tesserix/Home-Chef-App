@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -20,6 +20,10 @@ import {
   useOrderAction,
   type Order,
 } from '../../hooks/useVendorOrders';
+import {
+  useExpiringDocuments,
+  describeDocumentType,
+} from '../../hooks/useExpiringDocuments';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
 
@@ -83,7 +87,6 @@ export default function DashboardScreen() {
   const {
     data: dashboard,
     isLoading,
-    isRefetching,
     refetch,
     isError,
     error,
@@ -92,6 +95,22 @@ export default function DashboardScreen() {
     useVendorPendingOrders();
   const toggleMutation = useToggleAcceptingOrders();
   const { triggerAction, isLoading: orderActionLoading } = useOrderAction();
+  const { data: expiringDocsData } = useExpiringDocuments();
+
+  // User-initiated pull-to-refresh only — avoids the stuck-spinner bug when
+  // React Query's isRefetching fires for background refetches (focus, mutation
+  // invalidation, stale-time expiry).
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await Promise.all([refetch(), refetchPending()]);
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
+  const expiringDocs = expiringDocsData?.documents ?? [];
 
   const displayName = deriveDisplayName(
     user as { name?: string; email?: string } | null,
@@ -172,11 +191,8 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => {
-              refetch();
-              refetchPending();
-            }}
+            refreshing={isPulling}
+            onRefresh={onPullRefresh}
             tintColor={theme.colors.ink.DEFAULT}
           />
         }
@@ -240,6 +256,63 @@ export default function DashboardScreen() {
             )}
           </Pressable>
         </View>
+
+        {/* Zone B' — Document expiry alerts. Rendered above the order queue
+            because a lapsed FSSAI license hides the kitchen from customers —
+            it's actionable even when there are no orders. */}
+        {expiringDocs.length > 0 && (
+          <View style={styles.expirySection}>
+            <Text style={styles.expirySectionLabel}>ACTION REQUIRED</Text>
+            <View style={styles.expiryCards}>
+              {expiringDocs.map((doc) => (
+                <Pressable
+                  key={doc.id}
+                  onPress={() => router.push('/(onboarding)/documents')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${describeDocumentType(doc.type)} expires in ${doc.daysUntilExpiry} days. Tap to re-upload.`}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.expiryCard,
+                        pressed && { opacity: 0.85 },
+                      ]}
+                    >
+                      <View style={styles.expiryCardTop}>
+                        <View
+                          style={[
+                            styles.expiryDot,
+                            {
+                              backgroundColor:
+                                doc.daysUntilExpiry <= 7
+                                  ? theme.colors.destructive.DEFAULT
+                                  : theme.colors.amber.DEFAULT,
+                            },
+                          ]}
+                        />
+                        <Text style={styles.expiryDaysLabel}>
+                          {doc.daysUntilExpiry <= 0
+                            ? 'Expired'
+                            : `Expires in ${doc.daysUntilExpiry} day${doc.daysUntilExpiry === 1 ? '' : 's'}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.expiryDocType} numberOfLines={1}>
+                        {describeDocumentType(doc.type)} expires on{' '}
+                        {new Date(doc.expiryDate).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                        . Re-upload to keep your kitchen visible.
+                      </Text>
+                      <Text style={styles.expiryCtaLink}>Re-upload →</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Zone B — Action queue. The hero when there's anything to act on.
             Renders as filled bone cards because each row demands a decision. */}
@@ -380,12 +453,17 @@ function InFlightRow({ order, onPress }: InFlightRowProps) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        rowStyles.root,
-        pressed && { backgroundColor: theme.colors.bone },
-      ]}
       accessibilityRole="button"
     >
+      {({ pressed }) => (
+        // Inner-View carries layout. iOS strips flex/bg from Pressable
+        // when style prop returns an array — inner-View pattern is safe.
+        <View
+          style={[
+            rowStyles.root,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
       <View
         style={[
           rowStyles.dot,
@@ -404,6 +482,8 @@ function InFlightRow({ order, onPress }: InFlightRowProps) {
         </Text>
       </View>
       <Text style={rowStyles.total}>₹{order.total.toFixed(0)}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -464,6 +544,61 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.label.size,
     letterSpacing: 0.2,
+  },
+
+  // Zone B' — Document expiry alerts
+  expirySection: {
+    marginBottom: theme.spacing[4],
+  },
+  expirySectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    marginBottom: theme.spacing[2],
+  },
+  expiryCards: {
+    gap: theme.spacing[2],
+  },
+  expiryCard: {
+    backgroundColor: theme.colors.amber.tint,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[1],
+    // Use borderWidth instead of hairlineWidth so the amber tint card edge
+    // is always visible on paper bg.
+    borderWidth: 1,
+    borderColor: theme.colors.amber.DEFAULT,
+  },
+  expiryCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
+  expiryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  expiryDaysLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: 0.1,
+  },
+  expiryDocType: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 19,
+  },
+  expiryCtaLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.herb.DEFAULT,
+    letterSpacing: 0.1,
+    marginTop: theme.spacing[1],
   },
 
   // Zone B — Action queue + surge banner + see-more link + empty line

@@ -25,7 +25,14 @@ import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 
 interface OnboardingStatusResponse {
-  status: 'not_started' | 'in_progress' | 'pending_review' | 'submitted' | 'verified' | 'rejected';
+  status:
+    | 'not_started'
+    | 'in_progress'
+    | 'pending_review'
+    | 'submitted'
+    | 'verified'
+    | 'rejected'
+    | 'info_requested';
   completed: boolean;
   step: number;
   chefId: string | null;
@@ -49,6 +56,25 @@ Notifications.setNotificationHandler({
 
 // API base URL for background fetch (no React context available in background).
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+// Maps the API's `step` field (count of completed wizard sections — see
+// apps/api/handlers/upload.go:382-395) to the next screen the chef should
+// land on. The API skips step=1 because personal-info isn't persisted
+// server-side, so the array index lines up: step 0 → personal-info,
+// step 2 → operations (kitchen-details just completed), etc.
+const WIZARD_STEP_PATHS = [
+  '/(onboarding)/personal-info',
+  '/(onboarding)/kitchen-details',
+  '/(onboarding)/operations',
+  '/(onboarding)/documents',
+  '/(onboarding)/policies',
+  '/(onboarding)/review',
+] as const;
+
+function wizardPathForStep(step: number): string {
+  const i = Math.max(0, Math.min(step, WIZARD_STEP_PATHS.length - 1));
+  return WIZARD_STEP_PATHS[i];
+}
 
 function AppNavigator() {
   // Load Geist + Inter at boot. Until these resolve every Text falls back
@@ -272,14 +298,28 @@ function AppNavigator() {
 
   // Where we believe the user should land right now. null while still
   // resolving — the splash stays up in that case.
+  //
+  // Status → screen rules:
+  // - verified                            → tabs
+  // - pending_review / submitted          → /pending (real "under review")
+  // - not_started / in_progress / rejected
+  //   / info_requested                    → wizard, resuming at the
+  //                                         next incomplete step.
+  //
+  // The previous rule treated anything that wasn't `verified` or
+  // `not_started` as "pending", which sent users mid-wizard (BusinessName
+  // saved, no approval row yet — backend status `in_progress`) to the
+  // application-under-review screen even though they hadn't submitted.
   const expectedPath: string | null = (() => {
     if (authKey === 'resolving') return null;
     if (authKey === 'unauth') return '/(auth)/login';
     if (!onboardingStatus) return null;
-    const status = onboardingStatus.data.status;
+    const { status, step } = onboardingStatus.data;
     if (status === 'verified') return '/(tabs)';
-    if (status === 'not_started') return '/(onboarding)/personal-info';
-    return '/(onboarding)/pending';
+    if (status === 'pending_review' || status === 'submitted') {
+      return '/(onboarding)/pending';
+    }
+    return wizardPathForStep(step);
   })();
 
   const pathname = usePathname();

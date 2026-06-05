@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
-  ActivityIndicator,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,14 +12,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { Skeleton } from '@homechef/mobile-shared/ui';
+import { DietIcon } from '../../components/vendor/DietIcon';
 import {
-  useVendorOrderDetail,
+  useOrderDetail,
+  type OrderDetail,
+  type OrderDetailStatus,
+} from '../../hooks/useOrderDetail';
+import {
   useOrderAction,
   useUpdateOrderStatus,
-  type Order,
 } from '../../hooks/useVendorOrders';
 
-const STATUS_LABEL: Record<Order['status'], string> = {
+// ---- Status display maps -------------------------------------------------------
+
+const STATUS_LABEL: Record<OrderDetailStatus, string> = {
   pending: 'New order',
   accepted: 'Accepted',
   preparing: 'Preparing',
@@ -29,7 +37,7 @@ const STATUS_LABEL: Record<Order['status'], string> = {
   rejected: 'Rejected',
 };
 
-const STATUS_DOT: Record<Order['status'], string> = {
+const STATUS_DOT: Record<OrderDetailStatus, string> = {
   pending: theme.colors.amber.DEFAULT,
   accepted: theme.colors.info.DEFAULT,
   preparing: theme.colors.amber.DEFAULT,
@@ -40,25 +48,27 @@ const STATUS_DOT: Record<Order['status'], string> = {
   rejected: theme.colors.destructive.DEFAULT,
 };
 
-function formatTimeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+// ---- Helpers ------------------------------------------------------------------
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
-function formatAddress(addr: Order['deliveryAddress']): string[] {
-  // Backend ships deliveryAddress as a structured object on the order
-  // response but the old list path serializes it as a string. Handle both.
+function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
   if (typeof addr === 'string') {
     return addr.split(/,\s*/).filter(Boolean);
   }
   if (addr && typeof addr === 'object') {
-    const a = addr as unknown as {
+    const a = addr as {
       line1?: string;
       line2?: string;
       city?: string;
@@ -69,222 +79,28 @@ function formatAddress(addr: Order['deliveryAddress']): string[] {
       a.line1,
       a.line2,
       [a.city, a.state, a.postalCode].filter(Boolean).join(', '),
-    ].filter((line): line is string => !!line && line.trim().length > 0);
+    ].filter((l): l is string => !!l && l.trim().length > 0);
   }
   return [];
 }
 
-export default function OrderDetailScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const { data: order, isLoading, isError, refetch } = useVendorOrderDetail(
-    orderId,
-  );
-  const { triggerAction, isLoading: actionLoading } = useOrderAction();
-  const updateStatus = useUpdateOrderStatus();
-
-  const addressLines = useMemo(
-    () => (order ? formatAddress(order.deliveryAddress) : []),
-    [order],
-  );
-
-  function handleBack(): void {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/orders');
+function mapsUrl(query: string): string {
+  const encoded = encodeURIComponent(query);
+  if (Platform.OS === 'ios') {
+    return `http://maps.apple.com/?q=${encoded}`;
   }
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <CommandBar onBack={handleBack} />
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.ink.DEFAULT} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (isError || !order) {
-    return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <CommandBar onBack={handleBack} />
-        <View style={styles.centered}>
-          <Text style={styles.errorHeadline}>Couldn't load this order</Text>
-          <Text style={styles.errorBody}>
-            Open it again from the Orders queue or your history.
-          </Text>
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.retryBtn,
-              pressed && { opacity: 0.85 },
-            ]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryLabel}>Retry</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <CommandBar onBack={handleBack} />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero — Geist name, total beside it, status dot + age below. */}
-        <View style={styles.hero}>
-          <View style={styles.heroTopRow}>
-            <Text style={styles.heroName} numberOfLines={1}>
-              {order.customerName || 'Customer'}
-            </Text>
-            <Text style={styles.heroTotal}>₹{order.total.toFixed(0)}</Text>
-          </View>
-          <View style={styles.heroMetaRow}>
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor:
-                    STATUS_DOT[order.status] ?? theme.colors.ink.muted,
-                },
-              ]}
-            />
-            <Text style={styles.heroMeta}>
-              {STATUS_LABEL[order.status] ?? order.status} ·{' '}
-              {formatTimeAgo(order.createdAt)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Items section */}
-        <SectionLabel>ITEMS</SectionLabel>
-        <View style={styles.itemsGroup}>
-          {order.items.length === 0 ? (
-            <Text style={styles.bodyMuted}>No items recorded</Text>
-          ) : (
-            order.items.map((item, idx) => (
-              <View
-                key={`${item.name}-${idx}`}
-                style={[
-                  styles.itemRow,
-                  idx < order.items.length - 1 && styles.rowBorderBottom,
-                ]}
-              >
-                <View style={styles.itemBody}>
-                  <Text style={styles.itemName} numberOfLines={2}>
-                    {item.quantity > 1 ? `${item.quantity} × ` : ''}
-                    {item.name}
-                  </Text>
-                  {item.notes ? (
-                    <Text style={styles.itemNote} numberOfLines={2}>
-                      {item.notes}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.itemPrice}>
-                  ₹{(item.subtotal ?? item.price * item.quantity).toFixed(0)}
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Totals breakdown — only when the response includes the
-            split. The list path doesn't ship subtotal/fees so we keep
-            the section silent in that case. */}
-        {order.subtotal !== undefined ? (
-          <>
-            <SectionLabel>TOTAL</SectionLabel>
-            <View style={styles.totalsGroup}>
-              <TotalRow label="Subtotal" value={order.subtotal} />
-              {(order.discount ?? 0) > 0 ? (
-                <TotalRow label="Discount" value={-(order.discount ?? 0)} />
-              ) : null}
-              {(order.deliveryFee ?? 0) > 0 ? (
-                <TotalRow label="Delivery" value={order.deliveryFee ?? 0} />
-              ) : null}
-              {(order.serviceFee ?? 0) > 0 ? (
-                <TotalRow label="Service" value={order.serviceFee ?? 0} />
-              ) : null}
-              {(order.tax ?? 0) > 0 ? (
-                <TotalRow
-                  label={order.taxName || 'Tax'}
-                  value={order.tax ?? 0}
-                />
-              ) : null}
-              {(order.tip ?? 0) > 0 ? (
-                <TotalRow label="Tip" value={order.tip ?? 0} />
-              ) : null}
-              <TotalRow
-                label="Total"
-                value={order.total}
-                emphasis
-                hasBorderBottom={false}
-              />
-            </View>
-          </>
-        ) : null}
-
-        {/* Delivery address */}
-        {addressLines.length > 0 ? (
-          <>
-            <SectionLabel>DELIVERY ADDRESS</SectionLabel>
-            <View style={styles.addressGroup}>
-              {addressLines.map((line) => (
-                <Text key={line} style={styles.addressLine}>
-                  {line}
-                </Text>
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* Special instructions — persimmon tint callout matches the
-            orders queue card's instructions pill. */}
-        {order.specialInstructions ? (
-          <>
-            <SectionLabel>SPECIAL INSTRUCTIONS</SectionLabel>
-            <View style={styles.instructionsCallout}>
-              <Text style={styles.instructionsText}>
-                {order.specialInstructions}
-              </Text>
-            </View>
-          </>
-        ) : null}
-      </ScrollView>
-
-      {/* Status-dependent footer actions */}
-      <FooterActions
-        status={order.status}
-        orderId={order.id}
-        customerName={order.customerName || 'this customer'}
-        total={order.total}
-        disabled={actionLoading || updateStatus.isPending}
-        onAccept={() => triggerAction(order.id, 'accepted')}
-        onReject={() => triggerAction(order.id, 'rejected')}
-        onMarkPreparing={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'preparing' })
-        }
-        onMarkReady={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'ready' })
-        }
-      />
-    </SafeAreaView>
-  );
+  return `https://www.google.com/maps/search/?q=${encoded}`;
 }
 
-// ---- Command bar ------------------------------------------------------------
+// ---- Sub-components -----------------------------------------------------------
 
 interface CommandBarProps {
+  orderNumber?: string;
+  status?: OrderDetailStatus;
   onBack: () => void;
 }
 
-function CommandBar({ onBack }: CommandBarProps) {
+function CommandBar({ orderNumber, status, onBack }: CommandBarProps) {
   return (
     <View style={styles.commandBar}>
       <Pressable
@@ -295,21 +111,32 @@ function CommandBar({ onBack }: CommandBarProps) {
       >
         {({ pressed }) => (
           <View style={[styles.backBtn, pressed && { opacity: 0.6 }]}>
-            <ChevronLeft
-              size={22}
-              color={theme.colors.ink.DEFAULT}
-              strokeWidth={2}
-            />
+            <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
           </View>
         )}
       </Pressable>
-      <Text style={styles.commandTitle}>Order</Text>
+      <View style={styles.commandTitleBlock}>
+        <Text style={styles.commandTitle} numberOfLines={1}>
+          {orderNumber ? `#${orderNumber}` : 'Order'}
+        </Text>
+        {status ? (
+          <View style={styles.commandStatusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: STATUS_DOT[status] ?? theme.colors.ink.muted },
+              ]}
+            />
+            <Text style={styles.commandStatusLabel}>
+              {STATUS_LABEL[status] ?? status}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.commandSpacer} />
     </View>
   );
 }
-
-// ---- Section label ----------------------------------------------------------
 
 interface SectionLabelProps {
   children: string;
@@ -318,8 +145,6 @@ interface SectionLabelProps {
 function SectionLabel({ children }: SectionLabelProps) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
-
-// ---- Total row --------------------------------------------------------------
 
 interface TotalRowProps {
   label: string;
@@ -335,26 +160,19 @@ function TotalRow({
   hasBorderBottom = true,
 }: TotalRowProps) {
   return (
-    <View
-      style={[
-        styles.totalRow,
-        hasBorderBottom && styles.rowBorderBottom,
-      ]}
-    >
+    <View style={[styles.totalRow, hasBorderBottom && styles.rowBorderBottom]}>
       <Text style={[styles.totalLabel, emphasis && styles.totalLabelStrong]}>
         {label}
       </Text>
       <Text style={[styles.totalValue, emphasis && styles.totalValueStrong]}>
-        {value < 0 ? '−' : ''}₹{Math.abs(value).toFixed(0)}
+        ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
       </Text>
     </View>
   );
 }
 
-// ---- Footer actions ---------------------------------------------------------
-
 interface FooterActionsProps {
-  status: Order['status'];
+  status: OrderDetailStatus;
   orderId: string;
   customerName: string;
   total: number;
@@ -391,15 +209,20 @@ function FooterActions({
         <Pressable
           onPress={onAccept}
           disabled={disabled}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            pressed && { opacity: 0.85 },
-            disabled && { opacity: 0.4 },
-          ]}
           accessibilityRole="button"
           accessibilityLabel={`Accept ₹${total.toFixed(0)} order from ${customerName}`}
         >
-          <Text style={styles.primaryLabel}>Accept</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.primaryBtn,
+                pressed && { opacity: 0.85 },
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Accept</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     );
@@ -411,14 +234,19 @@ function FooterActions({
         <Pressable
           onPress={onMarkPreparing}
           disabled={disabled}
-          style={({ pressed }) => [
-            styles.primaryBtnFull,
-            pressed && { opacity: 0.85 },
-            disabled && { opacity: 0.4 },
-          ]}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryLabel}>Mark preparing</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.primaryBtnFull,
+                pressed && { opacity: 0.85 },
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Mark preparing</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     );
@@ -430,22 +258,25 @@ function FooterActions({
         <Pressable
           onPress={onMarkReady}
           disabled={disabled}
-          style={({ pressed }) => [
-            styles.primaryBtnFull,
-            pressed && { opacity: 0.85 },
-            disabled && { opacity: 0.4 },
-          ]}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryLabel}>Mark ready for pickup</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.primaryBtnFull,
+                pressed && { opacity: 0.85 },
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Mark ready for pickup</Text>
+            </View>
+          )}
         </Pressable>
       </View>
     );
   }
 
-  // ready / picked_up / delivered / cancelled / rejected — no action.
-  // Surface a one-line status caption so the footer doesn't read as empty.
-  const caption: Record<string, string> = {
+  const caption: Partial<Record<OrderDetailStatus, string>> = {
     ready: 'Waiting for driver to pick up.',
     picked_up: 'Out for delivery.',
     delivered: 'Delivered to customer.',
@@ -462,7 +293,325 @@ function FooterActions({
   );
 }
 
-// ---- Styles ----------------------------------------------------------------
+// ---- Loading skeleton ---------------------------------------------------------
+
+function DetailSkeleton() {
+  return (
+    <View style={styles.skeletonPad}>
+      <Skeleton height={32} style={{ width: 160, marginBottom: 8 }} />
+      <Skeleton height={16} style={{ width: 100, marginBottom: 32 }} />
+      <Skeleton height={14} style={{ width: 80, marginBottom: 12 }} />
+      <Skeleton height={44} style={{ marginBottom: 2 }} />
+      <Skeleton height={44} style={{ marginBottom: 24 }} />
+      <Skeleton height={14} style={{ width: 80, marginBottom: 12 }} />
+      <Skeleton height={44} style={{ marginBottom: 2 }} />
+      <Skeleton height={44} />
+    </View>
+  );
+}
+
+// ---- Main screen -------------------------------------------------------------
+
+export default function OrderDetailScreen() {
+  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
+  const { triggerAction, isLoading: actionLoading } = useOrderAction();
+  const updateStatus = useUpdateOrderStatus();
+
+  const addressLines = useMemo(
+    () => (order ? formatAddressLines(order.deliveryAddress) : []),
+    [order],
+  );
+
+  const mapsQuery = useMemo(
+    () => addressLines.join(', '),
+    [addressLines],
+  );
+
+  function handleBack(): void {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/orders');
+  }
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <CommandBar onBack={handleBack} />
+        <DetailSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <CommandBar onBack={handleBack} />
+        <View style={styles.centered}>
+          <Text style={styles.errorHeadline}>Couldn't load this order</Text>
+          <Text style={styles.errorBody}>
+            Check your connection and try again.
+          </Text>
+          <Pressable
+            onPress={() => refetch()}
+            accessibilityRole="button"
+          >
+            {({ pressed }) => (
+              <View style={[styles.retryBtn, pressed && { opacity: 0.85 }]}>
+                <Text style={styles.retryLabel}>Retry</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const { timing, pricing } = order;
+
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      <CommandBar
+        orderNumber={order.orderNumber}
+        status={order.status}
+        onBack={handleBack}
+      />
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* CUSTOMER section */}
+        <SectionLabel>CUSTOMER</SectionLabel>
+        <View style={styles.hairlineGroup}>
+          <View style={styles.customerRow}>
+            <View style={styles.customerTextBlock}>
+              <Text style={styles.customerName} numberOfLines={1}>
+                {order.customerName || 'Customer'}
+              </Text>
+              {order.customerPhone ? (
+                <Text style={styles.customerPhone} numberOfLines={1}>
+                  {order.customerPhone}
+                </Text>
+              ) : null}
+            </View>
+            {order.customerPhone ? (
+              <View style={styles.contactButtons}>
+                <Pressable
+                  onPress={() => Linking.openURL(`tel:${order.customerPhone}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${order.customerName}`}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.contactBtn,
+                        pressed && { backgroundColor: theme.colors.bone },
+                      ]}
+                    >
+                      <Text style={styles.contactBtnLabel}>Call</Text>
+                    </View>
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={() => Linking.openURL(`sms:${order.customerPhone}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message ${order.customerName}`}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.contactBtn,
+                        styles.contactBtnSecondary,
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={styles.contactBtnLabelSecondary}>
+                        Message
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {/* ITEMS section */}
+        <SectionLabel>ITEMS</SectionLabel>
+        <View style={styles.hairlineGroup}>
+          {order.items.length === 0 ? (
+            <Text style={styles.bodyMuted}>No items recorded</Text>
+          ) : (
+            order.items.map((item, idx) => (
+              <View
+                key={`${item.name}-${idx}`}
+                style={[
+                  styles.itemRow,
+                  idx < order.items.length - 1 && styles.rowBorderBottom,
+                ]}
+              >
+                <DietIcon
+                  kind={
+                    item.isVeg === true
+                      ? 'veg'
+                      : item.isVeg === false
+                        ? 'non-veg'
+                        : 'unknown'
+                  }
+                  size={12}
+                />
+                <View style={styles.itemBody}>
+                  <Text style={styles.itemName} numberOfLines={2}>
+                    {item.quantity > 1
+                      ? `${item.quantity} × ${item.name}`
+                      : item.name}
+                  </Text>
+                  {item.specialInstructions ? (
+                    <Text style={styles.itemNote} numberOfLines={2}>
+                      {item.specialInstructions}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.itemUnitPrice}>
+                    ₹{item.unitPrice.toLocaleString('en-IN')} each
+                  </Text>
+                </View>
+                <Text style={styles.itemLineTotal}>
+                  ₹{item.lineTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* DELIVERY ADDRESS section */}
+        {addressLines.length > 0 ? (
+          <>
+            <SectionLabel>DELIVERY ADDRESS</SectionLabel>
+            <Pressable
+              onPress={() =>
+                mapsQuery ? Linking.openURL(mapsUrl(mapsQuery)) : undefined
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Open in Maps"
+              disabled={!mapsQuery}
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.hairlineGroup,
+                    styles.addressGroup,
+                    pressed && { backgroundColor: theme.colors.bone },
+                  ]}
+                >
+                  {addressLines.map((line) => (
+                    <Text key={line} style={styles.addressLine}>
+                      {line}
+                    </Text>
+                  ))}
+                  {mapsQuery ? (
+                    <Text style={styles.mapsLink}>Open in Maps →</Text>
+                  ) : null}
+                </View>
+              )}
+            </Pressable>
+            {order.deliveryInstructions ? (
+              <View style={styles.deliveryInstructionsWrap}>
+                <Text style={styles.deliveryInstructionsText}>
+                  {order.deliveryInstructions}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
+        {/* SPECIAL INSTRUCTIONS */}
+        {order.specialInstructions ? (
+          <>
+            <SectionLabel>SPECIAL INSTRUCTIONS</SectionLabel>
+            <View style={styles.instructionsCallout}>
+              <Text style={styles.instructionsText}>
+                {order.specialInstructions}
+              </Text>
+            </View>
+          </>
+        ) : null}
+
+        {/* TIMING section */}
+        <SectionLabel>TIMING</SectionLabel>
+        <View style={styles.hairlineGroup}>
+          {([
+            ['Ordered', timing.orderedAt],
+            ['Accepted', timing.acceptedAt],
+            ['Prepared', timing.preparedAt],
+            ['Picked up', timing.pickedUpAt],
+            ['Delivered', timing.deliveredAt],
+          ] as [string, string | null | undefined][])
+            .filter(([, ts]) => !!ts)
+            .map(([label, ts], idx, arr) => (
+              <View
+                key={label}
+                style={[
+                  styles.timingRow,
+                  idx < arr.length - 1 && styles.rowBorderBottom,
+                ]}
+              >
+                <Text style={styles.timingLabel}>{label}</Text>
+                <Text style={styles.timingValue}>
+                  {formatDateTime(ts ?? '')}
+                </Text>
+              </View>
+            ))}
+        </View>
+
+        {/* PRICING section */}
+        <SectionLabel>PRICING</SectionLabel>
+        <View style={styles.hairlineGroup}>
+          <TotalRow label="Subtotal" value={pricing.subtotal} />
+          {pricing.deliveryFee > 0 ? (
+            <TotalRow label="Delivery fee" value={pricing.deliveryFee} />
+          ) : null}
+          {pricing.serviceFee > 0 ? (
+            <TotalRow label="Service fee" value={pricing.serviceFee} />
+          ) : null}
+          {pricing.tax > 0 ? (
+            <TotalRow label="Tax" value={pricing.tax} />
+          ) : null}
+          {pricing.chefTip > 0 ? (
+            <TotalRow label="Tip" value={pricing.chefTip} />
+          ) : null}
+          <TotalRow
+            label="Total"
+            value={pricing.total}
+            emphasis
+            hasBorderBottom={false}
+          />
+        </View>
+
+        {/* Bottom padding for footer */}
+        <View style={{ height: theme.spacing[10] }} />
+      </ScrollView>
+
+      <FooterActions
+        status={order.status}
+        orderId={order.id}
+        customerName={order.customerName || 'this customer'}
+        total={pricing.total}
+        disabled={actionLoading || updateStatus.isPending}
+        onAccept={() => triggerAction(order.id, 'accepted')}
+        onReject={() => triggerAction(order.id, 'rejected')}
+        onMarkPreparing={() =>
+          updateStatus.mutate({ orderId: order.id, status: 'preparing' })
+        }
+        onMarkReady={() =>
+          updateStatus.mutate({ orderId: order.id, status: 'ready' })
+        }
+      />
+    </SafeAreaView>
+  );
+}
+
+// ---- Styles ------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.paper },
@@ -482,78 +631,112 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
+  commandTitleBlock: { flex: 1 },
   commandTitle: {
     fontFamily: 'Geist-Bold',
-    fontSize: 28,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 28,
     letterSpacing: -0.3,
     color: theme.colors.ink.DEFAULT,
-    flex: 1,
   },
+  commandStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    marginTop: 2,
+  },
+  commandStatusLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
   commandSpacer: { width: 32 },
 
   // Scroll
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: theme.spacing[10] },
 
-  // Hero
-  hero: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[5],
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: theme.spacing[3],
-  },
-  heroName: {
-    flex: 1,
-    fontFamily: 'Geist-Bold',
-    fontSize: 28,
-    lineHeight: 32,
-    letterSpacing: -0.3,
-    color: theme.colors.ink.DEFAULT,
-  },
-  heroTotal: {
-    fontFamily: 'Geist-Bold',
-    fontSize: 24,
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-  },
-  heroMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    marginTop: theme.spacing[2],
-  },
-  heroMeta: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-
-  // Section labels — same caption-spaced cap-grey treatment as settings
+  // Section label
   sectionLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[6],
+    paddingTop: theme.spacing[5],
     paddingBottom: theme.spacing[2],
   },
 
-  // Items
-  itemsGroup: {
+  // Hairline group wrapper
+  hairlineGroup: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.mist.DEFAULT,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
   },
+
+  // Shared bottom hairline for rows inside a group
+  rowBorderBottom: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.mist.DEFAULT,
+  },
+
+  // CUSTOMER
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 56,
+    gap: theme.spacing[3],
+  },
+  customerTextBlock: { flex: 1 },
+  customerName: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  customerPhone: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  contactButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+  },
+  contactBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    minHeight: 36,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactBtnSecondary: {
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+  },
+  contactBtnLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.paper,
+    letterSpacing: 0.2,
+  },
+  contactBtnLabelSecondary: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.label.size,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: 0.2,
+  },
+
+  // ITEMS
   itemRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -576,26 +759,91 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 19,
   },
-  itemPrice: {
+  itemUnitPrice: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+  },
+  itemLineTotal: {
     fontFamily: 'Geist-Bold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
+    paddingTop: 2,
   },
 
-  // Shared hairline row border
-  rowBorderBottom: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // DELIVERY ADDRESS
+  addressGroup: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+  },
+  addressLine: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    lineHeight: 22,
+  },
+  mapsLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.herb.DEFAULT,
+    marginTop: theme.spacing[2],
+    letterSpacing: 0.1,
+  },
+  deliveryInstructionsWrap: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
+  },
+  deliveryInstructionsText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 20,
   },
 
-  // Totals
-  totalsGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // SPECIAL INSTRUCTIONS
+  instructionsCallout: {
+    marginHorizontal: theme.spacing[4],
+    backgroundColor: theme.colors.herb.tint,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
   },
+  instructionsText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.herb.soft,
+    lineHeight: 22,
+  },
+
+  // TIMING
+  timingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 40,
+    gap: theme.spacing[3],
+  },
+  timingLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+  timingValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+    flex: 1,
+  },
+
+  // PRICING / totals
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -626,44 +874,54 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 
-  // Address
-  addressGroup: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-  },
-  addressLine: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.DEFAULT,
-    lineHeight: 22,
-  },
-
-  // Special instructions
-  instructionsCallout: {
-    marginHorizontal: theme.spacing[4],
-    backgroundColor: theme.colors.herb.tint,
-    borderRadius: theme.radius.DEFAULT,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[3],
-  },
-  instructionsText: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.herb.soft,
-    lineHeight: 22,
-  },
-
-  // Body fallback
+  // Fallback body
   bodyMuted: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
+  },
+
+  // Loading skeleton
+  skeletonPad: {
+    padding: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
+
+  // Error state
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[6],
+  },
+  errorHeadline: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.h2.size,
+    color: theme.colors.ink.DEFAULT,
+    textAlign: 'center',
+    marginBottom: theme.spacing[2],
+  },
+  errorBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.muted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: theme.spacing[4],
+    maxWidth: 320,
+  },
+  retryBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[6],
+    paddingVertical: theme.spacing[3],
+  },
+  retryLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.paper,
   },
 
   // Footer
@@ -721,40 +979,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.paper,
     letterSpacing: 0.3,
-  },
-
-  // Loading + error
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing[6],
-  },
-  errorHeadline: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.h2.size,
-    color: theme.colors.ink.DEFAULT,
-    textAlign: 'center',
-    marginBottom: theme.spacing[2],
-  },
-  errorBody: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: theme.spacing[4],
-    maxWidth: 320,
-  },
-  retryBtn: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
-    paddingHorizontal: theme.spacing[6],
-    paddingVertical: theme.spacing[3],
-  },
-  retryLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.paper,
   },
 });

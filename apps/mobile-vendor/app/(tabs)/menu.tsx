@@ -29,9 +29,22 @@ interface ListEntry {
 }
 
 export default function MenuScreen() {
-  const { data, isLoading, isError, refetch, isRefetching } = useVendorMenu();
+  const { data, isLoading, isError, refetch } = useVendorMenu();
   const [selectedCategoryId, setSelectedCategoryId] =
     useState<string>(ALL_CATEGORIES);
+
+  // Pull-to-refresh spinner gated to USER action only; React Query's
+  // `isRefetching` would also fire for background refetches (window focus,
+  // invalidations from other screens), keeping the spinner stuck.
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setIsPulling(false);
+    }
+  }
 
   const categories = data?.categories ?? [];
   const items = data?.items ?? [];
@@ -101,23 +114,22 @@ export default function MenuScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      {/* Zone A — Command bar */}
+      {/* Zone A — Command bar. The "+ Add" affordance is always visible so
+          chefs have a discoverable entry point even when the menu is empty
+          (and as a fallback if the empty-state CTA fails to render). */}
       <View style={styles.commandBar}>
         <Text style={styles.commandTitle}>Menu</Text>
-        {hasItems && (
-          <Pressable
-            onPress={() => router.push('/menu/new' as never)}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.addBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Add menu item"
-          >
+        <Pressable
+          onPress={() => router.push('/menu/new' as never)}
+          hitSlop={8}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          accessibilityRole="button"
+          accessibilityLabel="Add menu item"
+        >
+          <View style={styles.addBtn}>
             <Text style={styles.addBtnLabel}>+ Add</Text>
-          </Pressable>
-        )}
+          </View>
+        </Pressable>
       </View>
 
       {/* Category tabs — bare text + persimmon underline. Hidden until
@@ -169,8 +181,8 @@ export default function MenuScreen() {
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={isPulling}
+              onRefresh={onPullRefresh}
               tintColor={theme.colors.ink.DEFAULT}
             />
           }
@@ -228,6 +240,10 @@ interface EmptyMenuProps {
 }
 
 function EmptyMenu({ onAdd }: EmptyMenuProps) {
+  // Outer Pressable carries only the pressed opacity; inner View owns
+  // backgroundColor/padding/alignSelf. iOS drops those styles when
+  // applied via the Pressable's function-style prop — see
+  // policies.tsx and the project handoff notes.
   return (
     <View style={styles.emptyMenu}>
       <Text style={styles.emptyHeadline}>Your menu is empty</Text>
@@ -236,13 +252,16 @@ function EmptyMenu({ onAdd }: EmptyMenuProps) {
       </Text>
       <Pressable
         onPress={onAdd}
-        style={({ pressed }) => [
-          styles.emptyCta,
-          pressed && { opacity: 0.85 },
-        ]}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.85 : 1,
+          alignSelf: 'stretch',
+        })}
         accessibilityRole="button"
+        accessibilityLabel="Add first menu item"
       >
-        <Text style={styles.emptyCtaLabel}>Add first item</Text>
+        <View style={styles.emptyCta}>
+          <Text style={styles.emptyCtaLabel}>Add first item</Text>
+        </View>
       </Pressable>
     </View>
   );
