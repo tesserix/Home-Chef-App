@@ -509,7 +509,7 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	query.Model(&models.Order{}).Count(&total)
 
 	var orders []models.Order
-	if err := query.Preload("Items").
+	if err := query.Preload("Items").Preload("Customer").
 		Order("created_at DESC").
 		Offset(offset).Limit(limit).
 		Find(&orders).Error; err != nil {
@@ -519,7 +519,10 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
-		responses[i] = order.ToResponse()
+		resp := order.ToResponse()
+		resp.CustomerName = order.Customer.FirstName + " " + order.Customer.LastName
+		resp.CustomerPhone = order.Customer.Phone
+		responses[i] = resp
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -587,6 +590,65 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, order.ToResponse())
+}
+
+// GetOrderDetail returns a single order's full detail for the authenticated chef.
+// The chef must own the order (order.chef_id == authenticated chef ID); returns 404
+// when the order doesn't exist or belongs to a different chef.
+// GET /chef/orders/:orderId
+func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderIDStr := c.Param("orderId")
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	var order models.Order
+	if err := database.DB.
+		Preload("Items").
+		Preload("Items.MenuItem").
+		Preload("Customer").
+		Where("id = ? AND chef_id = ?", orderIDStr, chef.ID).
+		First(&order).Error; err != nil {
+		// 404 for both "not found" and "wrong chef" — don't leak existence
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	resp := order.ToResponse()
+	resp.CustomerName = order.Customer.FirstName + " " + order.Customer.LastName
+	resp.CustomerPhone = order.Customer.Phone
+
+	// Enrich items with isVeg from the live MenuItem and surfacespecialInstructions
+	for i, item := range order.Items {
+		resp.Items[i].SpecialInstructions = item.Notes
+		if item.MenuItem.ID != (item.MenuItemID) {
+			// MenuItem was not loaded (e.g., item refers to a soft-deleted item) — skip
+			continue
+		}
+		resp.Items[i].IsVeg = item.MenuItem.IsVeg
+	}
+
+	detail := models.ChefOrderDetailResponse{
+		OrderResponse:         resp,
+		AcceptedAt:            order.AcceptedAt,
+		PreparedAt:            order.PreparedAt,
+		PickedUpAt:            order.PickedUpAt,
+		DeliveredAt:           order.DeliveredAt,
+		CancelledAt:           order.CancelledAt,
+		CancelReason:          order.CancelReason,
+		ScheduledFor:          order.ScheduledFor,
+		EstimatedPrepTime:     order.EstimatedPrepTime,
+		EstimatedDeliveryTime: order.EstimatedDeliveryTime,
+		SpecialInstructions:   order.SpecialInstructions,
+		DeliveryInstructions:  order.DeliveryInstructions,
+		PaymentMethod:         order.PaymentMethod,
+	}
+
+	c.JSON(http.StatusOK, detail)
 }
 
 // GetChefReviewsForDashboard returns all reviews for the authenticated chef

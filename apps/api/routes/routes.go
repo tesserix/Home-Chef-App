@@ -115,6 +115,7 @@ func SetupRouter() *gin.Engine {
 	// Initialize handlers. Note: the legacy AuthHandler was removed in the
 	// GIP migration (Task 2.6) — all auth flows now live in apps/auth-bff.
 	chefHandler := handlers.NewChefHandler()
+	chefEarningsHandler := handlers.NewChefEarningsHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
@@ -285,6 +286,8 @@ func SetupRouter() *gin.Engine {
 			chefMenu.DELETE("/items/:itemId", menuHandler.DeleteMenuItem)
 			chefMenu.POST("/items/:itemId/images", menuHandler.UploadMenuItemImage)
 			chefMenu.DELETE("/items/:itemId/images/:imageId", menuHandler.DeleteMenuItemImage)
+			// PUT /chef/menu/items/:id/availability — toggle out-of-stock per item
+			chefMenu.PUT("/items/:id/availability", menuHandler.ToggleMenuItemAvailability)
 		}
 
 		// Chef dashboard routes (chef only)
@@ -295,7 +298,13 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
 			chefDashboard.PUT("/profile", chefHandler.UpdateChefProfile)
 			chefDashboard.GET("/orders", chefHandler.GetChefOrders)
+			// GET /chef/orders/:orderId — full order detail for the vendor
+			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
 			chefDashboard.PUT("/orders/:orderId/status", chefHandler.UpdateOrderStatus)
+			// GET /chef/earnings/breakdown?period=week|month|cycle
+			chefDashboard.GET("/earnings/breakdown", chefEarningsHandler.GetEarningsBreakdown)
+			// GET /chef/documents/expiring?withinDays=30
+			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)
 			chefDashboard.POST("/reviews/:reviewId/reply", chefHandler.ReplyToReview)
 			chefDashboard.GET("/settings", chefHandler.GetChefSettings)

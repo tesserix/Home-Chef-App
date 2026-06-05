@@ -39,6 +39,10 @@ type MenuItem struct {
 	PortionSize  string         `gorm:"" json:"portionSize,omitempty"`
 	Serves       int            `gorm:"default:1" json:"serves"`
 	SpiceLevel   int            `gorm:"default:0" json:"spiceLevel"`
+	// IsVeg is a nullable boolean: true = veg, false = non-veg, nil = not set
+	// (legacy rows before the column was added). Frontend renders the FSSAI
+	// green/brown dot only when the value is non-nil.
+	IsVeg        *bool          `gorm:"" json:"isVeg,omitempty"`
 	IsAvailable  bool           `gorm:"default:true" json:"isAvailable"`
 	IsApproved   bool           `gorm:"default:false" json:"isApproved"`
 	IsFeatured   bool           `gorm:"default:false" json:"isFeatured"`
@@ -78,24 +82,26 @@ type MenuItemImageResponse struct {
 }
 
 type MenuItemResponse struct {
-	ID           uuid.UUID              `json:"id"`
-	ChefID       uuid.UUID              `json:"chefId"`
-	CategoryID   *uuid.UUID             `json:"categoryId,omitempty"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	Price        float64                `json:"price"`
-	ComparePrice float64                `json:"comparePrice,omitempty"`
-	ImageURL     string                 `json:"imageUrl,omitempty"`
+	ID           uuid.UUID               `json:"id"`
+	ChefID       uuid.UUID               `json:"chefId"`
+	CategoryID   *uuid.UUID              `json:"categoryId,omitempty"`
+	Name         string                  `json:"name"`
+	Description  string                  `json:"description"`
+	Price        float64                 `json:"price"`
+	ComparePrice float64                 `json:"comparePrice,omitempty"`
+	ImageURL     string                  `json:"imageUrl,omitempty"`
 	Images       []MenuItemImageResponse `json:"images"`
-	PrepTime     int                    `json:"prepTime"`
-	PortionSize  string                 `json:"portionSize,omitempty"`
-	Serves       int                    `json:"serves"`
-	DietaryTags  []string               `json:"dietaryTags"`
-	Allergens    []string               `json:"allergens"`
-	SpiceLevel   int                    `json:"spiceLevel"`
-	IsAvailable  bool                   `json:"isAvailable"`
-	IsFeatured   bool                   `json:"isFeatured"`
-	Rating       float64                `json:"rating"`
+	PrepTime     int                     `json:"prepTime"`
+	PortionSize  string                  `json:"portionSize,omitempty"`
+	Serves       int                     `json:"serves"`
+	DietaryTags  []string                `json:"dietaryTags"`
+	Allergens    []string                `json:"allergens"`
+	SpiceLevel   int                     `json:"spiceLevel"`
+	// IsVeg is omitted from JSON when nil (legacy items where the flag was not set).
+	IsVeg        *bool                   `json:"isVeg,omitempty"`
+	IsAvailable  bool                    `json:"isAvailable"`
+	IsFeatured   bool                    `json:"isFeatured"`
+	Rating       float64                 `json:"rating"`
 }
 
 func (m *MenuItem) ToResponse() MenuItemResponse {
@@ -136,6 +142,7 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 		DietaryTags:  dietaryTags,
 		Allergens:    allergens,
 		SpiceLevel:   m.SpiceLevel,
+		IsVeg:        m.IsVeg,
 		IsAvailable:  m.IsAvailable,
 		IsFeatured:   m.IsFeatured,
 		Rating:       m.Rating,

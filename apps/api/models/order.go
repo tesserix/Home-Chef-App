@@ -146,6 +146,12 @@ type OrderResponse struct {
 	PaymentStatus   PaymentStatus       `json:"paymentStatus"`
 	PaymentProvider string              `json:"paymentProvider,omitempty"`
 	Currency        string              `json:"currency"`
+	// CustomerName and CustomerPhone are populated by handlers that load the
+	// Customer relation (e.g. chef order list, chef order detail). They are
+	// intentionally absent from the base DTO so customer-facing endpoints
+	// cannot accidentally return chef-side data.
+	CustomerName  string              `json:"customerName,omitempty"`
+	CustomerPhone string              `json:"customerPhone,omitempty"`
 	Subtotal        float64             `json:"subtotal"`
 	DeliveryFee     float64             `json:"deliveryFee"`
 	ServiceFee      float64             `json:"serviceFee"`
@@ -153,6 +159,8 @@ type OrderResponse struct {
 	TaxRate         float64             `json:"taxRate"`
 	TaxName         string              `json:"taxName,omitempty"`
 	Tip             float64             `json:"tip"`
+	ChefTip         float64             `json:"chefTip,omitempty"`
+	DriverTip       float64             `json:"driverTip,omitempty"`
 	Discount        float64             `json:"discount"`
 	Total           float64             `json:"total"`
 	Items           []OrderItemResponse `json:"items"`
@@ -161,13 +169,18 @@ type OrderResponse struct {
 }
 
 type OrderItemResponse struct {
-	ID         uuid.UUID `json:"id"`
-	MenuItemID uuid.UUID `json:"menuItemId"`
-	Name       string    `json:"name"`
-	Price      float64   `json:"price"`
-	Quantity   int       `json:"quantity"`
-	Subtotal   float64   `json:"subtotal"`
-	Notes      string    `json:"notes,omitempty"`
+	ID                   uuid.UUID `json:"id"`
+	MenuItemID           uuid.UUID `json:"menuItemId"`
+	Name                 string    `json:"name"`
+	Price                float64   `json:"price"`
+	Quantity             int       `json:"quantity"`
+	Subtotal             float64   `json:"subtotal"`
+	Notes                string    `json:"notes,omitempty"`
+	// SpecialInstructions is an alias for Notes exposed in the vendor detail view.
+	SpecialInstructions  string    `json:"specialInstructions,omitempty"`
+	// IsVeg is resolved live from the MenuItem at response time. Omitted when nil
+	// (legacy items predating the column, or items with no veg flag).
+	IsVeg                *bool     `json:"isVeg,omitempty"`
 }
 
 type AddressResponse struct {
@@ -176,6 +189,27 @@ type AddressResponse struct {
 	City       string `json:"city"`
 	State      string `json:"state"`
 	PostalCode string `json:"postalCode"`
+}
+
+// ChefOrderDetailResponse is the full order shape returned by GET /chef/orders/:orderId.
+// It extends OrderResponse with fields the vendor needs for kitchen operations.
+type ChefOrderDetailResponse struct {
+	OrderResponse
+	// Timing
+	AcceptedAt            *time.Time `json:"acceptedAt,omitempty"`
+	PreparedAt            *time.Time `json:"preparedAt,omitempty"`
+	PickedUpAt            *time.Time `json:"pickedUpAt,omitempty"`
+	DeliveredAt           *time.Time `json:"deliveredAt,omitempty"`
+	CancelledAt           *time.Time `json:"cancelledAt,omitempty"`
+	CancelReason          string     `json:"cancelReason,omitempty"`
+	ScheduledFor          *time.Time `json:"scheduledFor,omitempty"`
+	EstimatedPrepTime     int        `json:"estimatedPrepTime,omitempty"`
+	EstimatedDeliveryTime int        `json:"estimatedDeliveryTime,omitempty"`
+	// Instructions
+	SpecialInstructions  string `json:"specialInstructions,omitempty"`
+	DeliveryInstructions string `json:"deliveryInstructions,omitempty"`
+	// Payment method
+	PaymentMethod string `json:"paymentMethod,omitempty"`
 }
 
 func (o *Order) ToResponse() OrderResponse {
@@ -210,9 +244,11 @@ func (o *Order) ToResponse() OrderResponse {
 		TaxRate:         o.TaxRate,
 		TaxName:         o.TaxName,
 		Tip:             o.Tip,
+		ChefTip:         o.ChefTip,
+		DriverTip:       o.DriverTip,
 		Discount:        o.Discount,
-		Total:         o.Total,
-		Items:         items,
+		Total:           o.Total,
+		Items:           items,
 		DeliveryAddress: AddressResponse{
 			Line1:      o.DeliveryAddressLine1,
 			Line2:      o.DeliveryAddressLine2,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +77,22 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
+	// Optional expiry date — ISO-8601 string in the multipart field "expiryDate"
+	// (e.g. "2026-07-10"). Omitting the field leaves ExpiryDate as nil.
+	var expiryDate *time.Time
+	if ed := c.PostForm("expiryDate"); ed != "" {
+		parsed, err := time.Parse("2006-01-02", ed)
+		if err != nil {
+			// Also try RFC3339 for callers that send a full timestamp
+			parsed, err = time.Parse(time.RFC3339, ed)
+		}
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expiryDate format. Use YYYY-MM-DD or RFC3339."})
+			return
+		}
+		expiryDate = &parsed
+	}
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
@@ -141,6 +158,7 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 		ContentType: contentType,
 		FileSize:    header.Size,
 		Status:      models.DocStatusPending,
+		ExpiryDate:  expiryDate,
 	}
 
 	if err := database.DB.Create(&doc).Error; err != nil {
@@ -844,6 +862,72 @@ func (h *UploadHandler) GetDocuments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, responses)
+}
+
+// GetExpiringDocuments returns the chef's documents whose expiryDate is within
+// the next N days (default 30). Intended for the mobile dashboard banner that
+// warns chefs to renew their FSSAI license before it lapses.
+//
+// GET /chef/documents/expiring?withinDays=30
+//
+// TODO(v2): Replace polling with a server-push via NATS/notification-service
+// so the mobile app is notified pro-actively instead of checking on every
+// app open.
+func (h *UploadHandler) GetExpiringDocuments(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	withinDays := 30
+	if wd := c.Query("withinDays"); wd != "" {
+		if n, err := strconv.Atoi(wd); err == nil && n > 0 && n <= 365 {
+			withinDays = n
+		}
+	}
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		// No profile = no documents, return empty rather than 404
+		c.JSON(http.StatusOK, gin.H{"documents": []interface{}{}})
+		return
+	}
+
+	now := time.Now().UTC()
+	cutoff := now.AddDate(0, 0, withinDays)
+
+	// Fetch documents whose expiryDate is in the future but within the window.
+	// We intentionally exclude already-expired documents (expiry_date <= now)
+	// because those would need a different warning ("expired") rather than
+	// "expiring soon". Handle both in v2.
+	var docs []models.ChefDocument
+	if err := database.DB.Where(
+		"chef_id = ? AND expiry_date > ? AND expiry_date <= ?",
+		chef.ID, now, cutoff,
+	).Order("expiry_date ASC").Find(&docs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch documents"})
+		return
+	}
+
+	type expiringDocResponse struct {
+		ID              string    `json:"id"`
+		Type            string    `json:"type"`
+		ExpiryDate      time.Time `json:"expiryDate"`
+		DaysUntilExpiry int       `json:"daysUntilExpiry"`
+	}
+
+	result := make([]expiringDocResponse, 0, len(docs))
+	for _, doc := range docs {
+		if doc.ExpiryDate == nil {
+			continue
+		}
+		days := int(doc.ExpiryDate.Sub(now).Hours() / 24)
+		result = append(result, expiringDocResponse{
+			ID:              doc.ID.String(),
+			Type:            string(doc.Type),
+			ExpiryDate:      *doc.ExpiryDate,
+			DaysUntilExpiry: days,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"documents": result})
 }
 
 // Request types

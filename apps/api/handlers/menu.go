@@ -148,6 +148,7 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		PortionSize:  req.PortionSize,
 		Serves:       max(req.Serves, 1),
 		SpiceLevel:   req.SpiceLevel,
+		IsVeg:        req.IsVeg,
 		IsAvailable:  true,
 		IsFeatured:   req.IsFeatured,
 	}
@@ -257,6 +258,9 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	if req.SpiceLevel != nil {
 		updates["spice_level"] = *req.SpiceLevel
 	}
+	if req.IsVeg != nil {
+		updates["is_veg"] = *req.IsVeg
+	}
 	if req.IsAvailable != nil {
 		updates["is_available"] = *req.IsAvailable
 	}
@@ -328,6 +332,57 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"item": item})
+}
+
+// ToggleMenuItemAvailability marks a menu item as available or out-of-stock.
+// The chef must own the item.
+// PUT /chef/menu/items/:id/availability — body: {"isAvailable": bool}
+func (h *MenuHandler) ToggleMenuItemAvailability(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	itemID := c.Param("id")
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	var item models.MenuItem
+	if err := database.DB.Where("id = ? AND chef_id = ?", itemID, chef.ID).First(&item).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Menu item not found"})
+		return
+	}
+
+	var req struct {
+		IsAvailable bool `json:"isAvailable"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := database.DB.Model(&item).Update("is_available", req.IsAvailable).Error; err != nil {
+		log.Printf("Failed to update item availability: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update availability"})
+		return
+	}
+
+	// Reload to return the up-to-date record
+	database.DB.Preload("Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("sort_order ASC")
+	}).First(&item, "id = ?", itemID)
+
+	if item.DietaryTags == nil {
+		item.DietaryTags = pq.StringArray{}
+	}
+	if item.Allergens == nil {
+		item.Allergens = pq.StringArray{}
+	}
+	if item.Ingredients == nil {
+		item.Ingredients = pq.StringArray{}
+	}
+
+	c.JSON(http.StatusOK, item)
 }
 
 // DeleteMenuItem soft-deletes a menu item.
@@ -638,6 +693,8 @@ type CreateMenuItemRequest struct {
 	PortionSize  string   `json:"portionSize"`
 	Serves       int      `json:"serves"`
 	SpiceLevel   int      `json:"spiceLevel"`
+	// IsVeg is nullable: send true/false to set, omit/null to leave unset.
+	IsVeg        *bool    `json:"isVeg"`
 	IsFeatured   bool     `json:"isFeatured"`
 }
 
@@ -655,6 +712,10 @@ type UpdateMenuItemRequest struct {
 	PortionSize  *string   `json:"portionSize"`
 	Serves       *int      `json:"serves"`
 	SpiceLevel   *int      `json:"spiceLevel"`
+	// IsVeg: send true/false to set, omit to leave unchanged.
+	// Note: to explicitly clear the flag (reset to "not set"), the API would
+	// need a tri-state sentinel — deferred for v2.
+	IsVeg        *bool     `json:"isVeg"`
 	IsAvailable  *bool     `json:"isAvailable"`
 	IsFeatured   *bool     `json:"isFeatured"`
 }

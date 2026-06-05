@@ -40,6 +40,10 @@ type ChefDocument struct {
 	FileSize        int64          `gorm:"" json:"fileSize"`
 	Status          DocumentStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
 	RejectionReason string         `gorm:"" json:"rejectionReason,omitempty"`
+	// ExpiryDate is the document's expiry date (nullable — not all document types
+	// have an expiry, and existing rows will have NULL until re-uploaded).
+	// Used by the FSSAI expiry-reminder endpoint.
+	ExpiryDate      *time.Time     `gorm:"" json:"expiryDate,omitempty"`
 	CreatedAt       time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt       time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 
@@ -76,6 +80,7 @@ type ChefDocumentResponse struct {
 	FileURL         string         `json:"fileUrl,omitempty"`
 	Status          DocumentStatus `json:"status"`
 	RejectionReason string         `json:"rejectionReason,omitempty"`
+	ExpiryDate      *time.Time     `json:"expiryDate,omitempty"`
 	CreatedAt       time.Time      `json:"createdAt"`
 }
 
@@ -87,6 +92,7 @@ func (d *ChefDocument) ToResponse() ChefDocumentResponse {
 		FileURL:         d.FileURL,
 		Status:          d.Status,
 		RejectionReason: d.RejectionReason,
+		ExpiryDate:      d.ExpiryDate,
 		CreatedAt:       d.CreatedAt,
 	}
 }
