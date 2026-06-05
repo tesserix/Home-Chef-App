@@ -286,8 +286,10 @@ func SetupRouter() *gin.Engine {
 			chefMenu.DELETE("/items/:itemId", menuHandler.DeleteMenuItem)
 			chefMenu.POST("/items/:itemId/images", menuHandler.UploadMenuItemImage)
 			chefMenu.DELETE("/items/:itemId/images/:imageId", menuHandler.DeleteMenuItemImage)
-			// PUT /chef/menu/items/:id/availability — toggle out-of-stock per item
-			chefMenu.PUT("/items/:id/availability", menuHandler.ToggleMenuItemAvailability)
+			// PUT /chef/menu/items/:itemId/availability — toggle out-of-stock per item.
+			// Param name MUST match the sibling routes (:itemId) — Gin's radix
+			// tree panics on conflicting wildcard names at the same position.
+			chefMenu.PUT("/items/:itemId/availability", menuHandler.ToggleMenuItemAvailability)
 		}
 
 		// Chef dashboard routes (chef only)

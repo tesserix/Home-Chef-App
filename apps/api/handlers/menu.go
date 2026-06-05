@@ -336,10 +336,10 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 
 // ToggleMenuItemAvailability marks a menu item as available or out-of-stock.
 // The chef must own the item.
-// PUT /chef/menu/items/:id/availability — body: {"isAvailable": bool}
+// PUT /chef/menu/items/:itemId/availability — body: {"isAvailable": bool}
 func (h *MenuHandler) ToggleMenuItemAvailability(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
-	itemID := c.Param("id")
+	itemID := c.Param("itemId")
 
 	var chef models.ChefProfile
 	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
