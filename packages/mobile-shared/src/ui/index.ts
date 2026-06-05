@@ -7,3 +7,4 @@ export { ToastProvider, useToast } from './Toast';
 export { Sheet, type SheetHandle } from './Sheet';
 export { UndoSnackbarProvider, useUndoSnackbar } from './UndoSnackbar';
 export { OnboardingScaffold } from './OnboardingScaffold';
+export { DietIcon } from './DietIcon';
