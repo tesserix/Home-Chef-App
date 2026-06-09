@@ -217,6 +217,21 @@ func SetupRouter() *gin.Engine {
 			"/api/v1/mobile/min-version",
 		},
 	}))
+	// Idempotency-Key dedup on chef-side mutations only. Opt-in via
+	// the Idempotency-Key request header (web doesn't send it today;
+	// mobile will start sending it on the retry-prone flows — accept
+	// order, place order, file payout, upload doc). Non-listed paths
+	// and missing headers pass through. 24h TTL; 5xx responses are
+	// NOT cached so a retry can re-execute. Fails open on Redis down.
+	v1.Use(middleware.Idempotency(middleware.IdempotencyConfig{
+		IncludedPathPrefixes: []string{
+			"/api/v1/chef/orders",
+			"/api/v1/chef/menu",
+			"/api/v1/chef/documents",
+			"/api/v1/chef/payments",
+		},
+		ResponseTTL: 24 * time.Hour,
+	}))
 	{
 		// Mobile-only routes (public — no auth)
 		mobileHandler := handlers.NewMobileHandler()
