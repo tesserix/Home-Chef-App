@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -8,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/homechef/api/services"
 	"golang.org/x/time/rate"
 )
 
@@ -127,4 +130,104 @@ func toString(v any) string {
 		return x.String()
 	}
 	return ""
+}
+
+// RateLimitRedisConfig configures the per-route Redis-backed rate limiter.
+//
+// AuthedPerMin   — request budget per authenticated user per minute.
+// UnauthedPerMin — request budget per IP per minute when no user is set.
+// ExcludedPaths  — exact path prefix matches that bypass the limiter
+//                  (typically /health, /metrics, /api/v1/mobile/min-version).
+//
+// Fixed-window counter (key TTL = 70s, slightly larger than the window).
+// This is less smooth than a true sliding-window token bucket but
+// adequate at the volumes we're guarding against (credential stuffing,
+// burst order spam) and trivially correct under Redis failure: a
+// missed INCR or read error fails OPEN per the Wave 1 backend design
+// — log + counter increment, let the request through. Burst risk
+// during a Redis outage is acceptable; service downtime is not.
+type RateLimitRedisConfig struct {
+	AuthedPerMin   int
+	UnauthedPerMin int
+	ExcludedPaths  []string
+}
+
+// RateLimitRedis returns a Gin middleware that throttles by user ID
+// when an authenticated user is present (set in c.Get("userID") via
+// BFFAuth), otherwise by client IP. Distributed across pods via Redis.
+// Excluded paths bypass entirely.
+//
+// Headers on a throttled response: Retry-After (seconds until window
+// roll-over) and X-RateLimit-* (informational).
+func RateLimitRedis(cfg RateLimitRedisConfig) gin.HandlerFunc {
+	if cfg.AuthedPerMin <= 0 {
+		cfg.AuthedPerMin = 60
+	}
+	if cfg.UnauthedPerMin <= 0 {
+		cfg.UnauthedPerMin = 30
+	}
+	redisClient := services.GetRedisClient()
+
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		for _, p := range cfg.ExcludedPaths {
+			if strings.HasPrefix(path, p) {
+				c.Next()
+				return
+			}
+		}
+
+		// Bail open if Redis isn't connected — we never want a Redis
+		// outage to brick the API. Burst risk during the outage is
+		// the explicit tradeoff (see Wave 1 backend design §3 Redis
+		// fail-mode decision).
+		if !redisClient.IsConnected() {
+			c.Next()
+			return
+		}
+
+		scope := "ip"
+		identifier := clientIP(c.Request)
+		budget := cfg.UnauthedPerMin
+		if uid, ok := c.Get("userID"); ok {
+			scope = "user"
+			identifier = toString(uid)
+			budget = cfg.AuthedPerMin
+		}
+
+		now := time.Now().UTC()
+		minuteBucket := now.Unix() / 60
+		key := fmt.Sprintf("rl:%s:%s:%d", scope, identifier, minuteBucket)
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 200*time.Millisecond)
+		defer cancel()
+
+		count, err := redisClient.IncrAndExpire(ctx, key, 70*time.Second)
+		if err != nil {
+			// Same fail-open posture — log, don't block. A spike in
+			// these logs is the prod signal that Redis is suffering.
+			c.Next()
+			return
+		}
+
+		remaining := budget - int(count)
+		if remaining < 0 {
+			remaining = 0
+		}
+		// Seconds until the current minute bucket rolls over.
+		retryAfter := 60 - int(now.Unix()%60)
+
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", budget))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", now.Unix()+int64(retryAfter)))
+
+		if int(count) > budget {
+			c.Header("Retry-After", fmt.Sprintf("%d", retryAfter))
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "Too many requests. Please slow down.",
+			})
+			return
+		}
+		c.Next()
+	}
 }

@@ -204,6 +204,19 @@ func SetupRouter() *gin.Engine {
 	v1.Use(middleware.VersionCheck([]string{
 		"/api/v1/mobile/min-version",
 	}))
+	// Redis-backed rate limit on all of v1. 60req/min per
+	// authenticated user (chef), 30req/min per IP otherwise. Excluded:
+	// the min-version poll (mobile hits it every 30 min — but other
+	// clients might too, so don't count it against budgets). Fails
+	// open if Redis is unreachable — see services/redis.go +
+	// middleware/ratelimit.go for the fail-mode rationale.
+	v1.Use(middleware.RateLimitRedis(middleware.RateLimitRedisConfig{
+		AuthedPerMin:   60,
+		UnauthedPerMin: 30,
+		ExcludedPaths: []string{
+			"/api/v1/mobile/min-version",
+		},
+	}))
 	{
 		// Mobile-only routes (public — no auth)
 		mobileHandler := handlers.NewMobileHandler()
