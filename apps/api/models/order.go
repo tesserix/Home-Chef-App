@@ -134,8 +134,46 @@ type OrderItem struct {
 	Notes      string    `gorm:"" json:"notes,omitempty"`
 	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
+	// Per-line cancellation — set when the chef marks a single line item
+	// as unfulfillable mid-prep. The order itself stays accepted /
+	// preparing so the remaining lines continue; only this line's
+	// subtotal (+ proportional tax) is refunded to the customer.
+	// RefundID is the gateway refund identifier returned by Razorpay /
+	// Stripe; used as the idempotency anchor so retries of the same
+	// per-line cancel don't double-refund.
+	IsCancelled     bool       `gorm:"default:false" json:"isCancelled"`
+	CancelledReason string     `gorm:"type:varchar(40)" json:"cancelledReason,omitempty"`
+	CancelledAt     *time.Time `gorm:"" json:"cancelledAt,omitempty"`
+	RefundID        string     `gorm:"" json:"-"`
+	RefundAmount    float64    `gorm:"default:0" json:"refundAmount,omitempty"`
+
 	Order    Order    `gorm:"foreignKey:OrderID" json:"-"`
 	MenuItem MenuItem `gorm:"foreignKey:MenuItemID" json:"menuItem,omitempty"`
+}
+
+// CancelReason enumerates the reason values mobile + admin send when
+// cancelling an order or per-line item. Kept narrow on purpose — open-
+// ended free-text reasons read worse on the customer email + harder
+// to bucket in analytics.
+type CancelReason string
+
+const (
+	CancelReasonOutOfIngredient CancelReason = "out_of_ingredient"
+	CancelReasonEquipmentFailure CancelReason = "equipment_failure"
+	CancelReasonCustomerRequest  CancelReason = "customer_request"
+	CancelReasonOther            CancelReason = "other"
+)
+
+// IsValid reports whether r is one of the four allowed cancel reasons.
+// Handlers should reject anything else with 400 so the column stays
+// queryable for ops dashboards.
+func (r CancelReason) IsValid() bool {
+	switch r {
+	case CancelReasonOutOfIngredient, CancelReasonEquipmentFailure,
+		CancelReasonCustomerRequest, CancelReasonOther:
+		return true
+	}
+	return false
 }
 
 // DTOs

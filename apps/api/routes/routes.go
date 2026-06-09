@@ -353,6 +353,12 @@ func SetupRouter() *gin.Engine {
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
 			chefDashboard.PUT("/orders/:orderId/status", chefHandler.UpdateOrderStatus)
+			// Chef-side cancellation (Wave 2). Whole-order issues a full
+			// Razorpay refund; per-line issues a partial and recomputes
+			// the order totals so the remaining items continue prep.
+			chefOrderCancelHandler := handlers.NewChefOrderCancelHandler()
+			chefDashboard.POST("/orders/:orderId/cancel", chefOrderCancelHandler.CancelOrder)
+			chefDashboard.POST("/orders/:orderId/items/:itemId/cancel", chefOrderCancelHandler.CancelOrderItem)
 			// GET /chef/earnings/breakdown?period=week|month|cycle
 			chefDashboard.GET("/earnings/breakdown", chefEarningsHandler.GetEarningsBreakdown)
 			// GET /chef/documents/expiring?withinDays=30
