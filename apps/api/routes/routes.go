@@ -12,6 +12,7 @@ import (
 	"github.com/homechef/api/handlers"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -87,6 +88,12 @@ func SetupRouter() *gin.Engine {
 	// Trust only proxies on the loopback / private mesh addresses so c.ClientIP()
 	// can't be spoofed by an upstream client.
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
+
+	// Sentry — recovers panics + tags them onto the per-request Hub so
+	// handlers can attach user context. Must come BEFORE other
+	// middleware so anything that panics downstream lands in Sentry.
+	// No-ops cleanly when SENTRY_DSN_API is unset.
+	r.Use(services.SentryGinMiddleware())
 
 	// Prometheus metrics middleware
 	r.Use(middleware.PrometheusMiddleware())

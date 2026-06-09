@@ -21,6 +21,12 @@ func main() {
 	config.Load()
 	log.Printf("Starting HomeChef API in %s mode", config.AppConfig.Environment)
 
+	// Init Sentry as early as possible so any startup failure below
+	// lands in Sentry rather than vanishing into the pod log. Gated
+	// on SENTRY_DSN_API — no-ops cleanly when unset (dev / staging).
+	services.InitSentry()
+	defer services.FlushSentry(2 * time.Second)
+
 	// Connect to database
 	if err := database.Connect(); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
