@@ -3,8 +3,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   BarChart2,
+  Bell,
   ChevronRight,
   DollarSign,
+  FileText,
+  Inbox,
   LogOut,
   Settings,
   Star,
@@ -25,7 +28,12 @@ const NAV_ROWS: NavRow[] = [
   { label: 'Earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
   { label: 'Analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
   { label: 'Reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
-  { label: 'Settings', caption: 'Notifications, account', route: '/settings', Icon: Settings },
+  // Wave 2 additions — surfaced from the More tab so they're
+  // discoverable beyond the dashboard cards / settings deep links.
+  { label: 'Admin requests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
+  { label: 'Documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
+  { label: 'Notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
+  { label: 'Settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
 ];
 
 function deriveDisplayName(
