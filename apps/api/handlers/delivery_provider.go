@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"regexp"
@@ -607,7 +612,14 @@ func (h *DeliveryProviderHandler) GetProviderStats(c *gin.Context) {
 	})
 }
 
-// HandleWebhook processes inbound webhooks from delivery providers
+// HandleWebhook processes inbound webhooks from delivery providers.
+// HMAC-SHA256 signature verification is required whenever the provider
+// has a webhook_secret configured (most do); missing-secret providers
+// fall through with a warn so partner onboarding isn't blocked. The
+// signature is read from `X-Webhook-Signature` (case-insensitive) —
+// Dunzo/Shadowfax/Porter all forward it under that header at our
+// request; per-provider header overrides can be added later if a
+// partner refuses to comply.
 func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 	providerCode := c.Param("provider")
 
@@ -624,6 +636,18 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 
+	if provider.WebhookSecret != "" {
+		signature := c.GetHeader("X-Webhook-Signature")
+		if !verifyHMACSHA256(body, signature, provider.WebhookSecret) {
+			log.Printf("delivery webhook signature mismatch for provider=%s", provider.Code)
+			services.CaptureSentryError(c, fmt.Errorf("delivery webhook bad signature: provider=%s", provider.Code))
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+			return
+		}
+	} else {
+		log.Printf("delivery webhook accepted without HMAC: provider=%s has no webhook_secret configured", provider.Code)
+	}
+
 	providerService := services.NewProviderService()
 	if err := providerService.HandleProviderWebhook(provider.Code, body); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
@@ -631,4 +655,16 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// verifyHMACSHA256 compares the hex-encoded HMAC-SHA256 of body using
+// secret against the provided signature in constant time.
+func verifyHMACSHA256(body []byte, signature, secret string) bool {
+	if signature == "" || secret == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
 }
