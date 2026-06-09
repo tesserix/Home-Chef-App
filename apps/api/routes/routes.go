@@ -186,7 +186,22 @@ func SetupRouter() *gin.Engine {
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
+	// Mobile force-upgrade gate. No-op for any request missing
+	// X-App-Version / X-Platform (i.e. web + admin + delivery portals,
+	// curl, internal tooling all pass through untouched). Mobile sets
+	// both, so a too-old build receives 426 + storeUrl on every API
+	// call as a defense-in-depth backstop to the explicit min-version
+	// poll the client does on focus. Excludes the min-version endpoint
+	// itself (would be circular) and webhook routes (no version
+	// header, but already gated by HMAC).
+	v1.Use(middleware.VersionCheck([]string{
+		"/api/v1/mobile/min-version",
+	}))
 	{
+		// Mobile-only routes (public — no auth)
+		mobileHandler := handlers.NewMobileHandler()
+		v1.GET("/mobile/min-version", mobileHandler.GetMinVersion)
+
 		// Location reference routes (public)
 		locations := v1.Group("/locations")
 		{

@@ -13,16 +13,34 @@ import axios, {
 import { clearTokens } from '../utils/storage';
 import { clearStoredSession } from '../auth/bff-session';
 
+export interface UpgradeRequiredPayload {
+  minVersion?: string;
+  storeUrl?: string;
+}
+
 export interface ApiClientOptions {
   baseURL: string;
   /** Returns current access token synchronously from Zustand store */
   getToken: () => string | null;
   /** Called on 401 after tokens are cleared — app should navigate to login */
   onAuthFailure?: () => void;
+  /** App version string sent as X-App-Version on every request (e.g. "1.0.3+12") */
+  appVersion?: string;
+  /** Platform sent as X-Platform on every request — needed by the server-side min-version check */
+  platform?: 'ios' | 'android';
+  /** Called on 426 Upgrade Required — app should route to the upgrade wall */
+  onUpgradeRequired?: (payload: UpgradeRequiredPayload) => void;
 }
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
-  const { baseURL, getToken, onAuthFailure } = options;
+  const {
+    baseURL,
+    getToken,
+    onAuthFailure,
+    appVersion,
+    platform,
+    onUpgradeRequired,
+  } = options;
 
   const instance = axios.create({
     baseURL,
@@ -30,23 +48,34 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     timeout: 15000,
   });
 
-  // Request interceptor: inject Bearer session token
+  // Request interceptor: inject Bearer session token + version headers.
+  // X-App-Version / X-Platform are a defense-in-depth backstop to the
+  // explicit min-version poll — backend middleware can return 426
+  // Upgrade Required on any authenticated request when a too-old
+  // client tries to talk to a newer API.
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       const token = getToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      if (appVersion) {
+        config.headers['X-App-Version'] = appVersion;
+      }
+      if (platform) {
+        config.headers['X-Platform'] = platform;
+      }
       return config;
     },
     (error) => Promise.reject(error)
   );
 
-  // Response interceptor: 401 → clear session and bubble up.
-  // We do NOT attempt a client-side refresh: the BFF session_token has no
-  // matching refresh token on the client. If the Firebase user is still
-  // signed in, the app can call AuthProvider.completeSignIn() to mint a
-  // fresh session. Otherwise the user must re-authenticate.
+  // Response interceptor: 401 → clear session; 426 → upgrade wall.
+  // We do NOT attempt a client-side refresh on 401: the BFF
+  // session_token has no matching refresh token on the client. If the
+  // Firebase user is still signed in, the app can call
+  // AuthProvider.completeSignIn() to mint a fresh session. Otherwise
+  // the user must re-authenticate.
   instance.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
@@ -58,6 +87,12 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
           // best-effort
         }
         onAuthFailure?.();
+      } else if (error.response?.status === 426) {
+        const data = (error.response.data ?? {}) as UpgradeRequiredPayload;
+        onUpgradeRequired?.({
+          minVersion: data.minVersion,
+          storeUrl: data.storeUrl,
+        });
       }
       return Promise.reject(error);
     }

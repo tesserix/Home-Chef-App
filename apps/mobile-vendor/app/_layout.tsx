@@ -23,6 +23,14 @@ import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { useMinVersion } from '../hooks/useMinVersion';
+import { initSentry, wrapWithSentry } from '../lib/sentry';
+
+// Init Sentry as early as possible — at module scope, before any
+// React component mounts — so a crash during initial render lands in
+// Sentry instead of disappearing into Xcode-only crash logs.
+// No-ops cleanly when EXPO_PUBLIC_SENTRY_DSN is unset.
+initSentry();
 
 interface OnboardingStatusResponse {
   status:
@@ -46,9 +54,14 @@ const queryClient = new QueryClient({
 });
 
 // Set global notification handler at module level — before any notification arrives.
+// SDK 55 split the legacy `shouldShowAlert` into `shouldShowBanner` (heads-up)
+// + `shouldShowList` (Notification Center); keep both true to match prior
+// behavior. `shouldShowAlert` is still required by the type for back-compat.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -322,6 +335,14 @@ function AppNavigator() {
     return wizardPathForStep(step);
   })();
 
+  // Force-upgrade gate. Polls /mobile/min-version while foregrounded;
+  // when the running app is below the configured minimum, every other
+  // routing decision below is short-circuited and the wall is pinned.
+  // Backend ALSO returns 426 on any authenticated request from a
+  // too-old client (defense in depth wired in lib/api.ts); both paths
+  // land on the same /upgrade-required screen.
+  const { upgradeRequired, minVersion, storeUrl } = useMinVersion();
+
   const pathname = usePathname();
 
   // The auth state we've last successfully routed for. While this lags
@@ -359,6 +380,21 @@ function AppNavigator() {
   // status change mid-session) we replace back to expectedPath. This is
   // the hard lock that keeps a non-verified chef out of the tabs.
   useEffect(() => {
+    if (upgradeRequired) {
+      if (normalize(pathname || '') !== '/upgrade-required') {
+        const qs = new URLSearchParams();
+        if (minVersion) qs.set('minVersion', minVersion);
+        if (storeUrl) qs.set('storeUrl', storeUrl);
+        const href = qs.toString()
+          ? `/upgrade-required?${qs.toString()}`
+          : '/upgrade-required';
+        router.replace(href as never);
+      }
+      // Pretend routing settled so the splash lifts; otherwise the
+      // wall renders under a permanent spinner.
+      routedFor.current = authKey;
+      return;
+    }
     if (!expectedPath) return;
     const target = normalize(expectedPath);
     const here = normalize(pathname || '');
@@ -374,7 +410,7 @@ function AppNavigator() {
     } else {
       router.replace(expectedPath as never);
     }
-  }, [pathname, expectedPath, authKey]);
+  }, [pathname, expectedPath, authKey, upgradeRequired, minVersion, storeUrl]);
 
   // Keep splash up until the OTF/TTF files are available — otherwise we
   // render a frame of System font then snap to Geist/Inter when fonts
@@ -444,7 +480,7 @@ function AppNavigator() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider
@@ -466,3 +502,7 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+// Sentry.wrap installs the navigation tracer + error boundary. No-op
+// when Sentry didn't initialize (DSN unset).
+export default wrapWithSentry(RootLayout);

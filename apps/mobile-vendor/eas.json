@@ -18,6 +18,7 @@
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "development",
         "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
@@ -35,6 +36,11 @@
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com",
+        "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "preview",
+        "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
+        "SENTRY_PROJECT": "homechef-vendor",
         "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
@@ -49,7 +55,8 @@
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "development"
       }
     },
     "preview": {
@@ -59,7 +66,12 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://vendors.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://vendors.fe3dr.com",
-        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql"
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
+        "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "preview",
+        "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
+        "SENTRY_PROJECT": "homechef-vendor"
       }
     },
     "production": {
@@ -68,11 +80,21 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://vendors.fe3dr.com/api/v1",
         "EXPO_PUBLIC_BFF_URL": "https://vendors.fe3dr.com",
-        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql"
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Business-8s8ql",
+        "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "production",
+        "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
+        "SENTRY_PROJECT": "homechef-vendor"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "$EAS_SECRET_APPLE_TEAM_ID",
+        "ascAppId": "$EAS_SECRET_ASC_APP_ID"
+      }
+    }
   }
 }
