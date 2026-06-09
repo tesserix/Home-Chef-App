@@ -32,12 +32,56 @@ interface ReviewsResponse {
   totalReviews: number;
 }
 
+// Wire-level shape from the backend (chefs.go:715). The screen consumes
+// the legacy ReviewsResponse shape above, so we adapt here. Field names
+// here mirror models.ReviewResponse in the Go backend (overallRating,
+// chefResponse) — NOT the screen's Review interface.
+interface BackendReview {
+  id: string;
+  orderId?: string;
+  overallRating: number;
+  comment: string;
+  customerName: string;
+  customerAvatar?: string;
+  createdAt: string;
+  chefResponse?: string;
+  chefRespondedAt?: string | null;
+}
+
+interface BackendReviewsEnvelope {
+  data: BackendReview[];
+  pagination?: { page: number; limit: number; total: number };
+}
+
+function adaptReview(b: BackendReview): Review {
+  return {
+    id: b.id,
+    customerName: b.customerName || 'Customer',
+    rating: b.overallRating,
+    comment: b.comment,
+    createdAt: b.createdAt,
+    reply: b.chefResponse || undefined,
+  };
+}
+
 // ----- Hook ------------------------------------------------------------------
 
 export function useReviews() {
   return useQuery<ReviewsResponse>({
     queryKey: ['chef', 'reviews'],
-    queryFn: () => api.get<ReviewsResponse>('/chef/reviews').then((r) => r.data),
+    queryFn: async () => {
+      const res = await api.get<BackendReviewsEnvelope>('/chef/reviews');
+      const items = (res.data?.data ?? []).map(adaptReview);
+      const totalReviews = res.data?.pagination?.total ?? items.length;
+      // averageRating isn't returned by the backend yet; compute it from
+      // the page we received. Good-enough for the v1 list — when the
+      // backend grows a `GET /chef/reviews/summary` we can swap to that.
+      const averageRating =
+        items.length === 0
+          ? 0
+          : items.reduce((sum, r) => sum + (r.rating || 0), 0) / items.length;
+      return { reviews: items, averageRating, totalReviews };
+    },
     staleTime: 60_000,
   });
 }
