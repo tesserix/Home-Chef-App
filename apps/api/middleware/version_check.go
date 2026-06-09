@@ -52,6 +52,19 @@ func VersionCheck(excludedPathPrefixes []string) gin.HandlerFunc {
 		min := minVersionFromEnv("vendor", platform)
 		if semverLess(appVersion, min) {
 			storeURL := os.Getenv("STORE_URL_VENDOR_" + strings.ToUpper(platform))
+			if storeURL == "" {
+				// Mirror handlers/mobile.go's defaultStoreURL so the
+				// upgrade wall CTA always has a valid target, even
+				// before ops sets the STORE_URL_* env. Without this
+				// the 426 body has storeUrl="", which renders a
+				// disabled "Update now" button on the mobile wall.
+				switch platform {
+				case "ios":
+					storeURL = "https://apps.apple.com/in/"
+				case "android":
+					storeURL = "https://play.google.com/store/"
+				}
+			}
 			c.AbortWithStatusJSON(http.StatusUpgradeRequired, gin.H{
 				"error":      "upgrade_required",
 				"message":    "App version " + appVersion + " is below required " + min + ". Please update.",
