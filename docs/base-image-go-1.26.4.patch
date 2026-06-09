@@ -1,0 +1,46 @@
+From: claude <noreply@anthropic.com>
+Date: 2026-06-09
+Subject: [PATCH] go-builder: pin to 1.26.4-alpine to close Go stdlib CVEs
+
+Closes GO-2026-4918, GO-2026-4971, GO-2026-4980, GO-2026-4982,
+GO-2026-5037, GO-2026-5039 — all Go stdlib vulns flagged by
+govulncheck against homechef-api at Go 1.26.2.
+
+The Dockerfile already used `golang:1.26-alpine` (floating major.minor
+tag), so the weekly rebuild would have picked these up automatically
+on the next Saturday run. Pinning to `1.26.4-alpine` makes the bump
+deliberate + immediate so downstream services can drop their stopgap
+overrides.
+
+Apply with:
+  cd <path-to>/base-docker-images
+  git checkout -b bump/go-1.26.4
+  patch -p1 < /path/to/base-image-go-1.26.4.patch
+  git commit -am "go-builder: pin to 1.26.4-alpine (Go stdlib CVE fixes)"
+  git push origin bump/go-1.26.4
+  # then open PR; once merged, weekly-rebuild.yml or a manual
+  # workflow_dispatch publishes the new :latest / :weekly tags.
+
+After base-go-builder:latest ships Go 1.26.4, revert the stopgap in
+Home-Chef-App/apps/api/Dockerfile:
+  FROM golang:1.26.4-alpine AS builder   ->
+  FROM ghcr.io/tesserix/base-go-builder:latest AS builder
+(and drop the apk add line — base image already has those).
+
+---
+ images/go-builder/Dockerfile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/images/go-builder/Dockerfile b/images/go-builder/Dockerfile
+index 0000000..0000000 100644
+--- a/images/go-builder/Dockerfile
++++ b/images/go-builder/Dockerfile
+@@ -7,7 +7,7 @@
+ #
+ # Non-root user is baked at 10001 so consumers can `USER 10001:10001` in
+ # their own Dockerfile without adding duplicate adduser commands.
+-FROM golang:1.26-alpine
++FROM golang:1.26.4-alpine
+
+ # Force each weekly rebuild to pull the freshest apk index — without
+ # --purge, the layer cache can silently hold month-old package sets.
