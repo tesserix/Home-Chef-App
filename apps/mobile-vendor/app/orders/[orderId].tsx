@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -12,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton } from '@homechef/mobile-shared/ui';
+import { Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import {
   useOrderDetail,
@@ -23,6 +25,30 @@ import {
   useOrderAction,
   useUpdateOrderStatus,
 } from '../../hooks/useVendorOrders';
+import {
+  useCancelOrder,
+  CANCEL_REASON_LABEL,
+  type CancelReason,
+} from '../../hooks/useCancelOrder';
+
+// Statuses where the chef can still cancel + refund. picked_up onward
+// is out of the chef's hands — cancellation becomes a customer-support
+// concern. Matches the backend's `cancellableStatuses` allowlist in
+// apps/api/handlers/chef_order_cancel.go.
+const CANCELLABLE_STATUSES: ReadonlySet<OrderDetailStatus> = new Set([
+  'accepted',
+  'preparing',
+  'ready',
+]);
+
+// CANCEL_REASONS preserves a stable display order across iOS/Android
+// action sheets and the destructive Android Alert dialog.
+const CANCEL_REASONS: CancelReason[] = [
+  'out_of_ingredient',
+  'equipment_failure',
+  'customer_request',
+  'other',
+];
 
 // ---- Status display maps -------------------------------------------------------
 
@@ -181,6 +207,7 @@ interface FooterActionsProps {
   onReject: () => void;
   onMarkPreparing: () => void;
   onMarkReady: () => void;
+  onCancel: () => void;
 }
 
 function FooterActions({
@@ -192,7 +219,24 @@ function FooterActions({
   onReject,
   onMarkPreparing,
   onMarkReady,
+  onCancel,
 }: FooterActionsProps) {
+  // Renders the destructive secondary action below the primary
+  // status-transition button when the order is cancellable. Kept as
+  // a link instead of a same-row button so the primary action stays
+  // the visual hero.
+  const cancelLink = CANCELLABLE_STATUSES.has(status) ? (
+    <Pressable
+      onPress={onCancel}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Cancel this order"
+      style={styles.cancelLinkWrap}
+    >
+      <Text style={styles.cancelLinkLabel}>Cancel order</Text>
+    </Pressable>
+  ) : null;
   if (status === 'pending') {
     return (
       <View style={styles.footer}>
@@ -248,6 +292,7 @@ function FooterActions({
             </View>
           )}
         </Pressable>
+        {cancelLink}
       </View>
     );
   }
@@ -272,8 +317,15 @@ function FooterActions({
             </View>
           )}
         </Pressable>
+        {cancelLink}
       </View>
     );
+  }
+
+  // status === 'ready' — chef has prepped, no more transitions for them;
+  // we still let them cancel until the driver picks up.
+  if (status === 'ready' && cancelLink) {
+    return <View style={styles.footer}>{cancelLink}</View>;
   }
 
   const caption: Partial<Record<OrderDetailStatus, string>> = {
@@ -317,6 +369,66 @@ export default function OrderDetailScreen() {
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
   const { triggerAction, isLoading: actionLoading } = useOrderAction();
   const updateStatus = useUpdateOrderStatus();
+  const cancelOrder = useCancelOrder(orderId);
+  const { show: showToast } = useToast();
+
+  // Two-step destructive flow: pick a reason, then confirm. iOS gets the
+  // native action sheet (familiar + dismissable by swipe); Android gets
+  // an Alert with N buttons (the closest cross-platform analog without
+  // pulling in a sheet library). Both end at submitCancel() which fires
+  // the mutation + shows a success/error toast.
+  function submitCancel(reason: CancelReason): void {
+    cancelOrder.mutate(reason, {
+      onSuccess: () => {
+        showToast({
+          message: 'Order cancelled. Customer is being refunded.',
+          tone: 'success',
+        });
+      },
+      onError: () => {
+        showToast({
+          message: 'Could not cancel. Try again.',
+          tone: 'error',
+        });
+      },
+    });
+  }
+
+  function openCancelSheet(): void {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: 'Cancel order',
+          message: 'The customer will be refunded in full.',
+          options: [
+            ...CANCEL_REASONS.map((r) => CANCEL_REASON_LABEL[r]),
+            'Keep order',
+          ],
+          cancelButtonIndex: CANCEL_REASONS.length,
+          destructiveButtonIndex: CANCEL_REASONS.length - 1,
+        },
+        (index) => {
+          if (index < 0 || index >= CANCEL_REASONS.length) return;
+          submitCancel(CANCEL_REASONS[index]!);
+        },
+      );
+      return;
+    }
+    // Android Alert max 3 buttons reliably — split into a 2-step prompt:
+    // first confirm intent, then a follow-up to pick a reason.
+    Alert.alert(
+      'Cancel this order?',
+      'The customer will be refunded in full. Pick a reason on the next screen.',
+      [
+        { text: 'Keep order', style: 'cancel' },
+        {
+          text: 'Cancel order',
+          style: 'destructive',
+          onPress: () => promptCancelReasonAndroid(submitCancel),
+        },
+      ],
+    );
+  }
 
   const addressLines = useMemo(
     () => (order ? formatAddressLines(order.deliveryAddress) : []),
@@ -597,7 +709,7 @@ export default function OrderDetailScreen() {
         orderId={order.id}
         customerName={order.customerName || 'this customer'}
         total={pricing.total}
-        disabled={actionLoading || updateStatus.isPending}
+        disabled={actionLoading || updateStatus.isPending || cancelOrder.isPending}
         onAccept={() => triggerAction(order.id, 'accepted')}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
@@ -606,9 +718,44 @@ export default function OrderDetailScreen() {
         onMarkReady={() =>
           updateStatus.mutate({ orderId: order.id, status: 'ready' })
         }
+        onCancel={openCancelSheet}
       />
     </SafeAreaView>
   );
+}
+
+// promptCancelReasonAndroid emulates an action sheet with a chained
+// Alert for the reason picker. We split out a function so the cancel
+// flow inside the screen stays readable.
+function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
+  // First two reasons + "Other" / "More…" because Android Alert
+  // caps reliably at 3 buttons. "More" chains a second prompt with
+  // the remaining options.
+  Alert.alert('Why?', '', [
+    {
+      text: CANCEL_REASON_LABEL.out_of_ingredient,
+      onPress: () => submit('out_of_ingredient'),
+    },
+    {
+      text: CANCEL_REASON_LABEL.equipment_failure,
+      onPress: () => submit('equipment_failure'),
+    },
+    {
+      text: 'More…',
+      onPress: () =>
+        Alert.alert('Why?', '', [
+          {
+            text: CANCEL_REASON_LABEL.customer_request,
+            onPress: () => submit('customer_request'),
+          },
+          {
+            text: CANCEL_REASON_LABEL.other,
+            onPress: () => submit('other'),
+          },
+          { text: 'Back', style: 'cancel' },
+        ]),
+    },
+  ]);
 }
 
 // ---- Styles ------------------------------------------------------------------
@@ -956,6 +1103,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
+    textDecorationLine: 'underline',
+  },
+  // Cancel-order destructive link — secondary affordance below the
+  // primary status-transition button. Underlined so it reads as an
+  // action, not just labelled text; coloured destructive to flag the
+  // tone before tap.
+  cancelLinkWrap: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+  },
+  cancelLinkLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
     textDecorationLine: 'underline',
   },
   primaryBtn: {
