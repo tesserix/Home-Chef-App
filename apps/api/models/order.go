@@ -219,6 +219,14 @@ type OrderItemResponse struct {
 	// IsVeg is resolved live from the MenuItem at response time. Omitted when nil
 	// (legacy items predating the column, or items with no veg flag).
 	IsVeg                *bool     `json:"isVeg,omitempty"`
+	// Per-line cancellation state. Surfaced so the mobile order detail
+	// can render the cancelled line with strikethrough + "Refunded ₹X"
+	// while the rest of the order continues prep. Mirror of the same-
+	// named columns on the OrderItem GORM model.
+	IsCancelled          bool       `json:"isCancelled,omitempty"`
+	CancelledReason      string     `json:"cancelledReason,omitempty"`
+	CancelledAt          *time.Time `json:"cancelledAt,omitempty"`
+	RefundAmount         float64    `json:"refundAmount,omitempty"`
 }
 
 type AddressResponse struct {
@@ -254,13 +262,17 @@ func (o *Order) ToResponse() OrderResponse {
 	items := make([]OrderItemResponse, len(o.Items))
 	for i, item := range o.Items {
 		items[i] = OrderItemResponse{
-			ID:         item.ID,
-			MenuItemID: item.MenuItemID,
-			Name:       item.Name,
-			Price:      item.Price,
-			Quantity:   item.Quantity,
-			Subtotal:   item.Subtotal,
-			Notes:      item.Notes,
+			ID:              item.ID,
+			MenuItemID:      item.MenuItemID,
+			Name:            item.Name,
+			Price:           item.Price,
+			Quantity:        item.Quantity,
+			Subtotal:        item.Subtotal,
+			Notes:           item.Notes,
+			IsCancelled:     item.IsCancelled,
+			CancelledReason: item.CancelledReason,
+			CancelledAt:     item.CancelledAt,
+			RefundAmount:    item.RefundAmount,
 		}
 	}
 

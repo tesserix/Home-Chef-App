@@ -33,3 +33,20 @@ export function useCancelOrder(orderId: string) {
     },
   });
 }
+
+// useCancelOrderItem triggers a per-line cancel + proportional refund.
+// Backend recomputes order subtotal/tax/total atomically; the order
+// status stays accepted/preparing/ready so the remaining lines keep
+// going. Cache invalidation is the same set as useCancelOrder — the
+// order detail screen rerenders with the cancelled line struck through.
+export function useCancelOrderItem(orderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, reason }: { itemId: string; reason: CancelReason }) =>
+      api.post(`/chef/orders/${orderId}/items/${itemId}/cancel`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chef', 'order-detail', orderId] });
+      qc.invalidateQueries({ queryKey: ['chef', 'orders'] });
+    },
+  });
+}

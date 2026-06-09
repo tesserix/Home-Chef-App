@@ -27,6 +27,7 @@ import {
 } from '../../hooks/useVendorOrders';
 import {
   useCancelOrder,
+  useCancelOrderItem,
   CANCEL_REASON_LABEL,
   type CancelReason,
 } from '../../hooks/useCancelOrder';
@@ -370,6 +371,7 @@ export default function OrderDetailScreen() {
   const { triggerAction, isLoading: actionLoading } = useOrderAction();
   const updateStatus = useUpdateOrderStatus();
   const cancelOrder = useCancelOrder(orderId);
+  const cancelItem = useCancelOrderItem(orderId);
   const { show: showToast } = useToast();
 
   // Two-step destructive flow: pick a reason, then confirm. iOS gets the
@@ -392,6 +394,66 @@ export default function OrderDetailScreen() {
         });
       },
     });
+  }
+
+  // Per-line cancel. Mirrors the order-level cancel flow but targets a
+  // single OrderItem — backend partial-refunds that line + recomputes
+  // totals; order status stays in prep so the chef continues with the
+  // remaining items.
+  function submitItemCancel(itemId: string, itemName: string, reason: CancelReason): void {
+    cancelItem.mutate(
+      { itemId, reason },
+      {
+        onSuccess: () => {
+          showToast({
+            message: `${itemName} marked unavailable. Customer is being refunded.`,
+            tone: 'success',
+          });
+        },
+        onError: () => {
+          showToast({
+            message: 'Could not cancel this item. Try again.',
+            tone: 'error',
+          });
+        },
+      },
+    );
+  }
+
+  function openItemCancelSheet(itemId: string, itemName: string): void {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: `Can't fulfill "${itemName}"?`,
+          message:
+            'The customer is refunded for this item only. The rest of the order continues.',
+          options: [
+            ...CANCEL_REASONS.map((r) => CANCEL_REASON_LABEL[r]),
+            'Keep item',
+          ],
+          cancelButtonIndex: CANCEL_REASONS.length,
+          destructiveButtonIndex: CANCEL_REASONS.length - 1,
+        },
+        (index) => {
+          if (index < 0 || index >= CANCEL_REASONS.length) return;
+          submitItemCancel(itemId, itemName, CANCEL_REASONS[index]!);
+        },
+      );
+      return;
+    }
+    Alert.alert(
+      `Can't fulfill "${itemName}"?`,
+      'The customer is refunded for this item only.',
+      [
+        { text: 'Keep item', style: 'cancel' },
+        {
+          text: "Can't fulfill",
+          style: 'destructive',
+          onPress: () =>
+            promptCancelReasonAndroid((r) => submitItemCancel(itemId, itemName, r)),
+        },
+      ],
+    );
   }
 
   function openCancelSheet(): void {
@@ -555,44 +617,87 @@ export default function OrderDetailScreen() {
           {order.items.length === 0 ? (
             <Text style={styles.bodyMuted}>No items recorded</Text>
           ) : (
-            order.items.map((item, idx) => (
-              <View
-                key={`${item.name}-${idx}`}
-                style={[
-                  styles.itemRow,
-                  idx < order.items.length - 1 && styles.rowBorderBottom,
-                ]}
-              >
-                <DietIcon
-                  kind={
-                    item.isVeg === true
-                      ? 'veg'
-                      : item.isVeg === false
-                        ? 'non-veg'
-                        : 'unknown'
-                  }
-                  size={12}
-                />
-                <View style={styles.itemBody}>
-                  <Text style={styles.itemName} numberOfLines={2}>
-                    {item.quantity > 1
-                      ? `${item.quantity} × ${item.name}`
-                      : item.name}
-                  </Text>
-                  {item.specialInstructions ? (
-                    <Text style={styles.itemNote} numberOfLines={2}>
-                      {item.specialInstructions}
+            order.items.map((item, idx) => {
+              // A line is per-line-cancellable while the whole order is
+              // cancellable AND this specific line hasn't been struck
+              // already. Backend rejects late attempts; this just avoids
+              // surfacing a button that would error.
+              const itemCancellable =
+                CANCELLABLE_STATUSES.has(order.status) && !item.isCancelled;
+              return (
+                <View
+                  key={item.id || `${item.name}-${idx}`}
+                  style={[
+                    styles.itemRow,
+                    idx < order.items.length - 1 && styles.rowBorderBottom,
+                    item.isCancelled && styles.itemRowCancelled,
+                  ]}
+                >
+                  <DietIcon
+                    kind={
+                      item.isVeg === true
+                        ? 'veg'
+                        : item.isVeg === false
+                          ? 'non-veg'
+                          : 'unknown'
+                    }
+                    size={12}
+                  />
+                  <View style={styles.itemBody}>
+                    <Text
+                      style={[
+                        styles.itemName,
+                        item.isCancelled && styles.itemNameCancelled,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {item.quantity > 1
+                        ? `${item.quantity} × ${item.name}`
+                        : item.name}
                     </Text>
-                  ) : null}
-                  <Text style={styles.itemUnitPrice}>
-                    ₹{item.unitPrice.toLocaleString('en-IN')} each
+                    {item.specialInstructions ? (
+                      <Text style={styles.itemNote} numberOfLines={2}>
+                        {item.specialInstructions}
+                      </Text>
+                    ) : null}
+                    {item.isCancelled ? (
+                      <Text style={styles.itemCancelledBadge}>
+                        Refunded ₹
+                        {(item.refundAmount ?? 0).toLocaleString('en-IN', {
+                          maximumFractionDigits: 2,
+                        })}
+                      </Text>
+                    ) : (
+                      <Text style={styles.itemUnitPrice}>
+                        ₹{item.unitPrice.toLocaleString('en-IN')} each
+                      </Text>
+                    )}
+                    {itemCancellable ? (
+                      <Pressable
+                        onPress={() => openItemCancelSheet(item.id, item.name)}
+                        disabled={cancelItem.isPending}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark ${item.name} as unfulfillable`}
+                        style={styles.itemCancelLinkWrap}
+                      >
+                        <Text style={styles.itemCancelLinkLabel}>
+                          Can't fulfill this item
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.itemLineTotal,
+                      item.isCancelled && styles.itemLineTotalCancelled,
+                    ]}
+                  >
+                    ₹{item.lineTotal.toLocaleString('en-IN')}
                   </Text>
                 </View>
-                <Text style={styles.itemLineTotal}>
-                  ₹{item.lineTotal.toLocaleString('en-IN')}
-                </Text>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
 
@@ -1119,6 +1224,42 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.destructive.DEFAULT,
     textDecorationLine: 'underline',
+  },
+  // Per-line cancel — smaller, lower-affordance link inside the item
+  // row. The whole-order cancel is the loud one; this is for the chef
+  // mid-prep who only needs to drop one line.
+  itemCancelLinkWrap: {
+    marginTop: 4,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  itemCancelLinkLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+    textDecorationLine: 'underline',
+    letterSpacing: 0.2,
+  },
+  // Cancelled-line presentation — dimmed background, strikethrough on
+  // text + price so the chef visually parses "this line is dead".
+  itemRowCancelled: {
+    opacity: 0.6,
+    backgroundColor: theme.colors.bone,
+  },
+  itemNameCancelled: {
+    textDecorationLine: 'line-through',
+    color: theme.colors.ink.muted,
+  },
+  itemLineTotalCancelled: {
+    textDecorationLine: 'line-through',
+    color: theme.colors.ink.muted,
+  },
+  itemCancelledBadge: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
   primaryBtn: {
     flex: 1,

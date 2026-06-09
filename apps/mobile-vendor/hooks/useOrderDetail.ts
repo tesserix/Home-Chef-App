@@ -5,12 +5,21 @@ import { api } from '../lib/api';
 // Shape returned by GET /chef/orders/:orderId.
 
 export interface OrderDetailItem {
+  id: string;
   name: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
   isVeg?: boolean;
   specialInstructions?: string;
+  // Per-line cancellation state — populated by the backend after a
+  // chef triggers POST /chef/orders/:id/items/:itemId/cancel. The
+  // detail screen renders cancelled lines with strikethrough + a
+  // "Refunded ₹X" badge so the chef sees what's still in prep.
+  isCancelled?: boolean;
+  cancelledReason?: string;
+  cancelledAt?: string | null;
+  refundAmount?: number;
 }
 
 export interface OrderDetailAddress {
@@ -69,6 +78,7 @@ export interface OrderDetail {
 // consumes the nested shape above. Adapt in the queryFn so the screen
 // stays untouched.
 interface RawOrderItemResponse {
+  id: string;
   name: string;
   quantity: number;
   price: number;
@@ -76,6 +86,10 @@ interface RawOrderItemResponse {
   isVeg?: boolean;
   specialInstructions?: string;
   notes?: string;
+  isCancelled?: boolean;
+  cancelledReason?: string;
+  cancelledAt?: string | null;
+  refundAmount?: number;
 }
 
 interface RawChefOrderDetailResponse {
@@ -111,12 +125,17 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
     customerName: raw.customerName ?? '',
     customerPhone: raw.customerPhone,
     items: (raw.items ?? []).map((i) => ({
+      id: i.id,
       name: i.name,
       quantity: i.quantity,
       unitPrice: i.price,
       lineTotal: i.subtotal,
       isVeg: i.isVeg,
       specialInstructions: i.specialInstructions || i.notes,
+      isCancelled: i.isCancelled,
+      cancelledReason: i.cancelledReason,
+      cancelledAt: i.cancelledAt,
+      refundAmount: i.refundAmount,
     })),
     deliveryAddress: raw.deliveryAddress ?? '',
     specialInstructions: raw.specialInstructions,
