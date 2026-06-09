@@ -368,6 +368,9 @@ func SetupRouter() *gin.Engine {
 			// GET /chef/documents/expiring?withinDays=30
 			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)
+			// Aggregate stats for the reviews header — averageRating across
+			// ALL reviews, total count, star distribution.
+			chefDashboard.GET("/reviews/summary", chefHandler.GetChefReviewsSummary)
 			chefDashboard.POST("/reviews/:reviewId/reply", chefHandler.ReplyToReview)
 			chefDashboard.GET("/settings", chefHandler.GetChefSettings)
 			chefDashboard.PUT("/settings", chefHandler.UpdateChefSettings)

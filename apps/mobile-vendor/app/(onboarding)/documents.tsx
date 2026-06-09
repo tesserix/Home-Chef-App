@@ -10,6 +10,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useState } from 'react';
@@ -73,6 +74,16 @@ export default function DocumentsScreen() {
       formData.append('type', docType);
       const filename = uri.split('/').pop() ?? (fileType === 'pdf' ? 'document.pdf' : 'document.jpg');
       formData.append('file', { uri, name: filename, type: mimeType } as unknown as Blob);
+      // FSSAI uploads carry the chef-entered expiry date so the
+      // expiry-reminder cron (services/fssai_reminder.go) can fire at
+      // 30/15/7 days. Only sent if the chef has typed a parseable
+      // YYYY-MM-DD; the backend handler treats missing as no-expiry.
+      if (
+        docType === 'fssai_license' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)
+      ) {
+        formData.append('expiryDate', documents.fssaiExpiryDate);
+      }
 
       await api.post('/chef/documents', formData, multipartConfig());
 
@@ -372,6 +383,53 @@ export default function DocumentsScreen() {
         fssaiUpload,
       )}
 
+      {/* FSSAI license number + expiry — collected as structured fields
+          alongside the photo so admin tooling can validate, FoSCoS API
+          can verify, and Wave 3 invoicing can print them. Always
+          visible (not gated on photo upload) so the chef can type the
+          number while their hands are on the keyboard. */}
+      <View style={styles.fssaiFields}>
+        <View style={styles.fssaiFieldGroup}>
+          <Text style={styles.fssaiFieldLabel}>License number</Text>
+          <TextInput
+            value={documents.fssaiLicenseNumber}
+            onChangeText={(v) =>
+              updateDocuments({ fssaiLicenseNumber: v.replace(/\D/g, '').slice(0, 14) })
+            }
+            placeholder="14-digit FSSAI number"
+            placeholderTextColor={theme.colors.ink.muted}
+            keyboardType="number-pad"
+            maxLength={14}
+            autoCorrect={false}
+            style={styles.fssaiInput}
+          />
+          {documents.fssaiLicenseNumber.length > 0 &&
+            documents.fssaiLicenseNumber.length !== 14 && (
+              <Text style={styles.fssaiHelpError}>Must be exactly 14 digits.</Text>
+            )}
+        </View>
+        <View style={styles.fssaiFieldGroup}>
+          <Text style={styles.fssaiFieldLabel}>Expiry date</Text>
+          <TextInput
+            value={documents.fssaiExpiryDate}
+            onChangeText={(v) => updateDocuments({ fssaiExpiryDate: v })}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={theme.colors.ink.muted}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            autoCorrect={false}
+            style={styles.fssaiInput}
+          />
+          {documents.fssaiExpiryDate.length > 0 &&
+            !/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate) && (
+              <Text style={styles.fssaiHelpError}>Use YYYY-MM-DD format.</Text>
+            )}
+          <Text style={styles.fssaiHelpHint}>
+            We'll remind you 30, 15, and 7 days before expiry.
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
   );
@@ -397,6 +455,41 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.soft,
     lineHeight: theme.typography.size.caption.size * 1.5,
+  },
+
+  // FSSAI structured fields — under the photo tile
+  fssaiFields: {
+    marginTop: theme.spacing[3],
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[1],
+  },
+  fssaiFieldGroup: { gap: 6 },
+  fssaiFieldLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.4,
+    color: theme.colors.ink.muted,
+  },
+  fssaiInput: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: 6,
+    backgroundColor: theme.colors.paper,
+  },
+  fssaiHelpError: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+  },
+  fssaiHelpHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
   },
 
   // Section caps label

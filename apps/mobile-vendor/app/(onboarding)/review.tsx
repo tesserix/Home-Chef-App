@@ -140,6 +140,10 @@ export default function ReviewScreen() {
         operatingHours: operations.operatingHours,
         acceptedTerms: policies.acceptedTerms,
         cancellationPolicy: policies.cancellationPolicy,
+        // Regulatory IDs — backend persists fssaiLicenseNumber on
+        // chef_profiles so Wave 3 invoicing can print it and FoSCoS
+        // validation can query against it.
+        fssaiLicenseNumber: documents.fssaiLicenseNumber,
       });
       // Optimistically flip the cached onboarding/status to pending_review
       // so the global routing effect in _layout.tsx sees the user as

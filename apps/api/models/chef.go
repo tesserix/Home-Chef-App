@@ -66,6 +66,18 @@ type ChefProfile struct {
 	BankAccountName   string `gorm:"default:''" json:"-"`
 	UpiID             string `gorm:"default:''" json:"-"`
 
+	// Regulatory IDs. Stored as plain strings (not -) because admin
+	// tooling + the customer-facing invoice (Wave 3) need to render
+	// them. PAN remains internal-only (`json:"-"`) per existing
+	// pattern; FSSAI license number is intentionally exposed because
+	// the invoice prints it for the customer's records.
+	//
+	// FSSAILicenseNumber: 14-digit numeric Food Safety license id.
+	// Validated client-side on submit; backend just stores the value
+	// so admins can pivot the field for FoSCoS API verification later.
+	PanNumber          string `gorm:"type:varchar(10)" json:"-"`
+	FSSAILicenseNumber string `gorm:"type:varchar(14)" json:"fssaiLicenseNumber,omitempty"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 

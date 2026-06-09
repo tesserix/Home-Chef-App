@@ -679,6 +679,60 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, detail)
 }
 
+// GetChefReviewsSummary returns aggregate review stats for the chef's
+// reviews tab header. Mobile currently computes averageRating client-
+// side from the paginated list; this endpoint gives the correct answer
+// across ALL reviews (not just the first page) and a star distribution
+// for any future histogram view.
+// GET /chef/reviews/summary
+func (h *ChefHandler) GetChefReviewsSummary(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"averageRating": 0,
+			"totalReviews":  0,
+			"distribution":  map[string]int{"5": 0, "4": 0, "3": 0, "2": 0, "1": 0},
+		})
+		return
+	}
+
+	type bucket struct {
+		Rating int
+		Count  int
+	}
+	var rows []bucket
+	if err := database.DB.Model(&models.Review{}).
+		Select("overall_rating AS rating, COUNT(*) AS count").
+		Where("chef_id = ?", chef.ID).
+		Group("overall_rating").
+		Scan(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load review summary"})
+		return
+	}
+
+	distribution := map[string]int{"5": 0, "4": 0, "3": 0, "2": 0, "1": 0}
+	var totalReviews, ratingSum int
+	for _, r := range rows {
+		if r.Rating >= 1 && r.Rating <= 5 {
+			distribution[strconv.Itoa(r.Rating)] = r.Count
+			totalReviews += r.Count
+			ratingSum += r.Rating * r.Count
+		}
+	}
+	avg := 0.0
+	if totalReviews > 0 {
+		avg = float64(ratingSum) / float64(totalReviews)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"averageRating": avg,
+		"totalReviews":  totalReviews,
+		"distribution":  distribution,
+	})
+}
+
 // GetChefReviewsForDashboard returns all reviews for the authenticated chef
 func (h *ChefHandler) GetChefReviewsForDashboard(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)

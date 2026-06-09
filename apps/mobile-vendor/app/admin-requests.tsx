@@ -49,7 +49,12 @@ function formatDate(iso: string): string {
 
 function RequestCard({ request }: { request: AdminRequest }) {
   const colors = statusBadgeColor(request.status);
-  return (
+  // Only info_requested cards are tappable — the chef has nothing to
+  // do for pending/approved/rejected (admin owns the state); making
+  // them tappable would invite confused taps that land on a useless
+  // screen.
+  const isInteractive = request.status === 'info_requested';
+  const inner = (
     <View style={styles.card}>
       <View style={styles.cardTopRow}>
         <View style={[styles.badge, { backgroundColor: colors.bg }]}>
@@ -73,7 +78,20 @@ function RequestCard({ request }: { request: AdminRequest }) {
           <Text style={styles.notesBody}>{request.adminNotes}</Text>
         </View>
       ) : null}
+      {isInteractive ? (
+        <Text style={styles.cardCta}>Respond to admin →</Text>
+      ) : null}
     </View>
+  );
+  if (!isInteractive) return inner;
+  return (
+    <Pressable
+      onPress={() => router.push(`/admin-requests/${request.id}`)}
+      accessibilityRole="button"
+      accessibilityLabel={`Respond to ${request.title}`}
+    >
+      {inner}
+    </Pressable>
   );
 }
 
@@ -207,6 +225,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 20,
+  },
+  cardCta: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+    marginTop: theme.spacing[1],
   },
 
   center: {

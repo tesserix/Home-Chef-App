@@ -553,22 +553,28 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 	}
 
 	chef := models.ChefProfile{
-		UserID:          userID,
-		BusinessName:    req.BusinessName,
-		Description:     req.Description,
-		Cuisines:        pq.StringArray(req.Cuisines),
-		Specialties:     pq.StringArray(req.Specialties),
-		PrepTime:        req.PrepTime,
-		MinimumOrder:    req.MinimumOrder,
-		DeliveryRadius:  req.ServiceRadius,
-		ServiceRadius:   req.ServiceRadius,
-		AddressLine1:    req.KitchenAddress.Line1,
-		AddressLine2:    req.KitchenAddress.Line2,
-		City:            req.KitchenAddress.City,
-		State:           req.KitchenAddress.State,
-		PostalCode:      req.KitchenAddress.PostalCode,
-		IsActive:        true,
-		AcceptingOrders: false,
+		UserID:             userID,
+		BusinessName:       req.BusinessName,
+		Description:        req.Description,
+		Cuisines:           pq.StringArray(req.Cuisines),
+		Specialties:        pq.StringArray(req.Specialties),
+		PrepTime:           req.PrepTime,
+		MinimumOrder:       req.MinimumOrder,
+		DeliveryRadius:     req.ServiceRadius,
+		ServiceRadius:      req.ServiceRadius,
+		AddressLine1:       req.KitchenAddress.Line1,
+		AddressLine2:       req.KitchenAddress.Line2,
+		City:               req.KitchenAddress.City,
+		State:              req.KitchenAddress.State,
+		PostalCode:         req.KitchenAddress.PostalCode,
+		// Persist the regulatory IDs as structured columns. Previously only
+		// captured in the approval submittedData JSON blob (audit-only),
+		// which left admin queries + Wave 3 invoicing without a queryable
+		// FSSAI number to print on customer invoices.
+		PanNumber:          req.PanNumber,
+		FSSAILicenseNumber: req.FSSAINumber,
+		IsActive:           true,
+		AcceptingOrders:    false,
 	}
 
 	approvalReq := models.ApprovalRequest{

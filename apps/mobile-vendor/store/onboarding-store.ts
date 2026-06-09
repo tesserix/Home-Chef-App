@@ -32,6 +32,15 @@ interface Documents {
   idProofType: 'image' | 'pdf' | null;
   fssaiUri: string | null;
   fssaiType: 'image' | 'pdf' | null;
+  // 14-digit Food Safety license number. Stored alongside the photo
+  // upload so admin tooling (and Wave 3 invoicing) can resolve it
+  // without re-reading the document image. Optional during partial
+  // form fill; validated on submit.
+  fssaiLicenseNumber: string;
+  // ISO date string (YYYY-MM-DD). Submitted as the `expiryDate`
+  // multipart field on the FSSAI doc upload + persisted on
+  // ChefDocument.ExpiryDate so the expiry reminder cron fires.
+  fssaiExpiryDate: string;
 }
 
 interface Policies {
@@ -88,6 +97,8 @@ const initialState = {
     idProofType: null,
     fssaiUri: null,
     fssaiType: null,
+    fssaiLicenseNumber: '',
+    fssaiExpiryDate: '',
   },
   policies: { acceptedTerms: false, cancellationPolicy: '' },
 };

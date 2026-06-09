@@ -64,18 +64,40 @@ function adaptReview(b: BackendReview): Review {
   };
 }
 
+interface BackendReviewsSummary {
+  averageRating: number;
+  totalReviews: number;
+  distribution?: Record<string, number>;
+}
+
 // ----- Hook ------------------------------------------------------------------
 
 export function useReviews() {
   return useQuery<ReviewsResponse>({
     queryKey: ['chef', 'reviews'],
     queryFn: async () => {
-      const res = await api.get<BackendReviewsEnvelope>('/chef/reviews');
-      const items = (res.data?.data ?? []).map(adaptReview);
-      const totalReviews = res.data?.pagination?.total ?? items.length;
-      // averageRating isn't returned by the backend yet; compute it from
-      // the page we received. Good-enough for the v1 list — when the
-      // backend grows a `GET /chef/reviews/summary` we can swap to that.
+      // Two parallel calls — list (paginated) + summary (aggregate
+      // across ALL reviews). Summary failure is non-fatal: we fall
+      // back to a client-side computation over the first page so
+      // older backends without /reviews/summary still render the tab.
+      const [listRes, summaryRes] = await Promise.all([
+        api.get<BackendReviewsEnvelope>('/chef/reviews'),
+        api
+          .get<BackendReviewsSummary>('/chef/reviews/summary')
+          .catch(() => null),
+      ]);
+
+      const items = (listRes.data?.data ?? []).map(adaptReview);
+
+      if (summaryRes && typeof summaryRes.data?.averageRating === 'number') {
+        return {
+          reviews: items,
+          averageRating: summaryRes.data.averageRating,
+          totalReviews: summaryRes.data.totalReviews ?? items.length,
+        };
+      }
+
+      const totalReviews = listRes.data?.pagination?.total ?? items.length;
       const averageRating =
         items.length === 0
           ? 0
