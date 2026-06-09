@@ -62,6 +62,29 @@
   "pnpm": {
     "patchedDependencies": {
       "@tesserix/native": "patches/@tesserix__native.patch"
+    },
+    "overrides": {
+      "vitest": "^3.2.6",
+      "@tootallnate/once": "^2.0.1",
+      "@xmldom/xmldom": "^0.8.13",
+      "ajv": "^6.14.0",
+      "axios": "^1.16.0",
+      "brace-expansion@1": "^1.1.13",
+      "brace-expansion@2": "^2.0.3",
+      "brace-expansion@5": "^5.0.6",
+      "esbuild": "^0.25.0",
+      "flatted": "^3.4.2",
+      "follow-redirects": "^1.16.0",
+      "minimatch@3": "^3.1.4",
+      "minimatch@9": "^9.0.7",
+      "picomatch@2": "^2.3.2",
+      "picomatch@4": "^4.0.4",
+      "postcss": "^8.5.10",
+      "react-router": "^7.15.0",
+      "rollup": "^4.59.0",
+      "vite": "^6.4.2",
+      "ws": "^8.20.1",
+      "yaml": "^2.8.3"
     }
   }
 }
