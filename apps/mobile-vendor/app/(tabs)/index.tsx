@@ -24,6 +24,7 @@ import {
   useExpiringDocuments,
   describeDocumentType,
 } from '../../hooks/useExpiringDocuments';
+import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
 
@@ -96,6 +97,7 @@ export default function DashboardScreen() {
   const toggleMutation = useToggleAcceptingOrders();
   const { triggerAction, isLoading: orderActionLoading } = useOrderAction();
   const { data: expiringDocsData } = useExpiringDocuments();
+  const { data: actionRequests } = useActionRequiredAdminRequests();
 
   // User-initiated pull-to-refresh only — avoids the stuck-spinner bug when
   // React Query's isRefetching fires for background refetches (focus, mutation
@@ -256,6 +258,43 @@ export default function DashboardScreen() {
             )}
           </Pressable>
         </View>
+
+        {/* Zone B'' — Admin requests awaiting a chef response. Rendered ABOVE
+            doc expiry because info_requested is fresher / higher-friction:
+            an admin has explicitly asked the chef for something. */}
+        {(actionRequests?.length ?? 0) > 0 && (
+          <View style={styles.expirySection}>
+            <Text style={styles.expirySectionLabel}>ACTION REQUIRED</Text>
+            <View style={styles.expiryCards}>
+              {actionRequests!.map((req) => (
+                <Pressable
+                  key={req.id}
+                  onPress={() => router.push('/admin-requests')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Admin needs information for ${req.title}. Tap to view.`}
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.expiryCard, pressed && { opacity: 0.85 }]}>
+                      <View style={styles.expiryCardTop}>
+                        <View
+                          style={[
+                            styles.expiryDot,
+                            { backgroundColor: theme.colors.destructive.DEFAULT },
+                          ]}
+                        />
+                        <Text style={styles.expiryDaysLabel}>Admin needs info</Text>
+                      </View>
+                      <Text style={styles.expiryDocType} numberOfLines={2}>
+                        {req.title}
+                      </Text>
+                      <Text style={styles.expiryCtaLink}>View request →</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Zone B' — Document expiry alerts. Rendered above the order queue
             because a lapsed FSSAI license hides the kitchen from customers —
