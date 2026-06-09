@@ -967,3 +967,146 @@ type DayHoursReq struct {
 	Open  string `json:"open"`
 	Close string `json:"close"`
 }
+
+// ReplaceDocument swaps an existing document's file (and optionally its
+// expiry date) and resets verification status to pending so admins
+// re-review. Used by the chef-side "renew expired document" flow —
+// the chef has already submitted onboarding and just needs to refresh
+// a single doc (FSSAI most often) before/after expiry.
+//
+// Differs from UploadDocument by ID-based addressing: UploadDocument
+// is keyed by (chef, type) and deletes any prior doc of that type;
+// this one updates the specific record so the audit log of which
+// approvals were tied to which document remains coherent.
+//
+// POST /chef/documents/:id/replace — multipart: file, optional expiryDate
+func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	docID := c.Param("id")
+
+	chef, err := getOrCreateChefProfile(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize chef profile"})
+		return
+	}
+
+	var doc models.ChefDocument
+	if err := database.DB.Where("id = ? AND chef_id = ?", docID, chef.ID).First(&doc).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	var newExpiry *time.Time
+	if ed := c.PostForm("expiryDate"); ed != "" {
+		parsed, perr := time.Parse("2006-01-02", ed)
+		if perr != nil {
+			parsed, perr = time.Parse(time.RFC3339, ed)
+		}
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expiryDate format. Use YYYY-MM-DD or RFC3339."})
+			return
+		}
+		newExpiry = &parsed
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+
+	if header.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	isPrivate := models.IsPrivateDoc(doc.Type)
+	isPhoto := models.IsPhotoDoc(doc.Type)
+	if isPhoto && !services.IsImageContentType(contentType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
+		return
+	}
+	if !isPhoto && !services.IsDocContentType(contentType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, PDF."})
+		return
+	}
+
+	// Upload the replacement to the same bucket the original lived in.
+	// We don't delete the previous GCS object — keeping it around lets
+	// support investigate any approval dispute against the prior file.
+	// Cost is negligible at our scale.
+	folder := fmt.Sprintf("chefs/%s/%s", chef.ID.String(), string(doc.Type))
+	var newFileURL, newFilePath, newBucket string
+	if isPrivate {
+		newBucket = config.AppConfig.GCSPrivateBucket
+		newFilePath, err = services.UploadPrivateFile(c.Request.Context(), folder, header.Filename, file, contentType)
+	} else {
+		newBucket = config.AppConfig.GCSPublicBucket
+		newFileURL, err = services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, contentType)
+		newFilePath = newFileURL
+	}
+	if err != nil {
+		log.Printf("Failed to upload replacement file: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file"})
+		return
+	}
+
+	// Atomic update — file metadata + (optional) expiry + status reset
+	// land together, so a half-saved doc never gets shown as still
+	// "approved" with the wrong file backing it.
+	updates := map[string]interface{}{
+		"file_name":    header.Filename,
+		"file_path":    newFilePath,
+		"file_url":     newFileURL,
+		"bucket":       newBucket,
+		"content_type": contentType,
+		"file_size":    header.Size,
+		"status":           models.DocStatusPending,
+		"rejection_reason": "",
+	}
+	if newExpiry != nil {
+		updates["expiry_date"] = newExpiry
+	}
+	if err := database.DB.Model(&doc).Updates(updates).Error; err != nil {
+		log.Printf("Failed to update document record: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save document"})
+		return
+	}
+
+	// Cancel any in-flight approval against the old file + create a
+	// fresh one for the new submission. Same pattern as UploadDocument
+	// so the admin dashboard shows exactly one pending request per
+	// chef document.
+	database.DB.Model(&models.ApprovalRequest{}).
+		Where("chef_id = ? AND type = ? AND entity_id = ? AND status = ?",
+			chef.ID, models.ApprovalDocumentVerification, doc.ID, models.ApprovalPending).
+		Update("status", models.ApprovalCancelled)
+
+	approvalReq := models.ApprovalRequest{
+		Type:          models.ApprovalDocumentVerification,
+		Status:        models.ApprovalPending,
+		Priority:      "normal",
+		ChefID:        &chef.ID,
+		SubmittedByID: userID,
+		EntityType:    "chef_document",
+		EntityID:      doc.ID,
+		Title:         fmt.Sprintf("Document Re-Verification: %s", string(doc.Type)),
+		Description:   fmt.Sprintf("Document replaced for re-verification: %s (%s)", header.Filename, string(doc.Type)),
+		SubmittedData: fmt.Sprintf(`{"document_id":"%s","type":"%s","file_name":"%s","replaced":true}`, doc.ID.String(), string(doc.Type), header.Filename),
+	}
+	database.DB.Create(&approvalReq)
+
+	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+		"approval_id": approvalReq.ID.String(),
+		"type":        string(approvalReq.Type),
+		"chef_id":     chef.ID.String(),
+		"title":       approvalReq.Title,
+		"replaced":    true,
+	})
+
+	// Refresh + return so the client sees the new expiry + status.
+	_ = database.DB.First(&doc, "id = ?", doc.ID).Error
+	c.JSON(http.StatusOK, doc.ToResponse())
+}

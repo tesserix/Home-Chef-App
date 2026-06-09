@@ -504,7 +504,41 @@ func (h *ApprovalHandler) RequestMoreInfo(c *gin.Context) {
 		log.Printf("Failed to publish approval info_requested event: %v", err)
 	}
 
+	// Email the chef in parallel with the NATS event so they see the
+	// request even if they don't open the app today. Fire-and-forget —
+	// the in-app card is the authoritative surface, email is the
+	// nudge. Errors logged, not returned to the admin who issued the
+	// request.
+	if approval.ChefID != nil {
+		go sendApprovalInfoRequestedEmail(*approval.ChefID, approval.Title, req.Notes)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "More information requested"})
+}
+
+// sendApprovalInfoRequestedEmail looks up the chef's user email and
+// fires the SendGrid template. Wrapped in its own function so the
+// info_requested handler stays focused on its core workflow.
+func sendApprovalInfoRequestedEmail(chefID uuid.UUID, title, notes string) {
+	var chef models.ChefProfile
+	if err := database.DB.Preload("User").First(&chef, "id = ?", chefID).Error; err != nil {
+		log.Printf("info_requested email skipped: chef %s lookup failed: %v", chefID, err)
+		return
+	}
+	if chef.User.Email == "" {
+		log.Printf("info_requested email skipped: chef %s has no email on file", chefID)
+		return
+	}
+	displayName := chef.User.FirstName
+	if displayName == "" {
+		displayName = chef.BusinessName
+	}
+	if displayName == "" {
+		displayName = "there"
+	}
+	if err := services.GetEmailService().SendApprovalInfoRequested(chef.User.Email, displayName, title, notes); err != nil {
+		log.Printf("info_requested email send failed for chef %s: %v", chefID, err)
+	}
 }
 
 // GetApprovalHistory returns all history entries for a request

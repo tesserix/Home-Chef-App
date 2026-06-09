@@ -221,6 +221,68 @@ func SendActionablePush(userID uuid.UUID, title, body, androidChannelID, iosCate
 	})
 }
 
+// SubscribeToFCMTopic adds the device token to a topic so it receives
+// topic broadcasts. Used by the notification-preferences handler when
+// a chef opts INTO a category. No-op when the push service isn't
+// configured — local dev without GCP creds shouldn't fail on FCM ops.
+//
+// The Firebase Instance ID (IID) API takes batches of up to 1000 tokens
+// per call; for single-token mobile-driven flows we just send one.
+func SubscribeToFCMTopic(token, topic string) error {
+	return iidTopicCall("POST", token, topic)
+}
+
+// UnsubscribeFromFCMTopic is SubscribeToFCMTopic's pair — used when a
+// chef opts OUT of a category. Errors are surfaced to the caller so
+// they can decide whether to log + move on (the prefs handler does).
+func UnsubscribeFromFCMTopic(token, topic string) error {
+	return iidTopicCall("DELETE", token, topic)
+}
+
+// iidTopicCall hits the Firebase Instance ID batchAdd / batchRemove
+// endpoint with a one-token batch. Returns nil on 2xx or when the
+// push service is disabled; surfaces transport errors and non-2xx
+// status otherwise so the caller can record metrics.
+func iidTopicCall(method, token, topic string) error {
+	svc := GetPushService()
+	svc.mu.RLock()
+	available := svc.available
+	svc.mu.RUnlock()
+	if !available {
+		return nil
+	}
+	if token == "" || topic == "" {
+		return fmt.Errorf("fcm topic call: token and topic required")
+	}
+
+	accessToken, err := svc.getAccessToken()
+	if err != nil {
+		return fmt.Errorf("fcm topic call: access token: %w", err)
+	}
+
+	endpoint := "https://iid.googleapis.com/iid/v1/" + token + "/rel/topics/" + topic
+	req, err := http.NewRequest(method, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("fcm topic call: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("access_token_auth", "true")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("fcm topic call: http: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("fcm topic call: status %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
 // SendPushToMultiple sends a push notification to multiple users
 func SendPushToMultiple(userIDs []uuid.UUID, title, body string, data map[string]string) error {
 	var users []models.User

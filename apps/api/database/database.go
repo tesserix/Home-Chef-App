@@ -125,6 +125,7 @@ func Migrate() error {
 		&models.ChefProfile{},
 		&models.ChefSchedule{},
 		&models.ChefDocument{},
+		&models.ChefNotificationPreferences{},
 
 		// Menu
 		&models.MenuCategory{},

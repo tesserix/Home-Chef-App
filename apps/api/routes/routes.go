@@ -314,6 +314,10 @@ func SetupRouter() *gin.Engine {
 			chefOnboarding.GET("/onboarding/status", uploadHandler.GetOnboardingStatus)
 		chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
 			chefOnboarding.POST("/documents", uploadHandler.UploadDocument)
+			// Wave 2: chef-side doc renewal. Existing doc by ID, swap file
+			// + (optional) expiry, reset status to pending, fresh approval
+			// request created so admins re-verify.
+			chefOnboarding.POST("/documents/:id/replace", uploadHandler.ReplaceDocument)
 			chefOnboarding.GET("/documents", uploadHandler.GetDocuments)
 			chefOnboarding.POST("/profile-image", uploadHandler.UploadProfileImage)
 			chefOnboarding.POST("/banner-image", uploadHandler.UploadBannerImage)
@@ -372,6 +376,13 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
+
+			// Wave 2: chef-side notification gating. GET returns defaults
+			// when no row exists; PUT upserts and reconciles FCM topic
+			// subscriptions in the background.
+			chefNotifPrefsHandler := handlers.NewChefNotificationPreferencesHandler()
+			chefDashboard.GET("/notification-preferences", chefNotifPrefsHandler.GetPreferences)
+			chefDashboard.PUT("/notification-preferences", chefNotifPrefsHandler.UpdatePreferences)
 
 			// Stripe Connect onboarding (international chefs)
 			stripeConnectHandler := handlers.NewStripeConnectHandler()

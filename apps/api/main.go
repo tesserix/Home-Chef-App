@@ -114,6 +114,14 @@ func main() {
 		handlers.RegisterPushConsumers()
 	}
 
+	// Background daily scan: ping chefs whose FSSAI license expires
+	// in 30/15/7 days. Runs under the root context so SIGTERM stops
+	// it cleanly with the rest of the service. Idempotent across pods
+	// via Redis SETNX (or fails open on Redis outage).
+	cronCtx, cronCancel := context.WithCancel(context.Background())
+	defer cronCancel()
+	services.StartFSSAIReminderCron(cronCtx)
+
 	// Setup router
 	router := routes.SetupRouter()
 

@@ -151,6 +151,24 @@ func (s *EmailService) SendChefVerificationApproved(to, chefName string) error {
 	return s.send(to, subject, html)
 }
 
+// SendApprovalInfoRequested notifies a chef that an admin has asked for
+// more information on an outstanding approval request. Mirrors the
+// in-app "ACTION REQUIRED" card so a chef who only checks email also
+// learns there's something blocking their onboarding.
+func (s *EmailService) SendApprovalInfoRequested(to, chefName, requestTitle, adminNotes string) error {
+	subject := "Action needed: " + requestTitle
+	html := fmt.Sprintf(`
+		<p>Hi %s,</p>
+		<p>Our team has asked for more information on your application item:
+		<strong>%s</strong>.</p>
+		<p style="white-space: pre-wrap; padding: 12px; background: #F4F2EC; border-left: 3px solid #C2410C;">%s</p>
+		<p>Please open the HomeChef Vendor app to respond — the request is
+		waiting under <strong>Action Required</strong> on your dashboard.</p>
+		<p>— Home Chef</p>
+	`, chefName, requestTitle, adminNotes)
+	return s.send(to, subject, html)
+}
+
 // SendChefNewOrder notifies a chef about a new incoming order
 func (s *EmailService) SendChefNewOrder(to, orderNumber string, total float64) error {
 	subject, html := ChefNewOrderHTML(orderNumber, total)
