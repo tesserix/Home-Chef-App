@@ -137,7 +137,13 @@ export function useCreateMenuItem() {
       const { isVeg, preparationTime, ...rest } = payload;
       const body = {
         ...rest,
+        // Send BOTH: dietaryTags drives the vendor-app diet icon, while the
+        // backend's nullable `isVeg` column is what the customer storefront
+        // and order detail read. Omitting isVeg here left new items unflagged
+        // (null → shown non-veg on the storefront) even though the chef chose
+        // a diet in the form.
         dietaryTags: tagsForIsVeg(isVeg),
+        isVeg,
         prepTime: preparationTime,
       };
       return api
@@ -161,13 +167,16 @@ export function useUpdateMenuItem() {
       payload: UpdateMenuItemPayload;
     }) => {
       // Translate the frontend convenience fields to the backend shape:
-      //  - `isVeg` → `dietaryTags`
+      //  - `isVeg` → `dietaryTags` (vendor-app icon) AND `isVeg` (storefront
+      //    reads the backend's nullable column — must be sent explicitly or
+      //    edits leave it stale).
       //  - `preparationTime` → `prepTime` (backend never read the former,
       //    so prep time changes were silently dropped before this fix).
       const { isVeg, preparationTime, hsn, ...rest } = payload;
       const body: Record<string, unknown> = { ...rest };
       if (typeof isVeg === 'boolean') {
         body.dietaryTags = tagsForIsVeg(isVeg);
+        body.isVeg = isVeg;
       }
       if (typeof preparationTime === 'number') {
         body.prepTime = preparationTime;
