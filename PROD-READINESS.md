@@ -40,6 +40,15 @@
 - Read replicas / multi-region
 - E-invoicing (>₹5cr turnover) — none of our beta chefs will hit threshold
 
+## Platform integration — tesserix-home + tickets (planned)
+
+The admin↔vendor loop spans two surfaces; the vendor app holds only the chef-facing half.
+
+- [ ] **Platform-admin approval UI in `tesserix-home`** — admins review/approve/`info_requested` against the existing chef approval API (`/admin/...`, `RequireAdmin`). The vendor app keeps its **Admin Requests** page as the chef's *respond* surface (`GET /chef/admin-requests` + `PUT /chef/admin-requests/:id/respond`) — do NOT remove it; it's the chef side of this flow.
+- [ ] **Vendor support/feature tickets** — chefs raise platform issues + feature requests from the vendor app, wired to the platform **`tickets-service`** (already exists in the Tesserix topology). New vendor ticket-create + list UI; admins triage in tesserix-home.
+- [x] **Vendor cover image** — `bannerImage` upload in vendor profile (`POST /chef/banner-image`) + customer `ChefCard` hero now prefers the cover (banner → kitchen photo → avatar). Backend + model already supported it; this session added the vendor upload UI + flipped the customer hero ordering.
+- Future (deferred): **OCR** to pre-fill FSSAI license number + expiry on doc re-upload (chef confirms/edits) — see the doc-reupload decision.
+
 ## Risks (and what eats which wave)
 
 | Risk | Eats |

@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, ChevronLeft, Plus } from 'lucide-react-native';
+import { Camera, ChevronLeft, ImagePlus, Plus } from 'lucide-react-native';
 import { multipartConfig, getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
@@ -110,6 +110,22 @@ function useUploadProfileImage() {
       const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
       formData.append('file', { uri, name: filename, type } as unknown as Blob);
       return api.post('/chef/profile-image', formData, multipartConfig());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chef', 'profile'] });
+    },
+  });
+}
+
+function useUploadBannerImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (uri: string) => {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() ?? 'cover.jpg';
+      const type = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      formData.append('file', { uri, name: filename, type } as unknown as Blob);
+      return api.post('/chef/banner-image', formData, multipartConfig());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'profile'] });
@@ -264,6 +280,7 @@ export default function ProfileScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useChefProfile();
   const updateMutation = useUpdateProfile();
   const uploadProfileImageMutation = useUploadProfileImage();
+  const uploadBannerImageMutation = useUploadBannerImage();
   const uploadKitchenPhotoMutation = useUploadKitchenPhoto();
   const { show: showToast } = useToast();
   // Indian states from the reference-data API. Falls back to an empty
@@ -448,6 +465,22 @@ export default function ProfileScreen() {
     }
   }
 
+  async function handlePickBannerImage() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) {
+      uploadBannerImageMutation.mutate(result.assets[0].uri, {
+        onError: (err) =>
+          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload cover.')),
+        onSuccess: () => showToast({ message: 'Cover photo updated.', tone: 'success' }),
+      });
+    }
+  }
+
   async function handleAddKitchenPhoto() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -532,6 +565,45 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Cover photo — the hero customers see on your listing */}
+          <Pressable
+            onPress={handlePickBannerImage}
+            disabled={uploadBannerImageMutation.isPending}
+            style={({ pressed }) => [
+              styles.coverWrapper,
+              pressed && { opacity: 0.9 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Change cover photo"
+          >
+            {data?.bannerImage ? (
+              <Image
+                source={{ uri: data.bannerImage }}
+                style={styles.coverImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <ImagePlus
+                  size={22}
+                  color={theme.colors.ink.muted}
+                  strokeWidth={1.75}
+                />
+                <Text style={styles.coverPlaceholderText}>Add a cover photo</Text>
+                <Text style={styles.coverPlaceholderHint}>
+                  Shown to customers on your listing
+                </Text>
+              </View>
+            )}
+            <View style={styles.coverBadge}>
+              {uploadBannerImageMutation.isPending ? (
+                <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
+              ) : (
+                <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+              )}
+            </View>
+          </Pressable>
+
           {/* Identity block */}
           <View style={styles.identityBlock}>
             <Pressable
@@ -801,6 +873,50 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
   commandSpacer: { width: 48 },
+
+  // Cover photo — wide hero card at the top of the profile.
+  coverWrapper: {
+    height: 150,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.bone,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
+    overflow: 'hidden',
+    marginBottom: theme.spacing[4],
+    justifyContent: 'center',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[1],
+  },
+  coverPlaceholderText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+  coverPlaceholderHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+  },
+  coverBadge: {
+    position: 'absolute',
+    right: theme.spacing[3],
+    bottom: theme.spacing[3],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadow[1],
+  },
 
   scroll: { flex: 1 },
   scrollContent: {

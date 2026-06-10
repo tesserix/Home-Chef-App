@@ -64,7 +64,11 @@ function mapChef(c: ApiChefProfile): Chef {
     reviewCount: c.totalReviews ?? 0,
     // Open to customers only when the kitchen is online AND accepting orders.
     isOpen: Boolean(c.isOnline && c.acceptingOrders),
-    imageUrl: firstNonEmpty(c.profileImage, c.bannerImage, c.kitchenPhotos?.[0]),
+    // Photo-led card: prefer the wide cover (bannerImage), then a kitchen
+    // photo, and only fall back to the avatar (a face crop makes a weak 4:3
+    // hero). The avatar still surfaces separately where an identity glyph is
+    // wanted.
+    imageUrl: firstNonEmpty(c.bannerImage, c.kitchenPhotos?.[0], c.profileImage),
     latitude: c.latitude,
     longitude: c.longitude,
     deliveryTime: c.prepTime,
