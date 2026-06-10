@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/homechef/api/logger"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
+	"github.com/homechef/api/tracing"
 )
 
 func main() {
@@ -31,6 +33,30 @@ func main() {
 	// on SENTRY_DSN_API — no-ops cleanly when unset (dev / staging).
 	services.InitSentry()
 	defer services.FlushSentry(2 * time.Second)
+
+	// OpenTelemetry tracing → Cloud Trace. Degrades to a no-op when there's
+	// no GCP project / credentials (local dev), so it never blocks startup.
+	otelSample := 0.1
+	if v := os.Getenv("OTEL_SAMPLING_RATE"); v != "" {
+		if f, perr := strconv.ParseFloat(v, 64); perr == nil {
+			otelSample = f
+		}
+	}
+	traceShutdown, terr := tracing.Init(
+		context.Background(),
+		config.AppConfig.GCSProjectID,
+		config.AppConfig.Environment,
+		os.Getenv("APP_VERSION"),
+		otelSample,
+	)
+	if terr != nil {
+		log.Printf("Warning: tracing init failed: %v", terr)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = traceShutdown(shutdownCtx)
+	}()
 
 	// Connect to database
 	if err := database.Connect(); err != nil {

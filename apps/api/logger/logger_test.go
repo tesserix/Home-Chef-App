@@ -20,16 +20,20 @@ func TestTraceIDRoundTrip(t *testing.T) {
 }
 
 func TestIDsFromEmptyContext(t *testing.T) {
+	// A context variable left nil — exercises the defensive nil-guard without
+	// the SA1012 literal-nil lint.
+	var nilCtx context.Context
 	if got := CorrelationIDFromContext(context.Background()); got != "" {
 		t.Errorf("want empty correlation id, got %q", got)
 	}
-	if got := TraceIDFromContext(nil); got != "" { //nolint:staticcheck // nil ctx tolerated
+	if got := TraceIDFromContext(nilCtx); got != "" {
 		t.Errorf("want empty trace id for nil ctx, got %q", got)
 	}
 }
 
 func TestFromContextDoesNotPanic(t *testing.T) {
 	// Before Init, FromContext should fall back to slog.Default() cleanly.
+	var nilCtx context.Context
 	_ = FromContext(context.Background())
-	_ = FromContext(nil)
+	_ = FromContext(nilCtx)
 }

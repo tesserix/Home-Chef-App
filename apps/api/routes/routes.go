@@ -14,6 +14,7 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // bffAuth returns a fresh BFFAuth middleware configured with the loaded HMAC
@@ -97,7 +98,13 @@ func SetupRouter() *gin.Engine {
 	// downstream log line, trace span, and audit row shares one id.
 	r.Use(middleware.RequestID())
 
-	// Structured access log (JSON) carrying the correlation id + latency.
+	// OpenTelemetry span per request (extracts inbound traceparent), then
+	// bridge the trace id into the logging/audit context. No-ops cleanly
+	// when tracing is disabled (no GCP project / creds).
+	r.Use(otelgin.Middleware("homechef-api"))
+	r.Use(middleware.TraceContext())
+
+	// Structured access log (JSON) carrying the correlation id + trace id.
 	r.Use(middleware.RequestLogger())
 
 	// Sentry — recovers panics + tags them onto the per-request Hub so
