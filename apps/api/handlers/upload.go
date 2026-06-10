@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -1123,4 +1124,37 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	// Refresh + return so the client sees the new expiry + status.
 	_ = database.DB.First(&doc, "id = ?", doc.ID).Error
 	c.JSON(http.StatusOK, doc.ToResponse())
+}
+
+// OCRDocument runs Cloud Vision OCR on an image and returns the detected
+// FSSAI number + expiry date for the chef to confirm/edit. Stateless — it
+// stores nothing; the actual upload still goes through UploadDocument /
+// ReplaceDocument with the confirmed values.
+// POST /chef/documents/ocr — multipart: file (image only)
+func (h *UploadHandler) OCRDocument(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+
+	if header.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+		return
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+
+	res, err := services.DetectDocumentFields(c.Request.Context(), data)
+	if err != nil {
+		// Soft-fail: OCR is a convenience. The chef types the fields manually.
+		log.Printf("OCR failed (non-fatal): %v", err)
+		c.JSON(http.StatusOK, services.OCRResult{})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }

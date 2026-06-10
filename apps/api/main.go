@@ -96,6 +96,14 @@ func main() {
 		defer services.CloseStorage()
 	}
 
+	// Cloud Vision OCR — non-fatal. Powers document pre-fill (FSSAI number +
+	// expiry); the chef always confirms, so the app works without it.
+	if err := services.InitVision(); err != nil {
+		log.Printf("Warning: Cloud Vision OCR unavailable: %v", err)
+	} else {
+		defer services.CloseVision()
+	}
+
 	// Initialize GCP Secret Manager
 	if err := services.InitSecretManager(); err != nil {
 		log.Printf("Warning: Failed to initialize Secret Manager: %v", err)
