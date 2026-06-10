@@ -482,6 +482,36 @@ func (s *NotificationService) handleOrderDelivered(event OrderEvent) {
 		Message: "Your order has been delivered! Enjoy your meal!",
 		Data:    map[string]interface{}{"order_id": event.OrderID.String()},
 	})
+
+	// Wave 3: auto-email the GST tax invoice PDF to the customer
+	// within minutes of delivery. Generates inline + sends as
+	// attachment. Failure is non-blocking — the in-app notification
+	// + push above are the authoritative confirmation; email is the
+	// permanent record.
+	go emailDeliveredInvoice(event)
+}
+
+// emailDeliveredInvoice resolves the customer's email and dispatches
+// the PDF invoice. Kept out of the notification handler hot path so
+// PDF rendering (~hundreds of ms) doesn't slow the NATS worker pool.
+func emailDeliveredInvoice(event OrderEvent) {
+	var customer models.User
+	if err := database.DB.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
+		log.Printf("invoice-email skipped: customer %s lookup failed: %v", event.CustomerID, err)
+		return
+	}
+	if customer.Email == "" {
+		log.Printf("invoice-email skipped: customer %s has no email", event.CustomerID)
+		return
+	}
+	pdfBytes, filename, err := GenerateOrderInvoicePDF(event.OrderID)
+	if err != nil {
+		log.Printf("invoice-email skipped: PDF generation failed for %s: %v", event.OrderNumber, err)
+		return
+	}
+	if err := GetEmailService().SendOrderInvoice(customer.Email, customer.FirstName, event.OrderNumber, pdfBytes, filename); err != nil {
+		log.Printf("invoice-email failed for %s: %v", event.OrderNumber, err)
+	}
 }
 
 func (s *NotificationService) handleUserRegistered(event Event) {

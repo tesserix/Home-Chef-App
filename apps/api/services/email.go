@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -149,6 +150,68 @@ func (s *EmailService) SendPasswordResetEmail(to, resetToken string) error {
 func (s *EmailService) SendChefVerificationApproved(to, chefName string) error {
 	subject, html := ChefVerificationApprovedHTML(chefName)
 	return s.send(to, subject, html)
+}
+
+// SendOrderInvoice emails the customer a copy of their GST tax
+// invoice as a PDF attachment after delivery. Uses SendGrid's v3
+// attachments shape: base64-encoded content + filename + content-type.
+// Failure is fatal-only at the gateway level (4xx/5xx); a missing
+// API key no-ops cleanly like every other send helper.
+func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBytes []byte, filename string) error {
+	if s.apiKey == "" {
+		log.Printf("Email skipped (no API key): to=%s subject=invoice %s", to, orderNumber)
+		return nil
+	}
+	name := firstName
+	if name == "" {
+		name = "there"
+	}
+	subject := fmt.Sprintf("Your Home Chef invoice (%s)", orderNumber)
+	body := fmt.Sprintf(`
+		<p>Hi %s,</p>
+		<p>Thanks for ordering with Home Chef. Your tax invoice for order
+		<strong>%s</strong> is attached as a PDF.</p>
+		<p>Save it for your records — if you need to claim GST input credit, your
+		accountant will want this.</p>
+		<p>— Home Chef</p>
+	`, name, orderNumber)
+
+	payload := map[string]interface{}{
+		"personalizations": []map[string]interface{}{
+			{"to": []map[string]string{{"email": to}}},
+		},
+		"from":    map[string]string{"email": s.from, "name": s.fromName},
+		"subject": subject,
+		"content": []map[string]string{{"type": "text/html", "value": body}},
+		"attachments": []map[string]string{
+			{
+				"content":     base64.StdEncoding.EncodeToString(pdfBytes),
+				"type":        "application/pdf",
+				"filename":    filename,
+				"disposition": "attachment",
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("email: marshal invoice payload: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("email: build invoice request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("email: invoice request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("email: SendGrid returned status %d", resp.StatusCode)
+	}
+	log.Printf("Invoice email sent: to=%s order=%s", to, orderNumber)
+	return nil
 }
 
 // SendApprovalInfoRequested notifies a chef that an admin has asked for

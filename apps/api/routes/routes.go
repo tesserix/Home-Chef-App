@@ -393,6 +393,13 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/notification-preferences", chefNotifPrefsHandler.GetPreferences)
 			chefDashboard.PUT("/notification-preferences", chefNotifPrefsHandler.UpdatePreferences)
 
+			// Wave 3 DPDP Act 2023 data-subject endpoints. /me/export
+			// returns a JSON dump of all rows tied to the chef; /me/delete
+			// soft-deletes + queues hard-delete after the retention window.
+			chefDPDPHandler := handlers.NewChefDPDPHandler()
+			chefDashboard.GET("/me/export", chefDPDPHandler.ExportMyData)
+			chefDashboard.POST("/me/delete", chefDPDPHandler.DeleteMyAccount)
+
 			// Stripe Connect onboarding (international chefs)
 			stripeConnectHandler := handlers.NewStripeConnectHandler()
 			chefDashboard.POST("/stripe/connect", stripeConnectHandler.CreateStripeConnectAccount)
