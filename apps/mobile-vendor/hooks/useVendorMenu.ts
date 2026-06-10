@@ -22,6 +22,11 @@ export interface MenuItem {
   dietaryTags: string[];
   images: MenuItemImage[];
   preparationTime: number;
+  // HSN/SAC code for GST classification. Surfaces the backend's value
+  // (defaults to 996331 — services provided by restaurants); chefs
+  // override per item when their tax advisor wants a more specific
+  // code. Printed on customer invoices.
+  hsn?: string;
 }
 
 // Treat any of these tag strings as "vegetarian". Lowercased + trimmed
@@ -52,6 +57,8 @@ export interface CreateMenuItemPayload {
   // `dietaryTags: ['vegetarian']` array before hitting the backend.
   isVeg: boolean;
   preparationTime: number;
+  // Optional HSN — empty string lets the DB default (996331) apply.
+  hsn?: string;
 }
 
 // Translate the frontend `isVeg` boolean to the backend's tag array.
@@ -96,6 +103,7 @@ function normalizeItem(
     dietaryTags: tags,
     isVeg,
     preparationTime: prep,
+    hsn: (item as { hsn?: string }).hsn ?? '',
   };
 }
 
@@ -156,13 +164,16 @@ export function useUpdateMenuItem() {
       //  - `isVeg` → `dietaryTags`
       //  - `preparationTime` → `prepTime` (backend never read the former,
       //    so prep time changes were silently dropped before this fix).
-      const { isVeg, preparationTime, ...rest } = payload;
+      const { isVeg, preparationTime, hsn, ...rest } = payload;
       const body: Record<string, unknown> = { ...rest };
       if (typeof isVeg === 'boolean') {
         body.dietaryTags = tagsForIsVeg(isVeg);
       }
       if (typeof preparationTime === 'number') {
         body.prepTime = preparationTime;
+      }
+      if (typeof hsn === 'string') {
+        body.hsn = hsn;
       }
       return api
         .put<{ item: MenuItem }>(`/chef/menu/items/${itemId}`, body)

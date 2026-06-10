@@ -27,6 +27,7 @@ const BLANK: MenuItemFormValues = {
   categoryId: '',
   isVeg: true,
   preparationTime: 15,
+  hsn: '',
 };
 
 export default function NewMenuItemScreen() {
@@ -53,6 +54,7 @@ export default function NewMenuItemScreen() {
         categoryId: values.categoryId,
         isVeg: values.isVeg,
         preparationTime: values.preparationTime,
+        hsn: values.hsn || undefined,
       });
 
       const createdId = result.item.id;

@@ -10,6 +10,9 @@ import {
   Text,
   View,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as SecureStore from 'expo-secure-store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -213,6 +216,7 @@ interface FooterActionsProps {
 
 function FooterActions({
   status,
+  orderId,
   customerName,
   total,
   disabled,
@@ -327,6 +331,27 @@ function FooterActions({
   // we still let them cancel until the driver picks up.
   if (status === 'ready' && cancelLink) {
     return <View style={styles.footer}>{cancelLink}</View>;
+  }
+
+  // Delivered — chef can download the GST invoice for their books +
+  // forward it to the customer if asked. PDF is generated server-side
+  // by services.GenerateOrderInvoicePDF and streamed via /chef/orders/
+  // :orderId/invoice.pdf.
+  if (status === 'delivered') {
+    return (
+      <View style={[styles.footer, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>Delivered to customer.</Text>
+        <Pressable
+          onPress={() => downloadInvoice(orderId)}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Download invoice PDF"
+          style={styles.cancelLinkWrap}
+        >
+          <Text style={styles.invoiceLinkLabel}>Download invoice (PDF)</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   const caption: Partial<Record<OrderDetailStatus, string>> = {
@@ -829,6 +854,39 @@ export default function OrderDetailScreen() {
   );
 }
 
+// downloadInvoice fetches the chef-side PDF invoice with the chef's
+// auth token, saves it to a cache file, and opens the system share
+// sheet so the chef can save to Files / forward to the customer /
+// email it. Side-stepped having to embed the token in a URL by using
+// FileSystem.downloadAsync with an explicit Authorization header.
+async function downloadInvoice(orderId: string): Promise<void> {
+  try {
+    const token = await SecureStore.getItemAsync('access_token');
+    if (!token) {
+      Alert.alert('Sign in required', 'Sign in again to download invoices.');
+      return;
+    }
+    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? '';
+    const url = `${apiBase}/chef/orders/${orderId}/invoice.pdf`;
+    const target = `${FileSystem.cacheDirectory}invoice-${orderId}.pdf`;
+    const dl = await FileSystem.downloadAsync(url, target, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (dl.status !== 200) {
+      Alert.alert('Could not download invoice', `Server returned ${dl.status}.`);
+      return;
+    }
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(dl.uri, { mimeType: 'application/pdf', dialogTitle: 'Invoice' });
+    } else {
+      Alert.alert('Saved', `Invoice saved to ${dl.uri}`);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Download failed.';
+    Alert.alert('Could not download invoice', msg);
+  }
+}
+
 // promptCancelReasonAndroid emulates an action sheet with a chained
 // Alert for the reason picker. We split out a function so the cancel
 // flow inside the screen stays readable.
@@ -1239,6 +1297,13 @@ const styles = StyleSheet.create({
     color: theme.colors.destructive.DEFAULT,
     textDecorationLine: 'underline',
     letterSpacing: 0.2,
+  },
+  invoiceLinkLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    textDecorationLine: 'underline',
+    marginTop: 4,
   },
   // Cancelled-line presentation — dimmed background, strikethrough on
   // text + price so the chef visually parses "this line is dead".

@@ -41,6 +41,11 @@ export interface MenuItemFormValues {
   categoryId: string;
   isVeg: boolean;
   preparationTime: number;
+  // HSN/SAC — optional. Backend defaults to 996331 (restaurant
+  // services) when empty. Most chefs leave this alone; surfaces as
+  // an "Advanced" field so it doesn't add visual noise to the
+  // common case.
+  hsn: string;
 }
 
 export interface MenuItemFormProps {
@@ -398,6 +403,7 @@ export function MenuItemForm({
   const [categoryId, setCategoryId] = useState(initialValues.categoryId);
   const [isVeg, setIsVeg] = useState(initialValues.isVeg);
   const [preparationTime, setPreparationTime] = useState(initialValues.preparationTime);
+  const [hsn, setHsn] = useState(initialValues.hsn);
 
   // Local photo URIs (new-mode queuing or pre-upload preview)
   const [localPhotoUris, setLocalPhotoUris] = useState<string[]>([]);
@@ -418,6 +424,7 @@ export function MenuItemForm({
     categoryId !== initialValues.categoryId ||
     isVeg !== initialValues.isVeg ||
     preparationTime !== initialValues.preparationTime ||
+    hsn !== initialValues.hsn ||
     localPhotoUris.length > 0 ||
     mode === 'new'; // new form is always "ready to save"
 
@@ -455,7 +462,7 @@ export function MenuItemForm({
   function handleSave() {
     if (!validate()) return;
     onSave(
-      { name: name.trim(), description: description.trim(), price, categoryId, isVeg, preparationTime },
+      { name: name.trim(), description: description.trim(), price, categoryId, isVeg, preparationTime, hsn: hsn.trim() },
       localPhotoUris,
     );
   }
@@ -818,6 +825,29 @@ export function MenuItemForm({
                 ))}
               </ScrollView>
             </View>
+          </View>
+
+          {/* HSN — advanced tax code, optional. Defaults to 996331
+              (restaurant services SAC) when blank. Printed on the
+              customer's GST invoice per Wave 3. */}
+          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>HSN / SAC (OPTIONAL)</Text>
+          <View style={styles.hairlineGroup}>
+            <TextInput
+              value={hsn}
+              onChangeText={(v) => setHsn(v.replace(/[^0-9]/g, '').slice(0, 8))}
+              placeholder="996331 (default — restaurant services)"
+              placeholderTextColor={theme.colors.ink.muted}
+              keyboardType="number-pad"
+              maxLength={8}
+              autoCorrect={false}
+              style={{
+                fontFamily: 'Inter-SemiBold',
+                fontSize: theme.typography.size.body.size,
+                color: theme.colors.ink.DEFAULT,
+                paddingHorizontal: 12,
+                paddingVertical: 12,
+              }}
+            />
           </View>
 
           {/* Bottom padding to clear sticky footer */}

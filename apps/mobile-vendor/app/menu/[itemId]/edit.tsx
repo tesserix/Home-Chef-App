@@ -46,6 +46,7 @@ export default function EditMenuItemScreen() {
     categoryId: '',
     isVeg: true,
     preparationTime: 15,
+    hsn: '',
   });
 
   const seenItemId = useRef<string | null>(null);
@@ -59,6 +60,7 @@ export default function EditMenuItemScreen() {
         categoryId: item.categoryId ?? '',
         isVeg: item.isVeg ?? true,
         preparationTime: item.preparationTime ?? 15,
+        hsn: item.hsn ?? '',
       });
       // Bump key so MenuItemForm re-initialises its useState from the new initialValues
       setFormKey((k) => k + 1);
@@ -89,6 +91,7 @@ export default function EditMenuItemScreen() {
           categoryId: values.categoryId,
           isVeg: values.isVeg,
           preparationTime: values.preparationTime,
+          hsn: values.hsn,
         },
       });
       showToast({ message: 'Item saved', tone: 'success' });
