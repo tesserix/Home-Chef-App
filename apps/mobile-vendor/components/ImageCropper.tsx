@@ -16,7 +16,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { theme } from '@homechef/mobile-shared/theme';
 
 interface ImageCropperProps {
@@ -121,6 +120,12 @@ export function ImageCropper({
     if (!uri || !natural || busy) return;
     setBusy(true);
     try {
+      // Lazy-require so importing this screen never triggers the native
+      // module load — on a build that hasn't linked expo-image-manipulator
+      // yet, this throws here (caught below) instead of redboxing the whole
+      // profile screen at import time.
+      const ImageManipulator = require('expo-image-manipulator');
+
       const s = baseScale * scale.value;
       const dispW = natural.w * s;
       const dispH = natural.h * s;
