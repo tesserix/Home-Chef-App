@@ -2,15 +2,16 @@ import { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
-  StyleSheet,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 const CUISINE_OPTIONS = [
   'North Indian',
@@ -77,103 +78,88 @@ export default function PreferencesScreen() {
   };
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Progress */}
-      <Text style={styles.stepLabel}>Step 3 of 3</Text>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: '100%' }]} />
-      </View>
-
-      <Text style={styles.title}>What do you love to eat?</Text>
-      <Text style={styles.subtitle}>
-        Select your favourite cuisines to get personalised recommendations.
-      </Text>
-
-      {/* Cuisine chips */}
-      <View style={styles.chipContainer}>
-        {CUISINE_OPTIONS.map((cuisine) => {
-          const isActive = selected.includes(cuisine);
-          return (
-            <TouchableOpacity
-              key={cuisine}
-              style={[styles.chip, isActive && styles.chipActive]}
-              onPress={() => toggleChip(cuisine)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[styles.chipText, isActive && styles.chipTextActive]}
-              >
-                {cuisine}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <TouchableOpacity
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
-        onPress={onFinish}
-        disabled={isSubmitting}
-        activeOpacity={0.8}
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingTop: 40, paddingBottom: 48 }}
+        keyboardShouldPersistTaps="handled"
       >
-        {isSubmitting ? (
-          <ActivityIndicator color="#fafaf7" />
-        ) : (
-          <Text style={styles.buttonText}>Finish Setup</Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+        {/* ── Step progress ── */}
+        <Text className="text-[13px] text-charcoal-soft mb-2">
+          Step 3 of 3
+        </Text>
+        <View className="h-1 bg-hairline rounded-full mb-8 overflow-hidden">
+          <View className="h-1 bg-coral rounded-full" style={{ width: '100%' }} />
+        </View>
+
+        {/* ── Heading ── */}
+        <Text className="text-[26px] font-bold text-charcoal tracking-tight font-display mb-2">
+          What do you love to eat?
+        </Text>
+        <Text className="text-[15px] text-charcoal-soft mb-8">
+          Select your favourite cuisines to get personalised recommendations.
+        </Text>
+
+        {/* ── Cuisine chips ── */}
+        {/* iOS Pressable pattern: visual styles on inner View */}
+        <View className="flex-row flex-wrap gap-2 mb-10">
+          {CUISINE_OPTIONS.map((cuisine) => {
+            const isActive = selected.includes(cuisine);
+            return (
+              <Pressable
+                key={cuisine}
+                onPress={() => toggleChip(cuisine)}
+                accessibilityRole="checkbox"
+                accessibilityLabel={cuisine}
+                accessibilityState={{ checked: isActive }}
+              >
+                <View
+                  className={`px-4 py-2 rounded-full border ${
+                    isActive
+                      ? 'bg-coral-tint border-coral'
+                      : 'bg-canvas border-hairline'
+                  }`}
+                >
+                  <Text
+                    className={`text-sm font-medium ${
+                      isActive ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                    }`}
+                  >
+                    {cuisine}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* ── Primary CTA ── */}
+        <Pressable
+          onPress={() => void onFinish()}
+          disabled={isSubmitting}
+          accessibilityRole="button"
+          accessibilityLabel="Finish setup"
+        >
+          {({ pressed }) => (
+            <View
+              className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${
+                pressed || isSubmitting ? 'opacity-90' : ''
+              }`}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator
+                  size="small"
+                  color={customerColors.canvas}
+                />
+              ) : (
+                <Text className="text-canvas font-semibold text-base">
+                  Finish Setup
+                </Text>
+              )}
+            </View>
+          )}
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fafaf7' },
-  container: { padding: 24, paddingTop: 60 },
-  stepLabel: { fontSize: 13, color: '#7a7a76', marginBottom: 8 },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#e6e5e0',
-    borderRadius: 2,
-    marginBottom: 32,
-  },
-  progressFill: {
-    height: 4,
-    backgroundColor: '#C2410C',
-    borderRadius: 2,
-  },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a18', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#7a7a76', marginBottom: 32 },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 40,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#d4d3ce',
-    backgroundColor: '#fafaf7',
-  },
-  chipActive: {
-    backgroundColor: '#FFF3EE',
-    borderColor: '#C2410C',
-  },
-  chipText: { fontSize: 14, color: '#4a4a47' },
-  chipTextActive: { color: '#C2410C', fontWeight: '600' },
-  button: {
-    height: 52,
-    backgroundColor: '#C2410C',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { fontSize: 16, fontWeight: '600', color: '#fafaf7' },
-});

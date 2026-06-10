@@ -44,6 +44,9 @@ interface RegisterScreenProps {
   brand?: string;
   title?: string;
   subtitle?: string;
+  /** Optional accent colour for the primary CTA + links. Customer passes its
+   *  Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  accent?: string;
 }
 
 export function RegisterScreen({
@@ -54,6 +57,7 @@ export function RegisterScreen({
   title = 'Create account',
   subtitle = 'A few details to get you cooking',
   brand,
+  accent,
 }: RegisterScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const errorOpacity = useRef(new Animated.Value(0)).current;
@@ -228,6 +232,7 @@ export function RegisterScreen({
           onPress={handleSubmit(onSubmit)}
           loading={isSubmitting}
           disabled={isSubmitting}
+          accentColor={accent}
         />
       </View>
 
@@ -263,7 +268,9 @@ export function RegisterScreen({
           <Pressable onPress={onNavigateToLogin} hitSlop={8}>
             <Text style={styles.signinPrompt}>
               Already have an account?{' '}
-              <Text style={styles.signinCTA}>Sign in</Text>
+              <Text style={[styles.signinCTA, accent ? { color: accent } : null]}>
+                Sign in
+              </Text>
             </Text>
           </Pressable>
         </View>

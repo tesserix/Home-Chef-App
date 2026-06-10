@@ -31,6 +31,9 @@ interface ForgotPasswordScreenProps {
   brand?: string;
   title?: string;
   subtitle?: string;
+  /** Optional accent colour for the primary CTA + links. Customer passes its
+   *  Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  accent?: string;
 }
 
 export function ForgotPasswordScreen({
@@ -39,6 +42,7 @@ export function ForgotPasswordScreen({
   title = 'Reset password',
   subtitle = "Enter your email and we'll send you a reset link",
   brand,
+  accent,
 }: ForgotPasswordScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -167,13 +171,16 @@ export function ForgotPasswordScreen({
           onPress={handleSubmit(onSubmit)}
           loading={isSubmitting}
           disabled={isSubmitting}
+          accentColor={accent}
         />
       </View>
 
       {onNavigateToLogin ? (
         <View style={styles.backRow}>
           <Pressable onPress={onNavigateToLogin} hitSlop={8}>
-            <Text style={styles.backText}>Back to sign in</Text>
+            <Text style={[styles.backText, accent ? { color: accent } : null]}>
+              Back to sign in
+            </Text>
           </Pressable>
         </View>
       ) : null}

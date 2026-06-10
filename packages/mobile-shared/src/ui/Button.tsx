@@ -32,6 +32,11 @@ interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   /** Full-width by default; pass `inline` for a hug-content button (e.g.
    *  the "+ New" pill in the menu category picker). */
   fullWidth?: boolean;
+  /** Optional accent override for the `primary` variant fill (and the
+   *  `ghost`/`secondary` label). Lets the customer app paint its Airbnb
+   *  coral CTA without forking this primitive. Undefined → default ink
+   *  palette (vendor / driver unchanged). */
+  accentColor?: string;
 }
 
 /**
@@ -55,10 +60,25 @@ export function Button({
   loading = false,
   disabled,
   fullWidth = true,
+  accentColor,
   ...pressable
 }: ButtonProps) {
   const v = variantStyles[variant];
   const isInert = disabled || loading;
+
+  // Accent override (customer Airbnb coral). Only repaints the fill of a
+  // primary button or the label/border of ghost/secondary — never touches
+  // the default ink palette when accentColor is undefined.
+  const accentContainer =
+    accentColor && variant === 'primary'
+      ? { backgroundColor: accentColor }
+      : accentColor && variant === 'secondary'
+        ? { borderColor: accentColor }
+        : undefined;
+  const accentLabel =
+    accentColor && (variant === 'ghost' || variant === 'secondary')
+      ? { color: accentColor }
+      : undefined;
 
   // Pressable wraps a styled View instead of carrying the visual styles
   // itself. iOS occasionally drops `backgroundColor` and `borderWidth` on
@@ -78,17 +98,18 @@ export function Button({
             styles.base,
             size === 'lg' ? styles.sizeLg : styles.sizeMd,
             v.container,
+            accentContainer,
             fullWidth && styles.fullWidth,
             pressed && !isInert && { opacity: 0.85 },
             isInert && styles.disabled,
           ]}
         >
           {loading ? (
-            <ActivityIndicator color={v.spinner} />
+            <ActivityIndicator color={accentColor && variant !== 'primary' ? accentColor : v.spinner} />
           ) : (
             <View style={styles.row}>
               {iconLeft ? <View style={styles.icon}>{iconLeft}</View> : null}
-              <Text style={[styles.label, v.label]}>{label}</Text>
+              <Text style={[styles.label, v.label, accentLabel]}>{label}</Text>
               {iconRight ? <View style={styles.icon}>{iconRight}</View> : null}
             </View>
           )}

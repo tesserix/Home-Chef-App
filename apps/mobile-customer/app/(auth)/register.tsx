@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { RegisterScreen } from '@homechef/mobile-shared/screens';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   registerWithEmail,
   useAuth,
@@ -43,6 +44,7 @@ export default function RegisterPage() {
 
   return (
     <RegisterScreen
+      accent={customerColors.coral.DEFAULT}
       onRegister={async (data) => {
         await registerWithEmail(data.email, data.password);
         const idToken = await getIdToken();

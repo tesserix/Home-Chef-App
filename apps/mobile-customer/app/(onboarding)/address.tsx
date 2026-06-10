@@ -2,16 +2,17 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router, useLocalSearchParams } from 'expo-router';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 const schema = z.object({
   addressLine1: z.string().min(5, 'Address must be at least 5 characters'),
@@ -54,160 +55,190 @@ export default function AddressScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Progress */}
-        <Text style={styles.stepLabel}>Step 2 of 3</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: '66%' }]} />
-        </View>
-
-        <Text style={styles.title}>Your delivery address</Text>
-        <Text style={styles.subtitle}>
-          Where should we deliver your orders?
-        </Text>
-
-        {/* Address Line 1 */}
-        <Text style={styles.label}>Address</Text>
-        <Controller
-          control={control}
-          name="addressLine1"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              style={[styles.input, errors.addressLine1 && styles.inputError]}
-              placeholder="House no., street, area"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
-          )}
-        />
-        {errors.addressLine1 && (
-          <Text style={styles.errorText}>{errors.addressLine1.message}</Text>
-        )}
-
-        {/* City */}
-        <Text style={styles.label}>City</Text>
-        <Controller
-          control={control}
-          name="city"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              style={[styles.input, errors.city && styles.inputError]}
-              placeholder="Enter your city"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
-          )}
-        />
-        {errors.city && (
-          <Text style={styles.errorText}>{errors.city.message}</Text>
-        )}
-
-        {/* State */}
-        <Text style={styles.label}>State</Text>
-        <Controller
-          control={control}
-          name="state"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              style={[styles.input, errors.state && styles.inputError]}
-              placeholder="Enter your state"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
-          )}
-        />
-        {errors.state && (
-          <Text style={styles.errorText}>{errors.state.message}</Text>
-        )}
-
-        {/* Pincode */}
-        <Text style={styles.label}>Pincode</Text>
-        <Controller
-          control={control}
-          name="pincode"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              style={[styles.input, errors.pincode && styles.inputError]}
-              placeholder="6-digit pincode"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              keyboardType="numeric"
-              maxLength={6}
-              returnKeyType="done"
-            />
-          )}
-        />
-        {errors.pincode && (
-          <Text style={styles.errorText}>{errors.pincode.message}</Text>
-        )}
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleSubmit(onSubmit)}
-          activeOpacity={0.8}
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 24, paddingTop: 40 }}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* ── Step progress ── */}
+          <Text className="text-[13px] text-charcoal-soft mb-2">
+            Step 2 of 3
+          </Text>
+          <View className="h-1 bg-hairline rounded-full mb-8 overflow-hidden">
+            <View className="h-1 bg-coral rounded-full" style={{ width: '66%' }} />
+          </View>
+
+          {/* ── Heading ── */}
+          <Text className="text-[26px] font-bold text-charcoal tracking-tight font-display mb-2">
+            Your delivery address
+          </Text>
+          <Text className="text-[15px] text-charcoal-soft mb-8">
+            Where should we deliver your orders?
+          </Text>
+
+          {/* ── Address Line 1 ── */}
+          <Text className="text-sm font-medium text-charcoal mb-1">
+            Address
+          </Text>
+          <Controller
+            control={control}
+            name="addressLine1"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                style={{
+                  borderWidth: errors.addressLine1 ? 1.5 : 0,
+                  borderColor: errors.addressLine1
+                    ? customerColors.destructive.DEFAULT
+                    : 'transparent',
+                }}
+                placeholder="House no., street, area"
+                placeholderTextColor={customerColors.charcoal.soft}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                returnKeyType="next"
+                accessibilityLabel="Address line 1"
+              />
+            )}
+          />
+          {errors.addressLine1 ? (
+            <Text className="text-xs text-destructive mb-3">
+              {errors.addressLine1.message}
+            </Text>
+          ) : (
+            <View className="mb-4" />
+          )}
+
+          {/* ── City ── */}
+          <Text className="text-sm font-medium text-charcoal mb-1">City</Text>
+          <Controller
+            control={control}
+            name="city"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                style={{
+                  borderWidth: errors.city ? 1.5 : 0,
+                  borderColor: errors.city
+                    ? customerColors.destructive.DEFAULT
+                    : 'transparent',
+                }}
+                placeholder="Enter your city"
+                placeholderTextColor={customerColors.charcoal.soft}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                returnKeyType="next"
+                accessibilityLabel="City"
+              />
+            )}
+          />
+          {errors.city ? (
+            <Text className="text-xs text-destructive mb-3">
+              {errors.city.message}
+            </Text>
+          ) : (
+            <View className="mb-4" />
+          )}
+
+          {/* ── State ── */}
+          <Text className="text-sm font-medium text-charcoal mb-1">State</Text>
+          <Controller
+            control={control}
+            name="state"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                style={{
+                  borderWidth: errors.state ? 1.5 : 0,
+                  borderColor: errors.state
+                    ? customerColors.destructive.DEFAULT
+                    : 'transparent',
+                }}
+                placeholder="Enter your state"
+                placeholderTextColor={customerColors.charcoal.soft}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                returnKeyType="next"
+                accessibilityLabel="State"
+              />
+            )}
+          />
+          {errors.state ? (
+            <Text className="text-xs text-destructive mb-3">
+              {errors.state.message}
+            </Text>
+          ) : (
+            <View className="mb-4" />
+          )}
+
+          {/* ── Pincode ── */}
+          <Text className="text-sm font-medium text-charcoal mb-1">
+            Pincode
+          </Text>
+          <Controller
+            control={control}
+            name="pincode"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-1"
+                style={{
+                  borderWidth: errors.pincode ? 1.5 : 0,
+                  borderColor: errors.pincode
+                    ? customerColors.destructive.DEFAULT
+                    : 'transparent',
+                }}
+                placeholder="6-digit pincode"
+                placeholderTextColor={customerColors.charcoal.soft}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                keyboardType="numeric"
+                maxLength={6}
+                returnKeyType="done"
+                accessibilityLabel="Pincode"
+              />
+            )}
+          />
+          {errors.pincode ? (
+            <Text className="text-xs text-destructive mb-3">
+              {errors.pincode.message}
+            </Text>
+          ) : (
+            <View className="mb-4" />
+          )}
+
+          {/* ── Primary CTA ── */}
+          {/* iOS Pressable pattern: visual styles on inner View */}
+          <Pressable
+            onPress={() => void handleSubmit(onSubmit)()}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to preferences"
+          >
+            {({ pressed }) => (
+              <View
+                className={`rounded-lg min-h-[52px] items-center justify-center mt-4 ${
+                  pressed ? 'opacity-90' : ''
+                } bg-coral`}
+              >
+                <Text className="text-canvas font-semibold text-base">
+                  Continue
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fafaf7' },
-  container: { padding: 24, paddingTop: 60 },
-  stepLabel: { fontSize: 13, color: '#7a7a76', marginBottom: 8 },
-  progressBar: {
-    height: 4,
-    backgroundColor: '#e6e5e0',
-    borderRadius: 2,
-    marginBottom: 32,
-  },
-  progressFill: {
-    height: 4,
-    backgroundColor: '#C2410C',
-    borderRadius: 2,
-  },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a18', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#7a7a76', marginBottom: 32 },
-  label: { fontSize: 14, fontWeight: '500', color: '#4a4a47', marginBottom: 6 },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#d4d3ce',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: '#1a1a18',
-    marginBottom: 4,
-    backgroundColor: '#fafaf7',
-  },
-  inputError: { borderColor: '#c95b3e' },
-  errorText: { fontSize: 12, color: '#c95b3e', marginBottom: 12 },
-  button: {
-    height: 52,
-    backgroundColor: '#C2410C',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  buttonText: { fontSize: 16, fontWeight: '600', color: '#fafaf7' },
-});

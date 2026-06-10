@@ -39,6 +39,9 @@ interface LoginScreenProps {
   /** Optional brand wordmark. When provided, renders above the title — the
    *  only persimmon-coloured element above the fold. */
   brand?: string;
+  /** Optional accent colour for the primary CTA + links. The customer app
+   *  passes its Airbnb coral; vendor/driver omit it and keep the ink palette. */
+  accent?: string;
 }
 
 /**
@@ -68,6 +71,7 @@ export function LoginScreen({
   title = 'Welcome back',
   subtitle = 'Sign in to continue',
   brand,
+  accent,
 }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const errorOpacity = useRef(new Animated.Value(0)).current;
@@ -184,7 +188,9 @@ export function LoginScreen({
       {onNavigateToForgotPassword ? (
         <View style={styles.forgotRow}>
           <Pressable onPress={onNavigateToForgotPassword} hitSlop={8}>
-            <Text style={styles.linkText}>Forgot password?</Text>
+            <Text style={[styles.linkText, accent ? { color: accent } : null]}>
+              Forgot password?
+            </Text>
           </Pressable>
         </View>
       ) : null}
@@ -195,6 +201,7 @@ export function LoginScreen({
           onPress={handleSubmit(onSubmit)}
           loading={isSubmitting}
           disabled={isSubmitting}
+          accentColor={accent}
         />
         {onBiometricLogin ? (
           <Button
@@ -237,7 +244,9 @@ export function LoginScreen({
           <Pressable onPress={onNavigateToRegister} hitSlop={8}>
             <Text style={styles.signupPrompt}>
               Don't have an account?{' '}
-              <Text style={styles.signupCTA}>Sign up</Text>
+              <Text style={[styles.signupCTA, accent ? { color: accent } : null]}>
+                Sign up
+              </Text>
             </Text>
           </Pressable>
         </View>

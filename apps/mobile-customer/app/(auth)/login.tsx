@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LoginScreen } from '@homechef/mobile-shared/screens';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   signInWithGoogleCredential,
   signInWithAppleCredential,
@@ -124,6 +125,7 @@ export default function LoginPage() {
   return (
     <LoginScreen
       title="Welcome back"
+      accent={customerColors.coral.DEFAULT}
       onLogin={async ({ email, password }) => {
         await signInWithEmail(email, password);
         const response = await completeBFFLogin();
