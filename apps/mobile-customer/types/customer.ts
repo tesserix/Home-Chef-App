@@ -61,7 +61,10 @@ export interface Order {
   id: string;
   orderNumber: string;
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
-  chef: Chef;
+  // Optional: the order API's OrderResponse (ToResponse) carries no chef object
+  // or chefId, so this is undefined on list/detail. Render defensively until the
+  // backend adds it. See hooks/useOrderHistory.ts mapper.
+  chef?: Chef;
   items: OrderItem[];
   totalAmount: number;
   deliveryAddress: Address;

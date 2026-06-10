@@ -92,7 +92,7 @@ export function OrderCard({ order }: OrderCardProps) {
     <Pressable
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`Order #${order.orderNumber} from ${order.chef.name}`}
+      accessibilityLabel={`Order #${order.orderNumber}${order.chef?.name ? ` from ${order.chef.name}` : ''}`}
       style={styles.pressableWrapper}
     >
       {({ pressed }) => (
@@ -109,7 +109,8 @@ export function OrderCard({ order }: OrderCardProps) {
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  {order.chef.name}
+                  {/* Order API carries no chef object yet — neutral fallback. */}
+                  {order.chef?.name ?? 'Your order'}
                 </Text>
                 <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
               </View>

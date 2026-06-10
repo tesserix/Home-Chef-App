@@ -168,7 +168,8 @@ export default function OrderDetailScreen() {
           </Pressable>
 
           <View style={styles.headerText}>
-            <Text style={styles.chefName}>{order.chef.name}</Text>
+            {/* Order API carries no chef object yet — fall back to a neutral title. */}
+            <Text style={styles.chefName}>{order.chef?.name ?? 'Your order'}</Text>
             <Text style={styles.orderNumber}>Order #{order.orderNumber}</Text>
           </View>
         </View>
