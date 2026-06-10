@@ -1,120 +1,100 @@
-# Next session — pick up where we stopped (end of day 2026-06-10, session 2)
+# Next session — pick up where we stopped (end of day 2026-06-10, session 3)
 
 ## TL;DR
 
-This session closed **Wave 3** (financial/tax), completed all **codeable Wave 4** items (observability + reliability + mobile platform + launch-ops docs), and shipped the **Wave 2 pause-receiving** straggler. All deployed to prod and verified live (trace IDs + correlation IDs flowing). Tree clean, all builds green, all pushed.
+Waves 1–4 (codeable) + the Wave 2 pause-receiving straggler are done. This session also finished three follow-ups: **auth-bff OpenTelemetry**, **audit-log retention cron**, and the **full Hindi migration** (dashboard/orders/earnings/onboarding). All app code is committed and pushed; `main` is in sync with origin.
 
-What's left is **operational / needs-a-build / blocked-on-Apple** — not code: App Store enrollment + submission, full a11y + bundle QA on a real build, status-page hosting, auth-bff OTel (separate repo), and the mechanical full-string Hindi migration.
+Three things are **not fully closed for reasons outside the app code** — all captured below: auth-bff OTel won't *deploy* (a `tesserix-k8s` GitOps wiring bug), the Hindi UI needs a **clean native rebuild** to link `expo-localization`, and prod telemetry is mis-tagged `env=development`.
 
 ## State on `main` at session end
 
 | Track | Status |
 |---|---|
-| Wave 1 application | ✅ 100% (Sentry, force-upgrade, rate-limit, idempotency, webhook HMAC) |
-| Wave 2 | ✅ 100% in-scope (9/9 backend, 12/13 mobile) — **pause-receiving + auto-resume** done; only FoSCoS (external) left |
-| Wave 3 | ✅ 100% in-scope (9/9 backend, 6/6 mobile) — statements + cron, TDS 16A, refund history, reconciliation |
-| Wave 4 backend | ✅ OTel→Cloud Trace, structured logging + correlation IDs, audit log, pool tuning, automaxprocs (min-scale:1 already set) |
-| Wave 4 mobile | ✅ deep links + tap-through, EAS OTA, i18n+Hindi+locale picker · ⏳ a11y/bundle QA (needs build), App Store (blocked) |
-| Wave 4 launch ops | ✅ runbook / on-call / status-page plan / concierge (`docs/ops/`) |
+| Waves 1–3 | ✅ 100% in-scope (verified live earlier) |
+| Wave 4 backend | ✅ OTel→Cloud Trace, structured logging + correlation IDs, audit log (+retention cron), pool tuning, automaxprocs |
+| Wave 4 mobile | ✅ deep links, EAS OTA, i18n+Hindi (315 keys, parity) — see rebuild caveat |
+| Wave 4 launch ops | ✅ runbook / on-call / status-page / concierge (`docs/ops/`) |
+| Wave 2 straggler | ✅ pause-receiving + auto-resume |
+| auth-bff OTel | ✅ code+image; ⛔ deploy blocked (tesserix-k8s) |
 
-Live prod: **`homechef-api-00088`** (`main-53535ee`) Ready, 100% traffic. Verified: `x-request-id` + `x-trace-id` echoed → logging + OpenTelemetry are live with real Cloud Trace creds.
+Prod: **homechef-api-00089** (`main-f56e6e1`) live & verified — `audit-retention: cron started (keep=400d)`, structured JSON logs, `x-request-id`+`x-trace-id` headers. auth-bff still on the **old** image (`main-741790f`) — see blocker #1.
 
-## What got SHIPPED this session (commit ladder, newest first)
+## This session's commits (newest first)
 
 ```
-53535ee docs:  Wave 4 + Wave 2 pause-receiving complete — PROD-READINESS checkboxes
-09471d9 feat:  Wave 4 i18n + Hindi + locale picker (react-i18next + expo-localization)
-4d1880c docs:  Wave 4 launch ops — runbook / on-call / status-page / concierge (docs/ops/)
-349674b feat:  Wave 4 EAS Update OTA — expo-updates + u.expo.dev + Hermes lock
-afe742b feat:  Wave 4 deep-link push tap-through — resolvePushRoute + cold-start replay
-babe161 feat:  Wave 2 pause-receiving with auto-resume — PausedUntil + endpoints + 1-min cron
-1d0fda1 perf:  Wave 4 reliability — DB pool 100/10 → env 20/5 + automaxprocs
-60d2fe9 feat:  Wave 4 audit log for sensitive mutations — LogAudit wiring + CorrelationID
-2612d49 feat:  Wave 4 OpenTelemetry → Cloud Trace — otelgin + TraceContext bridge
-e1dae8f feat:  Wave 4 structured logging foundation — slog + X-Request-ID middleware
-926a928 docs:  Wave 3 closed (100% in-scope)
-f7894c5 feat:  Wave 3 settlement reconciliation cron (Razorpay/Stripe drift)
-382b37e feat:  Wave 3 refund history — GET /chef/refunds
-85dd913 feat:  Wave 3 TDS certificate — GET /chef/tax/certificate?year=FY
-27b9eff feat:  Wave 3 weekly settlement statements — cron + PDF + Earnings section
+bd69c9a fix(i18n): lazy-require expo-localization (no redbox if native module missing → English fallback)
+45755cc fix(i18n): harden deviceLocale() try/catch
+f9972a0 ci: fix auth-bff image bump (main-<sha> fallback + verify-tag-landed guard)
+f56e6e1 feat: i18n Hindi migration (earnings + onboarding) — completes dashboard→orders→earnings→onboarding
+        (dashboard/orders + bulk locales landed in concurrent customer commits 9fff869/35b6980)
+469859d feat: audit-log retention prune cron (~13mo, env AUDIT_RETENTION_DAYS)
+7ba9802 feat: auth-bff OpenTelemetry → Cloud Trace (otelgin + obsmw, GCP_PROJECT_ID targets shared trace)
++ earlier this day: full Wave 4 + Wave 2 pause-receiving (see git log)
 ```
-(Plus earlier-in-day vendor v2 visual redesign commits: 115e4ff, f2a5814, 0523910, …)
 
-## What's pending in code (sorted by leverage)
+## ⚠️ Three open blockers (NOT app-code — need your hands / infra)
 
-### Backend
-- [ ] **auth-bff OpenTelemetry** — mirror the `homechef-api` tracing setup in the `auth-bff` service (separate repo) so login flows show in the same Cloud Trace.
-- [ ] **Audit-log retention job** — `audit_logs` grows unbounded; add a prune cron (keep e.g. 13 months for DPDP) or a Cloud SQL TTL policy.
+### 1. auth-bff OTel deploy — blocked in `tesserix-k8s` (app-of-apps wiring)
+- Code shipped, image `homechef-auth-bff:main-f9972a0` built. The CI bump now correctly writes `image.tag` into `argocd/prod/apps/homechef/homechef-auth-bff.yaml` (I hardened the bump step + added a verify guard).
+- **But** ArgoCD's live `homechef-auth-bff` Application still shows `image.tag: main-741790f` even though `homechef-app-of-apps` reports Synced to the bump commit. So the file the CI bumps is **not** the manifest ArgoCD renders auth-bff from (the API's equivalent file *is* wired — auth-bff's isn't).
+- **Fix (in `tesserix-k8s`, which I have no access to):** point the auth-bff Application's image source at the bumped file, or correct the app-of-apps generation for auth-bff. Then ArgoCD auto-syncs the OTel image.
+- Do **not** `kubectl patch` the live Deployment — `selfHeal:true` reverts it (git still resolves to the old tag).
 
-### Mobile
-- [ ] **Full Hindi string migration** — infra is done (`lib/i18n.ts`, `locales/en|hi.json`); the More tab is the reference. Mechanically migrate the remaining screens' strings to `t()` and add `hi` translations. Highest-value screens first: dashboard, orders, earnings, onboarding.
-- [ ] **Accessibility sweep** — run VoiceOver on every screen + contrast audit on a device/sim (new components are already labeled; this is the verification pass).
-- [ ] **Bundle-size audit** — build production, measure with `npx expo export` / source-map-explorer; Hermes is already locked (`jsEngine: hermes`).
+### 2. Hindi UI needs a clean native rebuild (links `expo-localization`)
+- The i18n code is correct (verified: 315 keys, en/hi parity, `t()` wired). Running on sim proved the earlier "raw key" / redbox was **a missing native module**, not code: `Cannot find native module 'ExpoLocalization'`.
+- I hardened `lib/i18n.ts` (lazy `require`) so it degrades to English instead of crashing — verified the app now boots.
+- **To see Hindi/translated UI:** clean rebuild so the native module links:
+  ```
+  cd apps/mobile-vendor
+  npx expo prebuild --clean
+  npx expo run:ios        # omit --device → targets booted sim, no signing
+  ```
+  Greeting + Language picker are post-login screens — need a signed-in session to reach. (A plain `xcodebuild` Release came out empty — use `expo run:ios`/EAS, not raw xcodebuild.)
 
-## What's pending out of code (operational — your hands)
+### 3. Prod telemetry tagged `env=development`
+- Pod logs/traces show `"env":"development"`. Set `ENVIRONMENT=production` (and `SENTRY_ENVIRONMENT=production`) on the homechef ExternalSecret so Sentry/Cloud Trace label prod correctly. One k8s env var, not code.
 
-| Action | Where |
-|---|---|
-| Apple Developer enrollment → App Store Connect record + TestFlight | apple.com/developer |
-| APNs production cert in Firebase + EAS credentials | Firebase + EAS Cloud |
-| App Store screenshots + IN listing + submission | App Store Connect (needs the build) |
-| Sentry projects → `eas secret:create` DSN/auth-token/org | sentry.io + EAS CLI (from `apps/mobile-vendor/`) |
-| Status page hosting (BetterStack/Instatus) → CNAME `status.fe3dr.com` | per `docs/ops/STATUS-PAGE.md` |
-| Cloudflare WAF managed ruleset + `/auth/auto-login` rate-limit | Cloudflare (Pro plan) |
-| Cloud SQL backup retention + restore drill | gcloud + GCP Console |
-| Privacy policy + EULA URLs → wire into app + onboarding consent | legal |
-| Triage remaining 30 Dependabot vulns (6 critical / 9 high) | repo security tab |
-| First push of an OTA update once a build exists | `cd apps/mobile-vendor && npx eas-cli@18.4.0 update --channel production` |
+## Still pending (unchanged operational/QA/blocked)
 
-## New surface added this session (for quick reference)
+- Apple Developer enrollment → App Store screenshots/listing/submission, APNs prod cert
+- Full a11y VoiceOver/contrast sweep + bundle-size measurement (on a real build)
+- Status-page hosting (`status.fe3dr.com`), Cloudflare WAF, Cloud SQL backup drill, Sentry DSN secrets, privacy/EULA URLs, Dependabot triage (30 vulns), FoSCoS API (external)
+- Cleanup: concurrent session left uncommitted `apps/mobile-customer/` changes + a `.metro-cache/` dir (don't commit the cache)
 
-**New routes** (all under `/api/v1/chef`, BFF-auth + RequireChef):
-- `GET /statements/weekly` · `GET /statements/:id/statement.pdf`
-- `GET /tax/certificate?year=FY`
-- `GET /refunds`
-- `POST /availability/pause` `{minutes:15|30|60}` · `POST /availability/resume`
+## New surface added this session (reference)
 
-**New crons** (in-process on homechef-api, reliable under min-scale:1, all fire on startup):
-- `weekly-statement` (daily, Mon–Sun IST close) · `reconciliation` (daily) · `availability-resume` (1-min) · existing `fssai-reminder` (daily)
-
-**New env vars** (all have safe defaults):
-- `OTEL_SAMPLING_RATE` (default 0.1) · `DB_MAX_OPEN_CONNS` (20) · `DB_MAX_IDLE_CONNS` (5) · `APP_VERSION` (trace/release tag)
-
-**Observability**: every response carries `X-Request-ID` (+ `X-Trace-ID` when tracing on). Logs are JSON via `logger.FromContext(ctx)` and carry `correlation_id`/`trace_id`. Audit rows carry `correlation_id` — pivot from a log line to the mutation it caused.
+- **Routes** (all `/api/v1/chef`): `GET /statements/weekly`, `GET /statements/:id/statement.pdf`, `GET /tax/certificate?year=FY`, `GET /refunds`, `POST /availability/pause|resume`
+- **Crons** (in-proc on homechef-api, reliable under min-scale:1, fire on startup): weekly-statement, reconciliation, availability-resume (1-min), audit-retention, fssai-reminder
+- **Env vars** (safe defaults): `OTEL_SAMPLING_RATE`(0.1), `DB_MAX_OPEN_CONNS`(20), `DB_MAX_IDLE_CONNS`(5), `AUDIT_RETENTION_DAYS`(400), `APP_VERSION`; auth-bff: `GCP_PROJECT_ID` (Cloud Trace target)
+- **Observability:** every response carries `X-Request-ID` (+`X-Trace-ID`); logs are JSON via `logger.FromContext(ctx)` with `correlation_id`/`trace_id`; audit rows carry `correlation_id`.
 
 ## Known gotchas (still true)
 
-- **Use `npx eas-cli@18.4.0`** — 20.x silently fails simulator builds.
-- **`cd apps/mobile-vendor`** before any eas-cli command.
-- **kube context (prod):** `gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke`, namespace `homechef`.
-- **Never** `kubectl edit/patch` prod image tags — ArgoCD self-heals. Roll back via ArgoCD UI or revert the `tesserix-k8s` bump commit. (CI `bump-k8s` writes the tag there.)
-- **Deploy = push to main** (paths `apps/api/**`) → CI build → `bump-k8s` → ArgoCD sync (~2 min) → new ksvc revision.
-- **Pre-existing TS noise** — mobile-vendor has ~100 pre-existing lucide-react-native + JSX-dup errors. Filter on files you touched.
-- **EMU permissions** — `gh pr create` fails on `tesserix` org; `git push` + `gh run watch` work fine.
-- **Tracing needs GCP creds** — works in prod (Workload Identity); locally it no-ops cleanly without a project/creds.
+- `npx eas-cli@18.4.0` for EAS builds; for local builds use `npx expo run:ios` (NOT raw `xcodebuild` — Release packaged empty). Omit `--device` for the sim (a UDID triggers a code-signing/device build).
+- prod GKE context: `gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke`, ns `homechef`. Deploy = push to main (paths `apps/api/**` or `apps/auth-bff/**`) → CI build → bump-k8s → ArgoCD (~2 min, API only).
+- Never `kubectl edit/patch` prod image tags — ArgoCD self-heals.
+- Pre-existing TS noise: ~100 lucide-react-native + JSX-dup errors in mobile-vendor; filter on files you touch.
+- EMU: `gh pr create` fails on `tesserix` org; `git push` + `gh run watch` + `gh run view` work.
 
-## First actions next session (suggested)
+## First actions next session
 
-1. **Verify prod:** `kubectl --context <prod> -n homechef get ksvc homechef-api` (expect a ≥00088 revision Ready) + `curl -D - https://vendors.fe3dr.com/api/v1/mobile/min-version?platform=ios&app=vendor` (expect `x-request-id` + `x-trace-id`).
-2. **Confirm a trace** end-to-end in Cloud Trace (GCP console → Trace) for a chef request.
-3. **Pick next batch:**
-   - **auth-bff OTel** (close the tracing gap), or
-   - **Full Hindi migration** of dashboard/orders/earnings (high user-facing value), or
-   - **Operational unblock**: Apple Dev enrollment → TestFlight → first real-device QA pass (a11y + bundle).
+1. **Verify prod:** `kubectl --context <prod> -n homechef get ksvc homechef-api` (≥00089 Ready) + `curl -D - https://vendors.fe3dr.com/api/v1/mobile/min-version?platform=ios&app=vendor` (expect `x-request-id`+`x-trace-id`).
+2. **Pick a blocker to close:** (a) auth-bff OTel — fix the `tesserix-k8s` app-of-apps wiring; (b) clean mobile rebuild → verify Hindi UI; (c) set `ENVIRONMENT=production` on the ExternalSecret.
 
 ## Suggested next-session prompt
 
 ```
-Continuing the Home Chef vendor app. Read NEXT-SESSION.md + PROD-READINESS.md first (don't re-discover state).
+Continuing the Home Chef vendor app. Read NEXT-SESSION.md + PROD-READINESS.md first — don't re-discover state.
 
-State: Waves 1–3 100% in-scope, Wave 4 codeable items done (OTel/logging/audit/pool/automaxprocs + deep-links/EAS-OTA/i18n + launch-ops docs), Wave 2 pause-receiving done. Prod on homechef-api-00088, trace+correlation IDs verified live. Tree clean.
+State: Waves 1–4 + Wave 2 pause-receiving done. auth-bff OTel, audit-retention cron, full Hindi migration (315 keys) all coded+committed. homechef-api live (00089) with crons + tracing + structured logging verified. Tree clean, pushed.
 
-First action: verify prod (kubectl ksvc on the prod GKE context + curl min-version, expect x-request-id/x-trace-id headers).
+Three open blockers (all non-app-code, see NEXT-SESSION "Three open blockers"):
+  1. auth-bff OTel won't deploy — tesserix-k8s app-of-apps doesn't render auth-bff from the file CI bumps (I have no tesserix-k8s access).
+  2. Hindi UI needs a clean native rebuild to link expo-localization: cd apps/mobile-vendor && npx expo prebuild --clean && npx expo run:ios.
+  3. prod telemetry tagged env=development — set ENVIRONMENT=production on the homechef ExternalSecret.
 
-Then [PICK ONE]:
-  - auth-bff OpenTelemetry (close the tracing gap, separate repo)
-  - Full Hindi migration of dashboard/orders/earnings strings to t()
-  - Operational: Apple Dev enrollment → TestFlight → on-device a11y + bundle QA
+First action: verify prod (kubectl ksvc homechef-api + curl min-version, expect x-request-id/x-trace-id).
+Then pick one blocker above, or move to operational items (Apple Dev enrollment, status page, a11y QA).
 
-Gotchas: EAS CLI 18.4.0, cd apps/mobile-vendor first, prod context gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke, deploy = push to main (paths apps/api/**) → ArgoCD ~2min.
+Gotchas: prod context gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke; deploy = push to main (apps/api/** or apps/auth-bff/**) → ArgoCD; never kubectl patch prod tags; use expo run:ios (not raw xcodebuild) for local sim builds, omit --device.
 ```
