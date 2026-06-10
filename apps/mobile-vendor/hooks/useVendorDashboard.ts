@@ -7,8 +7,13 @@ export interface DashboardData {
   rating: number;
   totalReviews: number;
   acceptingOrders: boolean;
+  /** ISO timestamp the kitchen auto-reopens, when temporarily paused. */
+  pausedUntil?: string | null;
   recentOrders: RecentOrder[];
 }
+
+/** Durations offered by the "Back in X min" pause control. */
+export type PauseMinutes = 15 | 30 | 60;
 
 export interface RecentOrder {
   id: string;
@@ -32,5 +37,26 @@ export function useToggleAcceptingOrders() {
     mutationFn: (acceptingOrders: boolean) =>
       api.put('/chef/settings', { acceptingOrders }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
+  });
+}
+
+/** Temporarily pause receiving for {15,30,60} min; backend auto-resumes. */
+export function usePauseReceiving() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (minutes: PauseMinutes) =>
+      api.post('/chef/availability/pause', { minutes }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
+  });
+}
+
+/** Reopen the kitchen immediately, cancelling any pause timer. */
+export function useResumeReceiving() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/chef/availability/resume', {}),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] }),
   });
 }

@@ -28,6 +28,10 @@ type ChefProfile struct {
 	VerifiedAt     *time.Time     `gorm:"" json:"verifiedAt"`
 	IsActive       bool           `gorm:"default:true" json:"isActive"`
 	AcceptingOrders bool           `gorm:"default:true" json:"acceptingOrders"`
+	// PausedUntil powers "Back in {15,30,60} min": when set in the future the
+	// kitchen is temporarily closed (AcceptingOrders is flipped false alongside
+	// it). The auto-resume cron clears it + reopens once the time passes.
+	PausedUntil   *time.Time     `gorm:"" json:"pausedUntil,omitempty"`
 	KitchenPhotos   pq.StringArray `gorm:"type:text[]" json:"kitchenPhotos"`
 
 	// Address
@@ -150,6 +154,7 @@ type ChefProfileResponse struct {
 	IsFeatured      bool                   `json:"isFeatured"`
 	IsOnline        bool                   `json:"isOnline"`
 	AcceptingOrders bool                   `json:"acceptingOrders"`
+	PausedUntil     *time.Time             `json:"pausedUntil,omitempty"`
 	KitchenPhotos   []string               `json:"kitchenPhotos"`
 	City            string                 `json:"city"`
 	State           string                 `json:"state"`
@@ -220,6 +225,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		IsFeatured:      c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),
 		IsOnline:        c.AcceptingOrders,
 		AcceptingOrders: c.AcceptingOrders,
+		PausedUntil:     c.PausedUntil,
 		KitchenPhotos:   kitchenPhotos,
 		City:            c.City,
 		State:           c.State,

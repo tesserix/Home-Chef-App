@@ -144,6 +144,7 @@ func SetupRouter() *gin.Engine {
 	chefStatementsHandler := handlers.NewChefStatementsHandler()
 	chefTaxHandler := handlers.NewChefTaxHandler()
 	chefRefundsHandler := handlers.NewChefRefundsHandler()
+	chefAvailabilityHandler := handlers.NewChefAvailabilityHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
@@ -399,6 +400,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/tax/certificate", chefTaxHandler.GetTDSCertificate)
 			// Refund history — one entry per refunded order, item breakdown.
 			chefDashboard.GET("/refunds", chefRefundsHandler.GetRefunds)
+			// Timed pause ("Back in {15,30,60} min") + manual resume.
+			chefDashboard.POST("/availability/pause", chefAvailabilityHandler.PauseReceiving)
+			chefDashboard.POST("/availability/resume", chefAvailabilityHandler.ResumeReceiving)
 			// GET /chef/documents/expiring?withinDays=30
 			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)

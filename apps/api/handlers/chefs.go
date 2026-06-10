@@ -378,6 +378,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalReviews":    chef.TotalReviews,
 		"totalOrders":     chef.TotalOrders,
 		"acceptingOrders": chef.AcceptingOrders,
+		"pausedUntil":     chef.PausedUntil,
 		"recentOrders":    recentOrdersResp,
 	})
 }
@@ -887,8 +888,12 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 		return
 	}
 
-	// Update acceptingOrders on chef profile
-	database.DB.Model(&chef).Update("accepting_orders", req.AcceptingOrders)
+	// Update acceptingOrders on chef profile. A manual toggle also clears any
+	// active pause timer — the chef's explicit choice overrides "Back in X min".
+	database.DB.Model(&chef).Updates(map[string]interface{}{
+		"accepting_orders": req.AcceptingOrders,
+		"paused_until":     nil,
+	})
 
 	// Upsert chef settings
 	var settings models.ChefSettings

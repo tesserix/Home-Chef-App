@@ -169,6 +169,10 @@ func main() {
 	// Read-only — surfaces discrepancies for finance ops, never mutates.
 	services.StartReconciliationCron(cronCtx)
 
+	// Auto-resume timed kitchen pauses ("Back in {15,30,60} min") once the
+	// window elapses. 1-minute granularity; reliable under min-scale:1.
+	services.StartAvailabilityResumeCron(cronCtx)
+
 	// Setup router
 	router := routes.SetupRouter()
 

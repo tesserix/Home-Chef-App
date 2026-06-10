@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,6 +27,9 @@ import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
   useVendorDashboard,
   useToggleAcceptingOrders,
+  usePauseReceiving,
+  useResumeReceiving,
+  type PauseMinutes,
 } from '../../hooks/useVendorDashboard';
 import {
   useVendorPendingOrders,
@@ -125,6 +131,8 @@ export default function DashboardScreen() {
   const { data: pendingResp, refetch: refetchPending } =
     useVendorPendingOrders();
   const toggleMutation = useToggleAcceptingOrders();
+  const pauseMutation = usePauseReceiving();
+  const resumeMutation = useResumeReceiving();
   const { triggerAction, isLoading: orderActionLoading } = useOrderAction();
   const { data: expiringDocsData } = useExpiringDocuments();
   const { data: actionRequests } = useActionRequiredAdminRequests();
@@ -209,6 +217,57 @@ export default function DashboardScreen() {
   }, [acceptingOrders, reduceMotion, pulse]);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
+  // Timed-pause state: closed AND a future reopen time → show "Back HH:MM".
+  const pausedUntil = dashboard?.pausedUntil
+    ? new Date(dashboard.pausedUntil)
+    : null;
+  const isPaused =
+    !acceptingOrders &&
+    pausedUntil !== null &&
+    !Number.isNaN(pausedUntil.getTime()) &&
+    pausedUntil.getTime() > Date.now();
+  const statusBusy =
+    toggleMutation.isPending ||
+    pauseMutation.isPending ||
+    resumeMutation.isPending ||
+    isLoading;
+  const statusLabel = acceptingOrders
+    ? 'Open'
+    : isPaused
+      ? `Back ${pausedUntil!.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`
+      : 'Closed';
+
+  // Tapping the status pill opens Open / Close / Pause {15,30,60} as a native
+  // sheet (iOS) or chained alert (Android) — the same pattern orders.tsx uses.
+  function openStatusMenu(): void {
+    const options: { label: string; action: () => void }[] = acceptingOrders
+      ? [
+          { label: 'Close kitchen', action: () => toggleMutation.mutate(false) },
+          { label: 'Pause 15 min', action: () => pauseMutation.mutate(15) },
+          { label: 'Pause 30 min', action: () => pauseMutation.mutate(30) },
+          { label: 'Pause 60 min', action: () => pauseMutation.mutate(60) },
+        ]
+      : [{ label: 'Open kitchen', action: () => resumeMutation.mutate() }];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: 'Kitchen status',
+          options: [...options.map((o) => o.label), 'Cancel'],
+          cancelButtonIndex: options.length,
+        },
+        (i) => {
+          if (i < options.length) options[i]!.action();
+        },
+      );
+    } else {
+      Alert.alert('Kitchen status', undefined, [
+        ...options.map((o) => ({ text: o.label, onPress: o.action })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
+    }
+  }
+
   if (isError) {
     return (
       <SafeAreaView style={styles.errorScreen}>
@@ -277,13 +336,15 @@ export default function DashboardScreen() {
               </Text>
             </View>
             <Pressable
-              onPress={() => toggleMutation.mutate(!acceptingOrders)}
-              disabled={toggleMutation.isPending || isLoading}
+              onPress={openStatusMenu}
+              disabled={statusBusy}
               accessibilityRole="button"
               accessibilityLabel={
                 acceptingOrders
-                  ? 'Kitchen is open. Tap to close.'
-                  : 'Kitchen is closed. Tap to open.'
+                  ? 'Kitchen is open. Tap to close or pause.'
+                  : isPaused
+                    ? `Kitchen paused until ${statusLabel.replace('Back ', '')}. Tap to reopen.`
+                    : 'Kitchen is closed. Tap to open.'
               }
             >
               {({ pressed }) => (
@@ -298,7 +359,7 @@ export default function DashboardScreen() {
                       ? styles.statusPillOpen
                       : styles.statusPillClosed,
                     pressed && { opacity: 0.85 },
-                    (toggleMutation.isPending || isLoading) && {
+                    statusBusy && {
                       opacity: 0.5,
                     },
                   ]}
@@ -324,7 +385,7 @@ export default function DashboardScreen() {
                       },
                     ]}
                   >
-                    {acceptingOrders ? 'Open' : 'Closed'}
+                    {statusLabel}
                   </Text>
                 </View>
               )}
