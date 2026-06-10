@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -256,7 +257,12 @@ export default function CheckoutScreen() {
       // Step 5: Start polling — webhook will update status server-side
       setPollingOrderId(orderId);
     } catch (err: unknown) {
-      setError(friendlyErrorMessage(err, 'Order creation failed. Please try again.'));
+      // Surface the real reason in a modal — the inline banner sits in the
+      // scroll body, far from the sticky button, so a failed tap otherwise
+      // reads as "nothing happened" (e.g. the delivery-zone coordinate gate).
+      const message = friendlyErrorMessage(err, 'Order creation failed. Please try again.');
+      setError(message);
+      Alert.alert('Could not place order', message);
       setIsLoading(false);
     }
   }
