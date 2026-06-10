@@ -4,10 +4,10 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Heart, ChefHat } from 'lucide-react-native';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
@@ -145,7 +145,7 @@ export default function FavoritesScreen() {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-canvas">
+      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
         <LoadingGrid />
       </SafeAreaView>
     );
@@ -154,7 +154,7 @@ export default function FavoritesScreen() {
   // ── Error ────────────────────────────────────────────────────────────────
   if (isError) {
     return (
-      <SafeAreaView className="flex-1 bg-canvas">
+      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
         <ErrorState onRetry={() => void refetch()} />
       </SafeAreaView>
     );
@@ -162,7 +162,7 @@ export default function FavoritesScreen() {
 
   // ── List (including empty) ───────────────────────────────────────────────
   return (
-    <SafeAreaView className="flex-1 bg-canvas">
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
       {/* ── Header ── */}
       <View className="px-4 pt-3 pb-2 flex-row items-baseline gap-2">
         <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
