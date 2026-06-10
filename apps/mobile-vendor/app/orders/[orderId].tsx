@@ -380,17 +380,6 @@ function FooterActions({
     );
   }
 
-  // The `ready` caption is dynamic (shows elapsed wait time); all others
-  // are static strings. Build `ready` outside the map so the elapsed
-  // suffix from state is included.
-  if (status === 'ready') {
-    return (
-      <View style={[styles.footer, styles.footerCaptionWrap]}>
-        <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
-      </View>
-    );
-  }
-
   const caption: Partial<Record<OrderDetailStatus, string>> = {
     picked_up: 'Out for delivery.',
     delivered: 'Delivered to customer.',
