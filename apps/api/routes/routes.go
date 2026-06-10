@@ -124,6 +124,7 @@ func SetupRouter() *gin.Engine {
 	chefHandler := handlers.NewChefHandler()
 	chefEarningsHandler := handlers.NewChefEarningsHandler()
 	chefStatementsHandler := handlers.NewChefStatementsHandler()
+	chefTaxHandler := handlers.NewChefTaxHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
@@ -375,6 +376,8 @@ func SetupRouter() *gin.Engine {
 			// Weekly settlement statements — list + per-statement PDF.
 			chefDashboard.GET("/statements/weekly", chefStatementsHandler.GetWeeklyStatements)
 			chefDashboard.GET("/statements/:id/statement.pdf", chefStatementsHandler.GetWeeklyStatementPDF)
+			// Annual TDS summary (Form 16A style) — ?year=FY-start.
+			chefDashboard.GET("/tax/certificate", chefTaxHandler.GetTDSCertificate)
 			// GET /chef/documents/expiring?withinDays=30
 			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)

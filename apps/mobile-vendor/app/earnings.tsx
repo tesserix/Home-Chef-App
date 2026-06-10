@@ -403,6 +403,51 @@ const statementRowStyles = StyleSheet.create({
   },
 });
 
+// ---- Tax document row (downloads the annual TDS certificate) -----------------
+
+/** Current Indian financial year label, e.g. "FY 2026-27" (FY starts 1 Apr). */
+function currentFyLabel(): string {
+  const now = new Date();
+  const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const endShort = String((fyStart + 1) % 100).padStart(2, '0');
+  return `FY ${fyStart}-${endShort}`;
+}
+
+interface TaxDocumentRowProps {
+  fyLabel: string;
+  onPress: () => void;
+}
+
+function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Download TDS certificate for ${fyLabel}`}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            accountRowStyles.root,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={accountRowStyles.textBlock}>
+            <Text style={accountRowStyles.sectionLabel}>TAX DOCUMENTS</Text>
+            <Text style={accountRowStyles.value} numberOfLines={1}>
+              TDS certificate · {fyLabel}
+            </Text>
+            <Text style={accountRowStyles.sub} numberOfLines={1}>
+              Annual summary (Section 194-O)
+            </Text>
+          </View>
+          <Text style={statementRowStyles.download}>Download</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 // ----- List item type ---------------------------------------------------------
 
 type ListItem =
@@ -414,6 +459,7 @@ type ListItem =
   | { type: 'orderEntry'; order: EarningsBreakdownOrder }
   | { type: 'statementsHeader' }
   | { type: 'statementEntry'; statement: WeeklyStatement }
+  | { type: 'taxRow' }
   | { type: 'payoutRow' }
   | { type: 'empty' };
 
@@ -501,6 +547,7 @@ export default function EarningsScreen() {
       });
     }
 
+    items.push({ type: 'taxRow' });
     items.push({ type: 'payoutRow' });
     return items;
   }, [totals, orders, statements]);
@@ -712,6 +759,21 @@ export default function EarningsScreen() {
               )
             }
           />
+        );
+
+      case 'taxRow':
+        return (
+          <View style={styles.payoutSection}>
+            <TaxDocumentRow
+              fyLabel={currentFyLabel()}
+              onPress={() =>
+                downloadAndSharePdf(
+                  '/chef/tax/certificate',
+                  `tds-certificate-${currentFyLabel().replace(/\s/g, '')}.pdf`,
+                )
+              }
+            />
+          </View>
         );
 
       case 'payoutRow':
