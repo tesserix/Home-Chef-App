@@ -21,7 +21,7 @@ import {
 import { Link, router, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
-import { Check, ChevronLeft, Clock, FileText, MapPin, Plus, Search } from 'lucide-react-native';
+import { Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -612,42 +612,29 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* ── Payment & refund summary (CW-01d / RBI PA MD §8) ── */}
-        <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4 gap-3">
-          <View>
-            <Text className="text-sm font-semibold text-charcoal mb-1">Payment & refund summary</Text>
-            <Text className="text-sm text-charcoal-soft leading-5">
-              Payments are processed by Razorpay (RBI-licensed payment aggregator).
-              Tesserix Pty Ltd (operator of Fe3dr) facilitates the transaction;
-              order proceeds go to your chef minus the platform commission.
-            </Text>
-          </View>
+        {/* ── Payment & delivery (concise; detail behind policy links) ── */}
+        {/* CW-01d / RBI PA MD §8: keeps the required PA + refund-window disclosure
+            as one line; full cancellation rules live behind the Refund Policy link. */}
+        <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4 gap-2.5">
           <View className="flex-row items-start gap-2">
-            <Clock size={16} color="#FF385C" style={{ marginTop: 2 }} />
+            <Clock size={16} color="#FF385C" style={{ marginTop: 1 }} />
             <Text className="text-sm text-charcoal-soft flex-1 leading-5">
-              Refunds return to your original payment method within{' '}
-              <Text className="font-semibold text-charcoal">7 working days</Text> per RBI Payment
-              Aggregator Master Direction §8.
+              Estimated delivery 30–45 min after the chef accepts.
             </Text>
           </View>
-          <View className="flex-row items-start gap-2">
-            <FileText size={16} color="#FF385C" style={{ marginTop: 2 }} />
-            <Text className="text-sm text-charcoal-soft flex-1 leading-5">
-              See our{' '}
-              {/* Terms/refund links: coral, no underline per spec */}
-              <Link href={'/refund' as Href} className="text-coral">
-                Refund Policy
-              </Link>{' '}
-              for cancellation rules by order stage.
-            </Text>
-          </View>
-          <View className="flex-row items-start gap-2">
-            <Clock size={16} color="#FF385C" style={{ marginTop: 2 }} />
-            <Text className="text-sm text-charcoal-soft flex-1 leading-5">
-              Estimated delivery: 30–45 minutes after the chef accepts your order.
-              Actual time depends on the chef's preparation and your driver's route.
-            </Text>
-          </View>
+          <Text className="text-xs text-charcoal-soft leading-5">
+            Payments secured by Razorpay (RBI-licensed). Refunds reach your original
+            payment method within 7 working days. See{' '}
+            {/* Terms/refund links: coral, no underline per spec */}
+            <Link href={'/refund' as Href} className="text-coral">
+              Refund Policy
+            </Link>{' '}
+            and{' '}
+            <Link href={'/terms' as Href} className="text-coral">
+              Terms
+            </Link>
+            .
+          </Text>
         </View>
 
         {/* ── T&C + Refund consent (CW-01d) ── */}
