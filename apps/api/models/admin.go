@@ -25,7 +25,11 @@ type AuditLog struct {
 	NewValue   string    `gorm:"type:text" json:"newValue,omitempty"`
 	IPAddress  string    `gorm:"" json:"ipAddress"`
 	UserAgent  string    `gorm:"" json:"userAgent"`
-	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	// CorrelationID ties this audit row to the request's structured logs and
+	// trace (X-Request-ID). Indexed so an investigator can pivot from a log
+	// line to the exact mutation it caused.
+	CorrelationID string    `gorm:"index" json:"correlationId,omitempty"`
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
 	User *User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }

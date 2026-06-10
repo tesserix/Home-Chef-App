@@ -149,6 +149,9 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// Refresh the in-memory copy so the response reflects the saved state.
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
+	services.LogAudit(c, "chef.order.cancel", "order", order.ID.String(),
+		nil, gin.H{"reason": string(reason), "refundAmount": order.RefundAmount, "refundId": refundID})
+
 	go publishOrderCancelled(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
@@ -306,6 +309,10 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	// path; an explicit CancelOrder call is the right way to flip
 	// status. (Could revisit later if zero-item-orders prove confusing.)
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
+
+	services.LogAudit(c, "chef.order.item_cancel", "order_item", target.ID.String(),
+		nil, gin.H{"orderId": order.ID.String(), "reason": string(reason), "refundAmount": lineRefund})
+
 	go publishOrderUpdated(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
@@ -422,6 +429,10 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
+
+	services.LogAudit(c, "chef.order.refund", "order", order.ID.String(),
+		nil, gin.H{"amount": req.Amount, "reason": req.Reason, "refundId": refundResp.ID})
+
 	go publishOrderUpdated(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
@@ -463,6 +474,8 @@ func (h *ChefOrderCancelHandler) GetOrderInvoicePDF(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate invoice"})
 		return
 	}
+	services.LogAudit(c, "chef.invoice.download", "order", order.ID.String(),
+		nil, gin.H{"orderNumber": order.OrderNumber})
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

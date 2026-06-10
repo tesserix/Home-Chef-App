@@ -61,6 +61,8 @@ func (h *ChefTaxHandler) GetTDSCertificate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate certificate"})
 		return
 	}
+	services.LogAudit(c, "chef.tax_certificate.download", "tds_certificate",
+		strconv.Itoa(fyStartYear), nil, gin.H{"fyStartYear": fyStartYear})
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

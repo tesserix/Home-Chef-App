@@ -163,6 +163,12 @@ func (h *ChefDPDPHandler) DeleteMyAccount(c *gin.Context) {
 	log.Printf("DPDP delete: user=%s email=%s at=%s", user.ID, user.Email, now.Format(time.RFC3339))
 
 	retainUntil := now.Add(30 * 24 * time.Hour)
+
+	// DPDP-significant: record the erasure request (no PII in the row beyond
+	// the user id, which is already the audit subject) for the compliance trail.
+	services.LogAudit(c, "chef.account.delete", "user", user.ID.String(),
+		nil, gin.H{"deletedAt": now, "retainUntil": retainUntil})
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":      "deleted",
 		"deletedAt":   now,

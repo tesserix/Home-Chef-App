@@ -126,6 +126,8 @@ func (h *ChefStatementsHandler) GetWeeklyStatementPDF(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate statement"})
 		return
 	}
+	services.LogAudit(c, "chef.statement.download", "weekly_statement", statementID.String(),
+		nil, gin.H{"weekStart": stmt.WeekStart.Format("2006-01-02")})
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

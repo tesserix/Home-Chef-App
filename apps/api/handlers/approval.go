@@ -731,5 +731,8 @@ func (h *ApprovalHandler) RespondToApprovalRequest(c *gin.Context) {
 		database.DB.Create(notif)
 	}
 
+	services.LogAudit(c, "chef.approval.respond", "approval_request", approval.ID.String(),
+		gin.H{"status": oldStatus}, gin.H{"type": string(approval.Type), "status": string(models.ApprovalPending)})
+
 	c.JSON(http.StatusOK, gin.H{"message": "Response sent to admin"})
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/logger"
 	"github.com/homechef/api/models"
 )
 
@@ -40,6 +41,9 @@ func LogAudit(c *gin.Context, action, entityType, entityID string, oldValue, new
 			if uid, ok := v.(uuid.UUID); ok {
 				entry.UserID = &uid
 			}
+		}
+		if c.Request != nil {
+			entry.CorrelationID = logger.CorrelationIDFromContext(c.Request.Context())
 		}
 	}
 

@@ -1058,6 +1058,14 @@ func (h *ChefHandler) SavePayoutDetails(c *gin.Context) {
 		}()
 	}
 
+	// Audit the payout change. NEVER store raw bank details in the audit row —
+	// only the method + masked account so the trail is useful without leaking PII.
+	services.LogAudit(c, "chef.payout.update", "chef", vendorID, nil, gin.H{
+		"payoutMethod":      req.PayoutMethod,
+		"bankAccountNumber": maskBankAccount(req.BankAccountNumber),
+		"upiId":             maskEmail(req.UpiID),
+	})
+
 	resp := gin.H{
 		"message":           "Payout details saved",
 		"payoutMethod":      chef.PayoutMethod,
