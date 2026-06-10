@@ -455,6 +455,7 @@ export default function ProfileScreen() {
       uploadKitchenPhotoMutation.mutate(result.assets[0].uri, {
         onError: (err) =>
           Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload photo.')),
+        onSuccess: () => showToast({ message: 'Kitchen photo added.', tone: 'success' }),
       });
     }
   }

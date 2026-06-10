@@ -24,6 +24,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { useToast } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import type { MenuItemImage, Category } from '../../hooks/useVendorMenu';
 
@@ -295,7 +296,7 @@ function PhotoThumb({ uri, onRemove }: PhotoThumbProps) {
       {onRemove ? (
         <Pressable
           onPress={onRemove}
-          hitSlop={4}
+          hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
           accessibilityRole="button"
           accessibilityLabel="Remove photo"
           style={photoStyles.removeBtnWrap}
@@ -396,6 +397,8 @@ export function MenuItemForm({
   onCreateCategory,
   onBack,
 }: MenuItemFormProps) {
+  const { show: showToast } = useToast();
+
   // Form state — plain useState mirrors profile.tsx's EditableField pattern
   const [name, setName] = useState(initialValues.name);
   const [description, setDescription] = useState(initialValues.description);
@@ -510,6 +513,7 @@ export function MenuItemForm({
       setCategoryId(created.id);
       setNewCatName('');
       setShowNewCatInput(false);
+      showToast({ message: `Category "${trimmed}" created.`, tone: 'success' });
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ??

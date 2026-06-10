@@ -1,11 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../hooks/useVendorOrders';
 
-function formatMinutesAgo(iso: string): string {
+function formatMinutesAgo(iso: string, nowMs: number): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '';
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
+  const mins = Math.max(0, Math.floor((nowMs - t) / 60_000));
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
@@ -53,6 +54,25 @@ export function PendingOrderCard({
   onAccept,
   onReject,
 }: PendingOrderCardProps) {
+  // Live clock — ticks every 45 s so the age label and urgency colour
+  // update without hammering the JS thread. Clears on unmount (T-grk-02).
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 45_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ageMins = Math.max(
+    0,
+    Math.floor((now - new Date(order.createdAt).getTime()) / 60_000),
+  );
+  const ageColor =
+    ageMins >= 10
+      ? theme.colors.destructive.DEFAULT
+      : ageMins >= 5
+        ? theme.colors.amber.DEFAULT
+        : theme.colors.ink.soft;
+
   const topRowContent = (
     <View style={styles.topRow}>
       <View style={styles.nameBlock}>
@@ -61,7 +81,10 @@ export function PendingOrderCard({
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {formatItemsSummary(order.items)}
-          {`  ·  ${formatMinutesAgo(order.createdAt)}`}
+          {'  ·  '}
+          <Text style={{ color: ageColor }}>
+            {formatMinutesAgo(order.createdAt, now)}
+          </Text>
         </Text>
       </View>
       <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>

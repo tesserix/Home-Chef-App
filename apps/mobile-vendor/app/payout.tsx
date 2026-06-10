@@ -367,6 +367,9 @@ export default function PayoutScreen() {
                   placeholder="11–18 digit account number"
                   keyboardType="number-pad"
                 />
+                {data && (
+                  <Text style={styles.reentryHelper}>(re-enter required)</Text>
+                )}
                 <Field
                   label="IFSC code"
                   value={bankIFSC}
@@ -391,6 +394,9 @@ export default function PayoutScreen() {
                   caption="Example: 9876543210@upi or name@hdfcbank"
                   hasBorderBottom={false}
                 />
+                {data && (
+                  <Text style={styles.reentryHelper}>(re-enter required)</Text>
+                )}
               </View>
             </>
           )}
@@ -419,7 +425,9 @@ export default function PayoutScreen() {
               {saveMutation.isPending ? (
                 <ActivityIndicator color={theme.colors.paper} />
               ) : (
-                <Text style={styles.saveBtnLabel}>Save payout details</Text>
+                <Text style={styles.saveBtnLabel}>
+                  {isDirty ? 'Save changes' : 'Save payout details'}
+                </Text>
               )}
             </Pressable>
           </SafeAreaView>
@@ -575,6 +583,17 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     marginTop: theme.spacing[1],
+  },
+
+  // Re-entry helper — displayed under masked account fields when a saved
+  // method already exists, to explain why the field appears empty.
+  reentryHelper: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: 4,
+    paddingBottom: theme.spacing[2],
   },
 
   // Helper block

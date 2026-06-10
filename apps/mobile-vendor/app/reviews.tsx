@@ -117,7 +117,7 @@ const FILTER_LABELS: { key: StarFilter; label: string }[] = [
   { key: '5', label: '5★' },
   { key: '4', label: '4★' },
   { key: '3', label: '3★' },
-  { key: '2-', label: '≤2★' },
+  { key: '2-', label: 'Low (1–2★)' },
 ];
 
 function passesFilter(review: Review, filter: StarFilter): boolean {
@@ -247,10 +247,22 @@ export default function ReviewsScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useReviews();
   const [activeFilter, setActiveFilter] = useState<StarFilter>('all');
 
+  const reviews = data?.reviews ?? [];
+
+  const filterCounts = useMemo<Record<StarFilter, number>>(
+    () => ({
+      all: reviews.length,
+      '5': reviews.filter((r) => r.rating === 5).length,
+      '4': reviews.filter((r) => r.rating === 4).length,
+      '3': reviews.filter((r) => r.rating === 3).length,
+      '2-': reviews.filter((r) => r.rating <= 2).length,
+    }),
+    [reviews],
+  );
+
   const filteredReviews = useMemo(() => {
-    const reviews = data?.reviews ?? [];
     return reviews.filter((r) => passesFilter(r, activeFilter));
-  }, [data?.reviews, activeFilter]);
+  }, [reviews, activeFilter]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -296,7 +308,7 @@ export default function ReviewsScreen() {
           {FILTER_LABELS.map((item) => (
             <FilterTab
               key={item.key}
-              item={item}
+              item={{ ...item, label: `${item.label} (${filterCounts[item.key]})` }}
               active={activeFilter === item.key}
               onPress={() => setActiveFilter(item.key)}
             />
@@ -341,7 +353,7 @@ export default function ReviewsScreen() {
             />
           }
           renderItem={({ item }) => <ReviewRow review={item} />}
-          ListEmptyComponent={<EmptyState filter={activeFilter} totalReviews={data?.totalReviews ?? 0} />}
+          ListEmptyComponent={<EmptyState filter={activeFilter} totalReviews={reviews.length} />}
         />
       )}
     </SafeAreaView>
