@@ -227,6 +227,46 @@
 
 ---
 
+## Wave 5 — Platform consolidation (added 2026-06-10, runs parallel to W4 ops; ships after App Store approval)
+
+**Goal:** Mobile-first like Uber — the web apps go away in favor of a single landing page with
+store links, and Home Chef becomes a first-class Tesserix product visible in tesserix-home.
+
+### 5A. Web sunset → landing page
+
+- [ ] **Landing page** at `fe3dr.com` — Uber-style: hero (photo-forward, persimmon brand per `.impeccable.md`), App Store + Play Store badge links, "Cook with us" chef CTA (vendor app download), contact/legal footer (privacy policy + EULA links — same artifacts W3 needs). Smart-app-banner meta tags + `apple-app-site-association` for deep links.
+  - Recommended: strip `apps/web` down to the landing (keeps the existing build/deploy pipeline) rather than a new app.
+- [ ] **Decommission `apps/vendor-portal` + `apps/delivery-portal` web UIs** — remove deployments; `vendors.fe3dr.com` / `delivery.fe3dr.com` web routes 301 → landing.
+  - ⚠️ **`vendors.fe3dr.com` is the mobile app's API host** (`EXPO_PUBLIC_API_URL=https://vendors.fe3dr.com/api/v1` + BFF auth routes). Only the web UI dies — API/auth-bff routing on that host MUST keep serving. Same check for any API traffic on the other hosts before removal.
+- [ ] **auth-bff registry cleanup** — drop the dead web app entries (`web`, `vendor-portal`, `delivery-portal` blocks in `apps/auth-bff/homechef-products.yaml`) once portals are gone; keep mobile-facing entries.
+- [ ] **Repo cleanup** — archive/delete the three web app dirs + their CI; update README + monorepo docs.
+- **Sequencing:** build the landing now; flip DNS/routing only after both store listings are live (a landing with dead store links is worse than the current web app).
+- **Open decision:** does the customer web ordering flow die entirely (Uber model) or redirect to app-only? Assumed app-only per this request — flag if customer web checkout must survive.
+
+### 5B. Tesserix platform integration (mark8ly pattern)
+
+Reference: mark8ly's registration spans 4 touchpoints. Home Chef replicates each:
+
+- [ ] **Platform auth-bff `products.yaml`** (`tesserix-new/auth-bff/products.yaml`) — add `homechef` product entry (domain `fe3dr.com`). GIP tenants already exist (`HomeChef-Customer-rqg8a`, `HomeChef-Business-8s8ql`) — reference them; do NOT create new ones.
+  - **Open decision:** Home-Chef-App currently runs its OWN auth-bff with `homechef-products.yaml`. Mobile apps depend on it — keep it serving mobile; the platform registry entry is for tesserix-home admin visibility/SSO only. Full auth-bff consolidation is a separate (deferrable) effort.
+- [ ] **`tesserix-infra/services.yaml`** — register Home Chef services under `appGroup: homechef` (namespace, storageApps, usesGoShared) so deploy tooling + monitoring see them.
+- [ ] **tesserix-home product config** — add `homechef: ProductConfig` to `lib/products/configs.ts` REGISTRY: id/name/namespace/cluster + KPI tiles (active chefs, orders today, GMV, pending approvals) + rowCountTables mapped to homechef DB tables.
+- [ ] **tesserix-home UI** — `app/admin/apps/homechef/page.tsx` (one-liner via `getProductConfig("homechef")`), add `hcNav` to `sidebar.tsx` + extend `getActiveContext()`, add `/homechef-icon.png` asset. Products-grid already has a homechef stub — wire it to the real page.
+- [ ] **OpenFGA stores** — register `hc-internal` / `hc-customer` stores via `go-shared/authz` MultiStoreClient at service startup if/when homechef services adopt platform FGA checks _(optional for v1 — current JWT role model keeps working; flag as fast-follow)_.
+- **Known friction (from mark8ly audit):** sidebar nav arrays + icon assets + per-product route dir are hardcoded — 3–4 file edits, no architectural blocker; "marketplace" strings leak in a couple of shared components.
+
+### Definition of done
+- `fe3dr.com` renders the landing with working store links on mobile + desktop; old portal URLs 301 to it; the vendor mobile app's API calls are unaffected (smoke: login + dashboard fetch from a device after DNS flip)
+- Home Chef tile appears in tesserix-home products grid → opens a working product overview with live KPI tiles
+- Platform admin can reach Home Chef ops data without leaving tesserix-home
+
+### Parallelization
+- Subagent A: landing page build (can start immediately)
+- Subagent B: tesserix-home + registries (separate repos — needs a session in `tesserix-new/` root, not Home-Chef-App)
+- DNS/routing flip + portal teardown: by hand, after store approval
+
+---
+
 ## Tracking
 
 This file is the source of truth. Update checkboxes as items ship. New blockers / scope changes get added to the appropriate wave OR explicitly punted to "Locked deferrals" with a one-line reason.
