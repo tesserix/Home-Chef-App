@@ -569,39 +569,45 @@ export default function ProfileScreen() {
           <Pressable
             onPress={handlePickBannerImage}
             disabled={uploadBannerImageMutation.isPending}
-            style={({ pressed }) => [
-              styles.coverWrapper,
-              pressed && { opacity: 0.9 },
-            ]}
             accessibilityRole="button"
             accessibilityLabel="Change cover photo"
           >
-            {data?.bannerImage ? (
-              <Image
-                source={{ uri: data.bannerImage }}
-                style={styles.coverImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.coverPlaceholder}>
-                <ImagePlus
-                  size={22}
-                  color={theme.colors.ink.muted}
-                  strokeWidth={1.75}
-                />
-                <Text style={styles.coverPlaceholderText}>Add a cover photo</Text>
-                <Text style={styles.coverPlaceholderHint}>
-                  Shown to customers on your listing
-                </Text>
+            {({ pressed }) => (
+              // Layout lives on this inner View — a Pressable with a
+              // function `style` returning an array drops height/bg/border
+              // on iOS, which collapsed (or blew out) the cover box.
+              <View style={[styles.coverWrapper, pressed && { opacity: 0.9 }]}>
+                {data?.bannerImage ? (
+                  <Image
+                    source={{ uri: data.bannerImage }}
+                    style={styles.coverImage}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={styles.coverPlaceholder}>
+                    <ImagePlus
+                      size={22}
+                      color={theme.colors.ink.muted}
+                      strokeWidth={1.75}
+                    />
+                    <Text style={styles.coverPlaceholderText}>Add a cover photo</Text>
+                    <Text style={styles.coverPlaceholderHint}>
+                      Shown to customers on your listing
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.coverBadge}>
+                  {uploadBannerImageMutation.isPending ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.ink.DEFAULT}
+                    />
+                  ) : (
+                    <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
+                  )}
+                </View>
               </View>
             )}
-            <View style={styles.coverBadge}>
-              {uploadBannerImageMutation.isPending ? (
-                <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
-              ) : (
-                <Camera size={14} color={theme.colors.ink.DEFAULT} strokeWidth={2} />
-              )}
-            </View>
           </Pressable>
 
           {/* Identity block */}
@@ -886,8 +892,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   coverImage: {
-    width: '100%',
-    height: '100%',
+    // Pin to the wrapper's bounds so the photo can never push the 160px
+    // box taller — `contentFit="cover"` then crops to fill. (A percentage
+    // height on expo-image falls back to the image's intrinsic size and
+    // blows out the layout.)
+    ...StyleSheet.absoluteFillObject,
   },
   coverPlaceholder: {
     flex: 1,
