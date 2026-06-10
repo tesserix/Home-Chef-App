@@ -7,22 +7,23 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  SafeAreaView,
+  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { UtensilsCrossed } from 'lucide-react-native';
 import {
   useCateringRequests,
   useCreateCateringRequest,
 } from '../hooks/useCatering';
 import type { CateringRequest } from '../hooks/useCatering';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Threat model T-02-05-02: Zod validates required fields before POST
 const cateringSchema = z.object({
@@ -58,46 +59,128 @@ const EVENT_TYPES = [
 
 type TabKey = 'request' | 'my-requests';
 
-function statusLabel(status: CateringRequest['status']): {
-  label: string;
-  color: string;
-} {
+// ─── Status chip ─────────────────────────────────────────────────────────────
+
+type StatusConfig = { label: string; bg: string; text: string };
+
+function getStatusConfig(status: CateringRequest['status']): StatusConfig {
   switch (status) {
     case 'open':
-      return { label: 'Open', color: '#4a73a3' };
+      return { label: 'Open', bg: customerColors.surface.soft, text: customerColors.charcoal.DEFAULT };
     case 'quoted':
-      return { label: 'Quoted', color: '#d1a64a' };
+      // A quote awaits the customer's action — coral attention state.
+      return { label: 'Quoted', bg: customerColors.coral.tint, text: customerColors.coral.pressed };
     case 'accepted':
-      return { label: 'Accepted', color: '#C2410C' };
+      return { label: 'Accepted', bg: customerColors.coral.tint, text: customerColors.coral.pressed };
     case 'completed':
-      return { label: 'Completed', color: '#7a7a76' };
+      return { label: 'Completed', bg: customerColors.success.tint, text: customerColors.success.DEFAULT };
     case 'cancelled':
-      return { label: 'Cancelled', color: '#c95b3e' };
+      return { label: 'Cancelled', bg: customerColors.surface.soft, text: customerColors.charcoal.soft };
     default:
-      return { label: status, color: '#7a7a76' };
+      return { label: status, bg: customerColors.surface.soft, text: customerColors.charcoal.soft };
   }
 }
 
+// ─── Request card ─────────────────────────────────────────────────────────────
+
 function RequestCard({ request }: { request: CateringRequest }) {
-  const { label, color } = statusLabel(request.status);
+  const { label, bg, text } = getStatusConfig(request.status);
+
   return (
-    <View style={styles.requestCard}>
-      <View style={styles.requestCardHeader}>
-        <Text style={styles.requestEventType}>{request.eventType}</Text>
-        <View style={[styles.statusDot, { backgroundColor: color }]}>
-          <Text style={styles.statusDotText}>{label}</Text>
+    /* Shadow on outer View, overflow+radius on inner clip View */
+    <View
+      style={{
+        shadowColor: customerColors.charcoal.DEFAULT,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
+        marginBottom: 12,
+      }}
+    >
+      <View className="bg-canvas rounded-xl overflow-hidden">
+        <View className="p-4">
+          {/* Header row: event type + status chip */}
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="text-base font-bold text-charcoal font-display flex-1 mr-2">
+              {request.eventType}
+            </Text>
+            <View
+              className="rounded-full px-3 py-1"
+              style={{ backgroundColor: bg }}
+            >
+              <Text className="text-xs font-semibold" style={{ color: text }}>
+                {label}
+              </Text>
+            </View>
+          </View>
+
+          {/* Meta info */}
+          <Text className="text-sm text-charcoal-soft">
+            {request.guestCount} guests · {request.eventDate} · {request.city},{' '}
+            {request.state}
+          </Text>
+
+          {/* Budget */}
+          {request.budget != null ? (
+            <Text className="text-sm text-charcoal mt-1">
+              Budget: ₹{request.budget}
+            </Text>
+          ) : null}
+
+          {/* Quoted hint in coral */}
+          {request.status === 'quoted' ? (
+            <Text className="text-xs text-coral font-medium mt-2">
+              Quotes available — view details
+            </Text>
+          ) : null}
         </View>
       </View>
-      <Text style={styles.requestMeta}>
-        {request.guestCount} guests • {request.eventDate} • {request.city},{' '}
-        {request.state}
-      </Text>
-      {request.budget != null && (
-        <Text style={styles.requestBudget}>Budget: ₹{request.budget}</Text>
-      )}
-      {request.status === 'quoted' && (
-        <Text style={styles.viewQuoteHint}>Quotes available — view details</Text>
-      )}
+    </View>
+  );
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-20">
+      <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
+        <UtensilsCrossed size={36} color={customerColors.charcoal.soft} />
+      </View>
+      <View className="items-center gap-2">
+        <Text className="text-xl font-bold text-charcoal text-center font-display">
+          No requests yet
+        </Text>
+        <Text className="text-sm text-charcoal-soft text-center leading-5">
+          Submit a catering request to get quotes from chefs.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Request form (label + input field helper) ────────────────────────────────
+
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1.5 mt-4">
+      {children}
+    </Text>
+  );
+}
+
+interface StyledInputProps {
+  hasError: boolean;
+  children: React.ReactNode;
+}
+
+function InputWrap({ hasError, children }: StyledInputProps) {
+  return (
+    <View
+      className={`bg-surface-soft rounded-lg px-3 py-3 ${hasError ? 'border border-coral-pressed' : ''}`}
+    >
+      {children}
     </View>
   );
 }
@@ -159,440 +242,337 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.formScroll}>
-      {/* Event Type */}
-      <Text style={styles.formLabel}>Event Type *</Text>
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Event Type chips — horizontal scroll */}
+      <FieldLabel>Event Type *</FieldLabel>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.eventTypeRow}
+        contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
       >
-        {EVENT_TYPES.map((t) => (
-          <TouchableOpacity
-            key={t}
-            onPress={() => selectEventType(t)}
-            style={[
-              styles.eventTypeChip,
-              selectedEventType === t && styles.eventTypeChipSelected,
-            ]}
-          >
-            <Text
-              style={[
-                styles.eventTypeChipText,
-                selectedEventType === t && styles.eventTypeChipTextSelected,
-              ]}
+        {EVENT_TYPES.map((t) => {
+          const isSelected = selectedEventType === t;
+          return (
+            /* iOS Pressable pattern: visual styles on inner View */
+            <Pressable
+              key={t}
+              onPress={() => selectEventType(t)}
+              accessibilityRole="button"
+              accessibilityLabel={t}
+              accessibilityState={{ selected: isSelected }}
             >
-              {t}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <View
+                className={`px-4 py-2 rounded-full border ${
+                  isSelected
+                    ? 'bg-coral-tint border-coral'
+                    : 'bg-canvas border-hairline'
+                }`}
+              >
+                <Text
+                  className={`text-sm font-medium ${
+                    isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                  }`}
+                >
+                  {t}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
-      {errors.eventType && (
-        <Text style={styles.errorText}>{errors.eventType.message}</Text>
-      )}
+      {errors.eventType ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.eventType.message}</Text>
+      ) : null}
 
       {/* Event Date */}
-      <Text style={styles.formLabel}>Event Date * (YYYY-MM-DD)</Text>
+      <FieldLabel>Event Date * (YYYY-MM-DD)</FieldLabel>
       <Controller
         control={control}
         name="eventDate"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, errors.eventDate && styles.inputError]}
-            value={value}
-            onChangeText={onChange}
-            onBlur={onBlur}
-            placeholder="2026-06-15"
-            keyboardType="numbers-and-punctuation"
-          />
+          <InputWrap hasError={!!errors.eventDate}>
+            <TextInput
+              className="text-base text-charcoal"
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholder="2026-06-15"
+              placeholderTextColor={customerColors.charcoal.soft}
+              keyboardType="numbers-and-punctuation"
+              accessibilityLabel="Event date"
+            />
+          </InputWrap>
         )}
       />
-      {errors.eventDate && (
-        <Text style={styles.errorText}>{errors.eventDate.message}</Text>
-      )}
+      {errors.eventDate ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.eventDate.message}</Text>
+      ) : null}
 
       {/* Guest Count */}
-      <Text style={styles.formLabel}>Guest Count *</Text>
+      <FieldLabel>Guest Count *</FieldLabel>
       <Controller
         control={control}
         name="guestCount"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, errors.guestCount && styles.inputError]}
-            value={value !== undefined ? String(value) : ''}
-            onChangeText={(v) => onChange(v === '' ? undefined : Number(v))}
-            onBlur={onBlur}
-            placeholder="50"
-            keyboardType="number-pad"
-          />
+          <InputWrap hasError={!!errors.guestCount}>
+            <TextInput
+              className="text-base text-charcoal"
+              value={value !== undefined ? String(value) : ''}
+              onChangeText={(v) => onChange(v === '' ? undefined : Number(v))}
+              onBlur={onBlur}
+              placeholder="50"
+              placeholderTextColor={customerColors.charcoal.soft}
+              keyboardType="number-pad"
+              accessibilityLabel="Guest count"
+            />
+          </InputWrap>
         )}
       />
-      {errors.guestCount && (
-        <Text style={styles.errorText}>{errors.guestCount.message}</Text>
-      )}
+      {errors.guestCount ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.guestCount.message}</Text>
+      ) : null}
 
       {/* Budget */}
-      <Text style={styles.formLabel}>Budget (₹)</Text>
+      <FieldLabel>Budget (₹)</FieldLabel>
       <Controller
         control={control}
         name="budget"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, errors.budget && styles.inputError]}
-            value={value !== undefined ? String(value) : ''}
-            onChangeText={(v) => onChange(v === '' ? undefined : Number(v))}
-            onBlur={onBlur}
-            placeholder="25000"
-            keyboardType="number-pad"
-          />
+          <InputWrap hasError={!!errors.budget}>
+            <TextInput
+              className="text-base text-charcoal"
+              value={value !== undefined ? String(value) : ''}
+              onChangeText={(v) => onChange(v === '' ? undefined : Number(v))}
+              onBlur={onBlur}
+              placeholder="25000"
+              placeholderTextColor={customerColors.charcoal.soft}
+              keyboardType="number-pad"
+              accessibilityLabel="Budget in rupees"
+            />
+          </InputWrap>
         )}
       />
-      {errors.budget && (
-        <Text style={styles.errorText}>{errors.budget.message}</Text>
-      )}
+      {errors.budget ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.budget.message}</Text>
+      ) : null}
 
       {/* City */}
-      <Text style={styles.formLabel}>City *</Text>
+      <FieldLabel>City *</FieldLabel>
       <Controller
         control={control}
         name="city"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, errors.city && styles.inputError]}
-            value={value}
-            onChangeText={onChange}
-            onBlur={onBlur}
-            placeholder="Mumbai"
-            autoCapitalize="words"
-          />
+          <InputWrap hasError={!!errors.city}>
+            <TextInput
+              className="text-base text-charcoal"
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholder="Mumbai"
+              placeholderTextColor={customerColors.charcoal.soft}
+              autoCapitalize="words"
+              accessibilityLabel="City"
+            />
+          </InputWrap>
         )}
       />
-      {errors.city && (
-        <Text style={styles.errorText}>{errors.city.message}</Text>
-      )}
+      {errors.city ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.city.message}</Text>
+      ) : null}
 
       {/* State */}
-      <Text style={styles.formLabel}>State *</Text>
+      <FieldLabel>State *</FieldLabel>
       <Controller
         control={control}
         name="state"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, errors.state && styles.inputError]}
-            value={value}
-            onChangeText={onChange}
-            onBlur={onBlur}
-            placeholder="Maharashtra"
-            autoCapitalize="words"
-          />
+          <InputWrap hasError={!!errors.state}>
+            <TextInput
+              className="text-base text-charcoal"
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholder="Maharashtra"
+              placeholderTextColor={customerColors.charcoal.soft}
+              autoCapitalize="words"
+              accessibilityLabel="State"
+            />
+          </InputWrap>
         )}
       />
-      {errors.state && (
-        <Text style={styles.errorText}>{errors.state.message}</Text>
-      )}
+      {errors.state ? (
+        <Text className="text-xs text-coral-pressed mt-1">{errors.state.message}</Text>
+      ) : null}
 
-      {/* Description */}
-      <Text style={styles.formLabel}>Additional Details</Text>
+      {/* Additional Details */}
+      <FieldLabel>Additional Details</FieldLabel>
       <Controller
         control={control}
         name="description"
         render={({ field: { onChange, value, onBlur } }) => (
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={value ?? ''}
-            onChangeText={onChange}
-            onBlur={onBlur}
-            placeholder="Any specific requirements, dietary restrictions, menu preferences..."
-            multiline
-            numberOfLines={4}
-          />
+          <View className="bg-surface-soft rounded-lg px-3 py-3">
+            <TextInput
+              className="text-base text-charcoal"
+              style={{ height: 100, textAlignVertical: 'top' }}
+              value={value ?? ''}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholder="Any specific requirements, dietary restrictions, menu preferences..."
+              placeholderTextColor={customerColors.charcoal.soft}
+              multiline
+              numberOfLines={4}
+              accessibilityLabel="Additional details"
+            />
+          </View>
         )}
       />
 
-      <TouchableOpacity
-        style={[
-          styles.submitButton,
-          createRequest.isPending && styles.submitButtonDisabled,
-        ]}
+      {/* Submit CTA — coral primary, radius 8, min-height 52 */}
+      <Pressable
         onPress={() => void handleSubmit(onSubmit)()}
         disabled={createRequest.isPending}
+        accessibilityRole="button"
+        accessibilityLabel="Submit catering request"
       >
-        {createRequest.isPending ? (
-          <ActivityIndicator size="small" color="#fafaf7" />
-        ) : (
-          <Text style={styles.submitButtonText}>Submit Request</Text>
+        {({ pressed }) => (
+          <View
+            className={`mt-6 rounded-lg min-h-[52px] items-center justify-center bg-coral ${
+              createRequest.isPending ? 'opacity-60' : pressed ? 'opacity-90' : ''
+            }`}
+          >
+            {createRequest.isPending ? (
+              <ActivityIndicator size="small" color={customerColors.canvas} />
+            ) : (
+              <Text className="text-canvas font-semibold text-base">
+                Submit Request
+              </Text>
+            )}
+          </View>
         )}
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function CateringScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('request');
   const { data, isLoading, refetch } = useCateringRequests();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Catering</Text>
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+
+      {/* ── Geist-Bold header ── */}
+      <View className="px-4 pt-3 pb-2">
+        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
+          Catering
+        </Text>
       </View>
 
-      {/* Tab switcher */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'request' && styles.tabActive]}
+      {/* ── Segmented tab bar ── */}
+      <View className="mx-4 my-3 bg-surface-soft rounded-lg p-1 flex-row">
+        {/* Tab: Request Catering */}
+        {/* iOS Pressable pattern: visual styles on inner View */}
+        <Pressable
+          className="flex-1"
           onPress={() => setActiveTab('request')}
+          accessibilityRole="tab"
+          accessibilityLabel="Request Catering"
+          accessibilityState={{ selected: activeTab === 'request' }}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'request' && styles.tabTextActive,
-            ]}
+          <View
+            className={`flex-1 py-2 items-center rounded-md ${
+              activeTab === 'request'
+                ? 'bg-canvas'
+                : 'bg-transparent'
+            }`}
+            style={
+              activeTab === 'request'
+                ? {
+                    shadowColor: customerColors.charcoal.DEFAULT,
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.06,
+                    shadowRadius: 2,
+                    elevation: 1,
+                  }
+                : undefined
+            }
           >
-            Request Catering
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'my-requests' && styles.tabActive]}
+            <Text
+              className={`text-sm font-medium ${
+                activeTab === 'request' ? 'text-charcoal font-bold' : 'text-charcoal-soft'
+              }`}
+            >
+              Request Catering
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* Tab: My Requests */}
+        <Pressable
+          className="flex-1"
           onPress={() => {
             setActiveTab('my-requests');
             void refetch();
           }}
+          accessibilityRole="tab"
+          accessibilityLabel="My Requests"
+          accessibilityState={{ selected: activeTab === 'my-requests' }}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'my-requests' && styles.tabTextActive,
-            ]}
+          <View
+            className={`flex-1 py-2 items-center rounded-md ${
+              activeTab === 'my-requests'
+                ? 'bg-canvas'
+                : 'bg-transparent'
+            }`}
+            style={
+              activeTab === 'my-requests'
+                ? {
+                    shadowColor: customerColors.charcoal.DEFAULT,
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.06,
+                    shadowRadius: 2,
+                    elevation: 1,
+                  }
+                : undefined
+            }
           >
-            My Requests
-          </Text>
-        </TouchableOpacity>
+            <Text
+              className={`text-sm font-medium ${
+                activeTab === 'my-requests' ? 'text-charcoal font-bold' : 'text-charcoal-soft'
+              }`}
+            >
+              My Requests
+            </Text>
+          </View>
+        </Pressable>
       </View>
 
+      {/* ── Content ── */}
       {activeTab === 'request' ? (
         <RequestForm onSuccess={() => setActiveTab('my-requests')} />
       ) : isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#C2410C" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
         </View>
       ) : (
-        <FlatList
+        <FlatList<CateringRequest>
           data={data?.data ?? []}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <RequestCard request={item} />}
-          contentContainerStyle={styles.requestList}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🍽️</Text>
-              <Text style={styles.emptyTitle}>No requests yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Submit a catering request to get quotes from chefs.
-              </Text>
-            </View>
+          contentContainerStyle={
+            (data?.data ?? []).length === 0
+              ? { flexGrow: 1 }
+              : { padding: 16, paddingBottom: 32 }
           }
+          ListEmptyComponent={<EmptyState />}
         />
       )}
+
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fafaf7',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a18',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginVertical: 12,
-    backgroundColor: '#e6e5e0',
-    borderRadius: 10,
-    padding: 3,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabActive: {
-    backgroundColor: '#fafaf7',
-    shadowColor: '#1a1a18',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#7a7a76',
-  },
-  tabTextActive: {
-    color: '#1a1a18',
-    fontWeight: '700',
-  },
-  // Form
-  formScroll: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4a4a47',
-    marginTop: 14,
-    marginBottom: 6,
-  },
-  eventTypeRow: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  eventTypeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d4d3ce',
-    backgroundColor: '#fafaf7',
-    marginRight: 8,
-  },
-  eventTypeChipSelected: {
-    backgroundColor: '#FFEDD5',
-    borderColor: '#C2410C',
-  },
-  eventTypeChipText: {
-    fontSize: 13,
-    color: '#7a7a76',
-  },
-  eventTypeChipTextSelected: {
-    color: '#C2410C',
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d4d3ce',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: '#1a1a18',
-    backgroundColor: '#fafaf7',
-  },
-  inputError: {
-    borderColor: '#c95b3e',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#c95b3e',
-    marginTop: 4,
-  },
-  submitButton: {
-    marginTop: 24,
-    backgroundColor: '#C2410C',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fafaf7',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  // Request list
-  requestList: {
-    padding: 16,
-  },
-  requestCard: {
-    backgroundColor: '#fafaf7',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#1a1a18',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  requestCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  requestEventType: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a18',
-  },
-  statusDot: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusDotText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fafaf7',
-  },
-  requestMeta: {
-    fontSize: 13,
-    color: '#7a7a76',
-    marginBottom: 4,
-  },
-  requestBudget: {
-    fontSize: 13,
-    color: '#4a4a47',
-    marginTop: 2,
-  },
-  viewQuoteHint: {
-    fontSize: 12,
-    color: '#C2410C',
-    fontWeight: '500',
-    marginTop: 6,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4a4a47',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#7a7a76',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-});

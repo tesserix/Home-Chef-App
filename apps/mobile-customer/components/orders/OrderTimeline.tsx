@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 
 interface OrderTimelineProps {
@@ -7,7 +8,7 @@ interface OrderTimelineProps {
 }
 
 const STEPS = ['confirmed', 'preparing', 'picked_up', 'delivered'] as const;
-type StepKey = typeof STEPS[number];
+type StepKey = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<StepKey, string> = {
   confirmed: 'Confirmed',
@@ -38,7 +39,10 @@ function getStepIndex(status: Order['status']): number {
   }
 }
 
-export function OrderTimeline({ status, estimatedDeliveryTime }: OrderTimelineProps) {
+export function OrderTimeline({
+  status,
+  estimatedDeliveryTime,
+}: OrderTimelineProps) {
   const currentIndex = getStepIndex(status);
 
   return (
@@ -54,44 +58,49 @@ export function OrderTimeline({ status, estimatedDeliveryTime }: OrderTimelinePr
       )}
       <View style={styles.steps}>
         {STEPS.map((step, index) => {
-          const isCompleted = index <= currentIndex;
+          const isCompleted = index < currentIndex;
           const isCurrent = index === currentIndex;
+          const isFuture = index > currentIndex;
 
           return (
             <View key={step} style={styles.stepRow}>
-              {/* Connector line above (except first step) */}
+              {/* Vertical connector line above (except first step) */}
               {index > 0 && (
                 <View
                   style={[
                     styles.connector,
-                    index <= currentIndex ? styles.connectorActive : styles.connectorPending,
+                    index <= currentIndex
+                      ? styles.connectorActive
+                      : styles.connectorPending,
                   ]}
                 />
               )}
+
               <View style={styles.stepContent}>
-                {/* Step circle */}
-                <View
-                  style={[
-                    styles.circle,
-                    isCompleted && styles.circleCompleted,
-                    isCurrent && styles.circleCurrent,
-                  ]}
-                >
-                  <Text
+                {/* Step dot/circle */}
+                {isCurrent ? (
+                  // Current step: coral ring with filled center
+                  <View style={styles.dotCurrentOuter}>
+                    <View style={styles.dotCurrentInner} />
+                  </View>
+                ) : (
+                  // Completed = coral filled dot; future = hairline dot
+                  <View
                     style={[
-                      styles.circleText,
-                      isCompleted && styles.circleTextCompleted,
+                      styles.dot,
+                      isCompleted && styles.dotCompleted,
+                      isFuture && styles.dotFuture,
                     ]}
-                  >
-                    {index + 1}
-                  </Text>
-                </View>
+                  />
+                )}
+
                 {/* Step label */}
                 <Text
                   style={[
                     styles.label,
                     isCompleted && styles.labelCompleted,
                     isCurrent && styles.labelCurrent,
+                    isFuture && styles.labelFuture,
                   ]}
                 >
                   {STEP_LABELS[step]}
@@ -109,68 +118,93 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 12,
   },
+  // ETA line — tabular numeral for the time portion
   eta: {
-    fontSize: 13,
-    color: '#7a7a76',
-    marginBottom: 12,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+    marginBottom: 16,
+    fontVariant: ['tabular-nums'],
   },
   steps: {
-    gap: 0,
+    // No gap — spacing is handled by connector heights + stepContent paddingVertical
   },
   stepRow: {
     position: 'relative',
   },
+
+  // Hairline connector between steps — active = coral, pending = hairline grey
   connector: {
     position: 'absolute',
-    left: 11,
-    top: -10,
-    width: 2,
-    height: 10,
+    // Left-center relative to the 12px dot (dot left margin ~0, dot width 12 → center = 5)
+    left: 5,
+    top: -12,
+    width: 1,
+    height: 12,
   },
   connectorActive: {
-    backgroundColor: '#C2410C',
+    backgroundColor: customerColors.coral.DEFAULT,
   },
   connectorPending: {
-    backgroundColor: '#d4d3ce',
+    backgroundColor: customerColors.hairline,
   },
+
   stepContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
+    gap: 14,
+    paddingVertical: 12,
   },
-  circle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#d4d3ce',
+
+  // Completed step: coral filled dot (12×12)
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  dotCompleted: {
+    backgroundColor: customerColors.coral.DEFAULT,
+  },
+  // Future step: hairline outlined dot
+  dotFuture: {
+    backgroundColor: customerColors.surface.DEFAULT,
+    borderWidth: 1.5,
+    borderColor: customerColors.hairline,
+  },
+
+  // Current step: coral outer ring + smaller coral filled center
+  dotCurrentOuter: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
+    // Compensate for the extra 4px so step content stays aligned
+    marginLeft: -2,
   },
-  circleCompleted: {
-    backgroundColor: '#C2410C',
+  dotCurrentInner: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: customerColors.coral.DEFAULT,
   },
-  circleCurrent: {
-    backgroundColor: '#C2410C',
-  },
-  circleText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#7a7a76',
-  },
-  circleTextCompleted: {
-    color: '#fafaf7',
-  },
+
+  // Labels
   label: {
+    fontFamily: 'Inter',
     fontSize: 14,
-    color: '#7a7a76',
   },
   labelCompleted: {
-    color: '#1a1a18',
-    fontWeight: '500',
+    fontFamily: 'Inter-SemiBold',
+    color: customerColors.charcoal.DEFAULT,
   },
   labelCurrent: {
-    color: '#C2410C',
-    fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
+    color: customerColors.coral.DEFAULT,
+  },
+  labelFuture: {
+    color: customerColors.charcoal.soft,
   },
 });

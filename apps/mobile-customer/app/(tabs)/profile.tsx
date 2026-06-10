@@ -2,20 +2,26 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
+  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  ChevronRight,
+  MessageSquare,
+  UtensilsCrossed,
+  User,
+} from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { useAuthStore } from '../../store/auth-store';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Threat model T-02-05-01: Zod validates profile fields before PATCH
 const profileSchema = z.object({
@@ -41,11 +47,60 @@ const CUISINE_OPTIONS = [
   'Street Food',
 ];
 
+// ─── Section label (iOS grouped style) ───────────────────────────────────────
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide px-4 pt-5 pb-2">
+      {children}
+    </Text>
+  );
+}
+
+// ─── Grouped list row ─────────────────────────────────────────────────────────
+// iOS Pressable pattern: visual styles on the inner View; `flex-1` on a plain
+// wrapper if the row must fill the width.
+
+interface NavRowProps {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+  isLast?: boolean;
+}
+
+function NavRow({ icon, label, onPress, isLast = false }: NavRowProps) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+      {({ pressed }) => (
+        <View
+          className={`flex-row items-center px-4 py-3 min-h-[52px] ${pressed ? 'bg-surface-soft' : 'bg-canvas'}`}
+        >
+          {/* Left icon circle */}
+          <View className="w-9 h-9 rounded-full bg-surface-soft items-center justify-center mr-3">
+            {icon}
+          </View>
+          {/* Label */}
+          <Text className="flex-1 text-base text-charcoal font-sans">
+            {label}
+          </Text>
+          {/* Chevron */}
+          <ChevronRight size={16} color={customerColors.charcoal.soft} />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function NavRowDivider() {
+  return <View className="h-px bg-hairline ml-[64px]" />;
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { data, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
-  const logout = useAuthStore((s) => s.logout);
 
   const profile = data?.data;
 
@@ -122,325 +177,290 @@ export default function ProfileScreen() {
     ]);
   }
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#C2410C" />
+      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
         </View>
       </SafeAreaView>
     );
   }
 
   // Initials for avatar placeholder
-  const initials = [profile?.firstName?.[0], profile?.lastName?.[0]]
-    .filter(Boolean)
-    .join('')
-    .toUpperCase() || '?';
+  const initials =
+    [profile?.firstName?.[0], profile?.lastName?.[0]]
+      .filter(Boolean)
+      .join('')
+      .toUpperCase() || '?';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{initials}</Text>
-          </View>
-          <Text style={styles.emailDisplay}>{profile?.email ?? ''}</Text>
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+
+        {/* ── Geist-Bold header ── */}
+        <View className="px-4 pt-3 pb-2">
+          <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
+            Profile
+          </Text>
         </View>
 
-        {/* Section 1 — Personal Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Info</Text>
-
-          <Text style={styles.label}>First Name</Text>
-          <Controller
-            control={control}
-            name="firstName"
-            render={({ field: { onChange, value, onBlur } }) => (
-              <TextInput
-                style={[styles.input, errors.firstName && styles.inputError]}
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                placeholder="First name"
-                autoCapitalize="words"
-              />
-            )}
-          />
-          {errors.firstName && (
-            <Text style={styles.errorText}>{errors.firstName.message}</Text>
-          )}
-
-          <Text style={styles.label}>Last Name</Text>
-          <Controller
-            control={control}
-            name="lastName"
-            render={({ field: { onChange, value, onBlur } }) => (
-              <TextInput
-                style={[styles.input, errors.lastName && styles.inputError]}
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                placeholder="Last name"
-                autoCapitalize="words"
-              />
-            )}
-          />
-          {errors.lastName && (
-            <Text style={styles.errorText}>{errors.lastName.message}</Text>
-          )}
-
-          <Text style={styles.label}>Phone</Text>
-          <Controller
-            control={control}
-            name="phone"
-            render={({ field: { onChange, value, onBlur } }) => (
-              <TextInput
-                style={[styles.input, errors.phone && styles.inputError]}
-                value={value ?? ''}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                placeholder="+91 9876543210"
-                keyboardType="phone-pad"
-              />
-            )}
-          />
-          {errors.phone && (
-            <Text style={styles.errorText}>{errors.phone.message}</Text>
-          )}
-
-          {isDirty && (
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={() => void handleSubmit(onSavePersonalInfo)()}
-              disabled={updateProfile.isPending}
+        {/* ── Identity block ── */}
+        <View className="items-center pt-4 pb-6 bg-canvas">
+          {/* Avatar circle — coral bg, white initials */}
+          <View
+            className="w-[72px] h-[72px] rounded-full bg-coral items-center justify-center mb-3"
+          >
+            <Text
+              className="text-[28px] font-bold text-canvas font-display"
+              style={{ lineHeight: 34 }}
             >
-              {updateProfile.isPending ? (
-                <ActivityIndicator size="small" color="#fafaf7" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          )}
+              {initials}
+            </Text>
+          </View>
+          {/* Name */}
+          {(profile?.firstName || profile?.lastName) ? (
+            <Text className="text-lg font-semibold text-charcoal font-display mb-1">
+              {[profile?.firstName, profile?.lastName].filter(Boolean).join(' ')}
+            </Text>
+          ) : null}
+          {/* Email */}
+          <Text className="text-sm text-charcoal-soft">
+            {profile?.email ?? ''}
+          </Text>
         </View>
 
-        {/* Section 2 — Food Preferences */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Food Preferences</Text>
-          <View style={styles.chipGrid}>
+        {/* ── Hairline under identity block ── */}
+        <View className="h-px bg-hairline mx-0" />
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Section — Personal Info
+        ═══════════════════════════════════════════════════════════════════ */}
+        <SectionLabel>Personal Info</SectionLabel>
+
+        <View className="bg-canvas mx-4 rounded-xl overflow-hidden border border-hairline">
+          {/* First Name */}
+          <View className="px-4 pt-3 pb-1">
+            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+              First Name
+            </Text>
+            <Controller
+              control={control}
+              name="firstName"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <TextInput
+                  className="text-base text-charcoal bg-transparent pb-2"
+                  style={{ borderBottomWidth: errors.firstName ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  placeholder="First name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  autoCapitalize="words"
+                  accessibilityLabel="First name"
+                />
+              )}
+            />
+            {errors.firstName ? (
+              <Text className="text-xs text-coral-pressed mb-1">{errors.firstName.message}</Text>
+            ) : null}
+          </View>
+
+          <View className="h-px bg-hairline mx-4" />
+
+          {/* Last Name */}
+          <View className="px-4 pt-3 pb-1">
+            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+              Last Name
+            </Text>
+            <Controller
+              control={control}
+              name="lastName"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <TextInput
+                  className="text-base text-charcoal bg-transparent pb-2"
+                  style={{ borderBottomWidth: errors.lastName ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  placeholder="Last name"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  autoCapitalize="words"
+                  accessibilityLabel="Last name"
+                />
+              )}
+            />
+            {errors.lastName ? (
+              <Text className="text-xs text-coral-pressed mb-1">{errors.lastName.message}</Text>
+            ) : null}
+          </View>
+
+          <View className="h-px bg-hairline mx-4" />
+
+          {/* Phone */}
+          <View className="px-4 pt-3 pb-3">
+            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+              Phone
+            </Text>
+            <Controller
+              control={control}
+              name="phone"
+              render={({ field: { onChange, value, onBlur } }) => (
+                <TextInput
+                  className="text-base text-charcoal bg-transparent pb-2"
+                  style={{ borderBottomWidth: errors.phone ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  value={value ?? ''}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  placeholder="+91 9876543210"
+                  placeholderTextColor={customerColors.charcoal.soft}
+                  keyboardType="phone-pad"
+                  accessibilityLabel="Phone number"
+                />
+              )}
+            />
+            {errors.phone ? (
+              <Text className="text-xs text-coral-pressed mt-1">{errors.phone.message}</Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Save Changes CTA — only shown when form is dirty */}
+        {isDirty ? (
+          <Pressable
+            onPress={() => void handleSubmit(onSavePersonalInfo)()}
+            disabled={updateProfile.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Save changes"
+          >
+            {({ pressed }) => (
+              <View
+                className={`mx-4 mt-3 rounded-lg min-h-[52px] items-center justify-center ${
+                  pressed ? 'opacity-90' : ''
+                } bg-coral`}
+              >
+                {updateProfile.isPending ? (
+                  <ActivityIndicator size="small" color={customerColors.canvas} />
+                ) : (
+                  <Text className="text-canvas font-semibold text-base">
+                    Save Changes
+                  </Text>
+                )}
+              </View>
+            )}
+          </Pressable>
+        ) : null}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Section — Food Preferences
+        ═══════════════════════════════════════════════════════════════════ */}
+        <SectionLabel>Food Preferences</SectionLabel>
+
+        <View className="px-4">
+          <View className="flex-row flex-wrap gap-2 mb-3">
             {CUISINE_OPTIONS.map((cuisine) => {
               const isSelected = cuisinePrefs.includes(cuisine);
               return (
-                <TouchableOpacity
+                /* iOS Pressable pattern: visual styles on inner View */
+                <Pressable
                   key={cuisine}
                   onPress={() => toggleCuisine(cuisine)}
-                  style={[styles.chip, isSelected && styles.chipSelected]}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={cuisine}
+                  accessibilityState={{ checked: isSelected }}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      isSelected && styles.chipTextSelected,
-                    ]}
+                  <View
+                    className={`px-4 py-2 rounded-full border ${
+                      isSelected
+                        ? 'bg-coral-tint border-coral'
+                        : 'bg-canvas border-hairline'
+                    }`}
                   >
-                    {cuisine}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      className={`text-sm font-medium ${
+                        isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                      }`}
+                    >
+                      {cuisine}
+                    </Text>
+                  </View>
+                </Pressable>
               );
             })}
           </View>
-          <TouchableOpacity
-            style={styles.saveButton}
+
+          {/* Save Preferences CTA */}
+          <Pressable
             onPress={saveCuisinePrefs}
             disabled={updateProfile.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Save preferences"
           >
-            <Text style={styles.saveButtonText}>Save Preferences</Text>
-          </TouchableOpacity>
+            {({ pressed }) => (
+              <View
+                className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${pressed ? 'opacity-90' : ''}`}
+              >
+                <Text className="text-canvas font-semibold text-base">
+                  Save Preferences
+                </Text>
+              </View>
+            )}
+          </Pressable>
         </View>
 
-        {/* Section 3 — More */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More</Text>
-          <TouchableOpacity
-            style={styles.moreRow}
-            onPress={() => router.push('/social')}
-          >
-            <Text style={styles.moreRowIcon}>📱</Text>
-            <Text style={styles.moreRowLabel}>Social Feed</Text>
-            <Text style={styles.moreRowArrow}>›</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.moreRow}
-            onPress={() => router.push('/catering')}
-          >
-            <Text style={styles.moreRowIcon}>🍽️</Text>
-            <Text style={styles.moreRowLabel}>Catering</Text>
-            <Text style={styles.moreRowArrow}>›</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ═══════════════════════════════════════════════════════════════════
+            Section — More (iOS grouped nav rows)
+        ═══════════════════════════════════════════════════════════════════ */}
+        <SectionLabel>More</SectionLabel>
 
-        {/* Logout */}
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
+        {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
+        <View
+          className="mx-4"
+          style={{
+            shadowColor: customerColors.charcoal.DEFAULT,
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
         >
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
+          <View className="rounded-xl overflow-hidden">
+            <NavRow
+              icon={<MessageSquare size={18} color={customerColors.charcoal.soft} />}
+              label="Social Feed"
+              onPress={() => router.push('/social')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
+              label="Catering"
+              onPress={() => router.push('/catering')}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── Logout — destructive action ── */}
+        <Pressable
+          onPress={handleLogout}
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+        >
+          {({ pressed }) => (
+            <View
+              className={`mx-4 mt-6 rounded-lg min-h-[52px] items-center justify-center border border-hairline ${
+                pressed ? 'bg-surface-soft' : 'bg-canvas'
+              }`}
+            >
+              <Text className="text-base font-semibold text-destructive">
+                Log Out
+              </Text>
+            </View>
+          )}
+        </Pressable>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fafaf7',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    paddingTop: 24,
-    paddingBottom: 16,
-    backgroundColor: '#fafaf7',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e6e5e0',
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#C2410C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  avatarInitials: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fafaf7',
-  },
-  emailDisplay: {
-    fontSize: 14,
-    color: '#7a7a76',
-  },
-  section: {
-    backgroundColor: '#fafaf7',
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1a1a18',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    color: '#4a4a47',
-    fontWeight: '500',
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d4d3ce',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: '#1a1a18',
-    backgroundColor: '#fafaf7',
-  },
-  inputError: {
-    borderColor: '#c95b3e',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#c95b3e',
-    marginTop: 4,
-  },
-  saveButton: {
-    marginTop: 16,
-    backgroundColor: '#C2410C',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fafaf7',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d4d3ce',
-    backgroundColor: '#fafaf7',
-  },
-  chipSelected: {
-    backgroundColor: '#FFEDD5',
-    borderColor: '#C2410C',
-  },
-  chipText: {
-    fontSize: 13,
-    color: '#7a7a76',
-  },
-  chipTextSelected: {
-    color: '#C2410C',
-    fontWeight: '600',
-  },
-  moreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
-  },
-  moreRowIcon: {
-    fontSize: 20,
-  },
-  moreRowLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: '#4a4a47',
-    fontWeight: '500',
-  },
-  moreRowArrow: {
-    fontSize: 20,
-    color: '#7a7a76',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e6e5e0',
-  },
-  logoutButton: {
-    margin: 16,
-    marginTop: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#c95b3e',
-    alignItems: 'center',
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#c95b3e',
-  },
-});

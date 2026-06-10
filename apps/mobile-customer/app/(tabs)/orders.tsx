@@ -1,18 +1,23 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { ShoppingBag } from 'lucide-react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
 import type { Order } from '../../types/customer';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type StatusFilter = 'all' | 'active' | 'delivered' | 'cancelled';
 
@@ -23,6 +28,8 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
+// Maps filter key → API status param. 'active' covers multiple statuses;
+// the backend handles it as a group filter. No business logic change.
 const STATUS_MAP: Record<StatusFilter, string | undefined> = {
   all: undefined,
   active: 'active',
@@ -31,6 +38,165 @@ const STATUS_MAP: Record<StatusFilter, string | undefined> = {
 };
 
 const PAGE_LIMIT = 20;
+
+// ─── Loading skeleton — matches OrderCard proportions ────────────────────────
+
+function SkeletonCard() {
+  return (
+    <View style={skeletonStyles.card}>
+      <View style={skeletonStyles.topRow}>
+        <View style={skeletonStyles.col}>
+          <View style={[skeletonStyles.line, { width: '60%', height: 14 }]} />
+          <View style={[skeletonStyles.line, { width: '35%', height: 11 }]} />
+        </View>
+        <View style={[skeletonStyles.chip, { width: 72, height: 22 }]} />
+      </View>
+      <View style={skeletonStyles.hairline} />
+      <View style={skeletonStyles.bottomRow}>
+        <View style={[skeletonStyles.line, { width: '50%', height: 12 }]} />
+        <View style={[skeletonStyles.line, { width: '18%', height: 14 }]} />
+      </View>
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 16,
+    marginVertical: 5,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: customerColors.canvas,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  col: { flex: 1, gap: 6 },
+  line: {
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+  chip: {
+    borderRadius: 9999,
+    backgroundColor: customerColors.surface.soft,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: customerColors.hairline,
+    marginVertical: 12,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+});
+
+// ─── Empty state — mirrors favorites empty state pattern exactly ──────────────
+
+function EmptyState({ filter }: { filter: StatusFilter }) {
+  const router = useRouter();
+
+  const title =
+    filter === 'all'
+      ? 'No orders yet'
+      : filter === 'active'
+        ? 'No active orders'
+        : filter === 'delivered'
+          ? 'No delivered orders'
+          : 'No cancelled orders';
+
+  const body =
+    filter === 'all'
+      ? 'Browse home chefs and place your first order.'
+      : 'Try switching to a different filter.';
+
+  return (
+    <View style={emptyStyles.container}>
+      {/* Surface-soft icon circle — matches favorites empty state */}
+      <View style={emptyStyles.iconCircle}>
+        <ShoppingBag size={34} color={customerColors.charcoal.soft} />
+      </View>
+      <View style={emptyStyles.textGroup}>
+        <Text style={emptyStyles.title}>{title}</Text>
+        <Text style={emptyStyles.body}>{body}</Text>
+      </View>
+      {/* Coral "Browse chefs" CTA — visual styles on inner View per iOS bug */}
+      {filter === 'all' && (
+        <Pressable
+          onPress={() => router.push('/(tabs)')}
+          accessibilityRole="button"
+          accessibilityLabel="Browse chefs"
+        >
+          <View style={emptyStyles.cta}>
+            <Text style={emptyStyles.ctaLabel}>Browse chefs</Text>
+          </View>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const emptyStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 64,
+    gap: 16,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: customerColors.surface.soft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textGroup: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 20,
+    color: customerColors.charcoal.DEFAULT,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  body: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: customerColors.charcoal.soft,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  cta: {
+    // Primary coral button — radius 8, min-height 52, Inter-SemiBold
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  ctaLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.canvas,
+  },
+});
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
@@ -46,8 +212,8 @@ export default function OrdersScreen() {
 
   const { data, isLoading, isRefetching, refetch } = useOrders(params);
 
-  // Merge pages into local list
-  React.useEffect(() => {
+  // Accumulate pages into a de-duped local list (immutable merge)
+  useEffect(() => {
     if (data?.data) {
       if (page === 1) {
         setAllOrders(data.data);
@@ -83,88 +249,102 @@ export default function OrdersScreen() {
     }
   }
 
+  // ── Filter chip row — Airbnb charcoal-underline style from home screen ──
+  // Selected = charcoal text + 2px charcoal bottom underline; unselected =
+  // charcoal-soft, no fill, no border. Matches the cuisine category bar.
+  const renderFilterBar = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterRowContent}
+      style={styles.filterRow}
+      accessibilityRole="tablist"
+    >
+      {STATUS_FILTERS.map((f) => {
+        const isActive = activeFilter === f.key;
+        return (
+          <Pressable
+            key={f.key}
+            onPress={() => handleFilterChange(f.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`Filter orders: ${f.label}`}
+          >
+            <View style={[styles.filterChip, isActive && styles.filterChipActive]}>
+              <Text
+                style={[
+                  styles.filterChipLabel,
+                  isActive ? styles.filterChipLabelActive : styles.filterChipLabelDefault,
+                ]}
+              >
+                {f.label}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  // ── Loading skeleton (first page only) ──
   if (isLoading && page === 1) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>My Orders</Text>
+          <Text style={styles.headerTitle}>Orders</Text>
         </View>
-        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <View style={styles.skeletonRow} />
-          <View style={styles.skeletonRow} />
-          <View style={styles.skeletonRow} />
-          <View style={styles.skeletonRow} />
+        {/* Filter bar skeleton */}
+        {renderFilterBar()}
+        {/* Skeleton cards */}
+        <View style={{ paddingTop: 8 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+      {/* ── Geist-Bold header — matches favorites "Favorites" header ── */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Orders</Text>
+        <Text style={styles.headerTitle}>Orders</Text>
       </View>
 
-      {/* Status filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {STATUS_FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f.key}
-            onPress={() => handleFilterChange(f.key)}
-            style={[
-              styles.filterChip,
-              activeFilter === f.key && styles.filterChipActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === f.key && styles.filterChipTextActive,
-              ]}
-            >
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* ── Airbnb-style filter chip row ── */}
+      {renderFilterBar()}
 
-      <FlatList
+      {/* ── Order list ── */}
+      <FlatList<Order>
         data={allOrders}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <OrderCard order={item} />}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={isRefetching && page === 1}
             onRefresh={handleRefresh}
-            tintColor="#C2410C"
+            tintColor={customerColors.coral.DEFAULT}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
+        contentContainerStyle={
+          allOrders.length === 0
+            ? styles.emptyContent
+            : styles.listContent
+        }
+        ListEmptyComponent={<EmptyState filter={activeFilter} />}
         ListFooterComponent={
           isLoadingMore ? (
             <ActivityIndicator
               size="small"
-              color="#C2410C"
+              color={customerColors.coral.DEFAULT}
               style={styles.footerLoader}
             />
           ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🍽️</Text>
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Browse chefs to place your first order!
-            </Text>
-          </View>
-        }
-        contentContainerStyle={
-          allOrders.length === 0 ? styles.emptyContent : styles.listContent
         }
       />
     </SafeAreaView>
@@ -172,83 +352,64 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#fafaf7',
+    backgroundColor: customerColors.canvas,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+  // ── Geist-Bold "Orders" header — matches favorites pattern (px-4, pt-3, pb-2)
   header: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 4,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a18',
+  headerTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 27,
+    color: customerColors.charcoal.DEFAULT,
+    letterSpacing: -0.3,
   },
+
+  // ── Airbnb category-bar style filter chips ──
+  // No fill, no pill border. Selected = charcoal text + 2px charcoal underline.
   filterRow: {
+    // No background; content sits on white canvas
+  },
+  filterRowContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    paddingBottom: 4,
+    gap: 0,
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#e6e5e0',
-    marginRight: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    // No background, no border — just text + optional underline
   },
   filterChipActive: {
-    backgroundColor: '#C2410C',
+    borderBottomWidth: 2,
+    borderBottomColor: customerColors.charcoal.DEFAULT,
   },
-  filterChipText: {
+  filterChipLabel: {
+    fontFamily: 'Inter',
     fontSize: 14,
-    fontWeight: '500',
-    color: '#7a7a76',
   },
-  filterChipTextActive: {
-    color: '#fafaf7',
+  filterChipLabelActive: {
+    color: customerColors.charcoal.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
   },
+  filterChipLabelDefault: {
+    color: customerColors.charcoal.soft,
+  },
+
+  // ── List layout ──
   listContent: {
-    paddingBottom: 24,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
   emptyContent: {
-    flex: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4a4a47',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#7a7a76',
-    textAlign: 'center',
-    paddingHorizontal: 40,
+    flexGrow: 1,
   },
   footerLoader: {
     paddingVertical: 16,
-  },
-  skeletonRow: {
-    height: 80,
-    backgroundColor: '#e6e5e0',
-    borderRadius: 12,
-    marginBottom: 12,
   },
 });

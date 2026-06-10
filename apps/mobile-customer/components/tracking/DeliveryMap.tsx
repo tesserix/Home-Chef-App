@@ -1,5 +1,6 @@
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { StyleSheet } from 'react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 interface DeliveryMapProps {
   driverLat?: number | null;
@@ -62,20 +63,22 @@ export function DeliveryMap({
       showsUserLocation={false}
       showsMyLocationButton={false}
     >
-      {/* Delivery destination marker (red) — customer dropoff from Delivery model */}
+      {/* Destination marker — charcoal pin (customer dropoff / chef fallback) */}
       {hasDestination && (
         <Marker
           coordinate={{ latitude: destLat, longitude: destLng }}
           title={hasDropoffCoords ? 'Delivery Address' : 'Chef Location'}
-          pinColor="red"
+          // Charcoal destination marker — the "home base" / delivery target
+          pinColor={customerColors.charcoal.DEFAULT}
         />
       )}
-      {/* Driver location marker (blue) — only when driver has real coordinates */}
+      {/* Driver location marker — coral accent so the driver stands out on the map */}
       {hasDriverLocation && (
         <Marker
           coordinate={{ latitude: driverLat!, longitude: driverLng! }}
           title="Driver"
-          pinColor="blue"
+          // Coral accent: the driver is the active moving element, primary interest
+          pinColor={customerColors.coral.DEFAULT}
         />
       )}
     </MapView>

@@ -1,38 +1,72 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 
 interface OrderCardProps {
   order: Order;
 }
 
-type StatusColor = {
-  bg: string;
-  text: string;
-  label: string;
-};
+// Status chip: tint bg + dark text of same family per spec §2.7 / §2 item 7.
+// pending/confirmed/preparing/ready → coral-tint bg + coral-pressed text (active)
+// picked_up/delivered → success-tint bg + success text
+// cancelled → surface-soft bg + charcoal-soft text (neutral)
+type ChipStyle = { bg: string; text: string; label: string };
 
-function getStatusStyle(status: Order['status']): StatusColor {
+function getStatusChip(status: Order['status']): ChipStyle {
   switch (status) {
     case 'pending':
-      return { bg: '#FEF9C3', text: '#92400E', label: 'Pending' };
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Pending',
+      };
     case 'confirmed':
-      return { bg: '#DBEAFE', text: '#1E40AF', label: 'Confirmed' };
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Confirmed',
+      };
     case 'preparing':
-      return { bg: '#EDE9FE', text: '#5B21B6', label: 'Preparing' };
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Preparing',
+      };
     case 'ready':
-      return { bg: '#DCFCE7', text: '#166534', label: 'Ready' };
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Ready',
+      };
     case 'picked_up':
-      return { bg: '#DCFCE7', text: '#166534', label: 'Picked Up' };
+      return {
+        bg: customerColors.success.tint,
+        text: customerColors.success.DEFAULT,
+        label: 'Picked Up',
+      };
     case 'delivered':
-      return { bg: '#F0FDF4', text: '#C2410C', label: 'Delivered' };
+      return {
+        bg: customerColors.success.tint,
+        text: customerColors.success.DEFAULT,
+        label: 'Delivered',
+      };
     case 'cancelled':
-      return { bg: '#f3dcd2', text: '#991B1B', label: 'Cancelled' };
+      return {
+        bg: customerColors.surface.soft,
+        text: customerColors.charcoal.soft,
+        label: 'Cancelled',
+      };
     default:
-      return { bg: '#e6e5e0', text: '#4a4a47', label: status };
+      return {
+        bg: customerColors.surface.soft,
+        text: customerColors.charcoal.soft,
+        label: status,
+      };
   }
 }
 
+// Tabular date for order row (e.g. "12 Jun 2026")
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-IN', {
@@ -44,102 +78,169 @@ function formatDate(dateStr: string): string {
 
 export function OrderCard({ order }: OrderCardProps) {
   const router = useRouter();
-  const statusStyle = getStatusStyle(order.status);
+  const chip = getStatusChip(order.status);
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
   function handlePress() {
     router.push(`/order/${order.id}`);
   }
 
+  // iOS Pressable bug: visual styles live on an inner View; the Pressable is
+  // a plain wrapper. flex-row wrapper fills the row, opacity on press handled
+  // by the Pressable's android_ripple / opacity prop.
   return (
-    <TouchableOpacity
-      style={styles.card}
+    <Pressable
       onPress={handlePress}
-      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Order #${order.orderNumber} from ${order.chef.name}`}
+      style={styles.pressableWrapper}
     >
-      <View style={styles.header}>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
-          <Text style={styles.chefName}>{order.chef.name}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-          <Text style={[styles.statusText, { color: statusStyle.text }]}>
-            {statusStyle.label}
-          </Text>
-        </View>
-      </View>
+      {({ pressed }) => (
+        // Shadow must be on the outer clip view; overflow hidden on same view
+        // kills shadow on iOS so we split: shadow on the outer View only,
+        // clip radius on the inner content View.
+        <View style={[styles.cardOuter, pressed && styles.cardPressed]}>
+          <View style={styles.cardInner}>
+            {/* Top row: chef name + status chip */}
+            <View style={styles.topRow}>
+              <View style={styles.chefInfo}>
+                <Text
+                  style={styles.chefName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {order.chef.name}
+                </Text>
+                <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
+              </View>
 
-      <View style={styles.divider} />
+              {/* Status chip — radius-full, tint bg + dark text */}
+              <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+                <Text style={[styles.statusText, { color: chip.text }]}>
+                  {chip.label}
+                </Text>
+              </View>
+            </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.meta}>
-          {itemCount} {itemCount === 1 ? 'item' : 'items'} •{' '}
-          {formatDate(order.createdAt)}
-        </Text>
-        <Text style={styles.amount}>₹{order.totalAmount.toFixed(2)}</Text>
-      </View>
-    </TouchableOpacity>
+            {/* Hairline separator */}
+            <View style={styles.hairline} />
+
+            {/* Bottom row: item count + date (charcoal-soft, tabular) + total (charcoal, tabular) */}
+            <View style={styles.bottomRow}>
+              <Text style={styles.meta}>
+                {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                {'  ·  '}
+                {formatDate(order.createdAt)}
+              </Text>
+              <Text style={styles.total}>₹{order.totalAmount.toFixed(0)}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fafaf7',
-    borderRadius: 12,
-    padding: 16,
+  pressableWrapper: {
+    // flex-1 wrapper so it fills whatever column/list cell the parent gives
     marginHorizontal: 16,
-    marginVertical: 6,
-    shadowColor: '#1a1a18',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    marginVertical: 5,
   },
-  header: {
+
+  // Shadow lives here (NOT on cardInner) — iOS kills shadow if overflow+radius
+  // are on the same View as shadowColor/shadowOffset.
+  cardOuter: {
+    borderRadius: 12,
+    backgroundColor: customerColors.canvas,
+    // Hairline border via shadowColor trick — use borderColor instead for clarity
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    // Soft shadow — shadow[1] style
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardPressed: {
+    opacity: 0.92,
+  },
+
+  // Content clips to radius — overflow hidden here is safe because shadow
+  // is on the parent cardOuter.
+  cardInner: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+
+  // — Chef name + order number column
+  topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 10,
   },
-  orderInfo: {
+  chefInfo: {
     flex: 1,
-    marginRight: 12,
-  },
-  orderNumber: {
-    fontSize: 13,
-    color: '#7a7a76',
-    marginBottom: 2,
+    gap: 3,
   },
   chefName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a18',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.charcoal.DEFAULT,
+    letterSpacing: 0,
   },
-  statusBadge: {
+  orderNumber: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    // Tabular numerals so the hash-number aligns neatly
+    fontVariant: ['tabular-nums'],
+  },
+
+  // — Status chip (radius-full, tint bg + dark text, Inter-SemiBold caption)
+  statusChip: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 9999,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.1,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#e6e5e0',
+
+  // — Hairline separator (not a heavy border)
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: customerColors.hairline,
     marginVertical: 12,
   },
-  footer: {
+
+  // — Meta + total row
+  bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   meta: {
+    fontFamily: 'Inter',
     fontSize: 13,
-    color: '#7a7a76',
+    color: customerColors.charcoal.soft,
+    // Tabular figures for date alignment
+    fontVariant: ['tabular-nums'],
+    flex: 1,
   },
-  amount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a18',
+  total: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.charcoal.DEFAULT,
+    // Tabular numerals so price digits are monospaced
+    fontVariant: ['tabular-nums'],
   },
 });

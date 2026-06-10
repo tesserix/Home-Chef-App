@@ -46,6 +46,10 @@ module.exports = {
           DEFAULT: '#008A05', // delivered / confirmation only
           tint: '#E6F4E6',
         },
+        destructive: {
+          DEFAULT: '#B22B0E', // logout, cancel, errors — never the brand accent
+          tint: '#FBE8E1',
+        },
 
         // ----- Legacy token names, repointed to the Airbnb system so shared
         // components (packages/mobile-shared) and not-yet-migrated screens stay

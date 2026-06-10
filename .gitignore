@@ -58,6 +58,7 @@ coverage/
 apps/mobile-*/ios/
 apps/mobile-*/android/
 apps/mobile-*/.expo/
+apps/mobile-*/.metro-cache/
 
 # Local kind secrets (copy of k8s/secrets.example.yaml)
 k8s/secrets.yaml

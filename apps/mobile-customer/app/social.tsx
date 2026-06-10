@@ -6,19 +6,21 @@ import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
-  SafeAreaView,
-  StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Heart } from 'lucide-react-native';
+import { Camera, Heart } from 'lucide-react-native';
 import { useSocialFeed, useLikePost } from '../hooks/useSocial';
 import type { SocialPost } from '../hooks/useSocial';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 const PAGE_LIMIT = 20;
+
+// ─── Post card ───────────────────────────────────────────────────────────────
 
 function PostCard({ post }: { post: SocialPost }) {
   const likePost = useLikePost();
@@ -40,17 +42,20 @@ function PostCard({ post }: { post: SocialPost }) {
   }
 
   return (
-    <View style={styles.postCard}>
+    <View className="bg-canvas">
       {/* Author row */}
-      <View style={styles.authorRow}>
-        <View style={styles.authorAvatar}>
-          <Text style={styles.authorInitial}>
+      <View className="flex-row items-center px-4 pt-4 pb-3 gap-3">
+        {/* Avatar initials circle */}
+        <View className="w-10 h-10 rounded-full bg-coral items-center justify-center">
+          <Text className="text-base font-bold text-canvas font-display">
             {post.chefName.charAt(0).toUpperCase()}
           </Text>
         </View>
-        <View style={styles.authorInfo}>
-          <Text style={styles.authorName}>{post.chefName}</Text>
-          <Text style={styles.postDate}>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-charcoal">
+            {post.chefName}
+          </Text>
+          <Text className="text-xs text-charcoal-soft">
             {new Date(post.createdAt).toLocaleDateString('en-IN', {
               day: 'numeric',
               month: 'short',
@@ -59,51 +64,83 @@ function PostCard({ post }: { post: SocialPost }) {
         </View>
       </View>
 
-      {/* Content */}
-      <Text style={styles.postContent}>{post.content}</Text>
-
-      {/* Images */}
-      {post.images && post.images.length > 0 && (
+      {/* Post image — full width, 4:3 ratio */}
+      {post.images && post.images.length > 0 ? (
         <Image
           source={{ uri: post.images[0] }}
-          style={styles.postImage}
+          style={{ width: '100%', aspectRatio: 4 / 3 }}
           contentFit="cover"
           transition={200}
+          accessibilityLabel={`Photo by ${post.chefName}`}
         />
-      )}
+      ) : null}
 
-      {/* Hashtags */}
-      {post.hashtags && post.hashtags.length > 0 && (
-        <Text style={styles.hashtags}>
+      {/* Caption */}
+      {post.content ? (
+        <Text className="text-sm text-charcoal-soft leading-relaxed px-4 pt-3">
+          {post.content}
+        </Text>
+      ) : null}
+
+      {/* Hashtags in coral */}
+      {post.hashtags && post.hashtags.length > 0 ? (
+        <Text className="text-xs text-coral px-4 pt-1">
           {post.hashtags.map((t) => `#${t}`).join(' ')}
         </Text>
-      )}
+      ) : null}
 
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity
+      {/* Actions row */}
+      <View className="flex-row items-center px-4 pt-3 pb-4 border-t border-hairline mt-3">
+        {/* iOS Pressable pattern: visual styles on inner View */}
+        <Pressable
           onPress={handleLike}
-          style={styles.likeButton}
-          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={optimisticLiked ? 'Unlike post' : 'Like post'}
+          accessibilityState={{ selected: optimisticLiked }}
         >
-          <Heart
-            size={18}
-            color={optimisticLiked ? '#c95b3e' : '#7a7a76'}
-            fill={optimisticLiked ? '#c95b3e' : 'transparent'}
-          />
-          <Text
-            style={[
-              styles.likeCount,
-              optimisticLiked && styles.likeCountActive,
-            ]}
-          >
-            {optimisticCount}
-          </Text>
-        </TouchableOpacity>
+          <View className="flex-row items-center gap-1.5 py-1 px-2">
+            <Heart
+              size={18}
+              color={optimisticLiked ? customerColors.coral.DEFAULT : customerColors.charcoal.soft}
+              fill={optimisticLiked ? customerColors.coral.DEFAULT : 'transparent'}
+            />
+            <Text
+              className={`text-sm font-medium ${optimisticLiked ? 'text-coral' : 'text-charcoal-soft'}`}
+            >
+              {optimisticCount}
+            </Text>
+          </View>
+        </Pressable>
+      </View>
+
+      {/* Hairline separator between posts */}
+      <View className="h-px bg-hairline" />
+    </View>
+  );
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-20">
+      {/* Surface-soft icon circle */}
+      <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
+        <Camera size={36} color={customerColors.charcoal.soft} />
+      </View>
+      <View className="items-center gap-2">
+        <Text className="text-xl font-bold text-charcoal text-center font-display">
+          No posts yet
+        </Text>
+        <Text className="text-sm text-charcoal-soft text-center leading-5">
+          Chefs will share their latest creations here.
+        </Text>
       </View>
     </View>
   );
 }
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function SocialScreen() {
   const [page, setPage] = useState(1);
@@ -144,23 +181,31 @@ export default function SocialScreen() {
     }
   }
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading && page === 1) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#C2410C" />
+      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={customerColors.coral.DEFAULT} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Social Feed</Text>
+    <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+
+      {/* ── Geist-Bold header ── */}
+      <View className="px-4 pt-3 pb-2">
+        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
+          Social Feed
+        </Text>
       </View>
 
-      <FlatList
+      {/* ── Hairline under header ── */}
+      <View className="h-px bg-hairline" />
+
+      <FlatList<SocialPost>
         data={allPosts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <PostCard post={item} />}
@@ -168,170 +213,22 @@ export default function SocialScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor="#C2410C"
+            tintColor={customerColors.coral.DEFAULT}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
           isLoadingMore ? (
-            <ActivityIndicator
-              size="small"
-              color="#C2410C"
-              style={styles.footerLoader}
-            />
+            <View className="py-4 items-center">
+              <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
+            </View>
           ) : null
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📸</Text>
-            <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Chefs will share their latest creations here.
-            </Text>
-          </View>
-        }
-        contentContainerStyle={
-          allPosts.length === 0 ? styles.emptyContent : styles.listContent
-        }
+        ListEmptyComponent={<EmptyState />}
+        contentContainerStyle={allPosts.length === 0 ? { flexGrow: 1 } : { paddingBottom: 24 }}
       />
+
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fafaf7',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a18',
-  },
-  listContent: {
-    paddingBottom: 24,
-  },
-  emptyContent: {
-    flex: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4a4a47',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#7a7a76',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  footerLoader: {
-    paddingVertical: 16,
-  },
-  // Post card
-  postCard: {
-    backgroundColor: '#fafaf7',
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#1a1a18',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  authorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#C2410C',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  authorInitial: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fafaf7',
-  },
-  authorInfo: {
-    flex: 1,
-  },
-  authorName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a18',
-  },
-  postDate: {
-    fontSize: 12,
-    color: '#7a7a76',
-  },
-  postContent: {
-    fontSize: 14,
-    color: '#4a4a47',
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  postImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  hashtags: {
-    fontSize: 13,
-    color: '#C2410C',
-    marginBottom: 10,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e6e5e0',
-    paddingTop: 10,
-    marginTop: 4,
-  },
-  likeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  likeCount: {
-    fontSize: 13,
-    color: '#7a7a76',
-    fontWeight: '500',
-  },
-  likeCountActive: {
-    color: '#c95b3e',
-  },
-});

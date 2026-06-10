@@ -127,6 +127,12 @@ export const customerColors = {
     DEFAULT: '#008A05',
     tint: '#E6F4E6',
   },
+  // Functional — destructive (logout, cancel, errors). Deep paprika red,
+  // never decorative and never the brand accent (that is coral).
+  destructive: {
+    DEFAULT: '#B22B0E',
+    tint: '#FBE8E1',
+  },
 } as const;
 
 // ----- SPACING ---------------------------------------------------------------
