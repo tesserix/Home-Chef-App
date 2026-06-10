@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04
 Plan: Not started
 Status: Executing Phase 04
-Last activity: 2026-04-06
+Last activity: 2026-06-10 - Completed quick task 260610-grk: Vendor app UX improvements from design critique
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -71,7 +71,14 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Dark mode for mobile apps (from 2026-06-10 vendor UX critique): `.impeccable.md` requires "light-first, dark supported" but `packages/mobile-shared/src/theme/tokens.ts` has no dark palette and all screens use static StyleSheets. Phase-sized: dark token set + theme-reactive styling across all 3 apps. Promote via /gsd-add-phase.
+- Bulk availability toggle for vendor menu categories (from same critique) — needs UX decision on placement.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260610-grk | Vendor app UX improvements from design critique | 2026-06-10 | 2dee223 | [260610-grk-vendor-app-ux-improvements-from-design-c](./quick/260610-grk-vendor-app-ux-improvements-from-design-c/) |
 
 ### Blockers/Concerns
 
