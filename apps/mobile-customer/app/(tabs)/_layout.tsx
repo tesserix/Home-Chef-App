@@ -1,14 +1,15 @@
 import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs, router } from 'expo-router';
 import { Home, ShoppingBag, Heart, User } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { CartBar } from '../../components/cart/CartBar';
 
+// Matches tabBarStyle.height — the tab bar already spans to the screen bottom,
+// so the cart bar sits flush on top of it (no extra safe-area inset, or a gap
+// opens up between the bar and the tab bar).
 const TAB_BAR_HEIGHT = 64;
 
 export default function TabsLayout() {
-  const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1 }}>
       <Tabs
@@ -53,7 +54,7 @@ export default function TabsLayout() {
           sitting just above the tab bar. Returns null when the cart is empty. */}
       <CartBar
         onPress={() => router.push('/checkout')}
-        bottomOffset={TAB_BAR_HEIGHT + insets.bottom}
+        bottomOffset={TAB_BAR_HEIGHT}
       />
     </View>
   );
