@@ -88,6 +88,47 @@ export const colors = {
   },
 } as const;
 
+// ----- CUSTOMER PALETTE (Airbnb language) ------------------------------------
+// apps/mobile-customer ONLY. Owner decision 2026-06-10: the customer app gets a
+// premium consumer-marketplace look in the Airbnb mold — white-first canvas,
+// charcoal text, rausch coral as the single accent. Vendor/driver stay on the
+// ink + persimmon system above and must NEVER import this export: `coral` must
+// not appear outside apps/mobile-customer (grep-gated). Conversely, customer
+// screens must never use `herb` (persimmon).
+//
+// These values mirror the customer app's tailwind.config.js (coral / charcoal /
+// canvas / hairline / surface / success) so a customer screen can fall back
+// from `className` (e.g. `bg-coral`) to inline `style={{ ... }}` for Reanimated
+// and programmatic color (heart toggle, star fill, placeholder text) without a
+// rename. Keep the two files in sync.
+export const customerColors = {
+  // Brand accent — Rausch coral. Primary CTA, links, selected states,
+  // heart-saved, focus ring. The ONE colour on screen.
+  coral: {
+    DEFAULT: '#FF385C',
+    pressed: '#E00B41', // pressed / hover
+    tint: '#FFE8EC', // chip / badge tint backgrounds
+  },
+  // Text + dark buttons — Airbnb's near-black charcoal (never pure #000).
+  charcoal: {
+    DEFAULT: '#222222', // primary text, dark buttons
+    soft: '#717171', // secondary text, captions, placeholders
+  },
+  // Surfaces — white-first. Canvas is true white (NOT the grey-canvas vendor
+  // uses); soft surfaces fill inputs, sections, and image placeholders.
+  canvas: '#FFFFFF', // page background
+  hairline: '#EBEBEB', // dividers, card borders
+  surface: {
+    DEFAULT: '#FFFFFF', // elevated cards
+    soft: '#F7F7F7', // input fills, soft sections, image placeholders
+  },
+  // Functional — success green only for delivered / confirmation.
+  success: {
+    DEFAULT: '#008A05',
+    tint: '#E6F4E6',
+  },
+} as const;
+
 // ----- SPACING ---------------------------------------------------------------
 // 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96. Matches .impeccable.md.
 // Use the numeric keys directly: spacing[4] === 16.
@@ -250,3 +291,19 @@ export const theme = {
 } as const;
 
 export type Theme = typeof theme;
+
+// Customer-app convenience aggregate (Airbnb palette). Same shape as `theme`
+// but with the coral/charcoal/canvas colours swapped in. apps/mobile-customer
+// ONLY — see the note on `customerColors`.
+export const customerTheme = {
+  colors: customerColors,
+  spacing,
+  radius,
+  typography,
+  shadow,
+  motion,
+  touchTarget,
+  roleScale,
+} as const;
+
+export type CustomerTheme = typeof customerTheme;
