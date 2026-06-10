@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
@@ -64,12 +65,12 @@ function deriveDisplayName(
   return 'Chef';
 }
 
-// Time-of-day greeting for the two-line command bar (UI-V2 spec §4).
-function deriveGreeting(): string {
+// Time-of-day greeting key for the two-line command bar (UI-V2 spec §4).
+function deriveGreetingKey(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return 'dashboard.goodMorning';
+  if (hour < 17) return 'dashboard.goodAfternoon';
+  return 'dashboard.goodEvening';
 }
 
 function formatMinutesAgo(iso: string): string {
@@ -120,6 +121,7 @@ const STATUS_CHIP: Record<string, { bg: string; text: string }> = {
 // kitchen status, and any "ready" order. Past-tense numbers (earnings,
 // rating) come last. See agent design notes — pending wins the top.
 export default function DashboardScreen() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const {
     data: dashboard,
@@ -271,18 +273,18 @@ export default function DashboardScreen() {
   if (isError) {
     return (
       <SafeAreaView style={styles.errorScreen}>
-        <Text style={styles.errorTitle}>Couldn't load your dashboard</Text>
+        <Text style={styles.errorTitle}>{t('dashboard.errorTitle')}</Text>
         <Text style={styles.errorBody}>
-          Check your connection and try again.
+          {t('dashboard.errorBody')}
         </Text>
         <Pressable onPress={() => refetch()} style={styles.errorPrimary}>
-          <Text style={styles.errorPrimaryText}>Retry</Text>
+          <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.replace('/(onboarding)/personal-info')}
           style={styles.errorSecondary}
         >
-          <Text style={styles.errorSecondaryText}>Complete onboarding</Text>
+          <Text style={styles.errorSecondaryText}>{t('dashboard.completeOnboarding')}</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -330,7 +332,7 @@ export default function DashboardScreen() {
         >
           <View style={styles.heroTopRow}>
             <View style={styles.heroGreetingBlock}>
-              <Text style={styles.heroGreeting}>{deriveGreeting()}</Text>
+              <Text style={styles.heroGreeting}>{t(deriveGreetingKey())}</Text>
               <Text style={styles.heroName} numberOfLines={1}>
                 {displayName}
               </Text>
@@ -341,10 +343,12 @@ export default function DashboardScreen() {
               accessibilityRole="button"
               accessibilityLabel={
                 acceptingOrders
-                  ? 'Kitchen is open. Tap to close or pause.'
+                  ? t('dashboard.kitchenAccessibilityOpen')
                   : isPaused
-                    ? `Kitchen paused until ${statusLabel.replace('Back ', '')}. Tap to reopen.`
-                    : 'Kitchen is closed. Tap to open.'
+                    ? t('dashboard.kitchenAccessibilityPaused', {
+                        time: statusLabel.replace('Back ', ''),
+                      })
+                    : t('dashboard.kitchenAccessibilityClosed')
               }
             >
               {({ pressed }) => (
@@ -397,19 +401,19 @@ export default function DashboardScreen() {
                 <Text style={styles.heroEarnings}>
                   ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
                 </Text>
-                <Text style={styles.heroStatLabel}>Today's earnings</Text>
+                <Text style={styles.heroStatLabel}>{t('dashboard.todaysEarnings')}</Text>
               </View>
               <View style={styles.heroStatCol}>
                 <Text style={styles.heroStatValue}>
                   {dashboard?.todayOrders ?? 0}
                 </Text>
-                <Text style={styles.heroStatLabel}>Orders</Text>
+                <Text style={styles.heroStatLabel}>{t('dashboard.orders')}</Text>
               </View>
               <View style={styles.heroStatCol}>
                 <Text style={styles.heroStatValue}>
                   {(dashboard?.rating ?? 0).toFixed(1)}★
                 </Text>
-                <Text style={styles.heroStatLabel}>Rating</Text>
+                <Text style={styles.heroStatLabel}>{t('dashboard.rating')}</Text>
               </View>
             </View>
           )}
@@ -428,7 +432,7 @@ export default function DashboardScreen() {
                 : FadeInDown.delay(60).duration(250).easing(ENTRANCE_EASING)
             }
           >
-            <Text style={styles.sectionLabel}>ACTION REQUIRED</Text>
+            <Text style={styles.sectionLabel}>{t('dashboard.actionRequired')}</Text>
             <View style={styles.alertCards}>
               {(actionRequests ?? []).map((req) => (
                 <Pressable
@@ -452,9 +456,9 @@ export default function DashboardScreen() {
                           ]}
                         />
                         <Text style={styles.alertLabel} numberOfLines={1}>
-                          Admin needs info
+                          {t('dashboard.adminNeedsInfo')}
                         </Text>
-                        <Text style={styles.alertCta}>View request →</Text>
+                        <Text style={styles.alertCta}>{t('dashboard.viewRequest')}</Text>
                       </View>
                       <Text style={styles.alertBody} numberOfLines={1}>
                         {req.title}
@@ -488,19 +492,29 @@ export default function DashboardScreen() {
                         />
                         <Text style={styles.alertLabel} numberOfLines={1}>
                           {doc.daysUntilExpiry <= 0
-                            ? 'Expired'
-                            : `Expires in ${doc.daysUntilExpiry} day${doc.daysUntilExpiry === 1 ? '' : 's'}`}
+                            ? t('dashboard.expired')
+                            : doc.daysUntilExpiry === 1
+                              ? t('dashboard.expiresInDay', {
+                                  count: doc.daysUntilExpiry,
+                                })
+                              : t('dashboard.expiresInDays', {
+                                  count: doc.daysUntilExpiry,
+                                })}
                         </Text>
-                        <Text style={styles.alertCta}>Re-upload →</Text>
+                        <Text style={styles.alertCta}>{t('dashboard.reupload')}</Text>
                       </View>
                       <Text style={styles.alertBody} numberOfLines={1}>
-                        {describeDocumentType(doc.type)} expires on{' '}
-                        {new Date(doc.expiryDate).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
+                        {t('dashboard.docExpiresOn', {
+                          document: describeDocumentType(doc.type),
+                          date: new Date(doc.expiryDate).toLocaleDateString(
+                            'en-IN',
+                            {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            },
+                          ),
                         })}
-                        . Re-upload to keep your kitchen visible.
                       </Text>
                     </View>
                   )}
@@ -538,7 +552,7 @@ export default function DashboardScreen() {
                   ]}
                 />
                 <Text style={styles.surgeBannerLabel}>
-                  {pendingOrders.length} orders awaiting acceptance
+                  {t('dashboard.ordersAwaiting', { count: pendingOrders.length })}
                 </Text>
               </View>
             )}
@@ -561,7 +575,7 @@ export default function DashboardScreen() {
                   accessibilityRole="link"
                 >
                   <Text style={styles.seeMoreInlineLabel}>
-                    +{pendingOrders.length - 3} more — open queue
+                    {t('dashboard.seeMore', { count: pendingOrders.length - 3 })}
                   </Text>
                 </Pressable>
               )}
@@ -582,7 +596,7 @@ export default function DashboardScreen() {
                 : FadeInDown.delay(140).duration(250).easing(ENTRANCE_EASING)
             }
           >
-            <Text style={styles.sectionLabel}>IN PROGRESS</Text>
+            <Text style={styles.sectionLabel}>{t('dashboard.inProgress')}</Text>
             <View style={styles.groupCard}>
               <View style={styles.groupCardInner}>
                 {inFlightOrders.slice(0, 5).map((order, idx, arr) => (
@@ -607,14 +621,18 @@ export default function DashboardScreen() {
           <View style={styles.bottomZone}>
             <View style={styles.quietBlock}>
               <Text style={styles.quietHeadline}>
-                {acceptingOrders ? 'Quiet right now' : 'Kitchen is closed'}
+                {acceptingOrders
+                  ? t('dashboard.quietRightNow')
+                  : t('dashboard.kitchenClosed')}
               </Text>
               <Text style={styles.quietBody}>
                 {acceptingOrders
                   ? lastOrderIso
-                    ? `Last order ${formatMinutesAgo(lastOrderIso)}. You're open and visible to customers.`
-                    : 'You’re open and visible to customers. New orders will appear here.'
-                  : 'Tap the Closed button above to start receiving orders.'}
+                    ? t('dashboard.quietLastOrder', {
+                        ago: formatMinutesAgo(lastOrderIso),
+                      })
+                    : t('dashboard.quietOpen')
+                  : t('dashboard.quietClosed')}
               </Text>
             </View>
           </View>

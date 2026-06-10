@@ -1,4 +1,5 @@
-import { FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from './ChefCard';
 import type { Chef } from '../../types/customer';
 
@@ -9,27 +10,33 @@ interface ChefGridProps {
   isRefreshing?: boolean;
 }
 
+// Skeleton matching the photo-led 4:3 ChefCard shape.
 function SkeletonCard() {
   return (
-    <View className="flex-1 rounded-2xl overflow-hidden bg-mist">
-      <View className="w-full h-40 bg-mist" />
-      <View className="p-3 gap-2">
-        <View className="h-4 w-3/4 rounded bg-mist" />
-        <View className="h-3 w-1/2 rounded bg-mist" />
-        <View className="h-3 w-1/3 rounded bg-mist" />
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonPhoto} />
+      <View style={styles.skeletonBody}>
+        <View style={styles.skeletonLine1} />
+        <View style={styles.skeletonLine2} />
+        <View style={styles.skeletonLine3} />
       </View>
     </View>
   );
 }
 
-export function ChefGrid({ chefs, isLoading, onRefresh, isRefreshing = false }: ChefGridProps) {
+export function ChefGrid({
+  chefs,
+  isLoading,
+  onRefresh,
+  isRefreshing = false,
+}: ChefGridProps) {
   if (isLoading) {
     return (
-      <View className="flex-row flex-wrap gap-3 px-4 pt-2">
-        <View className="flex-1"><SkeletonCard /></View>
-        <View className="flex-1"><SkeletonCard /></View>
-        <View className="flex-1"><SkeletonCard /></View>
-        <View className="flex-1"><SkeletonCard /></View>
+      <View style={styles.skeletonGrid}>
+        <View style={styles.skeletonCol}><SkeletonCard /></View>
+        <View style={styles.skeletonCol}><SkeletonCard /></View>
+        <View style={styles.skeletonCol}><SkeletonCard /></View>
+        <View style={styles.skeletonCol}><SkeletonCard /></View>
       </View>
     );
   }
@@ -39,14 +46,76 @@ export function ChefGrid({ chefs, isLoading, onRefresh, isRefreshing = false }: 
       data={chefs}
       keyExtractor={(item) => item.id}
       numColumns={2}
-      columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-      contentContainerStyle={{ paddingBottom: 100, gap: 12, paddingTop: 8 }}
+      columnWrapperStyle={styles.columnWrapper}
+      contentContainerStyle={styles.listContent}
       renderItem={({ item }) => <ChefCard chef={item} />}
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={customerColors.coral.DEFAULT}
+          />
         ) : undefined
       }
     />
   );
 }
+
+const styles = StyleSheet.create({
+  columnWrapper: {
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  listContent: {
+    paddingBottom: 100,
+    gap: 12,
+    paddingTop: 8,
+  },
+
+  // Skeleton grid — matches the 2-col layout
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  skeletonCol: {
+    flex: 1,
+    minWidth: '45%',
+  },
+  skeletonCard: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: customerColors.surface.soft,
+  },
+  skeletonPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonBody: {
+    padding: 10,
+    gap: 6,
+  },
+  skeletonLine1: {
+    height: 14,
+    width: '75%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonLine2: {
+    height: 12,
+    width: '55%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonLine3: {
+    height: 12,
+    width: '40%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+});

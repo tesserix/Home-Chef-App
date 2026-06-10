@@ -1,99 +1,126 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
   RefreshControl,
   SafeAreaView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Heart, Star } from 'lucide-react-native';
+import { Heart, ChefHat } from 'lucide-react-native';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import type { FavoriteChefEntry } from '../../hooks/useFavorites';
+import { ChefCard } from '../../components/chef/ChefCard';
 
-function FavoriteChefCard({
-  entry,
-  onUnfavorite,
-}: {
-  entry: FavoriteChefEntry;
-  onUnfavorite: (chefId: string) => void;
-}) {
-  const router = useRouter();
-  const chef = entry.chef;
+// ─── Loading skeleton ────────────────────────────────────────────────────────
 
+function SkeletonCard() {
   return (
-    <Pressable
-      style={styles.card}
-      onPress={() => router.push(`/chef/${chef.id}`)}
-      accessibilityLabel={`View ${chef.name}`}
-    >
-      <Image
-        source={chef.imageUrl ? { uri: chef.imageUrl } : null}
-        style={styles.cardImage}
-        contentFit="cover"
-        placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-        transition={200}
-      />
-
-      <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.chefName} numberOfLines={1}>
-            {chef.name}
-          </Text>
-          <Pressable
-            onPress={() => onUnfavorite(chef.id)}
-            hitSlop={8}
-            accessibilityLabel={`Remove ${chef.name} from favorites`}
-          >
-            <Heart size={20} color="#c95b3e" fill="#c95b3e" />
-          </Pressable>
-        </View>
-
-        <Text style={styles.cuisine} numberOfLines={1}>
-          {chef.cuisine}
-        </Text>
-
-        <View style={styles.metaRow}>
-          <Star size={12} color="#d1a64a" fill="#d1a64a" />
-          <Text style={styles.rating}>{chef.rating.toFixed(1)}</Text>
-          <Text style={styles.reviewCount}>({chef.reviewCount})</Text>
-
-          <View
-            style={[
-              styles.openBadge,
-              { backgroundColor: chef.isOpen ? '#C2410C' : '#7a7a76' },
-            ]}
-          >
-            <Text style={styles.openBadgeText}>
-              {chef.isOpen ? 'Open' : 'Closed'}
-            </Text>
-          </View>
-        </View>
+    <View className="flex-1 rounded-xl overflow-hidden bg-surface-soft">
+      <View className="w-full h-40 bg-hairline" />
+      <View className="p-3 gap-2">
+        <View className="h-4 rounded bg-hairline w-3/4" />
+        <View className="h-3 rounded bg-hairline w-1/2" />
+        <View className="h-3 rounded bg-hairline w-2/5" />
       </View>
-    </Pressable>
+    </View>
   );
 }
 
+function LoadingGrid() {
+  return (
+    <View className="flex-1 bg-canvas px-4 pt-4">
+      {/* Header skeleton */}
+      <View className="mb-4 gap-2">
+        <View className="h-7 rounded bg-hairline w-36" />
+        <View className="h-4 rounded bg-hairline w-20" />
+      </View>
+      {/* Card skeleton rows */}
+      <View className="flex-row gap-3 mb-3">
+        <SkeletonCard />
+        <SkeletonCard />
+      </View>
+      <View className="flex-row gap-3 mb-3">
+        <SkeletonCard />
+        <SkeletonCard />
+      </View>
+    </View>
+  );
+}
+
+// ─── Error state ─────────────────────────────────────────────────────────────
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4">
+      <View className="w-16 h-16 rounded-full bg-surface-soft items-center justify-center">
+        <Heart size={28} color="#EBEBEB" />
+      </View>
+      <Text className="text-lg font-semibold text-charcoal text-center font-display">
+        Something went wrong
+      </Text>
+      <Text className="text-sm text-charcoal-soft text-center">
+        We could not load your saved chefs. Please try again.
+      </Text>
+      {/* Coral CTA — visual styles on inner View per iOS Pressable bug */}
+      <Pressable onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading favorites">
+        <View className="bg-coral rounded-lg px-6 py-3 min-h-[44px] items-center justify-center">
+          <Text className="text-canvas font-semibold text-sm">Try again</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  const router = useRouter();
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
+      {/* Surface-soft icon circle */}
+      <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
+        <ChefHat size={36} color="#717171" />
+      </View>
+      <View className="items-center gap-2">
+        <Text className="text-xl font-bold text-charcoal text-center font-display">
+          No saved chefs yet
+        </Text>
+        <Text className="text-sm text-charcoal-soft text-center leading-5">
+          Tap the heart on any chef card to save them here for easy ordering.
+        </Text>
+      </View>
+      {/* Coral "Browse chefs" CTA — visual styles on inner View */}
+      <Pressable
+        onPress={() => router.push('/(tabs)/')}
+        accessibilityRole="button"
+        accessibilityLabel="Browse chefs"
+      >
+        <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
+          <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
+
 export default function FavoritesScreen() {
-  const { data, isLoading, isRefetching, refetch } = useFavorites();
+  const { data, isLoading, isError, isRefetching, refetch } = useFavorites();
   const toggleFavorite = useToggleFavorite();
-  // Optimistic local state — list of chef IDs being removed
+  // Optimistic local state — set of chef IDs currently being removed
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
 
   function handleUnfavorite(chefId: string) {
-    // Optimistic removal
     setRemovingIds((prev) => new Set([...prev, chefId]));
 
     toggleFavorite.mutate(
       { chefId, isFavorited: true },
       {
         onError: () => {
-          // Restore on error
           setRemovingIds((prev) => {
             const next = new Set(prev);
             next.delete(chefId);
@@ -115,173 +142,66 @@ export default function FavoritesScreen() {
   const visibleEntries =
     data?.data.filter((e) => !removingIds.has(e.chefId)) ?? [];
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#C2410C" />
-        </View>
+      <SafeAreaView className="flex-1 bg-canvas">
+        <LoadingGrid />
       </SafeAreaView>
     );
   }
 
+  // ── Error ────────────────────────────────────────────────────────────────
+  if (isError) {
+    return (
+      <SafeAreaView className="flex-1 bg-canvas">
+        <ErrorState onRetry={() => void refetch()} />
+      </SafeAreaView>
+    );
+  }
+
+  // ── List (including empty) ───────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Saved Chefs</Text>
-        {data && (
-          <Text style={styles.subtitle}>
-            {visibleEntries.length}/{data.max} saved
+    <SafeAreaView className="flex-1 bg-canvas">
+      {/* ── Header ── */}
+      <View className="px-4 pt-3 pb-2 flex-row items-baseline gap-2">
+        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
+          Favorites
+        </Text>
+        {data != null && (
+          <Text className="text-sm text-charcoal-soft">
+            {visibleEntries.length}/{data.max}
           </Text>
         )}
       </View>
 
-      <FlatList
+      {/* ── 2-col photo grid ── */}
+      <FlatList<FavoriteChefEntry>
         data={visibleEntries}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <FavoriteChefCard entry={item} onUnfavorite={handleUnfavorite} />
-        )}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
+        contentContainerStyle={
+          visibleEntries.length === 0
+            ? { flexGrow: 1 }
+            : { paddingTop: 8, paddingBottom: 24, gap: 12 }
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={() => void refetch()}
-            tintColor="#C2410C"
+            tintColor="#FF385C"
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>❤️</Text>
-            <Text style={styles.emptyTitle}>No saved chefs yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap the heart on any chef to save them!
-            </Text>
+        renderItem={({ item }) => (
+          // flex-1 wrapper so each column cell fills the available width.
+          // The Pressable inside ChefCard is already `flex-1`.
+          <View className="flex-1">
+            <ChefCard chef={item.chef} />
           </View>
-        }
-        contentContainerStyle={
-          visibleEntries.length === 0 ? styles.emptyContent : styles.listContent
-        }
+        )}
+        ListEmptyComponent={<EmptyState />}
       />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fafaf7',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a18',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#7a7a76',
-  },
-  listContent: {
-    padding: 16,
-    gap: 12,
-  },
-  emptyContent: {
-    flex: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4a4a47',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#7a7a76',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-  // Card styles
-  card: {
-    backgroundColor: '#fafaf7',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 12,
-    shadowColor: '#1a1a18',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardImage: {
-    width: '100%',
-    height: 140,
-  },
-  cardBody: {
-    padding: 12,
-    gap: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  chefName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a18',
-    flex: 1,
-    marginRight: 8,
-  },
-  cuisine: {
-    fontSize: 13,
-    color: '#7a7a76',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  rating: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4a4a47',
-  },
-  reviewCount: {
-    fontSize: 12,
-    color: '#7a7a76',
-  },
-  openBadge: {
-    marginLeft: 'auto',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  openBadgeText: {
-    fontSize: 11,
-    color: '#fafaf7',
-    fontWeight: '600',
-  },
-});

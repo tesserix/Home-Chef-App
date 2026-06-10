@@ -4,17 +4,28 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 
-const CUISINES = ['All', 'North Indian', 'South Indian', 'Chinese', 'Continental', 'Italian', 'Healthy'];
+const CUISINES = [
+  'All',
+  'North Indian',
+  'South Indian',
+  'Chinese',
+  'Continental',
+  'Italian',
+  'Healthy',
+];
 
 const SORT_OPTIONS: { label: string; value: ChefFilters['sort'] }[] = [
   { label: 'Recommended', value: 'rating' },
@@ -23,14 +34,15 @@ const SORT_OPTIONS: { label: string; value: ChefFilters['sort'] }[] = [
   { label: 'Price', value: 'price' },
 ];
 
+// Skeleton card matching the photo-led 4:3 ChefCard shape.
 function SkeletonCard() {
   return (
-    <View className="flex-1 rounded-2xl overflow-hidden bg-mist">
-      <View className="w-full h-40 bg-mist" />
-      <View className="p-3 gap-2">
-        <View className="h-4 w-3/4 rounded bg-mist" />
-        <View className="h-3 w-1/2 rounded bg-mist" />
-        <View className="h-3 w-1/3 rounded bg-mist" />
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonPhoto} />
+      <View style={styles.skeletonBody}>
+        <View style={styles.skeletonLine1} />
+        <View style={styles.skeletonLine2} />
+        <View style={styles.skeletonLine3} />
       </View>
     </View>
   );
@@ -74,112 +86,156 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <>
-      {/* Search bar */}
-      <View className="flex-row items-center bg-bone border border-mist rounded-xl mx-4 mt-4 mb-3 px-3 gap-2">
-        <Search size={18} color="#7a7a76" />
-        <TextInput
-          value={searchText}
-          onChangeText={setSearchText}
-          placeholder="Search chefs, cuisines..."
-          placeholderTextColor="#7a7a76"
-          className="flex-1 py-3 text-sm text-ink"
-          returnKeyType="search"
-          accessibilityLabel="Search chefs"
-        />
+      {/* Floating white search pill — the brand's first impression.
+          radius-full, shadow[2], charcoal-soft magnifier + placeholder. */}
+      <View style={styles.searchPillWrapper}>
+        <View style={styles.searchPill}>
+          <Search
+            size={18}
+            color={customerColors.charcoal.soft}
+            accessibilityElementsHidden
+          />
+          <TextInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="What are you craving?"
+            placeholderTextColor={customerColors.charcoal.soft}
+            style={styles.searchInput}
+            returnKeyType="search"
+            accessibilityLabel="Search chefs"
+          />
+        </View>
       </View>
 
-      {/* Cuisine filter chips */}
+      {/* Airbnb category chip row: selected = charcoal text + 2px charcoal
+          underline, unselected = charcoal-soft, NO fill / NO border. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 4 }}
-        className="mb-3"
+        contentContainerStyle={styles.chipRowContent}
+        style={styles.chipRow}
+        accessibilityRole="tablist"
       >
-        {CUISINES.map((cuisine) => (
-          <Pressable
-            key={cuisine}
-            onPress={() => setSelectedCuisine(cuisine)}
-            className={`px-4 py-2 rounded-full border ${
-              selectedCuisine === cuisine
-                ? 'bg-herb border-herb'
-                : 'bg-bone border-mist'
-            }`}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${cuisine}`}
-          >
-            <Text
-              className={`text-sm font-medium ${
-                selectedCuisine === cuisine ? 'text-paper' : 'text-ink-soft'
-              }`}
+        {CUISINES.map((cuisine) => {
+          const isSelected = selectedCuisine === cuisine;
+          return (
+            // className-based Pressable is safe on iOS (no function-style style prop).
+            <Pressable
+              key={cuisine}
+              onPress={() => setSelectedCuisine(cuisine)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`Filter by ${cuisine}`}
             >
-              {cuisine}
-            </Text>
-          </Pressable>
-        ))}
+              <View style={[styles.chip, isSelected && styles.chipSelected]}>
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                  ]}
+                >
+                  {cuisine}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
-      {/* Open Now toggle + Sort row */}
-      <View className="flex-row items-center justify-between px-4 mb-3 gap-2">
+      {/* Open-Now toggle + Sort chips + filter icon row.
+          Coral only for selected state; unselected = charcoal-soft. */}
+      <View style={styles.filterRow}>
+        {/* Open Now toggle */}
         <Pressable
-          onPress={() => setIsOpenOnly((prev: boolean) => !prev)}
-          className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
-            isOpenOnly ? 'bg-herb border-herb' : 'bg-bone border-mist'
-          }`}
+          onPress={() => setIsOpenOnly((prev) => !prev)}
           accessibilityRole="button"
-          accessibilityLabel="Toggle open now filter"
+          accessibilityLabel={isOpenOnly ? 'Showing open chefs only' : 'Show open chefs only'}
+          accessibilityState={{ checked: isOpenOnly }}
         >
           <View
-            className={`w-2 h-2 rounded-full ${isOpenOnly ? 'bg-bone' : 'bg-herb'}`}
-          />
-          <Text
-            className={`text-xs font-medium ${isOpenOnly ? 'text-paper' : 'text-ink-soft'}`}
+            style={[
+              styles.openNowPill,
+              isOpenOnly && styles.openNowPillActive,
+            ]}
           >
-            Open Now
-          </Text>
+            <View
+              style={[
+                styles.openNowDot,
+                isOpenOnly ? styles.openNowDotActive : styles.openNowDotInactive,
+              ]}
+            />
+            <Text
+              style={[
+                styles.openNowLabel,
+                isOpenOnly ? styles.openNowLabelActive : styles.openNowLabelDefault,
+              ]}
+            >
+              Open Now
+            </Text>
+          </View>
         </Pressable>
 
+        {/* Sort chips — horizontal scroll in a flex-1 container */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 6 }}
+          contentContainerStyle={styles.sortScrollContent}
+          style={styles.sortScroll}
         >
-          {SORT_OPTIONS.map((opt, index) => (
-            <Pressable
-              key={index}
-              onPress={() => setSort(opt.value)}
-              className={`px-3 py-1.5 rounded-full border ${
-                sort === opt.value && SORT_OPTIONS.findIndex((o) => o.value === sort) === index
-                  ? 'bg-herb-tint border-herb-tint'
-                  : 'bg-bone border-mist'
-              }`}
-              accessibilityRole="button"
-              accessibilityLabel={`Sort by ${opt.label}`}
-            >
-              <Text className="text-xs text-ink-soft font-medium">{opt.label}</Text>
-            </Pressable>
-          ))}
+          {SORT_OPTIONS.map((opt, index) => {
+            const isActive =
+              sort === opt.value &&
+              SORT_OPTIONS.findIndex((o) => o.value === sort) === index;
+            return (
+              <Pressable
+                key={index}
+                onPress={() => setSort(opt.value)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${opt.label}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                <View style={[styles.sortChip, isActive && styles.sortChipActive]}>
+                  <Text
+                    style={[
+                      styles.sortChipLabel,
+                      isActive ? styles.sortChipLabelActive : styles.sortChipLabelDefault,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
-        <SlidersHorizontal size={18} color="#7a7a76" />
+        <SlidersHorizontal
+          size={18}
+          color={customerColors.charcoal.soft}
+          accessibilityElementsHidden
+        />
       </View>
 
-      {/* Quick-access row: Social Feed and Catering */}
-      <View className="flex-row gap-2 px-4 py-2 mb-1">
+      {/* Quick-access: Social Feed + Catering — clean charcoal pills on white.
+          Ghost outline style, no fill, no persimmon. */}
+      <View style={styles.quickLinks}>
         <Pressable
           onPress={() => router.push('/social')}
-          className="bg-bone border border-mist rounded-full px-4 py-1.5 active:bg-paper"
           accessibilityRole="button"
           accessibilityLabel="Go to Social Feed"
         >
-          <Text className="text-sm text-ink">Social Feed</Text>
+          <View style={styles.quickLinkPill}>
+            <Text style={styles.quickLinkLabel}>Social Feed</Text>
+          </View>
         </Pressable>
         <Pressable
           onPress={() => router.push('/catering')}
-          className="bg-bone border border-mist rounded-full px-4 py-1.5 active:bg-paper"
           accessibilityRole="button"
           accessibilityLabel="Go to Catering"
         >
-          <Text className="text-sm text-ink">Catering</Text>
+          <View style={styles.quickLinkPill}>
+            <Text style={styles.quickLinkLabel}>Catering</Text>
+          </View>
         </Pressable>
       </View>
     </>
@@ -187,41 +243,288 @@ export default function HomeScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-paper">
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         {renderHeader()}
-        <View className="flex-row flex-wrap gap-3 px-4 pt-2">
-          <View className="flex-1"><SkeletonCard /></View>
-          <View className="flex-1"><SkeletonCard /></View>
-          <View className="flex-1"><SkeletonCard /></View>
-          <View className="flex-1"><SkeletonCard /></View>
+        <View style={styles.skeletonGrid}>
+          <View style={styles.skeletonCol}><SkeletonCard /></View>
+          <View style={styles.skeletonCol}><SkeletonCard /></View>
+          <View style={styles.skeletonCol}><SkeletonCard /></View>
+          <View style={styles.skeletonCol}><SkeletonCard /></View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View className="flex-1 bg-paper">
+    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <FlatList
         data={chefs}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-        contentContainerStyle={{ paddingBottom: 100, gap: 12, paddingTop: 4 }}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
         renderItem={({ item }) => <ChefCard chef={item} />}
         refreshControl={
           <RefreshControl
             refreshing={isFetching && !isLoading}
             onRefresh={refetch}
+            tintColor={customerColors.coral.DEFAULT}
           />
         }
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-16">
-            <Text className="text-ink-muted text-base">No chefs found</Text>
-            <Text className="text-ink-muted text-sm mt-1">Try adjusting your filters</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No chefs found</Text>
+            <Text style={styles.emptyBody}>Try adjusting your filters</Text>
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: customerColors.canvas,
+  },
+
+  // --- Floating search pill ---
+  // Outer wrapper provides horizontal margins and top spacing.
+  searchPillWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: customerColors.surface.DEFAULT,
+    borderRadius: 9999, // radius-full
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+    // shadow[2] per spec
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 15,
+    color: customerColors.charcoal.DEFAULT,
+    // Remove any default padding React Native adds on Android
+    padding: 0,
+  },
+
+  // --- Airbnb category chip row ---
+  chipRow: {
+    marginBottom: 4,
+  },
+  chipRowContent: {
+    gap: 0, // chips are spaced by their own padding
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    // No fill, no border on default state
+  },
+  chipSelected: {
+    borderBottomWidth: 2,
+    borderBottomColor: customerColors.charcoal.DEFAULT,
+  },
+  chipLabel: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    letterSpacing: 0,
+  },
+  chipLabelSelected: {
+    color: customerColors.charcoal.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
+  },
+  chipLabelDefault: {
+    color: customerColors.charcoal.soft,
+  },
+
+  // --- Open Now toggle + Sort row ---
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  openNowPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+    minHeight: 34,
+  },
+  openNowPillActive: {
+    borderColor: customerColors.charcoal.DEFAULT,
+    backgroundColor: customerColors.charcoal.DEFAULT,
+  },
+  openNowDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  openNowDotActive: {
+    backgroundColor: customerColors.coral.DEFAULT,
+  },
+  openNowDotInactive: {
+    backgroundColor: customerColors.coral.DEFAULT,
+    opacity: 0.6,
+  },
+  openNowLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+  },
+  openNowLabelActive: {
+    color: customerColors.canvas,
+  },
+  openNowLabelDefault: {
+    color: customerColors.charcoal.soft,
+  },
+  sortScroll: {
+    flex: 1,
+  },
+  sortScrollContent: {
+    gap: 6,
+  },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+    minHeight: 34,
+    justifyContent: 'center',
+  },
+  sortChipActive: {
+    borderColor: customerColors.charcoal.DEFAULT,
+    backgroundColor: customerColors.charcoal.DEFAULT,
+  },
+  sortChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+  },
+  sortChipLabelActive: {
+    color: customerColors.canvas,
+  },
+  sortChipLabelDefault: {
+    color: customerColors.charcoal.soft,
+  },
+
+  // --- Quick access links ---
+  quickLinks: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  quickLinkPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  quickLinkLabel: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
+  },
+
+  // --- List layout ---
+  columnWrapper: {
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  listContent: {
+    paddingBottom: 100,
+    gap: 12,
+    paddingTop: 4,
+  },
+
+  // --- Empty state ---
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+  },
+  emptyTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.charcoal.DEFAULT,
+    marginBottom: 4,
+  },
+  emptyBody: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: customerColors.charcoal.soft,
+  },
+
+  // --- Skeleton grid ---
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  skeletonCol: {
+    flex: 1,
+    minWidth: '45%',
+  },
+  skeletonCard: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: customerColors.surface.soft,
+  },
+  skeletonPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonBody: {
+    padding: 10,
+    gap: 6,
+  },
+  skeletonLine1: {
+    height: 14,
+    width: '75%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonLine2: {
+    height: 12,
+    width: '55%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+  skeletonLine3: {
+    height: 12,
+    width: '40%',
+    borderRadius: 4,
+    backgroundColor: customerColors.hairline,
+  },
+});

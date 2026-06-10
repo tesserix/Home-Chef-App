@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
@@ -180,6 +181,7 @@ function PayoutAccountRow({
   bankIFSC,
   upiId,
 }: PayoutAccountRowProps) {
+  const { t } = useTranslation();
   const hasBank =
     payoutMethod === 'bank_transfer' && bankAccountNumber.trim() !== '';
   const hasUpi = payoutMethod === 'upi' && upiId.trim() !== '';
@@ -190,13 +192,13 @@ function PayoutAccountRow({
     label = bankAccountName
       ? `${bankAccountName} · ${bankAccountNumber}`
       : bankAccountNumber;
-    sublabel = bankIFSC ? `IFSC ${bankIFSC}` : 'Bank account';
+    sublabel = bankIFSC ? t('earnings.ifsc', { ifsc: bankIFSC }) : t('earnings.bankAccount');
   } else if (hasUpi) {
     label = upiId;
-    sublabel = 'UPI';
+    sublabel = t('earnings.upi');
   } else {
-    label = 'No payout account';
-    sublabel = 'Tap to add a bank account or UPI ID';
+    label = t('earnings.noPayoutAccount');
+    sublabel = t('earnings.addPayoutHint');
   }
 
   return (
@@ -213,7 +215,7 @@ function PayoutAccountRow({
           ]}
         >
           <View style={accountRowStyles.textBlock}>
-            <Text style={accountRowStyles.sectionLabel}>PAYOUT ACCOUNT</Text>
+            <Text style={accountRowStyles.sectionLabel}>{t('earnings.payoutAccountLabel')}</Text>
             <Text style={accountRowStyles.value} numberOfLines={1}>
               {label}
             </Text>
@@ -341,6 +343,7 @@ interface OrderHistoryRowProps {
 }
 
 function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={onPress}
@@ -365,7 +368,7 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
           <View style={orderRowStyles.rightBlock}>
             <Text style={orderRowStyles.netPayout}>{fmtInr(order.netPayout)}</Text>
             <Text style={orderRowStyles.gross}>
-              Gross {fmtInr(order.gross)}
+              {t('earnings.gross', { amount: fmtInr(order.gross) })}
             </Text>
           </View>
           <ChevronLeft
@@ -439,6 +442,7 @@ interface StatementRowProps {
 }
 
 function StatementRow({ statement, onPress }: StatementRowProps) {
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={onPress}
@@ -457,15 +461,16 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
               {fmtWeekRange(statement.weekStart, statement.weekEnd)}
             </Text>
             <Text style={orderRowStyles.date}>
-              {statement.ordersCount} order
-              {statement.ordersCount === 1 ? '' : 's'}
+              {statement.ordersCount === 1
+                ? t('earnings.ordersInPeriodOne', { count: statement.ordersCount })
+                : t('earnings.ordersInPeriod', { count: statement.ordersCount })}
             </Text>
           </View>
           <View style={orderRowStyles.rightBlock}>
             <Text style={orderRowStyles.netPayout}>
               {fmtInr(statement.netPayout)}
             </Text>
-            <Text style={statementRowStyles.download}>Download PDF</Text>
+            <Text style={statementRowStyles.download}>{t('earnings.downloadPdfShort')}</Text>
           </View>
           <ChevronLeft
             size={14}
@@ -503,6 +508,7 @@ interface TaxDocumentRowProps {
 }
 
 function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={onPress}
@@ -517,15 +523,15 @@ function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
           ]}
         >
           <View style={accountRowStyles.textBlock}>
-            <Text style={accountRowStyles.sectionLabel}>TAX DOCUMENTS</Text>
+            <Text style={accountRowStyles.sectionLabel}>{t('earnings.taxDocumentsLabel')}</Text>
             <Text style={accountRowStyles.value} numberOfLines={1}>
-              TDS certificate · {fyLabel}
+              {t('earnings.tdsCertificateFy', { fy: fyLabel })}
             </Text>
             <Text style={accountRowStyles.sub} numberOfLines={1}>
-              Annual summary (Section 194-O)
+              {t('earnings.annualSummary')}
             </Text>
           </View>
-          <Text style={statementRowStyles.download}>Download</Text>
+          <Text style={statementRowStyles.download}>{t('earnings.downloadShort')}</Text>
         </View>
       )}
     </Pressable>
@@ -540,11 +546,12 @@ interface RefundRowProps {
 }
 
 function RefundRow({ refund, onPress }: RefundRowProps) {
+  const { t } = useTranslation();
   const detail =
     refund.reason ||
     (refund.items && refund.items.length > 0
       ? refund.items.map((i) => i.name).join(', ')
-      : 'Refund');
+      : t('earnings.refund'));
   return (
     <Pressable
       onPress={onPress}

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
@@ -22,15 +23,16 @@ import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
 
 type ActiveTab = 'queue' | 'history';
 
-const HISTORY_STATUS_LABEL: Record<string, string> = {
-  delivered: 'Delivered',
-  picked_up: 'Picked up',
-  cancelled: 'Cancelled',
-  rejected: 'Rejected',
-  accepted: 'Accepted',
-  preparing: 'Preparing',
-  ready: 'Ready',
-  pending: 'Pending',
+// Maps order status to its key under the `orders.status` i18n namespace.
+const HISTORY_STATUS_KEY: Record<string, string> = {
+  delivered: 'delivered',
+  picked_up: 'pickedUp',
+  cancelled: 'cancelled',
+  rejected: 'rejected',
+  accepted: 'accepted',
+  preparing: 'preparing',
+  ready: 'ready',
+  pending: 'pending',
 };
 
 // Status chip palette per UI-V2-SPEC §2: tint bg + dark text of same hue.
@@ -77,6 +79,9 @@ function formatMinutesAgo(iso: string): string {
 // it client-side, accepting that page boundaries can produce duplicate
 // headers on infinite scroll. Acceptable for now; documented in the
 // backend asks list.
+// Returns either an i18n key ('orders.today' / 'orders.yesterday') for the
+// relative buckets, or a pre-formatted locale date string for older buckets.
+// Render-side decides whether to translate or display verbatim.
 function dateBucketFor(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'Unknown';
@@ -86,8 +91,8 @@ function dateBucketFor(iso: string): string {
   const diffDays = Math.floor(
     (startOfDay(today) - startOfDay(d)) / (1000 * 60 * 60 * 24),
   );
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
+  if (diffDays === 0) return 'orders.today';
+  if (diffDays === 1) return 'orders.yesterday';
   return d.toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
@@ -98,6 +103,7 @@ function dateBucketFor(iso: string): string {
 // ----- Queue tab (live pending orders) -----------------------------------
 
 function QueueTab() {
+  const { t } = useTranslation();
   const { data, isLoading, refetch } = useVendorPendingOrders();
   const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } =
     useOrderAction();
@@ -151,7 +157,7 @@ function QueueTab() {
                 ]}
               />
               <Text style={styles.surgeBannerLabel}>
-                {orders.length} orders awaiting acceptance
+                {t('orders.ordersAwaiting', { count: orders.length })}
               </Text>
             </View>
           ) : null
@@ -185,11 +191,12 @@ function QueueTab() {
 function QueueEmpty() {
   // Reuse `lastOrderIso` style messaging from the dashboard's quiet block.
   // The hook doesn't return last-known data here, so the copy is generic.
+  const { t } = useTranslation();
   return (
     <View style={styles.emptyBlock}>
-      <Text style={styles.emptyHeadline}>Queue is clear</Text>
+      <Text style={styles.emptyHeadline}>{t('orders.queueClear')}</Text>
       <Text style={styles.emptyBody}>
-        New orders will appear here automatically. Your queue is up to date.
+        {t('orders.queueClearBody')}
       </Text>
     </View>
   );
@@ -209,6 +216,7 @@ interface HistoryListItem {
 }
 
 function HistoryTab() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const { data, isLoading, refetch } = useVendorOrderHistory(page);
   const orders = data?.orders ?? [];
@@ -285,7 +293,10 @@ function HistoryTab() {
       renderItem={({ item }) =>
         item.type === 'header' ? (
           <Text style={styles.dateHeader}>
-            {(item.bucket ?? '').toUpperCase()}
+            {(item.bucket?.startsWith('orders.')
+              ? t(item.bucket)
+              : (item.bucket ?? '')
+            ).toUpperCase()}
           </Text>
         ) : item.order ? (
           <HistoryRow
@@ -297,9 +308,9 @@ function HistoryTab() {
       }
       ListEmptyComponent={
         <View style={styles.emptyBlock}>
-          <Text style={styles.emptyHeadline}>No orders yet</Text>
+          <Text style={styles.emptyHeadline}>{t('orders.noOrdersYet')}</Text>
           <Text style={styles.emptyBody}>
-            Once customers start ordering, you'll see them here.
+            {t('orders.noOrdersBody')}
           </Text>
         </View>
       }
@@ -318,7 +329,9 @@ interface HistoryRowProps {
 // shadow lives on an outer wrapper so the inner overflow-hidden clip (needed
 // for the pressed-state bone fill to respect the radius) doesn't cut it off.
 function HistoryRow({ order, first, last }: HistoryRowProps) {
+  const { t } = useTranslation();
   const chip = HISTORY_STATUS_CHIP[order.status] ?? STATUS_CHIP_FALLBACK;
+  const statusKey = HISTORY_STATUS_KEY[order.status];
   return (
     <View
       style={[
@@ -351,7 +364,7 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
                 style={[historyRowStyles.chip, { backgroundColor: chip.bg }]}
               >
                 <Text style={[historyRowStyles.chipLabel, { color: chip.text }]}>
-                  {HISTORY_STATUS_LABEL[order.status] ?? order.status}
+                  {statusKey ? t(`orders.status.${statusKey}`) : order.status}
                 </Text>
               </View>
               <View style={historyRowStyles.nameBlock}>
@@ -377,25 +390,26 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
 // ----- Screen shell -------------------------------------------------------
 
 export default function OrdersScreen() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ActiveTab>('queue');
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       {/* Zone A — Command bar */}
       <View style={styles.commandBar}>
-        <Text style={styles.commandTitle}>Orders</Text>
+        <Text style={styles.commandTitle}>{t('orders.title')}</Text>
       </View>
 
       {/* iOS-style segmented control (UI-V2-SPEC §5) — mist track with a
           raised paper segment for the active tab. */}
       <View style={styles.segmentTrack}>
         <TabLabel
-          label="Queue"
+          label={t('orders.queue')}
           active={activeTab === 'queue'}
           onPress={() => setActiveTab('queue')}
         />
         <TabLabel
-          label="History"
+          label={t('orders.history')}
           active={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
         />
