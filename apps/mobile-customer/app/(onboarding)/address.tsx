@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -6,13 +7,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Search, MapPin } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import {
+  useAddressAutocomplete,
+  type AddressSuggestion,
+} from '../../hooks/useLocations';
 
 const schema = z.object({
   addressLine1: z.string().min(5, 'Address must be at least 5 characters'),
@@ -33,11 +41,29 @@ export default function AddressScreen() {
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<AddressForm>({
     resolver: zodResolver(schema),
     defaultValues: { addressLine1: '', city: '', state: '', pincode: '' },
   });
+
+  // Address autocomplete (Photon/OpenStreetMap via the backend). The search
+  // box is a shortcut — it fills the fields below, which stay editable.
+  const [addressQuery, setAddressQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { data: suggestions = [], isFetching: isSearching } =
+    useAddressAutocomplete(addressQuery);
+
+  function pickSuggestion(s: AddressSuggestion): void {
+    setValue('addressLine1', s.line1 || s.description, { shouldValidate: true });
+    if (s.city) setValue('city', s.city, { shouldValidate: true });
+    if (s.region) setValue('state', s.region, { shouldValidate: true });
+    if (s.postal) setValue('pincode', s.postal, { shouldValidate: true });
+    setAddressQuery('');
+    setShowSuggestions(false);
+    Keyboard.dismiss();
+  }
 
   const onSubmit = (data: AddressForm) => {
     router.push({
@@ -77,9 +103,65 @@ export default function AddressScreen() {
           <Text className="text-[26px] font-bold text-charcoal tracking-tight font-display mb-2">
             Your delivery address
           </Text>
-          <Text className="text-[15px] text-charcoal-soft mb-8">
+          <Text className="text-[15px] text-charcoal-soft mb-6">
             Where should we deliver your orders?
           </Text>
+
+          {/* ── Address autocomplete (Photon/OpenStreetMap) ── */}
+          {/* A search shortcut that fills the fields below; they stay editable. */}
+          <View className="flex-row items-center h-12 bg-surface-soft rounded-lg px-4 mb-2 gap-2">
+            <Search size={18} color={customerColors.charcoal.soft} />
+            <TextInput
+              className="flex-1 text-base text-charcoal"
+              placeholder="Search for your address"
+              placeholderTextColor={customerColors.charcoal.soft}
+              value={addressQuery}
+              onChangeText={(t) => {
+                setAddressQuery(t);
+                setShowSuggestions(true);
+              }}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="search"
+              accessibilityLabel="Search for your address"
+            />
+            {isSearching ? (
+              <ActivityIndicator size="small" color={customerColors.coral.DEFAULT} />
+            ) : null}
+          </View>
+
+          {showSuggestions && suggestions.length > 0 ? (
+            <View className="bg-surface border border-hairline rounded-lg mb-4 overflow-hidden">
+              {suggestions.map((s, i) => (
+                <Pressable
+                  key={`${s.description}-${i}`}
+                  onPress={() => pickSuggestion(s)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use address ${s.description}`}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={`flex-row items-start gap-3 px-4 py-3 ${
+                        pressed ? 'bg-surface-soft' : ''
+                      } ${i < suggestions.length - 1 ? 'border-b border-hairline' : ''}`}
+                    >
+                      <MapPin
+                        size={18}
+                        color={customerColors.charcoal.soft}
+                        style={{ marginTop: 2 }}
+                      />
+                      <Text
+                        className="flex-1 text-sm text-charcoal leading-5"
+                        numberOfLines={2}
+                      >
+                        {s.description}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
           {/* ── Address Line 1 ── */}
           <Text className="text-sm font-medium text-charcoal mb-1">
