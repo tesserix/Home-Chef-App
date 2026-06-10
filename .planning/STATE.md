@@ -80,6 +80,7 @@ Recent decisions affecting current work:
 |---|-------------|------|--------|-----------|
 | 260610-grk | Vendor app UX improvements from design critique | 2026-06-10 | 2dee223 | [260610-grk-vendor-app-ux-improvements-from-design-c](./quick/260610-grk-vendor-app-ux-improvements-from-design-c/) |
 | 260610-ica | Vendor app v2 visual redesign (canvas+cards, dark hero, motion) | 2026-06-10 | f2a5814 | [260610-ica-vendor-app-v2-visual-redesign-canvas-car](./quick/260610-ica-vendor-app-v2-visual-redesign-canvas-car/) |
+| 260610-iy5 | Customer app v2 Airbnb redesign + data-layer fixes; checkout address mapping fix + per-item special instructions | 2026-06-10 | 55258a5 | [260610-iy5-customer-app-v2-redesign-plan-airbnb-pal](./quick/260610-iy5-customer-app-v2-redesign-plan-airbnb-pal/) |
 
 ### Blockers/Concerns
 
