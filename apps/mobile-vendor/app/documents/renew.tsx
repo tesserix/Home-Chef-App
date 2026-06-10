@@ -3,11 +3,13 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,6 +41,37 @@ interface ChefDocument {
 // sheet relevant. Mirrors models.IsPhotoDoc in the Go backend.
 function isPhotoDoc(type: string): boolean {
   return type.startsWith('kitchen_photo_') || type === 'profile_image';
+}
+
+// Auto-format a digit string into DD / MM / YYYY as the chef types.
+function formatExpiryInput(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8);
+  const parts = [d.slice(0, 2), d.slice(2, 4), d.slice(4, 8)].filter(Boolean);
+  return parts.join(' / ');
+}
+
+// Parse "DD / MM / YYYY" → ISO "YYYY-MM-DD". Returns null if the date is
+// invalid or not in the future (an expiry must be ahead of today).
+function expiryToISO(input: string): string | null {
+  const m = input.replace(/\s/g, '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m;
+  const day = Number(dd);
+  const month = Number(mm);
+  const year = Number(yyyy);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null; // rolled over (e.g. 31/02) → not a real date
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (date <= today) return null; // expiry must be in the future
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function useChefDocuments() {
@@ -111,6 +144,58 @@ export default function DocumentsRenewScreen() {
   const replace = useReplaceDocument();
   const { show: showToast } = useToast();
   const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  // When a doc that carries an expiry is replaced, we hold the picked file
+  // here and ask for the new expiry date before submitting.
+  const [expiryPrompt, setExpiryPrompt] = useState<{
+    docId: string;
+    docType: string;
+    uri: string;
+    mimeType: string;
+    filename: string;
+  } | null>(null);
+  const [expiryText, setExpiryText] = useState('');
+
+  // Submit a replacement (optionally with a new expiry date) + surface result.
+  async function submitReplace(
+    docId: string,
+    docType: string,
+    uri: string,
+    mimeType: string,
+    filename: string,
+    expiryDate?: string,
+  ): Promise<void> {
+    setBusyDocId(docId);
+    try {
+      await replace.mutateAsync({ docId, uri, mimeType, filename, expiryDate });
+      showToast({
+        message: `${describeDocumentType(docType)} re-uploaded for verification.`,
+        tone: 'success',
+      });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ??
+        (err instanceof Error ? err.message : 'Upload failed.');
+      showToast({ message: msg, tone: 'error' });
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  // Confirm the entered expiry date and submit the held file.
+  function confirmExpiry(): void {
+    if (!expiryPrompt) return;
+    const iso = expiryToISO(expiryText);
+    if (!iso) {
+      showToast({
+        message: 'Enter a valid future date (DD / MM / YYYY).',
+        tone: 'error',
+      });
+      return;
+    }
+    const p = expiryPrompt;
+    setExpiryPrompt(null);
+    void submitReplace(p.docId, p.docType, p.uri, p.mimeType, p.filename, iso);
+  }
 
   async function pickAndUpload(doc: ChefDocument, source: 'camera' | 'gallery' | 'pdf'): Promise<void> {
     setBusyDocId(doc.id);
@@ -160,11 +245,21 @@ export default function DocumentsRenewScreen() {
         filename = result.assets[0].name ?? 'document.pdf';
       }
 
-      await replace.mutateAsync({ docId: doc.id, uri, mimeType, filename });
-      showToast({
-        message: `${describeDocumentType(doc.type)} re-uploaded for verification.`,
-        tone: 'success',
-      });
+      // Docs that carry an expiry (e.g. FSSAI) need a fresh expiry date —
+      // collect it before submitting so the new file isn't saved with the
+      // stale date. Everything else submits immediately.
+      if (doc.expiryDate != null || doc.type === 'fssai_license') {
+        setExpiryText('');
+        setExpiryPrompt({
+          docId: doc.id,
+          docType: doc.type,
+          uri,
+          mimeType,
+          filename,
+        });
+        return;
+      }
+      await submitReplace(doc.id, doc.type, uri, mimeType, filename);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ??
@@ -293,12 +388,134 @@ export default function DocumentsRenewScreen() {
           </View>
         </ScrollView>
       )}
+
+      <Modal
+        visible={expiryPrompt !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExpiryPrompt(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>New expiry date</Text>
+            <Text style={styles.modalBody}>
+              {expiryPrompt
+                ? `Enter the expiry date printed on your new ${describeDocumentType(
+                    expiryPrompt.docType,
+                  )}.`
+                : ''}
+            </Text>
+            <TextInput
+              value={expiryText}
+              onChangeText={(t) => setExpiryText(formatExpiryInput(t))}
+              placeholder="DD / MM / YYYY"
+              placeholderTextColor={theme.colors.ink.muted}
+              keyboardType="number-pad"
+              style={styles.modalInput}
+              maxLength={14}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setExpiryPrompt(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                {({ pressed }) => (
+                  <View style={[styles.modalBtnGhost, pressed && { opacity: 0.7 }]}>
+                    <Text style={styles.modalBtnGhostLabel}>Cancel</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={confirmExpiry}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm and upload"
+              >
+                {({ pressed }) => (
+                  <View style={[styles.modalBtn, pressed && { opacity: 0.85 }]}>
+                    <Text style={styles.modalBtnLabel}>Confirm & upload</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.paper },
+
+  // Expiry-date prompt modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(14,14,12,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing[6],
+  },
+  modalCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[5],
+    gap: theme.spacing[3],
+    ...theme.shadow[3],
+  },
+  modalTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 20,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: -0.2,
+  },
+  modalBody: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    lineHeight: 20,
+    color: theme.colors.ink.soft,
+  },
+  modalInput: {
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    fontFamily: 'Inter',
+    fontSize: 18,
+    letterSpacing: 1,
+    color: theme.colors.ink.DEFAULT,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  modalBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  modalBtnLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.paper,
+  },
+  modalBtnGhost: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  modalBtnGhostLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
   commandBar: {
     flexDirection: 'row',
     alignItems: 'center',
