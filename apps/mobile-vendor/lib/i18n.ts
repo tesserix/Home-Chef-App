@@ -14,10 +14,16 @@ function isSupported(code: string | null | undefined): code is AppLocale {
   return !!code && (SUPPORTED_LOCALES as readonly string[]).includes(code);
 }
 
-/** Best language for the device, falling back to English. */
+/** Best language for the device, falling back to English. Defensive: a missing
+ *  or misbehaving native locale module must never break i18n init — if locale
+ *  detection throws, we just default to English. */
 function deviceLocale(): AppLocale {
-  const code = Localization.getLocales()[0]?.languageCode;
-  return isSupported(code) ? code : 'en';
+  try {
+    const code = Localization.getLocales()[0]?.languageCode;
+    return isSupported(code) ? code : 'en';
+  } catch {
+    return 'en';
+  }
 }
 
 // Initialise synchronously with the device locale so the first render is
