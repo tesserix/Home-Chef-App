@@ -16,7 +16,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
 import { Check, ChevronLeft, Clock, FileText, MapPin, Plus } from 'lucide-react-native';
@@ -532,7 +532,7 @@ export default function CheckoutScreen() {
             <Text className="text-sm text-charcoal-soft flex-1 leading-5">
               See our{' '}
               {/* Terms/refund links: coral, no underline per spec */}
-              <Link href="/refund" className="text-coral">
+              <Link href={'/refund' as Href} className="text-coral">
                 Refund Policy
               </Link>{' '}
               for cancellation rules by order stage.
@@ -566,11 +566,11 @@ export default function CheckoutScreen() {
               </View>
               <Text className="flex-1 text-sm text-charcoal-soft leading-5">
                 I agree to the{' '}
-                <Link href="/terms" className="text-coral">
+                <Link href={'/terms' as Href} className="text-coral">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link href="/refund" className="text-coral">
+                <Link href={'/refund' as Href} className="text-coral">
                   Refund Policy
                 </Link>{' '}
                 for this order.

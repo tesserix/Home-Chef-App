@@ -94,7 +94,7 @@ function EmptyState() {
       </View>
       {/* Coral "Browse chefs" CTA — visual styles on inner View */}
       <Pressable
-        onPress={() => router.push('/(tabs)/')}
+        onPress={() => router.push('/(tabs)')}
         accessibilityRole="button"
         accessibilityLabel="Browse chefs"
       >

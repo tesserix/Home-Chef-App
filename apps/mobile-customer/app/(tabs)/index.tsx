@@ -241,29 +241,21 @@ export default function HomeScreen() {
     </>
   );
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        {renderHeader()}
-        <View style={styles.skeletonGrid}>
-          <View style={styles.skeletonCol}><SkeletonCard /></View>
-          <View style={styles.skeletonCol}><SkeletonCard /></View>
-          <View style={styles.skeletonCol}><SkeletonCard /></View>
-          <View style={styles.skeletonCol}><SkeletonCard /></View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  // A single persistent FlatList drives every state (loading, results, empty).
+  // The search pill + filter chips live in ListHeaderComponent so they NEVER
+  // reposition when a filter tap triggers a refetch — swapping the whole screen
+  // layout between a loading branch and a list branch caused the header to
+  // jump. Skeletons and the empty message render inside the list body instead.
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <FlatList
-        data={chefs}
+        data={isLoading ? [] : chefs}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => <ChefCard chef={item} />}
         refreshControl={
           <RefreshControl
@@ -273,10 +265,19 @@ export default function HomeScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No chefs found</Text>
-            <Text style={styles.emptyBody}>Try adjusting your filters</Text>
-          </View>
+          isLoading ? (
+            <View style={styles.skeletonGrid}>
+              <View style={styles.skeletonCol}><SkeletonCard /></View>
+              <View style={styles.skeletonCol}><SkeletonCard /></View>
+              <View style={styles.skeletonCol}><SkeletonCard /></View>
+              <View style={styles.skeletonCol}><SkeletonCard /></View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No chefs found</Text>
+              <Text style={styles.emptyBody}>Try adjusting your filters</Text>
+            </View>
+          )
         }
       />
     </SafeAreaView>
