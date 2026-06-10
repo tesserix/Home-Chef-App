@@ -10,10 +10,10 @@
 |---|---|---|
 | Wave 1 (Foundation) | **✅ 100%** — Sentry + force-upgrade gate + rate-limit + idempotency + webhook HMAC + Dependabot (88→28 vulns) + base-image Go 1.26.4 stopgap | ⏳ TestFlight, APNs cert, Sentry DSN secrets, Cloudflare WAF, Cloud SQL drill |
 | Wave 2 (Critical workflows) | **✅ 100% backend, 11/13 mobile** — cancel flows, doc renewal, notif prefs + FCM topics, info_requested email, FSSAI cron, FSSAI license number + expiry inputs | ⏳ Pause-receiving (needs new scheduler), FoSCoS API access |
-| Wave 3 (Financial + tax) | **✅ 6/9 backend, 3/6 mobile** — GSTIN + HSN, customer invoice PDF, post-delivery refund, auto-email invoice, DPDP export/delete | ⏳ Weekly statements + cron, TDS Form 16A, refund history view, settlement reconciliation |
-| Wave 4 (Launch polish + scale) | **0%** | — |
+| Wave 3 (Financial + tax) | **✅ 100% in-scope (9/9 backend, 6/6 mobile)** — GSTIN + HSN, customer invoice PDF, post-delivery refund, auto-email invoice, DPDP export/delete, **weekly statements + cron, TDS Form 16A, refund history, settlement reconciliation** | ⏳ Privacy policy + EULA URLs (legal) |
+| Wave 4 (Launch polish + scale) | **0%** — next up: observability trio (OTel + structured logging + audit log) | — |
 
-**37 commits on `main`** since 2026-06-05. Check `git log --oneline` for the full trail.
+**41 commits on `main`** since 2026-06-05 (4 this session closing Wave 3). Check `git log --oneline` for the full trail.
 
 ---
 
@@ -149,25 +149,26 @@
 ### Mobile
 - [x] **GSTIN capture** on chef profile (optional) — 15-char auto-uppercase TextInput in onboarding, sent to `/chef/onboarding`
 - [x] **HSN code per menu item** — 8-digit numeric TextInput in MenuItemForm, defaults to 996331 server-side when blank
-- [ ] **Earnings → Statements tab** — _(deferred)_
-- [ ] **Earnings → Tax certificates** — _(deferred)_
+- [x] **Earnings → Statements section** — lists issued weekly statements, tap → downloads settlement PDF (shared `lib/download-pdf` helper)
+- [x] **Earnings → Tax certificates** — TDS-certificate download row (current FY) on Earnings
 - [x] **Order detail → Download invoice (PDF)** — `expo-file-system/legacy` + `expo-sharing`; auth'd fetch → system share sheet; surfaced on delivered orders
 - [x] **Customer invoice auto-email** — backend hooks `order.delivered` NATS event, generates PDF, sends SendGrid attachment to customer
-- [ ] **Refund history view** on Earnings — _(deferred)_
+- [x] **Refund history view** on Earnings — Refunds section, one entry per refunded order (item breakdown), tap → opens order
 
 ### Backend
-- [ ] **`GET /chef/statements/weekly?cycle=...`** — _(deferred)_
-- [ ] **`GET /chef/tax/certificate?year=2026`** — TDS Form 16A PDF generation _(deferred)_
+- [x] **`GET /chef/statements/weekly`** — lists immutable `WeeklyStatement` rows; `GET /chef/statements/:id/statement.pdf` streams the maroto settlement PDF
+- [x] **`GET /chef/tax/certificate?year=FY`** — annual §194-O TDS summary (Form 16A style, quarterly breakdown, PAN/deductor block, TRACES disclaimer)
 - [x] **`GET /orders/:id/invoice.pdf`** — customer-facing GSTIN invoice via `services.GenerateOrderInvoicePDF` (maroto v0.46)
 - [x] **`GET /chef/orders/:orderId/invoice.pdf`** — chef-side copy of the same invoice _(bonus)_
 - [x] **`POST /chef/orders/:id/refund`** with amount + reason — post-delivery goodwill refund (distinct from in-flight cancel); idempotent via remaining-balance check
+- [x] **`GET /chef/refunds`** — refund history (authoritative `Order.RefundAmount`, no double-count vs per-line)
 - [x] **GSTIN + HSN fields** on `chef_profiles` and `menu_items` respectively
-- [ ] **Cycle close + statement generation cron** — _(deferred)_
+- [x] **Weekly statement generation cron** — daily Mon–Sun IST close → immutable statement + push; idempotent (Redis SETNX + unique index); shared earnings math extracted to `services` with unit tests
 
 ### Compliance
 - [x] **DPDP Act 2023** compliance pass — `GET /chef/me/export` (JSON dump of all chef data) + `POST /chef/me/delete` (soft-delete + 30d retention, requires email confirmation)
 - [ ] **Privacy policy + EULA URLs** finalized + linked from app _(legal artifact)_
-- [ ] **Stripe/Razorpay settlement reconciliation** — _(deferred)_
+- [x] **Stripe/Razorpay settlement reconciliation** — daily cron cross-checks previous IST day's payments vs gateways (capture status + refund-amount drift), read-only, ERROR log + Sentry alert
 
 ### Definition of done
 - Chef downloads weekly statement → opens cleanly in any PDF reader, line-itemized
