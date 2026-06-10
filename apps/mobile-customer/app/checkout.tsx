@@ -33,11 +33,13 @@ import {
 } from '../hooks/useLocations';
 import { api } from '../lib/api';
 import { friendlyErrorMessage } from '../lib/errors';
+import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
 
 // ─── Address form schema ──────────────────────────────────────────────────────
 
 const addressSchema = z.object({
+  label: z.string().min(1),
   addressLine1: z.string().min(1, 'Address line 1 is required'),
   addressLine2: z.string().optional(),
   city: z.string().min(1, 'City is required'),
@@ -152,6 +154,7 @@ export default function CheckoutScreen() {
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
+      label: 'Home',
       addressLine1: '',
       addressLine2: '',
       city: '',
@@ -181,6 +184,7 @@ export default function CheckoutScreen() {
   async function onSaveAddress(values: AddressFormValues) {
     try {
       const result = await createAddress.mutateAsync({
+        label: values.label,
         addressLine1: values.addressLine1,
         addressLine2: values.addressLine2,
         city: values.city,
@@ -339,10 +343,21 @@ export default function CheckoutScreen() {
                         }`}
                       />
                       <View className="flex-1">
-                        <Text className="text-sm text-charcoal">{formatAddress(addr)}</Text>
-                        {addr.isDefault && (
-                          <Text className="text-xs text-coral font-medium mt-0.5">Default</Text>
+                        {(addr.label || addr.isDefault) && (
+                          <View className="flex-row items-center gap-2 mb-1">
+                            {addr.label ? (
+                              <View className="bg-surface-soft rounded-md px-2 py-0.5">
+                                <Text className="text-[11px] font-semibold text-charcoal">
+                                  {addr.label}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {addr.isDefault ? (
+                              <Text className="text-xs text-coral font-medium">Default</Text>
+                            ) : null}
+                          </View>
                         )}
+                        <Text className="text-sm text-charcoal">{formatAddress(addr)}</Text>
                       </View>
                     </View>
                   </View>
@@ -363,6 +378,14 @@ export default function CheckoutScreen() {
 
               {showAddressForm && (
                 <View className="px-4 pb-4 gap-3">
+                  {/* Label selector — Home / Work / Other */}
+                  <Controller
+                    control={addrControl}
+                    name="label"
+                    render={({ field: { onChange, value } }) => (
+                      <AddressLabelSelect value={value} onChange={onChange} />
+                    )}
+                  />
                   {/* Address autocomplete — fills the fields below (editable) */}
                   <View className="flex-row items-center bg-surface-soft rounded-xl px-3 gap-2">
                     <Search size={16} color={'#717171'} />

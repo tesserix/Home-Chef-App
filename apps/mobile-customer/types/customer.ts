@@ -40,6 +40,8 @@ export interface CartItem {
 
 export interface Address {
   id?: string;
+  /** Home / Work / Other. Backend requires it (defaults to "Home" server-side). */
+  label?: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;

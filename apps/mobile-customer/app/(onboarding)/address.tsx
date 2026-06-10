@@ -21,8 +21,10 @@ import {
   useAddressAutocomplete,
   type AddressSuggestion,
 } from '../../hooks/useLocations';
+import { AddressLabelSelect } from '../../components/address/AddressLabelSelect';
 
 const schema = z.object({
+  label: z.string().min(1),
   addressLine2: z.string().optional(), // flat / house / floor — user-typed
   addressLine1: z.string().min(5, 'Address must be at least 5 characters'),
   city: z.string().min(1, 'City is required'),
@@ -47,6 +49,7 @@ export default function AddressScreen() {
   } = useForm<AddressForm>({
     resolver: zodResolver(schema),
     defaultValues: {
+      label: 'Home',
       addressLine2: '',
       addressLine1: '',
       city: '',
@@ -79,6 +82,7 @@ export default function AddressScreen() {
         firstName: params.firstName,
         lastName: params.lastName,
         phone: params.phone,
+        label: data.label,
         addressLine1: data.addressLine1,
         addressLine2: data.addressLine2 ?? '',
         city: data.city,
@@ -114,6 +118,17 @@ export default function AddressScreen() {
           <Text className="text-[15px] text-charcoal-soft mb-6">
             Where should we deliver your orders?
           </Text>
+
+          {/* ── Label selector — Home / Work / Other ── */}
+          <View className="mb-5">
+            <Controller
+              control={control}
+              name="label"
+              render={({ field: { onChange, value } }) => (
+                <AddressLabelSelect value={value} onChange={onChange} />
+              )}
+            />
+          </View>
 
           {/* ── Address autocomplete (Photon/OpenStreetMap) ── */}
           {/* A search shortcut that fills the fields below; they stay editable. */}

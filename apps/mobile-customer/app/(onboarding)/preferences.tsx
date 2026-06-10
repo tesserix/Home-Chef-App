@@ -33,6 +33,7 @@ export default function PreferencesScreen() {
     firstName: string;
     lastName: string;
     phone: string;
+    label: string;
     addressLine1: string;
     addressLine2: string;
     city: string;
@@ -62,7 +63,7 @@ export default function PreferencesScreen() {
         firstName: params.firstName,
         lastName: params.lastName,
         phone: params.phone,
-        addressLabel: 'Home',
+        addressLabel: params.label || 'Home',
         addressLine1: params.addressLine1,
         addressLine2: params.addressLine2 ?? '',
         addressCity: params.city,

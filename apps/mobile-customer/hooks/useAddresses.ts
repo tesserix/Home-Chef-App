@@ -29,6 +29,7 @@ interface ApiAddress {
 function mapAddress(a: ApiAddress): Address {
   return {
     id: a.id,
+    label: a.label || undefined,
     addressLine1: a.line1,
     addressLine2: a.line2 || undefined,
     city: a.city,
@@ -55,9 +56,9 @@ export function useCreateAddress() {
     mutationFn: (payload) =>
       api
         .post<ApiAddress>('/v1/addresses', {
-          // Backend `label` is required; the customer UI has no label field, so
-          // default to "Home". line1 / postalCode are the wire field names.
-          label: 'Home',
+          // Backend `label` is required; default to "Home" when the user didn't
+          // pick one. line1 / postalCode are the wire field names.
+          label: payload.label?.trim() || 'Home',
           line1: payload.addressLine1,
           line2: payload.addressLine2 ?? '',
           city: payload.city,
