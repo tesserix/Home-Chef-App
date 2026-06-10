@@ -32,6 +32,9 @@ interface CartState {
   /** Set absolute quantity for an item. If qty <= 0 the item is removed. */
   updateQty: (menuItemId: string, quantity: number) => void;
 
+  /** Set per-item special instructions (e.g. "no onions"). Empty string clears it. */
+  setInstructions: (menuItemId: string, instructions: string) => void;
+
   /** Clear all cart items and reset chef context. */
   clearCart: () => void;
 
@@ -90,6 +93,17 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({
       items: get().items.map((i) =>
         i.menuItemId === menuItemId ? { ...i, quantity } : i
+      ),
+    });
+  },
+
+  setInstructions: (menuItemId: string, instructions: string) => {
+    const trimmed = instructions.trim();
+    set({
+      items: get().items.map((i) =>
+        i.menuItemId === menuItemId
+          ? { ...i, instructions: trimmed || undefined }
+          : i
       ),
     });
   },

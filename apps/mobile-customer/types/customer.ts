@@ -34,6 +34,8 @@ export interface CartItem {
   price: number;
   quantity: number;
   imageUrl?: string;
+  /** Per-item special instructions, e.g. "no onions". Sent as `notes` per item on CreateOrder. */
+  instructions?: string;
 }
 
 export interface Address {

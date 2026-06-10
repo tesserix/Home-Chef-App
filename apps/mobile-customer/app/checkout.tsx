@@ -214,7 +214,11 @@ export default function CheckoutScreen() {
       // Step 1: Create the order on the server
       const orderResult = await createOrder.mutateAsync({
         chefId: cartStore.chefId,
-        items: cartStore.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+        items: cartStore.items.map((i) => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          notes: i.instructions?.trim() || undefined,
+        })),
         deliveryAddressId: selectedAddressId,
         note: note.trim() || undefined,
       });

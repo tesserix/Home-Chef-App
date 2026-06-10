@@ -8,7 +8,8 @@ import type { Order } from '../types/customer';
 
 interface CreateOrderPayload {
   chefId: string;
-  items: { menuItemId: string; quantity: number }[];
+  // `notes` is the per-item wire field (apps/api CreateOrderItem.json:"notes").
+  items: { menuItemId: string; quantity: number; notes?: string }[];
   deliveryAddressId: string;
   note?: string;
 }

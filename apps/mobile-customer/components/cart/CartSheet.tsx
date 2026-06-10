@@ -1,5 +1,5 @@
-import React, { forwardRef } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import React, { forwardRef, useState } from 'react';
+import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { Image } from 'expo-image';
@@ -15,9 +15,13 @@ interface CartItemRowProps {
 function CartItemRow({ item }: CartItemRowProps) {
   const updateQty = useCartStore((s) => s.updateQty);
   const removeItem = useCartStore((s) => s.removeItem);
+  const setInstructions = useCartStore((s) => s.setInstructions);
+  // Local state keeps typing smooth; the store trims only for persistence.
+  const [note, setNote] = useState(item.instructions ?? '');
 
   return (
-    <View className="flex-row items-center py-3 border-b border-hairline gap-3">
+    <View className="py-3 border-b border-hairline gap-2">
+      <View className="flex-row items-center gap-3">
       {item.imageUrl ? (
         <Image
           source={{ uri: item.imageUrl }}
@@ -74,6 +78,21 @@ function CartItemRow({ item }: CartItemRowProps) {
           </View>
         </Pressable>
       </View>
+      </View>
+
+      {/* Per-item special instructions — e.g. "no onions" on one dish */}
+      <TextInput
+        value={note}
+        onChangeText={(t) => {
+          setNote(t);
+          setInstructions(item.menuItemId, t);
+        }}
+        placeholder="Add a note (e.g. no onions)"
+        placeholderTextColor="#717171"
+        maxLength={140}
+        className="bg-surface-soft rounded-lg px-3 py-2 text-xs text-charcoal"
+        accessibilityLabel={`Special instructions for ${item.name}`}
+      />
     </View>
   );
 }
