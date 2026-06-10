@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04
 Plan: Not started
 Status: Executing Phase 04
-Last activity: 2026-06-10 - Completed quick task 260610-grk: Vendor app UX improvements from design critique
+Last activity: 2026-06-10 - Completed quick task 260610-ica: vendor app v2 visual redesign
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -79,6 +79,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260610-grk | Vendor app UX improvements from design critique | 2026-06-10 | 2dee223 | [260610-grk-vendor-app-ux-improvements-from-design-c](./quick/260610-grk-vendor-app-ux-improvements-from-design-c/) |
+| 260610-ica | Vendor app v2 visual redesign (canvas+cards, dark hero, motion) | 2026-06-10 | f2a5814 | [260610-ica-vendor-app-v2-visual-redesign-canvas-car](./quick/260610-ica-vendor-app-v2-visual-redesign-canvas-car/) |
 
 ### Blockers/Concerns
 
