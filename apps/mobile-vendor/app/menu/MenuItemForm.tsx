@@ -692,36 +692,43 @@ export function MenuItemForm({
           {/* CATEGORY section */}
           <Text style={styles.sectionLabel}>CATEGORY</Text>
           <View style={styles.card}>
-            <View style={styles.tabBarWrap}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tabBar}
-              >
-                {categories.map((cat) => (
+            {categories.length > 0 ? (
+              <View style={styles.tabBarWrap}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.tabBar}
+                >
+                  {categories.map((cat) => (
+                    <CategoryTab
+                      key={cat.id}
+                      label={cat.name}
+                      active={categoryId === cat.id}
+                      onPress={() => {
+                        setCategoryId(cat.id);
+                        if (errors.categoryId) setErrors((e) => ({ ...e, categoryId: undefined }));
+                      }}
+                    />
+                  ))}
                   <CategoryTab
-                    key={cat.id}
-                    label={cat.name}
-                    active={categoryId === cat.id}
-                    onPress={() => {
-                      setCategoryId(cat.id);
-                      if (errors.categoryId) setErrors((e) => ({ ...e, categoryId: undefined }));
-                    }}
+                    label="+ New"
+                    active={false}
+                    onPress={() => setShowNewCatInput((v) => !v)}
                   />
-                ))}
-                <CategoryTab
-                  label="+ New"
-                  active={false}
-                  onPress={() => setShowNewCatInput((v) => !v)}
-                />
-              </ScrollView>
-            </View>
+                </ScrollView>
+              </View>
+            ) : (
+              <Text style={styles.categoryHint}>
+                No categories yet — name your first one below (e.g. Starters) to
+                organize your menu.
+              </Text>
+            )}
             {errors.categoryId ? (
               <Text style={[fieldStyles.error, { marginTop: theme.spacing[2] }]}>
                 {errors.categoryId}
               </Text>
             ) : null}
-            {showNewCatInput && (
+            {(showNewCatInput || categories.length === 0) && (
               <View style={styles.newCatRow}>
                 <TextInput
                   value={newCatName}
@@ -917,6 +924,15 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[2],
+  },
+
+  // Empty-state hint shown in the CATEGORY card when the chef has no
+  // categories yet — points them at the inline "create your first one" field.
+  categoryHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    lineHeight: 19,
+    color: theme.colors.ink.soft,
   },
 
   // White group card on the bone canvas (UI-V2-SPEC §1)
