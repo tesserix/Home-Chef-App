@@ -41,6 +41,10 @@ interface Documents {
   // multipart field on the FSSAI doc upload + persisted on
   // ChefDocument.ExpiryDate so the expiry reminder cron fires.
   fssaiExpiryDate: string;
+  // 15-character GSTIN. Optional — chefs below the GST threshold
+  // (currently ₹20L turnover) don't need one. When set, printed on
+  // customer invoices and used by the chef to claim input tax credit.
+  gstin: string;
 }
 
 interface Policies {
@@ -99,6 +103,7 @@ const initialState = {
     fssaiType: null,
     fssaiLicenseNumber: '',
     fssaiExpiryDate: '',
+    gstin: '',
   },
   policies: { acceptedTerms: false, cancellationPolicy: '' },
 };

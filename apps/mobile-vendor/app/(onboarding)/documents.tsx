@@ -428,6 +428,32 @@ export default function DocumentsScreen() {
             We'll remind you 30, 15, and 7 days before expiry.
           </Text>
         </View>
+
+        {/* GSTIN — optional regulatory ID. Chefs below the GST
+            threshold (₹20L turnover) skip this; everyone else uses
+            it to claim input tax credit and to print on the customer
+            invoice per Wave 3. */}
+        <View style={styles.fssaiFieldGroup}>
+          <Text style={styles.fssaiFieldLabel}>GSTIN (optional)</Text>
+          <TextInput
+            value={documents.gstin}
+            onChangeText={(v) =>
+              updateDocuments({ gstin: v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15) })
+            }
+            placeholder="15-character GSTIN"
+            placeholderTextColor={theme.colors.ink.muted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={15}
+            style={styles.fssaiInput}
+          />
+          {documents.gstin.length > 0 && documents.gstin.length !== 15 && (
+            <Text style={styles.fssaiHelpError}>Must be exactly 15 characters.</Text>
+          )}
+          <Text style={styles.fssaiHelpHint}>
+            Skip if your turnover is below the GST threshold.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.bottomSpacer} />

@@ -142,8 +142,10 @@ export default function ReviewScreen() {
         cancellationPolicy: policies.cancellationPolicy,
         // Regulatory IDs — backend persists fssaiLicenseNumber on
         // chef_profiles so Wave 3 invoicing can print it and FoSCoS
-        // validation can query against it.
+        // validation can query against it. GSTIN is optional; backend
+        // only validates length when provided.
         fssaiLicenseNumber: documents.fssaiLicenseNumber,
+        gstin: documents.gstin || undefined,
       });
       // Optimistically flip the cached onboarding/status to pending_review
       // so the global routing effect in _layout.tsx sees the user as
