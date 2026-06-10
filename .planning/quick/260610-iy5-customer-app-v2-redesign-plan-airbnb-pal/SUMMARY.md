@@ -36,6 +36,21 @@ payload, chef mappers, `GestureHandlerRootView`, friendly errors). See
   sheet can't be screenshot-tested without tap input (simctl limitation) — no item in
   cart on a fresh launch.
 
+### Address labels (follow-up, commit `7b3dff2`)
+Home/Work/Other selector (shared `components/address/AddressLabelSelect.tsx`) on
+both the checkout "Add new address" form and the onboarding address step; label
+mapped through `useAddresses` and sent on create + onboarding submit; label shown
+as a chip in the checkout address list. Verified live — existing address renders a
+"Home" chip beside "Default".
+
 ## Open follow-up
-- Address `label` is hardcoded to `"Home"` on create (backend requires non-empty).
-  A Home/Work/Other selector on the address form is an open product decision.
+- **Order detail can't show a label chip:** the order's `deliveryAddress` is a flat
+  point-in-time snapshot on the orders table (`AddressResponse` = line1/line2/city/
+  state/postalCode) with **no label column**. Adding a chip there needs a backend
+  change (add `DeliveryAddressLabel`) — out of scope (no backend changes).
+- **Order detail address fields are mismapped** (pre-existing, separate from this
+  task): `app/order/[id]` reads `deliveryAddress.addressLine1/pincode` but the order
+  API returns `line1/postalCode`, so those render undefined. Same bug class as the
+  checkout fix; `hooks/useOrderHistory.ts` casts the response with no mapper. Worth a
+  small follow-up (map AddressResponse → Address in `useOrder`/`useOrders`).
+- "Other" label is a fixed value; no custom free-text label input yet.
