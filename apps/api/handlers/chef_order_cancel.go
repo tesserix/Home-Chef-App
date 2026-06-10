@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -308,6 +309,162 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	go publishOrderUpdated(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
+}
+
+// RefundOrder handles post-delivery refunds. Unlike CancelOrder
+// (which is for in-flight orders + auto-refunds the full amount),
+// this is for a delivered order where the customer complained later
+// and the chef wants to refund all or part of it as a goodwill
+// gesture or partner-mandated remedy.
+//
+// Idempotent on a re-call with the same amount: if RefundAmount
+// already covers the requested total, we 200 with the existing state
+// instead of double-refunding.
+//
+// POST /chef/orders/:orderId/refund   { amount: number, reason: string }
+func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderID := c.Param("orderId")
+
+	chef, err := loadChefForUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND chef_id = ?", orderID, chef.ID).
+		First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	var req struct {
+		Amount float64 `json:"amount" binding:"required,gt=0"`
+		Reason string  `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Refund is only meaningful after the customer received the order —
+	// for in-flight cancellations the CancelOrder handler is the right
+	// path (atomic state flip + full refund).
+	if order.Status != models.OrderStatusDelivered {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "refunds via this endpoint are only available for delivered orders; for in-flight orders, use cancel",
+		})
+		return
+	}
+
+	if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "only Razorpay-paid orders support refunds from the chef app today",
+		})
+		return
+	}
+
+	// Cap by what's left on the order. A goodwill refund covering the
+	// full amount that's already been partially refunded just no-ops
+	// the gateway call and returns the current state.
+	remaining := order.Total - order.RefundAmount
+	if remaining <= 0 {
+		c.JSON(http.StatusOK, order.ToResponse())
+		return
+	}
+	if req.Amount > remaining {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("amount exceeds refundable balance (%.2f remaining)", remaining),
+		})
+		return
+	}
+
+	amountPaise := int(roundPaise(req.Amount))
+	if amountPaise <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "amount rounds to zero paise"})
+		return
+	}
+
+	rzp := services.GetRazorpay()
+	if rzp == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
+		return
+	}
+	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
+		Amount: amountPaise,
+		Speed:  "normal",
+		Notes: map[string]string{
+			"order_id":  order.ID.String(),
+			"order_no":  order.OrderNumber,
+			"chef_id":   chef.ID.String(),
+			"reason":    req.Reason,
+			"initiator": "chef",
+			"scope":     "post_delivery_goodwill",
+		},
+	})
+	if err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
+		return
+	}
+
+	now := time.Now().UTC()
+	if err := database.DB.Model(&order).Updates(map[string]interface{}{
+		"refund_id":           refundResp.ID,
+		"refund_amount":       order.RefundAmount + req.Amount,
+		"refund_reason":       req.Reason,
+		"refund_initiated_by": "chef",
+		"refunded_at":         now,
+	}).Error; err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
+		return
+	}
+	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
+	go publishOrderUpdated(order)
+
+	c.JSON(http.StatusOK, order.ToResponse())
+}
+
+// GetOrderInvoicePDF streams the tax-compliant PDF invoice for the
+// chef's own order (separate auth path from the customer-side endpoint).
+// GET /chef/orders/:orderId/invoice.pdf
+func (h *ChefOrderCancelHandler) GetOrderInvoicePDF(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderID := c.Param("orderId")
+
+	chef, err := loadChefForUser(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	orderUUID, parseErr := uuid.Parse(orderID)
+	if parseErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order ID"})
+		return
+	}
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND chef_id = ?", orderUUID, chef.ID).
+		First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+	if order.Status != models.OrderStatusDelivered {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invoice available after delivery"})
+		return
+	}
+
+	pdfBytes, filename, genErr := services.GenerateOrderInvoicePDF(orderUUID)
+	if genErr != nil {
+		services.CaptureSentryError(c, genErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate invoice"})
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 // loadChefForUser returns the ChefProfile owned by the given user.

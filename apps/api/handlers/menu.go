@@ -151,6 +151,7 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		IsVeg:        req.IsVeg,
 		IsAvailable:  true,
 		IsFeatured:   req.IsFeatured,
+		HSN:          req.HSN,
 	}
 
 	if req.CategoryID != "" {
@@ -266,6 +267,9 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	}
 	if req.IsFeatured != nil {
 		updates["is_featured"] = *req.IsFeatured
+	}
+	if req.HSN != nil {
+		updates["hsn"] = *req.HSN
 	}
 	if req.CategoryID != nil {
 		if *req.CategoryID == "" {
@@ -696,6 +700,9 @@ type CreateMenuItemRequest struct {
 	// IsVeg is nullable: send true/false to set, omit/null to leave unset.
 	IsVeg        *bool    `json:"isVeg"`
 	IsFeatured   bool     `json:"isFeatured"`
+	// HSN/SAC code for GST classification. Optional — empty string
+	// causes the DB default ("996331", restaurant services) to apply.
+	HSN          string   `json:"hsn"`
 }
 
 type UpdateMenuItemRequest struct {
@@ -717,6 +724,7 @@ type UpdateMenuItemRequest struct {
 	// need a tri-state sentinel — deferred for v2.
 	IsVeg        *bool     `json:"isVeg"`
 	IsAvailable  *bool     `json:"isAvailable"`
+	HSN          *string   `json:"hsn"`
 	IsFeatured   *bool     `json:"isFeatured"`
 }
 

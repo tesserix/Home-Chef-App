@@ -567,6 +567,40 @@ func (h *OrderHandler) GetOrderInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, invoice.ToResponse())
 }
 
+// GetOrderInvoicePDF streams the PDF tax invoice for a delivered order.
+// Customer-scoped (only the buyer can pull their own invoice).
+// GET /api/v1/orders/:id/invoice.pdf
+func (h *OrderHandler) GetOrderInvoicePDF(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderID := c.Param("id")
+
+	orderUUID, err := uuid.Parse(orderID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order ID"})
+		return
+	}
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND customer_id = ?", orderUUID, userID).
+		First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+	if order.Status != models.OrderStatusDelivered {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invoice available after delivery"})
+		return
+	}
+
+	pdfBytes, filename, err := services.GenerateOrderInvoicePDF(orderUUID)
+	if err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate invoice"})
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
 // TrackOrderWS upgrades the HTTP connection to WebSocket and streams real-time driver location
 // updates from NATS delivery.location.{deliveryID} to the connected client.
 // Security: verifies the authenticated customer owns the order before upgrading (T-04-03).

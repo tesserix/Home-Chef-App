@@ -363,6 +363,12 @@ func SetupRouter() *gin.Engine {
 			chefOrderCancelHandler := handlers.NewChefOrderCancelHandler()
 			chefDashboard.POST("/orders/:orderId/cancel", chefOrderCancelHandler.CancelOrder)
 			chefDashboard.POST("/orders/:orderId/items/:itemId/cancel", chefOrderCancelHandler.CancelOrderItem)
+			// Post-delivery refund — partial or full goodwill remedy on
+			// an already-delivered order. Distinct from cancel.
+			chefDashboard.POST("/orders/:orderId/refund", chefOrderCancelHandler.RefundOrder)
+			// Chef can download the same GSTIN tax invoice the customer
+			// gets — used for their own bookkeeping. Wave 3 §invoicing.
+			chefDashboard.GET("/orders/:orderId/invoice.pdf", chefOrderCancelHandler.GetOrderInvoicePDF)
 			// GET /chef/earnings/breakdown?period=week|month|cycle
 			chefDashboard.GET("/earnings/breakdown", chefEarningsHandler.GetEarningsBreakdown)
 			// GET /chef/documents/expiring?withinDays=30
@@ -406,6 +412,9 @@ func SetupRouter() *gin.Engine {
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
+			// PDF tax invoice — customer-facing. Streams directly back as
+			// application/pdf with Content-Disposition: attachment.
+			orders.GET("/:id/invoice.pdf", orderHandler.GetOrderInvoicePDF)
 			// Order-specific chat rooms
 			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
 		}

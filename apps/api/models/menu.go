@@ -45,6 +45,12 @@ type MenuItem struct {
 	IsVeg        *bool          `gorm:"" json:"isVeg,omitempty"`
 	IsAvailable  bool           `gorm:"default:true" json:"isAvailable"`
 	IsApproved   bool           `gorm:"default:false" json:"isApproved"`
+	// HSN code per HSN/SAC (GST harmonized system). Defaults to 996331
+	// — the SAC for "Services provided by Restaurants … and others"
+	// which covers prepared-food sales for our home-chef model. Chef
+	// can override per item if their tax advisor wants a more specific
+	// code. Printed on customer invoices per Wave 3 GSTIN flow.
+	HSN          string         `gorm:"type:varchar(8);default:'996331'" json:"hsn,omitempty"`
 	IsFeatured   bool           `gorm:"default:false" json:"isFeatured"`
 	TotalOrders  int            `gorm:"default:0" json:"totalOrders"`
 	Rating       float64        `gorm:"default:0" json:"rating"`
@@ -102,6 +108,7 @@ type MenuItemResponse struct {
 	IsAvailable  bool                    `json:"isAvailable"`
 	IsFeatured   bool                    `json:"isFeatured"`
 	Rating       float64                 `json:"rating"`
+	HSN          string                  `json:"hsn,omitempty"`
 }
 
 func (m *MenuItem) ToResponse() MenuItemResponse {
@@ -146,5 +153,6 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 		IsAvailable:  m.IsAvailable,
 		IsFeatured:   m.IsFeatured,
 		Rating:       m.Rating,
+		HSN:          m.HSN,
 	}
 }

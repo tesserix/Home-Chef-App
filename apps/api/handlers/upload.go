@@ -573,6 +573,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		// FSSAI number to print on customer invoices.
 		PanNumber:          req.PanNumber,
 		FSSAILicenseNumber: req.FSSAINumber,
+		GSTIN:              req.GSTIN,
 		IsActive:           true,
 		AcceptingOrders:    false,
 	}
@@ -957,6 +958,10 @@ type OnboardingRequest struct {
 	OperatingHours map[string]*DayHoursReq `json:"operatingHours"`
 	PanNumber      string                  `json:"panNumber"`
 	FSSAINumber    string                  `json:"fssaiLicenseNumber"`
+	// GSTIN is optional — chefs below the GST threshold don't need one.
+	// When provided, persisted to chef_profiles.gstin and printed on
+	// customer invoices alongside the FSSAI number.
+	GSTIN          string                  `json:"gstin"`
 	AcceptedTerms  bool                    `json:"acceptedTerms"`
 }
 

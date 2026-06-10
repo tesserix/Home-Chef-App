@@ -77,6 +77,14 @@ type ChefProfile struct {
 	// so admins can pivot the field for FoSCoS API verification later.
 	PanNumber          string `gorm:"type:varchar(10)" json:"-"`
 	FSSAILicenseNumber string `gorm:"type:varchar(14)" json:"fssaiLicenseNumber,omitempty"`
+	// GSTIN — 15-character Goods & Services Tax Identification Number.
+	// Optional (chefs below the threshold of ~₹20L turnover don't need
+	// one). When set, printed on customer invoices alongside the FSSAI
+	// number, and the chef can claim input tax credit. Stored as
+	// varchar(15) without format enforcement at the DB level —
+	// validation lives in the handler so future format changes don't
+	// require a migration.
+	GSTIN              string `gorm:"type:varchar(15)" json:"gstin,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
