@@ -83,14 +83,25 @@ func SetupRouter() *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	r := gin.Default()
+	// gin.New() (not Default) so we own the middleware chain: gin's text
+	// logger is replaced by middleware.RequestLogger (structured JSON), and
+	// gin.Recovery stays as the outermost panic backstop.
+	r := gin.New()
+	r.Use(gin.Recovery())
 
 	// Trust only proxies on the loopback / private mesh addresses so c.ClientIP()
 	// can't be spoofed by an upstream client.
 	_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"})
 
+	// Correlation ID first — mints/propagates X-Request-ID so every
+	// downstream log line, trace span, and audit row shares one id.
+	r.Use(middleware.RequestID())
+
+	// Structured access log (JSON) carrying the correlation id + latency.
+	r.Use(middleware.RequestLogger())
+
 	// Sentry — recovers panics + tags them onto the per-request Hub so
-	// handlers can attach user context. Must come BEFORE other
+	// handlers can attach user context. Comes before the business
 	// middleware so anything that panics downstream lands in Sentry.
 	// No-ops cleanly when SENTRY_DSN_API is unset.
 	r.Use(services.SentryGinMiddleware())

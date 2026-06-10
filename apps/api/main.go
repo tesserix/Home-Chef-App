@@ -12,6 +12,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
+	"github.com/homechef/api/logger"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
 )
@@ -19,6 +20,10 @@ import (
 func main() {
 	// Load configuration
 	config.Load()
+
+	// Structured JSON logging — initialise before anything else logs so
+	// startup lines are machine-parsable in Cloud Logging too.
+	logger.Init(config.AppConfig.Environment)
 	log.Printf("Starting HomeChef API in %s mode", config.AppConfig.Environment)
 
 	// Init Sentry as early as possible so any startup failure below
