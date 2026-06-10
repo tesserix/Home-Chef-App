@@ -121,10 +121,13 @@ export default function NotificationPreferencesScreen() {
     setPrefs({ ...DEFAULT_PREFS, ...data });
   }, [data]);
 
+  const [quietTimeError, setQuietTimeError] = useState<string | null>(null);
+
   function persist(next: Partial<NotificationPreferences>) {
     const merged = { ...prefs, ...next };
     setPrefs(merged);
     update.mutate(next, {
+      onSuccess: () => showToast({ message: 'Preferences saved.', tone: 'success' }),
       onError: () => {
         // Roll back the optimistic update — we only mutated `next` so
         // restoring the previous slice from `prefs` is the safe undo.
@@ -140,7 +143,13 @@ export default function NotificationPreferencesScreen() {
     // state so the user can keep typing without losing characters.
     setPrefs({ ...prefs, [field]: value });
     if (HHMM_REGEX.test(value)) {
+      setQuietTimeError(null);
       persist({ [field]: value });
+    } else if (value.length === 5) {
+      // Only show error once user has typed a full 5-char string.
+      setQuietTimeError('Use HH:MM format (e.g. 22:00)');
+    } else {
+      setQuietTimeError(null);
     }
   }
 
@@ -226,34 +235,39 @@ export default function NotificationPreferencesScreen() {
             hasBorderBottom={prefs.quietHoursEnabled}
           />
           {prefs.quietHoursEnabled && (
-            <View style={styles.quietHoursRow}>
-              <View style={styles.quietHoursField}>
-                <Text style={styles.quietLabel}>Start</Text>
-                <TextInput
-                  value={prefs.quietHoursStart}
-                  onChangeText={(v) => handleQuietHoursInput('quietHoursStart', v)}
-                  placeholder="22:00"
-                  placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.quietInput}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                  autoCorrect={false}
-                />
+            <>
+              <View style={styles.quietHoursRow}>
+                <View style={styles.quietHoursField}>
+                  <Text style={styles.quietLabel}>Start</Text>
+                  <TextInput
+                    value={prefs.quietHoursStart}
+                    onChangeText={(v) => handleQuietHoursInput('quietHoursStart', v)}
+                    placeholder="22:00"
+                    placeholderTextColor={theme.colors.ink.muted}
+                    style={styles.quietInput}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={styles.quietHoursField}>
+                  <Text style={styles.quietLabel}>End</Text>
+                  <TextInput
+                    value={prefs.quietHoursEnd}
+                    onChangeText={(v) => handleQuietHoursInput('quietHoursEnd', v)}
+                    placeholder="07:00"
+                    placeholderTextColor={theme.colors.ink.muted}
+                    style={styles.quietInput}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
-              <View style={styles.quietHoursField}>
-                <Text style={styles.quietLabel}>End</Text>
-                <TextInput
-                  value={prefs.quietHoursEnd}
-                  onChangeText={(v) => handleQuietHoursInput('quietHoursEnd', v)}
-                  placeholder="07:00"
-                  placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.quietInput}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
+              {quietTimeError ? (
+                <Text style={styles.quietErrorText}>{quietTimeError}</Text>
+              ) : null}
+            </>
           )}
         </View>
 
@@ -352,10 +366,19 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.strong,
-    borderRadius: 6,
+    borderRadius: theme.radius.DEFAULT,
     backgroundColor: theme.colors.paper,
+  },
+  quietErrorText: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.destructive.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: 4,
+    paddingBottom: theme.spacing[2],
   },
 
   helperFootnote: {

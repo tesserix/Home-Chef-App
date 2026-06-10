@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -64,46 +64,64 @@ export default function LoginPage() {
   }, []);
 
   const handleGoogleSignIn = async () => {
-    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    const result = (await GoogleSignin.signIn()) as { data?: { idToken?: string | null }; idToken?: string | null };
-    const googleIdToken = result?.data?.idToken ?? result?.idToken;
-    if (!googleIdToken) throw new Error('Google sign-in failed: no ID token');
-    await signInWithGoogleCredential(googleIdToken);
-    const response = await completeBFFLogin();
-    await setAuthResponse(response);
-    await completeSignIn();
     try {
-      const fcmToken = await getRawFCMToken();
-      if (fcmToken) await registerDeviceToken(api, fcmToken);
-    } catch { /* non-fatal */ }
-    router.replace('/(tabs)');
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = (await GoogleSignin.signIn()) as { data?: { idToken?: string | null }; idToken?: string | null };
+      const googleIdToken = result?.data?.idToken ?? result?.idToken;
+      if (!googleIdToken) throw new Error('Google sign-in failed: no ID token');
+      await signInWithGoogleCredential(googleIdToken);
+      const response = await completeBFFLogin();
+      await setAuthResponse(response);
+      await completeSignIn();
+      try {
+        const fcmToken = await getRawFCMToken();
+        if (fcmToken) await registerDeviceToken(api, fcmToken);
+      } catch { /* non-fatal */ }
+      router.replace('/(tabs)');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Sign-in failed', msg);
+    }
   };
 
   const handleAppleSignIn = async () => {
-    const cred = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    });
-    if (!cred.identityToken) throw new Error('Apple sign-in failed: no identity token');
-    await signInWithAppleCredential(cred.identityToken, '');
-    const response = await completeBFFLogin();
-    await setAuthResponse(response);
-    await completeSignIn();
     try {
-      const fcmToken = await getRawFCMToken();
-      if (fcmToken) await registerDeviceToken(api, fcmToken);
-    } catch { /* non-fatal */ }
-    router.replace('/(tabs)');
+      const cred = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!cred.identityToken) throw new Error('Apple sign-in failed: no identity token');
+      await signInWithAppleCredential(cred.identityToken, '');
+      const response = await completeBFFLogin();
+      await setAuthResponse(response);
+      await completeSignIn();
+      try {
+        const fcmToken = await getRawFCMToken();
+        if (fcmToken) await registerDeviceToken(api, fcmToken);
+      } catch { /* non-fatal */ }
+      router.replace('/(tabs)');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Sign-in failed', msg);
+    }
   };
 
   const handleBiometricLogin = async () => {
-    const success = await authenticateWithBiometrics();
-    if (!success) throw new Error('Biometric authentication failed');
-    const { accessToken } = useAuthStore.getState();
-    if (!accessToken) throw new Error('No saved session found. Please log in with email.');
-    router.replace('/(tabs)');
+    try {
+      const success = await authenticateWithBiometrics();
+      if (!success) throw new Error('Biometric authentication failed');
+      const { accessToken } = useAuthStore.getState();
+      if (!accessToken) throw new Error('No saved session found. Please log in with email.');
+      router.replace('/(tabs)');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Sign-in failed', msg);
+    }
   };
 
   return (
@@ -112,18 +130,24 @@ export default function LoginPage() {
       title="Welcome back"
       subtitle="Sign in to keep your kitchen running"
       onLogin={async ({ email, password }) => {
-        await signInWithEmail(email, password);
-        const response = await completeBFFLogin();
-        await setAuthResponse(response);
-        await completeSignIn();
-        // Register FCM token after auth (D-09: raw FCM token)
         try {
-          const fcmToken = await getRawFCMToken();
-          if (fcmToken) await registerDeviceToken(api, fcmToken);
-        } catch {
-          // Non-fatal: push registration failure should not block login
+          await signInWithEmail(email, password);
+          const response = await completeBFFLogin();
+          await setAuthResponse(response);
+          await completeSignIn();
+          // Register FCM token after auth (D-09: raw FCM token)
+          try {
+            const fcmToken = await getRawFCMToken();
+            if (fcmToken) await registerDeviceToken(api, fcmToken);
+          } catch {
+            // Non-fatal: push registration failure should not block login
+          }
+          router.replace('/(tabs)');
+        } catch (err: unknown) {
+          const msg =
+            err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+          Alert.alert('Sign-in failed', msg);
         }
-        router.replace('/(tabs)');
       }}
       onNavigateToRegister={() => router.push('/(auth)/register')}
       onNavigateToForgotPassword={() => router.push('/(auth)/forgot-password')}

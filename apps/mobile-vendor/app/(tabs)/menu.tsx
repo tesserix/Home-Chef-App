@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +33,7 @@ export default function MenuScreen() {
   const { data, isLoading, isError, refetch } = useVendorMenu();
   const [selectedCategoryId, setSelectedCategoryId] =
     useState<string>(ALL_CATEGORIES);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pull-to-refresh spinner gated to USER action only; React Query's
   // `isRefetching` would also fire for background refetches (window focus,
@@ -54,14 +56,20 @@ export default function MenuScreen() {
   );
 
   const filteredItems = useMemo<MenuItem[]>(() => {
-    if (selectedCategoryId === ALL_CATEGORIES) return items;
-    return items.filter((i) => i.categoryId === selectedCategoryId);
-  }, [items, selectedCategoryId]);
+    const byCat =
+      selectedCategoryId === ALL_CATEGORIES
+        ? items
+        : items.filter((i) => i.categoryId === selectedCategoryId);
+    if (!searchQuery.trim()) return byCat;
+    const q = searchQuery.trim().toLowerCase();
+    return byCat.filter((i) => i.name.toLowerCase().includes(q));
+  }, [items, selectedCategoryId, searchQuery]);
 
-  // When "All" is selected, group items by category with section
-  // headers. When a category is filtered, a flat list with no headers.
+  // When "All" is selected (and no search query), group items by category
+  // with section headers. When a category is filtered or a search query is
+  // active, show a flat list without headers.
   const listEntries = useMemo<ListEntry[]>(() => {
-    if (selectedCategoryId !== ALL_CATEGORIES) {
+    if (selectedCategoryId !== ALL_CATEGORIES || searchQuery.trim()) {
       return filteredItems.map((i) => ({
         type: 'item',
         key: i.id,
@@ -97,7 +105,7 @@ export default function MenuScreen() {
       }
     }
     return out;
-  }, [items, selectedCategoryId, categoryNameById]);
+  }, [items, filteredItems, selectedCategoryId, searchQuery, categoryNameById]);
 
   const hasItems = items.length > 0;
 
@@ -158,6 +166,22 @@ export default function MenuScreen() {
         </View>
       )}
 
+      {/* Search input — visible only when there are items to search through */}
+      {hasItems && (
+        <View style={styles.searchWrap}>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search items…"
+            placeholderTextColor={theme.colors.ink.muted}
+            style={styles.searchInput}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            accessibilityLabel="Search menu items"
+          />
+        </View>
+      )}
+
       {/* List / loading / empty */}
       {isLoading ? (
         <View style={styles.skeletonStack}>
@@ -170,8 +194,13 @@ export default function MenuScreen() {
       ) : filteredItems.length === 0 ? (
         <View style={styles.filterEmptyBlock}>
           <Text style={styles.filterEmptyText}>
-            No items in this category. Tap{' '}
-            <Text style={styles.filterEmptyAccent}>+ Add</Text> to create one.
+            {searchQuery.trim()
+              ? `No items match "${searchQuery.trim()}".`
+              : 'No items in this category. Tap '}
+            {!searchQuery.trim() && (
+              <Text style={styles.filterEmptyAccent}>+ Add</Text>
+            )}
+            {!searchQuery.trim() && ' to create one.'}
           </Text>
         </View>
       ) : (
@@ -288,7 +317,7 @@ const styles = StyleSheet.create({
   addBtn: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   addBtnLabel: {
@@ -308,6 +337,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     gap: theme.spacing[5],
     alignItems: 'flex-start',
+  },
+
+  // Search
+  searchWrap: {
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[2],
+    paddingTop: theme.spacing[1],
+  },
+  searchInput: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    paddingHorizontal: theme.spacing[3],
   },
 
   // List
