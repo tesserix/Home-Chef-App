@@ -1,6 +1,5 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import en from '../locales/en.json';
 import hi from '../locales/hi.json';
@@ -19,6 +18,12 @@ function isSupported(code: string | null | undefined): code is AppLocale {
  *  detection throws, we just default to English. */
 function deviceLocale(): AppLocale {
   try {
+    // Lazy require — if the expo-localization NATIVE module is missing (e.g. a
+    // JS-only update shipped before the binary was rebuilt), a top-level import
+    // would throw at module load and redbox the whole app. require() inside the
+    // try lets us catch that and fall back to English instead.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Localization = require('expo-localization');
     const code = Localization.getLocales()[0]?.languageCode;
     return isSupported(code) ? code : 'en';
   } catch {
