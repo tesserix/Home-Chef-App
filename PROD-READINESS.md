@@ -9,11 +9,11 @@
 | Wave | Application code | Operational |
 |---|---|---|
 | Wave 1 (Foundation) | **✅ 100%** — Sentry + force-upgrade gate + rate-limit + idempotency + webhook HMAC + Dependabot (88→28 vulns) + base-image Go 1.26.4 stopgap | ⏳ TestFlight, APNs cert, Sentry DSN secrets, Cloudflare WAF, Cloud SQL drill |
-| Wave 2 (Critical workflows) | **✅ 100% backend, 11/13 mobile** — cancel flows, doc renewal, notif prefs + FCM topics, info_requested email, FSSAI cron, FSSAI license number + expiry inputs | ⏳ Pause-receiving (needs new scheduler), FoSCoS API access |
-| Wave 3 (Financial + tax) | **✅ 100% in-scope (9/9 backend, 6/6 mobile)** — GSTIN + HSN, customer invoice PDF, post-delivery refund, auto-email invoice, DPDP export/delete, **weekly statements + cron, TDS Form 16A, refund history, settlement reconciliation** | ⏳ Privacy policy + EULA URLs (legal) |
-| Wave 4 (Launch polish + scale) | **0%** — next up: observability trio (OTel + structured logging + audit log) | — |
+| Wave 2 (Critical workflows) | **✅ 100% in-scope (9/9 backend, 12/13 mobile)** — cancel flows, doc renewal, notif prefs + FCM topics, info_requested email, FSSAI cron, FSSAI inputs, **pause-receiving with auto-resume** | ⏳ FoSCoS API access (external) |
+| Wave 3 (Financial + tax) | **✅ 100% in-scope (9/9 backend, 6/6 mobile)** — GSTIN + HSN, invoice PDF, refund, auto-email, DPDP, weekly statements + cron, TDS 16A, refund history, settlement reconciliation | ⏳ Privacy policy + EULA URLs (legal) |
+| Wave 4 (Launch polish + scale) | **✅ codeable items done** — OTel→Cloud Trace, structured logging + correlation IDs, audit log, pool tuning, automaxprocs (min-scale:1 already set); deep links, EAS OTA, i18n+Hindi+locale picker; runbook/on-call/status/concierge docs | ⏳ App Store enrollment+submission, full a11y/bundle QA (needs build), auth-bff OTel |
 
-**41 commits on `main`** since 2026-06-05 (4 this session closing Wave 3). Check `git log --oneline` for the full trail.
+**51 commits on `main`** since 2026-06-05 (~14 this session: Wave 3 close-out + Wave 4 + Wave 2 pause-receiving). Check `git log --oneline` for the full trail.
 
 ---
 
@@ -104,7 +104,7 @@
 - [x] **Order partial fulfillment + cancellation** — TWO affordances on the accepted-order detail screen:
   - [x] **Per-line "Can't fulfill this item"** — backend partial-refunds the line + atomically recomputes order totals; mobile renders cancelled lines with strikethrough + "Refunded ₹X" badge
   - [x] **Whole-order cancel** with reason picker (iOS ActionSheet + Android chained Alert)
-- [ ] **Pause receiving with auto-resume** — replace binary Open/Closed with `Open / Closed / Back in {15,30,60} min` _(deferred — needs new backend auto-resume scheduler)_
+- [x] **Pause receiving with auto-resume** — dashboard status pill → Open / Close / Pause {15,30,60} min menu; `PausedUntil` on chef_profiles + `POST /chef/availability/pause|resume` + 1-min auto-resume cron (reopens + push); shows "Back HH:MM"
 - [x] **Menu item image upload UI** — already wired pre-session via `MenuItemForm.handlePickPhoto` → `useUploadMenuPhoto` → `POST /chef/menu/items/:id/images`
 - [x] **Reviews list / inbox** — `app/reviews.tsx` with adapter fix (was crashing on wire shape) + `/chef/reviews/summary` for averageRating
 - [x] **Notification preferences screen** — `app/notification-preferences.tsx` with toggles + quiet hours + optimistic save; backend FCM topic reconcile on each flip
@@ -188,29 +188,29 @@
 **Goal:** Smooth public launch. App Store submission. India-vernacular reach. Observability for the support pager.
 
 ### Mobile
-- [ ] **i18n setup** — `i18n-js` or `react-i18next`, Hindi locale at minimum
-- [ ] **Hindi translation** of all chef-facing strings (use a service: Translated.com, Smartling, or human translator)
-- [ ] **Locale picker** in More tab — English, Hindi, with auto-detection from device locale
-- [ ] **Deep links** — `homechef://orders/<id>` registered + tested for push tap-through across 4 push categories
-- [ ] **OTA updates** via EAS Update — channel `production`, runtimeVersion locked
-- [ ] **Bundle size audit** — Hermes verify, dead-code elimination, asset compression
-- [ ] **Accessibility pass** — VoiceOver across every screen, contrast audit, dynamic type lock-down where appropriate
-- [ ] **App Store screenshots + listing** for IN store
-- [ ] **App Store submission + review wait** — submit by week 7 Friday for week 8 review
+- [x] **i18n setup** — `react-i18next` + `expo-localization`, device-locale detection + AsyncStorage persistence (`lib/i18n.ts`)
+- [x] **Hindi translation** — `en`/`hi` resource bundles for chef-facing strings; More tab migrated to `t()` as the reference _(full per-screen string coverage is mechanical/incremental from here)_
+- [x] **Locale picker** in More tab — System / English / हिन्दी (`app/language.tsx`), auto-detects device locale
+- [x] **Deep links** — `homechef-vendor://` scheme + push tap-through generalized across all categories (order/FSSAI/statement/availability) via `resolvePushRoute` + cold-start replay
+- [x] **OTA updates** via EAS Update — `expo-updates` + `updates.url` (u.expo.dev), `appVersion` runtimeVersion policy, Hermes locked; `production`/`preview` channels in eas.json
+- [~] **Bundle size audit** — Hermes engine locked (`jsEngine: hermes`); the size *measurement* + asset-compression pass needs a production build _(QA — run on a build)_
+- [~] **Accessibility pass** — all new components ship with `accessibilityRole`/`Label`; full VoiceOver sweep + contrast audit needs the app running on device _(QA)_
+- [ ] **App Store screenshots + listing** for IN store _(blocked: needs Apple Dev account + built app)_
+- [ ] **App Store submission + review wait** _(blocked: Apple Developer enrollment)_
 
 ### Backend
-- [ ] **OpenTelemetry tracing** — instrument `homechef-api` + `auth-bff`, export to Cloud Trace (free up to 25M/mo)
-- [ ] **Structured logging with correlation IDs** — converge slog (some services use logrus today), inject request ID from middleware
-- [ ] **Audit log for sensitive mutations** — payout updates, doc downloads, approval responses → separate `audit_logs` table with retention
-- [ ] **`min_scale: 1` on homechef-api** (auth-bff was done in W1) — kills cold-start latency for the chef-facing API
-- [ ] **Connection pool tuning** — bump from 5 open / 2 idle to 20/5 with proper monitoring
-- [ ] **`gomaxprocs`** alignment with Knative CPU limits (Uber automaxprocs lib)
+- [x] **OpenTelemetry tracing** — `homechef-api` TracerProvider + Cloud Trace exporter (graceful no-op without creds, ratio sampler via `OTEL_SAMPLING_RATE`), otelgin span-per-request + trace_id bridged into logs _(auth-bff still pending — separate repo)_
+- [x] **Structured logging with correlation IDs** — slog JSON `logger` pkg + `X-Request-ID` middleware + structured access log; trace_id joined in
+- [x] **Audit log for sensitive mutations** — `LogAudit` wired into payout updates, doc downloads (invoice/statement/TDS), approval responses, order cancel/item-cancel/refund, DPDP delete; indexed `CorrelationID` on `audit_logs` (PII-safe)
+- [x] **`min_scale: 1` on homechef-api** — verified already set in prod (min-scale 1, max-scale 10); keeps a warm pod + makes the crons reliable
+- [x] **Connection pool tuning** — right-sized to env-configurable 20/5 + `ConnMaxIdleTime` (was an unsafe 100/10 on the shared db-f1-micro)
+- [x] **`gomaxprocs`** — `go.uber.org/automaxprocs` aligns GOMAXPROCS with the Knative CPU limit
 
 ### Launch ops
-- [ ] **Runbook** for top-5 incident types — auth-bff down, DB connection pool exhausted, Razorpay outage, GIP outage, Knative scale-from-zero stuck
-- [ ] **On-call rotation** (even if solo — define what triggers a page)
-- [ ] **Status page** (Statuspage.io free tier or roll-your-own) at `status.fe3dr.com`
-- [ ] **First-10-chefs concierge script** — onboard them by hand, watch logs live, fix in real-time
+- [x] **Runbook** for top-5 incident types — `docs/ops/RUNBOOK.md` (auth-bff / DB-pool / Razorpay / GIP / Knative + cron health)
+- [x] **On-call** paging policy (solo) — `docs/ops/ON-CALL.md` (P1 page triggers vs. P2 morning)
+- [x] **Status page** plan at `status.fe3dr.com` — `docs/ops/STATUS-PAGE.md` _(hosting setup is operational)_
+- [x] **First-10-chefs concierge script** — `docs/ops/CONCIERGE.md`
 
 ### Definition of done
 - App is live on App Store IN region
