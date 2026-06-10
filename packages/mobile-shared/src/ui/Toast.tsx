@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
 });
 
 const toneStyles: Record<ToastTone, { backgroundColor: string }> = {
-  success: { backgroundColor: theme.colors.herb.DEFAULT },
+  success: { backgroundColor: theme.colors.success.DEFAULT },
   info: { backgroundColor: theme.colors.ink.DEFAULT },
   error: { backgroundColor: theme.colors.destructive.DEFAULT },
 };

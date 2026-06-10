@@ -39,7 +39,7 @@ interface OnboardingScaffoldProps {
  *
  * Visual structure:
  *   [Back]                     [Step N · Total]   ← top bar
- *   [Progress dots]                               ← persimmon for done, mist for upcoming
+ *   [Progress dots]                               ← ink for done/current, mist for upcoming
  *
  *   <Geist title>
  *   <Inter subtitle>
@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     backgroundColor: theme.colors.mist.DEFAULT,
   },
-  dotDone: { backgroundColor: theme.colors.herb.DEFAULT },
-  dotCurrent: { backgroundColor: theme.colors.herb.DEFAULT },
+  dotDone: { backgroundColor: theme.colors.ink.DEFAULT },
+  dotCurrent: { backgroundColor: theme.colors.ink.DEFAULT },
 
   scroll: { flex: 1 },
   scrollContent: {

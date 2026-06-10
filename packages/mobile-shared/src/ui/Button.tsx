@@ -14,7 +14,7 @@ type Size = 'md' | 'lg';
 
 interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   label: string;
-  /** Visual treatment. `primary` = persimmon fill; `secondary` = ink-bordered
+  /** Visual treatment. `primary` = ink fill; `secondary` = ink-bordered
    *  outline; `ghost` = text-only; `destructive` = red fill for irreversible
    *  actions (delete, cancel order). Default `primary`. */
   variant?: Variant;

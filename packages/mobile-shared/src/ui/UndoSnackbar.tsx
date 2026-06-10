@@ -211,11 +211,11 @@ const styles = StyleSheet.create({
   undo: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
-    color: theme.colors.herb.tint,
+    color: theme.colors.paper,
     letterSpacing: 0.5,
   },
   progress: {
     height: 2,
-    backgroundColor: theme.colors.herb.DEFAULT,
+    backgroundColor: theme.colors.mist.strong,
   },
 });
