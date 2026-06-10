@@ -8,6 +8,14 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "jsEngine": "hermes",
+    "updates": {
+      "url": "https://u.expo.dev/e97eea3f-75ca-4666-9174-eba51ee40eab",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
