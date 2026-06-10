@@ -17,6 +17,12 @@ import (
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
 	"github.com/homechef/api/tracing"
+
+	// Aligns GOMAXPROCS with the Knative container CPU limit (cgroup quota)
+	// instead of the node's core count — prevents the Go scheduler from
+	// spinning up far more OS threads than the pod is allowed to run,
+	// which causes CPU throttling and tail-latency spikes.
+	_ "go.uber.org/automaxprocs"
 )
 
 func main() {

@@ -3,6 +3,8 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/homechef/api/config"
@@ -11,6 +13,29 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// Connection-pool defaults, sized for the shared Cloud SQL db-f1-micro.
+// Postgres caps total connections (~100 default) across EVERY client, and
+// Knative can run up to maxScale pods — so each pod must stay modest. 20 open
+// keeps 5 pods at ~100 worst-case, and idle conns are released after
+// connMaxIdleTime so a quiet pod doesn't hoard slots. Override via env for
+// load-tuning without a redeploy.
+const (
+	defaultMaxOpenConns = 20
+	defaultMaxIdleConns = 5
+	connMaxLifetime     = 30 * time.Minute
+	connMaxIdleTime     = 5 * time.Minute
+)
+
+// envInt reads a positive int from env, falling back to def on unset/invalid.
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}
 
 var DB *gorm.DB
 
@@ -53,12 +78,16 @@ func Connect() error {
 		return fmt.Errorf("failed to get database instance: %w", err)
 	}
 
-	// Set connection pool settings
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	// Connection pool — right-sized for the shared db-f1-micro so multiple
+	// Knative pods can't collectively exhaust Postgres' connection cap.
+	maxOpen := envInt("DB_MAX_OPEN_CONNS", defaultMaxOpenConns)
+	maxIdle := envInt("DB_MAX_IDLE_CONNS", defaultMaxIdleConns)
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
 
-	log.Println("Database connection established")
+	log.Printf("Database connection established (pool: maxOpen=%d maxIdle=%d)", maxOpen, maxIdle)
 	return nil
 }
 
