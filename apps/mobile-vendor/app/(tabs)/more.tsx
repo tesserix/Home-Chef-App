@@ -8,32 +8,37 @@ import {
   DollarSign,
   FileText,
   Inbox,
+  Languages,
   LogOut,
   Settings,
   Star,
   User,
 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
 
 interface NavRow {
-  label: string;
+  /** i18n key under the "more" namespace for the row label. */
+  labelKey: string;
   caption?: string;
   route: string;
   Icon: typeof User;
 }
 
 const NAV_ROWS: NavRow[] = [
-  { label: 'Profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
-  { label: 'Earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
-  { label: 'Analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
-  { label: 'Reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
+  { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
+  { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
+  { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
+  { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
   // Wave 2 additions — surfaced from the More tab so they're
   // discoverable beyond the dashboard cards / settings deep links.
-  { label: 'Admin requests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
-  { label: 'Documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
-  { label: 'Notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
-  { label: 'Settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
+  { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
+  { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
+  { labelKey: 'notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
+  // Wave 4 — language picker (English / हिन्दी).
+  { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
+  { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
 ];
 
 function deriveDisplayName(
@@ -62,6 +67,7 @@ function deriveInitials(name: string): string {
 }
 
 export default function MoreScreen() {
+  const { t } = useTranslation();
   const { logout, user } = useAuthStore();
   const displayName = deriveDisplayName(
     user as { name?: string; email?: string } | null,
@@ -91,7 +97,7 @@ export default function MoreScreen() {
       >
         {/* Zone A — Command bar (matches dashboard/orders/menu) */}
         <View style={styles.commandBar}>
-          <Text style={styles.commandTitle}>Account</Text>
+          <Text style={styles.commandTitle}>{t('more.account')}</Text>
         </View>
 
         {/* Identity block — white group card on the bone canvas (spec §1) */}
@@ -147,7 +153,7 @@ export default function MoreScreen() {
                     />
                   </View>
                   <View style={styles.navText}>
-                    <Text style={styles.logoutLabel}>Log out</Text>
+                    <Text style={styles.logoutLabel}>{t('more.logOut')}</Text>
                   </View>
                 </View>
               )}
@@ -165,7 +171,8 @@ interface NavRowItemProps {
 }
 
 function NavRowItem({ row, isLast }: NavRowItemProps) {
-  const { Icon, label, caption, route } = row;
+  const { t } = useTranslation();
+  const { Icon, labelKey, caption, route } = row;
   return (
     <>
       <Pressable
@@ -185,7 +192,7 @@ function NavRowItem({ row, isLast }: NavRowItemProps) {
               />
             </View>
             <View style={styles.navText}>
-              <Text style={styles.navLabel}>{label}</Text>
+              <Text style={styles.navLabel}>{t(`more.${labelKey}`)}</Text>
               {caption ? (
                 <Text style={styles.navCaption}>{caption}</Text>
               ) : null}

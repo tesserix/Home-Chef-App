@@ -1,0 +1,70 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "download": "Download",
+    "close": "Close",
+    "loading": "Loading…",
+    "error": "Something went wrong"
+  },
+  "tabs": {
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "menu": "Menu",
+    "more": "More"
+  },
+  "status": {
+    "open": "Open",
+    "closed": "Closed",
+    "kitchenStatus": "Kitchen status",
+    "closeKitchen": "Close kitchen",
+    "openKitchen": "Open kitchen",
+    "pauseMinutes": "Pause {{minutes}} min",
+    "backAt": "Back {{time}}"
+  },
+  "earnings": {
+    "title": "Earnings",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "allTime": "All time",
+    "pending": "Pending",
+    "lastPayout": "Last payout",
+    "breakdown": "Breakdown",
+    "grossRevenue": "Gross revenue",
+    "platformCommission": "Platform commission",
+    "gst": "GST",
+    "tds": "TDS",
+    "netPayout": "Net payout",
+    "orderHistory": "Order history",
+    "refunds": "Refunds",
+    "weeklyStatements": "Weekly statements",
+    "taxDocuments": "Tax documents",
+    "tdsCertificate": "TDS certificate",
+    "downloadPdf": "Download PDF",
+    "payoutAccount": "Payout account"
+  },
+  "more": {
+    "title": "More",
+    "account": "Account",
+    "profile": "Profile",
+    "earnings": "Earnings",
+    "analytics": "Analytics",
+    "reviews": "Reviews",
+    "adminRequests": "Admin requests",
+    "language": "Language",
+    "settings": "Settings",
+    "documents": "Documents",
+    "notifications": "Notifications",
+    "help": "Help & support",
+    "signOut": "Sign out",
+    "logOut": "Log out"
+  },
+  "language": {
+    "title": "Language",
+    "english": "English",
+    "hindi": "हिन्दी",
+    "system": "System default",
+    "subtitle": "Choose the language for the app"
+  }
+}

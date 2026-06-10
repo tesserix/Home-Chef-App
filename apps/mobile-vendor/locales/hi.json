@@ -1,0 +1,70 @@
+{
+  "common": {
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "retry": "पुनः प्रयास करें",
+    "download": "डाउनलोड करें",
+    "close": "बंद करें",
+    "loading": "लोड हो रहा है…",
+    "error": "कुछ गलत हो गया"
+  },
+  "tabs": {
+    "dashboard": "डैशबोर्ड",
+    "orders": "ऑर्डर",
+    "menu": "मेन्यू",
+    "more": "और"
+  },
+  "status": {
+    "open": "खुला",
+    "closed": "बंद",
+    "kitchenStatus": "रसोई की स्थिति",
+    "closeKitchen": "रसोई बंद करें",
+    "openKitchen": "रसोई खोलें",
+    "pauseMinutes": "{{minutes}} मिनट के लिए रोकें",
+    "backAt": "{{time}} बजे वापस"
+  },
+  "earnings": {
+    "title": "कमाई",
+    "thisWeek": "इस सप्ताह",
+    "thisMonth": "इस महीने",
+    "allTime": "अब तक",
+    "pending": "बकाया",
+    "lastPayout": "पिछला भुगतान",
+    "breakdown": "विवरण",
+    "grossRevenue": "कुल आय",
+    "platformCommission": "प्लेटफ़ॉर्म कमीशन",
+    "gst": "जीएसटी",
+    "tds": "टीडीएस",
+    "netPayout": "शुद्ध भुगतान",
+    "orderHistory": "ऑर्डर इतिहास",
+    "refunds": "रिफंड",
+    "weeklyStatements": "साप्ताहिक विवरण",
+    "taxDocuments": "कर दस्तावेज़",
+    "tdsCertificate": "टीडीएस प्रमाणपत्र",
+    "downloadPdf": "पीडीएफ डाउनलोड करें",
+    "payoutAccount": "भुगतान खाता"
+  },
+  "more": {
+    "title": "और",
+    "account": "खाता",
+    "profile": "प्रोफ़ाइल",
+    "earnings": "कमाई",
+    "analytics": "विश्लेषण",
+    "reviews": "समीक्षाएं",
+    "adminRequests": "एडमिन अनुरोध",
+    "language": "भाषा",
+    "settings": "सेटिंग्स",
+    "documents": "दस्तावेज़",
+    "notifications": "सूचनाएं",
+    "help": "सहायता और समर्थन",
+    "signOut": "साइन आउट",
+    "logOut": "लॉग आउट"
+  },
+  "language": {
+    "title": "भाषा",
+    "english": "English",
+    "hindi": "हिन्दी",
+    "system": "सिस्टम डिफ़ॉल्ट",
+    "subtitle": "ऐप के लिए भाषा चुनें"
+  }
+}

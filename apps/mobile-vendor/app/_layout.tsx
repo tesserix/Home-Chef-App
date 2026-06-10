@@ -1,4 +1,5 @@
 import '../global.css';
+import '../lib/i18n'; // side-effect: initialise i18next before first render
 
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Text, View } from 'react-native';
@@ -15,6 +16,7 @@ import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
+import { hydratePersistedLocale } from '../lib/i18n';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { ToastProvider, UndoSnackbarProvider, useToast } from '@homechef/mobile-shared/ui';
 import { useFonts } from 'expo-font';
@@ -142,6 +144,8 @@ function AppNavigator() {
 
   useEffect(() => {
     hydrateFromStorage();
+    // Apply the saved language choice (overrides the device default).
+    hydratePersistedLocale();
   }, []);
 
   // useBiometricLock internally waits for isLoading === false before registering
