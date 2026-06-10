@@ -443,16 +443,17 @@ export default function DashboardScreen() {
                 >
                   {({ pressed }) => (
                     <View
-                      style={[styles.alertCard, pressed && { opacity: 0.85 }]}
+                      style={[
+                        styles.alertCard,
+                        { borderLeftColor: theme.colors.amber.DEFAULT },
+                        pressed && { opacity: 0.85 },
+                      ]}
                     >
                       <View style={styles.alertRowTop}>
                         <View
                           style={[
                             styles.alertDot,
-                            {
-                              backgroundColor:
-                                theme.colors.destructive.DEFAULT,
-                            },
+                            { backgroundColor: theme.colors.amber.DEFAULT },
                           ]}
                         />
                         <Text style={styles.alertLabel} numberOfLines={1}>
@@ -467,28 +468,36 @@ export default function DashboardScreen() {
                   )}
                 </Pressable>
               ))}
-              {expiringDocs.map((doc) => (
+              {expiringDocs.map((doc) => {
+                // Severity by urgency: red ≤7d / expired, amber 8–30d, grey
+                // >30d. Stripe + dot share this so they never disagree.
+                const accent =
+                  doc.daysUntilExpiry <= 7
+                    ? theme.colors.destructive.DEFAULT
+                    : doc.daysUntilExpiry <= 30
+                      ? theme.colors.amber.DEFAULT
+                      : theme.colors.ink.muted;
+                // Route to the standalone re-upload screen (it has a back
+                // button) — NOT the onboarding wizard step, which traps a live
+                // chef with no way back.
+                return (
                 <Pressable
                   key={doc.id}
-                  onPress={() => router.push('/(onboarding)/documents')}
+                  onPress={() => router.push('/documents/renew')}
                   accessibilityRole="button"
                   accessibilityLabel={`${describeDocumentType(doc.type)} expires in ${doc.daysUntilExpiry} days. Tap to re-upload.`}
                 >
                   {({ pressed }) => (
                     <View
-                      style={[styles.alertCard, pressed && { opacity: 0.85 }]}
+                      style={[
+                        styles.alertCard,
+                        { borderLeftColor: accent },
+                        pressed && { opacity: 0.85 },
+                      ]}
                     >
                       <View style={styles.alertRowTop}>
                         <View
-                          style={[
-                            styles.alertDot,
-                            {
-                              backgroundColor:
-                                doc.daysUntilExpiry <= 7
-                                  ? theme.colors.destructive.DEFAULT
-                                  : theme.colors.amber.DEFAULT,
-                            },
-                          ]}
+                          style={[styles.alertDot, { backgroundColor: accent }]}
                         />
                         <Text style={styles.alertLabel} numberOfLines={1}>
                           {doc.daysUntilExpiry <= 0
@@ -519,7 +528,8 @@ export default function DashboardScreen() {
                     </View>
                   )}
                 </Pressable>
-              ))}
+                );
+              })}
             </View>
           </Animated.View>
         )}
@@ -824,6 +834,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bone,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.mist.DEFAULT,
+    // Bold accent stripe down the left edge — colour is set per card by
+    // severity (red ≤7d / amber ≤30d / grey >30d) so the stack triages at a
+    // glance. Card body stays calm.
+    borderLeftWidth: 3,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
