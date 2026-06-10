@@ -14,6 +14,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"golang.org/x/oauth2"
 
 	"github.com/homechef/auth-bff/internal/apiclient"
@@ -23,10 +24,12 @@ import (
 	"github.com/homechef/auth-bff/internal/config"
 	gippkg "github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/headerproxy"
+	"github.com/homechef/auth-bff/internal/obsmw"
 	oidcpkg "github.com/homechef/auth-bff/internal/oidc"
 	"github.com/homechef/auth-bff/internal/productregistry"
 	"github.com/homechef/auth-bff/internal/ratelimit"
 	"github.com/homechef/auth-bff/internal/session"
+	"github.com/homechef/auth-bff/internal/tracing"
 )
 
 func main() {
@@ -36,6 +39,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	// OpenTelemetry → Cloud Trace (same project as homechef-api when
+	// GCP_PROJECT_ID is set). No-ops cleanly without creds/project.
+	traceShutdown, terr := tracing.Init(
+		context.Background(), cfg.TraceProjectID, cfg.Env, cfg.AppVersion, cfg.OTelSamplingRate,
+	)
+	if terr != nil {
+		log.Printf("warning: tracing init failed: %v", terr)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = traceShutdown(shutdownCtx)
+	}()
 
 	reg, err := productregistry.Load(cfg.ProductsConfigPath)
 	if err != nil {
@@ -76,6 +93,11 @@ func main() {
 	_ = auditClient                             // currently unused by handlers; placeholder for future emit calls
 
 	r := gin.Default()
+	// Correlation id first, then an OTel span per request, then echo the trace
+	// id — so a login can be followed across auth-bff and the API in Cloud Trace.
+	r.Use(obsmw.RequestID())
+	r.Use(otelgin.Middleware("auth-bff"))
+	r.Use(obsmw.TraceContext())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
 	oidcH := &oidcpkg.Handlers{

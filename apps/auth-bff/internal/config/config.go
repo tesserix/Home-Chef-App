@@ -22,6 +22,14 @@ type Config struct {
 	APIBaseURL          string
 	AuditEndpoint       string
 	AdminAllowedEmails  string
+
+	// Observability. TraceProjectID is the GCP project Cloud Trace spans are
+	// written to — set GCP_PROJECT_ID to the GKE project (e.g. tesseracthub-480811)
+	// so auth-bff spans land in the SAME trace view as homechef-api. Defaults to
+	// the GIP project when unset. Empty disables tracing (local dev).
+	TraceProjectID   string
+	OTelSamplingRate float64
+	AppVersion       string
 }
 
 func Load() (*Config, error) {
@@ -74,6 +82,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("SESSION_MAX_AGE_HOURS must be integer: %w", err)
 	}
 	c.SessionMaxAge = time.Duration(h) * time.Hour
+
+	// Cloud Trace target — GCP_PROJECT_ID wins, else fall back to the GIP project.
+	c.TraceProjectID = getOrDefault("GCP_PROJECT_ID", c.GIPProjectID)
+	c.AppVersion = os.Getenv("APP_VERSION")
+	c.OTelSamplingRate = 0.1
+	if v := os.Getenv("OTEL_SAMPLING_RATE"); v != "" {
+		if f, perr := strconv.ParseFloat(v, 64); perr == nil {
+			c.OTelSamplingRate = f
+		}
+	}
 
 	return c, nil
 }
