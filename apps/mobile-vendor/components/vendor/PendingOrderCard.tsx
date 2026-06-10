@@ -1,24 +1,24 @@
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { theme } from '@homechef/mobile-shared/theme';
-import type { Order } from '../../hooks/useVendorOrders';
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { theme } from "@homechef/mobile-shared/theme";
+import type { Order } from "../../hooks/useVendorOrders";
 
 function formatMinutesAgo(iso: string, nowMs: number): string {
   const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
+  if (Number.isNaN(t)) return "";
   const mins = Math.max(0, Math.floor((nowMs - t) / 60_000));
-  if (mins < 1) return 'just now';
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function formatItemsSummary(items: Order['items']): string {
+function formatItemsSummary(items: Order["items"]): string {
   const count = items.reduce((sum, i) => sum + (i.quantity ?? 1), 0);
   if (count === 1 && items[0]) return items[0].name;
   if (items.length === 1 && items[0]) return `${count} × ${items[0].name}`;
-  return `${count} item${count === 1 ? '' : 's'}`;
+  return `${count} item${count === 1 ? "" : "s"}`;
 }
 
 interface PendingOrderCardProps {
@@ -35,12 +35,12 @@ interface PendingOrderCardProps {
 }
 
 /**
- * The triage card. The single most important block in the vendor app —
- * this is the moment the chef decides to commit or decline an order
- * within seconds, with wet hands. Designed for that moment:
- *  - name + total above (decision variables)
- *  - items summary + age in one line (context)
- *  - Reject as a naked underlined affordance (low gravity)
+ * The triage card — v2 "canvas + cards" hero. The single most important
+ * block in the vendor app: the moment the chef decides to commit or
+ * decline an order within seconds, with wet hands. Designed for that:
+ *  - name left, big tabular total right (decision variables)
+ *  - items summary + escalating age chip in one line (context)
+ *  - Reject as a quiet ghost button (low gravity)
  *  - Accept as the dominant ink-filled bar (commitment)
  *
  * Brand lock: Accept fill is ink (#0E0E0C), NOT persimmon. Persimmon
@@ -66,28 +66,39 @@ export function PendingOrderCard({
     0,
     Math.floor((now - new Date(order.createdAt).getTime()) / 60_000),
   );
-  const ageColor =
+  // Age chip escalation — same thresholds as the old inline-text colour,
+  // now expressed as a tinted pill per UI-V2 §2.
+  const ageChipBg =
+    ageMins >= 10
+      ? theme.colors.destructive.tint
+      : ageMins >= 5
+        ? theme.colors.amber.tint
+        : theme.colors.mist.DEFAULT;
+  const ageChipText =
     ageMins >= 10
       ? theme.colors.destructive.DEFAULT
       : ageMins >= 5
-        ? theme.colors.amber.DEFAULT
+        ? theme.colors.ink.DEFAULT
         : theme.colors.ink.soft;
 
   const topRowContent = (
-    <View style={styles.topRow}>
-      <View style={styles.nameBlock}>
+    <View style={styles.headerBlock}>
+      <View style={styles.topRow}>
         <Text style={styles.customerName} numberOfLines={1}>
           {order.customerName}
         </Text>
+        <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
+      </View>
+      <View style={styles.metaRow}>
         <Text style={styles.meta} numberOfLines={1}>
           {formatItemsSummary(order.items)}
-          {'  ·  '}
-          <Text style={{ color: ageColor }}>
+        </Text>
+        <View style={[styles.ageChip, { backgroundColor: ageChipBg }]}>
+          <Text style={[styles.ageChipLabel, { color: ageChipText }]}>
             {formatMinutesAgo(order.createdAt, now)}
           </Text>
-        </Text>
+        </View>
       </View>
-      <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
     </View>
   );
 
@@ -121,15 +132,23 @@ export function PendingOrderCard({
       ) : null}
 
       <View style={styles.buttonRow}>
+        {/* Ghost button. Visual styles (bg, border) live on the inner
+            View — same iOS Pressable rule as Accept below. The outer
+            Pressable returns a plain OBJECT (never an array) from the
+            function-style prop. */}
         <Pressable
           onPress={onReject}
           disabled={disabled}
           hitSlop={8}
-          style={styles.rejectBtn}
+          style={({ pressed }) => ({
+            opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+          })}
           accessibilityRole="button"
           accessibilityLabel={`Reject order from ${order.customerName}`}
         >
-          <Text style={styles.rejectLabel}>Reject</Text>
+          <View style={styles.rejectBtn}>
+            <Text style={styles.rejectLabel}>Reject</Text>
+          </View>
         </Pressable>
         {/* Outer Pressable carries only the pressed/disabled opacity AND
             the flex:1 needed to fill the row. iOS strips flex AND
@@ -158,74 +177,95 @@ export function PendingOrderCard({
 
 const styles = StyleSheet.create({
   root: {
-    backgroundColor: theme.colors.bone,
-    borderRadius: theme.radius.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
     padding: theme.spacing[4],
     gap: theme.spacing[3],
+    ...theme.shadow[2],
+  },
+  headerBlock: {
+    gap: theme.spacing[1],
   },
   topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: theme.spacing[3],
   },
-  nameBlock: { flex: 1 },
   customerName: {
-    fontFamily: 'Inter-SemiBold',
+    flex: 1,
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
   },
   meta: {
-    fontFamily: 'Inter',
+    flex: 1,
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
-    marginTop: 2,
+  },
+  ageChip: {
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+  },
+  ageChipLabel: {
+    fontFamily: "Inter-SemiBold",
+    fontSize: theme.typography.size.caption.size,
   },
   total: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.body.size,
+    fontFamily: "Geist-Bold",
+    fontSize: 22,
     color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.2,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -0.3,
   },
   instructionsPill: {
     backgroundColor: theme.colors.herb.tint,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.DEFAULT,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
   instructionsText: {
-    fontFamily: 'Inter',
+    fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     lineHeight: 19,
     color: theme.colors.herb.soft,
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: theme.spacing[2],
-    alignItems: 'center',
+    alignItems: "center",
   },
   rejectBtn: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    minHeight: 44,
-    justifyContent: 'center',
+    width: 96,
+    minHeight: 48,
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   rejectLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    textDecorationLine: 'underline',
+    color: theme.colors.ink.soft,
   },
   acceptBtn: {
     flex: 1,
     backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: theme.radius.md,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
   },
   acceptLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.paper,
     letterSpacing: 0.3,

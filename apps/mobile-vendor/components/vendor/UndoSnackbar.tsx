@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text } from 'react-native';
-import { theme } from '@homechef/mobile-shared/theme';
-import type { PendingUndo } from '../../hooks/useVendorOrders';
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text } from "react-native";
+import { theme } from "@homechef/mobile-shared/theme";
+import type { PendingUndo } from "../../hooks/useVendorOrders";
 
 interface UndoSnackbarProps {
   pendingUndo: PendingUndo | null;
@@ -48,10 +48,10 @@ export function UndoSnackbar({
   const isError = !!errorMessage;
   const label = isError
     ? errorMessage
-    : pendingUndo?.action === 'accepted'
-      ? 'Order accepted'
-      : 'Order rejected';
-  const actionLabel = isError ? 'RETRY' : 'UNDO';
+    : pendingUndo?.action === "accepted"
+      ? "Order accepted"
+      : "Order rejected";
+  const actionLabel = isError ? "RETRY" : "UNDO";
   const onPressAction = isError ? onRetry : onUndo;
 
   return (
@@ -70,14 +70,15 @@ export function UndoSnackbar({
         <Pressable
           onPress={onPressAction}
           hitSlop={8}
-          style={({ pressed }) => [
-            styles.action,
-            pressed && { opacity: 0.7 },
-          ]}
+          style={({ pressed }) => [styles.action, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel={isError ? 'Retry' : 'Undo'}
+          accessibilityLabel={isError ? "Retry" : "Undo"}
         >
-          <Text style={styles.actionLabel}>{actionLabel}</Text>
+          <Text
+            style={[styles.actionLabel, !isError && styles.actionLabelUndo]}
+          >
+            {actionLabel}
+          </Text>
         </Pressable>
       ) : null}
     </Animated.View>
@@ -86,19 +87,19 @@ export function UndoSnackbar({
 
 const styles = StyleSheet.create({
   root: {
-    position: 'absolute',
+    position: "absolute",
     bottom: theme.spacing[4],
     left: theme.spacing[4],
     right: theme.spacing[4],
     zIndex: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     gap: theme.spacing[3],
-    ...theme.shadow[2],
+    ...theme.shadow[3],
   },
   rootUndo: {
     backgroundColor: theme.colors.ink.DEFAULT,
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   },
   label: {
     flex: 1,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.paper,
   },
@@ -116,12 +117,17 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.radius.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
   },
   actionLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.paper,
     letterSpacing: 0.5,
+  },
+  // Brand-warm UNDO label on the ink bar (UI-V2 Wave B). RETRY keeps
+  // paper — brand[200] would not read on the destructive red bg.
+  actionLabelUndo: {
+    color: theme.colors.brand[200],
   },
 });

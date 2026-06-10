@@ -94,58 +94,65 @@ export default function MoreScreen() {
           <Text style={styles.commandTitle}>Account</Text>
         </View>
 
-        {/* Identity block — single hairline-divided row, no card chrome */}
-        <View style={styles.identityRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarLabel}>{initials}</Text>
-          </View>
-          <View style={styles.identityText}>
-            <Text style={styles.identityName} numberOfLines={1}>
-              {displayName}
-            </Text>
-            {email ? (
-              <Text style={styles.identityEmail} numberOfLines={1}>
-                {email}
+        {/* Identity block — white group card on the bone canvas (spec §1) */}
+        <View style={[styles.card, styles.identityCard]}>
+          <View style={styles.identityRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarLabel}>{initials}</Text>
+            </View>
+            <View style={styles.identityText}>
+              <Text style={styles.identityName} numberOfLines={1}>
+                {displayName}
               </Text>
-            ) : null}
+              {email ? (
+                <Text style={styles.identityEmail} numberOfLines={1}>
+                  {email}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {/* Nav rows — borderless hairline rows, no card-in-card */}
-        <View style={styles.navGroup}>
-          {NAV_ROWS.map((row) => (
-            <NavRowItem key={row.route} row={row} />
-          ))}
+        {/* Nav rows — one white group card, inset hairline separators
+            between rows (last row has none). spec §1 / §9. */}
+        <View style={styles.card}>
+          <View style={styles.cardInner}>
+            {NAV_ROWS.map((row, index) => (
+              <NavRowItem
+                key={row.route}
+                row={row}
+                isLast={index === NAV_ROWS.length - 1}
+              />
+            ))}
+          </View>
         </View>
 
-        {/* Log out — same row chrome as the nav group above so it doesn't
-            read as an orphaned text link. Differentiated as an action (not
-            navigation) by destructive label tone, LogOut icon, no caption,
-            no chevron. Matches the Delete-account row pattern in Settings. */}
-        <View style={styles.logoutGroup}>
-          <Pressable onPress={handleLogout} accessibilityRole="button">
-            {({ pressed }) => (
-              // Inner-View pattern — keeps iOS Pressable flex layout intact.
-              <View
-                style={[
-                  styles.navRow,
-                  styles.logoutRow,
-                  pressed && { backgroundColor: theme.colors.bone },
-                ]}
-              >
-                <View style={styles.navIcon}>
-                  <LogOut
-                    size={20}
-                    color={theme.colors.destructive.DEFAULT}
-                    strokeWidth={1.75}
-                  />
+        {/* Log out — its own group card so it doesn't read as an orphaned
+            text link. Differentiated as an action (not navigation) by
+            destructive label tone, LogOut icon, no caption, no chevron.
+            Matches the Delete-account row pattern in Settings. */}
+        <View style={[styles.card, styles.logoutCard]}>
+          <View style={styles.cardInner}>
+            <Pressable onPress={handleLogout} accessibilityRole="button">
+              {({ pressed }) => (
+                // Inner-View pattern — keeps iOS Pressable flex layout intact.
+                <View
+                  style={[styles.navRow, pressed && styles.rowPressed]}
+                >
+                  <View style={styles.navIcon}>
+                    <LogOut
+                      size={20}
+                      color={theme.colors.destructive.DEFAULT}
+                      strokeWidth={1.75}
+                    />
+                  </View>
+                  <View style={styles.navText}>
+                    <Text style={styles.logoutLabel}>Log out</Text>
+                  </View>
                 </View>
-                <View style={styles.navText}>
-                  <Text style={styles.logoutLabel}>Log out</Text>
-                </View>
-              </View>
-            )}
-          </Pressable>
+              )}
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -154,49 +161,81 @@ export default function MoreScreen() {
 
 interface NavRowItemProps {
   row: NavRow;
+  isLast: boolean;
 }
 
-function NavRowItem({ row }: NavRowItemProps) {
+function NavRowItem({ row, isLast }: NavRowItemProps) {
   const { Icon, label, caption, route } = row;
   return (
-    <Pressable
-      onPress={() => router.push(route as never)}
-      accessibilityRole="button"
-    >
-      {({ pressed }) => (
-        // Visual layer on an inner View. iOS Pressable with a
-        // function-based `style` prop strips flexbox under some
-        // conditions — same trick used by the dashboard status button.
-        <View
-          style={[
-            styles.navRow,
-            pressed && { backgroundColor: theme.colors.bone },
-          ]}
-        >
-          <View style={styles.navIcon}>
-            <Icon size={20} color={theme.colors.ink.soft} strokeWidth={1.75} />
+    <>
+      <Pressable
+        onPress={() => router.push(route as never)}
+        accessibilityRole="button"
+      >
+        {({ pressed }) => (
+          // Visual layer on an inner View. iOS Pressable with a
+          // function-based `style` prop strips flexbox under some
+          // conditions — same trick used by the dashboard status button.
+          <View style={[styles.navRow, pressed && styles.rowPressed]}>
+            <View style={styles.navIcon}>
+              <Icon
+                size={20}
+                color={theme.colors.ink.soft}
+                strokeWidth={1.75}
+              />
+            </View>
+            <View style={styles.navText}>
+              <Text style={styles.navLabel}>{label}</Text>
+              {caption ? (
+                <Text style={styles.navCaption}>{caption}</Text>
+              ) : null}
+            </View>
+            <ChevronRight
+              size={18}
+              color={theme.colors.ink.muted}
+              strokeWidth={1.75}
+            />
           </View>
-          <View style={styles.navText}>
-            <Text style={styles.navLabel}>{label}</Text>
-            {caption ? (
-              <Text style={styles.navCaption}>{caption}</Text>
-            ) : null}
-          </View>
-          <ChevronRight
-            size={18}
-            color={theme.colors.ink.muted}
-            strokeWidth={1.75}
-          />
-        </View>
-      )}
-    </Pressable>
+        )}
+      </Pressable>
+      {/* Inset hairline separator — aligned to the text, not edge-to-edge */}
+      {!isLast ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
+// 36pt icon circle (spec §9); separator inset lines up with the row text:
+// row paddingHorizontal + circle width + row gap.
+const ICON_CIRCLE = 36;
+const SEPARATOR_INSET = theme.spacing[4] + ICON_CIRCLE + theme.spacing[3];
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
   scrollContent: {
     paddingBottom: theme.spacing[10],
+  },
+
+  // Group cards — white surfaces on the bone canvas (spec §1).
+  // Shadow lives on the outer card; `cardInner` clips pressed-row
+  // backgrounds to the radius (iOS masksToBounds would kill the shadow
+  // if `overflow: 'hidden'` sat on the shadowed view itself).
+  card: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    ...theme.shadow[1],
+  },
+  cardInner: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+  },
+  rowPressed: {
+    backgroundColor: theme.colors.bone,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: SEPARATOR_INSET,
   },
 
   // Zone A — Command bar
@@ -213,17 +252,16 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Identity row
+  // Identity card
+  identityCard: {
+    marginBottom: theme.spacing[6],
+  },
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
-    marginBottom: theme.spacing[6],
   },
   avatar: {
     width: 44,
@@ -252,24 +290,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Nav group + rows
-  navGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-  },
+  // Rows inside group cards
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-    minHeight: 60,
+    paddingVertical: theme.spacing[2],
+    minHeight: 56,
   },
   navIcon: {
-    width: 28,
+    width: ICON_CIRCLE,
+    height: ICON_CIRCLE,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.bone,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navText: { flex: 1 },
   navLabel: {
@@ -284,16 +320,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Logout — separate group below navGroup with its own hairline top so
-  // the section reads as a distinct action surface, not a tail of the nav.
-  logoutGroup: {
+  // Logout — separate group card below the nav card so the section reads
+  // as a distinct action surface, not a tail of the nav.
+  logoutCard: {
     marginTop: theme.spacing[6],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-  },
-  logoutRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
   },
   logoutLabel: {
     fontFamily: 'Inter-SemiBold',

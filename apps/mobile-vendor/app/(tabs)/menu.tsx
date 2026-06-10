@@ -27,6 +27,10 @@ interface ListEntry {
   key: string;
   label?: string;
   item?: MenuItem;
+  // Position within the section — drives group-card corner radii
+  // (style-based grouping keeps the flat-list virtualization).
+  first?: boolean;
+  last?: boolean;
 }
 
 export default function MenuScreen() {
@@ -70,10 +74,12 @@ export default function MenuScreen() {
   // active, show a flat list without headers.
   const listEntries = useMemo<ListEntry[]>(() => {
     if (selectedCategoryId !== ALL_CATEGORIES || searchQuery.trim()) {
-      return filteredItems.map((i) => ({
-        type: 'item',
+      return filteredItems.map((i, idx) => ({
+        type: 'item' as const,
         key: i.id,
         item: i,
+        first: idx === 0,
+        last: idx === filteredItems.length - 1,
       }));
     }
     const buckets = new Map<string, MenuItem[]>();
@@ -94,15 +100,27 @@ export default function MenuScreen() {
         key: `h-${catId}`,
         label: categoryNameById.get(catId) ?? 'Other',
       });
-      for (const item of catItems) {
-        out.push({ type: 'item', key: item.id, item });
-      }
+      catItems.forEach((item, idx) => {
+        out.push({
+          type: 'item',
+          key: item.id,
+          item,
+          first: idx === 0,
+          last: idx === catItems.length - 1,
+        });
+      });
     }
     if (uncategorized.length > 0) {
       out.push({ type: 'header', key: 'h-uncat', label: 'Uncategorized' });
-      for (const item of uncategorized) {
-        out.push({ type: 'item', key: item.id, item });
-      }
+      uncategorized.forEach((item, idx) => {
+        out.push({
+          type: 'item',
+          key: item.id,
+          item,
+          first: idx === 0,
+          last: idx === uncategorized.length - 1,
+        });
+      });
     }
     return out;
   }, [items, filteredItems, selectedCategoryId, searchQuery, categoryNameById]);
@@ -130,7 +148,7 @@ export default function MenuScreen() {
         <Pressable
           onPress={() => router.push('/menu/new' as never)}
           hitSlop={8}
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
           accessibilityRole="button"
           accessibilityLabel="Add menu item"
         >
@@ -140,8 +158,9 @@ export default function MenuScreen() {
         </Pressable>
       </View>
 
-      {/* Category tabs — bare text + persimmon underline. Hidden until
-          there are items, and hidden if there's only one category to pick. */}
+      {/* Category chips (UI-V2-SPEC §5) — ink-filled pill when active,
+          paper + mist border when inactive. Hidden until there are items,
+          and hidden if there's no category to pick. */}
       {hasItems && categories.length > 0 && (
         <View style={styles.tabBarWrap}>
           <ScrollView
@@ -221,12 +240,30 @@ export default function MenuScreen() {
                 {(entry.label ?? '').toUpperCase()}
               </Text>
             ) : entry.item ? (
-              <MenuItemRow
-                item={entry.item}
-                onPress={() =>
-                  router.push(`/menu/${entry.item!.id}/edit` as never)
-                }
-              />
+              // Group-card segment (UI-V2-SPEC §1): shadow on the outer
+              // wrapper, overflow clip on the inner so corner radii hold.
+              <View
+                style={[
+                  styles.cardSegment,
+                  entry.first && styles.cardTop,
+                  entry.last && styles.cardBottom,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.cardClip,
+                    entry.first && styles.cardTop,
+                    entry.last && styles.cardBottom,
+                  ]}
+                >
+                  <MenuItemRow
+                    item={entry.item}
+                    onPress={() =>
+                      router.push(`/menu/${entry.item!.id}/edit` as never)
+                    }
+                  />
+                </View>
+              </View>
             ) : null
           }
           showsVerticalScrollIndicator={false}
@@ -251,15 +288,18 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
-      <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-        {label}
-      </Text>
+      {/* Inner-View pattern — visual styles live on the View, not the
+          Pressable, to dodge the iOS function-style style drop. */}
       <View
         style={[
-          tabStyles.indicator,
-          active && tabStyles.indicatorActive,
+          tabStyles.chip,
+          active ? tabStyles.chipActive : tabStyles.chipInactive,
         ]}
-      />
+      >
+        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -297,7 +337,7 @@ function EmptyMenu({ onAdd }: EmptyMenuProps) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
 
   commandBar: {
     flexDirection: 'row',
@@ -314,35 +354,36 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     color: theme.colors.ink.DEFAULT,
   },
+  // Small primary button (UI-V2-SPEC §3, compact variant)
   addBtn: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    minHeight: 44,
+    minHeight: 40,
     justifyContent: 'center',
   },
   addBtnLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    color: theme.colors.paper,
     letterSpacing: 0.1,
   },
 
-  // Category tab bar
+  // Category chip row (UI-V2-SPEC §5)
   tabBarWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    paddingBottom: theme.spacing[1],
   },
   tabBar: {
     paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[5],
-    alignItems: 'flex-start',
+    paddingVertical: theme.spacing[2],
+    gap: theme.spacing[2],
+    alignItems: 'center',
   },
 
-  // Search
+  // Search — white card field on the bone canvas (UI-V2-SPEC §1)
   searchWrap: {
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[2],
+    marginHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[3],
     paddingTop: theme.spacing[1],
   },
   searchInput: {
@@ -350,15 +391,15 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     minHeight: 44,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.strong,
-    borderRadius: theme.radius.DEFAULT,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.paper,
     paddingHorizontal: theme.spacing[3],
+    ...theme.shadow[1],
   },
 
   // List
   listContent: {
+    paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[10],
   },
   sectionHeader: {
@@ -369,6 +410,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[5],
     paddingBottom: theme.spacing[2],
+  },
+
+  // Group-card segment shell (UI-V2-SPEC §1) — wraps MenuItemRow entries.
+  cardSegment: {
+    marginHorizontal: theme.spacing[4],
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
+  },
+  cardClip: {
+    overflow: 'hidden',
+    backgroundColor: theme.colors.paper,
+  },
+  cardTop: {
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+  },
+  cardBottom: {
+    borderBottomLeftRadius: theme.radius.lg,
+    borderBottomRightRadius: theme.radius.lg,
   },
 
   // Loading + filter-empty
@@ -434,7 +494,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing[6],
-    backgroundColor: theme.colors.paper,
+    backgroundColor: theme.colors.bone,
   },
   errorBody: {
     fontFamily: 'Inter',
@@ -456,18 +516,26 @@ const styles = StyleSheet.create({
 });
 
 const tabStyles = StyleSheet.create({
-  root: { paddingTop: theme.spacing[2], paddingBottom: theme.spacing[2] },
+  root: {},
+  chip: {
+    minHeight: 36,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  chipInactive: {
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+  },
   label: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    paddingBottom: 6,
+    color: theme.colors.ink.soft,
   },
-  labelActive: { color: theme.colors.ink.DEFAULT },
-  indicator: {
-    height: 2,
-    backgroundColor: 'transparent',
-    borderRadius: 1,
-  },
-  indicatorActive: { backgroundColor: theme.colors.herb.DEFAULT },
+  labelActive: { color: theme.colors.paper },
 });

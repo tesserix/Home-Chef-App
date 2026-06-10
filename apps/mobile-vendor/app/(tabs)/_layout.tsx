@@ -20,10 +20,10 @@ import { theme } from '@homechef/mobile-shared/theme';
 //     feedback_ios_pressable_array_style.md. Without flex honored, all
 //     four tabs collapse against the left edge. TouchableOpacity has no
 //     such quirk.
-//   - Inner View carries `width: '100%'` so the absolute-positioned
-//     persimmon top line spans the full column. (Default cross-axis
-//     stretch should do this on its own, but explicit width belt-and-
-//     suspenders against any inherited alignItems.)
+//   - Inner View carries `width: '100%'` so the column fills its flex
+//     slot. (Default cross-axis stretch should do this on its own, but
+//     explicit width belt-and-suspenders against any inherited
+//     alignItems.)
 //   - `allowFontScaling={false}` + `numberOfLines={1}` on the label so
 //     iOS Dynamic Type at 130%+ can't widen the text past the column
 //     and re-introduce truncation.
@@ -46,7 +46,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           options.title ??
           route.name;
         const tintColor = isFocused
-          ? theme.colors.ink.DEFAULT
+          ? theme.colors.herb.DEFAULT
           : theme.colors.ink.muted;
 
         function onPress(): void {
@@ -79,12 +79,6 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             testID={options.tabBarButtonTestID}
           >
             <View style={styles.itemInner}>
-              <View
-                style={[
-                  styles.topLine,
-                  isFocused && styles.topLineActive,
-                ]}
-              />
               {options.tabBarIcon
                 ? options.tabBarIcon({
                     focused: isFocused,
@@ -114,8 +108,12 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     backgroundColor: theme.colors.paper,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    // Top elevation instead of a hairline border — spec §6.
+    shadowColor: theme.colors.ink.DEFAULT,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   itemTouchable: {
     flex: 1,
@@ -127,17 +125,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 6,
     minHeight: 56,
-  },
-  topLine: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: 'transparent',
-  },
-  topLineActive: {
-    backgroundColor: theme.colors.herb.DEFAULT,
   },
   label: {
     // `alignSelf: 'stretch'` overrides the parent itemInner's
@@ -156,7 +143,7 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   labelActive: {
-    color: theme.colors.ink.DEFAULT,
+    color: theme.colors.herb.DEFAULT,
   },
 });
 
