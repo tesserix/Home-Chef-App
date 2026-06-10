@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   FlatList,
   Pressable,
@@ -92,17 +92,78 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
     <Pressable
       onPress={onPress}
       style={tabStyles.root}
-      hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
-      <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-        {label}
-      </Text>
-      <View style={[tabStyles.indicator, active && tabStyles.indicatorActive]} />
+      {/* Inner-View pattern — visual styles live on the View, not the
+          Pressable, to dodge the iOS function-style style drop. */}
+      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
+        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
+
+// ----- Group-card segment shell (UI-V2-SPEC §1/§9) -----------------------------
+// Each list row is one segment of a white group card. First-in-group gets top
+// radii, last gets bottom radii; the shadow lives on the outer layer so the
+// inner overflow-hidden clip (needed for the pressed-state bone fill to respect
+// the radius) doesn't cut it off. Mirrors orders.tsx HistoryRow.
+
+interface CardSegmentProps {
+  first: boolean;
+  last: boolean;
+  children: ReactNode;
+}
+
+function CardSegment({ first, last, children }: CardSegmentProps) {
+  return (
+    <View
+      style={[
+        segmentStyles.shell,
+        first && segmentStyles.top,
+        last && segmentStyles.bottom,
+      ]}
+    >
+      <View
+        style={[
+          segmentStyles.clip,
+          first && segmentStyles.top,
+          last && segmentStyles.bottom,
+        ]}
+      >
+        {children}
+        {!last && <View style={segmentStyles.separator} />}
+      </View>
+    </View>
+  );
+}
+
+const segmentStyles = StyleSheet.create({
+  shell: {
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
+  },
+  top: {
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+  },
+  bottom: {
+    borderBottomLeftRadius: theme.radius.lg,
+    borderBottomRightRadius: theme.radius.lg,
+  },
+  clip: {
+    overflow: 'hidden',
+    backgroundColor: theme.colors.paper,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4], // inset — aligned to row content
+  },
+});
 
 interface PayoutAccountRowProps {
   payoutMethod: PayoutResponse['payoutMethod'];
@@ -182,6 +243,10 @@ interface BreakdownRowProps {
   accent?: boolean;
   /** The right-side annotation shown in brackets after the label */
   annotation?: string;
+  /** Totals row — emphasized label + Geist-Bold value (UI-V2-SPEC) */
+  emphasized?: boolean;
+  /** Last row in the card — drops the inset hairline */
+  last?: boolean;
 }
 
 function BreakdownRow({
@@ -190,10 +255,15 @@ function BreakdownRow({
   secondary,
   accent,
   annotation,
+  emphasized,
+  last,
 }: BreakdownRowProps) {
   return (
-    <View style={bkStyles.row}>
-      <Text style={bkStyles.rowLabel} numberOfLines={1}>
+    <View style={[bkStyles.row, last && bkStyles.rowLast]}>
+      <Text
+        style={[bkStyles.rowLabel, emphasized && bkStyles.rowLabelEmphasized]}
+        numberOfLines={1}
+      >
         {label}
         {annotation ? (
           <Text style={bkStyles.rowAnnotation}> {annotation}</Text>
@@ -203,6 +273,7 @@ function BreakdownRow({
         style={[
           bkStyles.rowValue,
           secondary && bkStyles.rowValueSecondary,
+          emphasized && bkStyles.rowValueEmphasized,
           accent && bkStyles.rowValueAccent,
         ]}
       >
@@ -222,11 +293,18 @@ const bkStyles = StyleSheet.create({
     borderBottomColor: theme.colors.mist.DEFAULT,
     minHeight: 40,
   },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
   rowLabel: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     flex: 1,
+  },
+  rowLabelEmphasized: {
+    fontFamily: 'Inter-SemiBold',
+    color: theme.colors.ink.DEFAULT,
   },
   rowAnnotation: {
     fontFamily: 'Inter',
@@ -243,6 +321,10 @@ const bkStyles = StyleSheet.create({
   rowValueSecondary: {
     color: theme.colors.ink.muted,
     fontFamily: 'Inter',
+  },
+  rowValueEmphasized: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.body.size,
   },
   rowValueAccent: {
     color: theme.colors.herb.DEFAULT,
@@ -298,14 +380,15 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
 }
 
 const orderRowStyles = StyleSheet.create({
+  // Rows live inside white group cards (CardSegment) — separators are
+  // rendered by the segment shell, not the row itself.
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-    minHeight: 44,
+    minHeight: 56,
     paddingVertical: theme.spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
   },
   leftBlock: { flex: 1 },
   orderNumber: {
@@ -516,11 +599,21 @@ type ListItem =
   | { type: 'tabBar' }
   | { type: 'breakdown' }
   | { type: 'orderListHeader' }
-  | { type: 'orderEntry'; order: EarningsBreakdownOrder }
+  | {
+      type: 'orderEntry';
+      order: EarningsBreakdownOrder;
+      first: boolean;
+      last: boolean;
+    }
   | { type: 'refundsHeader' }
-  | { type: 'refundEntry'; refund: RefundEntry }
+  | { type: 'refundEntry'; refund: RefundEntry; first: boolean; last: boolean }
   | { type: 'statementsHeader' }
-  | { type: 'statementEntry'; statement: WeeklyStatement }
+  | {
+      type: 'statementEntry';
+      statement: WeeklyStatement;
+      first: boolean;
+      last: boolean;
+    }
   | { type: 'taxRow' }
   | { type: 'payoutRow' }
   | { type: 'empty' };
@@ -600,31 +693,46 @@ export default function EarningsScreen() {
       items.push({ type: 'empty' });
     } else {
       items.push({ type: 'orderListHeader' });
-      orders.forEach((order) => {
-        items.push({ type: 'orderEntry', order });
+      orders.forEach((order, idx) => {
+        items.push({
+          type: 'orderEntry',
+          order,
+          first: idx === 0,
+          last: idx === orders.length - 1,
+        });
       });
     }
 
     const refundList = refunds ?? [];
     if (refundList.length > 0) {
       items.push({ type: 'refundsHeader' });
-      refundList.forEach((refund) => {
-        items.push({ type: 'refundEntry', refund });
+      refundList.forEach((refund, idx) => {
+        items.push({
+          type: 'refundEntry',
+          refund,
+          first: idx === 0,
+          last: idx === refundList.length - 1,
+        });
       });
     }
 
     const stmts = statements ?? [];
     if (stmts.length > 0) {
       items.push({ type: 'statementsHeader' });
-      stmts.forEach((statement) => {
-        items.push({ type: 'statementEntry', statement });
+      stmts.forEach((statement, idx) => {
+        items.push({
+          type: 'statementEntry',
+          statement,
+          first: idx === 0,
+          last: idx === stmts.length - 1,
+        });
       });
     }
 
     items.push({ type: 'taxRow' });
     items.push({ type: 'payoutRow' });
     return items;
-  }, [totals, orders, statements]);
+  }, [totals, orders, refunds, statements]);
 
   if (isLoading) {
     return (
@@ -797,6 +905,8 @@ export default function EarningsScreen() {
                 label="Net payout"
                 value={fmtInr(totals.netPayout)}
                 accent={totals.netPayout > 0}
+                emphasized
+                last
               />
             </View>
             <Text style={styles.ordersCount}>
@@ -813,10 +923,12 @@ export default function EarningsScreen() {
 
       case 'orderEntry':
         return (
-          <OrderHistoryRow
-            order={item.order}
-            onPress={() => router.push(`/orders/${item.order.orderId}`)}
-          />
+          <CardSegment first={item.first} last={item.last}>
+            <OrderHistoryRow
+              order={item.order}
+              onPress={() => router.push(`/orders/${item.order.orderId}`)}
+            />
+          </CardSegment>
         );
 
       case 'refundsHeader':
@@ -824,10 +936,12 @@ export default function EarningsScreen() {
 
       case 'refundEntry':
         return (
-          <RefundRow
-            refund={item.refund}
-            onPress={() => router.push(`/orders/${item.refund.orderId}`)}
-          />
+          <CardSegment first={item.first} last={item.last}>
+            <RefundRow
+              refund={item.refund}
+              onPress={() => router.push(`/orders/${item.refund.orderId}`)}
+            />
+          </CardSegment>
         );
 
       case 'statementsHeader':
@@ -835,42 +949,52 @@ export default function EarningsScreen() {
 
       case 'statementEntry':
         return (
-          <StatementRow
-            statement={item.statement}
-            onPress={() =>
-              downloadAndSharePdf(
-                `/chef/statements/${item.statement.id}/statement.pdf`,
-                `statement-${item.statement.weekStart}.pdf`,
-              )
-            }
-          />
+          <CardSegment first={item.first} last={item.last}>
+            <StatementRow
+              statement={item.statement}
+              onPress={() =>
+                downloadAndSharePdf(
+                  `/chef/statements/${item.statement.id}/statement.pdf`,
+                  `statement-${item.statement.weekStart}.pdf`,
+                )
+              }
+            />
+          </CardSegment>
         );
 
       case 'taxRow':
         return (
           <View style={styles.payoutSection}>
-            <TaxDocumentRow
-              fyLabel={currentFyLabel()}
-              onPress={() =>
-                downloadAndSharePdf(
-                  '/chef/tax/certificate',
-                  `tds-certificate-${currentFyLabel().replace(/\s/g, '')}.pdf`,
-                )
-              }
-            />
+            <View style={styles.singleCard}>
+              <View style={styles.singleCardClip}>
+                <TaxDocumentRow
+                  fyLabel={currentFyLabel()}
+                  onPress={() =>
+                    downloadAndSharePdf(
+                      '/chef/tax/certificate',
+                      `tds-certificate-${currentFyLabel().replace(/\s/g, '')}.pdf`,
+                    )
+                  }
+                />
+              </View>
+            </View>
           </View>
         );
 
       case 'payoutRow':
         return (
           <View style={styles.payoutSection}>
-            <PayoutAccountRow
-              payoutMethod={payoutData?.payoutMethod ?? ''}
-              bankAccountName={payoutData?.bankAccountName ?? ''}
-              bankAccountNumber={payoutData?.bankAccountNumber ?? ''}
-              bankIFSC={payoutData?.bankIFSC ?? ''}
-              upiId={payoutData?.upiId ?? ''}
-            />
+            <View style={styles.singleCard}>
+              <View style={styles.singleCardClip}>
+                <PayoutAccountRow
+                  payoutMethod={payoutData?.payoutMethod ?? ''}
+                  bankAccountName={payoutData?.bankAccountName ?? ''}
+                  bankAccountNumber={payoutData?.bankAccountNumber ?? ''}
+                  bankIFSC={payoutData?.bankIFSC ?? ''}
+                  upiId={payoutData?.upiId ?? ''}
+                />
+              </View>
+            </View>
           </View>
         );
 
@@ -931,10 +1055,10 @@ export default function EarningsScreen() {
 // ----- Styles ---------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
   errorRoot: {
     flex: 1,
-    backgroundColor: theme.colors.paper,
+    backgroundColor: theme.colors.bone,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing[6],
@@ -967,10 +1091,14 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[10],
   },
 
-  // Hero block
+  // Hero block — white paper card on the bone canvas (UI-V2-SPEC §1)
   heroBlock: {
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[5],
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    marginTop: theme.spacing[1],
+    marginBottom: theme.spacing[2],
+    ...theme.shadow[1],
   },
   heroLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -995,15 +1123,16 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Figures strip
+  // Figures strip — white stat card (pending / last payout)
   figuresStrip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingTop: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    marginBottom: theme.spacing[4],
     gap: theme.spacing[6],
+    ...theme.shadow[1],
   },
   figureItem: { flex: 1 },
   figureLabel: {
@@ -1033,13 +1162,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.mist.DEFAULT,
   },
 
-  // Tab bar
+  // Period tabs — iOS-style segmented control track (UI-V2-SPEC §5)
   tabBar: {
     flexDirection: 'row',
-    gap: theme.spacing[6],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-    marginBottom: 0,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    minHeight: 40,
   },
 
   // Breakdown section
@@ -1053,9 +1182,13 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[2],
   },
+  // Fee table lives inside a white card; rows keep their inset hairlines
+  // via the card's horizontal padding (UI-V2-SPEC §1).
   breakdownGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing[4],
+    ...theme.shadow[1],
   },
   gstSubRow: {
     fontFamily: 'Inter',
@@ -1081,11 +1214,20 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Payout account section
+  // Standalone single-row cards (tax docs, payout account)
   payoutSection: {
     marginTop: theme.spacing[6],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+  },
+  // Shadow on the outer shell; inner clip keeps the pressed-state bone
+  // fill inside the rounded corners (matches the CardSegment pattern).
+  singleCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    ...theme.shadow[1],
+  },
+  singleCardClip: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
   },
 
   // Empty state
@@ -1147,37 +1289,38 @@ const styles = StyleSheet.create({
 
 const tabStyles = StyleSheet.create({
   root: {
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[2],
+    flex: 1,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 34, // 40 track minus 3pt padding top/bottom
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  segmentActive: {
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
   },
   label: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     letterSpacing: 0.1,
-    paddingBottom: 6,
   },
   labelActive: {
     color: theme.colors.ink.DEFAULT,
   },
-  indicator: {
-    height: 2,
-    backgroundColor: 'transparent',
-    borderRadius: 1,
-  },
-  indicatorActive: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-  },
 });
 
 const accountRowStyles = StyleSheet.create({
+  // Row inside a standalone white card — card shell carries radius/shadow.
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing[4],
-    minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
+    minHeight: 56,
   },
   textBlock: { flex: 1 },
   sectionLabel: {

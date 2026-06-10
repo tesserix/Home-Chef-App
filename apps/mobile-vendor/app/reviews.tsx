@@ -3,6 +3,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -152,6 +153,10 @@ interface FilterTabProps {
   onPress: () => void;
 }
 
+// Horizontal chip variant of the v2 segmented control (UI-V2-SPEC §5) —
+// five segments with "(N)" counts are too tight for a fixed track, so the
+// filters render as a scrolling chip row: active = ink fill + paper text,
+// inactive = paper bg + mist.strong border.
 function FilterTab({ item, active, onPress }: FilterTabProps) {
   return (
     <Pressable
@@ -159,71 +164,99 @@ function FilterTab({ item, active, onPress }: FilterTabProps) {
       hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
-      style={filterTabStyles.root}
     >
-      <Text
-        style={[
-          filterTabStyles.label,
-          active && filterTabStyles.labelActive,
-        ]}
-      >
-        {item.label}
-      </Text>
-      <View
-        style={[
-          filterTabStyles.indicator,
-          active && filterTabStyles.indicatorActive,
-        ]}
-      />
+      {({ pressed }) => (
+        // Inner-View pattern — visual styles on the View, never a
+        // function-style array on the Pressable (iOS drops them).
+        <View
+          style={[
+            filterTabStyles.chip,
+            active ? filterTabStyles.chipActive : filterTabStyles.chipInactive,
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Text
+            style={[
+              filterTabStyles.label,
+              active && filterTabStyles.labelActive,
+            ]}
+          >
+            {item.label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
 
 interface ReviewRowProps {
   review: Review;
+  first: boolean;
+  last: boolean;
 }
 
-function ReviewRow({ review }: ReviewRowProps) {
+// One segment of the white "group card" (UI-V2-SPEC §1/§9). First-in-list
+// gets top radii, last gets bottom radii; shadow lives on the outer shell
+// so the inner overflow-hidden clip (needed for the pressed-state bone
+// fill to respect the radius) doesn't cut it off.
+function ReviewRow({ review, first, last }: ReviewRowProps) {
   return (
-    <Pressable
-      onPress={() => router.push(`/review/${review.id}` as `${string}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`Review by ${review.customerName}, ${review.rating} stars. Tap to reply.`}
+    <View
+      style={[
+        segmentStyles.shell,
+        first && segmentStyles.top,
+        last && segmentStyles.bottom,
+      ]}
     >
-      {({ pressed }) => (
-        <View
-          style={[rowStyles.root, pressed && rowStyles.rootPressed]}
+      <View
+        style={[
+          segmentStyles.clip,
+          first && segmentStyles.top,
+          last && segmentStyles.bottom,
+        ]}
+      >
+        <Pressable
+          onPress={() => router.push(`/review/${review.id}` as `${string}`)}
+          accessibilityRole="button"
+          accessibilityLabel={`Review by ${review.customerName}, ${review.rating} stars. Tap to reply.`}
         >
-          {/* Leading — star count */}
-          <View style={rowStyles.starBlock}>
-            <Text style={rowStyles.starGlyph}>★</Text>
-            <Text style={rowStyles.starCount}>{review.rating}</Text>
-          </View>
+          {({ pressed }) => (
+            <View
+              style={[rowStyles.root, pressed && rowStyles.rootPressed]}
+            >
+              {/* Leading — star count */}
+              <View style={rowStyles.starBlock}>
+                <Text style={rowStyles.starGlyph}>★</Text>
+                <Text style={rowStyles.starCount}>{review.rating}</Text>
+              </View>
 
-          {/* Centre — name + comment snippet */}
-          <View style={rowStyles.body}>
-            <View style={rowStyles.nameRow}>
-              <Text style={rowStyles.customerName} numberOfLines={1}>
-                {review.customerName}
-              </Text>
-              <Text style={rowStyles.date}>
-                {relativeDate(review.createdAt)}
-              </Text>
-            </View>
-            <Text style={rowStyles.snippet} numberOfLines={1}>
-              {review.comment}
-            </Text>
-          </View>
+              {/* Centre — name + comment snippet */}
+              <View style={rowStyles.body}>
+                <View style={rowStyles.nameRow}>
+                  <Text style={rowStyles.customerName} numberOfLines={1}>
+                    {review.customerName}
+                  </Text>
+                  <Text style={rowStyles.date}>
+                    {relativeDate(review.createdAt)}
+                  </Text>
+                </View>
+                <Text style={rowStyles.snippet} numberOfLines={1}>
+                  {review.comment}
+                </Text>
+              </View>
 
-          {/* Trailing — Replied pill (only when reply exists) */}
-          {review.reply ? (
-            <View style={rowStyles.repliedPill}>
-              <Text style={rowStyles.repliedPillLabel}>Replied</Text>
+              {/* Trailing — Replied pill (only when reply exists) */}
+              {review.reply ? (
+                <View style={rowStyles.repliedPill}>
+                  <Text style={rowStyles.repliedPillLabel}>Replied</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-      )}
-    </Pressable>
+          )}
+        </Pressable>
+        {!last && <View style={segmentStyles.separator} />}
+      </View>
+    </View>
   );
 }
 
@@ -287,14 +320,15 @@ export default function ReviewsScreen() {
         <Text style={styles.commandTitle}>Reviews</Text>
       </View>
 
-      {/* Summary row — inline below command bar, above filter tabs */}
+      {/* Hero — average rating on a white paper card (UI-V2-SPEC §1) */}
       {!isLoading && !isError && (data?.totalReviews ?? 0) > 0 && (
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryRating}>
-            {(data?.averageRating ?? 0).toFixed(1)}
-          </Text>
-          <Text style={styles.summaryStarGlyph}>★</Text>
-          <Text style={styles.summaryDivider}>·</Text>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryValueRow}>
+            <Text style={styles.summaryRating}>
+              {(data?.averageRating ?? 0).toFixed(1)}
+            </Text>
+            <Text style={styles.summaryStarGlyph}>★</Text>
+          </View>
           <Text style={styles.summaryCount}>
             {data?.totalReviews ?? 0}{' '}
             {(data?.totalReviews ?? 0) === 1 ? 'review' : 'reviews'}
@@ -302,9 +336,15 @@ export default function ReviewsScreen() {
         </View>
       )}
 
-      {/* Filter tab row — bare-text underline pattern from orders.tsx */}
+      {/* Filter chips — horizontal chip-row variant of the v2 segmented
+          control (five segments with counts are too tight for a track) */}
       {!isLoading && !isError && (
-        <View style={styles.filterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterBar}
+          contentContainerStyle={styles.filterBarContent}
+        >
           {FILTER_LABELS.map((item) => (
             <FilterTab
               key={item.key}
@@ -313,7 +353,7 @@ export default function ReviewsScreen() {
               onPress={() => setActiveFilter(item.key)}
             />
           ))}
-        </View>
+        </ScrollView>
       )}
 
       {/* List */}
@@ -329,14 +369,14 @@ export default function ReviewsScreen() {
           <Text style={styles.emptyBody}>
             Check your connection and try again.
           </Text>
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <Text style={styles.retryButtonLabel}>Retry</Text>
+          <Pressable onPress={() => refetch()} accessibilityRole="button">
+            {({ pressed }) => (
+              <View
+                style={[styles.retryButton, pressed && { opacity: 0.85 }]}
+              >
+                <Text style={styles.retryButtonLabel}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       ) : (
@@ -352,7 +392,13 @@ export default function ReviewsScreen() {
               tintColor={theme.colors.ink.DEFAULT}
             />
           }
-          renderItem={({ item }) => <ReviewRow review={item} />}
+          renderItem={({ item, index }) => (
+            <ReviewRow
+              review={item}
+              first={index === 0}
+              last={index === filteredReviews.length - 1}
+            />
+          )}
           ListEmptyComponent={<EmptyState filter={activeFilter} totalReviews={reviews.length} />}
         />
       )}
@@ -386,7 +432,7 @@ function EmptyState({ filter, totalReviews }: EmptyStateProps) {
 // ----- Styles ----------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
 
   // Zone A — Command bar (matches orders.tsx exactly)
   commandBar: {
@@ -411,57 +457,67 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Summary row — sits between command bar and filter bar
-  summaryRow: {
+  // Hero — average rating on a white paper card (UI-V2-SPEC §1)
+  summaryCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[3],
+    ...theme.shadow[1],
+  },
+  summaryValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[3],
   },
   summaryRating: {
     fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.body.size,
+    fontSize: 32,
+    lineHeight: 36,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.1,
+    letterSpacing: -0.4,
   },
   summaryStarGlyph: {
     fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
+    fontSize: theme.typography.size.h2.size,
     color: theme.colors.amber.DEFAULT,
-  },
-  summaryDivider: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.mist.strong,
-    marginHorizontal: theme.spacing[1],
   },
   summaryCount: {
     fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[1],
   },
 
-  // Filter bar — matches orders.tsx tabBar pattern
+  // Filter chip row — horizontal scroll, no edge-to-edge hairline
   filterBar: {
+    flexGrow: 0,
+  },
+  filterBarContent: {
     flexDirection: 'row',
+    gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[5],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    paddingBottom: theme.spacing[3],
   },
 
   // List
   listContent: {
     paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[1],
     paddingBottom: theme.spacing[10],
   },
 
-  // Skeleton stack
+  // Skeleton stack — card-shaped while loading so the layout doesn't jump
   skeletonStack: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[2],
+    marginHorizontal: theme.spacing[4],
+    marginTop: theme.spacing[2],
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    ...theme.shadow[1],
   },
 
   // Empty + error states (matches orders.tsx emptyBlock)
@@ -505,39 +561,66 @@ const styles = StyleSheet.create({
 });
 
 const filterTabStyles = StyleSheet.create({
-  root: {
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[2],
+  chip: {
+    minHeight: 36,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  chipInactive: {
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
   },
   label: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     letterSpacing: 0.1,
-    paddingBottom: 6,
   },
   labelActive: {
-    color: theme.colors.ink.DEFAULT,
+    color: theme.colors.paper,
   },
-  indicator: {
-    height: 2,
-    backgroundColor: 'transparent',
-    borderRadius: 1,
+});
+
+// Group-card segment shell (UI-V2-SPEC §1) — mirrors orders.tsx HistoryRow.
+const segmentStyles = StyleSheet.create({
+  shell: {
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
   },
-  indicatorActive: {
-    backgroundColor: theme.colors.ink.DEFAULT,
+  top: {
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+  },
+  bottom: {
+    borderBottomLeftRadius: theme.radius.lg,
+    borderBottomRightRadius: theme.radius.lg,
+  },
+  clip: {
+    overflow: 'hidden',
+    backgroundColor: theme.colors.paper,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4], // inset — aligned to row content
   },
 });
 
 const rowStyles = StyleSheet.create({
+  // Row inside the group card — separators come from the segment shell.
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
     minHeight: 56,
     paddingVertical: theme.spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    paddingHorizontal: theme.spacing[4],
   },
   rootPressed: {
     backgroundColor: theme.colors.bone,
@@ -595,18 +678,18 @@ const rowStyles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Trailing replied pill — muted, no persimmon
+  // Trailing replied chip — UI-V2-SPEC §2 style: mist bg, ink.soft text
   repliedPill: {
-    backgroundColor: theme.colors.bone,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
     flexShrink: 0,
   },
   repliedPillLabel: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 10,
-    color: theme.colors.ink.muted,
-    letterSpacing: 0.3,
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    letterSpacing: 0.2,
   },
 });

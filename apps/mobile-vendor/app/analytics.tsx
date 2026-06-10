@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -88,16 +87,16 @@ function TabLabel({ label, active, onPress }: TabLabelProps) {
     <Pressable
       onPress={onPress}
       style={tabStyles.root}
-      hitSlop={6}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
-      <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-        {label}
-      </Text>
-      <View
-        style={[tabStyles.indicator, active && tabStyles.indicatorActive]}
-      />
+      {/* Inner-View pattern — visual styles live on the View, not the
+          Pressable, to dodge the iOS function-style style drop. */}
+      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
+        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -108,22 +107,27 @@ interface PopularItemRowProps {
   isLast: boolean;
 }
 
+// One row of the white "group card" (UI-V2-SPEC §1/§9) — inset hairline
+// separators (left-padded by the row, hairline on the inner block) and the
+// last row drops its rule so the card edge stays clean.
 function PopularItemRow({ item, rank, isLast }: PopularItemRowProps) {
   return (
-    <View style={[rowStyles.root, isLast && rowStyles.rootLast]}>
-      <Text style={rowStyles.rank}>#{rank}</Text>
-      <Text style={rowStyles.name} numberOfLines={1}>
-        {item.name}
-      </Text>
-      <View style={rowStyles.right}>
-        <Text style={rowStyles.orders}>{item.orders} orders</Text>
-        <Text style={rowStyles.revenue}>
-          {typeof item.revenue === 'number'
-            ? `₹${item.revenue.toLocaleString('en-IN')}`
-            : typeof item.percentage === 'number'
-              ? `${item.percentage}% of orders`
-              : ''}
+    <View style={rowStyles.root}>
+      <View style={[rowStyles.inner, !isLast && rowStyles.innerBorder]}>
+        <Text style={rowStyles.rank}>#{rank}</Text>
+        <Text style={rowStyles.name} numberOfLines={1}>
+          {item.name}
         </Text>
+        <View style={rowStyles.right}>
+          <Text style={rowStyles.orders}>{item.orders} orders</Text>
+          <Text style={rowStyles.revenue}>
+            {typeof item.revenue === 'number'
+              ? `₹${item.revenue.toLocaleString('en-IN')}`
+              : typeof item.percentage === 'number'
+                ? `${item.percentage}% of orders`
+                : ''}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -145,41 +149,41 @@ export default function AnalyticsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      {/* Zone A — Command bar: back chevron left, title, period tabs right */}
+      {/* Zone A — Command bar: back chevron + title on the bone canvas */}
       <View style={styles.commandBar}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && { opacity: 0.6 },
-          ]}
           accessibilityRole="button"
           accessibilityLabel="Go back"
           hitSlop={8}
         >
-          <ChevronLeft
-            size={22}
-            color={theme.colors.ink.DEFAULT}
-            strokeWidth={2}
-          />
+          {({ pressed }) => (
+            // Inner-View pattern — visual styles on the View, never a
+            // function-style array on the Pressable (iOS drops them).
+            <View style={[styles.backButton, pressed && { opacity: 0.6 }]}>
+              <ChevronLeft
+                size={22}
+                color={theme.colors.ink.DEFAULT}
+                strokeWidth={2}
+              />
+            </View>
+          )}
         </Pressable>
 
         <Text style={styles.commandTitle}>Analytics</Text>
-
-        <View style={styles.periodTabs}>
-          {PERIODS.map((p) => (
-            <TabLabel
-              key={p.value}
-              label={p.label}
-              active={period === p.value}
-              onPress={() => setPeriod(p.value)}
-            />
-          ))}
-        </View>
       </View>
 
-      {/* Hairline below command bar — matches Orders screen tabBar rule */}
-      <View style={styles.commandBarRule} />
+      {/* Period tabs — iOS-style segmented control (UI-V2-SPEC §5) */}
+      <View style={styles.segmentTrack}>
+        {PERIODS.map((p) => (
+          <TabLabel
+            key={p.value}
+            label={p.label}
+            active={period === p.value}
+            onPress={() => setPeriod(p.value)}
+          />
+        ))}
+      </View>
 
       {/* Body states */}
       {isLoading ? (
@@ -199,15 +203,12 @@ export default function AnalyticsScreen() {
           <Text style={styles.errorBody}>
             Check your connection and try again.
           </Text>
-          <Pressable
-            onPress={() => refetch()}
-            style={({ pressed }) => [
-              styles.errorButton,
-              pressed && { opacity: 0.85 },
-            ]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.errorButtonText}>Retry</Text>
+          <Pressable onPress={() => refetch()} accessibilityRole="button">
+            {({ pressed }) => (
+              <View style={[styles.errorButton, pressed && { opacity: 0.85 }]}>
+                <Text style={styles.errorButtonText}>Retry</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       ) : !hasData ? (
@@ -230,33 +231,43 @@ export default function AnalyticsScreen() {
             />
           }
         >
-          {/* Summary strip — two tabular figures baseline-aligned,
-              hairline divider between them. Same visual grammar as the
-              dashboard today-strip so the chef reads them fluently. */}
-          <View style={styles.summaryStrip}>
-            <Text style={styles.summaryRevenue}>
-              ₹{(data?.totalRevenue ?? 0).toLocaleString('en-IN')}
-            </Text>
-            <Text style={styles.summaryDivider}>|</Text>
-            <Text style={styles.summaryOrders}>
-              {data?.totalOrders ?? 0}{' '}
-              {(data?.totalOrders ?? 0) === 1 ? 'order' : 'orders'}
-            </Text>
+          {/* Hero — revenue + orders on a white paper card (UI-V2-SPEC §1).
+              Same visual grammar as the dashboard TODAY stat card so the
+              chef reads the figures fluently. */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryCol}>
+              <Text style={styles.summaryRevenue}>
+                ₹{(data?.totalRevenue ?? 0).toLocaleString('en-IN')}
+              </Text>
+              <Text style={styles.summaryColLabel}>Revenue</Text>
+            </View>
+            <View style={styles.summaryCol}>
+              <Text style={styles.summaryOrders}>
+                {data?.totalOrders ?? 0}
+              </Text>
+              <Text style={styles.summaryColLabel}>
+                {(data?.totalOrders ?? 0) === 1 ? 'Order' : 'Orders'}
+              </Text>
+            </View>
           </View>
 
-          {/* Popular items section */}
+          {/* Popular items section — white group card */}
           {(data?.popularItems?.length ?? 0) > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>POPULAR ITEMS</Text>
-              <View>
-                {data!.popularItems.slice(0, 10).map((item, index) => (
-                  <PopularItemRow
-                    key={item.name}
-                    item={item}
-                    rank={index + 1}
-                    isLast={index === Math.min(data!.popularItems.length, 10) - 1}
-                  />
-                ))}
+              <View style={styles.groupCard}>
+                <View style={styles.groupCardInner}>
+                  {data!.popularItems.slice(0, 10).map((item, index) => (
+                    <PopularItemRow
+                      key={item.name}
+                      item={item}
+                      rank={index + 1}
+                      isLast={
+                        index === Math.min(data!.popularItems.length, 10) - 1
+                      }
+                    />
+                  ))}
+                </View>
               </View>
             </View>
           )}
@@ -278,15 +289,15 @@ export default function AnalyticsScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
 
-  // Command bar
+  // Command bar — back chevron + title, on the bone canvas
   commandBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
     gap: theme.spacing[3],
   },
   backButton: {
@@ -302,44 +313,53 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     flex: 1,
   },
-  periodTabs: {
+
+  // Segmented control track (UI-V2-SPEC §5)
+  segmentTrack: {
     flexDirection: 'row',
-    gap: theme.spacing[4],
-    alignItems: 'flex-end',
-  },
-  commandBarRule: {
-    height: StyleSheet.hairlineWidth,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
     backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    minHeight: 40,
   },
 
-  // Summary strip (matches dashboard todayStrip)
-  summaryStrip: {
+  // Hero — white stat card (UI-V2-SPEC §1)
+  summaryCard: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: theme.spacing[3],
-    paddingTop: theme.spacing[5],
-    paddingBottom: theme.spacing[5],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    marginTop: theme.spacing[2],
+    ...theme.shadow[1],
+  },
+  summaryCol: {
+    flex: 1,
+    alignItems: 'flex-start',
   },
   summaryRevenue: {
     fontFamily: 'Geist-Bold',
     fontSize: 28,
-    lineHeight: 30,
+    lineHeight: 32,
     letterSpacing: -0.4,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
   },
-  summaryDivider: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.mist.strong,
-  },
   summaryOrders: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
+    fontFamily: 'Geist-Bold',
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.4,
+    color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  summaryColLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[1],
   },
 
   // Section
@@ -352,6 +372,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[2],
+  },
+  // White group card for the popular-items rows (UI-V2-SPEC §1)
+  groupCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    ...theme.shadow[1],
+  },
+  groupCardInner: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
   },
 
   // Scroll container
@@ -437,47 +467,47 @@ const styles = StyleSheet.create({
 
 const tabStyles = StyleSheet.create({
   root: {
-    paddingTop: theme.spacing[1],
-    paddingBottom: theme.spacing[2],
+    flex: 1,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 34, // 40 track minus 3pt padding top/bottom
     alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  segmentActive: {
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
   },
   label: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
     letterSpacing: 0.1,
-    paddingBottom: 6,
   },
   labelActive: {
     color: theme.colors.ink.DEFAULT,
   },
-  indicator: {
-    height: 2,
-    width: '100%',
-    backgroundColor: 'transparent',
-    borderRadius: 1,
-  },
-  indicatorActive: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-  },
 });
 
 const rowStyles = StyleSheet.create({
+  // Outer row carries only the inset left padding; the hairline lives on
+  // the inner block so the separator reads as inset (UI-V2-SPEC §1).
   root: {
+    paddingLeft: theme.spacing[4],
+  },
+  inner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-    minHeight: 44,
+    minHeight: 56,
     paddingVertical: theme.spacing[2],
+    paddingRight: theme.spacing[4],
+  },
+  innerBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.mist.DEFAULT,
-  },
-  // Last row drops its bottom hairline so the section doesn't double-rule
-  // against whatever follows it.
-  rootLast: {
-    borderBottomWidth: 0,
   },
   rank: {
     fontFamily: 'Inter',

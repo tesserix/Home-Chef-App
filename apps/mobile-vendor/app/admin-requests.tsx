@@ -16,22 +16,30 @@ const STATUS_LABEL: Record<AdminRequest['status'], string> = {
   cancelled: 'Cancelled',
 };
 
+// Status chip colors per spec §2 — tint background + darker text of the
+// same hue, never solid fills.
 function statusBadgeColor(status: AdminRequest['status']): {
   bg: string;
   fg: string;
 } {
   switch (status) {
     case 'info_requested':
-      return { bg: theme.colors.destructive.DEFAULT, fg: theme.colors.paper };
+      return {
+        bg: theme.colors.destructive.tint,
+        fg: theme.colors.destructive.DEFAULT,
+      };
     case 'approved':
-      return { bg: theme.colors.ink.DEFAULT, fg: theme.colors.paper };
+      return { bg: theme.colors.herb.tint, fg: theme.colors.herb.soft };
     case 'rejected':
-      return { bg: theme.colors.destructive.DEFAULT, fg: theme.colors.paper };
+      return {
+        bg: theme.colors.destructive.tint,
+        fg: theme.colors.destructive.DEFAULT,
+      };
     case 'cancelled':
-      return { bg: theme.colors.mist.strong, fg: theme.colors.ink.muted };
+      return { bg: theme.colors.mist.DEFAULT, fg: theme.colors.ink.muted };
     case 'pending':
     default:
-      return { bg: theme.colors.bone, fg: theme.colors.ink.DEFAULT };
+      return { bg: theme.colors.amber.tint, fg: theme.colors.ink.DEFAULT };
   }
 }
 
@@ -140,7 +148,7 @@ export default function AdminRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
   commandBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -162,30 +170,32 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[10],
-    gap: theme.spacing[3],
   },
 
+  // Request card — white surface on the bone canvas (spec §1)
   card: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
-    paddingVertical: theme.spacing[3],
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    marginBottom: theme.spacing[3],
     gap: theme.spacing[2],
+    ...theme.shadow[1],
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // Pill chip per spec §2 — tint bg + colored text, radius.full
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
   },
   badgeText: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: 11,
-    letterSpacing: 0.6,
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
   },
   cardDate: {
     fontFamily: 'Inter',
@@ -211,7 +221,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[2],
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.destructive.DEFAULT,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.DEFAULT,
     gap: 4,
   },
   notesLabel: {
@@ -226,10 +236,11 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
     lineHeight: 20,
   },
+  // Text link per spec §3 — herb, no underline
   cardCta: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.destructive.DEFAULT,
+    color: theme.colors.herb.DEFAULT,
     marginTop: theme.spacing[1],
   },
 

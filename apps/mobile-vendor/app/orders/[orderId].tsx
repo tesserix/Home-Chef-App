@@ -67,15 +67,32 @@ const STATUS_LABEL: Record<OrderDetailStatus, string> = {
   rejected: 'Rejected',
 };
 
-const STATUS_DOT: Record<OrderDetailStatus, string> = {
-  pending: theme.colors.amber.DEFAULT,
-  accepted: theme.colors.info.DEFAULT,
-  preparing: theme.colors.amber.DEFAULT,
-  ready: theme.colors.herb.DEFAULT,
-  picked_up: theme.colors.info.DEFAULT,
-  delivered: theme.colors.diet.veg,
-  cancelled: theme.colors.destructive.DEFAULT,
-  rejected: theme.colors.destructive.DEFAULT,
+// Status chip palette per UI-V2-SPEC §2: tint bg + dark text of same hue.
+interface StatusChipColors {
+  bg: string;
+  text: string;
+}
+
+const STATUS_CHIP: Record<OrderDetailStatus, StatusChipColors> = {
+  pending: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
+  preparing: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
+  ready: { bg: theme.colors.herb.tint, text: theme.colors.herb.soft },
+  accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
+  picked_up: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
+  delivered: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
+  cancelled: {
+    bg: theme.colors.destructive.tint,
+    text: theme.colors.destructive.DEFAULT,
+  },
+  rejected: {
+    bg: theme.colors.destructive.tint,
+    text: theme.colors.destructive.DEFAULT,
+  },
+};
+
+const STATUS_CHIP_FALLBACK: StatusChipColors = {
+  bg: theme.colors.mist.DEFAULT,
+  text: theme.colors.ink.soft,
 };
 
 // ---- Helpers ------------------------------------------------------------------
@@ -131,6 +148,7 @@ interface CommandBarProps {
 }
 
 function CommandBar({ orderNumber, status, onBack }: CommandBarProps) {
+  const chip = status ? (STATUS_CHIP[status] ?? STATUS_CHIP_FALLBACK) : null;
   return (
     <View style={styles.commandBar}>
       <Pressable
@@ -149,17 +167,13 @@ function CommandBar({ orderNumber, status, onBack }: CommandBarProps) {
         <Text style={styles.commandTitle} numberOfLines={1}>
           {orderNumber ? `#${orderNumber}` : 'Order'}
         </Text>
-        {status ? (
+        {status && chip ? (
           <View style={styles.commandStatusRow}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: STATUS_DOT[status] ?? theme.colors.ink.muted },
-              ]}
-            />
-            <Text style={styles.commandStatusLabel}>
-              {STATUS_LABEL[status] ?? status}
-            </Text>
+            <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+              <Text style={[styles.statusChipLabel, { color: chip.text }]}>
+                {STATUS_LABEL[status] ?? status}
+              </Text>
+            </View>
           </View>
         ) : null}
       </View>
@@ -269,15 +283,25 @@ function FooterActions({
           onPress={onReject}
           disabled={disabled}
           hitSlop={8}
-          style={styles.rejectBtn}
           accessibilityRole="button"
           accessibilityLabel={`Reject order from ${customerName}`}
         >
-          <Text style={styles.rejectLabel}>Reject</Text>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.rejectBtn,
+                pressed && { backgroundColor: theme.colors.bone },
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.rejectLabel}>Reject</Text>
+            </View>
+          )}
         </Pressable>
         <Pressable
           onPress={onAccept}
           disabled={disabled}
+          style={styles.flex1}
           accessibilityRole="button"
           accessibilityLabel={`Accept ₹${total.toFixed(0)} order from ${customerName}`}
         >
@@ -303,6 +327,7 @@ function FooterActions({
         <Pressable
           onPress={onMarkPreparing}
           disabled={disabled}
+          style={styles.flex1}
           accessibilityRole="button"
         >
           {({ pressed }) => (
@@ -328,6 +353,7 @@ function FooterActions({
         <Pressable
           onPress={onMarkReady}
           disabled={disabled}
+          style={styles.flex1}
           accessibilityRole="button"
         >
           {({ pressed }) => (
@@ -607,7 +633,7 @@ export default function OrderDetailScreen() {
       >
         {/* CUSTOMER section */}
         <SectionLabel>CUSTOMER</SectionLabel>
-        <View style={styles.hairlineGroup}>
+        <View style={styles.card}>
           <View style={styles.customerRow}>
             <View style={styles.customerTextBlock}>
               <Text style={styles.customerName} numberOfLines={1}>
@@ -646,13 +672,10 @@ export default function OrderDetailScreen() {
                     <View
                       style={[
                         styles.contactBtn,
-                        styles.contactBtnSecondary,
-                        pressed && { opacity: 0.7 },
+                        pressed && { backgroundColor: theme.colors.bone },
                       ]}
                     >
-                      <Text style={styles.contactBtnLabelSecondary}>
-                        Message
-                      </Text>
+                      <Text style={styles.contactBtnLabel}>Message</Text>
                     </View>
                   )}
                 </Pressable>
@@ -663,7 +686,8 @@ export default function OrderDetailScreen() {
 
         {/* ITEMS section */}
         <SectionLabel>ITEMS</SectionLabel>
-        <View style={styles.hairlineGroup}>
+        <View style={styles.card}>
+          <View style={styles.cardClip}>
           {order.items.length === 0 ? (
             <Text style={styles.bodyMuted}>No items recorded</Text>
           ) : (
@@ -749,39 +773,42 @@ export default function OrderDetailScreen() {
               );
             })
           )}
+          </View>
         </View>
 
         {/* DELIVERY ADDRESS section */}
         {addressLines.length > 0 ? (
           <>
             <SectionLabel>DELIVERY ADDRESS</SectionLabel>
-            <Pressable
-              onPress={() =>
-                mapsQuery ? Linking.openURL(mapsUrl(mapsQuery)) : undefined
-              }
-              accessibilityRole="button"
-              accessibilityLabel="Open in Maps"
-              disabled={!mapsQuery}
-            >
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.hairlineGroup,
-                    styles.addressGroup,
-                    pressed && { backgroundColor: theme.colors.bone },
-                  ]}
-                >
-                  {addressLines.map((line) => (
-                    <Text key={line} style={styles.addressLine}>
-                      {line}
-                    </Text>
-                  ))}
-                  {mapsQuery ? (
-                    <Text style={styles.mapsLink}>Open in Maps →</Text>
-                  ) : null}
-                </View>
-              )}
-            </Pressable>
+            <View style={styles.card}>
+              <Pressable
+                onPress={() =>
+                  mapsQuery ? Linking.openURL(mapsUrl(mapsQuery)) : undefined
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Open in Maps"
+                disabled={!mapsQuery}
+              >
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.cardClip,
+                      styles.addressGroup,
+                      pressed && { backgroundColor: theme.colors.bone },
+                    ]}
+                  >
+                    {addressLines.map((line) => (
+                      <Text key={line} style={styles.addressLine}>
+                        {line}
+                      </Text>
+                    ))}
+                    {mapsQuery ? (
+                      <Text style={styles.mapsLink}>Open in Maps →</Text>
+                    ) : null}
+                  </View>
+                )}
+              </Pressable>
+            </View>
             {order.deliveryInstructions ? (
               <View style={styles.deliveryInstructionsWrap}>
                 <Text style={styles.deliveryInstructionsText}>
@@ -806,7 +833,7 @@ export default function OrderDetailScreen() {
 
         {/* TIMING section */}
         <SectionLabel>TIMING</SectionLabel>
-        <View style={styles.hairlineGroup}>
+        <View style={styles.card}>
           {([
             ['Ordered', timing.orderedAt],
             ['Accepted', timing.acceptedAt],
@@ -833,7 +860,7 @@ export default function OrderDetailScreen() {
 
         {/* PRICING section */}
         <SectionLabel>PRICING</SectionLabel>
-        <View style={styles.hairlineGroup}>
+        <View style={styles.card}>
           <TotalRow label="Subtotal" value={pricing.subtotal} />
           {pricing.deliveryFee > 0 ? (
             <TotalRow label="Delivery fee" value={pricing.deliveryFee} />
@@ -950,7 +977,8 @@ function promptCancelReasonAndroid(submit: (r: CancelReason) => void): void {
 // ---- Styles ------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
+  flex1: { flex: 1 },
 
   // Command bar
   commandBar: {
@@ -978,15 +1006,19 @@ const styles = StyleSheet.create({
   commandStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing[1],
-    marginTop: 2,
+    marginTop: theme.spacing[1],
   },
-  commandStatusLabel: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
+  // Status chip (UI-V2-SPEC §2) — tint bg pill with dark same-hue text.
+  statusChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusChipLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
+  },
   commandSpacer: { width: 32 },
 
   // Scroll
@@ -1000,16 +1032,23 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[5],
+    paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[2],
   },
 
-  // Hairline group wrapper
-  hairlineGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // White group card on the bone canvas (UI-V2-SPEC §1)
+  card: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
+    ...theme.shadow[1],
+  },
+  // Inner clip layer — keeps row backgrounds (pressed/cancelled fills)
+  // inside the card radius without clipping the outer shadow on iOS.
+  cardClip: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
   },
 
   // Shared bottom hairline for rows inside a group
@@ -1044,9 +1083,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing[2],
   },
+  // Ghost contact buttons (UI-V2-SPEC §3 secondary style)
   contactBtn: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     minHeight: 44,
@@ -1054,18 +1096,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contactBtnSecondary: {
-    backgroundColor: theme.colors.paper,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-  },
   contactBtnLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.label.size,
-    color: theme.colors.paper,
-    letterSpacing: 0.2,
-  },
-  contactBtnLabelSecondary: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.label.size,
     color: theme.colors.ink.DEFAULT,
@@ -1143,6 +1174,7 @@ const styles = StyleSheet.create({
   // SPECIAL INSTRUCTIONS
   instructionsCallout: {
     marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
     backgroundColor: theme.colors.herb.tint,
     borderRadius: theme.radius.DEFAULT,
     paddingHorizontal: theme.spacing[3],
@@ -1250,9 +1282,12 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -1260,7 +1295,8 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
   },
 
-  // Footer
+  // Footer — white action bar lifted off the canvas with a top shadow
+  // (UI-V2-SPEC §6-style elevation, no hairline).
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1268,9 +1304,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[5],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.paper,
+    shadowColor: theme.colors.ink.DEFAULT,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   footerCaptionWrap: {
     justifyContent: 'center',
@@ -1282,22 +1321,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
+  // Ghost Reject button (~96 wide) beside the full-flex Accept primary
+  // (UI-V2-SPEC §3).
   rejectBtn: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    minHeight: 44,
+    width: 96,
+    minHeight: 52,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    backgroundColor: theme.colors.paper,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   rejectLabel: {
     fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    textDecorationLine: 'underline',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: 0.1,
   },
-  // Cancel-order destructive link — secondary affordance below the
-  // primary status-transition button. Underlined so it reads as an
-  // action, not just labelled text; coloured destructive to flag the
-  // tone before tap.
+  // Cancel-order link — herb text link, no underline (UI-V2-SPEC §3).
   cancelLinkWrap: {
     alignSelf: 'center',
     paddingVertical: theme.spacing[2],
@@ -1306,8 +1348,7 @@ const styles = StyleSheet.create({
   cancelLinkLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.destructive.DEFAULT,
-    textDecorationLine: 'underline',
+    color: theme.colors.herb.DEFAULT,
   },
   // Per-line cancel — smaller, lower-affordance link inside the item
   // row. The whole-order cancel is the loud one; this is for the chef
@@ -1321,14 +1362,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.destructive.DEFAULT,
-    textDecorationLine: 'underline',
     letterSpacing: 0.2,
   },
   invoiceLinkLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    color: theme.colors.herb.DEFAULT,
     marginTop: 4,
   },
   // Cancelled-line presentation — dimmed background, strikethrough on
@@ -1355,16 +1394,16 @@ const styles = StyleSheet.create({
   primaryBtn: {
     flex: 1,
     backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
-    minHeight: 48,
+    borderRadius: theme.radius.md,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnFull: {
     flex: 1,
     backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
-    minHeight: 48,
+    borderRadius: theme.radius.md,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },

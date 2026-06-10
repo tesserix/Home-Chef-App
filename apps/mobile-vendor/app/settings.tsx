@@ -100,28 +100,27 @@ function ToggleRow({
   hasBorderBottom = true,
 }: ToggleRowProps) {
   return (
-    <View
-      style={[
-        styles.toggleRow,
-        hasBorderBottom && styles.rowBorderBottom,
-      ]}
-    >
-      <View style={styles.toggleText}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowCaption}>{caption}</Text>
+    <>
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleText}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          <Text style={styles.rowCaption}>{caption}</Text>
+        </View>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          trackColor={{
+            false: theme.colors.mist.strong,
+            true: theme.colors.herb.DEFAULT,
+          }}
+          thumbColor={theme.colors.paper}
+          ios_backgroundColor={theme.colors.mist.strong}
+        />
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        trackColor={{
-          false: theme.colors.mist.strong,
-          true: theme.colors.ink.DEFAULT,
-        }}
-        thumbColor={theme.colors.paper}
-        ios_backgroundColor={theme.colors.mist.strong}
-      />
-    </View>
+      {/* Inset hairline — skipped on the last row of a group card */}
+      {hasBorderBottom ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
@@ -139,30 +138,29 @@ function NavRow({
   hasBorderBottom = true,
 }: NavRowProps) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
-      {({ pressed }) => (
-        <View
-          style={[
-            styles.navRow,
-            hasBorderBottom && styles.rowBorderBottom,
-            pressed && { backgroundColor: theme.colors.bone },
-          ]}
-        >
-          <Text
-            style={[styles.rowLabel, destructive && styles.destructiveLabel]}
-          >
-            {label}
-          </Text>
-          {!destructive && (
-            <ChevronRight
-              size={18}
-              color={theme.colors.ink.muted}
-              strokeWidth={1.75}
-            />
-          )}
-        </View>
-      )}
-    </Pressable>
+    <>
+      <Pressable onPress={onPress} accessibilityRole="button">
+        {({ pressed }) => (
+          // Visual layer on the inner View — iOS Pressable with a
+          // function-based `style` prop can strip flex/bg styles.
+          <View style={[styles.navRow, pressed && styles.rowPressed]}>
+            <Text
+              style={[styles.rowLabel, destructive && styles.destructiveLabel]}
+            >
+              {label}
+            </Text>
+            {!destructive && (
+              <ChevronRight
+                size={18}
+                color={theme.colors.ink.muted}
+                strokeWidth={1.75}
+              />
+            )}
+          </View>
+        )}
+      </Pressable>
+      {hasBorderBottom ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
@@ -379,7 +377,8 @@ export default function SettingsScreen() {
             previous "Payouts" / "Reviews" toggles weren't wired to any
             real backend field. */}
         <Text style={styles.sectionLabel}>NOTIFICATION PREFERENCES</Text>
-        <View style={styles.sectionGroup}>
+        <View style={styles.card}>
+          <View style={styles.cardInner}>
           <ToggleRow
             label="New orders"
             caption="Push notification when a new order arrives"
@@ -416,6 +415,7 @@ export default function SettingsScreen() {
             onValueChange={(v) => handleNotifToggle('smsNewOrder', v)}
             hasBorderBottom={false}
           />
+          </View>
         </View>
 
         {/* AVAILABILITY section
@@ -425,30 +425,34 @@ export default function SettingsScreen() {
             preference across sessions (e.g. set to Off at end of day and it
             stays off on next launch). Both write to the same backend field. */}
         <Text style={styles.sectionLabel}>AVAILABILITY</Text>
-        <View style={styles.sectionGroup}>
-          <ToggleRow
-            label="Accepting orders"
-            caption="Persists across sessions — use dashboard button for quick toggle"
-            value={acceptingOrders}
-            disabled={updateMutation.isPending}
-            onValueChange={handleAcceptingOrdersToggle}
-            hasBorderBottom={false}
-          />
+        <View style={styles.card}>
+          <View style={styles.cardInner}>
+            <ToggleRow
+              label="Accepting orders"
+              caption="Persists across sessions — use dashboard button for quick toggle"
+              value={acceptingOrders}
+              disabled={updateMutation.isPending}
+              onValueChange={handleAcceptingOrdersToggle}
+              hasBorderBottom={false}
+            />
+          </View>
         </View>
 
-        {/* ACCOUNT section — navigation rows, no bone card backer */}
+        {/* ACCOUNT section — navigation rows in a white group card */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
-        <View style={styles.sectionGroup}>
-          <NavRow
-            label="Change password"
-            onPress={() => router.push('/(auth)/forgot-password' as never)}
-          />
-          <NavRow
-            label="Delete account"
-            onPress={handleDeleteAccount}
-            destructive
-            hasBorderBottom={false}
-          />
+        <View style={styles.card}>
+          <View style={styles.cardInner}>
+            <NavRow
+              label="Change password"
+              onPress={() => router.push('/(auth)/forgot-password' as never)}
+            />
+            <NavRow
+              label="Delete account"
+              onPress={handleDeleteAccount}
+              destructive
+              hasBorderBottom={false}
+            />
+          </View>
         </View>
 
         {/* DEVELOPER section — local-sim + dev builds only. Lets us exercise
@@ -457,20 +461,22 @@ export default function SettingsScreen() {
         {SHOW_DEV_TOOLS ? (
           <>
             <Text style={styles.sectionLabel}>DEVELOPER</Text>
-            <View style={styles.sectionGroup}>
-              <NavRow
-                label="Send test notification"
-                onPress={() => {
-                  const firstPending = pendingResp?.orders?.[0]?.id ?? null;
-                  triggerTestNotification(firstPending).catch((err: unknown) => {
-                    Alert.alert(
-                      'Test notification failed',
-                      err instanceof Error ? err.message : 'Unknown error',
-                    );
-                  });
-                }}
-                hasBorderBottom={false}
-              />
+            <View style={styles.card}>
+              <View style={styles.cardInner}>
+                <NavRow
+                  label="Send test notification"
+                  onPress={() => {
+                    const firstPending = pendingResp?.orders?.[0]?.id ?? null;
+                    triggerTestNotification(firstPending).catch((err: unknown) => {
+                      Alert.alert(
+                        'Test notification failed',
+                        err instanceof Error ? err.message : 'Unknown error',
+                      );
+                    });
+                  }}
+                  hasBorderBottom={false}
+                />
+              </View>
             </View>
           </>
         ) : null}
@@ -484,7 +490,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: theme.colors.paper,
+    backgroundColor: theme.colors.bone,
   },
 
   // Command bar — matches dashboard/orders/more geometry
@@ -524,18 +530,27 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[2],
   },
 
-  // Section group — hairline top and bottom, no card radius or shadow
-  sectionGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // Group card — white surface on the bone canvas (spec §1). Shadow on
+  // the outer card; `cardInner` clips pressed-row backgrounds to the
+  // radius (overflow:hidden on the shadowed view would kill the shadow).
+  card: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    ...theme.shadow[1],
   },
-
-  // Shared row border
-  rowBorderBottom: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  cardInner: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+  },
+  rowPressed: {
+    backgroundColor: theme.colors.bone,
+  },
+  // Inset hairline separator — aligned to the row text, not edge-to-edge
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4],
   },
 
   // Toggle row
@@ -597,7 +612,6 @@ const styles = StyleSheet.create({
   errorBackLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    color: theme.colors.herb.DEFAULT,
   },
 });

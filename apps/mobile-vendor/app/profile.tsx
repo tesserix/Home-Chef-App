@@ -193,7 +193,7 @@ const chipStyles = StyleSheet.create({
   root: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    borderRadius: 999,
+    borderRadius: theme.radius.full,
     borderWidth: 1,
     borderColor: theme.colors.mist.strong,
     backgroundColor: theme.colors.paper,
@@ -237,20 +237,24 @@ function EditableField({
   hasBorderBottom = true,
 }: EditableFieldProps) {
   return (
-    <View style={[styles.editRow, hasBorderBottom && styles.rowBorderBottom]}>
-      <Text style={styles.editLabel}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-        textAlignVertical={multiline ? 'top' : 'center'}
-        keyboardType={keyboardType}
-        placeholder={placeholder}
-        placeholderTextColor={theme.colors.ink.muted}
-        style={[styles.editInput, multiline && styles.editInputMultiline]}
-      />
-    </View>
+    <>
+      <View style={styles.editRow}>
+        <Text style={styles.editLabel}>{label}</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          multiline={multiline}
+          numberOfLines={multiline ? 4 : 1}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          keyboardType={keyboardType}
+          placeholder={placeholder}
+          placeholderTextColor={theme.colors.ink.muted}
+          style={[styles.editInput, multiline && styles.editInputMultiline]}
+        />
+      </View>
+      {/* Inset hairline — skipped on the last row of a group card */}
+      {hasBorderBottom ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
@@ -688,13 +692,14 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* KITCHEN PHOTOS */}
+          {/* KITCHEN PHOTOS — horizontal strip inside its own white card */}
           <Text style={styles.sectionLabel}>KITCHEN PHOTOS</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.photoStrip}
-          >
+          <View style={styles.photosCard}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoStrip}
+            >
             {(data?.kitchenPhotos ?? []).slice(0, 5).map((url, idx) => (
               <Image
                 key={`kp-${idx}-${url}`}
@@ -721,7 +726,8 @@ export default function ProfileScreen() {
                 )}
               </Pressable>
             )}
-          </ScrollView>
+            </ScrollView>
+          </View>
         </ScrollView>
 
         {/* Always-visible save footer. Disabled state when nothing
@@ -763,13 +769,13 @@ export default function ProfileScreen() {
 // ---- Styles -------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
   centeredFill: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing[6],
-    backgroundColor: theme.colors.paper,
+    backgroundColor: theme.colors.bone,
   },
 
   // Command bar
@@ -801,17 +807,18 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  // Identity block
+  // Identity block — its own white card on the bone canvas (spec §1)
   identityBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[5],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[6],
+    ...theme.shadow[1],
   },
   avatarWrapper: {
     width: 72,
@@ -874,17 +881,21 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Hairline group
+  // Section group card — white surface on the bone canvas (spec §1).
+  // Name kept from the v1 hairline layout to avoid call-site churn.
   hairlineGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[6],
+    paddingBottom: theme.spacing[1],
+    ...theme.shadow[1],
   },
-  rowBorderBottom: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // Inset hairline separator — aligned to row text, not edge-to-edge
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4],
   },
 
   // Editable field
@@ -900,22 +911,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginBottom: theme.spacing[1],
   },
+  // Bone input box inside the white group card (spec §1 surface flip)
   editInput: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     minHeight: 44,
     paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
   },
   editInputMultiline: {
     minHeight: 88,
     lineHeight: 22,
+    paddingTop: theme.spacing[3],
   },
 
-  // Kitchen photo strip
+  // Kitchen photo strip — white card wrapping the horizontal scroll
+  photosCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[6],
+    ...theme.shadow[1],
+  },
   photoStrip: {
     paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
     gap: theme.spacing[3],
     flexDirection: 'row',
     alignItems: 'center',
@@ -937,15 +960,19 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.paper,
   },
 
-  // Sticky Save footer
+  // Sticky Save footer — paper surface lifted off the canvas with a
+  // top shadow instead of a hairline (spec §6-style top elevation)
   stickyFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: theme.colors.paper,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    shadowColor: theme.colors.ink.DEFAULT,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   stickyFooterInner: {
     paddingHorizontal: theme.spacing[4],

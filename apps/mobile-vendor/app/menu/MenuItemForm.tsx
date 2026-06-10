@@ -1,9 +1,9 @@
 /**
  * MenuItemForm — shared form body for new.tsx and [itemId]/edit.tsx.
  *
- * Design language: hairline-divided rows, single-column, matches profile.tsx.
- * Persimmon used ONLY as the category/prep-time tab underline indicator.
- * No bone shadow cards. No persimmon fill chips.
+ * Design language: v2 "canvas + cards" (UI-V2-SPEC) — bone canvas, white
+ * group cards per labelled section, bone-filled inputs, ink-fill pill chips
+ * for category/diet/prep-time selectors. Single-column.
  */
 import { useRef, useState } from 'react';
 import {
@@ -99,12 +99,9 @@ function FormField({ label, error, children }: FormFieldProps) {
 }
 
 const fieldStyles = StyleSheet.create({
+  // Fields live inside a padded white card — spacing only, no hairlines.
   root: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    marginBottom: theme.spacing[3],
   },
   label: {
     fontFamily: 'Inter',
@@ -121,7 +118,37 @@ const fieldStyles = StyleSheet.create({
   },
 });
 
-// ---- Category tab -----------------------------------------------------------
+// ---- Selector chips (UI-V2-SPEC §5) ------------------------------------------
+// radius.full pills — selected = ink fill + paper text; unselected = paper bg
+// + mist.strong border + ink.soft text. Matches the menu screen category chips.
+
+const chipStyles = StyleSheet.create({
+  root: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[2],
+    minHeight: 36,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.paper,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+  },
+  rootActive: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderColor: theme.colors.ink.DEFAULT,
+  },
+  label: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+  },
+  labelActive: { color: theme.colors.paper },
+  labelTabular: { fontVariant: ['tabular-nums'] },
+});
+
+// ---- Category chip ------------------------------------------------------------
 
 interface CategoryTabProps {
   label: string;
@@ -138,36 +165,23 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
       accessibilityState={{ selected: active }}
     >
       {({ pressed }) => (
-        <View style={[catTabStyles.root, pressed && { opacity: 0.7 }]}>
-          <Text style={[catTabStyles.label, active && catTabStyles.labelActive]}>
+        <View
+          style={[
+            chipStyles.root,
+            active && chipStyles.rootActive,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[chipStyles.label, active && chipStyles.labelActive]}>
             {label}
           </Text>
-          <View
-            style={[
-              catTabStyles.indicator,
-              active && catTabStyles.indicatorActive,
-            ]}
-          />
         </View>
       )}
     </Pressable>
   );
 }
 
-const catTabStyles = StyleSheet.create({
-  root: { paddingTop: theme.spacing[2], paddingBottom: theme.spacing[2] },
-  label: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    paddingBottom: 5,
-  },
-  labelActive: { color: theme.colors.ink.DEFAULT },
-  indicator: { height: 2, backgroundColor: 'transparent', borderRadius: 1 },
-  indicatorActive: { backgroundColor: theme.colors.herb.DEFAULT },
-});
-
-// ---- Prep time tab ----------------------------------------------------------
+// ---- Prep time chip -----------------------------------------------------------
 
 interface PrepTabProps {
   value: number;
@@ -185,23 +199,29 @@ function PrepTab({ value, active, onPress }: PrepTabProps) {
       accessibilityLabel={`${value} minutes`}
     >
       {({ pressed }) => (
-        <View style={[prepTabStyles.root, pressed && { opacity: 0.7 }]}>
-          <Text style={[prepTabStyles.label, active && prepTabStyles.labelActive]}>
+        <View
+          style={[
+            chipStyles.root,
+            active && chipStyles.rootActive,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text
+            style={[
+              chipStyles.label,
+              chipStyles.labelTabular,
+              active && chipStyles.labelActive,
+            ]}
+          >
             {value} min
           </Text>
-          <View
-            style={[
-              prepTabStyles.indicator,
-              active && prepTabStyles.indicatorActive,
-            ]}
-          />
         </View>
       )}
     </Pressable>
   );
 }
 
-// ---- Diet tab ---------------------------------------------------------------
+// ---- Diet chip ------------------------------------------------------------------
 
 interface DietTabProps {
   label: string;
@@ -222,61 +242,22 @@ function DietTab({ label, optionIsVeg, active, onPress }: DietTabProps) {
       accessibilityLabel={label}
     >
       {({ pressed }) => (
-        <View style={[dietTabStyles.root, pressed && { opacity: 0.7 }]}>
-          <View style={dietTabStyles.labelRow}>
-            <DietIcon isVeg={optionIsVeg} size={12} />
-            <Text
-              style={[dietTabStyles.label, active && dietTabStyles.labelActive]}
-            >
-              {label}
-            </Text>
-          </View>
-          <View
-            style={[
-              dietTabStyles.indicator,
-              active && dietTabStyles.indicatorActive,
-            ]}
-          />
+        <View
+          style={[
+            chipStyles.root,
+            active && chipStyles.rootActive,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <DietIcon isVeg={optionIsVeg} size={12} />
+          <Text style={[chipStyles.label, active && chipStyles.labelActive]}>
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
   );
 }
-
-const dietTabStyles = StyleSheet.create({
-  root: { paddingTop: theme.spacing[2], paddingBottom: theme.spacing[2] },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    paddingBottom: 5,
-  },
-  label: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-  },
-  labelActive: { color: theme.colors.ink.DEFAULT },
-  indicator: { height: 2, backgroundColor: 'transparent', borderRadius: 1 },
-  indicatorActive: { backgroundColor: theme.colors.herb.DEFAULT },
-});
-
-const prepTabStyles = StyleSheet.create({
-  root: { paddingTop: theme.spacing[2], paddingBottom: theme.spacing[2] },
-  label: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.muted,
-    paddingBottom: 5,
-    fontVariant: ['tabular-nums'],
-  },
-  labelActive: {
-    fontFamily: 'Inter-SemiBold',
-    color: theme.colors.ink.DEFAULT,
-  },
-  indicator: { height: 2, backgroundColor: 'transparent', borderRadius: 1 },
-  indicatorActive: { backgroundColor: theme.colors.herb.DEFAULT },
-});
 
 // ---- Photo thumb + Add tile -------------------------------------------------
 
@@ -343,7 +324,7 @@ const photoStyles = StyleSheet.create({
   thumbImg: {
     width: 60,
     height: 60,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.bone,
   },
   removeBtnWrap: {
@@ -370,11 +351,11 @@ const photoStyles = StyleSheet.create({
   addTile: {
     width: 60,
     height: 60,
-    borderRadius: theme.radius.sm,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: theme.colors.mist.strong,
-    backgroundColor: theme.colors.paper,
+    backgroundColor: theme.colors.bone,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -612,12 +593,7 @@ export function MenuItemForm({
         >
           {/* PHOTOS section */}
           <Text style={styles.sectionLabel}>PHOTOS</Text>
-          <View
-            style={[
-              styles.hairlineGroup,
-              { paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[3] },
-            ]}
-          >
+          <View style={styles.card}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -652,8 +628,8 @@ export function MenuItemForm({
           </View>
 
           {/* DETAILS section */}
-          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>DETAILS</Text>
-          <View style={styles.hairlineGroup}>
+          <Text style={styles.sectionLabel}>DETAILS</Text>
+          <View style={styles.card}>
             {/* Name */}
             <FormField label="Item name" error={errors.name}>
               <TextInput
@@ -714,8 +690,8 @@ export function MenuItemForm({
           </View>
 
           {/* CATEGORY section */}
-          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>CATEGORY</Text>
-          <View style={styles.hairlineGroup}>
+          <Text style={styles.sectionLabel}>CATEGORY</Text>
+          <View style={styles.card}>
             <View style={styles.tabBarWrap}>
               <ScrollView
                 horizontal
@@ -741,7 +717,7 @@ export function MenuItemForm({
               </ScrollView>
             </View>
             {errors.categoryId ? (
-              <Text style={[fieldStyles.error, { paddingHorizontal: theme.spacing[4], paddingBottom: theme.spacing[2] }]}>
+              <Text style={[fieldStyles.error, { marginTop: theme.spacing[2] }]}>
                 {errors.categoryId}
               </Text>
             ) : null}
@@ -788,8 +764,8 @@ export function MenuItemForm({
               made it easy to misread which state was actually saved; with
               fixed labels + persistent DietIcon colour per tab the active
               choice is unambiguous. */}
-          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>DIET</Text>
-          <View style={styles.hairlineGroup}>
+          <Text style={styles.sectionLabel}>DIET</Text>
+          <View style={styles.card}>
             <View style={styles.tabBarWrap}>
               <View style={styles.dietTabBar}>
                 <DietTab
@@ -811,8 +787,8 @@ export function MenuItemForm({
           {/* PREP TIME section — own header so it sits in the same
               rhythm as CATEGORY (caps label + hairline group + scrollable
               underline tab strip). */}
-          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>PREP TIME</Text>
-          <View style={styles.hairlineGroup}>
+          <Text style={styles.sectionLabel}>PREP TIME</Text>
+          <View style={styles.card}>
             <View style={styles.tabBarWrap}>
               <ScrollView
                 horizontal
@@ -834,8 +810,8 @@ export function MenuItemForm({
           {/* HSN — advanced tax code, optional. Defaults to 996331
               (restaurant services SAC) when blank. Printed on the
               customer's GST invoice per Wave 3. */}
-          <Text style={[styles.sectionLabel, { marginTop: theme.spacing[6] }]}>HSN / SAC (OPTIONAL)</Text>
-          <View style={styles.hairlineGroup}>
+          <Text style={styles.sectionLabel}>HSN / SAC (OPTIONAL)</Text>
+          <View style={styles.card}>
             <TextInput
               value={hsn}
               onChangeText={(v) => setHsn(v.replace(/[^0-9]/g, '').slice(0, 8))}
@@ -844,13 +820,7 @@ export function MenuItemForm({
               keyboardType="number-pad"
               maxLength={8}
               autoCorrect={false}
-              style={{
-                fontFamily: 'Inter-SemiBold',
-                fontSize: theme.typography.size.body.size,
-                color: theme.colors.ink.DEFAULT,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
-              }}
+              style={[styles.textInput, styles.hsnInput]}
             />
           </View>
 
@@ -897,7 +867,7 @@ export function MenuItemForm({
 // ---- Styles -----------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
   flex: { flex: 1 },
 
   // Command bar
@@ -949,18 +919,25 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Hairline group
-  hairlineGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+  // White group card on the bone canvas (UI-V2-SPEC §1)
+  card: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    ...theme.shadow[1],
+    padding: theme.spacing[4],
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
 
-  // Text inputs
+  // Text inputs — bone fill inside the white cards, no border.
   textInput: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     minHeight: 44,
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
   textInputMultiline: {
@@ -970,13 +947,20 @@ const styles = StyleSheet.create({
   textInputError: {
     color: theme.colors.destructive.DEFAULT,
   },
+  hsnInput: {
+    fontFamily: 'Inter-SemiBold',
+  },
 
-  // Price input — ₹ prefix + value in a single row so it reads as one
-  // cohesive field instead of a floating numeral.
+  // Price input — ₹ prefix + value share one bone-filled field so it
+  // reads as a single cohesive input instead of a floating numeral.
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[3],
+    minHeight: 44,
   },
   pricePrefix: {
     fontFamily: 'Inter',
@@ -988,6 +972,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: 'Inter-SemiBold',
     fontVariant: ['tabular-nums'],
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
   },
 
   // Photo strip
@@ -1010,15 +996,12 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Category tabs
-  tabBarWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-  },
+  // Category chip strip — chips carry their own pill chrome; the wrap is
+  // just structure now (card provides padding, no hairlines).
+  tabBarWrap: {},
   tabBar: {
-    paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[5],
-    alignItems: 'flex-start',
+    gap: theme.spacing[2],
+    alignItems: 'center',
   },
 
   // New category inline row
@@ -1026,10 +1009,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    marginTop: theme.spacing[3],
   },
   newCatInput: {
     flex: 1,
@@ -1037,13 +1017,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.strong,
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
   },
   newCatAdd: {
     backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.DEFAULT,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     minHeight: 44,
@@ -1059,24 +1040,25 @@ const styles = StyleSheet.create({
     color: theme.colors.paper,
   },
 
-  // Diet two-tab bar — same horizontal rhythm as CATEGORY / PREP TIME
-  // but split into a 2-column row so both options stay visible without
-  // horizontal scroll.
+  // Diet two-chip row — both options stay visible without horizontal scroll.
   dietTabBar: {
     flexDirection: 'row',
-    paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[5],
+    gap: theme.spacing[2],
   },
 
-  // Sticky footer
+  // Sticky footer — white bar lifted off the canvas with a top shadow
+  // (UI-V2-SPEC §6-style elevation, no hairline).
   stickyFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: theme.colors.paper,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    shadowColor: theme.colors.ink.DEFAULT,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   stickyFooterInner: {
     paddingHorizontal: theme.spacing[4],

@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { theme } from "@homechef/mobile-shared/theme";
 import type { Order } from "../../hooks/useVendorOrders";
+
+const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 function formatMinutesAgo(iso: string, nowMs: number): string {
   const t = new Date(iso).getTime();
@@ -62,6 +72,24 @@ export function PendingOrderCard({
     return () => clearInterval(id);
   }, []);
 
+  // Press feedback — 0.97 scale on the Accept bar (150 ms state-change
+  // timing, no bounce). Skipped entirely under reduced motion.
+  const reduceMotion = useReducedMotion();
+  const acceptScale = useSharedValue(1);
+  const acceptPressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: acceptScale.value }],
+  }));
+  function onAcceptPressIn(): void {
+    if (!reduceMotion) {
+      acceptScale.value = withTiming(0.97, { duration: 150 });
+    }
+  }
+  function onAcceptPressOut(): void {
+    if (!reduceMotion) {
+      acceptScale.value = withTiming(1, { duration: 150 });
+    }
+  }
+
   const ageMins = Math.max(
     0,
     Math.floor((now - new Date(order.createdAt).getTime()) / 60_000),
@@ -103,7 +131,14 @@ export function PendingOrderCard({
   );
 
   return (
-    <View style={styles.root}>
+    <Animated.View
+      style={styles.root}
+      entering={
+        reduceMotion
+          ? undefined
+          : FadeInDown.duration(250).easing(ENTRANCE_EASING)
+      }
+    >
       {onOpenDetail ? (
         <Pressable
           onPress={onOpenDetail}
@@ -150,28 +185,33 @@ export function PendingOrderCard({
             <Text style={styles.rejectLabel}>Reject</Text>
           </View>
         </Pressable>
-        {/* Outer Pressable carries only the pressed/disabled opacity AND
-            the flex:1 needed to fill the row. iOS strips flex AND
-            backgroundColor when style is returned as an array from the
-            function-style prop, which renders the Accept button as
-            invisible white-on-white shrink-wrapped to its text width.
+        {/* flex:1 lives on a PLAIN wrapper View — never on the Pressable's
+            function-style prop and never on the visual inner View (iOS
+            drops flex from the former and the latter fights the row's
+            cross-axis alignment → squashed bar).
             See feedback_ios_pressable_array_style.md. */}
-        <Pressable
-          onPress={onAccept}
-          disabled={disabled}
-          style={({ pressed }) => ({
-            flex: 1,
-            opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
-          })}
-          accessibilityRole="button"
-          accessibilityLabel={`Accept ₹${order.total.toFixed(0)} order from ${order.customerName}`}
-        >
-          <View style={styles.acceptBtn}>
-            <Text style={styles.acceptLabel}>Accept</Text>
-          </View>
-        </Pressable>
+        <View style={styles.acceptWrap}>
+          <Pressable
+            onPress={onAccept}
+            onPressIn={onAcceptPressIn}
+            onPressOut={onAcceptPressOut}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`Accept ₹${order.total.toFixed(0)} order from ${order.customerName}`}
+          >
+            <Animated.View
+              style={[
+                styles.acceptBtn,
+                acceptPressStyle,
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.acceptLabel}>Accept</Text>
+            </Animated.View>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -239,7 +279,10 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: "row",
     gap: theme.spacing[2],
-    alignItems: "center",
+    alignItems: "stretch",
+  },
+  acceptWrap: {
+    flex: 1,
   },
   rejectBtn: {
     width: 96,
@@ -257,10 +300,10 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.soft,
   },
   acceptBtn: {
-    flex: 1,
+    width: "100%",
     backgroundColor: theme.colors.ink.DEFAULT,
     borderRadius: theme.radius.md,
-    minHeight: 48,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
   },

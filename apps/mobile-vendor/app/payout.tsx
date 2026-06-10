@@ -82,6 +82,9 @@ interface MethodTabProps {
   onPress: () => void;
 }
 
+// Segment of the iOS-style segmented control (spec §5): mist track,
+// active segment = paper pill with shadow[1]. Visual styles live on the
+// inner View (iOS Pressable inner-View pattern).
 function MethodTab({ label, active, onPress }: MethodTabProps) {
   return (
     <Pressable
@@ -89,15 +92,19 @@ function MethodTab({ label, active, onPress }: MethodTabProps) {
       hitSlop={6}
       accessibilityRole="radio"
       accessibilityState={{ checked: active }}
+      style={tabStyles.pressable}
     >
       {({ pressed }) => (
-        <View style={[tabStyles.root, pressed && { opacity: 0.7 }]}>
+        <View
+          style={[
+            tabStyles.segment,
+            active && tabStyles.segmentActive,
+            pressed && !active && { opacity: 0.7 },
+          ]}
+        >
           <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
             {label}
           </Text>
-          <View
-            style={[tabStyles.indicator, active && tabStyles.indicatorActive]}
-          />
         </View>
       )}
     </Pressable>
@@ -105,16 +112,24 @@ function MethodTab({ label, active, onPress }: MethodTabProps) {
 }
 
 const tabStyles = StyleSheet.create({
-  root: { paddingTop: theme.spacing[2], paddingBottom: theme.spacing[2] },
+  pressable: { flex: 1 },
+  segment: {
+    minHeight: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing[2],
+  },
+  segmentActive: {
+    backgroundColor: theme.colors.paper,
+    ...theme.shadow[1],
+  },
   label: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.muted,
-    paddingBottom: 5,
   },
   labelActive: { color: theme.colors.ink.DEFAULT },
-  indicator: { height: 2, backgroundColor: 'transparent', borderRadius: 1 },
-  indicatorActive: { backgroundColor: theme.colors.herb.DEFAULT },
 });
 
 interface FieldProps {
@@ -139,22 +154,24 @@ function Field({
   hasBorderBottom = true,
 }: FieldProps) {
   return (
-    <View
-      style={[styles.editRow, hasBorderBottom && styles.rowBorderBottom]}
-    >
-      <Text style={styles.editLabel}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.colors.ink.muted}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={false}
-        keyboardType={keyboardType}
-        style={styles.editInput}
-      />
-      {caption ? <Text style={styles.editCaption}>{caption}</Text> : null}
-    </View>
+    <>
+      <View style={styles.editRow}>
+        <Text style={styles.editLabel}>{label}</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.colors.ink.muted}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          keyboardType={keyboardType}
+          style={styles.editInput}
+        />
+        {caption ? <Text style={styles.editCaption}>{caption}</Text> : null}
+      </View>
+      {/* Inset hairline — skipped on the last row of a group card */}
+      {hasBorderBottom ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
@@ -329,23 +346,19 @@ export default function PayoutScreen() {
             </View>
           ) : null}
 
-          {/* Method tabs */}
+          {/* Method segmented control (spec §5) */}
           <Text style={styles.sectionLabel}>PAYOUT METHOD</Text>
-          <View style={styles.hairlineGroup}>
-            <View style={styles.tabBarWrap}>
-              <View style={styles.tabBar}>
-                <MethodTab
-                  label="Bank transfer"
-                  active={method === 'bank_transfer'}
-                  onPress={() => setMethod('bank_transfer')}
-                />
-                <MethodTab
-                  label="UPI"
-                  active={method === 'upi'}
-                  onPress={() => setMethod('upi')}
-                />
-              </View>
-            </View>
+          <View style={styles.segmentTrack}>
+            <MethodTab
+              label="Bank transfer"
+              active={method === 'bank_transfer'}
+              onPress={() => setMethod('bank_transfer')}
+            />
+            <MethodTab
+              label="UPI"
+              active={method === 'upi'}
+              onPress={() => setMethod('upi')}
+            />
           </View>
 
           {/* Method-specific fields */}
@@ -467,8 +480,8 @@ function CommandBar({ onBack }: CommandBarProps) {
 // ---- Styles --------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
-  centered: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
+  centered: { flex: 1, backgroundColor: theme.colors.bone },
   centeredFill: {
     flex: 1,
     alignItems: 'center',
@@ -505,14 +518,15 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 120 },
 
-  // Current method banner
+  // Current method banner — white card on the bone canvas (spec §1)
   currentBanner: {
     marginHorizontal: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
-    borderRadius: theme.radius.DEFAULT,
-    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.paper,
     marginBottom: theme.spacing[4],
+    ...theme.shadow[1],
   },
   currentBannerLabel: {
     fontFamily: 'Inter-SemiBold',
@@ -537,25 +551,32 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Hairline group
+  // Section group card — white surface on the bone canvas (spec §1).
+  // Name kept from the v1 hairline layout to avoid call-site churn.
   hairlineGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],
+    paddingBottom: theme.spacing[1],
+    ...theme.shadow[1],
   },
-  rowBorderBottom: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // Inset hairline separator — aligned to row text, not edge-to-edge
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4],
   },
 
-  // Method tab bar
-  tabBarWrap: {},
-  tabBar: {
+  // Segmented control track (spec §5)
+  segmentTrack: {
     flexDirection: 'row',
-    paddingHorizontal: theme.spacing[4],
-    gap: theme.spacing[5],
+    backgroundColor: theme.colors.mist.DEFAULT,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    minHeight: 40,
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[4],
   },
 
   // Editable field
@@ -571,12 +592,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginBottom: theme.spacing[1],
   },
+  // Bone input box inside the white group card (spec §1 surface flip)
   editInput: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     minHeight: 44,
     paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    backgroundColor: theme.colors.bone,
+    borderRadius: theme.radius.md,
   },
   editCaption: {
     fontFamily: 'Inter',
@@ -615,15 +640,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Sticky footer
+  // Sticky footer — paper surface lifted off the canvas with a top
+  // shadow instead of a hairline (spec §6-style top elevation)
   stickyFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: theme.colors.paper,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
+    shadowColor: theme.colors.ink.DEFAULT,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   stickyFooterInner: {
     paddingHorizontal: theme.spacing[4],

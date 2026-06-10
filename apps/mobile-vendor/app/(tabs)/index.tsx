@@ -7,6 +7,16 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -66,6 +76,9 @@ function formatMinutesAgo(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
+
+const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+const PULSE_EASING = Easing.bezier(0.4, 0, 0.2, 1);
 
 const IN_FLIGHT_STATUSES = new Set<Order['status']>([
   'accepted',
@@ -176,6 +189,26 @@ export default function DashboardScreen() {
     }
   }, [isError, error]);
 
+  // Live pulse on the Open pill's dot — a quiet "we're live" heartbeat.
+  // 900 ms state-change easing, suspended under reduced motion. Must run
+  // before the isError early return (hooks rule).
+  const acceptingOrders = dashboard?.acceptingOrders ?? false;
+  const reduceMotion = useReducedMotion();
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    if (acceptingOrders && !reduceMotion) {
+      pulse.value = withRepeat(
+        withTiming(0.35, { duration: 900, easing: PULSE_EASING }),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+    }
+  }, [acceptingOrders, reduceMotion, pulse]);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
   if (isError) {
     return (
       <SafeAreaView style={styles.errorScreen}>
@@ -196,7 +229,6 @@ export default function DashboardScreen() {
     );
   }
 
-  const acceptingOrders = dashboard?.acceptingOrders ?? false;
   const isSurge = pendingOrders.length > 3;
   const isQuiet =
     !isLoading &&
@@ -225,75 +257,116 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Zone A — Command bar. Two-line greeting left (caption + name),
-            Open/Closed pill right. The pill is high-contrast so a closed
-            kitchen reads as obviously bordered, never as a soft toggle
-            that's easy to skip. */}
-        <View style={styles.commandBar}>
-          <View style={styles.commandGreetingBlock}>
-            <Text style={styles.commandGreeting}>{deriveGreeting()}</Text>
-            <Text style={styles.commandName} numberOfLines={1}>
-              {displayName}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => toggleMutation.mutate(!acceptingOrders)}
-            disabled={toggleMutation.isPending || isLoading}
-            accessibilityRole="button"
-            accessibilityLabel={
-              acceptingOrders
-                ? 'Kitchen is open. Tap to close.'
-                : 'Kitchen is closed. Tap to open.'
-            }
-          >
-            {({ pressed }) => (
-              // Visual layer on an inner View. iOS occasionally drops
-              // backgroundColor + borderWidth from Pressable with a
-              // function-based `style` prop — same trick the shared
-              // <Button> primitive uses.
-              <View
-                style={[
-                  styles.statusButton,
-                  acceptingOrders
-                    ? styles.statusButtonOpen
-                    : styles.statusButtonClosed,
-                  pressed && { opacity: 0.85 },
-                  (toggleMutation.isPending || isLoading) && { opacity: 0.5 },
-                ]}
-              >
+        {/* Zone A — Hero header. Dark ink card: greeting + name, persimmon
+            Open pill with a live pulse dot, and today's numbers in light
+            numerals on near-black. The one statement piece on the screen —
+            everything below it is calm white-on-bone. */}
+        <Animated.View
+          style={styles.hero}
+          entering={
+            reduceMotion
+              ? undefined
+              : FadeInDown.duration(250).easing(ENTRANCE_EASING)
+          }
+        >
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroGreetingBlock}>
+              <Text style={styles.heroGreeting}>{deriveGreeting()}</Text>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {displayName}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => toggleMutation.mutate(!acceptingOrders)}
+              disabled={toggleMutation.isPending || isLoading}
+              accessibilityRole="button"
+              accessibilityLabel={
+                acceptingOrders
+                  ? 'Kitchen is open. Tap to close.'
+                  : 'Kitchen is closed. Tap to open.'
+              }
+            >
+              {({ pressed }) => (
+                // Visual layer on an inner View. iOS occasionally drops
+                // backgroundColor + borderWidth from Pressable with a
+                // function-based `style` prop — same trick the shared
+                // <Button> primitive uses.
                 <View
                   style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: acceptingOrders
-                        ? theme.colors.herb.DEFAULT
-                        : theme.colors.ink.muted,
-                    },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.statusButtonLabel,
-                    {
-                      color: acceptingOrders
-                        ? theme.colors.paper
-                        : theme.colors.ink.DEFAULT,
+                    styles.statusPill,
+                    acceptingOrders
+                      ? styles.statusPillOpen
+                      : styles.statusPillClosed,
+                    pressed && { opacity: 0.85 },
+                    (toggleMutation.isPending || isLoading) && {
+                      opacity: 0.5,
                     },
                   ]}
                 >
-                  {acceptingOrders ? 'Open' : 'Closed'}
+                  <Animated.View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor: acceptingOrders
+                          ? theme.colors.paper
+                          : theme.colors.ink.muted,
+                      },
+                      acceptingOrders && pulseStyle,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillLabel,
+                      {
+                        color: acceptingOrders
+                          ? theme.colors.paper
+                          : theme.colors.mist.DEFAULT,
+                      },
+                    ]}
+                  >
+                    {acceptingOrders ? 'Open' : 'Closed'}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+          {showToday && (
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStatMain}>
+                <Text style={styles.heroEarnings}>
+                  ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
                 </Text>
+                <Text style={styles.heroStatLabel}>Today's earnings</Text>
               </View>
-            )}
-          </Pressable>
-        </View>
+              <View style={styles.heroStatCol}>
+                <Text style={styles.heroStatValue}>
+                  {dashboard?.todayOrders ?? 0}
+                </Text>
+                <Text style={styles.heroStatLabel}>Orders</Text>
+              </View>
+              <View style={styles.heroStatCol}>
+                <Text style={styles.heroStatValue}>
+                  {(dashboard?.rating ?? 0).toFixed(1)}★
+                </Text>
+                <Text style={styles.heroStatLabel}>Rating</Text>
+              </View>
+            </View>
+          )}
+        </Animated.View>
 
         {/* Zone B' — single merged ACTION REQUIRED stack (UI-V2 spec §7).
             Admin requests first (an admin explicitly asked the chef for
             something — fresher / higher-friction), then doc expiry (a
             lapsed FSSAI license hides the kitchen from customers). */}
         {hasAlerts && (
-          <View style={styles.alertSection}>
+          <Animated.View
+            style={styles.alertSection}
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(60).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
             <Text style={styles.sectionLabel}>ACTION REQUIRED</Text>
             <View style={styles.alertCards}>
               {(actionRequests ?? []).map((req) => (
@@ -373,7 +446,7 @@ export default function DashboardScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* Zone B — Action queue. The hero when there's anything to act on.
@@ -440,7 +513,14 @@ export default function DashboardScreen() {
             intentional: pending = hero cards (act), in-progress = rows in
             a group card (just be aware). */}
         {!isLoading && inFlightOrders.length > 0 && (
-          <View style={styles.section}>
+          <Animated.View
+            style={styles.section}
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(140).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
             <Text style={styles.sectionLabel}>IN PROGRESS</Text>
             <View style={styles.groupCard}>
               <View style={styles.groupCardInner}>
@@ -454,26 +534,14 @@ export default function DashboardScreen() {
                 ))}
               </View>
             </View>
-          </View>
-        )}
-
-        {/* Zone D — TODAY stat card. Inline after IN PROGRESS for an active
-            screen; bottom-anchored ONLY in the quiet state (below). */}
-        {!isQuiet && showToday && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>TODAY</Text>
-            <TodayStatCard
-              earnings={dashboard?.todayEarnings ?? 0}
-              orders={dashboard?.todayOrders ?? 0}
-              rating={dashboard?.rating ?? 0}
-            />
-          </View>
+          </Animated.View>
         )}
 
         {/* Quiet state — dead-screen reassurance pushed to the visible
             bottom of the viewport via marginTop:auto on the contentContainer's
             flexGrow:1. A chef staring at an empty screen at 3am needs to
-            know it's quiet, not that the platform broke. */}
+            know it's quiet, not that the platform broke. (Today's numbers
+            live in the hero, so this zone is reassurance copy only.) */}
         {isQuiet && (
           <View style={styles.bottomZone}>
             <View style={styles.quietBlock}>
@@ -488,47 +556,10 @@ export default function DashboardScreen() {
                   : 'Tap the Closed button above to start receiving orders.'}
               </Text>
             </View>
-            {showToday && (
-              <View>
-                <Text style={styles.sectionLabel}>TODAY</Text>
-                <TodayStatCard
-                  earnings={dashboard?.todayEarnings ?? 0}
-                  orders={dashboard?.todayOrders ?? 0}
-                  rating={dashboard?.rating ?? 0}
-                />
-              </View>
-            )}
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-interface TodayStatCardProps {
-  earnings: number;
-  orders: number;
-  rating: number;
-}
-
-// "TODAY" stat card — white paper card on the bone canvas, three columns
-// with caption labels under each value (UI-V2 spec §7).
-function TodayStatCard({ earnings, orders, rating }: TodayStatCardProps) {
-  return (
-    <View style={todayStyles.card}>
-      <View style={todayStyles.col}>
-        <Text style={todayStyles.earnings}>₹{earnings.toFixed(0)}</Text>
-        <Text style={todayStyles.colLabel}>Earnings</Text>
-      </View>
-      <View style={todayStyles.col}>
-        <Text style={todayStyles.value}>{orders}</Text>
-        <Text style={todayStyles.colLabel}>Orders</Text>
-      </View>
-      <View style={todayStyles.col}>
-        <Text style={todayStyles.value}>{rating.toFixed(1)}★</Text>
-        <Text style={todayStyles.colLabel}>Rating</Text>
-      </View>
-    </View>
   );
 }
 
@@ -605,32 +636,39 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
 
-  // Zone A — Command bar
-  commandBar: {
+  // Zone A — Hero header (dark ink card)
+  hero: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[5],
+    marginTop: theme.spacing[3],
+    marginBottom: theme.spacing[6],
+    gap: theme.spacing[5],
+    ...theme.shadow[2],
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[5],
     gap: theme.spacing[3],
   },
-  commandGreetingBlock: {
+  heroGreetingBlock: {
     flex: 1,
   },
-  commandGreeting: {
+  heroGreeting: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 0.2,
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[0.5],
   },
-  commandName: {
+  heroName: {
     fontFamily: 'Geist-Bold',
     fontSize: 24,
-    color: theme.colors.ink.DEFAULT,
+    color: theme.colors.paper,
     letterSpacing: -0.3,
   },
-  statusButton: {
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -640,26 +678,60 @@ const styles = StyleSheet.create({
     minHeight: 40,
     minWidth: 92,
     justifyContent: 'center',
+  },
+  statusPillOpen: {
+    backgroundColor: theme.colors.herb.DEFAULT,
+  },
+  statusPillClosed: {
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    ...theme.shadow[1],
-  },
-  statusButtonOpen: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderColor: theme.colors.ink.DEFAULT,
-  },
-  statusButtonClosed: {
-    backgroundColor: theme.colors.paper,
-    borderColor: theme.colors.mist.strong,
+    borderColor: theme.colors.ink.soft,
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
-  statusButtonLabel: {
+  statusPillLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.label.size,
     letterSpacing: 0.2,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: theme.spacing[5],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.ink.soft,
+    paddingTop: theme.spacing[4],
+  },
+  heroStatMain: {
+    flex: 1,
+  },
+  heroEarnings: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
+  },
+  heroStatCol: {
+    alignItems: 'flex-start',
+  },
+  heroStatValue: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
+  },
+  heroStatLabel: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
+    color: theme.colors.ink.muted,
+    marginTop: theme.spacing[1],
   },
 
   // Zone B' — merged ACTION REQUIRED alert stack
@@ -814,42 +886,6 @@ const styles = StyleSheet.create({
     color: theme.colors.herb.DEFAULT,
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
-  },
-});
-
-const todayStyles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: theme.colors.paper,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing[4],
-    ...theme.shadow[1],
-  },
-  col: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  earnings: {
-    fontFamily: 'Geist-Bold',
-    fontSize: 24,
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-  },
-  value: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    lineHeight: 28,
-    color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-  },
-  colLabel: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    letterSpacing: 0.2,
-    color: theme.colors.ink.muted,
-    marginTop: theme.spacing[1],
   },
 });
 

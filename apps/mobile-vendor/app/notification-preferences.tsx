@@ -84,25 +84,27 @@ function ToggleRow({
   disabled = false,
 }: ToggleRowProps) {
   return (
-    <View
-      style={[styles.toggleRow, hasBorderBottom && styles.rowBorderBottom]}
-    >
-      <View style={styles.toggleText}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowCaption}>{caption}</Text>
+    <>
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleText}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          <Text style={styles.rowCaption}>{caption}</Text>
+        </View>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          trackColor={{
+            false: theme.colors.mist.strong,
+            true: theme.colors.herb.DEFAULT,
+          }}
+          thumbColor={theme.colors.paper}
+          ios_backgroundColor={theme.colors.mist.strong}
+        />
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        trackColor={{
-          false: theme.colors.mist.strong,
-          true: theme.colors.ink.DEFAULT,
-        }}
-        thumbColor={theme.colors.paper}
-        ios_backgroundColor={theme.colors.mist.strong}
-      />
-    </View>
+      {/* Inset hairline — skipped on the last row of a group card */}
+      {hasBorderBottom ? <View style={styles.separator} /> : null}
+    </>
   );
 }
 
@@ -197,7 +199,7 @@ export default function NotificationPreferencesScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.sectionLabel}>CATEGORIES</Text>
-        <View style={styles.sectionGroup}>
+        <View style={styles.card}>
           <ToggleRow
             label="New orders"
             caption="Push when a customer places an order"
@@ -226,7 +228,7 @@ export default function NotificationPreferencesScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>QUIET HOURS</Text>
-        <View style={styles.sectionGroup}>
+        <View style={styles.card}>
           <ToggleRow
             label="Mute non-critical pushes"
             caption="New-order pushes always come through. Payout, message, and promo pushes are silenced."
@@ -281,7 +283,7 @@ export default function NotificationPreferencesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.paper },
+  root: { flex: 1, backgroundColor: theme.colors.bone },
 
   commandBar: {
     flexDirection: 'row',
@@ -313,15 +315,18 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[2],
   },
 
-  sectionGroup: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // Group card — white surface on the bone canvas (spec §1)
+  card: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.spacing[4],
+    ...theme.shadow[1],
   },
-  rowBorderBottom: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
+  // Inset hairline separator — aligned to row text, not edge-to-edge
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginLeft: theme.spacing[4],
   },
 
   toggleRow: {
@@ -360,17 +365,16 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginBottom: 4,
   },
+  // Bone input box inside the white group card (spec §1 surface flip)
   quietInput: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
     minHeight: 44,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.mist.strong,
-    borderRadius: theme.radius.DEFAULT,
-    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bone,
   },
   quietErrorText: {
     fontFamily: 'Inter',
@@ -405,7 +409,6 @@ const styles = StyleSheet.create({
   errorBackLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    textDecorationLine: 'underline',
+    color: theme.colors.herb.DEFAULT,
   },
 });
