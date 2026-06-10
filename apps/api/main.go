@@ -127,6 +127,11 @@ func main() {
 	// the cron's lifecycle/idempotency model with the FSSAI reminder.
 	services.StartWeeklyStatementCron(cronCtx)
 
+	// Background settlement reconciliation: daily, cross-check the previous
+	// day's payment/refund records against Razorpay/Stripe and alert on drift.
+	// Read-only — surfaces discrepancies for finance ops, never mutates.
+	services.StartReconciliationCron(cronCtx)
+
 	// Setup router
 	router := routes.SetupRouter()
 

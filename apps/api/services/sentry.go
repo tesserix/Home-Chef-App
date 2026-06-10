@@ -98,3 +98,12 @@ func CaptureSentryError(c *gin.Context, err error) {
 	}
 	sentry.CaptureException(err)
 }
+
+// CaptureBackgroundError surfaces an error from a background job (cron,
+// goroutine) that has no gin.Context. No-op when Sentry isn't initialized.
+func CaptureBackgroundError(err error) {
+	if !sentryInitialized || err == nil {
+		return
+	}
+	sentry.CaptureException(err)
+}
