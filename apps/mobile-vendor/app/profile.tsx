@@ -23,6 +23,7 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 import { useStates } from '../hooks/useLocations';
+import { ImageCropper } from '../components/ImageCropper';
 
 // ---- Data types -----------------------------------------------------------
 // Matches the backend GET /chef/profile response.
@@ -282,6 +283,7 @@ export default function ProfileScreen() {
   const uploadProfileImageMutation = useUploadProfileImage();
   const uploadBannerImageMutation = useUploadBannerImage();
   const uploadKitchenPhotoMutation = useUploadKitchenPhoto();
+  const [cropUri, setCropUri] = useState<string | null>(null);
   const { show: showToast } = useToast();
   // Indian states from the reference-data API. Falls back to an empty
   // array until the request resolves — the chip strip just renders zero
@@ -466,19 +468,24 @@ export default function ProfileScreen() {
   }
 
   async function handlePickBannerImage() {
+    // Pick the full image (no native square editor) — the chef frames the
+    // 16:9 crop in our ImageCropper, which iOS's allowsEditing can't do.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.85,
+      quality: 1,
     });
     if (!result.canceled && result.assets[0]) {
-      uploadBannerImageMutation.mutate(result.assets[0].uri, {
-        onError: (err) =>
-          Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload cover.')),
-        onSuccess: () => showToast({ message: 'Cover photo updated.', tone: 'success' }),
-      });
+      setCropUri(result.assets[0].uri);
     }
+  }
+
+  function handleCoverCropped(croppedUri: string) {
+    setCropUri(null);
+    uploadBannerImageMutation.mutate(croppedUri, {
+      onError: (err) =>
+        Alert.alert('Upload failed', getServerErrorMessage(err, 'Failed to upload cover.')),
+      onSuccess: () => showToast({ message: 'Cover photo updated.', tone: 'success' }),
+    });
   }
 
   async function handleAddKitchenPhoto() {
@@ -840,6 +847,13 @@ export default function ProfileScreen() {
           </SafeAreaView>
         </View>
       </KeyboardAvoidingView>
+
+      <ImageCropper
+        uri={cropUri}
+        aspect={16 / 9}
+        onCancel={() => setCropUri(null)}
+        onCropped={handleCoverCropped}
+      />
     </SafeAreaView>
   );
 }
