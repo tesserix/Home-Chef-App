@@ -3,9 +3,11 @@ import { useCartStore } from '../../store/cart-store';
 
 interface CartBarProps {
   onPress: () => void;
+  /** Lift the bar above a tab bar / sticky footer. Default 0 (screen bottom). */
+  bottomOffset?: number;
 }
 
-export function CartBar({ onPress }: CartBarProps) {
+export function CartBar({ onPress, bottomOffset = 0 }: CartBarProps) {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
 
@@ -20,7 +22,7 @@ export function CartBar({ onPress }: CartBarProps) {
     <View
       style={{
         position: 'absolute',
-        bottom: 0,
+        bottom: bottomOffset,
         left: 0,
         right: 0,
         shadowColor: '#000',

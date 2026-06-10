@@ -22,8 +22,12 @@ import { useCartStore } from '../../store/cart-store';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
 import { CartSheet } from '../../components/cart/CartSheet';
 
-// Header photo occupies ~40% of the viewport height (spec §2.4).
-const HEADER_HEIGHT = Math.round(Dimensions.get('window').height * 0.4);
+// Compact photo header — ~28% of viewport (capped at 260) so the menu shows
+// higher up. 40% ate too much vertical space above the fold.
+const HEADER_HEIGHT = Math.min(
+  Math.round(Dimensions.get('window').height * 0.28),
+  260,
+);
 
 export default function ChefDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

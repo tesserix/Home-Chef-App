@@ -1,19 +1,25 @@
-import { StyleSheet } from 'react-native';
-import { Tabs } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Tabs, router } from 'expo-router';
 import { Home, ShoppingBag, Heart, User } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { CartBar } from '../../components/cart/CartBar';
+
+const TAB_BAR_HEIGHT = 64;
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: customerColors.coral.DEFAULT,
-        tabBarInactiveTintColor: customerColors.charcoal.soft,
-        tabBarLabelStyle: styles.tabLabel,
-      }}
-    >
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarActiveTintColor: customerColors.coral.DEFAULT,
+          tabBarInactiveTintColor: customerColors.charcoal.soft,
+          tabBarLabelStyle: styles.tabLabel,
+        }}
+      >
       <Tabs.Screen
         name="index"
         options={{
@@ -42,7 +48,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <User size={22} color={color} />,
         }}
       />
-    </Tabs>
+      </Tabs>
+      {/* Floating cart bar — shows on every tab when the cart has items,
+          sitting just above the tab bar. Returns null when the cart is empty. */}
+      <CartBar
+        onPress={() => router.push('/checkout')}
+        bottomOffset={TAB_BAR_HEIGHT + insets.bottom}
+      />
+    </View>
   );
 }
 
