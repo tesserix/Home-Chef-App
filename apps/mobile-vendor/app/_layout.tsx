@@ -70,6 +70,38 @@ Notifications.setNotificationHandler({
 // API base URL for background fetch (no React context available in background).
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
+// resolvePushRoute maps a notification's data payload to an in-app route for
+// tap-through, covering every push category:
+//   - order pushes carry `orderId`        → /orders/<id>
+//   - other pushes carry a `deeplink`     → homechef-vendor:///<path> → /<path>
+//   - and a `type` fallback map for older payloads without a deeplink.
+// Returns null when nothing actionable is present (stay put).
+function resolvePushRoute(data: Record<string, string> | undefined): string | null {
+  if (!data) return null;
+  if (data.orderId) return `/orders/${data.orderId}`;
+
+  if (data.deeplink) {
+    const m = data.deeplink.match(/^homechef-vendor:\/\/(.*)$/);
+    if (m) {
+      const path = m[1] && m[1] !== '/' ? m[1] : '/(tabs)';
+      return path.startsWith('/') ? path : `/${path}`;
+    }
+  }
+
+  switch (data.type) {
+    case 'fssai_expiring':
+      return '/documents/renew';
+    case 'weekly_statement':
+      return '/earnings';
+    case 'availability_resumed':
+      return '/(tabs)';
+    case 'new_order':
+      return '/(tabs)/orders';
+    default:
+      return null;
+  }
+}
+
 // Maps the API's `step` field (count of completed wizard sections — see
 // apps/api/handlers/upload.go:382-395) to the next screen the chef should
 // land on. The API skips step=1 because personal-info isn't persisted
@@ -242,18 +274,30 @@ function AppNavigator() {
             return; // do not navigate
           }
 
-          // Default tap: open the specific order detail when we have an
-          // orderId, otherwise drop the chef onto the queue tab. Detail
-          // screen falls back to the queue if the orderId can't resolve.
-          if (data?.type === 'new_order') {
-            if (data?.orderId) {
-              router.push(`/orders/${data.orderId}`);
-            } else {
-              router.push('/(tabs)/orders');
-            }
+          // Default tap: route to wherever the notification points. Order
+          // pushes open the order; FSSAI/statement/availability pushes carry
+          // a `deeplink` (homechef-vendor:///<path>); everything else falls
+          // back to a type→route map, then the dashboard.
+          const path = resolvePushRoute(data);
+          if (path) {
+            router.push(path as never);
           }
         }
       );
+
+      // Cold-start: if the app was launched by tapping a push (killed state),
+      // the live listener above may have missed it — replay the last response.
+      const last = await Notifications.getLastNotificationResponseAsync();
+      if (last) {
+        const data = last.notification.request.content.data as Record<
+          string,
+          string
+        >;
+        const path = resolvePushRoute(data);
+        if (path) {
+          router.push(path as never);
+        }
+      }
 
       pushCleanupRef.current = () => {
         tokenSub.remove();
