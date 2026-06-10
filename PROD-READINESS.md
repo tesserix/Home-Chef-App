@@ -241,7 +241,7 @@ store links, and Home Chef becomes a first-class Tesserix product visible in tes
 - [ ] **auth-bff registry cleanup** — drop the dead web app entries (`web`, `vendor-portal`, `delivery-portal` blocks in `apps/auth-bff/homechef-products.yaml`) once portals are gone; keep mobile-facing entries.
 - [ ] **Repo cleanup** — archive/delete the three web app dirs + their CI; update README + monorepo docs.
 - **Sequencing:** build the landing now; flip DNS/routing only after both store listings are live (a landing with dead store links is worse than the current web app).
-- **Open decision:** does the customer web ordering flow die entirely (Uber model) or redirect to app-only? Assumed app-only per this request — flag if customer web checkout must survive.
+- **Decision (owner, 2026-06-10):** customer web ordering dies entirely — app-only (Uber model), fewer apps to manage. All three web apps (`web`, `vendor-portal`, `delivery-portal`) sunset; the landing page is the only web surface.
 
 ### 5B. Tesserix platform integration (mark8ly pattern)
 
