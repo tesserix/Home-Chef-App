@@ -231,6 +231,7 @@
     "documentsRequiredBody": "Please upload both ID proof and FSSAI license to continue.",
     "idProofUploaded": "ID proof uploaded.",
     "fssaiUploaded": "FSSAI license uploaded.",
+    "ocrDetected": "We read the licence number and expiry — please check them.",
     "uploadFailed": "Upload failed. Please try again.",
     "cameraDenied": "Camera permission denied — tap Gallery to use a saved photo.",
     "cameraUnavailable": "Camera unavailable. Try Gallery.",

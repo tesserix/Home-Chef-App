@@ -31,6 +31,7 @@ import { OnboardingScaffold, useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
+import { ocrDocument } from '../../lib/ocr';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
 type DocumentType = 'id_proof' | 'fssai_license';
@@ -72,19 +73,45 @@ export default function DocumentsScreen() {
   ): Promise<void> {
     setUploadState(docType, { uploading: true, error: null });
     try {
+      // OCR an FSSAI image to pre-fill the licence number + expiry the chef
+      // would otherwise type by hand. Best-effort, only fills EMPTY fields
+      // (never overwrites the chef's input), and is skipped for PDFs. The
+      // detected expiry is also used for this upload so the new doc carries
+      // it even before the chef edits the field.
+      let expiryToSend = documents.fssaiExpiryDate;
+      if (docType === 'fssai_license' && fileType === 'image') {
+        try {
+          const ocr = await ocrDocument(uri, mimeType);
+          const prefill: Partial<typeof documents> = {};
+          if (ocr.fssaiNumber && !documents.fssaiLicenseNumber) {
+            prefill.fssaiLicenseNumber = ocr.fssaiNumber;
+          }
+          if (
+            ocr.expiryDate &&
+            !/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)
+          ) {
+            prefill.fssaiExpiryDate = ocr.expiryDate;
+            expiryToSend = ocr.expiryDate;
+          }
+          if (Object.keys(prefill).length > 0) {
+            updateDocuments(prefill);
+            showToast({ message: t('onboarding.ocrDetected'), tone: 'info' });
+          }
+        } catch {
+          // OCR is best-effort — fall through to manual entry.
+        }
+      }
+
       const formData = new FormData();
       formData.append('type', docType);
       const filename = uri.split('/').pop() ?? (fileType === 'pdf' ? 'document.pdf' : 'document.jpg');
       formData.append('file', { uri, name: filename, type: mimeType } as unknown as Blob);
-      // FSSAI uploads carry the chef-entered expiry date so the
-      // expiry-reminder cron (services/fssai_reminder.go) can fire at
-      // 30/15/7 days. Only sent if the chef has typed a parseable
-      // YYYY-MM-DD; the backend handler treats missing as no-expiry.
-      if (
-        docType === 'fssai_license' &&
-        /^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate)
-      ) {
-        formData.append('expiryDate', documents.fssaiExpiryDate);
+      // FSSAI uploads carry the expiry date (chef-typed or OCR-detected) so
+      // the expiry-reminder cron (services/fssai_reminder.go) can fire at
+      // 30/15/7 days. Only sent if it's a parseable YYYY-MM-DD; the backend
+      // handler treats missing as no-expiry.
+      if (docType === 'fssai_license' && /^\d{4}-\d{2}-\d{2}$/.test(expiryToSend)) {
+        formData.append('expiryDate', expiryToSend);
       }
 
       await api.post('/chef/documents', formData, multipartConfig());

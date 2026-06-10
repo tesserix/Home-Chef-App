@@ -23,6 +23,7 @@ import { useToast } from '@homechef/mobile-shared/ui';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../../lib/api';
 import { describeDocumentType } from '../../hooks/useExpiringDocuments';
+import { ocrDocument } from '../../lib/ocr';
 
 // Mirrors apps/api/models/document.go ChefDocumentResponse — the
 // camelCase JSON keys the handler emits, NOT the Go struct names.
@@ -152,6 +153,7 @@ export default function DocumentsRenewScreen() {
     uri: string;
     mimeType: string;
     filename: string;
+    prefilled?: boolean;
   } | null>(null);
   const [expiryText, setExpiryText] = useState('');
 
@@ -249,13 +251,31 @@ export default function DocumentsRenewScreen() {
       // collect it before submitting so the new file isn't saved with the
       // stale date. Everything else submits immediately.
       if (doc.expiryDate != null || doc.type === 'fssai_license') {
-        setExpiryText('');
+        // Try OCR on image uploads to pre-fill the expiry — best-effort, the
+        // chef always confirms/edits. Skip for PDFs.
+        let detected = '';
+        let wasDetected = false;
+        if (mimeType.startsWith('image/')) {
+          showToast({ message: 'Reading your document…', tone: 'info' });
+          try {
+            const ocr = await ocrDocument(uri, mimeType);
+            if (ocr.expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(ocr.expiryDate)) {
+              const [y, m, d] = ocr.expiryDate.split('-');
+              detected = formatExpiryInput(`${d}${m}${y}`);
+              wasDetected = true;
+            }
+          } catch {
+            // OCR is best-effort — fall through to manual entry.
+          }
+        }
+        setExpiryText(detected);
         setExpiryPrompt({
           docId: doc.id,
           docType: doc.type,
           uri,
           mimeType,
           filename,
+          prefilled: wasDetected,
         });
         return;
       }
@@ -399,11 +419,13 @@ export default function DocumentsRenewScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>New expiry date</Text>
             <Text style={styles.modalBody}>
-              {expiryPrompt
-                ? `Enter the expiry date printed on your new ${describeDocumentType(
-                    expiryPrompt.docType,
-                  )}.`
-                : ''}
+              {expiryPrompt?.prefilled
+                ? 'We read this from your document — please check it matches the date printed on it.'
+                : expiryPrompt
+                  ? `Enter the expiry date printed on your new ${describeDocumentType(
+                      expiryPrompt.docType,
+                    )}.`
+                  : ''}
             </Text>
             <TextInput
               value={expiryText}
