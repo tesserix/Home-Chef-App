@@ -23,6 +23,7 @@ import {
 } from '../../hooks/useLocations';
 
 const schema = z.object({
+  addressLine2: z.string().optional(), // flat / house / floor — user-typed
   addressLine1: z.string().min(5, 'Address must be at least 5 characters'),
   city: z.string().min(1, 'City is required'),
   state: z.string().min(1, 'State is required'),
@@ -45,7 +46,13 @@ export default function AddressScreen() {
     formState: { errors },
   } = useForm<AddressForm>({
     resolver: zodResolver(schema),
-    defaultValues: { addressLine1: '', city: '', state: '', pincode: '' },
+    defaultValues: {
+      addressLine2: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      pincode: '',
+    },
   });
 
   // Address autocomplete (Photon/OpenStreetMap via the backend). The search
@@ -73,6 +80,7 @@ export default function AddressScreen() {
         lastName: params.lastName,
         phone: params.phone,
         addressLine1: data.addressLine1,
+        addressLine2: data.addressLine2 ?? '',
         city: data.city,
         state: data.state,
         pincode: data.pincode,
@@ -163,9 +171,31 @@ export default function AddressScreen() {
             </View>
           ) : null}
 
-          {/* ── Address Line 1 ── */}
+          {/* ── Flat / House / Floor (user-typed; autocomplete won't fill this) ── */}
           <Text className="text-sm font-medium text-charcoal mb-1">
-            Address
+            Flat / House / Floor no.
+          </Text>
+          <Controller
+            control={control}
+            name="addressLine2"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                className="h-12 bg-surface-soft rounded-lg px-4 text-base text-charcoal mb-4"
+                placeholder="e.g. Flat 402, B-Wing"
+                placeholderTextColor={customerColors.charcoal.soft}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                value={value}
+                autoCapitalize="words"
+                returnKeyType="next"
+                accessibilityLabel="Flat, house or floor number"
+              />
+            )}
+          />
+
+          {/* ── Address Line 1 (building / society / area — autocompleted) ── */}
+          <Text className="text-sm font-medium text-charcoal mb-1">
+            Building / Society / Area
           </Text>
           <Controller
             control={control}

@@ -432,10 +432,10 @@ export default function CheckoutScreen() {
                       <TextInput
                         value={value}
                         onChangeText={onChange}
-                        placeholder="Address line 2 (optional)"
+                        placeholder="Flat / House / Floor no. (optional)"
                         placeholderTextColor="#717171"
                         className="bg-surface-soft rounded-xl px-3 py-2.5 text-sm text-charcoal"
-                        accessibilityLabel="Address line 2"
+                        accessibilityLabel="Flat, house or floor number"
                       />
                     )}
                   />

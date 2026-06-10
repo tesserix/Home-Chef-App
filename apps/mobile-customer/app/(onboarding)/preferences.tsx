@@ -33,6 +33,7 @@ export default function PreferencesScreen() {
     lastName: string;
     phone: string;
     addressLine1: string;
+    addressLine2: string;
     city: string;
     state: string;
     pincode: string;
@@ -53,16 +54,20 @@ export default function PreferencesScreen() {
   const onFinish = async () => {
     setIsSubmitting(true);
     try {
+      // Backend (CompleteOnboarding) reads FLAT address fields, not a nested
+      // `address` object — addressCity / addressState / addressPostalCode.
+      // Sending a nested object silently dropped the address before.
       await api.post('/v1/customer/onboarding', {
         firstName: params.firstName,
         lastName: params.lastName,
         phone: params.phone,
-        address: {
-          addressLine1: params.addressLine1,
-          city: params.city,
-          state: params.state,
-          pincode: params.pincode,
-        },
+        addressLabel: 'Home',
+        addressLine1: params.addressLine1,
+        addressLine2: params.addressLine2 ?? '',
+        addressCity: params.city,
+        addressState: params.state,
+        addressPostalCode: params.pincode,
+        addressCountry: 'IN',
         cuisinePreferences: selected,
       });
 
