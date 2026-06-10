@@ -117,10 +117,10 @@ export default function AddressScreen() {
 
           {/* ── Address autocomplete (Photon/OpenStreetMap) ── */}
           {/* A search shortcut that fills the fields below; they stay editable. */}
-          <View className="flex-row items-center h-12 bg-surface-soft rounded-lg px-4 mb-2 gap-2">
+          <View className="flex-row items-center bg-surface-soft rounded-lg px-4 mb-2 gap-2">
             <Search size={18} color={customerColors.charcoal.soft} />
             <TextInput
-              className="flex-1 text-base text-charcoal"
+              className="flex-1 h-12 text-base text-charcoal"
               placeholder="Search for your address"
               placeholderTextColor={customerColors.charcoal.soft}
               value={addressQuery}

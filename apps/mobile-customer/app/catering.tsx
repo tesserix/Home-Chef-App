@@ -23,6 +23,7 @@ import {
   useCreateCateringRequest,
 } from '../hooks/useCatering';
 import type { CateringRequest } from '../hooks/useCatering';
+import { friendlyErrorMessage } from '../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Threat model T-02-05-02: Zod validates required fields before POST
@@ -234,8 +235,11 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
           setSelectedEventType('');
           onSuccess();
         },
-        onError: (_err) => {
-          Alert.alert('Error', 'Could not submit request. Please try again.');
+        onError: (err) => {
+          Alert.alert(
+            'Error',
+            friendlyErrorMessage(err, 'Could not submit request. Please try again.'),
+          );
         },
       },
     );

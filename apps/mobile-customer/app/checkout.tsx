@@ -32,6 +32,7 @@ import {
   type AddressSuggestion,
 } from '../hooks/useLocations';
 import { api } from '../lib/api';
+import { friendlyErrorMessage } from '../lib/errors';
 import type { Address } from '../types/customer';
 
 // ─── Address form schema ──────────────────────────────────────────────────────
@@ -246,8 +247,8 @@ export default function CheckoutScreen() {
 
       // Step 5: Start polling — webhook will update status server-side
       setPollingOrderId(orderId);
-    } catch {
-      setError('Order creation failed. Please try again.');
+    } catch (err: unknown) {
+      setError(friendlyErrorMessage(err, 'Order creation failed. Please try again.'));
       setIsLoading(false);
     }
   }
@@ -362,7 +363,7 @@ export default function CheckoutScreen() {
                   <View className="flex-row items-center bg-surface-soft rounded-xl px-3 gap-2">
                     <Search size={16} color={'#717171'} />
                     <TextInput
-                      className="flex-1 py-2.5 text-sm text-charcoal"
+                      className="flex-1 h-11 text-sm text-charcoal"
                       placeholder="Search for your address"
                       placeholderTextColor="#717171"
                       value={addrQuery}

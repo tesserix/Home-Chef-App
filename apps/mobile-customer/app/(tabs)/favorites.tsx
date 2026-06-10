@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Heart, ChefHat } from 'lucide-react-native';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import type { FavoriteChefEntry } from '../../hooks/useFavorites';
+import { friendlyErrorMessage } from '../../lib/errors';
 import { ChefCard } from '../../components/chef/ChefCard';
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
@@ -120,13 +121,16 @@ export default function FavoritesScreen() {
     toggleFavorite.mutate(
       { chefId, isFavorited: true },
       {
-        onError: () => {
+        onError: (error) => {
           setRemovingIds((prev) => {
             const next = new Set(prev);
             next.delete(chefId);
             return next;
           });
-          Alert.alert('Error', 'Could not remove from favorites. Please try again.');
+          Alert.alert(
+            'Error',
+            friendlyErrorMessage(error, 'Could not remove from favorites. Please try again.'),
+          );
         },
         onSuccess: () => {
           setRemovingIds((prev) => {

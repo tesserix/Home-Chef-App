@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../store/auth-store';
 import { api } from '../../lib/api';
+import { friendlyErrorMessage } from '../../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 const CUISINE_OPTIONS = [
@@ -57,7 +58,7 @@ export default function PreferencesScreen() {
       // Backend (CompleteOnboarding) reads FLAT address fields, not a nested
       // `address` object — addressCity / addressState / addressPostalCode.
       // Sending a nested object silently dropped the address before.
-      await api.post('/v1/customer/onboarding', {
+      await api.post('/v1/customer/onboarding/complete', {
         firstName: params.firstName,
         lastName: params.lastName,
         phone: params.phone,
@@ -74,9 +75,13 @@ export default function PreferencesScreen() {
       await setOnboardingComplete(true);
       router.replace('/(tabs)');
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Something went wrong. Please try again.';
-      Alert.alert('Setup failed', message);
+      Alert.alert(
+        'Setup failed',
+        friendlyErrorMessage(
+          error,
+          "We couldn't finish setting up your account. Please try again.",
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }

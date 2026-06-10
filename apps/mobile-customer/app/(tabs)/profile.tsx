@@ -20,6 +20,7 @@ import {
   User,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
+import { friendlyErrorMessage } from '../../lib/errors';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
@@ -145,8 +146,11 @@ export default function ProfileScreen() {
       },
       {
         onSuccess: () => Alert.alert('Saved', 'Profile updated successfully.'),
-        onError: () =>
-          Alert.alert('Error', 'Could not update profile. Please try again.'),
+        onError: (error) =>
+          Alert.alert(
+            'Error',
+            friendlyErrorMessage(error, 'Could not update profile. Please try again.'),
+          ),
       },
     );
   }
@@ -157,8 +161,8 @@ export default function ProfileScreen() {
       {
         onSuccess: () =>
           Alert.alert('Saved', 'Cuisine preferences updated.'),
-        onError: () =>
-          Alert.alert('Error', 'Could not save preferences.'),
+        onError: (error) =>
+          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save preferences.')),
       },
     );
   }
