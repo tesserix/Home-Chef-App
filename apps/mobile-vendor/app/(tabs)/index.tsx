@@ -821,7 +821,9 @@ const styles = StyleSheet.create({
     gap: theme.spacing[2],
   },
   alertCard: {
-    backgroundColor: theme.colors.amber.tint,
+    backgroundColor: theme.colors.bone,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.DEFAULT,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
