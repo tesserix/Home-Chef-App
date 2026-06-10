@@ -24,6 +24,7 @@ import {
   useWeeklyStatements,
   type WeeklyStatement,
 } from '../hooks/useWeeklyStatements';
+import { useRefunds, type RefundEntry } from '../hooks/useRefunds';
 
 // ----- Types (payout account) -------------------------------------------------
 
@@ -448,6 +449,65 @@ function TaxDocumentRow({ fyLabel, onPress }: TaxDocumentRowProps) {
   );
 }
 
+// ---- Refund row (tappable → opens the order) ---------------------------------
+
+interface RefundRowProps {
+  refund: RefundEntry;
+  onPress: () => void;
+}
+
+function RefundRow({ refund, onPress }: RefundRowProps) {
+  const detail =
+    refund.reason ||
+    (refund.items && refund.items.length > 0
+      ? refund.items.map((i) => i.name).join(', ')
+      : 'Refund');
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Refund on order ${refund.orderNumber}, ${fmtInr(refund.amount)}`}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            orderRowStyles.root,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={orderRowStyles.leftBlock}>
+            <Text style={orderRowStyles.orderNumber} numberOfLines={1}>
+              #{refund.orderNumber}
+            </Text>
+            <Text style={orderRowStyles.date} numberOfLines={1}>
+              {detail} · {fmtShortDate(refund.refundedAt)}
+            </Text>
+          </View>
+          <View style={orderRowStyles.rightBlock}>
+            <Text style={refundRowStyles.amount}>
+              − {fmtInr(refund.amount)}
+            </Text>
+          </View>
+          <ChevronLeft
+            size={14}
+            color={theme.colors.ink.muted}
+            style={{ transform: [{ rotate: '180deg' }] }}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const refundRowStyles = StyleSheet.create({
+  amount: {
+    fontFamily: 'Geist-Bold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.destructive.DEFAULT,
+    fontVariant: ['tabular-nums'],
+  },
+});
+
 // ----- List item type ---------------------------------------------------------
 
 type ListItem =
@@ -457,6 +517,8 @@ type ListItem =
   | { type: 'breakdown' }
   | { type: 'orderListHeader' }
   | { type: 'orderEntry'; order: EarningsBreakdownOrder }
+  | { type: 'refundsHeader' }
+  | { type: 'refundEntry'; refund: RefundEntry }
   | { type: 'statementsHeader' }
   | { type: 'statementEntry'; statement: WeeklyStatement }
   | { type: 'taxRow' }
@@ -488,6 +550,9 @@ export default function EarningsScreen() {
   const { data: statements, refetch: refetchStatements } =
     useWeeklyStatements();
 
+  // Refund history (one entry per refunded order)
+  const { data: refunds, refetch: refetchRefunds } = useRefunds();
+
   const isLoading = payoutLoading || breakdownLoading;
   const isError = payoutError;
 
@@ -501,6 +566,7 @@ export default function EarningsScreen() {
         refetchPayout(),
         refetchBreakdown(),
         refetchStatements(),
+        refetchRefunds(),
       ]);
     } finally {
       setIsPulling(false);
@@ -536,6 +602,14 @@ export default function EarningsScreen() {
       items.push({ type: 'orderListHeader' });
       orders.forEach((order) => {
         items.push({ type: 'orderEntry', order });
+      });
+    }
+
+    const refundList = refunds ?? [];
+    if (refundList.length > 0) {
+      items.push({ type: 'refundsHeader' });
+      refundList.forEach((refund) => {
+        items.push({ type: 'refundEntry', refund });
       });
     }
 
@@ -745,6 +819,17 @@ export default function EarningsScreen() {
           />
         );
 
+      case 'refundsHeader':
+        return <Text style={styles.dateHeader}>REFUNDS</Text>;
+
+      case 'refundEntry':
+        return (
+          <RefundRow
+            refund={item.refund}
+            onPress={() => router.push(`/orders/${item.refund.orderId}`)}
+          />
+        );
+
       case 'statementsHeader':
         return <Text style={styles.dateHeader}>WEEKLY STATEMENTS</Text>;
 
@@ -825,6 +910,7 @@ export default function EarningsScreen() {
         keyExtractor={(item, idx) => {
           if (item.type === 'orderEntry') return item.order.orderId;
           if (item.type === 'statementEntry') return `stmt-${item.statement.id}`;
+          if (item.type === 'refundEntry') return `refund-${item.refund.orderId}`;
           return `${item.type}-${idx}`;
         }}
         contentContainerStyle={styles.listContent}

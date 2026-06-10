@@ -125,6 +125,7 @@ func SetupRouter() *gin.Engine {
 	chefEarningsHandler := handlers.NewChefEarningsHandler()
 	chefStatementsHandler := handlers.NewChefStatementsHandler()
 	chefTaxHandler := handlers.NewChefTaxHandler()
+	chefRefundsHandler := handlers.NewChefRefundsHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
@@ -378,6 +379,8 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/statements/:id/statement.pdf", chefStatementsHandler.GetWeeklyStatementPDF)
 			// Annual TDS summary (Form 16A style) — ?year=FY-start.
 			chefDashboard.GET("/tax/certificate", chefTaxHandler.GetTDSCertificate)
+			// Refund history — one entry per refunded order, item breakdown.
+			chefDashboard.GET("/refunds", chefRefundsHandler.GetRefunds)
 			// GET /chef/documents/expiring?withinDays=30
 			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)
