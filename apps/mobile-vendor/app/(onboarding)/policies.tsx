@@ -267,9 +267,9 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     fontFamily: 'Inter-Medium',
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     textDecorationLine: 'underline',
-    textDecorationColor: theme.colors.herb.DEFAULT,
+    textDecorationColor: theme.colors.ink.DEFAULT,
   },
 
   // Checkbox acceptance row

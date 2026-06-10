@@ -112,8 +112,8 @@ const STATUS_CHIP: Record<string, { bg: string; text: string }> = {
     text: theme.colors.ink.DEFAULT,
   },
   ready: {
-    bg: theme.colors.herb.tint,
-    text: theme.colors.herb.soft,
+    bg: theme.colors.success.tint,
+    text: theme.colors.success.soft,
   },
 };
 
@@ -548,7 +548,7 @@ export default function DashboardScreen() {
                 <View
                   style={[
                     styles.statusDot,
-                    { backgroundColor: theme.colors.herb.DEFAULT },
+                    { backgroundColor: theme.colors.amber.DEFAULT },
                   ]}
                 />
                 <Text style={styles.surgeBannerLabel}>
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statusPillOpen: {
-    backgroundColor: theme.colors.herb.DEFAULT,
+    backgroundColor: theme.colors.success.DEFAULT,
   },
   statusPillClosed: {
     backgroundColor: 'transparent',
@@ -847,7 +847,7 @@ const styles = StyleSheet.create({
   alertCta: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
   },
   alertBody: {
@@ -865,13 +865,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.amber.tint,
     marginBottom: theme.spacing[3],
   },
   surgeBannerLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.soft,
+    color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
   },
   actionList: { gap: theme.spacing[2] },
@@ -883,7 +883,7 @@ const styles = StyleSheet.create({
   seeMoreInlineLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
 
   // Zone C — In progress group card
@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   errorSecondaryText: {
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
   },

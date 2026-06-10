@@ -224,7 +224,7 @@ export default function DocumentsScreen() {
         <View style={[styles.tile, styles.tileUploaded]}>
           <View style={styles.tileHeader}>
             <View style={[styles.tileIconWrap, styles.tileIconSuccess]}>
-              <CheckCircle size={18} color={theme.colors.herb.DEFAULT} strokeWidth={2} />
+              <CheckCircle size={18} color={theme.colors.success.DEFAULT} strokeWidth={2} />
             </View>
             <View style={styles.tileTitleGroup}>
               <Text style={styles.tileTitle}>{title}</Text>
@@ -352,7 +352,7 @@ export default function DocumentsScreen() {
     >
       {/* Context note */}
       <View style={styles.noteRow}>
-        <ShieldCheck size={14} color={theme.colors.herb.DEFAULT} strokeWidth={2} />
+        <ShieldCheck size={14} color={theme.colors.success.DEFAULT} strokeWidth={2} />
         <Text style={styles.noteText}>
           {t('onboarding.documentsNote')}
         </Text>
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     marginBottom: theme.spacing[4],
     borderLeftWidth: 2,
-    borderLeftColor: theme.colors.herb.DEFAULT,
+    borderLeftColor: theme.colors.ink.DEFAULT,
   },
   noteText: {
     flex: 1,
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   // Uploaded tile gets a hairline persimmon tint on the top edge
   tileUploaded: {
     borderTopWidth: 2,
-    borderTopColor: theme.colors.herb.DEFAULT,
+    borderTopColor: theme.colors.success.DEFAULT,
   },
 
   tileHeader: {

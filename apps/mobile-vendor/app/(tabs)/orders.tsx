@@ -54,7 +54,7 @@ const HISTORY_STATUS_CHIP: Record<string, StatusChipColors> = {
   },
   pending: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
   preparing: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
-  ready: { bg: theme.colors.herb.tint, text: theme.colors.herb.soft },
+  ready: { bg: theme.colors.success.tint, text: theme.colors.success.soft },
   accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
 };
 
@@ -153,7 +153,7 @@ function QueueTab() {
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: theme.colors.herb.DEFAULT },
+                  { backgroundColor: theme.colors.amber.DEFAULT },
                 ]}
               />
               <Text style={styles.surgeBannerLabel}>
@@ -491,13 +491,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.amber.tint,
     marginBottom: theme.spacing[3],
   },
   surgeBannerLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.soft,
+    color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
   },
   statusDot: { width: 8, height: 8, borderRadius: 4 },

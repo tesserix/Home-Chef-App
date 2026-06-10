@@ -170,7 +170,7 @@ export default function PendingScreen() {
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: theme.colors.herb.DEFAULT },
+                  { backgroundColor: theme.colors.ink.DEFAULT },
                 ]}
               />
               <Text style={styles.statusLabel}>{t('onboarding.underReview')}</Text>
@@ -476,7 +476,7 @@ const timelineStyles = StyleSheet.create({
     backgroundColor: theme.colors.ink.DEFAULT,
   },
   dotActive: {
-    backgroundColor: theme.colors.herb.DEFAULT,
+    backgroundColor: theme.colors.ink.DEFAULT,
   },
   dotPending: {
     borderWidth: 1.5,

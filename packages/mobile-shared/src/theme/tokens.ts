@@ -45,6 +45,16 @@ export const colors = {
     DEFAULT: '#B22B0E', // deep paprika red. NOT brand orange.
     tint: '#FBE8E1',
   },
+  // Functional success — "go / ready / verified" green. Uber-style: the
+  // vendor app retires persimmon as a brand accent (ink carries actions),
+  // so positive operational status (order ready, request approved, document
+  // verified) is carried by this functional green instead. Mirrors the
+  // customer palette's success green so the two apps read the same "good".
+  success: {
+    DEFAULT: '#008A05', // checkmarks, "ready/verified" icons
+    soft: '#046A06', // pill text on tint
+    tint: '#E6F4E6', // pill / badge background
+  },
   amber: {
     DEFAULT: '#d1a64a',
     tint: '#f0e3c0',

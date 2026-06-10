@@ -112,7 +112,7 @@ function ToggleRow({
           disabled={disabled}
           trackColor={{
             false: theme.colors.mist.strong,
-            true: theme.colors.herb.DEFAULT,
+            true: theme.colors.ink.DEFAULT,
           }}
           thumbColor={theme.colors.paper}
           ios_backgroundColor={theme.colors.mist.strong}
@@ -612,6 +612,6 @@ const styles = StyleSheet.create({
   errorBackLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
 });

@@ -13,6 +13,13 @@ describe('theme tokens', () => {
     expect(colors.herb.tint).toBe('#FFEDD5');
   });
 
+  it('exports the functional `success` green (vendor positive status)', async () => {
+    const { colors } = await import('../theme/tokens');
+    expect(colors.success.DEFAULT).toBe('#008A05');
+    expect(colors.success.soft).toBe('#046A06');
+    expect(colors.success.tint).toBe('#E6F4E6');
+  });
+
   it('exports the Paper · Ink surface tokens', async () => {
     const { colors } = await import('../theme/tokens');
     expect(colors.paper).toBe('#FFFFFF');

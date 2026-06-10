@@ -201,7 +201,7 @@ export default function ReviewScreen() {
       <View style={[styles.readinessRow, docsComplete && styles.readinessComplete]}>
         <CheckCircle
           size={16}
-          color={docsComplete ? theme.colors.herb.DEFAULT : theme.colors.ink.muted}
+          color={docsComplete ? theme.colors.success.DEFAULT : theme.colors.ink.muted}
           strokeWidth={2}
         />
         <Text style={[styles.readinessText, docsComplete && styles.readinessTextComplete]}>
@@ -290,8 +290,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[2],
   },
   readinessComplete: {
-    borderColor: theme.colors.herb.DEFAULT,
-    backgroundColor: 'rgba(194, 65, 12, 0.06)',
+    borderColor: theme.colors.success.DEFAULT,
+    backgroundColor: 'rgba(0, 138, 5, 0.08)',
   },
   readinessText: {
     flex: 1,

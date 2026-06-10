@@ -472,7 +472,7 @@ export default function KitchenDetailsScreen() {
                           pressed && { backgroundColor: theme.colors.bone },
                         ]}
                       >
-                        <MapPin size={16} color={theme.colors.herb.DEFAULT} strokeWidth={2.2} />
+                        <MapPin size={16} color={theme.colors.ink.DEFAULT} strokeWidth={2.2} />
                         <Text style={styles.suggestionMeta} numberOfLines={2}>
                           {item.description}
                         </Text>

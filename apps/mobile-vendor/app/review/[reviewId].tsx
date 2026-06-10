@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   inputContainerFocused: {
-    borderColor: theme.colors.herb.DEFAULT, // persimmon focus ring — only usage on screen
+    borderColor: theme.colors.ink.DEFAULT, // persimmon focus ring — only usage on screen
   },
   inputContainerError: {
     borderColor: theme.colors.destructive.DEFAULT,

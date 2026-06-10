@@ -29,7 +29,7 @@ function statusBadgeColor(status: AdminRequest['status']): {
         fg: theme.colors.destructive.DEFAULT,
       };
     case 'approved':
-      return { bg: theme.colors.herb.tint, fg: theme.colors.herb.soft };
+      return { bg: theme.colors.success.tint, fg: theme.colors.success.soft };
     case 'rejected':
       return {
         bg: theme.colors.destructive.tint,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   cardCta: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     marginTop: theme.spacing[1],
   },
 

@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   instructionsPill: {
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.amber.tint,
     borderRadius: theme.radius.DEFAULT,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter",
     fontSize: theme.typography.size.bodySm.size,
     lineHeight: 19,
-    color: theme.colors.herb.soft,
+    color: theme.colors.ink.DEFAULT,
   },
   buttonRow: {
     flexDirection: "row",

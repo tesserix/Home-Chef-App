@@ -76,7 +76,7 @@ interface StatusChipColors {
 const STATUS_CHIP: Record<OrderDetailStatus, StatusChipColors> = {
   pending: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
   preparing: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
-  ready: { bg: theme.colors.herb.tint, text: theme.colors.herb.soft },
+  ready: { bg: theme.colors.success.tint, text: theme.colors.success.soft },
   accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
   picked_up: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
   delivered: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },
@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
   mapsLink: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     marginTop: theme.spacing[2],
     letterSpacing: 0.1,
   },
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   instructionsCallout: {
     marginHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[4],
-    backgroundColor: theme.colors.herb.tint,
+    backgroundColor: theme.colors.amber.tint,
     borderRadius: theme.radius.DEFAULT,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
@@ -1183,7 +1183,7 @@ const styles = StyleSheet.create({
   instructionsText: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.body.size,
-    color: theme.colors.herb.soft,
+    color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
   },
 
@@ -1348,7 +1348,7 @@ const styles = StyleSheet.create({
   cancelLinkLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
   // Per-line cancel — smaller, lower-affordance link inside the item
   // row. The whole-order cancel is the loud one; this is for the chef
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
   invoiceLinkLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     marginTop: 4,
   },
   // Cancelled-line presentation — dimmed background, strikethrough on

@@ -46,7 +46,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           options.title ??
           route.name;
         const tintColor = isFocused
-          ? theme.colors.herb.DEFAULT
+          ? theme.colors.ink.DEFAULT
           : theme.colors.ink.muted;
 
         function onPress(): void {
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   labelActive: {
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
   },
 });
 

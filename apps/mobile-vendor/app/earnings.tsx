@@ -329,7 +329,7 @@ const bkStyles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
   },
   rowValueAccent: {
-    color: theme.colors.herb.DEFAULT,
+    color: theme.colors.ink.DEFAULT,
     fontFamily: 'Geist-Bold',
     fontSize: theme.typography.size.body.size,
   },
@@ -487,7 +487,7 @@ const statementRowStyles = StyleSheet.create({
   download: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
-    color: theme.colors.herb.DEFAULT, // persimmon accent
+    color: theme.colors.ink.DEFAULT, // persimmon accent
     marginTop: 1,
   },
 });

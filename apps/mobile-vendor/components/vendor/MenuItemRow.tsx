@@ -92,7 +92,7 @@ export function MenuItemRow({ item, onPress }: MenuItemRowProps) {
               disabled={toggleMutation.isPending}
               trackColor={{
                 false: theme.colors.mist.DEFAULT,
-                true: theme.colors.herb.DEFAULT,
+                true: theme.colors.ink.DEFAULT,
               }}
               thumbColor={theme.colors.paper}
               ios_backgroundColor={theme.colors.mist.DEFAULT}

@@ -74,7 +74,7 @@ export default function LanguageScreen() {
                         {active ? (
                           <Check
                             size={20}
-                            color={theme.colors.herb.DEFAULT}
+                            color={theme.colors.ink.DEFAULT}
                             strokeWidth={2}
                           />
                         ) : null}

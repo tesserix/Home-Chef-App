@@ -36,17 +36,26 @@ module.exports = {
           soft: '#525252',
           muted: '#888888',
         },
-        // Brand accent: Persimmon. Token name `herb` kept for back-compat
-        // with the existing class names across 49 files.
+        // Uber-style vendor app: persimmon retired as the brand accent — Ink
+        // now carries every primary action (CTA, toggle, tab, link, focus).
+        // `herb` is kept only so any stray legacy class resolves to Ink rather
+        // than reintroducing orange; new code should use `ink` directly.
         herb: {
-          DEFAULT: '#C2410C',
-          soft: '#9A3412',
-          tint: '#FFEDD5',
+          DEFAULT: '#0E0E0C',
+          soft: '#2A2A28',
+          tint: '#F5F5F4',
         },
         // Functional only — never decorative.
         destructive: {
           DEFAULT: '#B22B0E',
           tint: '#FBE8E1',
+        },
+        // Functional success — "go / ready / verified" green. Carries positive
+        // operational status now that persimmon is gone. Mirrors tokens.ts.
+        success: {
+          DEFAULT: '#008A05',
+          soft: '#046A06',
+          tint: '#E6F4E6',
         },
         paprika: {
           DEFAULT: '#c95b3e',
