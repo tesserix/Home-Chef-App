@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -207,6 +207,9 @@ interface FooterActionsProps {
   customerName: string;
   total: number;
   disabled: boolean;
+  /** ISO timestamp of the last status transition — used to compute
+   *  waiting-for-driver elapsed time in the `ready` state. */
+  updatedAt?: string;
   onAccept: () => void;
   onReject: () => void;
   onMarkPreparing: () => void;
@@ -220,12 +223,29 @@ function FooterActions({
   customerName,
   total,
   disabled,
+  updatedAt,
   onAccept,
   onReject,
   onMarkPreparing,
   onMarkReady,
   onCancel,
 }: FooterActionsProps) {
+  // Ticks every 45 s so the "ready" caption's elapsed counter updates.
+  // Only runs when status === 'ready'; clears on status change or unmount.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const id = setInterval(() => setNow(Date.now()), 45_000);
+    return () => clearInterval(id);
+  }, [status]);
+
+  const readyElapsed = (() => {
+    if (status !== 'ready') return '';
+    const ts = updatedAt;
+    if (!ts) return '';
+    const mins = Math.max(0, Math.floor((now - new Date(ts).getTime()) / 60_000));
+    return mins < 1 ? '' : ` · ${mins}m`;
+  })();
   // Renders the destructive secondary action below the primary
   // status-transition button when the order is cancellable. Kept as
   // a link instead of a same-row button so the primary action stays
@@ -328,9 +348,15 @@ function FooterActions({
   }
 
   // status === 'ready' — chef has prepped, no more transitions for them;
-  // we still let them cancel until the driver picks up.
-  if (status === 'ready' && cancelLink) {
-    return <View style={styles.footer}>{cancelLink}</View>;
+  // we still let them cancel until the driver picks up. Show the elapsed
+  // wait time so the chef knows how long the driver is taking.
+  if (status === 'ready') {
+    return (
+      <View style={[styles.footer, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
+        {cancelLink}
+      </View>
+    );
   }
 
   // Delivered — chef can download the GST invoice for their books +
@@ -354,8 +380,18 @@ function FooterActions({
     );
   }
 
+  // The `ready` caption is dynamic (shows elapsed wait time); all others
+  // are static strings. Build `ready` outside the map so the elapsed
+  // suffix from state is included.
+  if (status === 'ready') {
+    return (
+      <View style={[styles.footer, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
+      </View>
+    );
+  }
+
   const caption: Partial<Record<OrderDetailStatus, string>> = {
-    ready: 'Waiting for driver to pick up.',
     picked_up: 'Out for delivery.',
     delivered: 'Delivered to customer.',
     cancelled: 'This order was cancelled.',
@@ -840,6 +876,7 @@ export default function OrderDetailScreen() {
         customerName={order.customerName || 'this customer'}
         total={pricing.total}
         disabled={actionLoading || updateStatus.isPending || cancelOrder.isPending}
+        updatedAt={order.timing.preparedAt ?? order.timing.orderedAt}
         onAccept={() => triggerAction(order.id, 'accepted')}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
@@ -1023,7 +1060,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.DEFAULT,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    minHeight: 36,
+    minHeight: 44,
     minWidth: 60,
     alignItems: 'center',
     justifyContent: 'center',
