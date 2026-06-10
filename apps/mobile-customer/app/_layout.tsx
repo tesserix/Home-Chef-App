@@ -1,7 +1,8 @@
 import '../global.css';
 
 import { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, router } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
@@ -132,16 +133,18 @@ export default function RootLayout() {
   }, [isAuthenticated, isLoading, onboardingComplete]);
 
   return (
-    <AuthProvider
-      bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
-      tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
-    >
-      <QueryClientProvider client={queryClient}>
-        <View style={{ flex: 1 }}>
+    // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
+    // GestureDetector (used by CartSheet on the chef detail screen) works.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider
+        bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+        tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+      >
+        <QueryClientProvider client={queryClient}>
           <OfflineBanner />
           <Stack screenOptions={{ headerShown: false }} />
-        </View>
-      </QueryClientProvider>
-    </AuthProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
