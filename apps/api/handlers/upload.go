@@ -1068,9 +1068,12 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	// land together, so a half-saved doc never gets shown as still
 	// "approved" with the wrong file backing it.
 	updates := map[string]interface{}{
-		"file_name":    header.Filename,
-		"file_path":    newFilePath,
-		"file_url":     newFileURL,
+		"file_name": header.Filename,
+		"file_path": newFilePath,
+		// NOTE: no "file_url" — ChefDocument.FileURL is `gorm:"-"` (computed
+		// at read time by signing file_path), so there is no file_url column.
+		// Writing it via a raw update map throws SQLSTATE 42703 and fails the
+		// whole replace. For public docs the URL already lives in file_path.
 		"bucket":       newBucket,
 		"content_type": contentType,
 		"file_size":    header.Size,
