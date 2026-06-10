@@ -628,6 +628,7 @@ type ListItem =
 // ----- Screen -----------------------------------------------------------------
 
 export default function EarningsScreen() {
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
   const apiPeriod = toApiPeriod(period);
 
@@ -749,12 +750,12 @@ export default function EarningsScreen() {
             onPress={() => router.back()}
             hitSlop={8}
             style={styles.backButton}
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('earnings.goBack')}
             accessibilityRole="button"
           >
             <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
           </Pressable>
-          <Text style={styles.commandTitle}>Earnings</Text>
+          <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
         </View>
         <View style={styles.skeletonPad}>
           <Skeleton height={48} style={{ width: 180, marginBottom: 16 }} />
@@ -770,16 +771,16 @@ export default function EarningsScreen() {
   if (isError) {
     return (
       <SafeAreaView style={styles.errorRoot} edges={['top', 'left', 'right']}>
-        <Text style={styles.errorTitle}>Couldn't load earnings</Text>
+        <Text style={styles.errorTitle}>{t('earnings.errorTitle')}</Text>
         <Text style={styles.errorBody}>
-          Check your connection and try again.
+          {t('earnings.errorBody')}
         </Text>
         <Pressable
           onPress={() => refetchPayout()}
           style={styles.errorPrimary}
           accessibilityRole="button"
         >
-          <Text style={styles.errorPrimaryText}>Retry</Text>
+          <Text style={styles.errorPrimaryText}>{t('common.retry')}</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -792,10 +793,10 @@ export default function EarningsScreen() {
           <View style={styles.heroBlock}>
             <Text style={styles.heroLabel}>
               {period === 'week'
-                ? 'THIS WEEK'
+                ? t('earnings.heroThisWeek')
                 : period === 'month'
-                  ? 'THIS MONTH'
-                  : 'ALL TIME'}
+                  ? t('earnings.heroThisMonth')
+                  : t('earnings.heroAllTime')}
             </Text>
             <Text style={styles.heroAmount}>{fmtInr(periodTotal)}</Text>
             {breakdown && (
@@ -811,7 +812,7 @@ export default function EarningsScreen() {
         return (
           <View style={styles.figuresStrip}>
             <View style={styles.figureItem}>
-              <Text style={styles.figureLabel}>PENDING</Text>
+              <Text style={styles.figureLabel}>{t('earnings.figurePending')}</Text>
               <Text style={styles.figureValue}>
                 {fmtInr(payoutData?.pendingPayout ?? 0)}
               </Text>
@@ -819,7 +820,7 @@ export default function EarningsScreen() {
             <View style={styles.figureDivider} />
             {payoutData?.lastPayout ? (
               <View style={styles.figureItem}>
-                <Text style={styles.figureLabel}>LAST PAYOUT</Text>
+                <Text style={styles.figureLabel}>{t('earnings.figureLastPayout')}</Text>
                 <Text style={styles.figureValue}>
                   {fmtInr(payoutData.lastPayout.amount)}
                 </Text>
@@ -832,8 +833,8 @@ export default function EarningsScreen() {
               </View>
             ) : (
               <View style={styles.figureItem}>
-                <Text style={styles.figureLabel}>LAST PAYOUT</Text>
-                <Text style={styles.figureSub}>None yet</Text>
+                <Text style={styles.figureLabel}>{t('earnings.figureLastPayout')}</Text>
+                <Text style={styles.figureSub}>{t('earnings.noneYet')}</Text>
               </View>
             )}
           </View>
@@ -843,17 +844,17 @@ export default function EarningsScreen() {
         return (
           <View style={styles.tabBar}>
             <TabLabel
-              label="Week"
+              label={t('earnings.week')}
               active={period === 'week'}
               onPress={() => setPeriod('week')}
             />
             <TabLabel
-              label="Month"
+              label={t('earnings.month')}
               active={period === 'month'}
               onPress={() => setPeriod('month')}
             />
             <TabLabel
-              label="All"
+              label={t('earnings.all')}
               active={period === 'all'}
               onPress={() => setPeriod('all')}
             />
@@ -864,14 +865,14 @@ export default function EarningsScreen() {
         if (!totals || !rates) return null;
         return (
           <View style={styles.breakdownSection}>
-            <Text style={styles.breakdownSectionLabel}>BREAKDOWN</Text>
+            <Text style={styles.breakdownSectionLabel}>{t('earnings.breakdownLabel')}</Text>
             <View style={styles.breakdownGroup}>
               <BreakdownRow
-                label="Gross revenue"
+                label={t('earnings.grossRevenue')}
                 value={fmtInr(totals.grossRevenue)}
               />
               <BreakdownRow
-                label="Platform commission"
+                label={t('earnings.platformCommission')}
                 annotation={`(${fmtPct(rates.platformCommission)})`}
                 value={`− ${fmtInr(totals.platformCommission)}`}
                 secondary
@@ -879,7 +880,7 @@ export default function EarningsScreen() {
               {gstInterState ? (
                 <>
                   <BreakdownRow
-                    label="GST (IGST)"
+                    label={t('earnings.gstIgst')}
                     annotation={`(${fmtPct(rates.gst)})`}
                     value={`− ${fmtInr(totals.igst)}`}
                     secondary
@@ -888,7 +889,7 @@ export default function EarningsScreen() {
               ) : (
                 <>
                   <BreakdownRow
-                    label="GST"
+                    label={t('earnings.gst')}
                     annotation={`(${fmtPct(rates.gst)})`}
                     value={`− ${fmtInr(gstCombined)}`}
                     secondary
@@ -903,13 +904,13 @@ export default function EarningsScreen() {
                 </>
               )}
               <BreakdownRow
-                label="TDS"
+                label={t('earnings.tds')}
                 annotation={`(${fmtPct(rates.tds)})`}
                 value={`− ${fmtInr(totals.tds)}`}
                 secondary
               />
               <BreakdownRow
-                label="Net payout"
+                label={t('earnings.netPayout')}
                 value={fmtInr(totals.netPayout)}
                 accent={totals.netPayout > 0}
                 emphasized
@@ -917,15 +918,16 @@ export default function EarningsScreen() {
               />
             </View>
             <Text style={styles.ordersCount}>
-              {totals.ordersCount} order{totals.ordersCount === 1 ? '' : 's'}{' '}
-              in period
+              {totals.ordersCount === 1
+                ? t('earnings.ordersInPeriodOne', { count: totals.ordersCount })
+                : t('earnings.ordersInPeriod', { count: totals.ordersCount })}
             </Text>
           </View>
         );
 
       case 'orderListHeader':
         return (
-          <Text style={styles.dateHeader}>ORDER HISTORY</Text>
+          <Text style={styles.dateHeader}>{t('earnings.orderHistoryHeader')}</Text>
         );
 
       case 'orderEntry':
@@ -939,7 +941,7 @@ export default function EarningsScreen() {
         );
 
       case 'refundsHeader':
-        return <Text style={styles.dateHeader}>REFUNDS</Text>;
+        return <Text style={styles.dateHeader}>{t('earnings.refundsHeader')}</Text>;
 
       case 'refundEntry':
         return (
@@ -952,7 +954,7 @@ export default function EarningsScreen() {
         );
 
       case 'statementsHeader':
-        return <Text style={styles.dateHeader}>WEEKLY STATEMENTS</Text>;
+        return <Text style={styles.dateHeader}>{t('earnings.weeklyStatementsHeader')}</Text>;
 
       case 'statementEntry':
         return (
@@ -1008,10 +1010,9 @@ export default function EarningsScreen() {
       case 'empty':
         return (
           <View style={styles.emptyBlock}>
-            <Text style={styles.emptyHeadline}>No orders in period</Text>
+            <Text style={styles.emptyHeadline}>{t('earnings.noOrdersInPeriod')}</Text>
             <Text style={styles.emptyBody}>
-              Completed orders will appear here after your first payout cycle
-              closes.
+              {t('earnings.noOrdersInPeriodBody')}
             </Text>
           </View>
         );
@@ -1028,12 +1029,12 @@ export default function EarningsScreen() {
           onPress={() => router.back()}
           hitSlop={8}
           style={styles.backButton}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t('earnings.goBack')}
           accessibilityRole="button"
         >
           <ChevronLeft size={22} color={theme.colors.ink.DEFAULT} />
         </Pressable>
-        <Text style={styles.commandTitle}>Earnings</Text>
+        <Text style={styles.commandTitle}>{t('earnings.title')}</Text>
       </View>
 
       <FlatList

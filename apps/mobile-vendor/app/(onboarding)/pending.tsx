@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQuery } from '@tanstack/react-query';
 import { theme } from '@homechef/mobile-shared/theme';
 import { api } from '../../lib/api';
@@ -42,31 +44,32 @@ function formatSubmitted(iso: string | undefined): string | null {
 
 // Relative-time helper for the timeline step. Renders as "Today at 3:42 PM",
 // "Yesterday", or "X days ago" — same vocabulary the chef sees elsewhere.
-function relativeFrom(iso: string | undefined): string | null {
+function relativeFrom(iso: string | undefined, t: TFunction): string | null {
   if (!iso) return null;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return null;
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return null;
   const now = Date.now();
-  const diffMs = now - t;
+  const diffMs = now - ts;
   const diffMins = Math.floor(diffMs / 60_000);
-  if (diffMins < 1) return 'just now';
+  if (diffMins < 1) return t('onboarding.justNow');
   if (diffMins < 60) return `${diffMins}m ago`;
   const diffHrs = Math.floor(diffMins / 60);
   if (diffHrs < 24) {
-    const time = new Date(t).toLocaleTimeString('en-IN', {
+    const time = new Date(ts).toLocaleTimeString('en-IN', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-    return `Today at ${time}`;
+    return t('onboarding.todayAt', { time });
   }
   const diffDays = Math.floor(diffHrs / 24);
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays === 1) return t('onboarding.yesterday');
+  if (diffDays < 7) return t('onboarding.daysAgo', { count: diffDays });
   return formatSubmitted(iso) ?? '';
 }
 
 export default function PendingScreen() {
+  const { t } = useTranslation();
   const { logout } = useAuthStore();
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
@@ -109,9 +112,9 @@ export default function PendingScreen() {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       {/* Header bar */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Application status</Text>
+        <Text style={styles.headerTitle}>{t('onboarding.applicationStatus')}</Text>
         <Pressable onPress={handleLogout} hitSlop={8} style={styles.logoutBtn}>
-          <Text style={styles.logoutLabel}>Logout</Text>
+          <Text style={styles.logoutLabel}>{t('onboarding.logout')}</Text>
         </Pressable>
       </View>
 
@@ -134,18 +137,18 @@ export default function PendingScreen() {
                   { backgroundColor: theme.colors.destructive.DEFAULT },
                 ]}
               />
-              <Text style={styles.statusLabel}>NOT APPROVED</Text>
+              <Text style={styles.statusLabel}>{t('onboarding.notApproved')}</Text>
             </View>
-            <Text style={styles.headline}>Application not approved</Text>
+            <Text style={styles.headline}>{t('onboarding.applicationNotApproved')}</Text>
             <Text style={styles.body}>
               {rejectionReason
-                ? `Reviewer feedback: ${rejectionReason}`
-                : 'Your application was not approved. Review the feedback below and reapply when you’re ready.'}
+                ? t('onboarding.reviewerFeedback', { reason: rejectionReason })
+                : t('onboarding.notApprovedBody')}
             </Text>
 
             {submittedAt && (
               <View style={styles.infoBlock}>
-                <Text style={styles.infoKey}>Submitted</Text>
+                <Text style={styles.infoKey}>{t('onboarding.submitted')}</Text>
                 <Text style={styles.infoVal}>{submittedAt}</Text>
               </View>
             )}
@@ -158,7 +161,7 @@ export default function PendingScreen() {
               ]}
               accessibilityRole="button"
             >
-              <Text style={styles.primaryBtnLabel}>Reapply</Text>
+              <Text style={styles.primaryBtnLabel}>{t('onboarding.reapply')}</Text>
             </Pressable>
           </>
         ) : (
@@ -170,12 +173,11 @@ export default function PendingScreen() {
                   { backgroundColor: theme.colors.herb.DEFAULT },
                 ]}
               />
-              <Text style={styles.statusLabel}>UNDER REVIEW</Text>
+              <Text style={styles.statusLabel}>{t('onboarding.underReview')}</Text>
             </View>
-            <Text style={styles.headline}>We’re reviewing your application</Text>
+            <Text style={styles.headline}>{t('onboarding.reviewingHeadline')}</Text>
             <Text style={styles.body}>
-              Our team will get back to you within 24–48 hours. You’ll get a
-              notification the moment your kitchen is approved.
+              {t('onboarding.reviewingBody')}
             </Text>
 
             {/* Application timeline — three steps, current in persimmon.
@@ -183,29 +185,29 @@ export default function PendingScreen() {
             <View style={styles.timeline}>
               <TimelineStep
                 state="done"
-                label="Submitted"
-                meta={relativeFrom(data?.data?.profile?.submittedAt) ?? ''}
+                label={t('onboarding.submitted')}
+                meta={relativeFrom(data?.data?.profile?.submittedAt, t) ?? ''}
               />
               <TimelineConnector active />
               <TimelineStep
                 state="active"
-                label="Reviewing"
-                meta="Now"
+                label={t('onboarding.reviewing')}
+                meta={t('onboarding.now')}
               />
               <TimelineConnector />
               <TimelineStep
                 state="pending"
-                label="Approved"
-                meta="24–48h"
+                label={t('onboarding.approved')}
+                meta={t('onboarding.approvedEta')}
               />
             </View>
 
             {/* What you'll get — sets expectations and reduces wait anxiety */}
             <View style={styles.unlockBlock}>
-              <Text style={styles.unlockLabel}>WHAT YOU'LL GET</Text>
-              <UnlockItem text="Manage your menu and pricing" />
-              <UnlockItem text="Accept and track live orders" />
-              <UnlockItem text="Weekly automatic payouts" />
+              <Text style={styles.unlockLabel}>{t('onboarding.whatYoullGet')}</Text>
+              <UnlockItem text={t('onboarding.unlockMenu')} />
+              <UnlockItem text={t('onboarding.unlockOrders')} />
+              <UnlockItem text={t('onboarding.unlockPayouts')} />
             </View>
 
             {/* Manual refresh button. Pull-to-refresh still works, but a
@@ -220,17 +222,17 @@ export default function PendingScreen() {
                 isRefetching && { opacity: 0.5 },
               ]}
               accessibilityRole="button"
-              accessibilityLabel="Check status"
+              accessibilityLabel={t('onboarding.checkStatus')}
             >
               {isRefetching ? (
                 <ActivityIndicator color={theme.colors.paper} />
               ) : (
-                <Text style={styles.primaryBtnLabel}>Check status</Text>
+                <Text style={styles.primaryBtnLabel}>{t('onboarding.checkStatus')}</Text>
               )}
             </Pressable>
 
             <Text style={styles.helperLine}>
-              You'll get the rest of the app once your kitchen is approved.
+              {t('onboarding.pendingHelper')}
             </Text>
           </>
         )}

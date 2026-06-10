@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Check, RotateCcw } from 'lucide-react-native';
 import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -24,16 +25,17 @@ import {
 const VENDOR_TERMS_URL = 'https://fe3dr.com/vendor-terms';
 const VENDOR_TERMS_LABEL = 'fe3dr.com/vendor-terms';
 
-// Bullet points extracted from the terms text for scannable display
-const TERMS_BULLETS = [
-  'Maintain food hygiene standards per FSSAI regulations',
-  'Ensure accurate menu descriptions and pricing',
-  'Prepare orders within your stated prep time',
-  'Comply with all applicable local food safety laws',
-  'HomeChef may suspend accounts for repeated hygiene complaints',
+// i18n keys for the scannable terms bullets (under the `onboarding` namespace)
+const TERMS_BULLET_KEYS = [
+  'onboarding.termsBullet1',
+  'onboarding.termsBullet2',
+  'onboarding.termsBullet3',
+  'onboarding.termsBullet4',
+  'onboarding.termsBullet5',
 ];
 
 export default function PoliciesScreen() {
+  const { t } = useTranslation();
   const { policies, updatePolicies, setStep } = useVendorOnboardingStore();
 
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(policies.acceptedTerms);
@@ -43,11 +45,11 @@ export default function PoliciesScreen() {
 
   function onNext(): void {
     if (!acceptedTerms) {
-      Alert.alert('Terms required', 'Please accept the terms and conditions to continue.');
+      Alert.alert(t('onboarding.termsRequired'), t('onboarding.termsRequiredBody'));
       return;
     }
     if (!cancellationPolicy) {
-      Alert.alert('Policy required', 'Please select a cancellation policy to continue.');
+      Alert.alert(t('onboarding.policyRequired'), t('onboarding.policyRequiredBody'));
       return;
     }
     updatePolicies({ acceptedTerms, cancellationPolicy });
@@ -57,35 +59,43 @@ export default function PoliciesScreen() {
 
   const canContinue = acceptedTerms && cancellationPolicy !== '';
 
+  // Maps each cancellation policy value to its i18n key, falling back to the
+  // constant's English label if no key is registered.
+  const policyLabelKey: Record<string, string> = {
+    no_cancellations: 'onboarding.policyNoCancellations',
+    up_to_1_hour: 'onboarding.policyUpTo1Hour',
+    up_to_30_mins: 'onboarding.policyUpTo30Mins',
+  };
+
   return (
     <OnboardingScaffold
       step={5}
       total={6}
-      title="Policies"
-      subtitle="Agree to our terms and set how you handle cancellations."
-      primaryLabel="Continue"
+      title={t('onboarding.policiesTitle')}
+      subtitle={t('onboarding.policiesSubtitle')}
+      primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
       primaryDisabled={!canContinue}
     >
       {/* ── TERMS & CONDITIONS ────────────────────────────────── */}
       <View style={styles.sectionLabel}>
-        <Text style={styles.sectionLabelText}>TERMS & CONDITIONS</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.termsConditions')}</Text>
       </View>
 
       {/* Scannable bullets instead of a dense text block */}
       <View style={styles.termsBulletCard}>
-        {TERMS_BULLETS.map((bullet, idx) => (
+        {TERMS_BULLET_KEYS.map((bulletKey, idx) => (
           <View
             key={idx}
-            style={[styles.bulletRow, idx < TERMS_BULLETS.length - 1 && styles.bulletRowBorder]}
+            style={[styles.bulletRow, idx < TERMS_BULLET_KEYS.length - 1 && styles.bulletRowBorder]}
           >
             <View style={styles.bulletDot} />
-            <Text style={styles.bulletText}>{bullet}</Text>
+            <Text style={styles.bulletText}>{t(bulletKey)}</Text>
           </View>
         ))}
         <View style={styles.termsFooterRow}>
           <Text style={styles.termsFooterText}>
-            Full terms at{' '}
+            {t('onboarding.fullTermsAt')}
             <Text
               style={styles.termsLink}
               onPress={() => {
@@ -108,7 +118,7 @@ export default function PoliciesScreen() {
         style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
-        accessibilityLabel="I accept the terms and conditions"
+        accessibilityLabel={t('onboarding.acceptTerms')}
       >
         <View style={[styles.checkRow, acceptedTerms && styles.checkRowAccepted]}>
           <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
@@ -117,7 +127,7 @@ export default function PoliciesScreen() {
             ) : null}
           </View>
           <Text style={[styles.checkLabel, acceptedTerms && styles.checkLabelAccepted]}>
-            I accept the terms and conditions
+            {t('onboarding.acceptTerms')}
           </Text>
         </View>
       </Pressable>
@@ -127,16 +137,19 @@ export default function PoliciesScreen() {
 
       <View style={styles.sectionLabel}>
         <RotateCcw size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>CANCELLATION POLICY</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.cancellationPolicy')}</Text>
       </View>
       <Text style={styles.sectionHint}>
-        Choose how customers can cancel orders placed with you.
+        {t('onboarding.cancellationHint')}
       </Text>
 
       <View style={styles.radioGroup}>
         {CANCELLATION_POLICY_OPTIONS.map((option, idx) => {
           const selected = cancellationPolicy === option.value;
           const isLast = idx === CANCELLATION_POLICY_OPTIONS.length - 1;
+          const optionLabel = policyLabelKey[option.value]
+            ? t(policyLabelKey[option.value]!)
+            : option.label;
 
           return (
             <Pressable
@@ -147,7 +160,7 @@ export default function PoliciesScreen() {
               })}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
-              accessibilityLabel={option.label}
+              accessibilityLabel={optionLabel}
             >
               <View
                 style={[
@@ -160,7 +173,7 @@ export default function PoliciesScreen() {
                   {selected ? <View style={styles.radioDot} /> : null}
                 </View>
                 <Text style={[styles.radioLabel, selected && styles.radioLabelSelected]}>
-                  {option.label}
+                  {optionLabel}
                 </Text>
               </View>
             </Pressable>

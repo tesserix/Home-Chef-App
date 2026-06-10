@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Clock, Timer, MapPin } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -43,6 +44,7 @@ const DAY_LABELS: Record<Day, string> = {
 const PREP_TIME_OPTIONS = ['15min', '30min', '45min', '60min', '90min'] as const;
 
 export default function OperationsScreen() {
+  const { t } = useTranslation();
   const { operations, updateOperations, setStep } = useVendorOnboardingStore();
 
   const [hours, setHours] = useState<HoursMap>(operations.operatingHours);
@@ -68,7 +70,7 @@ export default function OperationsScreen() {
   function onNext(): void {
     const radius = parseInt(serviceRadius, 10);
     if (Number.isNaN(radius) || radius < 1 || radius > 50) {
-      Alert.alert('Validation Error', 'Service radius must be between 1 and 50 km');
+      Alert.alert(t('onboarding.validationError'), t('onboarding.radiusError'));
       return;
     }
     updateOperations({ operatingHours: hours, prepTime, serviceRadius: radius });
@@ -80,19 +82,19 @@ export default function OperationsScreen() {
     <OnboardingScaffold
       step={3}
       total={6}
-      title="Operations"
-      subtitle="When you cook, how fast, and how far."
-      primaryLabel="Continue"
+      title={t('onboarding.operationsTitle')}
+      subtitle={t('onboarding.operationsSubtitle')}
+      primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
     >
       {/* ── WHEN YOU COOK ──────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
         <Clock size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>WHEN YOU COOK</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.whenYouCook')}</Text>
       </View>
 
       <View style={styles.sectionHint}>
-        <Text style={styles.hintText}>Toggle days on or off, then set your hours.</Text>
+        <Text style={styles.hintText}>{t('onboarding.whenYouCookHint')}</Text>
       </View>
 
       <View style={styles.hoursCard}>
@@ -150,7 +152,7 @@ export default function OperationsScreen() {
                   </View>
                 </View>
               ) : (
-                <Text style={styles.closedLabel}>Closed</Text>
+                <Text style={styles.closedLabel}>{t('onboarding.closed')}</Text>
               )}
             </View>
           );
@@ -162,9 +164,9 @@ export default function OperationsScreen() {
 
       <View style={styles.sectionLabel}>
         <Timer size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>PREP TIME</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.prepTime')}</Text>
       </View>
-      <Text style={styles.hintText}>Average time per order before it's ready.</Text>
+      <Text style={styles.hintText}>{t('onboarding.prepTimeHint')}</Text>
 
       <View style={styles.chipRow}>
         {PREP_TIME_OPTIONS.map((option) => {
@@ -191,18 +193,18 @@ export default function OperationsScreen() {
 
       <View style={styles.sectionLabel}>
         <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>DELIVERY AREA</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.deliveryArea')}</Text>
       </View>
 
       <View style={styles.fieldCard}>
         <Input
-          label="Service radius (km)"
-          placeholder="1–50 km"
+          label={t('onboarding.serviceRadius')}
+          placeholder={t('onboarding.serviceRadiusPlaceholder')}
           value={serviceRadius}
           onChangeText={setServiceRadius}
           keyboardType="number-pad"
           maxLength={2}
-          helper="Maximum distance from your kitchen to accept orders."
+          helper={t('onboarding.serviceRadiusHelper')}
         />
       </View>
 

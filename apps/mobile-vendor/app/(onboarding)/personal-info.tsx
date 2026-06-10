@@ -3,6 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { User, Phone, Mail } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -10,16 +11,17 @@ import { useAuthStore } from '../../store/auth-store';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
 const schema = z.object({
-  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+  fullName: z.string().min(2, 'onboarding.errFullNameMin'),
   phone: z
     .string()
-    .regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-  email: z.string().email('Invalid email address'),
+    .regex(/^[6-9]\d{9}$/, 'onboarding.errPhone'),
+  email: z.string().email('onboarding.errEmail'),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function PersonalInfoScreen() {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { updatePersonalInfo, setStep } = useVendorOnboardingStore();
 
@@ -44,22 +46,22 @@ export default function PersonalInfoScreen() {
 
   function onInvalid(errs: typeof errors): void {
     const firstError = Object.values(errs)[0];
-    if (firstError?.message) Alert.alert('Check your details', firstError.message);
+    if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
   }
 
   return (
     <OnboardingScaffold
       step={1}
       total={6}
-      title="Tell us about you"
-      subtitle="Your customers will see your name and contact details."
-      primaryLabel="Continue"
+      title={t('onboarding.personalTitle')}
+      subtitle={t('onboarding.personalSubtitle')}
+      primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >
       {/* ── WHO YOU ARE ─────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
         <User size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>IDENTITY</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.identity')}</Text>
       </View>
 
       <View style={styles.fieldCard}>
@@ -68,13 +70,13 @@ export default function PersonalInfoScreen() {
           name="fullName"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Full name"
-              placeholder="Enter your full name"
+              label={t('onboarding.fullName')}
+              placeholder={t('onboarding.fullNamePlaceholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               autoCapitalize="words"
-              error={errors.fullName?.message}
+              error={errors.fullName?.message ? t(errors.fullName.message) : undefined}
             />
           )}
         />
@@ -85,7 +87,7 @@ export default function PersonalInfoScreen() {
 
       <View style={styles.sectionLabel}>
         <Phone size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>CONTACT</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.contact')}</Text>
       </View>
 
       <View style={styles.fieldCard}>
@@ -94,15 +96,15 @@ export default function PersonalInfoScreen() {
           name="phone"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Phone number"
-              placeholder="10-digit mobile number"
+              label={t('onboarding.phoneNumber')}
+              placeholder={t('onboarding.phonePlaceholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               keyboardType="phone-pad"
               maxLength={10}
-              helper="Used for delivery coordination only."
-              error={errors.phone?.message}
+              helper={t('onboarding.phoneHelper')}
+              error={errors.phone?.message ? t(errors.phone.message) : undefined}
             />
           )}
         />
@@ -117,15 +119,15 @@ export default function PersonalInfoScreen() {
             <View style={styles.lockedWrap}>
               <View style={styles.lockedLabelRow}>
                 <Mail size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-                <Text style={styles.lockedLabel}>EMAIL</Text>
+                <Text style={styles.lockedLabel}>{t('onboarding.email')}</Text>
               </View>
               <View style={styles.lockedField}>
                 <Text style={styles.lockedValue} numberOfLines={1}>{value}</Text>
                 <View style={styles.lockedBadge}>
-                  <Text style={styles.lockedBadgeText}>Locked</Text>
+                  <Text style={styles.lockedBadgeText}>{t('onboarding.locked')}</Text>
                 </View>
               </View>
-              <Text style={styles.lockedHint}>Signed in with Google — cannot be changed here.</Text>
+              <Text style={styles.lockedHint}>{t('onboarding.emailLockedHint')}</Text>
             </View>
           )}
         />

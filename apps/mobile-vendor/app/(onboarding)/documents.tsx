@@ -17,6 +17,7 @@ import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import {
   Camera,
   Image as ImageIcon,
@@ -48,6 +49,7 @@ function uriToFilename(uri: string, fileType: 'image' | 'pdf' | null): string {
 }
 
 export default function DocumentsScreen() {
+  const { t } = useTranslation();
   const { documents, updateDocuments, setStep } = useVendorOnboardingStore();
   const { show: showToast } = useToast();
 
@@ -94,14 +96,14 @@ export default function DocumentsScreen() {
       }
       setUploadState(docType, { uploading: false, error: null });
       showToast({
-        message: docType === 'id_proof' ? 'ID proof uploaded.' : 'FSSAI license uploaded.',
+        message: docType === 'id_proof' ? t('onboarding.idProofUploaded') : t('onboarding.fssaiUploaded'),
         tone: 'success',
       });
     } catch (error: unknown) {
       const serverError =
         (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
       const message =
-        serverError ?? (error instanceof Error ? error.message : 'Upload failed. Please try again.');
+        serverError ?? (error instanceof Error ? error.message : t('onboarding.uploadFailed'));
       setUploadState(docType, { uploading: false, error: message });
       showToast({ message, tone: 'error' });
     }
@@ -119,7 +121,7 @@ export default function DocumentsScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        showToast({ message: 'Camera permission denied — tap Gallery to use a saved photo.', tone: 'error' });
+        showToast({ message: t('onboarding.cameraDenied'), tone: 'error' });
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -131,7 +133,7 @@ export default function DocumentsScreen() {
         await uploadFile(result.assets[0].uri, 'image', 'image/jpeg', docType);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Camera unavailable. Try Gallery.';
+      const message = err instanceof Error ? err.message : t('onboarding.cameraUnavailable');
       showToast({ message, tone: 'error' });
     }
   }
@@ -140,7 +142,7 @@ export default function DocumentsScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        showToast({ message: 'Gallery permission denied — please allow photo access in Settings.', tone: 'error' });
+        showToast({ message: t('onboarding.galleryDenied'), tone: 'error' });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -152,7 +154,7 @@ export default function DocumentsScreen() {
         await uploadFile(result.assets[0].uri, 'image', 'image/jpeg', docType);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not open gallery. Please try again.';
+      const message = err instanceof Error ? err.message : t('onboarding.galleryFailed');
       showToast({ message, tone: 'error' });
     }
   }
@@ -167,7 +169,7 @@ export default function DocumentsScreen() {
         await uploadFile(result.assets[0].uri, 'pdf', 'application/pdf', docType);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not open document picker. Please try again.';
+      const message = err instanceof Error ? err.message : t('onboarding.pickerFailed');
       showToast({ message, tone: 'error' });
     }
   }
@@ -175,8 +177,8 @@ export default function DocumentsScreen() {
   function onNext(): void {
     if (!documents.idProofUri || !documents.fssaiUri) {
       Alert.alert(
-        'Documents required',
-        'Please upload both ID proof and FSSAI license to continue.',
+        t('onboarding.documentsRequired'),
+        t('onboarding.documentsRequiredBody'),
       );
       return;
     }
@@ -210,7 +212,7 @@ export default function DocumentsScreen() {
           </View>
           <View style={styles.uploadingRow}>
             <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
-            <Text style={styles.uploadingLabel}>Uploading…</Text>
+            <Text style={styles.uploadingLabel}>{t('onboarding.uploading')}</Text>
           </View>
         </View>
       );
@@ -255,7 +257,7 @@ export default function DocumentsScreen() {
           ) : (
             <View style={styles.pdfPreview}>
               <FileText size={24} color={theme.colors.ink.soft} strokeWidth={1.5} />
-              <Text style={styles.pdfTypeLabel}>PDF Document</Text>
+              <Text style={styles.pdfTypeLabel}>{t('onboarding.pdfDocument')}</Text>
             </View>
           )}
 
@@ -267,7 +269,7 @@ export default function DocumentsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Replace ${title} with gallery photo`}
             >
-              <Text style={styles.replaceBtnLabel}>Replace</Text>
+              <Text style={styles.replaceBtnLabel}>{t('onboarding.replace')}</Text>
             </Pressable>
           </View>
         </View>
@@ -287,7 +289,7 @@ export default function DocumentsScreen() {
 
         {/* Dashed placeholder zone */}
         <View style={styles.dashedZone}>
-          <Text style={styles.dashedZoneHint}>Tap a button below to upload</Text>
+          <Text style={styles.dashedZoneHint}>{t('onboarding.tapToUpload')}</Text>
         </View>
 
         {/* Three upload affordances: Camera (primary), Gallery, PDF */}
@@ -302,7 +304,7 @@ export default function DocumentsScreen() {
             accessibilityLabel={`Take photo for ${title}`}
           >
             <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
-            <Text style={styles.actionBtnPrimaryLabel}>Camera</Text>
+            <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.camera')}</Text>
           </Pressable>
           <Pressable
             onPress={() => handleGallery(docType)}
@@ -314,7 +316,7 @@ export default function DocumentsScreen() {
             accessibilityLabel={`Choose from gallery for ${title}`}
           >
             <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-            <Text style={styles.actionBtnSecondaryLabel}>Gallery</Text>
+            <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
           </Pressable>
           <Pressable
             onPress={() => handlePdf(docType)}
@@ -326,7 +328,7 @@ export default function DocumentsScreen() {
             accessibilityLabel={`Upload PDF for ${title}`}
           >
             <FileText size={15} color={theme.colors.ink.soft} strokeWidth={2} />
-            <Text style={styles.actionBtnSecondaryLabel}>PDF</Text>
+            <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.pdf')}</Text>
           </Pressable>
         </View>
 
@@ -342,9 +344,9 @@ export default function DocumentsScreen() {
     <OnboardingScaffold
       step={4}
       total={6}
-      title="Documents"
-      subtitle="Required to verify your kitchen before you go live."
-      primaryLabel="Continue"
+      title={t('onboarding.documentsTitle')}
+      subtitle={t('onboarding.documentsSubtitle')}
+      primaryLabel={t('onboarding.continue')}
       onPrimary={onNext}
       primaryDisabled={!bothUploaded}
     >
@@ -352,18 +354,18 @@ export default function DocumentsScreen() {
       <View style={styles.noteRow}>
         <ShieldCheck size={14} color={theme.colors.herb.DEFAULT} strokeWidth={2} />
         <Text style={styles.noteText}>
-          Documents are reviewed privately and never shared with customers.
+          {t('onboarding.documentsNote')}
         </Text>
       </View>
 
       {/* ── REQUIRED ──────────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
-        <Text style={styles.sectionLabelText}>REQUIRED</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.required')}</Text>
       </View>
 
       {renderUploadTile(
-        'ID proof',
-        'Aadhaar, PAN, or Passport',
+        t('onboarding.idProof'),
+        t('onboarding.idProofSubtitle'),
         <CreditCard size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />,
         'id_proof',
         documents.idProofUri,
@@ -374,8 +376,8 @@ export default function DocumentsScreen() {
       <View style={styles.tileSpacer} />
 
       {renderUploadTile(
-        'FSSAI license',
-        'Food safety registration certificate',
+        t('onboarding.fssaiLicense'),
+        t('onboarding.fssaiLicenseSubtitle'),
         <ShieldCheck size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />,
         'fssai_license',
         documents.fssaiUri,
@@ -390,13 +392,13 @@ export default function DocumentsScreen() {
           number while their hands are on the keyboard. */}
       <View style={styles.fssaiFields}>
         <View style={styles.fssaiFieldGroup}>
-          <Text style={styles.fssaiFieldLabel}>License number</Text>
+          <Text style={styles.fssaiFieldLabel}>{t('onboarding.licenseNumber')}</Text>
           <TextInput
             value={documents.fssaiLicenseNumber}
             onChangeText={(v) =>
               updateDocuments({ fssaiLicenseNumber: v.replace(/\D/g, '').slice(0, 14) })
             }
-            placeholder="14-digit FSSAI number"
+            placeholder={t('onboarding.fssaiNumberPlaceholder')}
             placeholderTextColor={theme.colors.ink.muted}
             keyboardType="number-pad"
             maxLength={14}
@@ -405,15 +407,15 @@ export default function DocumentsScreen() {
           />
           {documents.fssaiLicenseNumber.length > 0 &&
             documents.fssaiLicenseNumber.length !== 14 && (
-              <Text style={styles.fssaiHelpError}>Must be exactly 14 digits.</Text>
+              <Text style={styles.fssaiHelpError}>{t('onboarding.fssaiNumberError')}</Text>
             )}
         </View>
         <View style={styles.fssaiFieldGroup}>
-          <Text style={styles.fssaiFieldLabel}>Expiry date</Text>
+          <Text style={styles.fssaiFieldLabel}>{t('onboarding.expiryDate')}</Text>
           <TextInput
             value={documents.fssaiExpiryDate}
             onChangeText={(v) => updateDocuments({ fssaiExpiryDate: v })}
-            placeholder="YYYY-MM-DD"
+            placeholder={t('onboarding.expiryDatePlaceholder')}
             placeholderTextColor={theme.colors.ink.muted}
             keyboardType="numbers-and-punctuation"
             maxLength={10}
@@ -422,10 +424,10 @@ export default function DocumentsScreen() {
           />
           {documents.fssaiExpiryDate.length > 0 &&
             !/^\d{4}-\d{2}-\d{2}$/.test(documents.fssaiExpiryDate) && (
-              <Text style={styles.fssaiHelpError}>Use YYYY-MM-DD format.</Text>
+              <Text style={styles.fssaiHelpError}>{t('onboarding.expiryDateError')}</Text>
             )}
           <Text style={styles.fssaiHelpHint}>
-            We'll remind you 30, 15, and 7 days before expiry.
+            {t('onboarding.expiryReminder')}
           </Text>
         </View>
 
@@ -434,13 +436,13 @@ export default function DocumentsScreen() {
             it to claim input tax credit and to print on the customer
             invoice per Wave 3. */}
         <View style={styles.fssaiFieldGroup}>
-          <Text style={styles.fssaiFieldLabel}>GSTIN (optional)</Text>
+          <Text style={styles.fssaiFieldLabel}>{t('onboarding.gstinOptional')}</Text>
           <TextInput
             value={documents.gstin}
             onChangeText={(v) =>
               updateDocuments({ gstin: v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15) })
             }
-            placeholder="15-character GSTIN"
+            placeholder={t('onboarding.gstinPlaceholder')}
             placeholderTextColor={theme.colors.ink.muted}
             autoCapitalize="characters"
             autoCorrect={false}
@@ -448,10 +450,10 @@ export default function DocumentsScreen() {
             style={styles.fssaiInput}
           />
           {documents.gstin.length > 0 && documents.gstin.length !== 15 && (
-            <Text style={styles.fssaiHelpError}>Must be exactly 15 characters.</Text>
+            <Text style={styles.fssaiHelpError}>{t('onboarding.gstinError')}</Text>
           )}
           <Text style={styles.fssaiHelpHint}>
-            Skip if your turnover is below the GST threshold.
+            {t('onboarding.gstinHint')}
           </Text>
         </View>
       </View>

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, CheckCircle } from 'lucide-react-native';
 import { OnboardingScaffold } from '@homechef/mobile-shared/ui';
@@ -30,10 +31,11 @@ interface CachedOnboardingStatus {
   };
 }
 
-const POLICY_LABELS: Record<string, string> = {
-  no_cancellations: 'No cancellations after order accepted',
-  up_to_1_hour: 'Up to 1 hour before prep start',
-  up_to_30_mins: 'Up to 30 mins before prep start',
+// Maps cancellation policy value to its i18n key (under `onboarding`).
+const POLICY_LABEL_KEYS: Record<string, string> = {
+  no_cancellations: 'onboarding.policyNoCancellations',
+  up_to_1_hour: 'onboarding.policyUpTo1Hour',
+  up_to_30_mins: 'onboarding.policyUpTo30Mins',
 };
 
 const DAY_LABELS: Record<string, string> = {
@@ -76,6 +78,7 @@ function Section({
   editRoute: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  const { t } = useTranslation();
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -85,10 +88,10 @@ function Section({
           hitSlop={8}
           style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
-          accessibilityLabel={`Edit ${title}`}
+          accessibilityLabel={`${t('onboarding.edit')} ${title}`}
         >
           <Pencil size={12} color={theme.colors.ink.soft} strokeWidth={2} />
-          <Text style={styles.editBtnLabel}>Edit</Text>
+          <Text style={styles.editBtnLabel}>{t('onboarding.edit')}</Text>
         </Pressable>
       </View>
       <View style={styles.sectionBody}>{children}</View>
@@ -97,6 +100,7 @@ function Section({
 }
 
 export default function ReviewScreen() {
+  const { t } = useTranslation();
   const store = useVendorOnboardingStore();
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
@@ -170,25 +174,25 @@ export default function ReviewScreen() {
       const serverError =
         (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
       const fallback =
-        error instanceof Error ? error.message : 'Submission failed. Please try again.';
-      Alert.alert('Submission error', serverError ?? fallback);
+        error instanceof Error ? error.message : t('onboarding.submissionFailed');
+      Alert.alert(t('onboarding.submissionError'), serverError ?? fallback);
     } finally {
       setSubmitting(false);
     }
   }
 
   // Document status pills
-  const idStatus = documents.idProofUri ? 'Uploaded' : 'Missing';
-  const fssaiStatus = documents.fssaiUri ? 'Uploaded' : 'Missing';
+  const idStatus = documents.idProofUri ? t('onboarding.uploaded') : t('onboarding.missing');
+  const fssaiStatus = documents.fssaiUri ? t('onboarding.uploaded') : t('onboarding.missing');
   const docsComplete = Boolean(documents.idProofUri && documents.fssaiUri);
 
   return (
     <OnboardingScaffold
       step={6}
       total={6}
-      title="Review & submit"
-      subtitle="Confirm your details before sending the application."
-      primaryLabel={submitting ? '' : 'Submit application'}
+      title={t('onboarding.reviewTitle')}
+      subtitle={t('onboarding.reviewSubtitle')}
+      primaryLabel={submitting ? '' : t('onboarding.submitApplication')}
       onPrimary={onSubmit}
       primaryLoading={submitting}
       primaryDisabled={submitting}
@@ -202,54 +206,56 @@ export default function ReviewScreen() {
         />
         <Text style={[styles.readinessText, docsComplete && styles.readinessTextComplete]}>
           {docsComplete
-            ? 'All required documents uploaded. Ready to submit.'
-            : 'Missing required documents — go back to Documents to upload.'}
+            ? t('onboarding.readyToSubmit')
+            : t('onboarding.missingDocuments')}
         </Text>
       </View>
 
       {/* ── PERSONAL ─────────────────────────────────────────── */}
-      <Section title="PERSONAL" editRoute="/(onboarding)/personal-info">
-        <RowItem label="Full name" value={personalInfo.fullName || '—'} />
-        <RowItem label="Phone" value={personalInfo.phone || '—'} />
-        <RowItem label="Email" value={personalInfo.email || '—'} isLast />
+      <Section title={t('onboarding.personal')} editRoute="/(onboarding)/personal-info">
+        <RowItem label={t('onboarding.fullName')} value={personalInfo.fullName || '—'} />
+        <RowItem label={t('onboarding.phone')} value={personalInfo.phone || '—'} />
+        <RowItem label={t('onboarding.email')} value={personalInfo.email || '—'} isLast />
       </Section>
 
       {/* ── KITCHEN ──────────────────────────────────────────── */}
-      <Section title="KITCHEN" editRoute="/(onboarding)/kitchen-details">
-        <RowItem label="Business name" value={kitchenDetails.businessName || '—'} />
+      <Section title={t('onboarding.kitchen')} editRoute="/(onboarding)/kitchen-details">
+        <RowItem label={t('onboarding.businessNameLabel')} value={kitchenDetails.businessName || '—'} />
         <RowItem
-          label="Cuisines"
+          label={t('onboarding.cuisines')}
           value={kitchenDetails.cuisines.length > 0 ? kitchenDetails.cuisines.join(', ') : '—'}
         />
-        <RowItem label="Description" value={kitchenDetails.description || '—'} />
-        <RowItem label="Address" value={fullAddress || '—'} isLast />
+        <RowItem label={t('onboarding.description')} value={kitchenDetails.description || '—'} />
+        <RowItem label={t('onboarding.address')} value={fullAddress || '—'} isLast />
       </Section>
 
       {/* ── OPERATIONS ───────────────────────────────────────── */}
-      <Section title="OPERATIONS" editRoute="/(onboarding)/operations">
-        <RowItem label="Open days" value={openDaysShort.length > 0 ? openDaysShort : '—'} />
-        <RowItem label="Prep time" value={operations.prepTime || '—'} />
+      <Section title={t('onboarding.operations')} editRoute="/(onboarding)/operations">
+        <RowItem label={t('onboarding.openDays')} value={openDaysShort.length > 0 ? openDaysShort : '—'} />
+        <RowItem label={t('onboarding.prepTimeLabel')} value={operations.prepTime || '—'} />
         <RowItem
-          label="Radius"
-          value={operations.serviceRadius > 0 ? `${operations.serviceRadius} km` : '—'}
+          label={t('onboarding.radius')}
+          value={operations.serviceRadius > 0 ? t('onboarding.radiusKm', { count: operations.serviceRadius }) : '—'}
           isLast
         />
       </Section>
 
       {/* ── DOCUMENTS ────────────────────────────────────────── */}
-      <Section title="DOCUMENTS" editRoute="/(onboarding)/documents">
-        <RowItem label="ID proof" value={idStatus} />
-        <RowItem label="FSSAI license" value={fssaiStatus} isLast />
+      <Section title={t('onboarding.documents')} editRoute="/(onboarding)/documents">
+        <RowItem label={t('onboarding.idProof')} value={idStatus} />
+        <RowItem label={t('onboarding.fssaiLicense')} value={fssaiStatus} isLast />
       </Section>
 
       {/* ── POLICIES ─────────────────────────────────────────── */}
-      <Section title="POLICIES" editRoute="/(onboarding)/policies">
-        <RowItem label="Terms" value={policies.acceptedTerms ? 'Accepted' : 'Not accepted'} />
+      <Section title={t('onboarding.policies')} editRoute="/(onboarding)/policies">
+        <RowItem label={t('onboarding.terms')} value={policies.acceptedTerms ? t('onboarding.accepted') : t('onboarding.notAccepted')} />
         <RowItem
-          label="Cancellation"
+          label={t('onboarding.cancellation')}
           value={
             policies.cancellationPolicy
-              ? (POLICY_LABELS[policies.cancellationPolicy] ?? policies.cancellationPolicy)
+              ? (POLICY_LABEL_KEYS[policies.cancellationPolicy]
+                  ? t(POLICY_LABEL_KEYS[policies.cancellationPolicy]!)
+                  : policies.cancellationPolicy)
               : '—'
           }
           isLast
@@ -260,7 +266,7 @@ export default function ReviewScreen() {
       {submitting ? (
         <View style={styles.submittingRow}>
           <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
-          <Text style={styles.submittingLabel}>Submitting your application…</Text>
+          <Text style={styles.submittingLabel}>{t('onboarding.submitting')}</Text>
         </View>
       ) : null}
 

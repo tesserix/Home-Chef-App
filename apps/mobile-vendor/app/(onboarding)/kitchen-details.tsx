@@ -20,6 +20,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
 import { MapPin, UtensilsCrossed, FileText, Navigation } from 'lucide-react-native';
 import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
@@ -50,26 +51,27 @@ const CUISINE_OPTIONS = [
 ] as const;
 
 const schema = z.object({
-  businessName: z.string().min(3, 'Business name must be at least 3 characters'),
-  cuisines: z.array(z.string()).min(1, 'Select at least one cuisine type'),
+  businessName: z.string().min(3, 'onboarding.errBusinessNameMin'),
+  cuisines: z.array(z.string()).min(1, 'onboarding.errCuisineMin'),
   description: z
     .string()
-    .min(50, 'Description must be at least 50 characters')
-    .max(500, 'Description must be at most 500 characters'),
-  addressLine1: z.string().min(3, 'Address line 1 is required'),
+    .min(50, 'onboarding.errDescriptionMin')
+    .max(500, 'onboarding.errDescriptionMax'),
+  addressLine1: z.string().min(3, 'onboarding.errAddressLine1'),
   addressLine2: z.string(),
-  city: z.string().min(2, 'City is required'),
-  state: z.string().min(2, 'State is required'),
+  city: z.string().min(2, 'onboarding.errCity'),
+  state: z.string().min(2, 'onboarding.errState'),
   // India PIN codes are exactly 6 digits. Tightened from the legacy >=4
   // check now that we enforce India-only.
   postalCode: z
     .string()
-    .regex(/^\d{6}$/, 'PIN code must be exactly 6 digits'),
+    .regex(/^\d{6}$/, 'onboarding.errPin'),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function KitchenDetailsScreen() {
+  const { t } = useTranslation();
   const { updateKitchenDetails, setStep } = useVendorOnboardingStore();
 
   const {
@@ -186,7 +188,7 @@ export default function KitchenDetailsScreen() {
       if (item.region) setValue('state', item.region, { shouldValidate: true });
     }
     setShowPostcodeSuggestions(false);
-    showToast({ message: 'Address filled — adjust as needed.', tone: 'success' });
+    showToast({ message: t('onboarding.addressFilled'), tone: 'success' });
   }
 
   // GPS auto-fill. Asks for foreground location permission, reverse-
@@ -199,7 +201,7 @@ export default function KitchenDetailsScreen() {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') {
         showToast({
-          message: 'Location permission denied — enter your address manually.',
+          message: t('onboarding.locationDenied'),
           tone: 'error',
         });
         return;
@@ -214,7 +216,7 @@ export default function KitchenDetailsScreen() {
       const top = results[0];
       if (!top) {
         showToast({
-          message: "We couldn't read your address from GPS — enter it manually.",
+          message: t('onboarding.locationReadFailed'),
           tone: 'error',
         });
         return;
@@ -223,7 +225,9 @@ export default function KitchenDetailsScreen() {
       // validation are all India-only.
       if (top.isoCountryCode && top.isoCountryCode !== 'IN') {
         showToast({
-          message: `HomeChef is India-only today — detected ${top.country ?? top.isoCountryCode}.`,
+          message: t('onboarding.indiaOnly', {
+            country: top.country ?? top.isoCountryCode,
+          }),
           tone: 'error',
         });
         return;
@@ -261,12 +265,12 @@ export default function KitchenDetailsScreen() {
       }
 
       showToast({
-        message: 'Address filled from your location — adjust as needed.',
+        message: t('onboarding.addressFilledLocation'),
         tone: 'success',
       });
     } catch (_err) {
       showToast({
-        message: 'Location lookup failed — enter your address manually.',
+        message: t('onboarding.locationLookupFailed'),
         tone: 'error',
       });
     } finally {
@@ -282,22 +286,22 @@ export default function KitchenDetailsScreen() {
 
   function onInvalid(errs: typeof errors): void {
     const firstError = Object.values(errs)[0];
-    if (firstError?.message) Alert.alert('Check your details', firstError.message);
+    if (firstError?.message) Alert.alert(t('onboarding.checkDetails'), t(firstError.message));
   }
 
   return (
     <OnboardingScaffold
       step={2}
       total={6}
-      title="Your kitchen"
-      subtitle="Name, cuisine, and where customers find you."
-      primaryLabel="Continue"
+      title={t('onboarding.kitchenTitle')}
+      subtitle={t('onboarding.kitchenSubtitle')}
+      primaryLabel={t('onboarding.continue')}
       onPrimary={handleSubmit(onSubmit, onInvalid)}
     >
       {/* ── IDENTITY ──────────────────────────────────────────── */}
       <View style={styles.sectionLabel}>
         <UtensilsCrossed size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>KITCHEN IDENTITY</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.kitchenIdentity')}</Text>
       </View>
 
       <View style={styles.fieldCard}>
@@ -307,13 +311,13 @@ export default function KitchenDetailsScreen() {
           name="businessName"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Kitchen / business name"
-              placeholder="e.g. Amma's Kitchen"
+              label={t('onboarding.businessName')}
+              placeholder={t('onboarding.businessNamePlaceholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               autoCapitalize="words"
-              error={errors.businessName?.message}
+              error={errors.businessName?.message ? t(errors.businessName.message) : undefined}
             />
           )}
         />
@@ -322,7 +326,7 @@ export default function KitchenDetailsScreen() {
 
         {/* Cuisine chips — outlined pill pattern, ink border active */}
         <View>
-          <Text style={styles.fieldLabel}>Cuisine types</Text>
+          <Text style={styles.fieldLabel}>{t('onboarding.cuisineTypes')}</Text>
           <View style={styles.chipRow}>
             {CUISINE_OPTIONS.map((cuisine) => {
               const selected = selectedCuisines?.includes(cuisine) ?? false;
@@ -342,8 +346,8 @@ export default function KitchenDetailsScreen() {
               );
             })}
           </View>
-          {errors.cuisines ? (
-            <Text style={styles.fieldError}>{errors.cuisines.message}</Text>
+          {errors.cuisines?.message ? (
+            <Text style={styles.fieldError}>{t(errors.cuisines.message)}</Text>
           ) : null}
         </View>
 
@@ -356,15 +360,15 @@ export default function KitchenDetailsScreen() {
             name="description"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="About your kitchen"
-                placeholder="Describe your kitchen, specialties, and cooking style (min 50 characters)"
+                label={t('onboarding.aboutKitchen')}
+                placeholder={t('onboarding.aboutKitchenPlaceholder')}
                 onBlur={onBlur}
                 onChangeText={onChange}
                 value={value}
                 multiline
                 numberOfLines={4}
                 inputStyle={styles.textArea}
-                error={errors.description?.message}
+                error={errors.description?.message ? t(errors.description.message) : undefined}
               />
             )}
           />
@@ -377,7 +381,7 @@ export default function KitchenDetailsScreen() {
 
       <View style={styles.sectionLabel}>
         <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>KITCHEN ADDRESS</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.kitchenAddress')}</Text>
       </View>
 
       {/* GPS fast-path — ink-filled primary affordance */}
@@ -385,7 +389,7 @@ export default function KitchenDetailsScreen() {
         onPress={handleUseCurrentLocation}
         disabled={locating}
         accessibilityRole="button"
-        accessibilityLabel="Use my current location to fill the address"
+        accessibilityLabel={t('onboarding.useCurrentLocation')}
       >
         {({ pressed }) => (
           <View
@@ -401,7 +405,7 @@ export default function KitchenDetailsScreen() {
               <Navigation size={16} color={theme.colors.paper} strokeWidth={2.2} />
             )}
             <Text style={styles.locateCtaLabel}>
-              {locating ? 'Finding your address…' : 'Use my current location'}
+              {locating ? t('onboarding.findingAddress') : t('onboarding.useCurrentLocation')}
             </Text>
           </View>
         )}
@@ -411,7 +415,7 @@ export default function KitchenDetailsScreen() {
       <View style={styles.searchWrap}>
         <Input
           label=""
-          placeholder="Search PIN, area, or street name"
+          placeholder={t('onboarding.searchAddressPlaceholder')}
           value={postcodeQuery}
           onChangeText={(text) => {
             setPostcodeQuery(text);
@@ -481,8 +485,8 @@ export default function KitchenDetailsScreen() {
                 (addressAutocomplete.data?.length ?? 0) === 0 ? (
                   <Text style={styles.suggestionEmpty}>
                     {postcodeQuery.trim().length < 3
-                      ? 'Type at least 3 characters.'
-                      : 'No match — fill the fields manually below.'}
+                      ? t('onboarding.typeMinChars')
+                      : t('onboarding.noMatch')}
                   </Text>
                 ) : null}
               </>
@@ -498,13 +502,13 @@ export default function KitchenDetailsScreen() {
           name="addressLine1"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Address line 1"
-              placeholder="House / building, street"
+              label={t('onboarding.addressLine1')}
+              placeholder={t('onboarding.addressLine1Placeholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               autoCapitalize="words"
-              error={errors.addressLine1?.message}
+              error={errors.addressLine1?.message ? t(errors.addressLine1.message) : undefined}
             />
           )}
         />
@@ -516,8 +520,8 @@ export default function KitchenDetailsScreen() {
           name="addressLine2"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Address line 2"
-              placeholder="Apartment, suite (optional)"
+              label={t('onboarding.addressLine2')}
+              placeholder={t('onboarding.addressLine2Placeholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value ?? ''}
@@ -535,13 +539,13 @@ export default function KitchenDetailsScreen() {
             name="state"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="State"
-                placeholder="Tap a state below or type"
+                label={t('onboarding.state')}
+                placeholder={t('onboarding.statePlaceholder')}
                 onBlur={onBlur}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
-                error={errors.state?.message}
+                error={errors.state?.message ? t(errors.state.message) : undefined}
               />
             )}
           />
@@ -595,17 +599,17 @@ export default function KitchenDetailsScreen() {
             name="city"
             render={({ field: { onChange, onBlur, value } }) => (
               <Input
-                label="City"
+                label={t('onboarding.city')}
                 placeholder={
                   selectedStateCode
-                    ? 'Tap a city below or type'
-                    : 'Pick a state, then tap or type'
+                    ? t('onboarding.cityPlaceholderState')
+                    : t('onboarding.cityPlaceholderNoState')
                 }
                 onBlur={onBlur}
                 onChangeText={onChange}
                 value={value}
                 autoCapitalize="words"
-                error={errors.city?.message}
+                error={errors.city?.message ? t(errors.city.message) : undefined}
               />
             )}
           />
@@ -656,14 +660,14 @@ export default function KitchenDetailsScreen() {
           name="postalCode"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="PIN code"
-              placeholder="6-digit PIN"
+              label={t('onboarding.pinCode')}
+              placeholder={t('onboarding.pinPlaceholder')}
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
               keyboardType="number-pad"
               maxLength={6}
-              error={errors.postalCode?.message}
+              error={errors.postalCode?.message ? t(errors.postalCode.message) : undefined}
             />
           )}
         />
