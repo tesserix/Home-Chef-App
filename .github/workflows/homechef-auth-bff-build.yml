@@ -168,6 +168,7 @@ jobs:
           API="https://api.github.com/repos/${REPO}/contents/${FILE_PATH}"
           AUTH_HDR=(-H "Authorization: Bearer ${BOT_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
 
+          TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           for attempt in 1 2 3; do
             echo "::group::Attempt ${attempt}: fetch → bump → PUT"
             RESP="$(curl -sS "${AUTH_HDR[@]}" "${API}?ref=main")"
@@ -180,10 +181,40 @@ jobs:
               continue
             fi
             echo "$RESP" | jq -r .content | base64 -d > /tmp/current.yaml
+            cp /tmp/current.yaml /tmp/before.yaml
 
+            # 1) ArgoCD Application Helm parameters (image.tag + optional
+            #    updateTimestamp). `select` is a no-op when nothing matches —
+            #    it never creates spurious paths.
             yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
+            NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' /tmp/current.yaml
+
+            # 2) Fallback for manifests that don't use an image.tag helm param
+            #    (e.g. a plain Deployment app): replace the image-tag token
+            #    directly. The only `main-<7..40 hex>` token in an app manifest
+            #    is the image tag, so this is safe regardless of YAML shape.
+            if ! grep -q "${NEW_TAG}" /tmp/current.yaml; then
+              sed -i -E "s/main-[0-9a-f]{7,40}/${NEW_TAG}/g" /tmp/current.yaml
+            fi
+
+            # Never report a silent no-op as success — fail loudly if the tag
+            # didn't land so the manifest/selector mismatch is visible.
+            if ! grep -q "${NEW_TAG}" /tmp/current.yaml; then
+              echo "ERROR: could not set image tag to ${NEW_TAG} in ${FILE_PATH}." >&2
+              echo "       No image.tag helm param and no main-<sha> token matched." >&2
+              echo "::endgroup::"
+              exit 1
+            fi
+
             echo "New values:"
-            grep -A1 "image\.tag" /tmp/current.yaml | head -4
+            grep -nE "image|main-[0-9a-f]{7,}" /tmp/current.yaml | head -8
+
+            # Already at the target tag (re-run) → idempotent success, no commit.
+            if cmp -s /tmp/before.yaml /tmp/current.yaml; then
+              echo "Image tag already ${NEW_TAG}; nothing to commit."
+              echo "::endgroup::"
+              exit 0
+            fi
 
             NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
             PAYLOAD="$(jq -nc \
