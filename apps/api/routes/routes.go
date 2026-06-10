@@ -123,6 +123,7 @@ func SetupRouter() *gin.Engine {
 	// GIP migration (Task 2.6) — all auth flows now live in apps/auth-bff.
 	chefHandler := handlers.NewChefHandler()
 	chefEarningsHandler := handlers.NewChefEarningsHandler()
+	chefStatementsHandler := handlers.NewChefStatementsHandler()
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
@@ -371,6 +372,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/orders/:orderId/invoice.pdf", chefOrderCancelHandler.GetOrderInvoicePDF)
 			// GET /chef/earnings/breakdown?period=week|month|cycle
 			chefDashboard.GET("/earnings/breakdown", chefEarningsHandler.GetEarningsBreakdown)
+			// Weekly settlement statements — list + per-statement PDF.
+			chefDashboard.GET("/statements/weekly", chefStatementsHandler.GetWeeklyStatements)
+			chefDashboard.GET("/statements/:id/statement.pdf", chefStatementsHandler.GetWeeklyStatementPDF)
 			// GET /chef/documents/expiring?withinDays=30
 			chefDashboard.GET("/documents/expiring", uploadHandler.GetExpiringDocuments)
 			chefDashboard.GET("/reviews", chefHandler.GetChefReviewsForDashboard)

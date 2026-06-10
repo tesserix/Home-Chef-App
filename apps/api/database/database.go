@@ -214,6 +214,9 @@ func Migrate() error {
 		// Invoices
 		&models.OrderInvoice{},
 
+		// Weekly settlement statements
+		&models.WeeklyStatement{},
+
 		// Support Tickets
 		&models.SupportTicket{},
 		&models.SupportMessage{},

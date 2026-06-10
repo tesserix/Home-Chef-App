@@ -14,11 +14,16 @@ import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
+import { downloadAndSharePdf } from '../lib/download-pdf';
 import {
   useEarningsBreakdown,
   type BreakdownPeriod,
   type EarningsBreakdownOrder,
 } from '../hooks/useEarningsBreakdown';
+import {
+  useWeeklyStatements,
+  type WeeklyStatement,
+} from '../hooks/useWeeklyStatements';
 
 // ----- Types (payout account) -------------------------------------------------
 
@@ -330,6 +335,74 @@ const orderRowStyles = StyleSheet.create({
   },
 });
 
+// ---- Statement row (tappable → downloads the weekly settlement PDF) ----------
+
+/** Format a [weekStart, weekEnd) ISO range as "1 Jun – 7 Jun" (weekEnd is exclusive). */
+function fmtWeekRange(weekStart: string, weekEnd: string): string {
+  const start = new Date(`${weekStart}T00:00:00`);
+  const end = new Date(`${weekEnd}T00:00:00`);
+  end.setDate(end.getDate() - 1); // weekEnd is the exclusive next Monday
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return weekStart;
+  }
+  return `${start.toLocaleDateString('en-IN', opts)} – ${end.toLocaleDateString('en-IN', opts)}`;
+}
+
+interface StatementRowProps {
+  statement: WeeklyStatement;
+  onPress: () => void;
+}
+
+function StatementRow({ statement, onPress }: StatementRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Download settlement statement for ${fmtWeekRange(statement.weekStart, statement.weekEnd)}`}
+    >
+      {({ pressed }) => (
+        <View
+          style={[
+            orderRowStyles.root,
+            pressed && { backgroundColor: theme.colors.bone },
+          ]}
+        >
+          <View style={orderRowStyles.leftBlock}>
+            <Text style={orderRowStyles.orderNumber} numberOfLines={1}>
+              {fmtWeekRange(statement.weekStart, statement.weekEnd)}
+            </Text>
+            <Text style={orderRowStyles.date}>
+              {statement.ordersCount} order
+              {statement.ordersCount === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <View style={orderRowStyles.rightBlock}>
+            <Text style={orderRowStyles.netPayout}>
+              {fmtInr(statement.netPayout)}
+            </Text>
+            <Text style={statementRowStyles.download}>Download PDF</Text>
+          </View>
+          <ChevronLeft
+            size={14}
+            color={theme.colors.ink.muted}
+            style={{ transform: [{ rotate: '180deg' }] }}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const statementRowStyles = StyleSheet.create({
+  download: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.herb.DEFAULT, // persimmon accent
+    marginTop: 1,
+  },
+});
+
 // ----- List item type ---------------------------------------------------------
 
 type ListItem =
@@ -339,6 +412,8 @@ type ListItem =
   | { type: 'breakdown' }
   | { type: 'orderListHeader' }
   | { type: 'orderEntry'; order: EarningsBreakdownOrder }
+  | { type: 'statementsHeader' }
+  | { type: 'statementEntry'; statement: WeeklyStatement }
   | { type: 'payoutRow' }
   | { type: 'empty' };
 
@@ -363,6 +438,10 @@ export default function EarningsScreen() {
     refetch: refetchBreakdown,
   } = useEarningsBreakdown(apiPeriod);
 
+  // Weekly settlement statements (issued by the backend cron)
+  const { data: statements, refetch: refetchStatements } =
+    useWeeklyStatements();
+
   const isLoading = payoutLoading || breakdownLoading;
   const isError = payoutError;
 
@@ -372,7 +451,11 @@ export default function EarningsScreen() {
   async function onPullRefresh(): Promise<void> {
     setIsPulling(true);
     try {
-      await Promise.all([refetchPayout(), refetchBreakdown()]);
+      await Promise.all([
+        refetchPayout(),
+        refetchBreakdown(),
+        refetchStatements(),
+      ]);
     } finally {
       setIsPulling(false);
     }
@@ -410,9 +493,17 @@ export default function EarningsScreen() {
       });
     }
 
+    const stmts = statements ?? [];
+    if (stmts.length > 0) {
+      items.push({ type: 'statementsHeader' });
+      stmts.forEach((statement) => {
+        items.push({ type: 'statementEntry', statement });
+      });
+    }
+
     items.push({ type: 'payoutRow' });
     return items;
-  }, [totals, orders]);
+  }, [totals, orders, statements]);
 
   if (isLoading) {
     return (
@@ -607,6 +698,22 @@ export default function EarningsScreen() {
           />
         );
 
+      case 'statementsHeader':
+        return <Text style={styles.dateHeader}>WEEKLY STATEMENTS</Text>;
+
+      case 'statementEntry':
+        return (
+          <StatementRow
+            statement={item.statement}
+            onPress={() =>
+              downloadAndSharePdf(
+                `/chef/statements/${item.statement.id}/statement.pdf`,
+                `statement-${item.statement.weekStart}.pdf`,
+              )
+            }
+          />
+        );
+
       case 'payoutRow':
         return (
           <View style={styles.payoutSection}>
@@ -653,11 +760,11 @@ export default function EarningsScreen() {
 
       <FlatList
         data={listItems}
-        keyExtractor={(item, idx) =>
-          item.type === 'orderEntry'
-            ? item.order.orderId
-            : `${item.type}-${idx}`
-        }
+        keyExtractor={(item, idx) => {
+          if (item.type === 'orderEntry') return item.order.orderId;
+          if (item.type === 'statementEntry') return `stmt-${item.statement.id}`;
+          return `${item.type}-${idx}`;
+        }}
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
         refreshControl={

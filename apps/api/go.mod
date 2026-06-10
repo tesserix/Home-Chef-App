@@ -23,6 +23,7 @@ require (
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/getsentry/sentry-go/gin v0.46.2
 	github.com/gorilla/websocket v1.5.3
+	github.com/johnfercher/maroto/v2 v2.4.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/sqlite v1.6.0
@@ -76,7 +77,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/johnfercher/go-tree v1.1.0 // indirect
-	github.com/johnfercher/maroto/v2 v2.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect

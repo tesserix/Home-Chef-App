@@ -24,27 +24,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
-)
-
-// Earnings rate constants. Defined as named consts so they can be made
-// configurable (env / DB-backed config row) in a future pass without
-// touching the math functions.
-const (
-	// rateCommission is the platform's share of each order's item revenue.
-	rateCommission = 0.15
-
-	// rateGST is the total GST rate applied to the commission amount.
-	// Splits into CGST + SGST (intra-state) or IGST (inter-state).
-	rateGST = 0.18
-
-	// rateTDS is the TDS rate deducted from gross payout under Section 194-O.
-	// Applied whenever the chef's cumulative annual gross meets the threshold —
-	// for now, computed always; enforcement is at settlement time.
-	rateTDS = 0.01
-
-	// earningsCurrency is the reporting currency for all India-domiciled chefs.
-	// International chefs are out of scope for this breakdown endpoint (v1).
-	earningsCurrency = "INR"
+	"github.com/homechef/api/services"
 )
 
 // ChefEarningsHandler handles earnings-breakdown requests.
@@ -163,59 +143,46 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"cycleStart": cycleStart,
 		"cycleEnd":   cycleEnd,
-		"currency":   earningsCurrency,
+		"currency":   services.EarningsCurrency,
 		"rates": breakdownRates{
-			PlatformCommission: rateCommission,
-			GST:                rateGST,
-			TDS:                rateTDS,
+			PlatformCommission: services.RateCommission,
+			GST:                services.RateGST,
+			TDS:                services.RateTDS,
 		},
 		"totals": totals,
 		"orders": orderItems,
 	})
 }
 
-// computeOrderBreakdown applies the earnings rules to a single order row.
-//
-// Rules (from spec):
-//   - commission = rateCommission × itemRevenue
-//   - gross       = itemRevenue + deliveryFee + chefTip
-//   - intra-state (order.state == chef.state): CGST 9% + SGST 9% on commission
-//   - inter-state (order.state != chef.state): IGST 18% on commission
-//   - tds        = rateTDS × gross
-//   - netPayout  = gross − commission − tds   (GST is not deducted from chef)
+// computeOrderBreakdown applies the earnings rules to a single order row and
+// shapes the result into the wire response. The math itself lives in
+// services.ComputeOrderEarnings so the live endpoint, the weekly statement
+// generator, and the TDS certificate all settle identically.
 func computeOrderBreakdown(row earningsOrderRow, chefState string) earningsOrderResponse {
-	commission := round2(rateCommission * row.ItemRevenue)
-	gross := round2(row.ItemRevenue + row.DeliveryFee + row.ChefTip)
-
-	var cgst, sgst, igst float64
-	halfGST := round2(rateGST / 2 * commission)
-	fullGST := round2(rateGST * commission)
-
-	intraState := normaliseState(row.DeliveryState) == normaliseState(chefState)
-	if intraState {
-		cgst = halfGST
-		sgst = halfGST
-	} else {
-		igst = fullGST
-	}
-
-	tds := round2(rateTDS * gross)
-	netPayout := round2(gross - commission - tds)
+	e := services.ComputeOrderEarnings(services.EarningsInput{
+		OrderID:       row.OrderID,
+		OrderNumber:   row.OrderNumber,
+		CompletedAt:   row.CompletedAt,
+		ItemRevenue:   row.ItemRevenue,
+		DeliveryFee:   row.DeliveryFee,
+		ChefTip:       row.ChefTip,
+		DeliveryState: row.DeliveryState,
+	}, chefState)
 
 	return earningsOrderResponse{
-		OrderID:            row.OrderID,
-		OrderNumber:        row.OrderNumber,
-		CompletedAt:        row.CompletedAt,
-		ItemRevenue:        round2(row.ItemRevenue),
-		DeliveryFee:        round2(row.DeliveryFee),
-		Tip:                round2(row.ChefTip),
-		Gross:              gross,
-		PlatformCommission: commission,
-		CGST:               cgst,
-		SGST:               sgst,
-		IGST:               igst,
-		TDS:                tds,
-		NetPayout:          netPayout,
+		OrderID:            e.OrderID,
+		OrderNumber:        e.OrderNumber,
+		CompletedAt:        e.CompletedAt,
+		ItemRevenue:        e.ItemRevenue,
+		DeliveryFee:        e.DeliveryFee,
+		Tip:                e.Tip,
+		Gross:              e.Gross,
+		PlatformCommission: e.PlatformCommission,
+		CGST:               e.CGST,
+		SGST:               e.SGST,
+		IGST:               e.IGST,
+		TDS:                e.TDS,
+		NetPayout:          e.NetPayout,
 	}
 }
 
@@ -264,31 +231,10 @@ func endOfDay(t time.Time) time.Time {
 	return d.Add(24*time.Hour - time.Nanosecond)
 }
 
-// normaliseState lowercases and trims state names for comparison so that
-// "Maharashtra" == "maharashtra" and " MAHARASHTRA " == "maharashtra".
-func normaliseState(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r == ' ' || r == '\t' {
-			continue
-		}
-		if r >= 'A' && r <= 'Z' {
-			out = append(out, r+32)
-		} else {
-			out = append(out, r)
-		}
-	}
-	return string(out)
-}
+// normaliseState delegates to services.NormaliseState (kept as a local alias
+// for the totals loop and the package's unit tests).
+func normaliseState(s string) string { return services.NormaliseState(s) }
 
-// round2 rounds a float64 to 2 decimal places using banker's-style rounding.
-// All monetary values in the earnings breakdown are non-negative, so the
-// simpler positive-only path is the hot path. The negative branch is retained
-// for correctness.
-func round2(v float64) float64 {
-	const factor = 100.0
-	if v >= 0 {
-		return float64(int64(v*factor+0.5)) / factor
-	}
-	return -float64(int64(-v*factor+0.5)) / factor
-}
+// round2 delegates to services.Round2 (kept as a local alias for the totals
+// loop and the package's unit tests).
+func round2(v float64) float64 { return services.Round2(v) }

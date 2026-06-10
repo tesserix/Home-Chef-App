@@ -122,6 +122,11 @@ func main() {
 	defer cronCancel()
 	services.StartFSSAIReminderCron(cronCtx)
 
+	// Background weekly settlement statements: once a Mon–Sun week (IST)
+	// closes, issue an immutable statement + "ready" push per chef. Shares
+	// the cron's lifecycle/idempotency model with the FSSAI reminder.
+	services.StartWeeklyStatementCron(cronCtx)
+
 	// Setup router
 	router := routes.SetupRouter()
 
