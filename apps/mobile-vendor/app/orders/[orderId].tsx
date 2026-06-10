@@ -74,8 +74,8 @@ interface StatusChipColors {
 }
 
 const STATUS_CHIP: Record<OrderDetailStatus, StatusChipColors> = {
-  pending: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
-  preparing: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
+  pending: { bg: theme.colors.mist.DEFAULT, text: theme.colors.ink.DEFAULT },
+  preparing: { bg: theme.colors.mist.DEFAULT, text: theme.colors.ink.DEFAULT },
   ready: { bg: theme.colors.success.tint, text: theme.colors.success.soft },
   accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
   picked_up: { bg: theme.colors.mist.DEFAULT, text: theme.colors.diet.veg },

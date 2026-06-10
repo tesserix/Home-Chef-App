@@ -108,7 +108,7 @@ const STATUS_CHIP: Record<string, { bg: string; text: string }> = {
     text: theme.colors.info.DEFAULT,
   },
   preparing: {
-    bg: theme.colors.amber.tint,
+    bg: theme.colors.mist.DEFAULT,
     text: theme.colors.ink.DEFAULT,
   },
   ready: {

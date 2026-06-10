@@ -52,8 +52,8 @@ const HISTORY_STATUS_CHIP: Record<string, StatusChipColors> = {
     bg: theme.colors.destructive.tint,
     text: theme.colors.destructive.DEFAULT,
   },
-  pending: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
-  preparing: { bg: theme.colors.amber.tint, text: theme.colors.ink.DEFAULT },
+  pending: { bg: theme.colors.mist.DEFAULT, text: theme.colors.ink.DEFAULT },
+  preparing: { bg: theme.colors.mist.DEFAULT, text: theme.colors.ink.DEFAULT },
   ready: { bg: theme.colors.success.tint, text: theme.colors.success.soft },
   accepted: { bg: theme.colors.info.tint, text: theme.colors.info.DEFAULT },
 };
