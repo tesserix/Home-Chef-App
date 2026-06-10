@@ -1,112 +1,157 @@
-# Next session — pick up where we stopped (2026-06-05 end of day)
+# Next session — pick up where we stopped (end of day 2026-06-10)
 
 ## TL;DR
 
-Vendor app is in a working demo state. 4 menu items + 4 orders + 2 reviews + 1 admin approval seeded for chef `mahesh.sangawar@gmail.com` against prod DB. Backend is at commit `6d9f659`, mobile build `build-1780638xxx` is the latest local artifact (uninstalled — you'll install first).
+Last session shipped **37 commits** taking the vendor app from Wave 1 kickoff through to Wave 3 partial: Wave 1 application code 100%, Dependabot 88→28, Wave 2 backend 100% + mobile 11/13, Wave 3 backend 6/9 + mobile 3/6, plus DPDP export/delete. Tree clean, all builds green, all pushed.
 
-The next BIG thing is **executing PROD-READINESS.md Wave 1** — observability, security, distribution. Plan is committed at repo root; read it before kicking off.
+The next BIG thing is **finishing Wave 3** (weekly statements + TDS cert + refund history view + settlement reconciliation) and **starting Wave 4**. Plus a queue of operational items waiting on console / account access.
 
-## State as of session end
+## State on `main` at session end
 
-### Code on `main`
-| Commit | Scope |
+| Track | Status |
 |---|---|
-| `cff75c6` | feat(api): chef earnings breakdown + order detail + menu availability + is_veg + document expiry (W2 of session) |
-| `9d18256` | feat(mobile-vendor): onboarding fixes + custom tab bar + 5 chef features |
-| `6f21c9c` | chore: drop stray root eas.json, export DietIcon from @homechef/mobile-shared |
-| `8f5ceb8` | fix(api): rename :id to :itemId in PUT /chef/menu/items/:id/availability to avoid Gin route param conflict |
-| `6d9f659` | fix(api+mobile-vendor): dashboard recentOrders + todayEarnings, orders list envelope shape, isVeg honors backend flag, analytics popularItems shape, isPulling on orders queue/history |
+| Wave 1 application | ✅ 100% — Sentry mobile+backend, force-upgrade gate, rate-limit, idempotency, webhook HMAC |
+| Wave 1 Dependabot | 88 → 28 vulns (60-vuln reduction via pnpm overrides + `golang.org/x/net` bump + Dockerfile pin to `golang:1.26.4-alpine`) |
+| Wave 2 backend | ✅ 100% (9/9) |
+| Wave 2 mobile | 11/13 — only **pause-receiving with auto-resume** + **FoSCoS** deferred |
+| Wave 3 backend | 6/9 — invoice PDF (customer + chef), post-delivery refund, GSTIN+HSN, auto-email invoice, DPDP export/delete |
+| Wave 3 mobile | 3/6 — GSTIN, HSN, Download invoice link |
+| Wave 4 | Not started |
 
-### Uncommitted (you decide whether to keep)
-- `apps/mobile-vendor/components/vendor/PendingOrderCard.tsx` — fixed Accept button visibility (was invisible white-on-white due to iOS Pressable array-style bug); switched to object-style with inner View
-- `apps/mobile-vendor/app/(tabs)/index.tsx` — wired `onOpenDetail` on Dashboard's PendingOrderCard so tapping the customer/total area opens `/orders/:id`
-- These were intended to ship; latest mobile build (`b0tzfsoaw` task) was built AFTER these edits but not installed yet. Install + verify, then commit if good.
+Live prod at session end: `homechef-api-00077` Ready; next CI rebuild lands all backend Wave 1/2/3 work + the `golang:1.26.4-alpine` Go stdlib CVE close.
 
-### Backend prod state
-- `homechef-api-00076` serving 100% traffic (deployed from `6d9f659`)
-- `auth-bff` unchanged
-- All new endpoints live and tested via curl:
-  - `GET /chef/earnings/breakdown?period=week|month|cycle`
-  - `GET /chef/orders/:orderId`
-  - `GET /chef/documents/expiring?withinDays=30`
-  - `PUT /chef/menu/items/:itemId/availability`
-  - Modified: `GET /chef/dashboard` (adds `recentOrders`, `todayEarnings`), `GET /chef/orders` (envelope shape: `{orders, total, page, limit}`)
+## What got SHIPPED this session (commit ladder)
 
-### Seeded prod data for the test chef
-- **Chef**: `mahesh.sangawar@gmail.com`, user_id `dcba6316-e735-4fcd-b671-a0165e4c92b8`, chef_id `7fc77bb0-a2ca-400c-aab4-7ca9e9ea4481`, business_name `Test`, state `Maharashtra`, city `Mumbai`, is_verified `true`
-- **FSSAI document**: expires 2026-06-17 (banner active at 11 days)
-- **4 menu items** with Unsplash food images:
-  - Paneer Butter Masala — ₹280, veg
-  - Veg Hyderabadi Biryani — ₹220, veg
-  - Chicken Biryani — ₹320, non-veg
-  - Butter Chicken — ₹340, non-veg
-- **1 customer**: Priya Sharma, `priya.testcustomer@example.com`, user_id `00000000-0000-0000-0000-000000000c11`
-- **4 orders**:
-  - `HC-DEMO-001` delivered 2 days ago — 2 × Paneer Butter Masala, ₹630
-  - `HC-DEMO-002` delivered 1 day ago — 1 × Chicken + 1 × Veg Biryani, ₹610
-  - `HC-DEMO-003` **pending** (~minutes old) — Chicken Biryani + Paneer Butter Masala, ₹605, special instructions present
-  - `HC-DEMO-004` **preparing** (~minutes old) — Butter Chicken, ₹380
-- **2 reviews**: 5★ on `HC-DEMO-001`, 4★ on `HC-DEMO-002` (with constructive packaging complaint)
-- **1 admin approval**: `info_requested` type=kitchen_onboarding, 4h old, asking for clearer FSSAI photo
+```
+89c03ba feat(api): Wave 3 close-out - auto-email PDF invoice + DPDP /chef/me/export + /chef/me/delete
+b19d51a feat(mobile): Wave 3 HSN input + Download invoice PDF on delivered orders
+72a6a88 feat(mobile): Wave 3 GSTIN input in onboarding
+08b08a3 feat(api):    Wave 3 backend foundation - GSTIN+HSN, maroto PDF invoice, post-delivery refund
+c63f2d5 feat(mobile): More tab nav (admin-requests, documents/renew, notif-prefs)
+90f57bf feat(wave2):  reviews summary endpoint + approval response screen + FSSAI license number/expiry
+9e61087 feat:         Wave 2 per-line cancel (backend OrderItemResponse + mobile strikethrough/refunded UI)
+3ae0fec feat(mobile): doc renewal screen
+7c28712 fix(mobile):  reviews list adapter (was crashing on wire shape)
+bf6fde2 feat(mobile): whole-order cancel UI with reason picker
+c3b60a3 feat(mobile): notification-preferences + admin-requests inbox
+508994a feat(api):    Wave 2 backend foundation (5 items)
+9927661 feat(api):    Wave 2 chef order cancellation
+1bad99f chore(api):   Dockerfile pin to golang:1.26.4-alpine
+aa9a1f0 chore(deps):  pnpm overrides close 63 npm vulns
+1e4ed20 chore(api):   x/net 0.51 → 0.55
+97d63e8 fix(api):     version-check storeUrl fallback
+435f004 feat(api):    Idempotency-Key middleware
+07b8425 feat(api):    Redis token-bucket rate limit
+46644a8 fix(api):     delivery webhook HMAC
+eada225 feat(api):    Sentry-go init on homechef-api
+f76e6fa feat:         Wave 1 mobile observability + force-upgrade gate
++ docs commits 16921e6, 804a215, b8e2a08
+```
 
-## What's working end-to-end on the sim build
+## What's pending in code (sorted by leverage)
 
-- Sign-in via GIP (test chef + password works)
-- Onboarding routing: `verified` chefs → `/(tabs)`, `pending_review` → `/pending`, `in_progress` → wizard at next step
-- Tab bar: 4 columns evenly distributed, full labels (Dashboard, Orders, Menu, More), persimmon top-line on active tab, locked font scaling
-- Dashboard: FSSAI banner, action queue card with Reject/Accept (Accept readability fix uncommitted — see above)
-- Menu: 4 items with veg/non-veg icons (paneer + veg biryani = green per backend `is_veg`), in-stock Switch with optimistic toggle
-- Earnings: breakdown math against 2 delivered orders (gross ₹1,240, commission ₹165, CGST+SGST ₹14.85+₹14.85, TDS ₹12.40, net ₹1,062.60)
-- Order detail screen: customer call/sms, items with diet icons, delivery address → Maps, timing, pricing
-- Analytics: no longer crashes (renders "X% of orders" instead of broken `revenue.toLocaleString`)
+### Wave 3 remaining (close out the wave)
+- [ ] **Weekly settlement statements** — backend cron (Sunday 23:59 IST) + `GET /chef/statements/weekly` PDF + mobile Earnings tab. ~4–6h. Use existing `services.GenerateOrderInvoicePDF` pattern with maroto.
+- [ ] **TDS Form 16A** annual PDF — `GET /chef/tax/certificate?year=YYYY`. ~2h. Same maroto pattern.
+- [ ] **Refund history mobile view** — Earnings → Refunds section consuming `Order.RefundID/RefundAmount/RefundReason` (all already on the model). ~1h.
+- [ ] **Stripe/Razorpay daily settlement reconciliation cron** — compare platform rows vs gateway records, alert on drift. ~3h.
 
-## Known issues that did NOT make this session
+### Wave 2 stragglers
+- [ ] **Pause-receiving with auto-resume** — `Open / Closed / Back in {15,30,60} min`. Needs new backend support: scheduler that flips `accepting_orders` back on after the timer; mobile UI on the dashboard's status button. ~3h backend + ~1h mobile.
+- [ ] **FoSCoS API integration** — external dep, multi-day; fallback is manual admin review queue (already exists).
 
-(all in PROD-READINESS.md Wave 2)
-- **Per-line order cancellation** (chef discovers mid-prep that 1 of N items can't be made) — backend + mobile both need work. Was bumped to a proper feature in the Wave 2 plan today.
-- **FSSAI expiry capture in upload form** — backend accepts `expiryDate`, mobile form has no date picker. Manual seed only for now.
-- **Doc renewal screen for verified chefs** — no path to re-upload an expired doc in-app today
-- **Admin-requests inbox UI** — endpoint exists (`GET /chef/admin-requests`), mobile doesn't consume it yet. Seeded approval is invisible to the chef.
-- **Order cancellation by chef** after accept (any flavor)
-- **Menu item image upload UI** — backend endpoint exists, mobile form has no picker
-- **Reviews list / inbox**
+### Wave 4 (entirely new — start when Wave 3 closes)
+- i18n + Hindi translations + locale picker
+- Deep links (`homechef://orders/<id>`) registered + push tap-through tested
+- EAS Update OTA channel
+- Bundle size audit, accessibility pass
+- App Store screenshots + submission
+- OTel tracing → Cloud Trace
+- Structured logging + correlation IDs
+- Audit log table
+- `min_scale: 1` on homechef-api
+- Connection pool tuning (5/2 → 20/5)
+- Runbook + status page + concierge script for first-10-chefs
 
-## iOS Pressable bug — pay attention
+## What's pending out of code (operational — your hands)
 
-We hit this 5+ times across the session. **`<Pressable style={({pressed}) => [styles.x, ...]}>` (function returning an ARRAY) silently drops layout props (flex, backgroundColor, padding, alignSelf) on iOS.** Use OBJECT-style return OR wrap content in an inner `<View>`. See `~/.claude/projects/-Users-Mahesh-Sangawar-personal-tesserix-new-Home-Chef-App/memory/feedback_ios_pressable_array_style.md`. The latest bite was the Accept button (the uncommitted PendingOrderCard fix).
+| Action | Where |
+|---|---|
+| Apple Developer Program enrollment | apple.com/developer (24h–7d wait) |
+| App Store Connect app record + TestFlight internal group | App Store Connect |
+| APNs production cert in Firebase + EAS credentials | Firebase + EAS Cloud |
+| Sentry account → create projects → `eas secret:create EAS_SECRET_SENTRY_DSN`, `EAS_SECRET_SENTRY_AUTH_TOKEN`, `EAS_SECRET_SENTRY_ORG` | sentry.io + EAS CLI (from `apps/mobile-vendor/`) |
+| Cloudflare WAF managed ruleset + custom `/auth/auto-login` rate-limit | Cloudflare dashboard (Pro plan needed; ~$20/mo) |
+| Cloud SQL backup retention + non-prod restore drill | gcloud + GCP Console |
+| Apply `docs/base-image-go-1.26.4.patch` to `tesserix/base-docker-images` | Separate repo; I have read-only access |
+| Set `SENTRY_DSN_API` + `SENTRY_ENVIRONMENT` env on homechef-api | tesserix-infra/k8s ExternalSecret |
+| Set `MIN_VERSION_VENDOR_IOS/ANDROID`, `LATEST_VERSION_VENDOR_*`, `STORE_URL_VENDOR_*` env vars when ready to enforce the upgrade wall | tesserix-infra/k8s |
+| Configure `webhook_secret` per enabled delivery provider | `PUT /api/v1/admin/delivery/providers/:id` |
+| Triage remaining 6 Go stdlib vulns | rebuild homechef-api after the Dockerfile pin lands (CI may have already done this — check `kubectl get ksvc homechef-api`) |
+| Verify FSSAI cron fires in prod | `kubectl logs` for `"fssai-reminder: scan complete"` |
+| Legal: privacy policy + EULA URLs | wire into mobile app + onboarding consent capture |
 
-## Operational gotchas (still true from prior session)
+## Known gotchas (still true)
 
-- Use `npx eas-cli@18.4.0` — 20.x silently fails simulator builds (exit 0, no artifact)
-- Always `cd apps/mobile-vendor` before running eas-cli; if cwd is repo root, eas-cli creates a stray root `eas.json` missing the prod-sim profile
-- Sim UUID: `AD109A46-2F99-43C3-8AAA-FEE68DC8499E`, bundle `com.homechef.vendor`, location pinned to Koramangala
-- Kargo overrides `argocd/prod/apps/homechef/*.yaml` image tags — don't roll back via manifest edits, use ArgoCD UI Rollback or push a revert
-- kube context for prod GKE: `gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke`
-- Postgres pod: `homechef-postgres-10`, ns `homechef`. Password via `kubectl get secret homechef-postgres-app-credentials -o jsonpath='{.data.password}' | base64 -d`
-- Backend `chef_documents` and `menu_items` got new columns via AutoMigrate — `expiry_date`, `is_veg`. Verified live.
-- 82 Dependabot vulnerabilities, Trivy gate still warn-only per locked decision. Wave 1 will flip the gate.
+- **Use `npx eas-cli@18.4.0`** — 20.x silently fails simulator builds (exit 0, no artifact)
+- **`cd apps/mobile-vendor`** before any eas-cli command (else stray root `eas.json` is created)
+- **Sim UUID:** `AD109A46-2F99-43C3-8AAA-FEE68DC8499E`, bundle `com.homechef.vendor`
+- **Kargo overrides** `argocd/prod/apps/homechef/*.yaml` image tags — never roll back via manifest edits; use ArgoCD UI Rollback or push a revert
+- **kube context for prod GKE:** `gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke`
+- **iOS Pressable bug** — function-style returning array drops layout props on iOS. Use object-style returns OR push layout to inner View. See `~/.claude/projects/.../memory/feedback_ios_pressable_array_style.md`.
+- **Pre-existing typecheck noise** — mobile-vendor has ~101 pre-existing TS errors (lucide-react-native missing exports + JSX type duplication from hoisted `@types/react` in `packages/mobile-shared/node_modules`). Filter on file paths you touched.
+- **EMU permissions** — `gh pr create` fails on `tesserix` org; open PRs via the printed `Create a pull request` URL. `git push` works fine.
 
-## First three actions next session
+## Operational state in prod (verify on next session start)
 
-1. **Install** the latest mobile build (`b0tzfsoaw` artifact at `apps/mobile-vendor/build-*.tar.gz` — newest) and verify the Accept button + dashboard tap-to-detail
-2. **Commit** the two uncommitted mobile fixes (`PendingOrderCard.tsx` + `(tabs)/index.tsx`) — suggested message: `fix(mobile-vendor): Accept button visibility (iOS Pressable array bug) + dashboard pending cards now tap into order detail`
-3. **Read PROD-READINESS.md** at repo root. We agreed: 8-week public launch, you + agents executing, 4 waves of 2 weeks. Wave 1 starts with TestFlight pipeline, Sentry, rate limiting, idempotency, Dependabot sweep. Dispatch the backend + mobile subagents per Wave 1's parallelization breakdown.
+- `homechef-api` Knative latest revision `00077` Ready (from `97d63e8` storeUrl fix)
+- After CI cycles for the recent backend pushes, expect a fresh revision incorporating: Sentry, rate-limit, idempotency, webhook HMAC, cancel flows, doc replace, notif prefs, FCM topics, FSSAI cron, GSTIN/HSN, invoice PDFs, refund endpoint, DPDP endpoints, auto-email invoice, Go 1.26.4 base image
+- `homechef-auth-bff` Deployment 2/2 (NOT Knative; already at minReplicas:2)
+- `homechef-postgres-pooler-ro/rw` 2/2
+- Dependabot: **28 vulns** at last push (5 critical / 9 high / 13 moderate / 1 low). The 6 Go stdlib among them close once the `golang:1.26.4-alpine` rebuild propagates → should drop to ~22.
+
+## Cross-cutting design contracts in effect
+
+- Force-upgrade: `GET /api/v1/mobile/min-version?platform=ios|android&app=vendor` → `{ minVersion, latestVersion, storeUrl }`. Mobile sends `X-App-Version` + `X-Platform` on every request; backend returns `426 Upgrade Required` when too old. Excludes `/health`, `/metrics`, the min-version endpoint itself.
+- Rate-limit: 60req/min per chef, 30req/min unauth-by-IP. Fail-open on Redis down. `X-RateLimit-*` headers on every response.
+- Idempotency: Opt-in via `Idempotency-Key` header on POST/PUT/PATCH for `/chef/orders/*`, `/chef/menu/*`, `/chef/documents/*`, `/chef/payments/*`. 24h TTL. 5xx not cached. Fail-open.
+- Sentry: backend env `SENTRY_DSN_API` + `SENTRY_ENVIRONMENT`; mobile env `EXPO_PUBLIC_SENTRY_DSN` + `EXPO_PUBLIC_SENTRY_ENVIRONMENT`. Both no-op cleanly when unset.
+- Redis fail-mode: ALL middleware fails OPEN (rate-limit, idempotency, FSSAI dedup). Documented tradeoff: burst risk during Redis outage is preferred over service downtime.
+- Cancellation: reason enum `out_of_ingredient | equipment_failure | customer_request | other`. Whole-order = full refund + status flip. Per-line = partial refund + line strikethrough + order subtotal/tax/total recompute, status unchanged.
+- Invoice PDF: maroto v0.46.2 generates GSTIN-formatted tax invoice with HSN-coded line items; auto-emailed via SendGrid attachment on `order.delivered` NATS event; chef can also download from order detail screen via `expo-file-system` + `expo-sharing`.
+
+## First actions next session (suggested)
+
+1. **Check prod state:** `kubectl --context gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke -n homechef get ksvc homechef-api` — confirm latest revision is rolled and serving
+2. **Smoke-test the new endpoints** against `vendors.fe3dr.com`:
+   - `curl -s vendors.fe3dr.com/api/v1/mobile/min-version?platform=ios&app=vendor` → 200 JSON
+   - With auth: `curl -H "Idempotency-Key: test-1" ...` to verify middleware
+   - With `X-App-Version: 0.0.1` + `X-Platform: ios` → 426
+3. **Set Sentry secrets** if not done (unblocks crash reporting on next build):
+   ```
+   cd apps/mobile-vendor
+   npx eas-cli@18.4.0 secret:create --scope project --name EAS_SECRET_SENTRY_DSN --value <dsn>
+   npx eas-cli@18.4.0 secret:create --scope project --name EAS_SECRET_SENTRY_AUTH_TOKEN --value <token>
+   npx eas-cli@18.4.0 secret:create --scope project --name EAS_SECRET_SENTRY_ORG --value <org>
+   ```
+4. **Pick next batch.** Suggested top picks:
+   - **Close Wave 3:** weekly statements + TDS Form 16A + refund history (4 items, ~8h focused) → wave fully done
+   - **OR Wave 2 pause-receiving:** lower priority but a smaller, cleaner unit (~4h)
+   - **OR start Wave 4:** OTel + structured logging + audit log table is the most leverage-positive trio for launch readiness
 
 ## Suggested next-session prompt
 
 ```
-Continuing the Home Chef vendor app from 2026-06-05. Read NEXT-SESSION.md, PROD-READINESS.md, and the two memory files (feedback_no_editorial_style + feedback_ios_pressable_array_style) before any work.
+Continuing the Home Chef vendor app. Read NEXT-SESSION.md + PROD-READINESS.md first (don't re-discover state — read the progress snapshot at top of PROD-READINESS).
 
-State:
-- Backend at homechef-api-00076 (commit 6d9f659), all session endpoints live
-- Seeded chef data in prod for mahesh.sangawar@gmail.com (4 menu items, 4 orders, 2 reviews, 1 admin approval, FSSAI expiring in ~10 days)
-- 2 uncommitted mobile fixes pending verify + commit (Accept button visibility, dashboard tap-to-detail)
-- Latest local mobile build is the newest build-*.tar.gz in apps/mobile-vendor/, NOT yet installed on sim AD109A46
+State: Wave 1 application 100%, Wave 2 100% backend + 11/13 mobile, Wave 3 6/9 backend + 3/6 mobile, Dependabot 88→28. 37 commits since 2026-06-05. Tree clean.
 
-First three actions:
-1. Install latest mobile build + smoke test Accept button + tap-to-detail on dashboard
-2. Commit the two pending fixes
-3. Kick off PROD-READINESS.md Wave 1 — TestFlight pipeline, Sentry on mobile+backend, rate limiting + idempotency, Dependabot sweep, Trivy gate flip. Dispatch backend + mobile subagents per wave's parallelization plan.
+First action: verify prod (kubectl ksvc homechef-api on the prod GKE context per NEXT-SESSION gotchas) + smoke test /mobile/min-version + /chef/orders/:id/invoice.pdf.
 
-Operational gotchas — see NEXT-SESSION.md "Operational gotchas" section. Specifically: npx eas-cli@18.4.0, cd apps/mobile-vendor before eas, Kargo overrides manifest tags, GKE context gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke for kubectl.
+Then: [PICK ONE]
+  - Close Wave 3: weekly statements + TDS Form 16A + refund history view
+  - Wave 2 pause-receiving with auto-resume
+  - Start Wave 4: OTel + structured logging + audit log
+
+Operational gotchas: see NEXT-SESSION "Known gotchas". Specifically EAS CLI 18.4.0, cd into apps/mobile-vendor first, Kargo manages prod image tags, GKE context gke_tesseracthub-480811_asia-south1_tesseract-prod-in-gke.
 ```

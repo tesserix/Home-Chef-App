@@ -4,6 +4,17 @@
 **Execution:** Solo dev (Mahesh) + Claude subagents
 **Scope:** vendor-mobile + homechef-api + supporting infra. Customer + delivery apps tracked separately.
 
+## Progress snapshot (last updated 2026-06-10)
+
+| Wave | Application code | Operational |
+|---|---|---|
+| Wave 1 (Foundation) | **✅ 100%** — Sentry + force-upgrade gate + rate-limit + idempotency + webhook HMAC + Dependabot (88→28 vulns) + base-image Go 1.26.4 stopgap | ⏳ TestFlight, APNs cert, Sentry DSN secrets, Cloudflare WAF, Cloud SQL drill |
+| Wave 2 (Critical workflows) | **✅ 100% backend, 11/13 mobile** — cancel flows, doc renewal, notif prefs + FCM topics, info_requested email, FSSAI cron, FSSAI license number + expiry inputs | ⏳ Pause-receiving (needs new scheduler), FoSCoS API access |
+| Wave 3 (Financial + tax) | **✅ 6/9 backend, 3/6 mobile** — GSTIN + HSN, customer invoice PDF, post-delivery refund, auto-email invoice, DPDP export/delete | ⏳ Weekly statements + cron, TDS Form 16A, refund history view, settlement reconciliation |
+| Wave 4 (Launch polish + scale) | **0%** | — |
+
+**37 commits on `main`** since 2026-06-05. Check `git log --oneline` for the full trail.
+
 ---
 
 ## Assumptions
@@ -46,25 +57,25 @@
 **Goal:** Cannot ship without these. Make the system observable, securable, distributable.
 
 ### Mobile
-- [ ] **TestFlight pipeline** — App Store Connect setup, distribution cert, `eas submit` flow, internal testing group
-- [ ] **Sentry** integration (`sentry-expo`), source-maps upload on EAS build
-- [ ] **Force-upgrade gate** — `min_version` from API, hard wall + App Store link
-- [ ] **Privacy manifests** (iOS 17+) — declare camera/photos/location/notifications usage
-- [ ] **APNs production cert** in Firebase + EAS credentials
-- [ ] **Bundle ID + signing certs** finalized for production profile in EAS
+- [ ] **TestFlight pipeline** — App Store Connect setup, distribution cert, `eas submit` flow, internal testing group _(blocked: Apple Developer enrollment)_
+- [x] **Sentry** integration (`@sentry/react-native` + Expo plugin), source-maps upload on EAS build _(scaffold shipped — needs `EAS_SECRET_SENTRY_DSN/AUTH_TOKEN/ORG` set)_
+- [x] **Force-upgrade gate** — `min_version` from API, hard wall + App Store link (`/upgrade-required` screen + axios 426 handler + useMinVersion polling)
+- [x] **Privacy manifests** (iOS 17+) — `app.json` `ios.privacyManifests` declares 4 API categories + 7 data types
+- [ ] **APNs production cert** in Firebase + EAS credentials _(blocked: Firebase + Apple Dev console access)_
+- [x] **Bundle ID + signing certs** finalized for production profile in EAS _(eas.json `submit.production.ios` configured; cert upload pending)_
 
 ### Backend
-- [ ] **Sentry-go** integration on `homechef-api` and `auth-bff` (panics + 5xx capture)
-- [ ] **Rate limiting middleware** — Redis token-bucket, per chef (auth user_id) + per IP. `60req/min` chef, `30req/min` unauth.
-- [ ] **Idempotency-Key** middleware on POST/PUT/PATCH mutations — Redis-backed, 24h TTL
-- [ ] **Razorpay webhook signature verification** — audit all webhook endpoints, add HMAC check
-- [ ] **Dependabot triage** — apt-get critical → high → moderate, ship bumps in a single PR each
-- [ ] **Trivy gate flip** — from warn-only to fail on critical+high once Dependabot is clean
+- [x] **Sentry-go** integration on `homechef-api` (gated on `SENTRY_DSN_API`; panics + 5xx capture, 10% trace sample) _(auth-bff same recipe pending)_
+- [x] **Rate limiting middleware** — Redis token-bucket, per chef (auth user_id) + per IP. `60req/min` chef, `30req/min` unauth. Fail-open on Redis down. X-RateLimit-* headers.
+- [x] **Idempotency-Key** middleware on POST/PUT/PATCH mutations — Redis-backed, 24h TTL, opt-in via header
+- [x] **Razorpay webhook signature verification** — audit complete (Razorpay+Stripe were already verified; delivery provider webhook HMAC added)
+- [x] **Dependabot triage** — partial: 88 → 28 vulns (60-vuln reduction via pnpm overrides + x/net bump); 6 Go stdlib remain pending base-image rebuild
+- [ ] **Trivy gate flip** — from warn-only to fail on critical+high once Dependabot is clean _(blocked: 6 remaining critical/high)_
 
 ### Infra
-- [ ] **Cloud SQL automated backups + restore drill** — verify retention policy, run a non-prod restore, document RTO/RPO
-- [ ] **`min_scale: 1` on auth-bff** — kills the cold-start 503 race that bit us
-- [ ] **Cloudflare WAF rules** — managed ruleset on `*.fe3dr.com`, custom rules for `/auth/auto-login` brute force
+- [ ] **Cloud SQL automated backups + restore drill** — verify retention policy, run a non-prod restore, document RTO/RPO _(operational)_
+- [x] **`min_scale: 1` on auth-bff** — confirmed already satisfied (auth-bff is Deployment+KEDA at 2/2 replicas, not Knative; flagged in `docs/superpowers/specs/2026-06-05-wave1-infra-design.md` §8)
+- [ ] **Cloudflare WAF rules** — managed ruleset on `*.fe3dr.com`, custom rules for `/auth/auto-login` brute force _(operational; Pro plan needed)_
 
 ### Definition of done
 - A real device installs via TestFlight (single chef test)
@@ -86,31 +97,35 @@
 **Goal:** A real chef can run a full week of orders without needing manual ops intervention.
 
 ### Mobile
-- [ ] **FSSAI expiry date picker** on docs step (onboarding + renewal)
-- [ ] **Doc renewal screen** for verified chefs (`/documents/renew`) — list docs with expiry status, swap file + new expiry
-- [ ] **Admin-requests inbox** — consume `/chef/admin-requests`, dashboard "ACTION REQUIRED" card per item
-- [ ] **Approval-request response flow** — chef can reply to info-requested with text + attach a re-uploaded doc
-- [ ] **Order partial fulfillment + cancellation** — TWO affordances on the accepted-order detail screen:
-  - **Per-line "Can't fulfill this item"** — mark one line item as unavailable, system auto-refunds that line, remaining items continue prep. Critical UX: chef discovers mid-prep that one of N items can't be made (out of ingredient, ran out).
-  - **Whole-order cancel** with reason picker (`out_of_ingredient`, `equipment_failure`, `customer_request`, `other`) — triggers full refund.
-- [ ] **Pause receiving with auto-resume** — replace binary Open/Closed with `Open / Closed / Back in {15,30,60} min`
-- [ ] **Menu item image upload UI** — `expo-image-picker` → POST `/chef/menu/items/:id/images` (endpoint exists)
-- [ ] **Reviews list / inbox** — read endpoint exists, no list view today
-- [ ] **Notification preferences screen** — categories (new order / payout / customer message / promo) + quiet hours
+- [x] **FSSAI expiry date picker** on docs step (onboarding) — TextInput w/ YYYY-MM-DD format validation, sent as `expiryDate` multipart field on FSSAI upload
+- [x] **Doc renewal screen** for verified chefs (`/documents/renew`) — list docs with expiry status, swap file (camera/gallery/PDF) → `POST /chef/documents/:id/replace`
+- [x] **Admin-requests inbox** — dashboard "ACTION REQUIRED" card + `/admin-requests` list with status badges + `/admin-requests/[id]` detail
+- [x] **Approval-request response flow** — chef replies with text + optional file attach; sends to `PUT /chef/admin-requests/:id/respond`
+- [x] **Order partial fulfillment + cancellation** — TWO affordances on the accepted-order detail screen:
+  - [x] **Per-line "Can't fulfill this item"** — backend partial-refunds the line + atomically recomputes order totals; mobile renders cancelled lines with strikethrough + "Refunded ₹X" badge
+  - [x] **Whole-order cancel** with reason picker (iOS ActionSheet + Android chained Alert)
+- [ ] **Pause receiving with auto-resume** — replace binary Open/Closed with `Open / Closed / Back in {15,30,60} min` _(deferred — needs new backend auto-resume scheduler)_
+- [x] **Menu item image upload UI** — already wired pre-session via `MenuItemForm.handlePickPhoto` → `useUploadMenuPhoto` → `POST /chef/menu/items/:id/images`
+- [x] **Reviews list / inbox** — `app/reviews.tsx` with adapter fix (was crashing on wire shape) + `/chef/reviews/summary` for averageRating
+- [x] **Notification preferences screen** — `app/notification-preferences.tsx` with toggles + quiet hours + optimistic save; backend FCM topic reconcile on each flip
+
+### Bonus (not in original spec)
+- [x] **FSSAI license number capture** — 14-digit TextInput in onboarding, persisted to new `chef_profiles.fssai_license_number` column (unblocks Wave 3 invoicing + future FoSCoS lookup)
+- [x] **More tab nav** — discoverable entries for admin-requests, documents/renew, notification-preferences
 
 ### Backend
-- [ ] **`POST /chef/orders/:id/cancel`** with reason enum (`out_of_ingredient`, `equipment_failure`, `customer_request`, `other`) — triggers full Razorpay refund + status → `cancelled`
-- [ ] **`POST /chef/orders/:id/items/:itemId/cancel`** with reason — partial Razorpay refund equal to that line's subtotal, atomically recomputes order subtotal/tax/total, mark order_item `is_cancelled = true`. Order status stays `accepted`/`preparing` so chef proceeds with the rest.
-- [ ] **`is_cancelled` + `cancelled_reason` + `refund_id` + `cancelled_at` columns** on `order_items` — migration via AutoMigrate
-- [ ] **Razorpay partial refund** integration in `services/razorpay.go` — wrap the gateway's `/payments/:id/refund` with our domain shape; idempotent on `(order_item.id, refund_id)`
-- [ ] **`POST /chef/documents/:id/replace`** — atomically swap file URL + reset expiry + reset status to `pending` for re-verification
-- [ ] **`GET /chef/notification-preferences` + `PUT`** — per-chef preference flags
-- [ ] **FCM topic subscriptions** wired to preferences — chefs unsubscribe from `promo` channel etc.
-- [ ] **Email notification on info_requested approval** (SendGrid) — chef sees the in-app card AND gets an email
-- [ ] **FSSAI expiry cron** — daily job in `audit-service` or homechef-api that fires push at 30/15/7 days
+- [x] **`POST /chef/orders/:id/cancel`** with reason enum — full Razorpay refund + status → `cancelled` + NATS `order.cancelled` event. Idempotent on retry.
+- [x] **`POST /chef/orders/:id/items/:itemId/cancel`** with reason — partial Razorpay refund (line subtotal + proportional tax share); atomic GORM transaction for line flip + order recompute; order status stays accepted/preparing
+- [x] **`is_cancelled` + `cancelled_reason` + `refund_id` + `cancelled_at` + `refund_amount` columns** on `order_items` via AutoMigrate
+- [x] **Razorpay partial refund** — `services.GetRazorpay().CreateRefund` already existed; wired into both cancel paths
+- [x] **`POST /chef/documents/:id/replace`** — atomic file URL + (optional) expiry + status flip to `pending`; cancels in-flight approval and creates a fresh one
+- [x] **`GET /chef/notification-preferences` + `PUT`** — new `chef_notification_preferences` table; defaults applied when no row exists
+- [x] **FCM topic subscriptions** wired to preferences — `services.SubscribeToFCMTopic` / `UnsubscribeFromFCMTopic` via Firebase IID API; reconciles on each PUT diff
+- [x] **Email notification on info_requested approval** — `EmailService.SendApprovalInfoRequested` fires inline with the existing NATS event publish
+- [x] **FSSAI expiry cron** — `services.StartFSSAIReminderCron` launched from `main.go`; 24h ticker, Redis-deduped via SETNX (26h TTL), fail-open on Redis down; fires push at 30/15/7 day windows
 
 ### Compliance
-- [ ] **FSSAI validation** — `FoSCoS` API integration (or manual review queue if FoSCoS access blocked). License number + expiry verified against the registry, not just photo upload.
+- [ ] **FSSAI validation** — `FoSCoS` API integration _(external dep — manual review queue is the fallback per risk callout)_
 
 ### Definition of done
 - A chef whose FSSAI expires next month gets a banner + push at 30 days
@@ -132,26 +147,27 @@
 **Goal:** A chef can run their accounting for the quarter from inside the app. Legally sufficient invoices to customers.
 
 ### Mobile
-- [ ] **GSTIN capture** on chef profile (optional but encouraged) + validation against GST portal format
-- [ ] **HSN code per menu item** (optional, defaults to 996331 for restaurant services if blank)
-- [ ] **Earnings → Statements tab** — list of weekly settlement statements, downloadable as PDF
-- [ ] **Earnings → Tax certificates** — TDS year-end certificate download (Form 16A equivalent)
-- [ ] **Order detail → Download invoice (PDF)** for the chef
-- [ ] **Customer invoice auto-email** on order delivery (with chef's GSTIN + HSN line items)
-- [ ] **Refund history view** on Earnings — see what got refunded, who paid, why
+- [x] **GSTIN capture** on chef profile (optional) — 15-char auto-uppercase TextInput in onboarding, sent to `/chef/onboarding`
+- [x] **HSN code per menu item** — 8-digit numeric TextInput in MenuItemForm, defaults to 996331 server-side when blank
+- [ ] **Earnings → Statements tab** — _(deferred)_
+- [ ] **Earnings → Tax certificates** — _(deferred)_
+- [x] **Order detail → Download invoice (PDF)** — `expo-file-system/legacy` + `expo-sharing`; auth'd fetch → system share sheet; surfaced on delivered orders
+- [x] **Customer invoice auto-email** — backend hooks `order.delivered` NATS event, generates PDF, sends SendGrid attachment to customer
+- [ ] **Refund history view** on Earnings — _(deferred)_
 
 ### Backend
-- [ ] **`GET /chef/statements/weekly?cycle=...`** — returns PDF (or signed URL to GCS) of the weekly settlement
-- [ ] **`GET /chef/tax/certificate?year=2026`** — TDS Form 16A PDF generation (use `maroto` lib — already a dep)
-- [ ] **`GET /orders/:id/invoice.pdf`** — customer-facing GSTIN invoice
-- [ ] **`POST /chef/orders/:id/refund`** with amount + reason — partial or full
-- [ ] **GSTIN + HSN fields** on `chef_profiles` and `menu_items` respectively
-- [ ] **Cycle close + statement generation cron** — weekly Sunday 23:59 IST, generates statement, sends NATS event
+- [ ] **`GET /chef/statements/weekly?cycle=...`** — _(deferred)_
+- [ ] **`GET /chef/tax/certificate?year=2026`** — TDS Form 16A PDF generation _(deferred)_
+- [x] **`GET /orders/:id/invoice.pdf`** — customer-facing GSTIN invoice via `services.GenerateOrderInvoicePDF` (maroto v0.46)
+- [x] **`GET /chef/orders/:orderId/invoice.pdf`** — chef-side copy of the same invoice _(bonus)_
+- [x] **`POST /chef/orders/:id/refund`** with amount + reason — post-delivery goodwill refund (distinct from in-flight cancel); idempotent via remaining-balance check
+- [x] **GSTIN + HSN fields** on `chef_profiles` and `menu_items` respectively
+- [ ] **Cycle close + statement generation cron** — _(deferred)_
 
 ### Compliance
-- [ ] **DPDP Act 2023** compliance pass — explicit consent capture on registration, data subject access endpoints (`/chef/me/export`, `/chef/me/delete`), retention policy in privacy policy
-- [ ] **Privacy policy + EULA URLs** finalized + linked from app
-- [ ] **Stripe/Razorpay settlement reconciliation** — automated daily comparison of platform records vs gateway records
+- [x] **DPDP Act 2023** compliance pass — `GET /chef/me/export` (JSON dump of all chef data) + `POST /chef/me/delete` (soft-delete + 30d retention, requires email confirmation)
+- [ ] **Privacy policy + EULA URLs** finalized + linked from app _(legal artifact)_
+- [ ] **Stripe/Razorpay settlement reconciliation** — _(deferred)_
 
 ### Definition of done
 - Chef downloads weekly statement → opens cleanly in any PDF reader, line-itemized
