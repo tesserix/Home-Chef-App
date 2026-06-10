@@ -173,6 +173,10 @@ func main() {
 	// window elapses. 1-minute granularity; reliable under min-scale:1.
 	services.StartAvailabilityResumeCron(cronCtx)
 
+	// Prune audit_logs past the retention window (~13 months) so the table
+	// stays bounded on the shared db-f1-micro.
+	services.StartAuditRetentionCron(cronCtx)
+
 	// Setup router
 	router := routes.SetupRouter()
 
