@@ -9,11 +9,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
+
+// Entrance easing — ease-out-quart, matches the app-wide motion spec.
+const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 
@@ -83,6 +91,9 @@ export default function HomeScreen() {
   const { data, isLoading, isFetching, refetch } = useChefs(filters);
 
   const chefs = data?.data ?? [];
+
+  // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
+  const reduceMotion = useReducedMotion();
 
   const renderHeader = () => (
     <>
@@ -256,7 +267,20 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
         keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => <ChefCard chef={item} />}
+        renderItem={({ item, index }) => (
+          <Animated.View
+            style={{ flex: 1 }}
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(Math.min(index, 8) * 60)
+                    .duration(250)
+                    .easing(ENTRANCE_EASING)
+            }
+          >
+            <ChefCard chef={item} />
+          </Animated.View>
+        )}
         refreshControl={
           <RefreshControl
             refreshing={isFetching && !isLoading}
