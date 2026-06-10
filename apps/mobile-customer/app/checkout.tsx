@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,13 +20,17 @@ import {
 import { Link, router, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
-import { Check, ChevronLeft, Clock, FileText, MapPin, Plus } from 'lucide-react-native';
+import { Check, ChevronLeft, Clock, FileText, MapPin, Plus, Search } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder, useOrderStatus } from '../hooks/useOrderCheckout';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
+import {
+  useAddressAutocomplete,
+  type AddressSuggestion,
+} from '../hooks/useLocations';
 import { api } from '../lib/api';
 import type { Address } from '../types/customer';
 
@@ -141,6 +146,7 @@ export default function CheckoutScreen() {
     control: addrControl,
     handleSubmit: handleAddrSubmit,
     reset: resetAddrForm,
+    setValue: setAddrValue,
     formState: { errors: addrErrors, isSubmitting: addrSubmitting },
   } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
@@ -153,6 +159,23 @@ export default function CheckoutScreen() {
       isDefault: false,
     },
   });
+
+  // Address autocomplete (Photon/OpenStreetMap via backend) — fills the form
+  // fields below, which stay editable. Same UX as the onboarding address step.
+  const [addrQuery, setAddrQuery] = useState('');
+  const [showAddrSuggestions, setShowAddrSuggestions] = useState(false);
+  const { data: addrSuggestions = [], isFetching: addrSearching } =
+    useAddressAutocomplete(addrQuery);
+
+  function pickAddrSuggestion(s: AddressSuggestion): void {
+    setAddrValue('addressLine1', s.line1 || s.description, { shouldValidate: true });
+    if (s.city) setAddrValue('city', s.city, { shouldValidate: true });
+    if (s.region) setAddrValue('state', s.region, { shouldValidate: true });
+    if (s.postal) setAddrValue('pincode', s.postal, { shouldValidate: true });
+    setAddrQuery('');
+    setShowAddrSuggestions(false);
+    Keyboard.dismiss();
+  }
 
   async function onSaveAddress(values: AddressFormValues) {
     try {
@@ -335,6 +358,52 @@ export default function CheckoutScreen() {
 
               {showAddressForm && (
                 <View className="px-4 pb-4 gap-3">
+                  {/* Address autocomplete — fills the fields below (editable) */}
+                  <View className="flex-row items-center bg-surface-soft rounded-xl px-3 gap-2">
+                    <Search size={16} color={'#717171'} />
+                    <TextInput
+                      className="flex-1 py-2.5 text-sm text-charcoal"
+                      placeholder="Search for your address"
+                      placeholderTextColor="#717171"
+                      value={addrQuery}
+                      onChangeText={(t) => {
+                        setAddrQuery(t);
+                        setShowAddrSuggestions(true);
+                      }}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      returnKeyType="search"
+                      accessibilityLabel="Search for your address"
+                    />
+                    {addrSearching ? (
+                      <ActivityIndicator size="small" color={'#FF385C'} />
+                    ) : null}
+                  </View>
+                  {showAddrSuggestions && addrSuggestions.length > 0 && (
+                    <View className="bg-surface border border-hairline rounded-xl overflow-hidden">
+                      {addrSuggestions.map((s, i) => (
+                        <Pressable
+                          key={`${s.description}-${i}`}
+                          onPress={() => pickAddrSuggestion(s)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Use address ${s.description}`}
+                        >
+                          {({ pressed }) => (
+                            <View
+                              className={`flex-row items-start gap-2 px-3 py-2.5 ${
+                                pressed ? 'bg-surface-soft' : ''
+                              } ${i < addrSuggestions.length - 1 ? 'border-b border-hairline' : ''}`}
+                            >
+                              <MapPin size={16} color={'#717171'} style={{ marginTop: 2 }} />
+                              <Text className="flex-1 text-sm text-charcoal leading-5" numberOfLines={2}>
+                                {s.description}
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                   <Controller
                     control={addrControl}
                     name="addressLine1"
@@ -349,7 +418,7 @@ export default function CheckoutScreen() {
                           accessibilityLabel="Address line 1"
                         />
                         {addrErrors.addressLine1 && (
-                          <Text className="text-xs text-paprika mt-1">
+                          <Text className="text-xs text-destructive mt-1">
                             {addrErrors.addressLine1.message}
                           </Text>
                         )}
@@ -385,7 +454,7 @@ export default function CheckoutScreen() {
                             accessibilityLabel="City"
                           />
                           {addrErrors.city && (
-                            <Text className="text-xs text-paprika mt-1">
+                            <Text className="text-xs text-destructive mt-1">
                               {addrErrors.city.message}
                             </Text>
                           )}
@@ -406,7 +475,7 @@ export default function CheckoutScreen() {
                             accessibilityLabel="State"
                           />
                           {addrErrors.state && (
-                            <Text className="text-xs text-paprika mt-1">
+                            <Text className="text-xs text-destructive mt-1">
                               {addrErrors.state.message}
                             </Text>
                           )}
@@ -430,7 +499,7 @@ export default function CheckoutScreen() {
                           accessibilityLabel="Pincode"
                         />
                         {addrErrors.pincode && (
-                          <Text className="text-xs text-paprika mt-1">
+                          <Text className="text-xs text-destructive mt-1">
                             {addrErrors.pincode.message}
                           </Text>
                         )}
@@ -598,15 +667,15 @@ export default function CheckoutScreen() {
 
         {/* ── Error ── */}
         {error && (
-          <View className="mx-4 mt-4 bg-paprika-tint border border-paprika/30 rounded-xl px-4 py-3">
-            <Text className="text-sm text-paprika">{error}</Text>
+          <View className="mx-4 mt-4 bg-destructive-tint border border-destructive/30 rounded-xl px-4 py-3">
+            <Text className="text-sm text-destructive">{error}</Text>
             <Pressable
               onPress={() => setError(null)}
               className="mt-1"
               accessibilityRole="button"
               accessibilityLabel="Dismiss error"
             >
-              <Text className="text-xs text-paprika underline">Dismiss</Text>
+              <Text className="text-xs text-destructive underline">Dismiss</Text>
             </Pressable>
           </View>
         )}
