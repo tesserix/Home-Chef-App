@@ -172,7 +172,7 @@ function QueueEmpty() {
     <View style={styles.emptyBlock}>
       <Text style={styles.emptyHeadline}>Queue is clear</Text>
       <Text style={styles.emptyBody}>
-        New orders arrive here automatically. We poll every 10 seconds.
+        New orders will appear here automatically. Your queue is up to date.
       </Text>
     </View>
   );

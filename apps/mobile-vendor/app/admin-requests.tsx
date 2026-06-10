@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: theme.radius.sm,
   },
   badgeText: {
     fontFamily: 'Inter-SemiBold',
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[2],
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.destructive.DEFAULT,
-    borderRadius: 2,
+    borderRadius: theme.radius.sm,
     gap: 4,
   },
   notesLabel: {

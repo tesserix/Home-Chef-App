@@ -214,8 +214,7 @@ export default function AnalyticsScreen() {
         <View style={styles.emptyBlock}>
           <Text style={styles.emptyHeadline}>Nothing here yet</Text>
           <Text style={styles.emptyBody}>
-            Analytics appear once you have completed orders. Check back after
-            your first few deliveries.
+            Analytics appear after your first completed order.
           </Text>
         </View>
       ) : (
