@@ -11,6 +11,10 @@ WORKDIR /app
 
 # Monorepo root files required for pnpm workspace resolution.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+# The root package.json declares pnpm.patchedDependencies (@tesserix/native);
+# pnpm reads it on every install, so the patch file must be present even though
+# the landing doesn't use that package.
+COPY patches ./patches
 COPY apps/web-landing/package.json ./apps/web-landing/
 
 RUN pnpm install --frozen-lockfile --filter @homechef/web-landing...
