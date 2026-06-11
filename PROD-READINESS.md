@@ -309,8 +309,8 @@ Reference: mark8ly's registration spans 4 touchpoints. Home Chef replicates each
 **Decision (owner, 2026-06-11):** Home Chef will **not run its own delivery fleet** — managing delivery agents is overkill at this scale. Deliveries are fulfilled by **third-party logistics providers** (Shadowfax / Dunzo / Porter class). The **own delivery app (`apps/mobile-delivery`) + own-fleet backend are retired.** Mirrors the web-sunset decision: fewer surfaces to operate.
 
 ### 7A. Retire own-fleet
-- [ ] **Sunset `apps/mobile-delivery`** + the web `delivery-portal` (already in Wave 5A). Archive dirs + CI; `delivery.fe3dr.com` web routes 301 → landing.
-- [ ] **Deprecate own-driver code paths** (keep DB tables until data is irrelevant): driver onboarding (`/delivery/onboarding/*`), `DriverOnboardingPayout`, driver Stripe Connect (`CreateDriverStripeAccount`), `DeliveryPartner` self-service, `ManualAssignDelivery`. Make admin "delivery partners" views read-only or remove.
+- [ ] **Sunset `apps/mobile-delivery`** + the web `delivery-portal` (already in Wave 5A). Archive dirs + CI; `delivery.fe3dr.com` web routes 301 → landing. _(operational/by-hand — not done in code)_
+- [x] **Deprecate own-driver code paths** — **routes retired 2026-06-11** (`routes/routes.go`): removed the driver onboarding groups (`/delivery/onboarding/*`, `/driver/onboarding/*` incl. `DriverOnboardingPayout`), the driver-app group (`/delivery/*`: profile/online/location/current/available/accept/status/earnings + driver Stripe Connect), `/driver/referral/*`, `/driver/subscription/*`, and `ManualAssignDelivery`. Admin + staff "delivery partners" views are now **read-only** (GET list/detail/stats/overview kept; `verify`/`suspend`/`assign` mutations removed). **Handler files, models, and DB tables left intact** (keep until data is irrelevant) — fully git-reversible. 3PL provider CRUD + delivery zones + staff management unaffected.
 - ⚠️ Confirm nothing API-critical rides `delivery.fe3dr.com` before teardown (same caution as the vendor host in 5A).
 
 ### 7B. 3PL integration — what EXISTS (framework, scaffolded ✅)
