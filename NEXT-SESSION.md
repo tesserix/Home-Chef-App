@@ -35,12 +35,23 @@ i18n (en/hi). Full live API cycle (create→detail→reply→close) verified aga
 `/api/v1/support/tickets`. No backend changes. ⏳ remaining: visual tap-through on the sim (Metro 8082)
 + commit.
 
-### 3. 🔧 Native rebuild / iOS signing fix — unblocks two things
-`expo run:ios` fails "No code signing certificates" (even sim); `xcodebuild` Debug-sim fails on
-`PrecompileModule RNFBApp` (Firebase explicit-modules). Fixing this unblocks **(a)** the 16:9
-cover **cropper** (code-complete, `components/ImageCropper.tsx`, just needs expo-image-manipulator
-linked) and **(b)** the **Hindi UI verification** (expo-localization). Likely needs an Apple Dev
-signing cert in Xcode and/or a `CLANG/SWIFT_ENABLE_EXPLICIT_MODULES=NO` build-setting workaround.
+### 3. ✅ Native build fixed (2026-06-11) — cropper + Hindi unblocked
+Root-caused the `PrecompileModule RNFBApp` failure to TWO independent issues under Xcode 26.5
+explicit modules: **(1)** RNFBApp (framework module via `use_frameworks! static`) imported
+non-modular React-Core headers → `-Werror=non-modular-include-in-framework-module`; **(2)** the
+**prebuilt React-Core** Debug binary lacked `react_rendererdebug` symbols (`getDebugProps`) that
+from-source `ExpoModulesCore` references → linker error. **Both** are fixed by one line —
+`buildReactNativeFromSource: true` in `app.json` (expo-build-properties.ios): from-source RN makes
+React-Core a real `React.framework` module (so RNFBApp's includes become modular) AND compiles the
+debug renderer symbols in the same config. Verified: clean Debug **sim** build SUCCEEDED, app
+installs + launches + stays alive on the sim with ImageManipulator (cropper) + Localization (Hindi)
++ Firebase all linked in. Tradeoff: from-source builds are slower (acceptable).
+- **Signing** was a red herring for the sim path — sim builds need none (`CODE_SIGNING_ALLOWED=NO`);
+  the "No code signing certificates" only blocks **device** builds, which still need the Apple Dev
+  account (external blocker #6). Cropper + Hindi verify on the **sim**, so they're unblocked now.
+- Local builds skip the Sentry source-map upload phase via `ios/.xcode.env.local`
+  (`SENTRY_DISABLE_AUTO_UPLOAD=true`) — no Sentry org token locally; EAS still uploads with secrets.
+- ⏳ remaining: visual tap-through of the cropper + Hindi screens on the sim (Metro 8082).
 
 ### 4. 🌐 Web sunset (Wave 5A, decided) + landing page
 Build the `fe3dr.com` landing page (Uber-style, store badges, "Cook with us" chef CTA, legal
@@ -65,14 +76,18 @@ FSSAI/FoSCoS API (external).
   Deploy = push to `main` (paths `apps/api/**` / `apps/auth-bff/**`) → CI → bump → ArgoCD (~3-4 min).
   Never `kubectl patch` prod image tags (ArgoCD self-heals).
 - **Sim/Metro:** `npx expo start --dev-client --port 8082`; launch via
-  `homechef-vendor://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082`. Native rebuild broken (see #3).
+  `homechef-vendor://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082`. Native build now
+  works (from-source RN, see #3); a fresh Debug sim build is installed on the iPhone 17 Pro sim.
+  Local sim build = `xcodebuild -workspace ios/HomeChefVendor.xcworkspace -scheme HomeChefVendor
+  -configuration Debug -destination 'platform=iOS Simulator,id=<booted>' CODE_SIGNING_ALLOWED=NO build`
+  (or `expo run:ios`); first from-source build ~6–8 min.
 - **Test token:** re-capture if `/tmp/seed-token.txt` stale — temp `console.log` of
   `useAuthStore.getState().accessToken` in `app/_layout.tsx`, read from Metro log, revert.
 - ~100 pre-existing lucide TS errors in mobile-vendor — filter on touched files.
 - `gh pr create` fails on tesserix org (EMU); `git push` + `gh run watch` work.
 
 ## Suggested order
-~~Delivery zones~~ (vendor tickets DONE) → signing fix (unblocks cropper + Hindi) → web sunset +
-landing → platform/tesserix-home integration. Delivery-zone enforcement is deferred feature work
-(ordering already works) and is mostly customer-app — pick it up only when delivery-area gating is
-actually wanted.
+~~Delivery zones~~ · ~~vendor tickets~~ · ~~native build fix~~ (all DONE) → web sunset + landing →
+platform/tesserix-home integration. Delivery-zone enforcement is deferred feature work (ordering
+already works) and is mostly customer-app — pick it up only when delivery-area gating is actually
+wanted. Cropper + Hindi just need a visual tap-through on the now-working sim build.

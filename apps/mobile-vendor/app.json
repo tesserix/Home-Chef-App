@@ -164,7 +164,8 @@
           "ios": {
             "useFrameworks": "static",
             "deploymentTarget": "18.0",
-            "newArchEnabled": false
+            "newArchEnabled": false,
+            "buildReactNativeFromSource": true
           },
           "android": {
             "newArchEnabled": false
