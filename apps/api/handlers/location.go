@@ -224,8 +224,14 @@ type photonProperties struct {
 	CountryCode string `json:"countrycode,omitempty"`
 }
 
+// photonGeometry is GeoJSON Point geometry. Coordinates are [lon, lat].
+type photonGeometry struct {
+	Coordinates []float64 `json:"coordinates"`
+}
+
 type photonFeature struct {
 	Properties photonProperties `json:"properties"`
+	Geometry   photonGeometry   `json:"geometry"`
 }
 
 type photonResponse struct {
@@ -235,13 +241,17 @@ type photonResponse struct {
 // AddressSuggestion is the flattened shape the mobile autocomplete
 // renders. Mirrors mark8ly/apps/storefront/app/api/locations/autocomplete
 // so a shared mobile-shared address picker can target both products.
+// Lat/Lon come from Photon's geometry so the client can persist real
+// coordinates on the address (powers delivery-zone checks + 3PL quotes).
 type AddressSuggestion struct {
-	Description string `json:"description"`
-	Line1       string `json:"line1"`
-	City        string `json:"city"`
-	Region      string `json:"region"`
-	Postal      string `json:"postal"`
-	Country     string `json:"country"`
+	Description string  `json:"description"`
+	Line1       string  `json:"line1"`
+	City        string  `json:"city"`
+	Region      string  `json:"region"`
+	Postal      string  `json:"postal"`
+	Country     string  `json:"country"`
+	Lat         float64 `json:"lat,omitempty"`
+	Lon         float64 `json:"lon,omitempty"`
 }
 
 // AutocompleteAddresses proxies the Photon (OpenStreetMap-backed)
@@ -318,6 +328,12 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 		s.Description = buildPhotonDescription(s, p)
 		if s.Description == "" || (s.Line1 == "" && s.City == "") {
 			continue
+		}
+		// GeoJSON coordinates are [lon, lat]; surface them so the client can
+		// persist real coordinates on the address.
+		if len(f.Geometry.Coordinates) >= 2 {
+			s.Lon = f.Geometry.Coordinates[0]
+			s.Lat = f.Geometry.Coordinates[1]
 		}
 		out = append(out, s)
 	}
