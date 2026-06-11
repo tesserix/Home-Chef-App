@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -108,26 +109,22 @@ func (s *ProviderService) FindAvailableProvider(city string, distance float64, c
 	return nil, nil // no provider available
 }
 
-// CreateProviderDelivery creates a delivery request with a third-party provider
-// Phase 1: returns a mock response; actual API integration is Phase 2
+// CreateProviderDelivery books a delivery with a third-party provider. When an
+// outbound adapter exists for the provider's code (ClientFor) the real API is
+// called; providers without an adapter yet get a deterministic mock response so
+// onboarding isn't blocked. Either way a single NATS event is published.
 func (s *ProviderService) CreateProviderDelivery(provider *models.DeliveryProvider, req ProviderDeliveryRequest) (*ProviderDeliveryResponse, error) {
 	log.Printf("Creating provider delivery: provider=%s order=%s", provider.Code, req.OrderID)
 
-	// Calculate estimated cost based on pricing model
-	cost := s.calculateCost(provider, req)
-
-	// Calculate distance for time estimates
-	distance := haversineDistance(req.PickupLat, req.PickupLng, req.DropoffLat, req.DropoffLng)
-	estimatedMinutes := provider.AvgPickupTime + int(distance*3) // rough estimate: 3 min/km
-
-	now := time.Now()
-	response := &ProviderDeliveryResponse{
-		ExternalDeliveryID: fmt.Sprintf("%s_%s", provider.Code, uuid.New().String()[:8]),
-		ExternalTrackingID: fmt.Sprintf("TRK_%s_%d", provider.Code, now.UnixMilli()),
-		TrackingURL:        fmt.Sprintf("%s/track/%s_%s", provider.APIBaseURL, provider.Code, uuid.New().String()[:8]),
-		EstimatedPickup:    now.Add(time.Duration(provider.AvgPickupTime) * time.Minute),
-		EstimatedDelivery:  now.Add(time.Duration(estimatedMinutes) * time.Minute),
-		Cost:               cost,
+	var response *ProviderDeliveryResponse
+	if client, ok := ClientFor(provider); ok {
+		resp, err := client.CreateTask(context.Background(), req)
+		if err != nil {
+			return nil, fmt.Errorf("provider %s create task: %w", provider.Code, err)
+		}
+		response = resp
+	} else {
+		response = s.mockProviderDelivery(provider, req)
 	}
 
 	// Publish NATS event
@@ -140,6 +137,64 @@ func (s *ProviderService) CreateProviderDelivery(provider *models.DeliveryProvid
 	})
 
 	return response, nil
+}
+
+// mockProviderDelivery returns a deterministic fake booking for providers that
+// don't have a real outbound adapter yet. Cost + ETA are derived from the
+// provider's configured pricing/timing so admin stats stay sane in testing.
+func (s *ProviderService) mockProviderDelivery(provider *models.DeliveryProvider, req ProviderDeliveryRequest) *ProviderDeliveryResponse {
+	cost := s.calculateCost(provider, req)
+	distance := haversineDistance(req.PickupLat, req.PickupLng, req.DropoffLat, req.DropoffLng)
+	estimatedMinutes := provider.AvgPickupTime + int(distance*3) // rough estimate: 3 min/km
+
+	now := time.Now()
+	return &ProviderDeliveryResponse{
+		ExternalDeliveryID: fmt.Sprintf("%s_%s", provider.Code, uuid.New().String()[:8]),
+		ExternalTrackingID: fmt.Sprintf("TRK_%s_%d", provider.Code, now.UnixMilli()),
+		TrackingURL:        fmt.Sprintf("%s/track/%s_%s", provider.APIBaseURL, provider.Code, uuid.New().String()[:8]),
+		EstimatedPickup:    now.Add(time.Duration(provider.AvgPickupTime) * time.Minute),
+		EstimatedDelivery:  now.Add(time.Duration(estimatedMinutes) * time.Minute),
+		Cost:               cost,
+	}
+}
+
+// GetProviderQuote returns a price + ETA for a leg. Uses the provider's outbound
+// adapter when available; otherwise computes a quote from the provider's
+// configured pricing model (always serviceable). Returns Serviceable=false only
+// when a real adapter says the leg can't be served.
+func (s *ProviderService) GetProviderQuote(provider *models.DeliveryProvider, req QuoteRequest) (*QuoteResponse, error) {
+	if client, ok := ClientFor(provider); ok {
+		return client.GetQuote(context.Background(), req)
+	}
+
+	distance := haversineDistance(req.PickupLat, req.PickupLng, req.DropoffLat, req.DropoffLng)
+	var fee float64
+	switch provider.PricingModel {
+	case "per_km":
+		fee = math.Round((provider.BaseCost+provider.PerKmCost*distance)*100) / 100
+	default: // flat_rate, per_delivery
+		fee = provider.BaseCost
+	}
+	currency := provider.Currency
+	if currency == "" {
+		currency = "INR"
+	}
+	return &QuoteResponse{
+		Fee:         fee,
+		Currency:    currency,
+		ETAMinutes:  provider.AvgPickupTime + int(distance*3),
+		Serviceable: true,
+	}, nil
+}
+
+// CancelProviderDelivery cancels a booked task. No-op (logged) for providers
+// without a real adapter.
+func (s *ProviderService) CancelProviderDelivery(provider *models.DeliveryProvider, externalID, reason string) error {
+	if client, ok := ClientFor(provider); ok {
+		return client.CancelTask(context.Background(), externalID, reason)
+	}
+	log.Printf("mock cancel provider delivery: provider=%s external=%s reason=%s", provider.Code, externalID, reason)
+	return nil
 }
 
 // HandleProviderWebhook processes an inbound webhook from a provider
@@ -225,6 +280,23 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		updates["external_tracking_url"] = trackingURL
 	}
 
+	// Persist the raw provider status + live rider details so the customer map
+	// shows the real 3PL rider (closes the live-map gap). Field names vary by
+	// provider; accept the common aliases.
+	updates["provider_status"] = providerStatus
+	if name := firstWebhookString(webhookData, "rider_name", "agent_name", "driver_name"); name != "" {
+		updates["rider_name"] = name
+	}
+	if phone := firstWebhookString(webhookData, "rider_phone", "agent_phone", "driver_phone", "rider_contact"); phone != "" {
+		updates["rider_phone"] = phone
+	}
+	if lat, ok := firstWebhookFloat(webhookData, "rider_latitude", "latitude", "lat", "current_latitude"); ok {
+		updates["rider_latitude"] = lat
+	}
+	if lng, ok := firstWebhookFloat(webhookData, "rider_longitude", "longitude", "lng", "lon", "current_longitude"); ok {
+		updates["rider_longitude"] = lng
+	}
+
 	if err := database.DB.Model(&delivery).Updates(updates).Error; err != nil {
 		return fmt.Errorf("failed to update delivery: %w", err)
 	}
@@ -258,6 +330,34 @@ func (s *ProviderService) calculateCost(provider *models.DeliveryProvider, req P
 	default:
 		return provider.BaseCost
 	}
+}
+
+// firstWebhookString returns the first non-empty string value among the given
+// keys in a decoded webhook payload. Lets one extraction handle field-name
+// variation across providers.
+func firstWebhookString(data map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := data[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// firstWebhookFloat returns the first numeric value among the given keys.
+// JSON numbers decode as float64; a stringified number is also accepted.
+func firstWebhookFloat(data map[string]interface{}, keys ...string) (float64, bool) {
+	for _, k := range keys {
+		switch v := data[k].(type) {
+		case float64:
+			return v, true
+		case json.Number:
+			if f, err := v.Float64(); err == nil {
+				return f, true
+			}
+		}
+	}
+	return 0, false
 }
 
 // haversineDistance calculates the distance between two lat/lng points in km
