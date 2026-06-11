@@ -225,7 +225,7 @@ export default function CheckoutScreen() {
           notes: i.instructions?.trim() || undefined,
         })),
         deliveryAddressId: selectedAddressId,
-        note: note.trim() || undefined,
+        specialInstructions: note.trim() || undefined,
       });
 
       const orderId = orderResult.data.id;

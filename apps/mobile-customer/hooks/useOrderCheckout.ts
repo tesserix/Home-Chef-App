@@ -11,13 +11,19 @@ interface CreateOrderPayload {
   // `notes` is the per-item wire field (apps/api CreateOrderItem.json:"notes").
   items: { menuItemId: string; quantity: number; notes?: string }[];
   deliveryAddressId: string;
-  note?: string;
+  // Order-level note to the chef. Backend reads `specialInstructions`
+  // (CreateOrderRequest) — a `note` field is silently dropped.
+  specialInstructions?: string;
 }
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
+  // CreateOrder returns the order BARE (c.JSON(StatusCreated, order.ToResponse())),
+  // with `id` at the top level — not wrapped in {data}. Wrap it here so callers
+  // can keep reading `result.data.id`.
   return useMutation<{ data: Order }, Error, CreateOrderPayload>({
-    mutationFn: (payload) => api.post('/v1/orders', payload).then((r) => r.data),
+    mutationFn: (payload) =>
+      api.post<Order>('/v1/orders', payload).then((r) => ({ data: r.data })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
@@ -27,9 +33,11 @@ export function useCreateOrder() {
 // Used for polling after payment — stops when order status shows payment confirmed or beyond.
 // Interval: 3 seconds while status === 'pending'; stops on any other status.
 export function useOrderStatus(id: string, enabled: boolean) {
+  // GET /v1/orders/:id also returns the order bare — wrap to {data}.
   return useQuery<{ data: Order }>({
     queryKey: ['order-status', id],
-    queryFn: () => api.get(`/v1/orders/${id}`).then((r) => r.data),
+    queryFn: () =>
+      api.get<Order>(`/v1/orders/${id}`).then((r) => ({ data: r.data })),
     enabled: enabled && !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.data?.status;
