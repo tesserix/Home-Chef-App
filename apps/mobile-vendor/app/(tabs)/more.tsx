@@ -9,6 +9,7 @@ import {
   FileText,
   Inbox,
   Languages,
+  LifeBuoy,
   LogOut,
   Settings,
   Star,
@@ -36,6 +37,9 @@ const NAV_ROWS: NavRow[] = [
   { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
   { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
   { labelKey: 'notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
+  // Support — raise a platform issue or feature request; threaded with the
+  // support team (wired to the existing /support/tickets API).
+  { labelKey: 'support', caption: 'Report an issue or request a feature', route: '/support', Icon: LifeBuoy },
   // Wave 4 — language picker (English / हिन्दी).
   { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
   { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },

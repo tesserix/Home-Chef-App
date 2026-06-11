@@ -17,16 +17,23 @@ Read this + `PROD-READINESS.md` + `VENDOR-TICKETS-SPEC.md`. Don't re-discover st
 
 ## PENDING — prioritized
 
-### 1. 🔴 Delivery zones disabled — blocks ALL ordering (highest impact)
-All 18 zones deactivated 2026-06-11 (NULL bounds + no client coord capture). Re-enable needs
-**real zone bounds** + **lat/lon capture in the client**. See memory `project_delivery_zones_disabled`.
-Investigate `apps/api` delivery-zone model/handler + how the customer app captures location at
-checkout. This gates the core customer→chef→driver flow.
+### 1. 🟡 Delivery-zone enforcement — feature work, NOT an outage (premise corrected 2026-06-11)
+**Ordering currently WORKS.** The zone gate at `orders.go:261` is opt-in (`if HasActiveZones()`);
+with all 18 zones `is_active=false`, `HasActiveZones()` returns false → the coord/zone check is
+**skipped entirely**. Deactivating the zones is what *unblocked* ordering, not what broke it. So the
+earlier "🔴 blocks ALL ordering" framing was inverted. Re-enabling proper delivery-area enforcement
+is feature-completion, deferred (owner decision 2026-06-11), and needs: (a) backend autocomplete to
+forward Photon `geometry` (pure JS/backend — sidesteps the broken native rebuild; do NOT add
+`expo-location`), (b) customer app to carry coords from the picked suggestion onto the saved address,
+(c) real zone bounds + a coverage-policy decision, then flip zones active. See memory
+`project_delivery_zones_disabled`. Mostly **customer-app** work.
 
-### 2. 📱 Vendor tickets (clean mobile-only build) — spec ready
-Execute **`VENDOR-TICKETS-SPEC.md`** verbatim: 3 screens (`app/support/{index,new,[id]}.tsx`) +
-`hooks/useSupport.ts` + More-tab entry, mirroring Mark8ly's ticket UX (4-stage status stepper)
-against the EXISTING `/api/v1/support/tickets` API. Pure JS, Metro 8082. No backend changes.
+### 2. ✅ Vendor tickets — DONE (2026-06-11)
+Built per `VENDOR-TICKETS-SPEC.md`: `hooks/useSupport.ts` + 3 screens (`app/support/{index,new,[id]}.tsx`)
++ `components/vendor/TicketStatus{Chip,Stepper}.tsx` + More-tab entry (`LifeBuoy`) + `more.support`
+i18n (en/hi). Full live API cycle (create→detail→reply→close) verified against prod
+`/api/v1/support/tickets`. No backend changes. ⏳ remaining: visual tap-through on the sim (Metro 8082)
++ commit.
 
 ### 3. 🔧 Native rebuild / iOS signing fix — unblocks two things
 `expo run:ios` fails "No code signing certificates" (even sim); `xcodebuild` Debug-sim fails on
@@ -65,5 +72,7 @@ FSSAI/FoSCoS API (external).
 - `gh pr create` fails on tesserix org (EMU); `git push` + `gh run watch` work.
 
 ## Suggested order
-Delivery zones (unblock ordering) → vendor tickets (clean win) → signing fix (unblocks cropper +
-Hindi) → web sunset + landing → platform/tesserix-home integration.
+~~Delivery zones~~ (vendor tickets DONE) → signing fix (unblocks cropper + Hindi) → web sunset +
+landing → platform/tesserix-home integration. Delivery-zone enforcement is deferred feature work
+(ordering already works) and is mostly customer-app — pick it up only when delivery-area gating is
+actually wanted.
