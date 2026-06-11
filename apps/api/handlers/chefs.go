@@ -618,6 +618,18 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		}
 	}()
 
+	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
+	// the request path; idempotent so repeated "ready" updates are safe. A
+	// dispatch failure must not fail the chef's status update.
+	if order.Status == models.OrderStatusReady {
+		go func() {
+			if err := services.DispatchOrderDelivery(order.ID); err != nil {
+				log.Printf("Failed to auto-dispatch delivery for order %s: %v", order.ID, err)
+				services.CaptureBackgroundError(err)
+			}
+		}()
+	}
+
 	c.JSON(http.StatusOK, order.ToResponse())
 }
 
