@@ -55,7 +55,7 @@ function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
   return vals.find((v) => typeof v === 'string' && v.trim().length > 0);
 }
 
-function mapChef(c: ApiChefProfile): Chef {
+export function mapChef(c: ApiChefProfile): Chef {
   return {
     id: c.id,
     name: c.businessName ?? '',
@@ -77,7 +77,7 @@ function mapChef(c: ApiChefProfile): Chef {
   };
 }
 
-function mapMenuItem(
+export function mapMenuItem(
   m: ApiMenuItem,
   categoryNames: Map<string, string>,
 ): MenuItem {
