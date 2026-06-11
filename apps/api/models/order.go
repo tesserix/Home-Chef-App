@@ -203,7 +203,20 @@ type OrderResponse struct {
 	Total           float64             `json:"total"`
 	Items           []OrderItemResponse `json:"items"`
 	DeliveryAddress AddressResponse     `json:"deliveryAddress"`
-	CreatedAt       time.Time           `json:"createdAt"`
+	// Chef is populated when the handler preloads the Chef relation
+	// (customer order list/detail). Omitted otherwise so chef-facing
+	// endpoints don't carry a redundant self-reference.
+	Chef      *OrderChefResponse `json:"chef,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+}
+
+// OrderChefResponse is the minimal chef identity the customer order
+// list/detail render (business name + image). Kept small on purpose — the
+// full chef profile is fetched separately when a detail view needs it.
+type OrderChefResponse struct {
+	ID       uuid.UUID `json:"id"`
+	Name     string    `json:"name"`
+	ImageURL string    `json:"imageUrl,omitempty"`
 }
 
 type OrderItemResponse struct {
@@ -280,6 +293,22 @@ func (o *Order) ToResponse() OrderResponse {
 	if currency == "" {
 		currency = "INR"
 	}
+
+	// Chef identity — only when the relation was preloaded (Chef.ID set).
+	// Prefer the profile image, fall back to the banner.
+	var chef *OrderChefResponse
+	if o.Chef.ID != uuid.Nil {
+		image := o.Chef.ProfileImage
+		if image == "" {
+			image = o.Chef.BannerImage
+		}
+		chef = &OrderChefResponse{
+			ID:       o.Chef.ID,
+			Name:     o.Chef.BusinessName,
+			ImageURL: image,
+		}
+	}
+
 	return OrderResponse{
 		ID:              o.ID,
 		OrderNumber:     o.OrderNumber,
@@ -306,6 +335,7 @@ func (o *Order) ToResponse() OrderResponse {
 			State:      o.DeliveryAddressState,
 			PostalCode: o.DeliveryAddressPostalCode,
 		},
+		Chef:      chef,
 		CreatedAt: o.CreatedAt,
 	}
 }

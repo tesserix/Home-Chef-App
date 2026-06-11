@@ -37,6 +37,12 @@ interface ApiOrderItem {
   quantity: number;
 }
 
+interface ApiOrderChef {
+  id: string;
+  name: string;
+  imageUrl?: string;
+}
+
 interface ApiOrder {
   id: string;
   orderNumber: string;
@@ -44,6 +50,7 @@ interface ApiOrder {
   total?: number;
   items?: ApiOrderItem[];
   deliveryAddress?: ApiAddress;
+  chef?: ApiOrderChef;
   createdAt: string;
 }
 
@@ -66,6 +73,20 @@ function mapOrder(raw: ApiOrder): Order {
     id: raw.id,
     orderNumber: raw.orderNumber,
     status: raw.status,
+    // Chef is now sent by the order API (OrderChefResponse: id/name/imageUrl).
+    // Fill the rest of the Chef shape with neutral defaults — the order
+    // list/detail only render name (and optionally image).
+    chef: raw.chef
+      ? {
+          id: raw.chef.id,
+          name: raw.chef.name,
+          imageUrl: raw.chef.imageUrl,
+          cuisine: '',
+          rating: 0,
+          reviewCount: 0,
+          isOpen: false,
+        }
+      : undefined,
     items: (raw.items ?? []).map(mapOrderItem),
     totalAmount: raw.total ?? 0,
     deliveryAddress: {
