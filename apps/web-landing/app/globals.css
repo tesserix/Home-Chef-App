@@ -1,0 +1,366 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* ============================================================
+   Home Chef — fe3dr.com landing
+   Customer coral palette (Airbnb-style): white-first canvas,
+   charcoal text, rausch coral as the single accent.
+   Source of truth: /.impeccable.md → "Customer palette addendum".
+   ============================================================ */
+
+/* Tokens ----------------------------------------------------- */
+:root {
+  /* Canvas + text */
+  --canvas: #ffffff;
+  --charcoal: #222222;
+  --charcoal-soft: #717171;
+  --hairline: #ebebeb;
+  --surface: #f7f7f7;
+  /* Ghost numerals / outline type (editorial device, monochrome) */
+  --ink-outline: #d6d6d6;
+
+  /* Accent — the single brand accent (CTAs, links, focus, selected) */
+  --coral: #ff385c;
+  --coral-pressed: #e00b41;
+  --coral-tint: #ffe8ec;
+
+  /* Functional-only (signal, never decoration) */
+  --success: #008a05;
+  --destructive: #b22b0e;
+  --destructive-foreground: #ffffff;
+
+  /* Three-step elevation scale */
+  --shadow-1: 0 1px 2px rgb(34 34 34 / 0.06);
+  --shadow-2: 0 4px 16px rgb(34 34 34 / 0.1);
+  --shadow-3: 0 12px 40px rgb(34 34 34 / 0.16);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-state: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Semantic aliases (shadcn / @tesserix/web compat) */
+  --background: var(--canvas);
+  --foreground: var(--charcoal);
+  --card: var(--canvas);
+  --card-foreground: var(--charcoal);
+  --popover: var(--canvas);
+  --popover-foreground: var(--charcoal);
+  --primary: var(--coral);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface);
+  --secondary-foreground: var(--charcoal);
+  --muted: var(--surface);
+  --muted-foreground: var(--charcoal-soft);
+  --accent: var(--coral-tint);
+  --accent-foreground: var(--charcoal);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--coral);
+
+  --radius: 0.5rem;
+}
+
+/* Base ------------------------------------------------------- */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px; /* sticky nav offset for anchor links */
+}
+
+body {
+  background: var(--canvas);
+  color: var(--charcoal);
+  font-family: var(--font-inter), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--coral-tint);
+  color: var(--charcoal);
+}
+
+/* A11y: visible coral focus ring everywhere — never outline:none */
+:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Tabular figures for any numeral that should align (ETAs, prices) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Editorial outline type — ghost numerals & marquee alternates.
+   Monochrome by design (never coral). */
+.text-outline {
+  -webkit-text-stroke: 1.5px var(--ink-outline);
+  color: transparent;
+}
+
+/* Scroll reveal ----------------------------------------------
+   Entrances: opacity + transform only, ease-out-quart.
+   `Reveal` (components/reveal.tsx) adds `.is-visible` on
+   intersection; reduced-motion users get instant state. */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 600ms var(--ease-out),
+    transform 600ms var(--ease-out);
+}
+
+.reveal--left {
+  transform: translateX(-28px);
+}
+
+.reveal--right {
+  transform: translateX(28px);
+}
+
+.reveal--scale {
+  transform: scale(0.95);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hero entrance ----------------------------------------------
+   Line-mask rise: each headline line sits inside an overflow-hidden
+   mask and rises into place on load. Pure CSS — no JS required, so
+   the entrance also runs for no-JS visitors. */
+.line-mask {
+  display: block;
+  overflow: hidden;
+  /* Breathing room so descenders aren't clipped by the mask */
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
+}
+
+.line-rise {
+  display: block;
+  transform: translateY(110%);
+  animation: line-rise 800ms var(--ease-out) both;
+}
+
+@keyframes line-rise {
+  to {
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: fade-up 700ms var(--ease-out) both;
+}
+
+@keyframes fade-up {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Launch-dot pulse (eyebrow chip). Opacity-only — no scale ripple. */
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--coral);
+  animation: pulse-dot 2.4s var(--ease-state) infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Dish marquee ------------------------------------------------
+   Continuous translateX loop; track content is duplicated and the
+   copy is aria-hidden. Pauses on hover; reduced-motion stops it. */
+.marquee {
+  overflow: hidden;
+  /* Soft edge fade so dishes glide in and out of frame */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 8%,
+    black 92%,
+    transparent
+  );
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 36s linear infinite;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Order-route motif -------------------------------------------
+   The signature device: a dashed route from a chef's stove to your
+   door, with a coral dot travelling along it (offset-path = motion
+   along transform — compositor-friendly). */
+.route-dot {
+  /* offset-path positions the box; offset-anchor (auto) centers it
+     on the path — no manual top/left/margin correction needed. */
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--coral);
+  box-shadow: 0 0 0 3px var(--coral-tint);
+  offset-rotate: 0deg;
+  animation: route-travel 5s var(--ease-state) infinite;
+}
+
+@keyframes route-travel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+/* Floating hero cards — slow drift adds depth without bounce. */
+.float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Scroll-driven progress line (How-it-works) ------------------
+   Progressive enhancement: browsers with CSS scroll-driven
+   animations get a hairline that fills as the steps scroll by.
+   Everyone else just sees the static hairline. */
+.progress-line {
+  position: relative;
+  background: var(--hairline);
+}
+
+.progress-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--charcoal);
+  transform: scaleY(0);
+  transform-origin: top;
+}
+
+@supports (animation-timeline: view()) {
+  .progress-line::after {
+    animation: progress-grow linear both;
+    animation-timeline: view();
+    animation-range: entry 20% exit 80%;
+  }
+}
+
+@keyframes progress-grow {
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Horizontal dish rail ----------------------------------------
+   Native scroll + snap; scrollbar hidden but region stays
+   keyboard-focusable (tabindex + role on the element). */
+.rail {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* Reduced motion ---------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal,
+  .line-rise,
+  .fade-up {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+
+  .pulse-dot::after,
+  .marquee-track,
+  .route-dot,
+  .float-slow,
+  .progress-line::after {
+    animation: none;
+  }
+
+  .route-dot {
+    offset-distance: 60%;
+    opacity: 1;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Skip link — first focusable element on the page */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 9999px;
+  background: var(--charcoal);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-2);
+}
+
+.skip-link:focus-visible {
+  top: 16px;
+}

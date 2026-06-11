@@ -1,0 +1,31 @@
+# fe3dr.com landing Dockerfile.
+# Builds the Next.js static export (out/) and serves it with nginx.
+#
+# NOTE: Build from monorepo root with:
+#   docker build -f apps/web-landing/Dockerfile .
+
+# ─── builder ───────────────────────────────────────────────────────────
+FROM node:22-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
+WORKDIR /app
+
+# Monorepo root files required for pnpm workspace resolution.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY apps/web-landing/package.json ./apps/web-landing/
+
+RUN pnpm install --frozen-lockfile --filter @homechef/web-landing...
+
+COPY apps/web-landing ./apps/web-landing
+WORKDIR /app/apps/web-landing
+
+RUN pnpm build
+
+# ─── runtime ───────────────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+COPY apps/web-landing/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web-landing/out /usr/share/nginx/html
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1

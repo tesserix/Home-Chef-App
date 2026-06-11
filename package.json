@@ -20,6 +20,8 @@
     "dev:customer": "pnpm --filter @homechef/mobile-customer start",
     "dev:mobile-vendor": "pnpm --filter @homechef/mobile-vendor start",
     "dev:mobile-delivery": "pnpm --filter @homechef/mobile-delivery start",
+    "dev:landing": "pnpm --filter @homechef/web-landing dev",
+    "build:landing": "pnpm --filter @homechef/web-landing build",
     "build:customer": "pnpm --filter @homechef/mobile-customer build:local",
     "build:mobile-vendor": "pnpm --filter @homechef/mobile-vendor build:local",
     "build:mobile-delivery": "pnpm --filter @homechef/mobile-delivery build:local",
