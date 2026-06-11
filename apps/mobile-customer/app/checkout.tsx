@@ -1,10 +1,10 @@
-// Checkout screen — address selection, order summary, Razorpay hosted checkout via expo-web-browser.
+// Checkout screen — address selection, order summary, then Razorpay payment.
 //
-// D-04 decision: react-native-razorpay is incompatible with Expo managed workflow SDK 55.
-// Using expo-web-browser + Razorpay hosted checkout URL as fallback.
-// DO NOT import react-native-razorpay or razorpay-react-native-checkout.
+// Payment runs in-app via the WebView screen at app/payment/checkout.tsx
+// (Razorpay Standard Checkout). This screen creates the order + Razorpay order,
+// then hands off to that screen, which verifies the result server-side.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,14 +19,12 @@ import {
   View,
 } from 'react-native';
 import { Link, router, type Href } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import * as WebBrowser from 'expo-web-browser';
 import { Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
-import { useCreateOrder, useOrderStatus } from '../hooks/useOrderCheckout';
+import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
   useAddressAutocomplete,
@@ -82,7 +80,6 @@ export default function CheckoutScreen() {
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pollingOrderId, setPollingOrderId] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
   // CW-01d: explicit per-order T&C + Refund Policy consent for RBI PA disclosure.
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -96,53 +93,6 @@ export default function CheckoutScreen() {
       }
     }
   }, [addresses]);
-
-  // ─── Polling ──────────────────────────────────────────────────────────────
-
-  const { data: polledOrder } = useOrderStatus(pollingOrderId ?? '', !!pollingOrderId);
-
-  useEffect(() => {
-    if (!polledOrder) return;
-    const status = polledOrder.data.status;
-    if (status !== 'pending') {
-      setPollingOrderId(null);
-      setIsLoading(false);
-
-      if (
-        status === 'confirmed' ||
-        status === 'preparing' ||
-        status === 'ready' ||
-        status === 'picked_up' ||
-        status === 'delivered'
-      ) {
-        useCartStore.getState().clearCart();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace(`/order/${polledOrder.data.id}`);
-      } else if (status === 'cancelled') {
-        setError('Payment was not completed. Please try again.');
-      }
-    }
-  }, [polledOrder]);
-
-  // Hard timeout: stop polling after 60s
-  useEffect(() => {
-    if (!pollingOrderId) return;
-    const timeout = setTimeout(() => {
-      setPollingOrderId(null);
-      setIsLoading(false);
-      setError('Payment confirmation timed out. Check your order history to confirm status.');
-    }, 60000);
-    return () => clearTimeout(timeout);
-  }, [pollingOrderId]);
-
-  // Clean up polling on unmount
-  const pollingOrderIdRef = useRef(pollingOrderId);
-  pollingOrderIdRef.current = pollingOrderId;
-  useEffect(() => {
-    return () => {
-      pollingOrderIdRef.current = null;
-    };
-  }, []);
 
   // ─── Address form ─────────────────────────────────────────────────────────
 
@@ -237,25 +187,24 @@ export default function CheckoutScreen() {
       );
       const paymentData = paymentResp.data.data ?? (paymentResp.data as unknown as RazorpayPaymentData);
 
-      // Step 3: Build Razorpay hosted checkout URL (D-04 fallback — expo-web-browser)
-      const checkoutUrl = [
-        'https://api.razorpay.com/v1/checkout/embedded',
-        `?key_id=${paymentData.razorpayKeyId}`,
-        `&order_id=${paymentData.razorpayOrderId}`,
-        `&amount=${paymentData.amount}`,
-        `&currency=${paymentData.currency ?? 'INR'}`,
-        `&name=Fe3dr`,
-        `&prefill[name]=${encodeURIComponent(paymentData.prefill?.name ?? '')}`,
-        `&prefill[email]=${encodeURIComponent(paymentData.prefill?.email ?? '')}`,
-        `&prefill[contact]=${encodeURIComponent(paymentData.prefill?.phone ?? '')}`,
-        `&callback_url=${encodeURIComponent('homechef-customer://payment/result')}`,
-      ].join('');
-
-      // Step 4: Open hosted checkout in in-app browser
-      await WebBrowser.openBrowserAsync(checkoutUrl);
-
-      // Step 5: Start polling — webhook will update status server-side
-      setPollingOrderId(orderId);
+      // Step 3: Hand off to the in-app Razorpay checkout (WebView). That screen
+      // opens the payment sheet, verifies the result server-side, and routes to
+      // /payment/result. Clear our loading state so checkout is usable if the
+      // user backs out of the payment sheet.
+      setIsLoading(false);
+      router.push({
+        pathname: '/payment/checkout',
+        params: {
+          orderId,
+          razorpayOrderId: paymentData.razorpayOrderId,
+          razorpayKeyId: paymentData.razorpayKeyId,
+          amount: String(paymentData.amount),
+          currency: paymentData.currency ?? 'INR',
+          name: paymentData.prefill?.name ?? '',
+          email: paymentData.prefill?.email ?? '',
+          phone: paymentData.prefill?.phone ?? '',
+        },
+      });
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
       // scroll body, far from the sticky button, so a failed tap otherwise
