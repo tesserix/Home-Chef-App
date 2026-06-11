@@ -160,7 +160,6 @@ func SetupRouter() *gin.Engine {
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
-	driverHandler := handlers.NewDriverOnboardingHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
 	paymentHandler := handlers.NewPaymentHandler()
@@ -334,7 +333,7 @@ func SetupRouter() *gin.Engine {
 		chefOnboarding.Use(bffAuth(bffKey, bffWindow))
 		{
 			chefOnboarding.GET("/onboarding/status", uploadHandler.GetOnboardingStatus)
-		chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
+			chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
 			chefOnboarding.POST("/documents", uploadHandler.UploadDocument)
 			// Wave 2: chef-side doc renewal. Existing doc by ID, swap file
 			// + (optional) expiry, reset status to pending, fresh approval
@@ -540,45 +539,12 @@ func SetupRouter() *gin.Engine {
 			chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
 		}
 
-		// Delivery partner onboarding (authenticated, no delivery role required)
-		deliveryOnboarding := v1.Group("/delivery")
-		deliveryOnboarding.Use(bffAuth(bffKey, bffWindow))
-		{
-			deliveryOnboarding.GET("/onboarding/status", deliveryHandler.GetOnboardingStatus)
-			deliveryOnboarding.POST("/onboarding", deliveryHandler.Onboarding)
-		}
-
-		// Driver onboarding (authenticated, no role required — user is becoming a driver)
-		driverOnboarding := v1.Group("/driver")
-		driverOnboarding.Use(bffAuth(bffKey, bffWindow))
-		{
-			driverOnboarding.GET("/onboarding/status", driverHandler.GetDriverOnboardingStatus)
-			driverOnboarding.POST("/onboarding/personal", driverHandler.DriverOnboardingPersonal)
-			driverOnboarding.POST("/onboarding/vehicle", driverHandler.DriverOnboardingVehicle)
-			driverOnboarding.POST("/onboarding/documents", deliveryHandler.UploadPartnerDocument)
-			driverOnboarding.GET("/onboarding/documents", deliveryHandler.GetPartnerDocuments)
-			driverOnboarding.POST("/onboarding/payout", driverHandler.DriverOnboardingPayout)
-			driverOnboarding.POST("/onboarding/submit", driverHandler.DriverOnboardingSubmit)
-			driverOnboarding.POST("/referral/validate", driverHandler.ValidateReferralCode)
-			// Subscription plan selection during onboarding (no delivery role needed yet)
-			driverOnboarding.GET("/subscription/plans", subscriptionHandler.GetAvailablePlans)
-			driverOnboarding.POST("/subscription/plan", subscriptionHandler.ChoosePlan)
-		}
-
-		// Driver referral routes (delivery role required)
-		driverReferral := v1.Group("/driver/referral")
-		driverReferral.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
-		{
-			driverReferral.GET("/code", driverHandler.GetReferralCode)
-			driverReferral.GET("/stats", driverHandler.GetReferralStats)
-		}
-
 		// Delivery staff routes — enforced with granular staff permissions
 		deliveryStaff := v1.Group("/delivery/staff")
 		deliveryStaff.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
 		{
-			deliveryStaff.GET("/me", staffHandler.GetMyStaffProfile)   // No permission needed — own profile
-			deliveryStaff.GET("/roles", staffHandler.GetStaffRoles)    // No permission needed — role definitions
+			deliveryStaff.GET("/me", staffHandler.GetMyStaffProfile) // No permission needed — own profile
+			deliveryStaff.GET("/roles", staffHandler.GetStaffRoles)  // No permission needed — role definitions
 			deliveryStaff.GET("", middleware.RequireStaffPermission(models.SPViewStaff), staffHandler.ListStaff)
 			deliveryStaff.POST("/invitations", middleware.RequireStaffPermission(models.SPInviteStaff), staffHandler.CreateInvitation)
 			deliveryStaff.GET("/invitations", middleware.RequireStaffPermission(models.SPViewStaff), staffHandler.ListInvitations)
@@ -593,36 +559,6 @@ func SetupRouter() *gin.Engine {
 			deliveryStaff.GET("/fleet/overview", middleware.RequireStaffPermission(models.SPViewFleet), deliveryHandler.FleetOverview)
 			deliveryStaff.GET("/fleet/partners", middleware.RequireStaffPermission(models.SPViewDeliveryPartners), deliveryHandler.AdminGetDeliveryPartners)
 			deliveryStaff.GET("/fleet/partners/:id", middleware.RequireStaffPermission(models.SPViewDeliveryPartners), deliveryHandler.GetPartnerDetail)
-			deliveryStaff.PUT("/fleet/partners/:id/verify", middleware.RequireStaffPermission(models.SPVerifyDeliveryPartners), deliveryHandler.AdminVerifyPartner)
-			deliveryStaff.PUT("/fleet/partners/:id/suspend", middleware.RequireStaffPermission(models.SPManageDeliveryPartners), deliveryHandler.AdminSuspendPartner)
-			deliveryStaff.POST("/fleet/partners/:id/assign", middleware.RequireStaffPermission(models.SPAssignDeliveries), deliveryHandler.ManualAssignDelivery)
-		}
-
-		// Delivery partner routes (delivery role required)
-		delivery := v1.Group("/delivery")
-		delivery.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
-		{
-			delivery.GET("/stats", deliveryHandler.GetStats)
-			delivery.GET("/profile", deliveryHandler.GetProfile)
-			delivery.PUT("/profile", deliveryHandler.UpdateProfile)
-			delivery.PUT("/online", deliveryHandler.ToggleOnline)
-			delivery.PUT("/location", deliveryHandler.UpdateLocation)
-			delivery.GET("/current", deliveryHandler.GetCurrentDelivery)
-			delivery.GET("/available", deliveryHandler.GetAvailableDeliveries)
-			delivery.POST("/:id/accept", deliveryHandler.AcceptDelivery)
-			delivery.PUT("/:id/status", deliveryHandler.UpdateDeliveryStatus)
-			delivery.GET("/orders", deliveryHandler.GetDeliveryHistory)
-			delivery.GET("/earnings", deliveryHandler.GetEarnings)
-			delivery.POST("/documents", deliveryHandler.UploadPartnerDocument)
-			delivery.GET("/documents", deliveryHandler.GetPartnerDocuments)
-
-			// Stripe Connect onboarding for international drivers. Same
-			// handler type as the chef version — different endpoints.
-			driverStripeHandler := handlers.NewStripeConnectHandler()
-			delivery.POST("/stripe/connect", driverStripeHandler.CreateDriverStripeAccount)
-			delivery.GET("/stripe/status", driverStripeHandler.GetDriverStripeStatus)
-			delivery.POST("/stripe/onboarding-link", driverStripeHandler.RefreshDriverOnboardingLink)
-			delivery.PUT("/payment-provider", driverStripeHandler.SetDriverPaymentProvider)
 		}
 
 		// Chef promotion routes (featured ads)
@@ -647,20 +583,6 @@ func SetupRouter() *gin.Engine {
 			chefSubscription.PUT("/change-plan", subscriptionHandler.ChangePlan)
 			chefSubscription.GET("/invoices", subscriptionHandler.GetInvoices)
 			chefSubscription.GET("/earnings", subscriptionHandler.GetEarningsSummary)
-		}
-
-		// Driver subscription routes (delivery role required — post-onboarding management)
-		// Note: /plans and /plan are registered in the onboarding group above (auth-only)
-		// to allow plan selection during onboarding before delivery role is assigned
-		driverSubscription := v1.Group("/driver/subscription")
-		driverSubscription.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
-		{
-			driverSubscription.GET("", subscriptionHandler.GetSubscription)
-			driverSubscription.POST("/choose-plan", subscriptionHandler.ChoosePlan)
-			driverSubscription.POST("/cancel", subscriptionHandler.CancelSubscription)
-			driverSubscription.PUT("/change-plan", subscriptionHandler.ChangePlan)
-			driverSubscription.GET("/invoices", subscriptionHandler.GetInvoices)
-			driverSubscription.GET("/earnings", subscriptionHandler.GetEarningsSummary)
 		}
 
 		// Payment routes (authenticated). Rate-limited per-user to defend
@@ -710,8 +632,6 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/delivery/list", deliveryHandler.AdminListDeliveries)
 			admin.GET("/delivery/partners", deliveryHandler.AdminGetDeliveryPartners)
 			admin.GET("/delivery/partners/:id", deliveryHandler.GetPartnerDetail)
-			admin.PUT("/delivery/partners/:id/verify", deliveryHandler.AdminVerifyPartner)
-			admin.PUT("/delivery/partners/:id/suspend", deliveryHandler.AdminSuspendPartner)
 
 			// Delivery provider management
 			admin.GET("/delivery/providers", providerHandler.ListProviders)
