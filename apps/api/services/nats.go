@@ -79,10 +79,10 @@ type OrderEvent struct {
 
 // NotificationEvent represents a notification to be sent
 type NotificationEvent struct {
-	UserID  uuid.UUID `json:"user_id"`
-	Type    string    `json:"type"` // email, push, sms
-	Title   string    `json:"title"`
-	Message string    `json:"message"`
+	UserID  uuid.UUID              `json:"user_id"`
+	Type    string                 `json:"type"` // email, push, sms
+	Title   string                 `json:"title"`
+	Message string                 `json:"message"`
 	Data    map[string]interface{} `json:"data,omitempty"`
 }
 

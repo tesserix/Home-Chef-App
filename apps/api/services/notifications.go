@@ -21,14 +21,14 @@ import (
 
 // NotificationService handles notification processing
 type NotificationService struct {
-	nats         *NATSClient
+	nats          *NATSClient
 	subscriptions []*nats.Subscription
-	consumers    []jetstream.Consumer
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	running      bool
-	mu           sync.Mutex
+	consumers     []jetstream.Consumer
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	running       bool
+	mu            sync.Mutex
 }
 
 var (
@@ -1065,13 +1065,13 @@ func (s *NotificationService) saveNotification(notification *models.Notification
 
 func getOrderStatusMessage(status string) string {
 	messages := map[string]string{
-		"confirmed":   "Your order has been confirmed by the chef!",
-		"preparing":   "Your order is being prepared",
-		"ready":       "Your order is ready for pickup/delivery",
-		"picked_up":   "Your order has been picked up by the delivery partner",
-		"on_the_way":  "Your order is on its way!",
-		"delivered":   "Your order has been delivered. Enjoy!",
-		"cancelled":   "Your order has been cancelled",
+		"confirmed":  "Your order has been confirmed by the chef!",
+		"preparing":  "Your order is being prepared",
+		"ready":      "Your order is ready for pickup/delivery",
+		"picked_up":  "Your order has been picked up by the delivery partner",
+		"on_the_way": "Your order is on its way!",
+		"delivered":  "Your order has been delivered. Enjoy!",
+		"cancelled":  "Your order has been cancelled",
 	}
 	if msg, ok := messages[status]; ok {
 		return msg

@@ -56,8 +56,9 @@ type Config struct {
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
 
-	// SendGrid
+	// Email — SendGrid primary, Resend fallback
 	SendGridAPIKey string
+	ResendAPIKey   string
 	FromEmail      string
 	FromName       string
 
@@ -164,8 +165,9 @@ func Load() {
 		RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
 		RazorpayWebhookSecret: getEnv("RAZORPAY_WEBHOOK_SECRET", ""),
 
-		// SendGrid
+		// Email — SendGrid primary, Resend fallback
 		SendGridAPIKey: getEnv("SENDGRID_API_KEY", ""),
+		ResendAPIKey:   getEnv("RESEND_API_KEY", ""),
 		FromEmail:      getEnv("FROM_EMAIL", "noreply@homechef.com"),
 		FromName:       getEnv("FROM_NAME", "HomeChef"),
 

@@ -137,14 +137,14 @@ type StripeConnectAccountRequest struct {
 }
 
 type StripeConnectAccountResponse struct {
-	ID       string `json:"id"`
-	Object   string `json:"object"`
-	Country  string `json:"country"`
-	Email    string `json:"email"`
-	Type     string `json:"type"`
-	Charges  bool   `json:"charges_enabled"`
-	Payouts  bool   `json:"payouts_enabled"`
-	Details  bool   `json:"details_submitted"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Country string `json:"country"`
+	Email   string `json:"email"`
+	Type    string `json:"type"`
+	Charges bool   `json:"charges_enabled"`
+	Payouts bool   `json:"payouts_enabled"`
+	Details bool   `json:"details_submitted"`
 }
 
 // CreateConnectAccount creates a Stripe Connect account. Returns the account
@@ -355,12 +355,12 @@ func (c *StripeClient) CreateTransfer(req *StripeTransferRequest) (*StripeTransf
 // --- Refunds ---
 
 type StripeRefundRequest struct {
-	PaymentIntent         string
-	Amount                int // In cents; 0 = full refund
-	Reason                string
-	ReverseTransfer       bool
-	RefundApplicationFee  bool
-	Metadata              map[string]string
+	PaymentIntent        string
+	Amount               int // In cents; 0 = full refund
+	Reason               string
+	ReverseTransfer      bool
+	RefundApplicationFee bool
+	Metadata             map[string]string
 }
 
 type StripeRefund struct {

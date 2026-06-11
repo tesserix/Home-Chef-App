@@ -17,7 +17,7 @@ import (
 // TaxConfig holds per-country tax configuration loaded from PlatformSettings
 type TaxConfig struct {
 	CountryCode         string
-	TaxName             string  // GST, VAT, Sales Tax
+	TaxName             string // GST, VAT, Sales Tax
 	FoodPercent         float64
 	ServicePercent      float64
 	DeliveryPercent     float64
@@ -271,9 +271,9 @@ func GenerateOrderInvoice(order *models.Order) (*models.OrderInvoice, error) {
 		ServiceTaxPercent:  taxCfg.ServicePercent,
 		DeliveryTaxPercent: taxCfg.DeliveryPercent,
 
-		CustomerName:  order.Customer.FirstName + " " + order.Customer.LastName,
-		CustomerEmail: order.Customer.Email,
-		CustomerPhone: order.Customer.Phone,
+		CustomerName:    order.Customer.FirstName + " " + order.Customer.LastName,
+		CustomerEmail:   order.Customer.Email,
+		CustomerPhone:   order.Customer.Phone,
 		CustomerAddress: customerAddress,
 		ChefName:        order.Chef.BusinessName,
 		ChefAddress:     chefAddress,
@@ -360,11 +360,11 @@ func GenerateSubscriptionInvoiceData(invoice *models.SubscriptionInvoice) (map[s
 
 		// Tax breakdown
 		"tax": map[string]interface{}{
-			"name":       taxCfg.TaxName,
-			"percent":    taxCfg.SubscriptionPercent,
-			"amount":     invoice.TaxAmount,
-			"idLabel":    taxCfg.RegistrationIDLabel,
-			"companyId":  taxCfg.CompanyTaxID,
+			"name":      taxCfg.TaxName,
+			"percent":   taxCfg.SubscriptionPercent,
+			"amount":    invoice.TaxAmount,
+			"idLabel":   taxCfg.RegistrationIDLabel,
+			"companyId": taxCfg.CompanyTaxID,
 		},
 
 		// Totals

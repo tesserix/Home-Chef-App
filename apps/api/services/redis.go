@@ -17,7 +17,7 @@ type RedisClient struct {
 
 var (
 	redisInstance *RedisClient
-	redisOnce    sync.Once
+	redisOnce     sync.Once
 )
 
 func GetRedisClient() *RedisClient {

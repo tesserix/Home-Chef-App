@@ -153,13 +153,13 @@ func InitRazorpay() {
 
 // LinkedAccountRequest represents the request to create a Razorpay Route linked account
 type LinkedAccountRequest struct {
-	Email         string `json:"email"`
-	Phone         string `json:"phone"`
-	LegalName     string `json:"legal_business_name"`
-	BusinessType  string `json:"business_type"` // individual, partnership, etc.
-	ContactName   string `json:"contact_name"`
-	LegalInfo     *LinkedAccountLegalInfo `json:"legal_info,omitempty"`
-	Profile       *LinkedAccountProfile   `json:"profile,omitempty"`
+	Email        string                  `json:"email"`
+	Phone        string                  `json:"phone"`
+	LegalName    string                  `json:"legal_business_name"`
+	BusinessType string                  `json:"business_type"` // individual, partnership, etc.
+	ContactName  string                  `json:"contact_name"`
+	LegalInfo    *LinkedAccountLegalInfo `json:"legal_info,omitempty"`
+	Profile      *LinkedAccountProfile   `json:"profile,omitempty"`
 }
 
 type LinkedAccountLegalInfo struct {
@@ -168,9 +168,9 @@ type LinkedAccountLegalInfo struct {
 }
 
 type LinkedAccountProfile struct {
-	Category    string                   `json:"category,omitempty"`
-	SubCategory string                   `json:"subcategory,omitempty"`
-	Addresses   *LinkedAccountAddresses  `json:"addresses,omitempty"`
+	Category    string                  `json:"category,omitempty"`
+	SubCategory string                  `json:"subcategory,omitempty"`
+	Addresses   *LinkedAccountAddresses `json:"addresses,omitempty"`
 }
 
 type LinkedAccountAddresses struct {
@@ -218,18 +218,18 @@ func (c *RazorpayClient) CreateLinkedAccount(req *LinkedAccountRequest) (*Linked
 
 // TransferSpec defines a payment split for Razorpay Route
 type TransferSpec struct {
-	Account  string  `json:"account"`  // Razorpay linked account ID
-	Amount   int     `json:"amount"`   // Amount in paise (INR smallest unit)
-	Currency string  `json:"currency"`
+	Account  string            `json:"account"` // Razorpay linked account ID
+	Amount   int               `json:"amount"`  // Amount in paise (INR smallest unit)
+	Currency string            `json:"currency"`
 	Notes    map[string]string `json:"notes,omitempty"`
-	OnHold   bool    `json:"on_hold,omitempty"` // Hold transfer until delivery confirmed
+	OnHold   bool              `json:"on_hold,omitempty"` // Hold transfer until delivery confirmed
 }
 
 // OrderRequest creates a Razorpay order with optional Route transfers
 type OrderRequest struct {
-	Amount    int               `json:"amount"`    // Total in paise
+	Amount    int               `json:"amount"` // Total in paise
 	Currency  string            `json:"currency"`
-	Receipt   string            `json:"receipt"`   // Order number
+	Receipt   string            `json:"receipt"` // Order number
 	Notes     map[string]string `json:"notes,omitempty"`
 	Transfers []TransferSpec    `json:"transfers,omitempty"`
 }
@@ -267,10 +267,10 @@ func (c *RazorpayClient) CreateOrder(req *OrderRequest) (*OrderResponse, error) 
 
 // RefundRequest creates a refund on a payment
 type RefundRequest struct {
-	Amount int               `json:"amount"` // In paise; 0 = full refund
-	Speed  string            `json:"speed"`  // "normal" or "optimum"
-	Notes  map[string]string `json:"notes,omitempty"`
-	Receipt string           `json:"receipt,omitempty"`
+	Amount  int               `json:"amount"` // In paise; 0 = full refund
+	Speed   string            `json:"speed"`  // "normal" or "optimum"
+	Notes   map[string]string `json:"notes,omitempty"`
+	Receipt string            `json:"receipt,omitempty"`
 }
 
 // RefundResponse from Razorpay
@@ -309,17 +309,17 @@ func (c *RazorpayClient) CreateRefund(paymentID string, req *RefundRequest) (*Re
 
 // PaymentResponse from Razorpay
 type PaymentResponse struct {
-	ID            string `json:"id"`
-	Entity        string `json:"entity"`
-	Amount        int    `json:"amount"`
-	Currency      string `json:"currency"`
-	Status        string `json:"status"`
-	OrderID       string `json:"order_id"`
-	Method        string `json:"method"` // card, upi, netbanking, wallet
-	Email         string `json:"email"`
-	Contact       string `json:"contact"`
-	Captured      bool   `json:"captured"`
-	AmountRefunded int   `json:"amount_refunded"`
+	ID             string `json:"id"`
+	Entity         string `json:"entity"`
+	Amount         int    `json:"amount"`
+	Currency       string `json:"currency"`
+	Status         string `json:"status"`
+	OrderID        string `json:"order_id"`
+	Method         string `json:"method"` // card, upi, netbanking, wallet
+	Email          string `json:"email"`
+	Contact        string `json:"contact"`
+	Captured       bool   `json:"captured"`
+	AmountRefunded int    `json:"amount_refunded"`
 }
 
 // FetchPayment retrieves payment details

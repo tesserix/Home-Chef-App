@@ -140,9 +140,9 @@ func sendFSSAIReminderPush(chefID uuid.UUID, expiryDate *time.Time, daysOut int)
 	}
 
 	data := map[string]string{
-		"type":       "fssai_expiring",
-		"daysOut":    fmt.Sprintf("%d", daysOut),
-		"deeplink":   "homechef-vendor:///documents/renew",
+		"type":     "fssai_expiring",
+		"daysOut":  fmt.Sprintf("%d", daysOut),
+		"deeplink": "homechef-vendor:///documents/renew",
 	}
 	if expiryDate != nil {
 		data["expiryDate"] = expiryDate.Format("2006-01-02")

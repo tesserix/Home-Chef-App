@@ -122,7 +122,7 @@ func main() {
 	// decides which one handles a given order.
 	services.InitStripe()
 
-	// Initialize SendGrid email service
+	// Initialize email service (SendGrid primary, Resend fallback)
 	services.InitEmailService()
 
 	// Initialize FCM push notification service

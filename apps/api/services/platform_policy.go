@@ -23,19 +23,19 @@ const platformPolicyKey = "platform_policy"
 type PlatformPolicy struct {
 	// Fees applied at order creation. Values are plain floats (percent is 0-100,
 	// fee is absolute). Chef payout = subtotal + chefTip + (subtotal * chefPayoutPercent / 100 - serviceFee).
-	ServiceFeePercent  float64 `json:"serviceFeePercent"`
-	TaxPercent         float64 `json:"taxPercent"`
-	BaseDeliveryFee    float64 `json:"baseDeliveryFee"`
-	PerKmDeliveryFee   float64 `json:"perKmDeliveryFee"`
-	ChefPayoutPercent  float64 `json:"chefPayoutPercent"`  // of subtotal
+	ServiceFeePercent   float64 `json:"serviceFeePercent"`
+	TaxPercent          float64 `json:"taxPercent"`
+	BaseDeliveryFee     float64 `json:"baseDeliveryFee"`
+	PerKmDeliveryFee    float64 `json:"perKmDeliveryFee"`
+	ChefPayoutPercent   float64 `json:"chefPayoutPercent"`   // of subtotal
 	DriverPayoutPercent float64 `json:"driverPayoutPercent"` // of deliveryFee
 
 	// Operating hours enforced at checkout. "" / 0 disables the check.
-	Timezone         string `json:"timezone"`           // IANA, e.g. "Asia/Kolkata"
-	OpeningTime      string `json:"openingTime"`        // "HH:MM" 24h
-	ClosingTime      string `json:"closingTime"`        // "HH:MM" 24h
-	OperatingDays    []int  `json:"operatingDays"`      // 0=Sunday..6=Saturday; empty = all days
-	ClosedMessage    string `json:"closedMessage"`      // shown at checkout when closed
+	Timezone      string `json:"timezone"`      // IANA, e.g. "Asia/Kolkata"
+	OpeningTime   string `json:"openingTime"`   // "HH:MM" 24h
+	ClosingTime   string `json:"closingTime"`   // "HH:MM" 24h
+	OperatingDays []int  `json:"operatingDays"` // 0=Sunday..6=Saturday; empty = all days
+	ClosedMessage string `json:"closedMessage"` // shown at checkout when closed
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go

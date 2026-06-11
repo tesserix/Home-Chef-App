@@ -4,9 +4,9 @@ import "testing"
 
 func TestFSSAIRegex(t *testing.T) {
 	cases := map[string]string{
-		"Lic. No. 12345678901234 issued":   "12345678901234",
-		"FSSAI 1 0 0 19 0 22 000123":       "", // spaced digits don't form 14 contiguous
-		"No fourteen digit here 1234567":   "",
+		"Lic. No. 12345678901234 issued":            "12345678901234",
+		"FSSAI 1 0 0 19 0 22 000123":                "", // spaced digits don't form 14 contiguous
+		"No fourteen digit here 1234567":            "",
 		"prefix99887766554433 and 9988776655443322": "", // 16 digits, not a clean 14-digit word
 	}
 	for text, want := range cases {

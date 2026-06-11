@@ -22,8 +22,8 @@ func TestCurrentFinancialYearStart(t *testing.T) {
 		now  time.Time
 		want int
 	}{
-		{time.Date(2026, 5, 10, 6, 0, 0, 0, time.UTC), 2026},  // May → FY2026
-		{time.Date(2026, 2, 10, 6, 0, 0, 0, time.UTC), 2025},  // Feb → FY2025
+		{time.Date(2026, 5, 10, 6, 0, 0, 0, time.UTC), 2026},   // May → FY2026
+		{time.Date(2026, 2, 10, 6, 0, 0, 0, time.UTC), 2025},   // Feb → FY2025
 		{time.Date(2026, 4, 1, 0, 0, 0, 0, istLocation), 2026}, // 1 Apr boundary → FY2026
 		{time.Date(2026, 3, 31, 23, 0, 0, 0, istLocation), 2025},
 	}

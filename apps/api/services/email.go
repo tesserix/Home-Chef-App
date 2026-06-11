@@ -1,22 +1,18 @@
 package services
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
+	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"sync"
 
 	"github.com/homechef/api/config"
 )
 
-// EmailService handles sending transactional emails via SendGrid
+// EmailService handles sending transactional emails. The provider chain is
+// built in InitEmailService: SendGrid primary, Resend fallback.
 type EmailService struct {
-	apiKey   string
-	from     string
-	fromName string
+	mailer Mailer
 }
 
 // OrderItemSummary represents a single item in an order email
@@ -39,81 +35,47 @@ func GetEmailService() *EmailService {
 	return emailService
 }
 
-// InitEmailService initialises the email service from config
+// InitEmailService initialises the email service from config.
+//
+// SendGrid is the primary provider; Resend is ALWAYS the fallback when both
+// keys are set, so a SendGrid outage degrades to a provider switch instead
+// of dropped mail. With only one key, that provider runs alone. With no
+// keys, emails are skipped (and logged) — same behaviour as before the
+// fallback existed.
 func InitEmailService() {
 	svc := GetEmailService()
-	svc.apiKey = config.AppConfig.SendGridAPIKey
-	svc.from = config.AppConfig.FromEmail
-	svc.fromName = config.AppConfig.FromName
+	cfg := config.AppConfig
 
-	if svc.apiKey == "" {
-		log.Println("Warning: SendGrid API key not configured — emails will be skipped")
-	} else {
+	switch {
+	case cfg.SendGridAPIKey != "" && cfg.ResendAPIKey != "":
+		svc.mailer = NewFallbackMailer(
+			NewSendGridMailer(cfg.SendGridAPIKey, cfg.FromEmail, cfg.FromName),
+			NewResendMailer(cfg.ResendAPIKey, cfg.FromEmail, cfg.FromName),
+		)
+		log.Println("Email service initialised (SendGrid primary, Resend fallback)")
+	case cfg.SendGridAPIKey != "":
+		log.Println("Warning: RESEND_API_KEY not configured — SendGrid only, no fallback provider")
+		svc.mailer = NewSendGridMailer(cfg.SendGridAPIKey, cfg.FromEmail, cfg.FromName)
 		log.Println("Email service initialised (SendGrid)")
+	case cfg.ResendAPIKey != "":
+		log.Println("Warning: SENDGRID_API_KEY not configured — using Resend as the only provider")
+		svc.mailer = NewResendMailer(cfg.ResendAPIKey, cfg.FromEmail, cfg.FromName)
+		log.Println("Email service initialised (Resend)")
+	default:
+		log.Println("Warning: SendGrid API key not configured — emails will be skipped")
 	}
 }
 
-// sendgridPayload represents the SendGrid v3 mail/send request body
-type sendgridPayload struct {
-	Personalizations []sendgridPersonalization `json:"personalizations"`
-	From             sendgridAddress           `json:"from"`
-	Subject          string                    `json:"subject"`
-	Content          []sendgridContent         `json:"content"`
-}
-
-type sendgridPersonalization struct {
-	To []sendgridAddress `json:"to"`
-}
-
-type sendgridAddress struct {
-	Email string `json:"email"`
-	Name  string `json:"name,omitempty"`
-}
-
-type sendgridContent struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
-}
-
-// send dispatches an email via the SendGrid v3 REST API.
-// Returns nil immediately if the API key is not configured.
+// send dispatches an email via the configured provider chain.
+// Returns nil immediately if no API key is configured.
 func (s *EmailService) send(to, subject, htmlBody string) error {
-	if s.apiKey == "" {
+	if s.mailer == nil {
 		log.Printf("Email skipped (no API key): to=%s subject=%s", to, subject)
 		return nil
 	}
 
-	payload := sendgridPayload{
-		Personalizations: []sendgridPersonalization{
-			{To: []sendgridAddress{{Email: to}}},
-		},
-		From:    sendgridAddress{Email: s.from, Name: s.fromName},
-		Subject: subject,
-		Content: []sendgridContent{
-			{Type: "text/html", Value: htmlBody},
-		},
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("email: failed to marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("email: failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("email: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("email: SendGrid returned status %d", resp.StatusCode)
+	if err := s.mailer.Send(context.Background(), to, subject, htmlBody); err != nil {
+		return err
 	}
 
 	log.Printf("Email sent: to=%s subject=%s", to, subject)
@@ -153,12 +115,12 @@ func (s *EmailService) SendChefVerificationApproved(to, chefName string) error {
 }
 
 // SendOrderInvoice emails the customer a copy of their GST tax
-// invoice as a PDF attachment after delivery. Uses SendGrid's v3
-// attachments shape: base64-encoded content + filename + content-type.
-// Failure is fatal-only at the gateway level (4xx/5xx); a missing
-// API key no-ops cleanly like every other send helper.
+// invoice as a PDF attachment after delivery. Goes through the same
+// provider chain as every other send, so the attachment fails over
+// from SendGrid to Resend too. A missing API key no-ops cleanly like
+// every other send helper.
 func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBytes []byte, filename string) error {
-	if s.apiKey == "" {
+	if s.mailer == nil {
 		log.Printf("Email skipped (no API key): to=%s subject=invoice %s", to, orderNumber)
 		return nil
 	}
@@ -176,39 +138,13 @@ func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBy
 		<p>— Home Chef</p>
 	`, name, orderNumber)
 
-	payload := map[string]interface{}{
-		"personalizations": []map[string]interface{}{
-			{"to": []map[string]string{{"email": to}}},
-		},
-		"from":    map[string]string{"email": s.from, "name": s.fromName},
-		"subject": subject,
-		"content": []map[string]string{{"type": "text/html", "value": body}},
-		"attachments": []map[string]string{
-			{
-				"content":     base64.StdEncoding.EncodeToString(pdfBytes),
-				"type":        "application/pdf",
-				"filename":    filename,
-				"disposition": "attachment",
-			},
-		},
+	att := Attachment{
+		Filename:    filename,
+		ContentType: "application/pdf",
+		Content:     pdfBytes,
 	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("email: marshal invoice payload: %w", err)
-	}
-	req, err := http.NewRequest(http.MethodPost, "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(data))
-	if err != nil {
-		return fmt.Errorf("email: build invoice request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("email: invoice request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("email: SendGrid returned status %d", resp.StatusCode)
+	if err := s.mailer.SendWithAttachment(context.Background(), to, subject, body, att); err != nil {
+		return fmt.Errorf("email: invoice send: %w", err)
 	}
 	log.Printf("Invoice email sent: to=%s order=%s", to, orderNumber)
 	return nil
