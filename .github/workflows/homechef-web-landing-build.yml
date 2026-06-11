@@ -1,4 +1,10 @@
-name: HomeChef Web - CI Build
+name: HomeChef Web Landing - CI Build
+
+# Builds the fe3dr.com marketing landing (apps/web-landing, Next.js static
+# export) and deploys it to the EXISTING `homechef-web` slot — same GHCR image
+# name, same ArgoCD app, same fe3dr.com routing. The landing thus REPLACES the
+# sunset Vite SPA at fe3dr.com with no routing/DNS change (port 80 matches).
+# The old apps/web build/release workflows were removed (see apps/web/SUNSET.md).
 
 on:
   push:
@@ -9,16 +15,14 @@ on:
       - 'bugfix/**'
       - 'hotfix/**'
     paths:
-      - 'apps/web/**'
-      - 'packages/**'
+      - 'apps/web-landing/**'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/homechef-web-build.yml'
+      - '.github/workflows/homechef-web-landing-build.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'apps/web/**'
-      - 'packages/**'
-      - '.github/workflows/homechef-web-build.yml'
+      - 'apps/web-landing/**'
+      - '.github/workflows/homechef-web-landing-build.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,11 +34,12 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   REGISTRY: ghcr.io
+  # Same image name as the sunset SPA — the landing becomes homechef-web.
   IMAGE_NAME: tesserix/home-chef-app/homechef-web
 
 jobs:
   build:
-    name: Build and Push HomeChef Web
+    name: Build and Push HomeChef Web Landing
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
 
     steps:
@@ -52,22 +57,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Build and Push to GHCR ---
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Only emit `main-<sha7>` on main. No `:latest` — Kargo
-          # promotes the newest matching tag from the GAR mirror via
-          # the kargo-homechef Project's prod Stage.
+          # main-<sha7> on main; no :latest (ArgoCD pins the exact tag).
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=homechef-web
-            org.opencontainers.image.description=HomeChef Web Application
+            org.opencontainers.image.description=HomeChef fe3dr.com marketing landing (Next.js static)
 
       - name: Compute cache ref
         id: cache
@@ -77,36 +79,18 @@ jobs:
         id: build_push
         uses: docker/build-push-action@v6
         with:
+          # Build from repo root (the Dockerfile COPYs the pnpm workspace +
+          # root .npmrc). @tesserix packages resolve from public npm — no
+          # token needed. The landing is fully static; no build-args.
           context: .
-          file: apps/web/Dockerfile
+          file: apps/web-landing/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VITE_API_URL=${{ vars.VITE_API_URL || 'https://fe3dr.com/api/v1' }}
-            VITE_BFF_URL=${{ vars.VITE_BFF_URL }}
-            VITE_GIP_API_KEY=${{ secrets.GIP_WEB_API_KEY }}
-            VITE_GIP_PROJECT_ID=tesseracthub-480811
-            VITE_GIP_AUTH_DOMAIN=tesseracthub-480811.firebaseapp.com
-            VITE_GIP_TENANT_ID=HomeChef-Customer-rqg8a
-            VITE_GOOGLE_CLIENT_ID=849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com
-          secrets: |
-            npm_token=${{ secrets.NPM_TOKEN }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
           cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
 
-      # Image push only — the deploy bump happens in the `bump-k8s` job
-      # below, which writes the new main-<sha7> tag (and Knative
-      # updateTimestamp) into argocd/prod/apps/homechef/homechef-web.yaml
-      # in tesserix-k8s. Argo CD picks up the commit and syncs.
-      #
-      # When kargo-homechef is wired (Project + Warehouse + Stage in
-      # tesserix/kargo-manifests), bump-k8s here can be retired in favour
-      # of Kargo discovering the GAR-mirrored tag and writing the same
-      # helm.parameters field via a PromotionTemplate.
-
-      # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
         id: trivy
         if: github.event_name != 'pull_request'
@@ -132,35 +116,15 @@ jobs:
         run: |
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Application:** HomeChef Web" >> $GITHUB_STEP_SUMMARY
-          echo "**Architecture:** AMD64" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** HomeChef Web Landing (fe3dr.com)" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} (deploys to the homechef-web slot)" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            echo "**Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Deploy:** bump-k8s job updates argocd/prod/apps/homechef/homechef-web.yaml on push to main" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # ─── Bump tesserix-k8s ArgoCD app to new image tag ──────────────────
-  # After the image push succeeds, write the new main-<sha7> tag (and a
-  # fresh Knative updateTimestamp annotation to force a new revision)
-  # into the homechef-web Argo CD Application in tesserix-k8s. Argo CD
-  # auto-syncs on the resulting commit.
-  #
-  # Uses the GitHub Contents API directly (PUT /contents/{path}) instead
-  # of git clone + push because git-over-HTTPS in the Actions runner has
-  # auth quirks with fine-grained PATs (a pre-installed credential helper
-  # intercepts and overrides the token). The API is the supported path
-  # for fine-grained PATs and works with the same TESSERIX_K8S_BOT secret.
+  # ─── Bump tesserix-k8s ArgoCD app to the new image tag ──────────────────
+  # Writes the new main-<sha7> tag (+ Knative updateTimestamp) into the
+  # EXISTING homechef-web Argo CD Application in tesserix-k8s. Argo CD
+  # auto-syncs the homechef-web Knative service → fe3dr.com serves the landing.
   bump-k8s:
     name: Bump tesserix-k8s image tag via API
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -179,10 +143,7 @@ jobs:
       - name: Install yq
         run: |
           set -euo pipefail
-          if command -v yq >/dev/null; then
-            yq --version
-            exit 0
-          fi
+          if command -v yq >/dev/null; then yq --version; exit 0; fi
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -193,10 +154,6 @@ jobs:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
           set -euo pipefail
-          # Use plain curl + Bearer header. We tried gh CLI but it ignores
-          # GH_TOKEN inside the Actions runner (auth gets shadowed by the
-          # auto-injected GITHUB_TOKEN even after unset). Direct curl with
-          # the bot PAT via Authorization header is deterministic.
           BOT_TOKEN="${GH_TOKEN}"
           NEW_TAG="main-${SHORT_SHA}"
           TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -208,22 +165,18 @@ jobs:
             RESP="$(curl -sS "${AUTH_HDR[@]}" "${API}?ref=main")"
             BLOB_SHA="$(echo "$RESP" | jq -r '.sha // empty')"
             if [ -z "$BLOB_SHA" ]; then
-              echo "GET failed:"
-              echo "$RESP" | jq -r '.message // .' | head -5
-              echo "::endgroup::"
-              sleep 2
-              continue
+              echo "GET failed:"; echo "$RESP" | jq -r '.message // .' | head -5
+              echo "::endgroup::"; sleep 2; continue
             fi
             echo "$RESP" | jq -r .content | base64 -d > /tmp/current.yaml
 
             yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
             NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' /tmp/current.yaml
-            echo "New values:"
-            grep -A1 "image\.tag\|updateTimestamp" /tmp/current.yaml | head -8
+            echo "New values:"; grep -A1 "image\.tag\|updateTimestamp" /tmp/current.yaml | head -8
 
             NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
             PAYLOAD="$(jq -nc \
-              --arg msg "chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
+              --arg msg "chore(homechef): bump ${SERVICE} to ${NEW_TAG} (web-landing)" \
               --arg content "${NEW_CONTENT}" \
               --arg sha "${BLOB_SHA}" \
               --arg branch main \
@@ -232,48 +185,35 @@ jobs:
             PUT_RESP="$(curl -sS -X PUT "${AUTH_HDR[@]}" -H "Content-Type: application/json" -d "$PAYLOAD" "$API")"
             COMMIT_SHA="$(echo "$PUT_RESP" | jq -r '.commit.sha // empty')"
             if [ -n "$COMMIT_SHA" ]; then
-              echo "Committed tesserix-k8s@${COMMIT_SHA}"
-              echo "::endgroup::"
-              exit 0
+              echo "Committed tesserix-k8s@${COMMIT_SHA}"; echo "::endgroup::"; exit 0
             fi
-            echo "PUT failed:"
-            echo "$PUT_RESP" | jq -r '.message // .' | head -5
-            echo "::endgroup::"
-            sleep 2
+            echo "PUT failed:"; echo "$PUT_RESP" | jq -r '.message // .' | head -5
+            echo "::endgroup::"; sleep 2
           done
-
-          echo "Failed to bump after 3 attempts." >&2
-          exit 1
+          echo "Failed to bump after 3 attempts." >&2; exit 1
 
       - name: Bump Summary
         if: always()
         run: |
           echo "## Bump Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Target:** tesserix-k8s argocd/prod/apps/homechef/homechef-web.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** tesserix-k8s ${{ env.FILE_PATH }}" >> $GITHUB_STEP_SUMMARY
           echo "**New tag:** \`main-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Source commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   test:
-    name: Run Tests
+    name: Lint + Typecheck
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-
       - name: Get pnpm store directory
         shell: bash
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
@@ -281,32 +221,11 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-
-      - name: Configure npm for GitHub Packages
-        run: |
-          echo "@tesserix:registry=https://npm.pkg.github.com" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
-
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run linter
-        working-directory: apps/web
+        run: pnpm install --filter @homechef/web-landing... --frozen-lockfile
+      - name: Lint
+        working-directory: apps/web-landing
         run: pnpm lint
-
-      - name: Run type check
-        working-directory: apps/web
+      - name: Type check
+        working-directory: apps/web-landing
         run: pnpm exec tsc --noEmit
-
-      - name: Run tests
-        working-directory: apps/web
-        run: pnpm test -- --passWithNoTests
-        continue-on-error: true
-
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Application:** HomeChef Web" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Tests completed" >> $GITHUB_STEP_SUMMARY

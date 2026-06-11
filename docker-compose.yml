@@ -86,25 +86,11 @@ services:
       nats:
         condition: service_healthy
 
-  # React Web Frontend (Development)
-  web:
-    build:
-      context: .
-      dockerfile: ./apps/web/Dockerfile.dev
-    container_name: homechef-web
-    restart: unless-stopped
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8080/api/v1
-      - VITE_WS_URL=ws://localhost:8080/ws
-    volumes:
-      - ./apps/web:/app/apps/web
-      - ./packages:/app/packages
-      - /app/node_modules
-      - /app/apps/web/node_modules
-    depends_on:
-      - api
+  # NOTE: the React customer web app (apps/web) is SUNSET — Home Chef is
+  # app-only; the only web surface is the fe3dr.com marketing landing
+  # (apps/web-landing, Next.js). The old `web` dev service was removed here.
+  # Run the landing locally with `pnpm dev:landing` (Next dev on :3000).
+  # See apps/web/SUNSET.md.
 
   # Adminer for database management (optional)
   adminer:
