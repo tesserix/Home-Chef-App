@@ -39,6 +39,8 @@ export default function PreferencesScreen() {
     city: string;
     state: string;
     pincode: string;
+    latitude: string;
+    longitude: string;
   }>();
 
   const setOnboardingComplete = useAuthStore(
@@ -70,6 +72,10 @@ export default function PreferencesScreen() {
         addressState: params.state,
         addressPostalCode: params.pincode,
         addressCountry: 'IN',
+        // Geocoded from the address autocomplete pick; 0 when the user typed
+        // the address manually (server then uses a flat fee + skips zones).
+        addressLatitude: params.latitude ? Number(params.latitude) : 0,
+        addressLongitude: params.longitude ? Number(params.longitude) : 0,
         cuisinePreferences: selected,
       });
 

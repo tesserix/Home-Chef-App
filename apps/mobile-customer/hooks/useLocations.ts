@@ -20,6 +20,10 @@ export interface AddressSuggestion {
   region: string;
   postal: string;
   country: string;
+  // From Photon geometry. Present when the geocoder returned coordinates;
+  // the client persists these on the address for zone checks + 3PL quotes.
+  lat?: number;
+  lon?: number;
 }
 
 // PostcodeSearchResult comes from /v1/locations/postcodes/search — the

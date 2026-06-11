@@ -65,11 +65,22 @@ export default function AddressScreen() {
   const { data: suggestions = [], isFetching: isSearching } =
     useAddressAutocomplete(addressQuery);
 
+  // Geocoded coordinates from the picked suggestion. Persisted on the address
+  // so the server can run delivery-zone checks + live 3PL quotes. Cleared when
+  // the user manually edits the street line (the geocode would be stale), in
+  // which case the server falls back to a flat delivery fee.
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+
   function pickSuggestion(s: AddressSuggestion): void {
     setValue('addressLine1', s.line1 || s.description, { shouldValidate: true });
     if (s.city) setValue('city', s.city, { shouldValidate: true });
     if (s.region) setValue('state', s.region, { shouldValidate: true });
     if (s.postal) setValue('pincode', s.postal, { shouldValidate: true });
+    setCoords(
+      typeof s.lat === 'number' && typeof s.lon === 'number'
+        ? { lat: s.lat, lon: s.lon }
+        : null,
+    );
     setAddressQuery('');
     setShowSuggestions(false);
     Keyboard.dismiss();
@@ -88,6 +99,8 @@ export default function AddressScreen() {
         city: data.city,
         state: data.state,
         pincode: data.pincode,
+        latitude: coords ? String(coords.lat) : '',
+        longitude: coords ? String(coords.lon) : '',
       },
     });
   };
@@ -227,7 +240,12 @@ export default function AddressScreen() {
                 placeholder="House no., street, area"
                 placeholderTextColor={customerColors.charcoal.soft}
                 onBlur={onBlur}
-                onChangeText={onChange}
+                onChangeText={(t) => {
+                  // Manual edit invalidates the picked-suggestion geocode.
+                  // (pickSuggestion uses setValue, which doesn't fire this.)
+                  onChange(t);
+                  setCoords(null);
+                }}
                 value={value}
                 autoCapitalize="words"
                 returnKeyType="next"

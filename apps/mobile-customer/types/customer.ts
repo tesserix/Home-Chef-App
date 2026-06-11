@@ -47,6 +47,9 @@ export interface Address {
   city: string;
   state: string;
   pincode: string;
+  /** Geocoded coords (from address autocomplete). 0/absent → server uses a flat delivery fee + skips zone checks. */
+  latitude?: number;
+  longitude?: number;
   isDefault?: boolean;
 }
 
