@@ -209,9 +209,12 @@ func (d *DeliveryPartnerDocument) ToResponse() PartnerDocumentResponse {
 }
 
 type Delivery struct {
-	ID                uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	OrderID           uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"orderId"`
-	DeliveryPartnerID uuid.UUID      `gorm:"type:uuid;not null;index" json:"deliveryPartnerId"`
+	ID      uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	OrderID uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"orderId"`
+	// DeliveryPartnerID is nullable: third-party (3PL) deliveries have no
+	// internal partner. Own-fleet rows set it; 3PL rows leave it nil and
+	// carry the rider via the Rider* fields below, fed by provider webhooks.
+	DeliveryPartnerID *uuid.UUID     `gorm:"type:uuid;index" json:"deliveryPartnerId,omitempty"`
 	Status            DeliveryStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
 
 	// Pickup Location (Chef)
@@ -247,6 +250,15 @@ type Delivery struct {
 	ExternalTrackingID  string     `gorm:"" json:"externalTrackingId,omitempty"`
 	ExternalTrackingURL string     `gorm:"" json:"externalTrackingUrl,omitempty"`
 	ProviderCost        float64    `gorm:"default:0" json:"providerCost"` // what Fe3dr pays the provider
+
+	// 3PL rider — populated from provider webhooks. For own-fleet deliveries
+	// the rider's live position lives on DeliveryPartner instead; ToResponse
+	// prefers these when set so the customer map shows the real 3PL rider.
+	RiderName       string  `gorm:"" json:"riderName,omitempty"`
+	RiderPhone      string  `gorm:"" json:"riderPhone,omitempty"`
+	RiderLatitude   float64 `gorm:"" json:"riderLatitude,omitempty"`
+	RiderLongitude  float64 `gorm:"" json:"riderLongitude,omitempty"`
+	ProviderStatus  string  `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
 
 	// Earnings
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
@@ -299,6 +311,9 @@ type DeliveryResponse struct {
 	DropoffLongitude float64 `json:"dropoffLongitude"`
 	PickupLatitude   float64 `json:"pickupLatitude"`
 	PickupLongitude  float64 `json:"pickupLongitude"`
+	// 3PL rider identity (safe to expose: a contracted courier, not an internal driver)
+	RiderName  string `json:"riderName,omitempty"`
+	RiderPhone string `json:"riderPhone,omitempty"`
 }
 
 func (d *Delivery) ToResponse() DeliveryResponse {
@@ -317,9 +332,16 @@ func (d *Delivery) ToResponse() DeliveryResponse {
 		PickupLatitude:    d.PickupLatitude,
 		PickupLongitude:   d.PickupLongitude,
 	}
-	// Populate driver's current position from preloaded DeliveryPartner relationship.
-	// Defaults to 0.0 if DeliveryPartner was not preloaded — acceptable for non-tracking contexts.
-	if d.DeliveryPartner.ID != uuid.Nil {
+	// Live rider position. Prefer the 3PL rider coords (fed by provider
+	// webhooks) when present; otherwise fall back to the own-fleet partner's
+	// position from the preloaded DeliveryPartner relationship. Both default
+	// to 0.0 when absent — acceptable for non-tracking contexts.
+	if d.RiderLatitude != 0 || d.RiderLongitude != 0 {
+		resp.CurrentLatitude = d.RiderLatitude
+		resp.CurrentLongitude = d.RiderLongitude
+		resp.RiderName = d.RiderName
+		resp.RiderPhone = d.RiderPhone
+	} else if d.DeliveryPartner.ID != uuid.Nil {
 		resp.CurrentLatitude = d.DeliveryPartner.CurrentLatitude
 		resp.CurrentLongitude = d.DeliveryPartner.CurrentLongitude
 	}

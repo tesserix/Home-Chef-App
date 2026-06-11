@@ -289,6 +289,11 @@ func Migrate() error {
 		`ALTER TABLE users DROP CONSTRAINT IF EXISTS idx_users_email`,
 		`DROP INDEX IF EXISTS users_email_key`,
 		`DROP INDEX IF EXISTS idx_users_email`,
+		// 3PL deliveries have no internal delivery partner. The model field is
+		// now *uuid.UUID (nullable), but AutoMigrate never drops an existing
+		// NOT NULL constraint — do it here so provider-fulfilled deliveries can
+		// be inserted with a null partner. No-op once already nullable.
+		`ALTER TABLE deliveries ALTER COLUMN delivery_partner_id DROP NOT NULL`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

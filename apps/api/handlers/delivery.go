@@ -470,7 +470,7 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 	// Create delivery
 	delivery := models.Delivery{
 		OrderID:            order.ID,
-		DeliveryPartnerID:  partner.ID,
+		DeliveryPartnerID:  &partner.ID,
 		Status:             models.DeliveryAssigned,
 		PickupAddressLine1: order.Chef.AddressLine1,
 		PickupAddressCity:  order.Chef.City,
@@ -1384,7 +1384,7 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 
 	delivery := models.Delivery{
 		OrderID:            order.ID,
-		DeliveryPartnerID:  partner.ID,
+		DeliveryPartnerID:  &partner.ID,
 		Status:             models.DeliveryAssigned,
 		AssignmentType:     models.AssignmentManual,
 		AssignedByID:       &userID,
