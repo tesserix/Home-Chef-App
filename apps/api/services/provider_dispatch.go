@@ -112,6 +112,40 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 	return nil
 }
 
+// QuoteCheckoutDeliveryFee returns a live 3PL delivery fee for an order leg, or
+// ok=false when no provider can serve it — the caller then falls back to the
+// flat policy fee. Safe to call with zero drop coords (returns ok=false rather
+// than a bogus quote), which is the current reality until customer-side
+// coordinate capture ships; live quotes activate automatically once it does.
+func QuoteCheckoutDeliveryFee(chef models.ChefProfile, city, country string, dropLat, dropLng float64) (float64, bool) {
+	if dropLat == 0 && dropLng == 0 {
+		return 0, false
+	}
+	if country == "" {
+		country = "IN"
+	}
+
+	distance := haversineDistance(chef.Latitude, chef.Longitude, dropLat, dropLng)
+	svc := NewProviderService()
+	provider, err := svc.FindAvailableProvider(city, distance, country)
+	if err != nil || provider == nil {
+		return 0, false
+	}
+
+	quote, err := svc.GetProviderQuote(provider, QuoteRequest{
+		PickupLat:  chef.Latitude,
+		PickupLng:  chef.Longitude,
+		DropoffLat: dropLat,
+		DropoffLng: dropLng,
+		City:       city,
+		Weight:     1.0,
+	})
+	if err != nil || quote == nil || !quote.Serviceable {
+		return 0, false
+	}
+	return quote.Fee, true
+}
+
 // joinAddress joins non-empty address parts with ", ".
 func joinAddress(parts ...string) string {
 	var nonEmpty []string
