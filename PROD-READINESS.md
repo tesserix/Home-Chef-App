@@ -2,9 +2,9 @@
 
 **Target:** Open public launch in 8 weeks (start: 2026-06-05, ship: ~2026-07-31)
 **Execution:** Solo dev (Mahesh) + Claude subagents
-**Scope:** vendor-mobile + homechef-api + supporting infra. Customer + delivery apps tracked separately.
+**Scope:** vendor-mobile + homechef-api + supporting infra. **Customer app (Wave 6)**, **delivery via 3PL — own fleet retired (Wave 7)**, and **tesserix-home admin integration (Wave 5B)** are captured below for separate implementation sessions.
 
-## Progress snapshot (last updated 2026-06-10)
+## Progress snapshot (last updated 2026-06-11)
 
 | Wave | Application code | Operational |
 |---|---|---|
@@ -29,7 +29,8 @@
 
 ## Locked deferrals (v2, NOT in scope)
 
-- Customer + delivery apps (separate tracks)
+- Customer app — now IN scope, see **Wave 6** (separate session)
+- **Own delivery fleet / driver app** — RETIRED. Deliveries go through 3PL providers (Shadowfax-class). See **Wave 7**.
 - Multi-staff / sub-chef permissions
 - Multi-kitchen locations
 - Menu customizations + modifiers + combos
@@ -267,6 +268,8 @@ Reference: mark8ly's registration spans 4 touchpoints. Home Chef replicates each
   - **Backend prereqs (homechef-api):** admin endpoints to list all `WeeklyStatement`s (filter week/chef/status), per-chef net-payout + bank/UPI + status; configure commission % (`platform_settings.service_fee_percent`) + payout schedule; mark-paid + bulk-CSV export. Add `status / paidAt / payoutRef` to `WeeklyStatement` (no status field today).
   - **Already shipped:** weekly settlement **calculation** is automated (`statement_cron.go` → idempotent Mon–Sun IST statements w/ commission + CGST/SGST/IGST + TDS + NetPayout). Chef self-service view + receipt/invoice PDF is live in the vendor app.
   - **Disbursement gated** on RazorpayX + an Indian entity (see payment-structuring decision: stick with Razorpay, Indian subsidiary deferred, low volume). Until then payouts are computed weekly and **paid manually**; the RazorpayX auto-payout adapter (cron → createPayout per pending statement → webhook marks paid) is a fast-follow once the entity lands.
+- [ ] **Delivery (3PL) admin in tesserix-home** — manage delivery providers (config/keys/toggle/test), view delivery list + stats, and **reconcile 3PL costs vs collected delivery fees** (admin CRUD already exists at `/admin/delivery/providers`). See Wave 7E.
+- [ ] **Customer-ops oversight in tesserix-home** — orders/GMV/customers KPI tiles + read access to customer-side ops data (already part of the homechef product config KPIs above).
 - **Known friction (from mark8ly audit):** sidebar nav arrays + icon assets + per-product route dir are hardcoded — 3–4 file edits, no architectural blocker; "marketplace" strings leak in a couple of shared components.
 
 ### Definition of done
@@ -278,6 +281,58 @@ Reference: mark8ly's registration spans 4 touchpoints. Home Chef replicates each
 - Subagent A: landing page build (can start immediately)
 - Subagent B: tesserix-home + registries (separate repos — needs a session in `tesserix-new/` root, not Home-Chef-App)
 - DNS/routing flip + portal teardown: by hand, after store approval
+
+---
+
+## Wave 6 — Customer app production close-out (separate session)
+
+**Goal:** the customer ordering app is launch-ready alongside the vendor app.
+
+**Status:** Phase-02 verified **feature-complete** (11/11 CUST requirements, no stubs/TODO blockers). Shipped this session (2026-06-11): address fetch/create + **address labels** + **per-item special instructions**; **in-app Razorpay payment** (Standard Checkout in a WebView, server-side verify — replaces the external-browser flow, adds `react-native-webview`); **legal screens** (Refund/Terms/Privacy); order-shape mapper + **chef-on-orders** API field (deployed); place-order crash fix + **error surfacing**; **18 misconfigured delivery zones deactivated** to unblock ordering.
+
+### Pending
+- [ ] **Live driver location on the tracking map** — `DeliveryResponse.ToResponse()` omits driver + dropoff coords, so the map falls back to chef location. **Resolved by Wave 7** (3PL webhooks carry rider location → surface in `DeliveryResponse` → map goes live). No own-driver fix needed given fleet retirement.
+- [ ] **Payment happy-path verification** — real cart → Razorpay **test card** (`4111 1111 1111 1111`) → success, tapped through on device. Then switch `rzp_test_*`→`rzp_live_*` in `homechef-api-secrets` and register the **live Razorpay webhook** at `https://api.fe3dr.com/webhooks/razorpay` (backend handler verified live; dashboard config is owner action).
+- [ ] **Surface Privacy in the UI** — add a Profile → Legal section (Terms · Privacy · Refund). `/privacy` route exists but isn't linked anywhere; `/refund` + `/terms` are linked from checkout. (~30 min)
+- [ ] **Legal content review** — counsel sign-off on Refund/Terms/Privacy; confirm placeholders (operator **"Tesserix Pty Ltd"**, support **support@fe3dr.com**, effective date 11 Jun 2026).
+- [ ] **Customer unit tests** — planned-but-unwritten: `cart-store`, `useOrderTracking`, `useChefs`, jest RN setup.
+- [ ] **EAS production build + App Store submission** (customer track; separate from vendor) — blocked on Apple Developer enrollment (same blocker as vendor).
+- [ ] **Delivery zones** — currently OFF (ordering unrestricted). Re-enable only if coverage enforcement is wanted, and only after adding real zone bounding boxes + address **coordinate capture** (`expo-location`, not installed).
+
+---
+
+## Wave 7 — Delivery via 3PL providers (Shadowfax-class) + own-fleet retirement
+
+**Decision (owner, 2026-06-11):** Home Chef will **not run its own delivery fleet** — managing delivery agents is overkill at this scale. Deliveries are fulfilled by **third-party logistics providers** (Shadowfax / Dunzo / Porter class). The **own delivery app (`apps/mobile-delivery`) + own-fleet backend are retired.** Mirrors the web-sunset decision: fewer surfaces to operate.
+
+### 7A. Retire own-fleet
+- [ ] **Sunset `apps/mobile-delivery`** + the web `delivery-portal` (already in Wave 5A). Archive dirs + CI; `delivery.fe3dr.com` web routes 301 → landing.
+- [ ] **Deprecate own-driver code paths** (keep DB tables until data is irrelevant): driver onboarding (`/delivery/onboarding/*`), `DriverOnboardingPayout`, driver Stripe Connect (`CreateDriverStripeAccount`), `DeliveryPartner` self-service, `ManualAssignDelivery`. Make admin "delivery partners" views read-only or remove.
+- ⚠️ Confirm nothing API-critical rides `delivery.fe3dr.com` before teardown (same caution as the vendor host in 5A).
+
+### 7B. 3PL integration — what EXISTS (framework, scaffolded ✅)
+- `models.DeliveryProvider` — full config: name/code (Dunzo/Porter/**Shadowfax**), `APIBaseURL/APIKey/APISecret/WebhookSecret`, `StatusMapping` (provider→Fe3dr `DeliveryStatus`), `SupportedCities/Countries`, `MaxDistance`, `PricingModel` + `BaseCost` (what Fe3dr pays per delivery).
+- Admin CRUD: `/admin/delivery/providers` — List/Get/Create/Update/Delete/Toggle/**TestConnection**/Stats (`handlers/delivery_provider.go`).
+- Inbound webhook: `POST /webhooks/delivery/:provider` — HMAC-verified (`X-Webhook-Signature`), `services.HandleProviderWebhook(code, body)` maps provider status → `DeliveryStatus`.
+
+### 7C. 3PL integration — what's MISSING (build this)
+- [ ] **Per-provider OUTBOUND adapter** (start with **Shadowfax**) — a `DeliveryProviderClient` interface keyed by `provider.Code` with `CreateTask` (pickup=chef, drop=customer), `CancelTask`, `GetQuote`, `TrackTask`; provider-specific auth + payload mapping. Lives alongside `services/provider.go`.
+- [ ] **Serviceability + quote at checkout** — replace the flat `policy.BaseDeliveryFee` (`orders.go:173`) with a live 3PL quote (fee + ETA) for the customer's address; fall back to flat fee if the provider is down/out-of-area.
+- [ ] **Auto-dispatch** — on order ready/accepted, call the selected provider's `CreateTask`; persist `provider_id` + external task id on the `Delivery` row. Provider selection by serviceable city + cost.
+- [ ] **Tracking → closes the Wave-6 live-map gap** — provider webhooks carry rider status + **live location**; persist driver/dropoff coords and **surface them in `DeliveryResponse.ToResponse()`** so the customer map shows the real rider.
+- [ ] **Cancellation** — order cancel → provider `CancelTask`; reconcile any 3PL cancellation fee.
+
+### 7D. Delivery payments & payouts (3PL model — much simpler than own-fleet)
+- **Customer side:** delivery fee (3PL quote) is collected in the order total via Razorpay — **no change to the customer payment rail.**
+- **Platform → 3PL settlement:** Fe3dr pays the provider per `PricingModel`/`BaseCost`, typically a **prepaid wallet** or **postpaid weekly invoice** with the 3PL. **No per-driver payouts** — that entire complexity disappears with the fleet. Reconcile collected delivery fees vs 3PL charges (margin/subsidy).
+  - ⚠️ Same constraint as chef payouts: paying an Indian 3PL needs **INR funded from an Indian account/entity** (see payment-structuring decision). At low volume, top up the 3PL wallet manually from the interim entity account; automate later.
+- **Tax:** capture the 3PL's GST tax invoice for input credit (entity-dependent).
+
+### 7E. tesserix-home admin (batches with Wave 5B)
+- [ ] Manage delivery providers (config/keys/toggle/test), view delivery list + stats, **reconcile 3PL cost vs collected delivery fee**. Built in the single tesserix-home integration effort alongside chef-payout admin (5B).
+
+### Definition of done
+- A customer order **auto-dispatches to Shadowfax**, the customer sees the **real rider** move on the live map, status flows pickup→delivered via webhook, and the platform's 3PL cost is recorded + reconcilable — with **zero own-fleet code in the hot path**.
 
 ---
 
