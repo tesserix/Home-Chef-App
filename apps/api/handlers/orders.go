@@ -510,6 +510,15 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		}
 	}()
 
+	// Cancel any booked 3PL delivery (no-op if none exists yet). Off the
+	// response path; failure must not fail the order cancellation.
+	go func() {
+		if err := services.CancelOrderDelivery(order.ID, req.Reason); err != nil {
+			log.Printf("Failed to cancel 3PL delivery for order %s: %v", order.ID, err)
+			services.CaptureBackgroundError(err)
+		}
+	}()
+
 	c.JSON(http.StatusOK, order.ToResponse())
 }
 

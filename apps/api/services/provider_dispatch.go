@@ -112,6 +112,41 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 	return nil
 }
 
+// CancelOrderDelivery cancels any active 3PL delivery booked for an order. It's
+// a no-op when there's no delivery, the delivery isn't provider-fulfilled, or
+// it's already terminal — so it's safe to call on every order cancellation.
+// On success the local Delivery row is marked cancelled.
+func CancelOrderDelivery(orderID uuid.UUID, reason string) error {
+	var delivery models.Delivery
+	if err := database.DB.Preload("Provider").
+		Where("order_id = ?", orderID).First(&delivery).Error; err != nil {
+		return nil // no delivery row → nothing to cancel
+	}
+	if delivery.ProviderID == nil || delivery.Provider == nil || delivery.ExternalDeliveryID == "" {
+		return nil // not a 3PL delivery
+	}
+	switch delivery.Status {
+	case models.DeliveryDelivered, models.DeliveryCancelled, models.DeliveryFailed, models.DeliveryReturned:
+		return nil // already terminal
+	}
+
+	svc := NewProviderService()
+	// TODO(shadowfax-creds): capture any cancellation fee the provider returns
+	// and reconcile it against collected delivery fees (Wave 7E admin view).
+	if err := svc.CancelProviderDelivery(delivery.Provider, delivery.ExternalDeliveryID, reason); err != nil {
+		return fmt.Errorf("cancel provider delivery: %w", err)
+	}
+
+	now := time.Now()
+	database.DB.Model(&delivery).Updates(map[string]interface{}{
+		"status":        models.DeliveryCancelled,
+		"cancelled_at":  now,
+		"cancel_reason": reason,
+	})
+	log.Printf("cancel: order=%s 3PL delivery cancelled provider=%s external=%s", orderID, delivery.Provider.Code, delivery.ExternalDeliveryID)
+	return nil
+}
+
 // QuoteCheckoutDeliveryFee returns a live 3PL delivery fee for an order leg, or
 // ok=false when no provider can serve it — the caller then falls back to the
 // flat policy fee. Safe to call with zero drop coords (returns ok=false rather
