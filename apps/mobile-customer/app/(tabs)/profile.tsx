@@ -18,6 +18,9 @@ import {
   MessageSquare,
   UtensilsCrossed,
   User,
+  FileText,
+  Shield,
+  Receipt,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -440,6 +443,44 @@ export default function ProfileScreen() {
               icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
               label="Catering"
               onPress={() => router.push('/catering')}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Section — Legal (Terms · Privacy · Refund)
+        ═══════════════════════════════════════════════════════════════════ */}
+        <SectionLabel>Legal</SectionLabel>
+
+        {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
+        <View
+          className="mx-4"
+          style={{
+            shadowColor: customerColors.charcoal.DEFAULT,
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <View className="rounded-xl overflow-hidden">
+            <NavRow
+              icon={<FileText size={18} color={customerColors.charcoal.soft} />}
+              label="Terms of Service"
+              onPress={() => router.push('/terms')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<Shield size={18} color={customerColors.charcoal.soft} />}
+              label="Privacy Policy"
+              onPress={() => router.push('/privacy')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<Receipt size={18} color={customerColors.charcoal.soft} />}
+              label="Refund Policy"
+              onPress={() => router.push('/refund')}
               isLast
             />
           </View>
