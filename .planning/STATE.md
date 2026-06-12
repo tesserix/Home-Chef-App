@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04
 Plan: Not started
 Status: Executing Phase 04
-Last activity: 2026-06-10 - Completed quick task 260610-ica: vendor app v2 visual redesign
+Last activity: 2026-06-12 - Completed quick task 260612-n0g: polish batch (wordmark, splash/adaptive icons, doc drift, SVG logo)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -81,6 +81,7 @@ Recent decisions affecting current work:
 | 260610-grk | Vendor app UX improvements from design critique | 2026-06-10 | 2dee223 | [260610-grk-vendor-app-ux-improvements-from-design-c](./quick/260610-grk-vendor-app-ux-improvements-from-design-c/) |
 | 260610-ica | Vendor app v2 visual redesign (canvas+cards, dark hero, motion) | 2026-06-10 | f2a5814 | [260610-ica-vendor-app-v2-visual-redesign-canvas-car](./quick/260610-ica-vendor-app-v2-visual-redesign-canvas-car/) |
 | 260610-iy5 | Customer app v2 Airbnb redesign + data-layer fixes; checkout address mapping fix + per-item special instructions | 2026-06-10 | 55258a5 | [260610-iy5-customer-app-v2-redesign-plan-airbnb-pal](./quick/260610-iy5-customer-app-v2-redesign-plan-airbnb-pal/) |
+| 260612-n0g | Polish batch: landing wordmark swap + SVG logo + mobile splash/adaptive-icons + doc-drift checkbox sync | 2026-06-12 | 111084f | [260612-n0g-polish-batch-landing-wordmark-swap-mobil](./quick/260612-n0g-polish-batch-landing-wordmark-swap-mobil/) |
 
 ### Blockers/Concerns
 
