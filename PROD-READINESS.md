@@ -256,6 +256,8 @@ store links, and Home Chef becomes a first-class Tesserix product visible in tes
 
 ### 5B. Tesserix platform integration (mark8ly pattern)
 
+> **Owner cutover steps (DB role, secret mgmt, ArgoCD/Cloudflare teardown, infra hardening) are written up with concrete Home Chef values in [`docs/ops/CUTOVER-RUNBOOK.md`](docs/ops/CUTOVER-RUNBOOK.md).**
+
 Reference: mark8ly's registration spans 4 touchpoints. Home Chef replicates each:
 
 - [ ] **Platform auth-bff `products.yaml`** (`tesserix-new/auth-bff/products.yaml`) — add `homechef` product entry (domain `fe3dr.com`). GIP tenants already exist (`HomeChef-Customer-rqg8a`, `HomeChef-Business-8s8ql`) — reference them; do NOT create new ones.
