@@ -77,9 +77,12 @@ unset PWD
 ```
 
 **Then in `tesserix-k8s` (PRs, ArgoCD-synced):**
-- [ ] `external-secrets/prod/tesserix/externalsecret.yaml` — add a `homechef-platform-admin` entry pointing at `prod-homechef-platform-admin-password` → exposes `HOMECHEF_DB_PASSWORD` (+ host/port/user/db) to the tesserix-home pod, mirroring `MARK8LY_DB_*`.
-- [ ] `charts/thirdparty/istio-config/values.yaml` — add `homechef` under `crossProductNamespaceAccess.tesserix` (egress tesserix → homechef:5432).
-- [ ] Insert a row into `tesserix-postgres.tesserix_admin.apps` (product slug `homechef`, DB host `homechef-postgres-rw.homechef.svc.cluster.local`, db `homechef_db`, role-secret name, admin URL).
+- [x] `charts/thirdparty/istio-config/values.yaml` — `homechef` added under `crossProductNamespaceAccess.tesserix` (egress tesserix → homechef:5432). **DONE** (`643ee706`).
+- [x] `charts/apps/company/` — `HOMECHEF_DB_*` env staged behind `database.homechef.enabled` (default **false**). **DONE** (`39d7f807`). Renders nothing until flipped, so it's safe on `main`.
+- [ ] `external-secrets/prod/tesserix/externalsecret.yaml` — add a `homechef-platform-admin` ExternalSecret pointing at `prod-homechef-platform-admin-password` (mirrors the `mark8ly-platform-admin` block: `type: kubernetes.io/basic-auth`, `username: "homechef_platform_admin"`, `password` from the GCP key).
+- [ ] **Flip the switch:** set `database.homechef.enabled: true` in `charts/apps/company/values.yaml` — **in the SAME change as the ExternalSecret above** (so the pod's `secretKeyRef` resolves). This is what actually wires the tesserix-home pod to homechef_db.
+- [ ] Insert a row into `tesserix-postgres.tesserix_admin.apps` (product slug `homechef`, DB host `homechef-postgres-rw.homechef.svc.cluster.local`, db `homechef_db`, role-secret name, admin URL) — drives the Apps grid tile.
+- [ ] **Cut a tesserix-home release tag** (`v*.*.*`) so CI builds an image containing the homechef admin pages (push-to-main alone does not deploy it).
 
 **Then in tesserix-home (the 5B session):** add `lib/db/homechef.ts` (a `pg.Pool` reading
 `HOMECHEF_DB_*`, mirroring `lib/db/mark8ly.ts`) and the `homechef` `ProductConfig`. Payout
