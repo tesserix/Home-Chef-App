@@ -126,7 +126,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FA6F5C"
       },
       "intentFilters": [
         {
@@ -182,7 +182,16 @@
       ],
       "expo-font",
       "expo-sharing",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FA6F5C"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

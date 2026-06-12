@@ -419,6 +419,9 @@ importers:
       expo-secure-store:
         specifier: ~55.0.14
         version: 55.0.14(expo@55.0.26)
+      expo-splash-screen:
+        specifier: ~55.0.21
+        version: 55.0.21(expo@55.0.26)(typescript@5.9.3)
       expo-status-bar:
         specifier: ~55.0.6
         version: 55.0.6(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
@@ -733,6 +736,9 @@ importers:
       expo-sharing:
         specifier: ^55.0.20
         version: 55.0.20(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
+      expo-splash-screen:
+        specifier: ~55.0.21
+        version: 55.0.21(expo@55.0.26)(typescript@5.9.3)
       expo-status-bar:
         specifier: ~55.0.6
         version: 55.0.6(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
@@ -5613,6 +5619,11 @@ packages:
       expo: '*'
       react: '*'
       react-native: '*'
+
+  expo-splash-screen@55.0.21:
+    resolution: {integrity: sha512-hFGEap69ggCckbHIdDXMe5rqfBR9TwcnY5gBhyaACUxU64w827T6prOQcIvLmAdv00kp3Gqt7hgE+mNn37EF+A==}
+    peerDependencies:
+      expo: '*'
 
   expo-status-bar@55.0.6:
     resolution: {integrity: sha512-ijOUptfdiqYt7rObZ6jrPQ8sE5YN/8MxKCIJx0b7TY4nGkSJxhPIxeoW4GXcXCA8mTQ9PiOHH/ThLZgRVZvUlQ==}
@@ -14946,6 +14957,14 @@ snapshots:
       react-native: 0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0)
     transitivePeerDependencies:
       - supports-color
+
+  expo-splash-screen@55.0.21(expo@55.0.26)(typescript@5.9.3):
+    dependencies:
+      '@expo/prebuild-config': 55.0.18(expo@55.0.26)(typescript@5.9.3)
+      expo: 55.0.26(@babel/core@7.29.0)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.9)(expo-router@55.0.16)(react-dom@19.2.3(react@19.2.0))(react-native-webview@13.16.0(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0))(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0))(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
 
   expo-status-bar@55.0.6(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0):
     dependencies:
