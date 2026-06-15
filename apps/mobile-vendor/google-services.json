@@ -31,10 +31,10 @@
               "client_type": 3
             },
             {
-              "client_id": "849928263410-gfdc29lb318pf3vs9fcu7451uibog34m.apps.googleusercontent.com",
+              "client_id": "849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.homechef.delivery"
+                "bundle_id": "com.tesserix.homechef.vendor"
               }
             }
           ]
@@ -67,10 +67,10 @@
               "client_type": 3
             },
             {
-              "client_id": "849928263410-gfdc29lb318pf3vs9fcu7451uibog34m.apps.googleusercontent.com",
+              "client_id": "849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.homechef.delivery"
+                "bundle_id": "com.tesserix.homechef.vendor"
               }
             }
           ]
@@ -103,10 +103,46 @@
               "client_type": 3
             },
             {
-              "client_id": "849928263410-gfdc29lb318pf3vs9fcu7451uibog34m.apps.googleusercontent.com",
+              "client_id": "849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.homechef.delivery"
+                "bundle_id": "com.tesserix.homechef.vendor"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:849928263410:android:da0e083e70aeb6ba39a26b",
+        "android_client_info": {
+          "package_name": "com.tesserix.homechef.vendor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "849928263410-3n4fva16mmmmk9qgkk1d6fr36ctcfmpg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnaZfnxLzC6Aadc0mAWYPCxPHSlUUBqtU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "849928263410-3n4fva16mmmmk9qgkk1d6fr36ctcfmpg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tesserix.homechef.vendor"
               }
             }
           ]

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n.apps.googleusercontent.com</string>
+	<string>849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.849928263410-t2a8s4hef8a8hecdsfgus50ml53qc65n</string>
+	<string>com.googleusercontent.apps.849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47</string>
 	<key>ANDROID_CLIENT_ID</key>
 	<string>849928263410-u1uqda3gv7o05p6ogeagc91srs0cbnto.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.homechef.vendor</string>
+	<string>com.tesserix.homechef.vendor</string>
 	<key>PROJECT_ID</key>
 	<string>tesseracthub-480811</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:849928263410:ios:be35bb0047dd6d3939a26b</string>
+	<string>1:849928263410:ios:cfeca97f5b23512039a26b</string>
 </dict>
 </plist>
