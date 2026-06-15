@@ -85,6 +85,8 @@ Recent decisions affecting current work:
 | 260615-i1h | Legal docs → reviewer-ready: full landing policies + vendor legal screens + customer/vendor EULA + consistency sweep + COUNSEL-REVIEW.md; entity reconciled to Tesserix Pty Ltd (mark8ly parent precedent) | 2026-06-15 | bd26470 | [260615-i1h-finish-prod-readiness-point-2-legal-docs](./quick/260615-i1h-finish-prod-readiness-point-2-legal-docs/) |
 | fast | Customer app iOS-submission config — privacy manifest (5 data types, no crash/perf) + ITSAppUsesNonExemptEncryption=false + eas submit appleTeamId/ascAppId | 2026-06-15 | 22cf787 | _(inline /gsd-fast)_ |
 | fast | Customer app EAS Update OTA wiring — expo-updates@~55.0.24 + updates.url + appVersion runtimeVersion (now matches vendor) | 2026-06-15 | 4ff472c | _(inline)_ |
+| fast | EAS Workflow CI scaffold (production iOS+Android build+submit, both apps, inert until creds) | 2026-06-15 | e7c5ca3 | _(inline)_ |
+| fast | Bundle-ID migration → com.tesserix.homechef.{vendor,customer} (com.homechef.* taken globally); app.json+eas.json+new Firebase configs+iOS OAuth clients, verified | 2026-06-15 | 4ed26ee, b211b6b | _(inline)_ |
 
 ### Blockers/Concerns
 
