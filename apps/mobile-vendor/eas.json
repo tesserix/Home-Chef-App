@@ -39,6 +39,7 @@
         "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
         "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "preview",
         "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_URL": "https://de.sentry.io/",
         "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
         "SENTRY_PROJECT": "homechef-vendor",
         "RCT_USE_PREBUILT_RNCORE": "0"
@@ -70,6 +71,7 @@
         "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
         "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "preview",
         "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_URL": "https://de.sentry.io/",
         "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
         "SENTRY_PROJECT": "homechef-vendor"
       }
@@ -84,6 +86,7 @@
         "EXPO_PUBLIC_SENTRY_DSN": "$EAS_SECRET_SENTRY_DSN",
         "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "production",
         "SENTRY_AUTH_TOKEN": "$EAS_SECRET_SENTRY_AUTH_TOKEN",
+        "SENTRY_URL": "https://de.sentry.io/",
         "SENTRY_ORG": "$EAS_SECRET_SENTRY_ORG",
         "SENTRY_PROJECT": "homechef-vendor"
       }
