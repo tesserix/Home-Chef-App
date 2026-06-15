@@ -87,9 +87,11 @@ Recent decisions affecting current work:
 | fast | Customer app EAS Update OTA wiring — expo-updates@~55.0.24 + updates.url + appVersion runtimeVersion (now matches vendor) | 2026-06-15 | 4ff472c | _(inline)_ |
 | fast | EAS Workflow CI scaffold (production iOS+Android build+submit, both apps, inert until creds) | 2026-06-15 | e7c5ca3 | _(inline)_ |
 | fast | Bundle-ID migration → com.tesserix.homechef.{vendor,customer} (com.homechef.* taken globally); app.json+eas.json+new Firebase configs+iOS OAuth clients, verified | 2026-06-15 | 4ed26ee, b211b6b | _(inline)_ |
+| fast | Android production builds (both apps) green on EAS; vendor required disabling Sentry source-map upload (EU-region sentry-cli routing) + Play android submit profile + EAS Workflow CI scaffold | 2026-06-15 | _(EAS builds + eas.json)_ | _(inline)_ |
 
 ### Blockers/Concerns
 
+- **Sentry source-map upload (vendor) DISABLED** via `SENTRY_DISABLE_AUTO_UPLOAD=true` — EU-region (`tesserix` org, `de.sentry.io`) + sentry-cli/Expo-gradle can't reconcile control-silo auth (sentry.io) vs EU data region: `SENTRY_URL=de`→401 invalid token, no `SENTRY_URL`→"organization not found". Runtime crash reporting via DSN is UNAFFECTED. **Post-launch follow-up:** re-enable upload with correct EU endpoint config (or a region-matched token) for de-minified stack traces.
 - Confirm Go API has `PATCH /v1/delivery/:id/location` endpoint before Phase 4 GPS work begins
 - Confirm whether real-time driver location for Customer map is REST polling or WebSocket (v1 fallback: 5-second polling)
 - Verify EAS Build free tier build minute limits for 3 apps before Phase 1 ends
