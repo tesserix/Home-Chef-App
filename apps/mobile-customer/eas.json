@@ -17,7 +17,7 @@
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Customer-rqg8a",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-sntbom5dttgot368focuh9k0quplg0pu.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp.apps.googleusercontent.com",
         "RCT_USE_PREBUILT_RNCORE": "0"
       }
     },
@@ -32,7 +32,7 @@
         "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Customer-rqg8a",
         "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-sntbom5dttgot368focuh9k0quplg0pu.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp.apps.googleusercontent.com"
       }
     },
     "preview": {
