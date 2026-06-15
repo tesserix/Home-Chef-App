@@ -82,6 +82,7 @@ Recent decisions affecting current work:
 | 260610-ica | Vendor app v2 visual redesign (canvas+cards, dark hero, motion) | 2026-06-10 | f2a5814 | [260610-ica-vendor-app-v2-visual-redesign-canvas-car](./quick/260610-ica-vendor-app-v2-visual-redesign-canvas-car/) |
 | 260610-iy5 | Customer app v2 Airbnb redesign + data-layer fixes; checkout address mapping fix + per-item special instructions | 2026-06-10 | 55258a5 | [260610-iy5-customer-app-v2-redesign-plan-airbnb-pal](./quick/260610-iy5-customer-app-v2-redesign-plan-airbnb-pal/) |
 | 260612-n0g | Polish batch: landing wordmark swap + SVG logo + mobile splash/adaptive-icons + doc-drift checkbox sync | 2026-06-12 | 111084f | [260612-n0g-polish-batch-landing-wordmark-swap-mobil](./quick/260612-n0g-polish-batch-landing-wordmark-swap-mobil/) |
+| 260615-i1h | Legal docs → reviewer-ready: full landing policies + vendor legal screens + customer/vendor EULA + consistency sweep + COUNSEL-REVIEW.md; entity reconciled to Tesserix Pty Ltd (mark8ly parent precedent) | 2026-06-15 | bd26470 | [260615-i1h-finish-prod-readiness-point-2-legal-docs](./quick/260615-i1h-finish-prod-readiness-point-2-legal-docs/) |
 
 ### Blockers/Concerns
 
