@@ -280,7 +280,7 @@ export default function SettingsScreen() {
           onPress: () =>
             Alert.alert(
               'Support',
-              'Email support@homechef.app to request account deletion.',
+              'Email support@fe3dr.com to request account deletion.',
             ),
         },
       ],
