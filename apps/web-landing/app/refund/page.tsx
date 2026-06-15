@@ -2,7 +2,11 @@
 
 import type { Metadata } from 'next';
 import { LegalPage, type LegalSection } from '@/components/legal-page';
-import { LEGAL_LAST_UPDATED, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
+import {
+  LEGAL_LAST_UPDATED,
+  LEGAL_OPERATOR_FULL,
+  LEGAL_SUPPORT_EMAIL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Refund & Cancellation Policy',
@@ -17,7 +21,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Cancellation eligibility by order stage',
     paragraphs: [
-      `Fe3dr, operated by ${LEGAL_OPERATOR}, ties refunds to the order stage because home chefs cook to order. Every order moves through fixed stages — Placed, Accepted, Preparing, Ready, Out for delivery, Delivered — and you can see the current stage on the order detail screen.`,
+      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL}, and ties refunds to the order stage because home chefs cook to order. Every order moves through fixed stages — Placed, Accepted, Preparing, Ready, Out for delivery, Delivered — and you can see the current stage on the order detail screen.`,
       '• Placed (chef has not accepted yet): cancel instantly, 100% refund within 7 working days.',
       '• Accepted (chef has not started cooking): full refund. In rare cases — a custom or pre-shopped catering dish — the chef may have already bought ingredients; if so, we show you the ingredient cost before you confirm and refund the rest.',
       '• Preparing (chef is cooking): we cannot refund the food cost, because the chef cannot sell the food to someone else. If the order is not delivered, we still refund the delivery fee.',

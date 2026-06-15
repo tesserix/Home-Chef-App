@@ -6,7 +6,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'This End User Licence Agreement (EULA) covers your right to use the Fe3dr customer app, provided by Tesserix Pty Ltd ("Fe3dr", "we", "us"). We grant you a limited licence to use the app; we keep ownership of the software.';
+  'This End User Licence Agreement (EULA) covers your right to use the Fe3dr customer app. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). We grant you a limited licence to use the app; we keep ownership of the software.';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -52,7 +52,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '7. Governing law and contact',
     paragraphs: [
-      'This EULA is read alongside our Terms of Service and Privacy Policy, and relates to a platform operated in India. For any question about this EULA, contact support@fe3dr.com.',
+      'This EULA is governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. It is read alongside our Terms of Service and Privacy Policy. For any question about this EULA, contact support@fe3dr.com.',
     ],
   },
 ];

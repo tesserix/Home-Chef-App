@@ -2,7 +2,13 @@
 
 import type { Metadata } from 'next';
 import { LegalPage, type LegalSection } from '@/components/legal-page';
-import { LEGAL_LAST_UPDATED, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
+import {
+  LEGAL_GRIEVANCE_EMAIL,
+  LEGAL_LAST_UPDATED,
+  LEGAL_OPERATOR,
+  LEGAL_OPERATOR_FULL,
+  LEGAL_SUPPORT_EMAIL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -17,8 +23,8 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Who we are',
     paragraphs: [
-      `${LEGAL_OPERATOR} operates Fe3dr. In this policy we call ourselves "we", "us", or Fe3dr, and we call you "you".`,
-      'Under the Digital Personal Data Protection Act, 2023 (the DPDP Act), we are the Data Fiduciary — we decide why and how your personal data is processed. You are the Data Principal, the person the data is about.',
+      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL}. In this policy we call ourselves "we", "us", or Fe3dr, and we call you "you".`,
+      `${LEGAL_OPERATOR} handles personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India's Digital Personal Data Protection Act, 2023 (the DPDP Act). For our India operations we act as the Data Fiduciary — we decide why and how your personal data is processed — and you are the Data Principal, the person the data is about.`,
       'When we say Personal Data, we mean any information that identifies you or could identify you — your name, your phone number, your address, your face in a profile photo. When we say Processing, we mean anything we do with that data: collecting it, storing it, using it, sharing it, or deleting it.',
     ],
   },
@@ -100,11 +106,13 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '10. Grievance Officer',
     paragraphs: [
-      'We have appointed a Grievance Officer under Section 10 of the DPDP Act and the IT (Intermediary Guidelines) Rules, 2021. They acknowledge complaints within 24 hours and aim to resolve them within 15 days.',
-      // TODO(counsel): replace bracketed Grievance Officer name and phone with the real India-resident appointee before launch (DPDP §10/§13 requirement).
+      'For our India operations we have appointed a Grievance Officer under Section 13 of the DPDP Act and the IT (Intermediary Guidelines) Rules, 2021. They acknowledge complaints within 24 hours and aim to resolve them within 15 days.',
+      // TODO(counsel): replace bracketed Grievance Officer name and phone with the real India-resident appointee before launch (DPDP §13 requirement).
+      // TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
       '• Name: [Grievance Officer Name]',
       '• Phone: [Grievance Officer Phone] (Mon–Fri, 10:00–18:00 IST)',
-      `• Email: ${LEGAL_SUPPORT_EMAIL}`,
+      `• Grievance Officer (India): ${LEGAL_GRIEVANCE_EMAIL}`,
+      `• General support and legal contact: ${LEGAL_SUPPORT_EMAIL}`,
       'If we do not resolve your grievance, you can complain to the Data Protection Board of India.',
     ],
   },

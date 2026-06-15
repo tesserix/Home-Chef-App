@@ -6,7 +6,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'These Terms of Service govern your use of the Fe3dr customer app, operated by Tesserix Pty Ltd ("Fe3dr", "we", "us"). By creating an account or placing an order you agree to these terms. Please read them carefully.';
+  'These Terms of Service govern your use of the Fe3dr customer app. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). By creating an account or placing an order you agree to these terms. Please read them carefully.';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -73,7 +73,8 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '11. Governing law and contact',
     paragraphs: [
-      'These terms are governed by the laws of India, and disputes are subject to the courts of competent jurisdiction in India. For any question about these terms, contact support@fe3dr.com.',
+      'These terms are governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction — including, if you are an Indian consumer, your right to bring a complaint to a District Consumer Disputes Redressal Commission with jurisdiction over your place of residence under the Consumer Protection Act, 2019.',
+      'Before commencing proceedings, the parties will try to resolve any dispute in good faith for at least 30 days, then attempt mediation under the Rules of the Resolution Institute (Australia); nothing in this clause prevents either party from seeking urgent interlocutory relief. For any question about these terms, contact support@fe3dr.com.',
     ],
   },
 ];

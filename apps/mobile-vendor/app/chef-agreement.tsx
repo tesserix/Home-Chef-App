@@ -7,7 +7,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'This Chef & Vendor Agreement is between you, an independent home chef, and Tesserix Pty Ltd, which operates the Fe3dr platform ("Fe3dr", "we", "us"). It governs your use of the vendor app and your sale of home-cooked food through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.';
+  'This Chef & Vendor Agreement is between you, an independent home chef, and Tesserix Pty Ltd. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). It governs your use of the vendor app and your sale of home-cooked food through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -67,7 +67,8 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '10. Liability, governing law, and contact',
     paragraphs: [
-      'As an independent business, you are responsible for the food you prepare and for your compliance with the law. To the extent permitted by law, Fe3dr’s liability to you in connection with an order is limited to the platform fees and commission attributable to that order. This agreement relates to a platform operated in India and is read alongside Indian food-safety (FSSAI), payments (RBI), and tax law. For any question about this agreement, your payouts, or your account, contact support@fe3dr.com.',
+      'As an independent business, you are responsible for the food you prepare and for your compliance with the law. To the extent permitted by law, Fe3dr’s liability to you in connection with an order is limited to the platform fees and commission attributable to that order.',
+      'This agreement is governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. Before commencing proceedings, the parties will try to resolve any dispute in good faith for at least 30 days, then attempt mediation under the Rules of the Resolution Institute (Australia); nothing prevents either party from seeking urgent interlocutory relief. The agreement is read alongside Indian food-safety (FSSAI), payments (RBI), and tax law that applies to your operation. For any question about this agreement, your payouts, or your account, contact support@fe3dr.com.',
     ],
   },
 ];

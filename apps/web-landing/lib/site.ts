@@ -23,10 +23,19 @@ export const CONTACT_EMAIL = 'hello@fe3dr.com';
 export const CHEFS_EMAIL = 'chefs@fe3dr.com';
 
 // Canonical legal-document values — kept identical across landing + both apps.
-// LEGAL_SUPPORT_EMAIL is the legal/grievance contact (distinct from the
+// LEGAL_SUPPORT_EMAIL is the general legal/support contact (distinct from the
 // general CONTACT_EMAIL above). Do NOT repurpose CONTACT_EMAIL for legal copy.
 export const LEGAL_SUPPORT_EMAIL = 'support@fe3dr.com';
 export const LEGAL_OPERATOR = 'Tesserix Pty Ltd';
+// Full operator identity — confirmed against sibling product mark8ly (same
+// parent). Used on every operator mention across landing + both apps. Mirrors
+// the mark8ly precedent of putting the ACN/ABN in user-facing copy.
+export const LEGAL_OPERATOR_FULL =
+  'Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia';
+// India grievance-officer contact (DPDP §13). Distinct from the general
+// LEGAL_SUPPORT_EMAIL; mark8ly exposes a dedicated dpo@ alongside general support.
+// TODO(ops): provision dpo@fe3dr.com mailbox + name a resident Grievance Officer (DPDP §13)
+export const LEGAL_GRIEVANCE_EMAIL = 'dpo@fe3dr.com';
 export const LEGAL_LAST_UPDATED = '11 June 2026';
 
 // TODO(owner): real social profiles (placeholders until accounts exist).

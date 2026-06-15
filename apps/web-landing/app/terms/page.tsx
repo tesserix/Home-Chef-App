@@ -2,7 +2,13 @@
 
 import type { Metadata } from 'next';
 import { LegalPage, type LegalSection } from '@/components/legal-page';
-import { LEGAL_LAST_UPDATED, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
+import {
+  LEGAL_GRIEVANCE_EMAIL,
+  LEGAL_LAST_UPDATED,
+  LEGAL_OPERATOR,
+  LEGAL_OPERATOR_FULL,
+  LEGAL_SUPPORT_EMAIL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
@@ -24,7 +30,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '2. What Fe3dr does',
     paragraphs: [
-      `Fe3dr, operated by ${LEGAL_OPERATOR}, is a technology platform. We connect customers who want home-cooked food with independent home cooks (each a Chef) and independent delivery partners (each a Driver). We list menus, take payments, and pass orders to the right chef and driver.`,
+      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL}, and is a technology platform. We connect customers who want home-cooked food with independent home cooks (each a Chef) and independent delivery partners (each a Driver). We list menus, take payments, and pass orders to the right chef and driver.`,
       'We are a marketplace, not a restaurant. We do not cook your food, store it, package it, or carry it. The chef cooks the food in their own kitchen; the driver picks it up and brings it to you. We verify chefs and drivers before they start and we set service standards, but we do not control the kitchen, the cooking, or the route.',
       'We operate as an intermediary under the Information Technology Act, 2000. Our role and the protection that goes with it is explained in section 11.',
     ],
@@ -106,22 +112,23 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '12. Governing law and dispute resolution',
     paragraphs: [
-      // TODO(counsel): the operating entity carries an Australian suffix while operations, food safety, payments, and tax are India-based — confirm the single governing-law / jurisdiction clause before launch (see COUNSEL-REVIEW.md).
-      'These terms relate to a platform operated in India and are read alongside Indian food-safety (FSSAI), payments (RBI), and tax (GST) law. If you are a consumer, nothing here stops you from bringing a complaint to a District Consumer Disputes Redressal Commission with jurisdiction over your place of residence, as the Consumer Protection Act, 2019 allows.',
-      'If you have a problem, please tell us first — most problems are sorted out quickly through our Grievance Officer, who acknowledges complaints within 48 hours and aims to resolve them within 30 days. You may also escalate to the National Consumer Helpline, a District Consumer Disputes Redressal Commission, the Data Protection Board of India, or the Reserve Bank of India Integrated Ombudsman Scheme for unresolved payment disputes. For commercial disputes that are not consumer matters, we agree to arbitration in India under the Arbitration and Conciliation Act, 1996, seated in Mumbai, before a single arbitrator, in English.',
+      'Governing law. These terms are governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles.',
+      'Jurisdiction. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. If you are a consumer, nothing here stops you from bringing a complaint to a District Consumer Disputes Redressal Commission with jurisdiction over your place of residence, as the Consumer Protection Act, 2019 allows.',
+      'Dispute ladder. Before commencing proceedings, the parties will try to resolve any dispute in good faith for at least 30 days. If the dispute is not resolved, the parties will attempt mediation under the Rules of the Resolution Institute (Australia). Nothing in this clause prevents either party from seeking urgent interlocutory relief.',
+      'If you have a problem, please tell us first — most problems are sorted out quickly through our Grievance Officer, who acknowledges complaints within 48 hours and aims to resolve them within 30 days. You may also escalate to the National Consumer Helpline, a District Consumer Disputes Redressal Commission, the Data Protection Board of India, or the Reserve Bank of India Integrated Ombudsman Scheme for unresolved payment disputes.',
     ],
   },
   {
     heading: '13. Privacy and changes',
     paragraphs: [
-      'We handle your personal data under the Digital Personal Data Protection Act, 2023. Our Privacy Policy at fe3dr.com/privacy explains what we collect, why, how long we keep it, and how to exercise your rights. By using Fe3dr, you confirm that you have read it.',
+      `${LEGAL_OPERATOR} handles personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India's Digital Personal Data Protection Act, 2023 (DPDP). Our Privacy Policy at fe3dr.com/privacy explains what we collect, why, how long we keep it, and how to exercise your rights. By using Fe3dr, you confirm that you have read it.`,
       'We may update these terms. When we do, we update the "Last updated" date at the top of this page. For material changes — for example a change to how we handle refunds, how disputes are resolved, or what fees you pay — we give you 30 days notice by email and in the app. We do not change the terms that apply to an order you have already placed.',
     ],
   },
   {
     heading: '14. Contact us',
     paragraphs: [
-      `For routine questions, and for complaints, data-protection requests, and notices that need a formal response, contact our support and Grievance Officer at ${LEGAL_SUPPORT_EMAIL}. We acknowledge complaints within 48 hours and aim to resolve them within 30 days, in line with the Consumer Protection (E-Commerce) Rules, 2020 and the Digital Personal Data Protection Act, 2023.`,
+      `For routine questions, and for complaints and notices that need a formal response, contact our general support and legal team at ${LEGAL_SUPPORT_EMAIL}. For India data-protection grievances, our Grievance Officer is reachable at ${LEGAL_GRIEVANCE_EMAIL}. We acknowledge complaints within 48 hours and aim to resolve them within 30 days, in line with the Consumer Protection (E-Commerce) Rules, 2020 and the Digital Personal Data Protection Act, 2023.`,
     ],
   },
 ];

@@ -6,7 +6,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'These Terms of Service govern your use of the Fe3dr vendor app, operated by Tesserix Pty Ltd ("Fe3dr", "we", "us"). The full commercial terms of your relationship with the platform — commission, payouts, food-safety duties, and cancellation rules — are set out in the Chef & Vendor Agreement, also available from this menu.';
+  'These Terms of Service govern your use of the Fe3dr vendor app. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). The full commercial terms of your relationship with the platform — commission, payouts, food-safety duties, and cancellation rules — are set out in the Chef & Vendor Agreement, also available from this menu.';
 
 const SECTIONS: LegalSection[] = [
   {
@@ -48,7 +48,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '7. Governing law and contact',
     paragraphs: [
-      'These terms relate to a platform operated in India and are read alongside Indian food-safety (FSSAI), payments (RBI), and tax law. For any question about these terms, contact support@fe3dr.com.',
+      'These terms are governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. They are read alongside Indian food-safety (FSSAI), payments (RBI), and tax law that applies to your operation. For any question about these terms, contact support@fe3dr.com.',
     ],
   },
 ];

@@ -2,7 +2,13 @@
 
 import type { Metadata } from 'next';
 import { LegalPage, type LegalSection } from '@/components/legal-page';
-import { LEGAL_LAST_UPDATED, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
+import {
+  LEGAL_GRIEVANCE_EMAIL,
+  LEGAL_LAST_UPDATED,
+  LEGAL_OPERATOR,
+  LEGAL_OPERATOR_FULL,
+  LEGAL_SUPPORT_EMAIL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Chef & Vendor Agreement',
@@ -18,7 +24,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Who this agreement is between',
     paragraphs: [
-      `This Chef & Vendor Agreement is between you (the "Chef") and ${LEGAL_OPERATOR}, which operates the Fe3dr platform ("Fe3dr", "we", "us"). It governs your use of the Fe3dr vendor app and your sale of home-cooked food to customers through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.`,
+      `This Chef & Vendor Agreement is between you (the "Chef") and ${LEGAL_OPERATOR}. Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). It governs your use of the Fe3dr vendor app and your sale of home-cooked food to customers through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.`,
     ],
   },
   {
@@ -96,9 +102,10 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '13. Governing law and contact',
     paragraphs: [
-      // TODO(counsel): confirm the governing-law / jurisdiction clause for the chef contract given the operating-entity vs India-operations question (see COUNSEL-REVIEW.md).
-      'This agreement relates to a platform operated in India and is read alongside Indian food-safety (FSSAI), payments (RBI), and tax law. We may update it from time to time, with notice in the app for material changes.',
-      `For any question about this agreement, your payouts, or your account, contact ${LEGAL_SUPPORT_EMAIL}.`,
+      'Governing law. This agreement is governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction.',
+      'Dispute ladder. Before commencing proceedings, the parties will try to resolve any dispute in good faith for at least 30 days, then attempt mediation under the Rules of the Resolution Institute (Australia). Nothing in this clause prevents either party from seeking urgent interlocutory relief.',
+      'This agreement is read alongside Indian food-safety (FSSAI), payments (RBI), and tax law that applies to your operation. We may update it from time to time, with notice in the app for material changes.',
+      `For any question about this agreement, your payouts, or your account, contact ${LEGAL_SUPPORT_EMAIL}. For India data-protection grievances, our Grievance Officer is reachable at ${LEGAL_GRIEVANCE_EMAIL}.`,
     ],
   },
 ];

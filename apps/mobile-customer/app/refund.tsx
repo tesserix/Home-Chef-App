@@ -6,7 +6,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'Fe3dr is a marketplace operated by Tesserix Pty Ltd that connects you with independent home chefs and delivery partners. This policy explains when you can cancel an order and how refunds are handled. It applies to all orders placed through the Fe3dr customer app.';
+  'Fe3dr is a marketplace that connects you with independent home chefs and delivery partners. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia. This policy explains when you can cancel an order and how refunds are handled. It applies to all orders placed through the Fe3dr customer app.';
 
 const SECTIONS: LegalSection[] = [
   {

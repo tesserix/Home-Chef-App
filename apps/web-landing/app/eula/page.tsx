@@ -2,7 +2,11 @@
 
 import type { Metadata } from 'next';
 import { LegalPage, type LegalSection } from '@/components/legal-page';
-import { LEGAL_LAST_UPDATED, LEGAL_OPERATOR, LEGAL_SUPPORT_EMAIL } from '@/lib/site';
+import {
+  LEGAL_LAST_UPDATED,
+  LEGAL_OPERATOR_FULL,
+  LEGAL_SUPPORT_EMAIL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'End User Licence Agreement',
@@ -17,7 +21,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Licence grant',
     paragraphs: [
-      `${LEGAL_OPERATOR} ("Fe3dr", "we", "us") grants you a limited, non-exclusive, non-transferable, revocable licence to download and use the Fe3dr mobile apps on devices you own or control, for your personal, non-commercial use, subject to this EULA and to our Terms of Service.`,
+      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). We grant you a limited, non-exclusive, non-transferable, revocable licence to download and use the Fe3dr mobile apps on devices you own or control, for your personal, non-commercial use, subject to this EULA and to our Terms of Service.`,
     ],
   },
   {
@@ -70,8 +74,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '9. Governing law and contact',
     paragraphs: [
-      // TODO(counsel): confirm IP-ownership entity and governing law for the EULA (see COUNSEL-REVIEW.md).
-      'This EULA is read alongside our Terms of Service and Privacy Policy and relates to a platform operated in India.',
+      'This EULA is governed by the laws of New South Wales, Australia, without regard to conflict-of-laws principles. The courts of New South Wales have exclusive jurisdiction, subject to any non-excludable consumer-protection forum rules in your jurisdiction. It is read alongside our Terms of Service and Privacy Policy.',
       `For any question about this EULA, contact ${LEGAL_SUPPORT_EMAIL}.`,
     ],
   },
