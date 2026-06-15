@@ -11,7 +11,10 @@ import {
   Languages,
   LifeBuoy,
   LogOut,
+  Scale,
+  ScrollText,
   Settings,
+  Shield,
   Star,
   User,
 } from 'lucide-react-native';
@@ -43,6 +46,11 @@ const NAV_ROWS: NavRow[] = [
   // Wave 4 — language picker (English / हिन्दी).
   { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
   { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
+  // Legal — template policy screens reachable from the More tab (PROD-READINESS W3/W6).
+  { labelKey: 'legalPrivacy', caption: 'How we handle your data', route: '/privacy', Icon: Shield },
+  { labelKey: 'legalTerms', caption: 'Using the vendor app', route: '/terms', Icon: FileText },
+  { labelKey: 'legalAgreement', caption: 'Commission, payouts, food safety', route: '/chef-agreement', Icon: Scale },
+  { labelKey: 'legalEula', caption: 'App licence terms', route: '/eula', Icon: ScrollText },
 ];
 
 function deriveDisplayName(

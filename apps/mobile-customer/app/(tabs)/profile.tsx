@@ -21,6 +21,7 @@ import {
   FileText,
   Shield,
   Receipt,
+  ScrollText,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -481,6 +482,12 @@ export default function ProfileScreen() {
               icon={<Receipt size={18} color={customerColors.charcoal.soft} />}
               label="Refund Policy"
               onPress={() => router.push('/refund')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<ScrollText size={18} color={customerColors.charcoal.soft} />}
+              label="End User Licence"
+              onPress={() => router.push('/eula')}
               isLast
             />
           </View>
