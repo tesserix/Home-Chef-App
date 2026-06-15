@@ -425,6 +425,9 @@ importers:
       expo-status-bar:
         specifier: ~55.0.6
         version: 55.0.6(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
+      expo-updates:
+        specifier: ~55.0.24
+        version: 55.0.24(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))(react@19.2.0)
       expo-web-browser:
         specifier: ~55.0.16
         version: 55.0.16(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.7)(react@19.2.0))
