@@ -22,6 +22,13 @@ export const LAUNCH_CITY = 'Pune';
 export const CONTACT_EMAIL = 'hello@fe3dr.com';
 export const CHEFS_EMAIL = 'chefs@fe3dr.com';
 
+// Canonical legal-document values — kept identical across landing + both apps.
+// LEGAL_SUPPORT_EMAIL is the legal/grievance contact (distinct from the
+// general CONTACT_EMAIL above). Do NOT repurpose CONTACT_EMAIL for legal copy.
+export const LEGAL_SUPPORT_EMAIL = 'support@fe3dr.com';
+export const LEGAL_OPERATOR = 'Tesserix Pty Ltd';
+export const LEGAL_LAST_UPDATED = '11 June 2026';
+
 // TODO(owner): real social profiles (placeholders until accounts exist).
 export const INSTAGRAM_URL = 'https://instagram.com/fe3dr';
 export const X_URL = 'https://x.com/fe3dr';
