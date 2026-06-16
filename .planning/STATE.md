@@ -93,6 +93,8 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
+- **🔴 OPEN: both iOS TestFlight apps CRASH ON LAUNCH (2026-06-16)** — native crashes, not JS (bundle clean). Vendor `EXC_BAD_ACCESS` SIGSEGV via NSInvocation (main thread); customer SIGABRT uncaught ObjC exception (bg thread). `.ips` at `~/Library/CloudStorage/OneDrive-CivicaUKLtd/Desktop/drive-download-20260616T013233Z-3-001/`. Next: symbolicate with dSYM (EAS build artifacts). Suspects: Firebase init / expo-updates. Full detail in `project_ios_launch_crash_debug` memory. **Blocks on-device testing of both apps.**
+
 - **Sentry source-map upload (vendor) DISABLED** via `SENTRY_DISABLE_AUTO_UPLOAD=true` — EU-region (`tesserix` org, `de.sentry.io`) + sentry-cli/Expo-gradle can't reconcile control-silo auth (sentry.io) vs EU data region: `SENTRY_URL=de`→401 invalid token, no `SENTRY_URL`→"organization not found". Runtime crash reporting via DSN is UNAFFECTED. **Post-launch follow-up:** re-enable upload with correct EU endpoint config (or a region-matched token) for de-minified stack traces.
 - Confirm Go API has `PATCH /v1/delivery/:id/location` endpoint before Phase 4 GPS work begins
 - Confirm whether real-time driver location for Customer map is REST polling or WebSocket (v1 fallback: 5-second polling)
