@@ -102,6 +102,13 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-06T08:39:54.160Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-gps-push-polish/04-CONTEXT.md
+Last session: 2026-06-16 — iOS auth debugging
+Stopped at: all iOS auth fixed on-device (launch + Google + Apple Sign-In); EAS prod build #3 submitted to TestFlight (vendor `fe77a977` + customer `3c45c479`)
+
+Next session TODO:
+1. Confirm TestFlight build #3 (both apps) once Apple processing finishes — verify launch + Google + Apple sign-in from TestFlight on-device.
+2. Ship Android: `eas workflow:run release.yml` (or `eas build -p android --profile production --auto-submit`) per app — same Google client-ID fixes already in `eas.json` apply.
+3. Account linking by email across password/Google/Apple — backend/identity work, see `project_account_linking_by_email` memory (outside mobile "no backend changes" scope; needs scoping).
+4. Local-build reminder: build locally for SIM/device only, no EAS during debug (see `feedback_local_sim_builds_only`); device builds need `SENTRY_DISABLE_AUTO_UPLOAD=true` for vendor + ad-hoc sign for sim.
+
+Key context memories: `project_ios_launch_crash_debug`, `project_apple_signin_gip_not_enabled`, `reference_apple_eas_identifiers`.
