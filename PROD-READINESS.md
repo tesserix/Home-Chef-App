@@ -69,7 +69,7 @@ The admin↔vendor loop spans two surfaces; the vendor app holds only the chef-f
 **Goal:** Cannot ship without these. Make the system observable, securable, distributable.
 
 ### Mobile
-- [ ] **TestFlight pipeline** — App Store Connect setup, distribution cert, `eas submit` flow, internal testing group _(blocked: Apple Developer enrollment)_
+- [x] **TestFlight pipeline** — **DONE 2026-06-16**: org Apple Developer account (Team `2CRHRRYBPL`), ASC app records (vendor `6780689641` / customer `6780689976`), distribution cert + provisioning profiles, ASC API key stored on EAS → **both apps built (`.ipa`) + submitted to TestFlight** via `eas submit`. Bundle IDs migrated to `com.tesserix.homechef.*` (com.homechef.* taken globally). ⏳ Remaining: add internal testers in App Store Connect to install on-device.
 - [x] **Sentry** integration (`@sentry/react-native` + Expo plugin), source-maps upload on EAS build _(scaffold shipped — needs `EAS_SECRET_SENTRY_DSN/AUTH_TOKEN/ORG` set)_
 - [x] **Force-upgrade gate** — `min_version` from API, hard wall + App Store link (`/upgrade-required` screen + axios 426 handler + useMinVersion polling)
 - [x] **Privacy manifests** (iOS 17+) — `app.json` `ios.privacyManifests` declares 4 API categories + 7 data types
