@@ -89,6 +89,7 @@ Recent decisions affecting current work:
 | fast | Bundle-ID migration → com.tesserix.homechef.{vendor,customer} (com.homechef.* taken globally); app.json+eas.json+new Firebase configs+iOS OAuth clients, verified | 2026-06-15 | 4ed26ee, b211b6b | _(inline)_ |
 | fast | Android production builds (both apps) green on EAS; vendor required disabling Sentry source-map upload (EU-region sentry-cli routing) + Play android submit profile + EAS Workflow CI scaffold | 2026-06-15 | _(EAS builds + eas.json)_ | _(inline)_ |
 | fast | iOS: both apps built + **submitted to TestFlight**; Apple dist cert + ASC API key set up on EAS (interactive once, now CI-ready); appleTeamId(2CRHRRYBPL)+ascAppId hardcoded in submit profiles (eas submit doesn't interpolate $EAS_SECRET) | 2026-06-16 | _(EAS submit + eas.json)_ | _(inline)_ |
+| fast | Android: both apps published to Play **internal testing** (first manual AAB upload, Play's rule); **Google Play service account** (eas-play-submit@tesseracthub-480811) wired to EAS for BOTH apps + verified via eas submit (auth OK, rejected only on dup versionCode). **Release pipeline now fully automated both stores** — eas submit/release.yml zero-touch; versionCode auto-increments | 2026-06-16 | _(EAS credentials/submit)_ | _(inline)_ |
 
 ### Blockers/Concerns
 
