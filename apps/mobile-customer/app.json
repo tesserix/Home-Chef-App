@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -20,7 +20,14 @@
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
         "NSCameraUsageDescription": "Used to take photos",
         "NSLocationWhenInUseUsageDescription": "Used to show your location on the delivery tracking map",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp"
+            ]
+          }
+        ]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -135,10 +142,10 @@
           "ios": {
             "useFrameworks": "static",
             "deploymentTarget": "18.0",
-            "newArchEnabled": false
+            "newArchEnabled": true
           },
           "android": {
-            "newArchEnabled": false
+            "newArchEnabled": true
           }
         }
       ],

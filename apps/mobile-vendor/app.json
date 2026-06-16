@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "jsEngine": "hermes",
     "updates": {
       "url": "https://u.expo.dev/e97eea3f-75ca-4666-9174-eba51ee40eab",
@@ -29,7 +29,14 @@
         "NSCameraUsageDescription": "Used to take photos",
         "NSPhotoLibraryUsageDescription": "Used to attach kitchen photos and FSSAI documents",
         "NSLocationWhenInUseUsageDescription": "Used to autofill your kitchen address during onboarding",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47"
+            ]
+          }
+        ]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -164,11 +171,11 @@
           "ios": {
             "useFrameworks": "static",
             "deploymentTarget": "18.0",
-            "newArchEnabled": false,
+            "newArchEnabled": true,
             "buildReactNativeFromSource": true
           },
           "android": {
-            "newArchEnabled": false
+            "newArchEnabled": true
           }
         }
       ],
