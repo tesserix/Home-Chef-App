@@ -20,14 +20,7 @@
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
         "NSCameraUsageDescription": "Used to take photos",
         "NSLocationWhenInUseUsageDescription": "Used to show your location on the delivery tracking map",
-        "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp"
-            ]
-          }
-        ]
+        "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -137,12 +130,19 @@
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.849928263410-cv5p1hdpt7ftkg0t1l8fmjhjhd8aq5rp"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {
             "useFrameworks": "static",
             "deploymentTarget": "18.0",
-            "newArchEnabled": true
+            "newArchEnabled": true,
+            "buildReactNativeFromSource": true
           },
           "android": {
             "newArchEnabled": true

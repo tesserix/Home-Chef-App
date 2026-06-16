@@ -29,14 +29,7 @@
         "NSCameraUsageDescription": "Used to take photos",
         "NSPhotoLibraryUsageDescription": "Used to attach kitchen photos and FSSAI documents",
         "NSLocationWhenInUseUsageDescription": "Used to autofill your kitchen address during onboarding",
-        "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47"
-            ]
-          }
-        ]
+        "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -164,6 +157,12 @@
       "expo-apple-authentication",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47"
+        }
+      ],
       "@sentry/react-native/expo",
       [
         "expo-build-properties",
