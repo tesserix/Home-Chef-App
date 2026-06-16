@@ -95,8 +95,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appleTeamId": "$EAS_SECRET_APPLE_TEAM_ID",
-        "ascAppId": "$EAS_SECRET_ASC_APP_ID"
+        "appleTeamId": "2CRHRRYBPL",
+        "ascAppId": "6780689641"
       },
       "android": {
         "track": "internal",
