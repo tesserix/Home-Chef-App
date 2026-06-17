@@ -29,6 +29,61 @@ func boolField(name string, present bool) string {
 	return ""
 }
 
+// GetFSSAILockedChefs lists India chefs whose FSSAI food-safety licence has
+// lapsed — and who are therefore locked out of new orders and payouts (#32) —
+// so ops can follow up. Reuses services.IsChefFSSAIExpired, so a verified
+// renewal is correctly excluded and this view never disagrees with enforcement.
+// GET /admin/chefs/fssai-locked
+func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
+	cutoff := time.Now().AddDate(0, 0, -1)
+
+	// Candidate chefs: those with a verified FSSAI doc already past expiry. The
+	// per-chef check below narrows to the genuinely-locked.
+	var chefIDs []uuid.UUID
+	database.DB.Model(&models.ChefDocument{}).
+		Distinct("chef_id").
+		Where("type = ? AND status = ? AND expiry_date IS NOT NULL AND expiry_date < ?",
+			models.DocFSSAILicense, models.DocStatusVerified, cutoff).
+		Pluck("chef_id", &chefIDs)
+
+	type lockedChef struct {
+		ChefID          uuid.UUID  `json:"chefId"`
+		UserID          uuid.UUID  `json:"userId"`
+		BusinessName    string     `json:"businessName"`
+		FSSAIExpiry     *time.Time `json:"fssaiExpiry"`
+		DaysSinceExpiry int        `json:"daysSinceExpiry"`
+	}
+
+	locked := make([]lockedChef, 0, len(chefIDs))
+	for _, chefID := range chefIDs {
+		var chef models.ChefProfile
+		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+			continue
+		}
+		if !services.IsChefFSSAIExpired(&chef) {
+			continue // renewed / not actually locked
+		}
+		var doc models.ChefDocument
+		database.DB.
+			Where("chef_id = ? AND type = ? AND status = ? AND expiry_date IS NOT NULL",
+				chefID, models.DocFSSAILicense, models.DocStatusVerified).
+			Order("expiry_date DESC").First(&doc)
+		days := 0
+		if doc.ExpiryDate != nil {
+			days = int(time.Since(*doc.ExpiryDate).Hours() / 24)
+		}
+		locked = append(locked, lockedChef{
+			ChefID:          chef.ID,
+			UserID:          chef.UserID,
+			BusinessName:    chef.BusinessName,
+			FSSAIExpiry:     doc.ExpiryDate,
+			DaysSinceExpiry: days,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": locked, "count": len(locked)})
+}
+
 // GetStats returns dashboard statistics
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	db := database.DB
