@@ -55,6 +55,11 @@ type Order struct {
 	DriverTip   float64 `gorm:"default:0" json:"driverTip"`   // Tip for the delivery driver
 	Discount    float64 `gorm:"default:0" json:"discount"`
 	Total       float64 `gorm:"not null" json:"total"`
+	// WalletApplied is the store credit applied at checkout (#141). The customer
+	// is charged (Total − WalletApplied) at the gateway; the chef/driver splits are
+	// still settled in full (the wallet-covered slice is topped up from the platform
+	// balance). Recorded at payment-create, debited from the wallet on capture.
+	WalletApplied float64 `gorm:"default:0" json:"walletApplied"`
 	PromoCode   string  `gorm:"" json:"promoCode,omitempty"`
 	// Currency is the 3-letter ISO code the customer is charged in. Frozen
 	// at order creation from the chef's settlement currency so later edits

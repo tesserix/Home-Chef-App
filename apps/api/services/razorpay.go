@@ -305,6 +305,54 @@ func (c *RazorpayClient) CreateRefund(paymentID string, req *RefundRequest) (*Re
 	return &result, nil
 }
 
+// --- Direct transfers (platform balance → linked account) ---
+
+// DirectTransferRequest moves money from the PLATFORM's Razorpay balance directly
+// to a linked account, independent of any single payment. Unlike a payment-linked
+// Route transfer (capped by the captured payment), this draws from the pooled
+// platform balance — which is how a wallet-covered order tops up the chef/driver
+// shortfall when the gateway capture alone can't fund the full split (#141).
+type DirectTransferRequest struct {
+	Account  string            `json:"account"`           // destination linked account (acc_...)
+	Amount   int               `json:"amount"`            // paise
+	Currency string            `json:"currency"`          // "INR"
+	OnHold   bool              `json:"on_hold,omitempty"` // hold until delivery confirmation
+	Notes    map[string]string `json:"notes,omitempty"`
+}
+
+// TransferResponse from Razorpay's /transfers endpoint.
+type TransferResponse struct {
+	ID            string `json:"id"`
+	Entity        string `json:"entity"`
+	RecipientType string `json:"recipient_settlement_id"`
+	Account       string `json:"recipient"`
+	Amount        int    `json:"amount"`
+	Currency      string `json:"currency"`
+	Status        string `json:"status"`
+	OnHold        bool   `json:"on_hold"`
+}
+
+// CreateTransfer issues a direct transfer from the platform balance to a linked
+// account. Used to settle the wallet-funded portion of an order's chef/driver
+// split that the gateway capture could not cover (#141).
+func (c *RazorpayClient) CreateTransfer(req *DirectTransferRequest) (*TransferResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := c.doRequest("POST", "/transfers", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result TransferResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &result, nil
+}
+
 // --- Payment Fetch ---
 
 // PaymentResponse from Razorpay

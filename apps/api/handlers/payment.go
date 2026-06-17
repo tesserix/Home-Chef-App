@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -59,6 +60,18 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		return
 	}
 
+	// Optional wallet store-credit to apply at checkout (#141). Body is optional,
+	// so a malformed/empty body just means "no wallet". Gated by a feature flag;
+	// wallet is INR-only (Razorpay Route), so it never applies to the Stripe path.
+	var body struct {
+		WalletAmount float64 `json:"walletAmount"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	requestedWalletPaise := 0
+	if config.AppConfig.WalletCheckoutEnabled && body.WalletAmount > 0 {
+		requestedWalletPaise = services.ToPaise(body.WalletAmount)
+	}
+
 	// Pick gateway from chef's configured provider. Falls back to razorpay
 	// for older chef profiles that don't have the column populated yet.
 	provider := strings.ToLower(order.Chef.PaymentProvider)
@@ -70,7 +83,7 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 	case "stripe":
 		h.createStripePayment(c, &order, userID)
 	default:
-		h.createRazorpayPayment(c, &order, userID)
+		h.createRazorpayPayment(c, &order, userID, requestedWalletPaise)
 	}
 }
 
@@ -78,72 +91,57 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 // from the pre-multi-gateway implementation except that the order's
 // payment_provider column is now stamped so VerifyPayment / InitiateRefund
 // know which code path to run later.
-func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID) {
+func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Order, userID uuid.UUID, requestedWalletPaise int) {
 	rz := services.GetRazorpay()
 	if rz == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 		return
 	}
 
-	// Build Route transfer splits
 	totalPaise := services.ToPaise(order.Total)
-	transfers := []services.TransferSpec{}
 
-	// Chef transfer: subtotal + tax + chef tip (food amount goes directly to chef)
-	chefAmount := order.Subtotal + order.Tax + order.ChefTip
-	// FSSAI hard lockout (#32): withhold the chef's payout when their food-safety
-	// licence has lapsed. The customer is still charged and the platform/driver
-	// are settled; the chef's split stays in the platform account until a verified
-	// renewal lifts the lock. Defense-in-depth — CreateOrder already blocks new
-	// orders for expired chefs, but any path that reaches payment is covered here.
-	chefFSSAIExpired := services.IsChefFSSAIExpired(&order.Chef)
-	if chefFSSAIExpired {
+	// FSSAI hard lockout (#32/#93): audit + withhold the chef payout when their
+	// food-safety licence has lapsed. orderSettlements() clears the chef account so
+	// no transfer is built; here we record the freeze for the regulatory trail.
+	if services.IsChefFSSAIExpired(&order.Chef) {
+		chefAmount := order.Subtotal + order.Tax + order.ChefTip
 		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
 			order.OrderNumber, order.Chef.ID, chefAmount)
-		// Audit the freeze — legal/regulatory evidence that the chef's split was
-		// withheld, and why (#93). System-triggered, so no actor is recorded.
 		services.LogSystemAudit(c, "chef.payout.fssai_withheld", "chef", order.Chef.ID.String(), nil, map[string]any{
 			"orderNumber":    order.OrderNumber,
 			"withheldAmount": chefAmount,
 			"reason":         "fssai_licence_expired",
 		})
 	}
-	if order.Chef.RazorpayAccountID != "" && chefAmount > 0 && !chefFSSAIExpired {
-		transfers = append(transfers, services.TransferSpec{
-			Account:  order.Chef.RazorpayAccountID,
-			Amount:   services.ToPaise(chefAmount),
-			Currency: "INR",
-			Notes: map[string]string{
-				"purpose":      "food_payment",
-				"order_number": order.OrderNumber,
-			},
-			OnHold: true,
-		})
-	}
 
-	// Driver transfer: delivery fee + driver tip
-	if order.Delivery != nil && order.Delivery.DeliveryPartner.RazorpayAccountID != "" {
-		driverAmount := order.DeliveryFee + order.DriverTip
-		if driverAmount > 0 {
-			transfers = append(transfers, services.TransferSpec{
-				Account:  order.Delivery.DeliveryPartner.RazorpayAccountID,
-				Amount:   services.ToPaise(driverAmount),
-				Currency: "INR",
-				Notes: map[string]string{
-					"purpose":      "delivery_payment",
-					"order_number": order.OrderNumber,
-				},
-				OnHold: true,
-			})
+	settlements := orderSettlements(order)
+
+	// Clamp the requested wallet credit against the live balance, then plan the
+	// split: payment-funded transfers (bounded by the capture) + platform-funded
+	// top-ups for whatever the capture can't cover.
+	balancePaise := 0
+	if requestedWalletPaise > 0 {
+		if w, err := services.WalletBalance(database.DB, userID); err == nil && w != nil {
+			balancePaise = services.ToPaise(w.Balance)
 		}
+	}
+	plan := services.PlanWalletFunding(totalPaise, balancePaise, requestedWalletPaise, settlements)
+	walletApplied := services.FromPaise(plan.WalletAppliedPaise)
+
+	// Full-wallet order: the credit covers the entire total, so there is no gateway
+	// payment. Settle the chef/driver from the platform balance, debit the wallet,
+	// and mark the order paid in one shot.
+	if plan.FullWallet {
+		h.settleFullWalletOrder(c, order, plan, walletApplied)
+		return
 	}
 
 	rzOrder, err := rz.CreateOrder(&services.OrderRequest{
-		Amount:    totalPaise,
+		Amount:    plan.CapturePaise,
 		Currency:  "INR",
 		Receipt:   order.OrderNumber,
-		Transfers: transfers,
+		Transfers: plan.PaymentTransfers,
 		Notes: map[string]string{
 			"order_id":     order.ID.String(),
 			"order_number": order.OrderNumber,
@@ -159,13 +157,15 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	database.DB.Model(order).Updates(map[string]interface{}{
 		"razorpay_order_id": rzOrder.ID,
 		"payment_provider":  "razorpay",
+		"wallet_applied":    walletApplied,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"provider":        "razorpay",
 		"razorpayOrderId": rzOrder.ID,
 		"razorpayKeyId":   rz.GetKeyID(),
-		"amount":          totalPaise,
+		"amount":          plan.CapturePaise,
+		"walletApplied":   walletApplied,
 		"currency":        "INR",
 		"orderNumber":     order.OrderNumber,
 		"prefill": gin.H{
@@ -173,6 +173,102 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 			"email": order.Customer.Email,
 			"phone": order.Customer.Phone,
 		},
+	})
+}
+
+// orderSettlements derives the chef + driver payouts for an order, chef first so
+// its (larger) food payout stays a single payment-linked transfer when the capture
+// allows (#141). The chef account is cleared when its FSSAI licence has lapsed, so
+// that slice is withheld and never transferred. Requires Chef and
+// Delivery.DeliveryPartner preloaded. Deterministic, so create and verify produce
+// the same split for a given order.
+func orderSettlements(order *models.Order) []services.Settlement {
+	chefAccount := order.Chef.RazorpayAccountID
+	if services.IsChefFSSAIExpired(&order.Chef) {
+		chefAccount = ""
+	}
+	driverAccount := ""
+	if order.Delivery != nil {
+		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
+	}
+	return []services.Settlement{
+		{Account: chefAccount, Amount: services.ToPaise(order.Subtotal + order.Tax + order.ChefTip), Hold: true,
+			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
+		{Account: driverAccount, Amount: services.ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
+			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
+	}
+}
+
+// debitOrderWallet debits the customer's store credit for the wallet applied to an
+// order, idempotent on the order so a retry never double-debits (#141).
+func debitOrderWallet(order *models.Order) error {
+	if order.WalletApplied <= 0 {
+		return nil
+	}
+	_, err := services.DebitWallet(database.DB, order.CustomerID, order.WalletApplied,
+		models.WalletSourceOrderPayment, &order.ID, "checkout", "wallet-debit:"+order.ID.String(), nil)
+	return err
+}
+
+// settleWalletTopUps funds the chef/driver portion that the gateway capture could
+// not cover, via direct transfers from the platform balance (#141). Failures are
+// logged but not fatal — the money is already captured and the reconciliation job
+// retries; failing here would wrongly tell the client the order is unpaid.
+func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
+	rz := services.GetRazorpay()
+	if rz == nil {
+		return
+	}
+	for _, t := range topUps {
+		if _, err := rz.CreateTransfer(&services.DirectTransferRequest{
+			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
+		}); err != nil {
+			log.Printf("wallet-topup: direct transfer failed order=%s account=%s amount=%d: %v",
+				order.OrderNumber, t.Account, t.Amount, err)
+		}
+	}
+}
+
+// settleFullWalletOrder handles an order fully covered by store credit: there is no
+// gateway payment, so the chef/driver are paid entirely from the platform balance,
+// the wallet is debited, and the order is marked paid (#141).
+func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Order, plan services.FundingPlan, walletApplied float64) {
+	order.WalletApplied = walletApplied
+	if err := debitOrderWallet(order); err != nil {
+		log.Printf("full-wallet: debit failed order=%s: %v", order.OrderNumber, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not apply wallet credit"})
+		return
+	}
+
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(order).Updates(map[string]interface{}{
+			"payment_status":   models.PaymentCompleted,
+			"payment_method":   "wallet",
+			"payment_provider": "wallet",
+			"wallet_applied":   walletApplied,
+		}).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
+			"order_id":     order.ID.String(),
+			"order_number": order.OrderNumber,
+			"amount":       order.Total,
+			"method":       "wallet",
+			"provider":     "wallet",
+		})
+	}); err != nil {
+		log.Printf("full-wallet: mark-paid failed order=%s: %v", order.OrderNumber, err)
+	}
+
+	// Pay the chef/driver from the platform balance (the whole split is a top-up).
+	settleWalletTopUps(order, plan.DirectTopUps)
+
+	c.JSON(http.StatusOK, gin.H{
+		"provider":      "wallet",
+		"paid":          true,
+		"amount":        0,
+		"walletApplied": walletApplied,
+		"orderNumber":   order.OrderNumber,
 	})
 }
 
@@ -290,7 +386,10 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	// (IDOR). Returning 404 (not 403) avoids leaking existence of other
 	// orders.
 	var order models.Order
-	if err := database.DB.Where("id = ? AND customer_id = ?", orderID, userID).First(&order).Error; err != nil {
+	// Preload Chef + Delivery so wallet-funded orders can recompute the chef/driver
+	// split and settle their platform-balance top-ups after capture (#141).
+	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
+		Where("id = ? AND customer_id = ?", orderID, userID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
@@ -358,6 +457,20 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	}); err != nil {
 		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
 		services.CaptureBackgroundError(err)
+	}
+
+	// Wallet-at-checkout settlement (#141): now that the gateway capture is
+	// confirmed, debit the applied store credit (idempotent) and top up the
+	// chef/driver portion the capture couldn't cover, from the platform balance.
+	// Recomputes the same split planned at create time (deterministic per order).
+	if order.WalletApplied > 0 {
+		if err := debitOrderWallet(order); err != nil {
+			log.Printf("wallet-debit failed order=%s: %v", order.OrderNumber, err)
+			services.CaptureBackgroundError(err)
+		}
+		appliedPaise := services.ToPaise(order.WalletApplied)
+		plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(order))
+		settleWalletTopUps(order, plan.DirectTopUps)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
@@ -545,9 +658,45 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		provider = "razorpay"
 	}
 
+	// Wallet-at-checkout refunds (#141): a wallet-funded order only captured
+	// (Total − WalletApplied) at the gateway, so the gateway can't refund more than
+	// that. Re-credit the wallet-covered slice as store credit and cap the gateway
+	// refund to the captured amount. NOTE: direct-transfer top-ups
+	// (settleWalletTopUps) are NOT auto-reversed by Razorpay Route the way
+	// payment-linked transfers are — reversing them needs a transfer-reversal call,
+	// tracked for the sandbox-verification follow-up before this flag goes live.
+	if order.WalletApplied > 0 && provider != "wallet" {
+		capture := order.Total - order.WalletApplied
+		if refundAmount > capture {
+			walletPortion := refundAmount - capture
+			if _, werr := services.CreditWallet(database.DB, order.CustomerID, walletPortion,
+				models.WalletSourceRefund, &order.ID,
+				fmt.Sprintf("Wallet-portion refund for order %s: %s", order.OrderNumber, req.Reason),
+				"refund-wallet:"+order.ID.String(), nil); werr != nil {
+				log.Printf("wallet-portion re-credit failed order=%s: %v", order.OrderNumber, werr)
+				services.CaptureBackgroundError(werr)
+			}
+			refundAmount = capture
+		}
+	}
+
 	var refundID, refundStatus string
 
 	switch provider {
+	case "wallet":
+		// Full-wallet order (no gateway payment): the entire refund returns as
+		// store credit.
+		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
+			models.WalletSourceRefund, &order.ID,
+			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
+			"refund:"+order.ID.String(), nil)
+		if werr != nil {
+			log.Printf("wallet-order refund failed order=%s: %v", order.OrderNumber, werr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
+			return
+		}
+		refundID = "wallet:" + txn.ID.String()
+		refundStatus = "processed"
 	case "stripe":
 		if order.StripePaymentIntentID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})
