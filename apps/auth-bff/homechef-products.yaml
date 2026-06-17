@@ -4,47 +4,11 @@ products:
   - name: homechef
     domain: fe3dr.com
     apps:
-      - name: web
-        hosts: ["fe3dr.com", "www.fe3dr.com", "localhost:5173"]
-        gipTenantId: HomeChef-Customer-rqg8a
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_CUSTOMER_CLIENT_SECRET
-        sessionCookie: hc_session
-        callbackPath: /auth/callback
-        callbackHost: fe3dr.com
-        postLoginUrl: /
-        postLogoutUrl: /
-        authContext: customer
-        defaultRole: customer
-        signInMethods: [password, google.com, apple.com, facebook.com, phone]
-        allowedOrigins: ["https://fe3dr.com", "https://www.fe3dr.com", "http://localhost:5173"]
-
-      - name: vendor-portal
-        hosts: ["vendors.fe3dr.com", "localhost:5174"]
-        gipTenantId: HomeChef-Business-8s8ql
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
-        sessionCookie: hc_vendor_session
-        callbackPath: /auth/callback
-        postLoginUrl: /dashboard
-        authContext: business
-        defaultRole: vendor
-        signInMethods: [password, google.com, apple.com, phone]
-        allowedOrigins: ["https://vendors.fe3dr.com", "http://localhost:5174"]
-
-      - name: delivery-portal
-        hosts: ["delivery.fe3dr.com", "localhost:5175"]
-        gipTenantId: HomeChef-Business-8s8ql
-        oauthClientId: "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com"
-        clientSecretEnv: HOMECHEF_BUSINESS_CLIENT_SECRET
-        sessionCookie: hc_driver_session
-        callbackPath: /auth/callback
-        postLoginUrl: /jobs
-        authContext: business
-        defaultRole: driver
-        signInMethods: [password, google.com, phone]
-        allowedOrigins: ["https://delivery.fe3dr.com", "http://localhost:5175"]
-
+      # Web portals (web / vendor-portal / delivery-portal) sunset — entries
+      # removed 2026-06-17 (issue #22) once the browser UIs were retired.
+      # Mobile auth does NOT use these app entries (it goes through
+      # /auth/auto-login gated by mobileTenantAllowlist below); only the
+      # OIDC browser handlers resolve apps by host. admin-portal is retained.
       - name: admin-portal
         hosts: ["admin.fe3dr.com", "localhost:5176"]
         gipTenantId: HomeChef-Internal-gyofe

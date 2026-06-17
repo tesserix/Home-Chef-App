@@ -59,7 +59,7 @@ func newHandlers(t *testing.T, ver *fakeVerifier, api *fakeAPI) *Handlers {
 	return &Handlers{
 		Registry: loadReg(t),
 		OAuthByApp: map[string]*oauth2.Config{
-			"web": {
+			"admin-portal": {
 				ClientID:     "test-client",
 				ClientSecret: "test-secret",
 				Endpoint:     oauth2.Endpoint{AuthURL: "https://example.com/oauth/authorize", TokenURL: "https://example.com/oauth/token"},
@@ -79,7 +79,7 @@ func TestLogin_Redirects(t *testing.T) {
 	r := gin.New()
 	h.Register(r)
 
-	req := httptest.NewRequest("GET", "http://fe3dr.com/auth/login", nil)
+	req := httptest.NewRequest("GET", "http://admin.fe3dr.com/auth/login", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -87,7 +87,7 @@ func TestLogin_Redirects(t *testing.T) {
 	loc := w.Header().Get("Location")
 	assert.Contains(t, loc, "https://example.com/oauth/authorize")
 	assert.Contains(t, loc, "state=")
-	assert.Contains(t, loc, "tenantId=HomeChef-Customer-rqg8a")
+	assert.Contains(t, loc, "tenantId=HomeChef-Internal-gyofe")
 	assert.Contains(t, loc, "nonce=")
 }
 
@@ -104,11 +104,11 @@ func TestLogin_UnknownHost_400(t *testing.T) {
 func TestExchange_Happy(t *testing.T) {
 	ver := &fakeVerifier{
 		tok: &gip.VerifiedToken{
-			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-rqg8a", Provider: "password",
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
 			Claims: map[string]any{
 				"sub":      "g1",
 				"email":    "x@y.com",
-				"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Customer-rqg8a"},
+				"firebase": map[string]any{"sign_in_provider": "password", "tenant": "HomeChef-Internal-gyofe"},
 			},
 		},
 	}
@@ -117,7 +117,7 @@ func TestExchange_Happy(t *testing.T) {
 	r := gin.New()
 	h.Register(r)
 
-	req := httptest.NewRequest("POST", "http://fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -133,7 +133,7 @@ func TestExchange_InvalidBody_400(t *testing.T) {
 	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
 	r := gin.New()
 	h.Register(r)
-	req := httptest.NewRequest("POST", "http://fe3dr.com/auth/exchange", strings.NewReader(`{}`))
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -144,7 +144,7 @@ func TestExchange_InvalidToken_401(t *testing.T) {
 	h := newHandlers(t, &fakeVerifier{err: errors.New("bad")}, &fakeAPI{})
 	r := gin.New()
 	h.Register(r)
-	req := httptest.NewRequest("POST", "http://fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"bad"}`))
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"bad"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
