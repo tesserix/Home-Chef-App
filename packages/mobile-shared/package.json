@@ -31,7 +31,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@hookform/resolvers": "^5.0.1",
+    "@hookform/resolvers": "^5.4.0",
     "@types/react": "^19.2.0",
     "axios": "^1.14.0",
     "react-hook-form": "^7.56.4",
