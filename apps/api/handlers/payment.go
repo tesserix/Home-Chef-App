@@ -424,8 +424,9 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	}
 
 	var req struct {
-		Amount float64 `json:"amount"` // 0 = full refund
-		Reason string  `json:"reason" binding:"required"`
+		Amount   float64 `json:"amount"` // 0 = full refund
+		Reason   string  `json:"reason" binding:"required"`
+		ToWallet bool    `json:"toWallet"` // credit store credit instead of reversing the gateway charge (#33)
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -470,6 +471,50 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	}
 	if refundAmount > order.Total {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot exceed order total"})
+		return
+	}
+
+	// Refund-to-wallet (#33): credit the customer's store credit instead of
+	// reversing the gateway charge. Faster for the customer (no gateway round
+	// trip) and the platform keeps the cash. The idempotency key ties the credit
+	// to the order so a retried refund can't double-credit. Doesn't touch the
+	// chef/driver splits — the original payment already settled.
+	if req.ToWallet {
+		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
+			models.WalletSourceRefund, &order.ID,
+			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
+			"refund:"+order.ID.String(), nil)
+		if werr != nil {
+			log.Printf("refund-to-wallet failed for order %s: %v", order.OrderNumber, werr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
+			return
+		}
+		now := time.Now()
+		database.DB.Model(&order).Updates(map[string]interface{}{
+			"payment_status":      models.PaymentRefunded,
+			"status":              models.OrderStatusRefunded,
+			"refund_id":           "wallet:" + txn.ID.String(),
+			"refund_amount":       refundAmount,
+			"refund_reason":       req.Reason,
+			"refund_initiated_by": initiatedBy,
+			"refunded_at":         &now,
+		})
+		services.LogSystemAudit(c, "order.refund.to_wallet", "order", order.ID.String(), nil, map[string]any{
+			"amount": refundAmount, "walletTxnId": txn.ID.String(), "reason": req.Reason, "initiatedBy": initiatedBy,
+		})
+		if err := services.PublishEvent("orders.refunded", "order.refunded", userID, map[string]interface{}{
+			"order_id": order.ID.String(), "order_number": order.OrderNumber,
+			"refund_amount": refundAmount, "reason": req.Reason, "initiated_by": initiatedBy,
+			"refund_id": "wallet:" + txn.ID.String(), "provider": "wallet",
+		}); err != nil {
+			log.Printf("Failed to publish order refunded event: %v", err)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":             "Refund credited to wallet",
+			"refundAmount":        refundAmount,
+			"provider":            "wallet",
+			"walletTransactionId": txn.ID,
+		})
 		return
 	}
 
