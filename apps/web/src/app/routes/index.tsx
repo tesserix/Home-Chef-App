@@ -39,6 +39,7 @@ const CheckoutPage = lazyWithRetry(() => import('@/features/customer/pages/Check
 const OrdersPage = lazyWithRetry(() => import('@/features/customer/pages/OrdersPage'));
 const OrderDetailPage = lazyWithRetry(() => import('@/features/customer/pages/OrderDetailPage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/customer/pages/ProfilePage'));
+const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletPage'));
 const SocialFeedPage = lazyWithRetry(() => import('@/features/social/pages/SocialFeedPage'));
 const FavoritesPage = lazyWithRetry(() => import('@/features/customer/pages/FavoritesPage'));
 const CateringRequestPage = lazyWithRetry(() => import('@/features/catering/pages/CateringRequestPage'));
@@ -172,6 +173,14 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="wallet"
+            element={
+              <ProtectedRoute>
+                <WalletPage />
               </ProtectedRoute>
             }
           />
