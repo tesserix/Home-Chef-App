@@ -35,6 +35,13 @@ updates:
     groups:
       js-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # vitest is pinned to v3 via the root pnpm override; v4 is a breaking
+      # migration (its transform pipeline can't parse the RN/Flow `typeof`
+      # syntax the mobile-shared screen tests import, breaking 4 tests). Adopt
+      # it deliberately, not via an auto-bump. See PR #157.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
 
   # --- GitHub Actions ---
   - package-ecosystem: github-actions
