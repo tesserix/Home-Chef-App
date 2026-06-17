@@ -28,7 +28,9 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04
 Plan: Not started
 Status: Executing Phase 04
-Last activity: 2026-06-17 - Completed quick task 260617-due: social-login profile (name+avatar) + account-link hardening + Apple name + profile-save read-envelope fix
+Last activity: 2026-06-17 - Completed quick task 260617-gmq: Expo SDK 55→56 upgrade (local main, unpushed, pending owner native-build verification)
+
+Session continuity (2026-06-17 pm): repo `tesserix/Home-Chef-App` made **PUBLIC** (to get free GitHub Actions — org Actions billing was blocking all CI). Deployed `auth-bff` (registry cleanup) + `api` (social-profile/email_verified) via the CI→GHCR→tesserix-k8s argocd bump→ArgoCD chain — required refreshing the expired `TESSERIX_K8S_BOT` PAT (see reference_deploy_pipeline_and_repo_public memory). Going public unleashed Dependabot: **auto-merge PAUSED** (`dependabot-auto-merge.yml` disabled) after it merged a partial expo-updates 56 bump. SDK 56 upgrade done on local main but **NOT pushed** — owner must run a native build (Xcode ≥26.4) first, then push. Redundant dependabot expo-* PRs to close: #79/#84/#85/#86/#87. Android prod builds (customer e6bcc99e + vendor 8c868fa3, versionCode 2) submitted to Play internal earlier. iOS #9 closed (TestFlight launch verified).
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -92,6 +94,7 @@ Recent decisions affecting current work:
 | fast | Android: both apps published to Play **internal testing** (first manual AAB upload, Play's rule); **Google Play service account** (eas-play-submit@tesseracthub-480811) wired to EAS for BOTH apps + verified via eas submit (auth OK, rejected only on dup versionCode). **Release pipeline now fully automated both stores** — eas submit/release.yml zero-touch; versionCode auto-increments | 2026-06-16 | _(EAS credentials/submit)_ | _(inline)_ |
 | 260617-due | Social-login profile (name+avatar, backfill-only) via GIP claims through verifier→autologin→apiclient→API upsert; email_verified-gated same-email re-bind (anti-hijack hardening); Apple first-auth name→Firebase displayName; **fixed "profile edits don't persist" — mobile read-side `{data}` envelope mismatch** (customer useProfile/profile.tsx read flat; vendor/delivery already flat). Go tests green both services | 2026-06-17 | 5d8e3fc | [260617-due-social-profile-and-profile-save-fix](./quick/260617-due-social-profile-and-profile-save-fix/) |
 | fast | Issue #22 auth-bff registry cleanup — dropped dead web OIDC entries (web/vendor-portal/delivery-portal) from `homechef-products.yaml`; kept admin-portal + mobileTenantAllowlist (mobile uses /auth/auto-login, not these app entries — ResolveByHost only in oidc handlers); oidc+registry tests repointed to admin-portal, `go test ./...` green. Owner confirmed web portals already down | 2026-06-17 | 0fd4e5c | _(inline /gsd-fast)_ |
+| 260617-gmq | Expo SDK 55→56 upgrade (all 3 apps + mobile-shared) — fixes the broken split from auto-merged expo-updates 56. expo ~56.0.12 / RN 0.85.3 / React 19.2.3, single coherent lockfile (frozen install passes); vendor bottom-tabs type reconciled via expo-router/tabs; delivery newArchEnabled→true; SDK-56 config plugins added. Static verify green (expo-doctor 19/21, 0 NEW tsc errors, tests baseline). **NOT build-verified, NOT pushed** — native build (Xcode ≥26.4 / iOS 16.4, prebuild --clean) is the owner's remaining gate. Research+plan-check+validate run | 2026-06-17 | a81d234 | [260617-gmq-expo-sdk-55-to-56-upgrade](./quick/260617-gmq-expo-sdk-55-to-56-upgrade/) |
 
 ### Blockers/Concerns
 
