@@ -182,6 +182,7 @@ func Migrate() error {
 
 		// Reviews
 		&models.Review{},
+		&models.DishRating{},
 
 		// Wallet (store-credit ledger, #33)
 		&models.Wallet{},

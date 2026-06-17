@@ -108,3 +108,15 @@ func (r *Review) ToResponse() ReviewResponse {
 		CreatedAt:       r.CreatedAt,
 	}
 }
+
+// DishRating is a per-dish rating attached to a review (#35/#145) — a customer
+// can rate individual menu items from their order, which rolls up into each
+// dish's MenuItem.Rating. One row per (review, menu item).
+type DishRating struct {
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ReviewID   uuid.UUID `gorm:"type:uuid;not null;index" json:"reviewId"`
+	MenuItemID uuid.UUID `gorm:"type:uuid;not null;index" json:"menuItemId"`
+	ChefID     uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
+	Rating     int       `gorm:"not null" json:"rating"` // 1-5
+	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
+}
