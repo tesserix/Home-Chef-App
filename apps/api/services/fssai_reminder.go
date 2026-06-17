@@ -97,9 +97,86 @@ func runFSSAIReminderScan(ctx context.Context) {
 		}
 	}
 
+	// Post-expiry: nudge chefs whose licence has actually lapsed (now locked),
+	// once per day until they renew. Reuses IsChefFSSAIExpired so a verified
+	// renewal correctly lifts the nudge.
+	totalSent += runFSSAIExpiredNudge(ctx, today)
+
 	if totalSent > 0 {
 		log.Printf("fssai-reminder: scan complete, sent=%d", totalSent)
 	}
+}
+
+// runFSSAIExpiredNudge pings chefs whose FSSAI licence has lapsed (and who are
+// therefore locked out of new orders + payouts) with a daily "orders paused —
+// renew" push, until they renew. Returns the number of pushes sent.
+//
+// Candidates are chefs with a verified FSSAI doc already past expiry; the
+// per-chef IsChefFSSAIExpired check then narrows to the genuinely-locked (a
+// later verified renewal lifts the lock), so the cron and the order/payout
+// enforcement never disagree.
+func runFSSAIExpiredNudge(ctx context.Context, today time.Time) int {
+	cutoff := time.Now().AddDate(0, 0, -1)
+
+	var chefIDs []uuid.UUID
+	if err := database.DB.Model(&models.ChefDocument{}).
+		Distinct("chef_id").
+		Where("type = ? AND status = ? AND expiry_date IS NOT NULL AND expiry_date < ?",
+			models.DocFSSAILicense, models.DocStatusVerified, cutoff).
+		Pluck("chef_id", &chefIDs).Error; err != nil {
+		log.Printf("fssai-reminder: expired-nudge query failed: %v", err)
+		return 0
+	}
+
+	sent := 0
+	for _, chefID := range chefIDs {
+		var chef models.ChefProfile
+		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+			continue
+		}
+		if !IsChefFSSAIExpired(&chef) {
+			continue // renewed / not actually locked
+		}
+		if !shouldSendExpiredNudge(ctx, chefID, today) {
+			continue
+		}
+		if err := sendFSSAIExpiredPush(chef.UserID); err != nil {
+			log.Printf("fssai-reminder: expired push failed for chef=%s: %v", chefID, err)
+			continue
+		}
+		sent++
+	}
+	if sent > 0 {
+		log.Printf("fssai-reminder: expired-nudge sent=%d", sent)
+	}
+	return sent
+}
+
+// shouldSendExpiredNudge gates one expired-nudge per chef per day through Redis
+// SETNX (fails open if Redis is down — better a duplicate nudge than none).
+func shouldSendExpiredNudge(ctx context.Context, chefID uuid.UUID, today time.Time) bool {
+	r := GetRedisClient()
+	if !r.IsConnected() {
+		return true
+	}
+	key := fmt.Sprintf("fssai_expired_nudge:%s:%s", chefID, today.Format("2006-01-02"))
+	dedupCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	acquired, err := r.SetNX(dedupCtx, key, "1", 26*time.Hour)
+	if err != nil {
+		return true
+	}
+	return acquired
+}
+
+func sendFSSAIExpiredPush(userID uuid.UUID) error {
+	title := "FSSAI licence expired — orders paused"
+	body := "Your food-safety (FSSAI) licence has expired, so new orders are paused. Renew now to go back online."
+	data := map[string]string{
+		"type":     "fssai_expired",
+		"deeplink": "homechef-vendor:///documents/renew",
+	}
+	return SendPushNotification(userID, title, body, data)
 }
 
 // shouldSendReminder gates each (doc, window, day) tuple through Redis
