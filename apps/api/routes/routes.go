@@ -329,6 +329,14 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
 		}
 
+		// Dish search across chefs (#36) — its own path so it doesn't collide
+		// with the /chefs/:id param route.
+		search := v1.Group("/search")
+		search.Use(bffAuthOptional(bffKey, bffWindow))
+		{
+			search.GET("/dishes", chefHandler.SearchDishes)
+		}
+
 		// Chef onboarding (authenticated, but no chef role required — user is becoming a chef)
 		chefOnboarding := v1.Group("/chef")
 		chefOnboarding.Use(bffAuth(bffKey, bffWindow))
