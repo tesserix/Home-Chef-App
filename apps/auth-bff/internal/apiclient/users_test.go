@@ -51,6 +51,33 @@ func TestClient_UpsertUser_ForwardsIdentityWithHMAC(t *testing.T) {
 	assert.Equal(t, "customer", received.AuthPool)
 }
 
+func TestClient_UpsertUser_MarshalsAvatarAndEmailVerified(t *testing.T) {
+	key := []byte("test-key-32-bytes-padding-padding!")
+	signer := headerproxy.NewSigner(headerproxy.SignerConfig{Key: key, Window: time.Minute})
+
+	var rawBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawBody = readBody(t, r)
+		_, err := signer.Verify(r, rawBody)
+		require.NoError(t, err)
+		_ = json.NewEncoder(w).Encode(UpsertUserResponse{UserID: "u1"})
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, signer)
+	_, err := c.UpsertUser(context.Background(), UpsertUserRequest{
+		GIPUid: "gip-u", GIPTenantID: "HomeChef-Customer", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "a@b.com", Name: "A",
+		Avatar: "https://example.com/a.png", EmailVerified: true, Role: "customer",
+	})
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(rawBody, &decoded))
+	assert.Equal(t, "https://example.com/a.png", decoded["avatar"])
+	assert.Equal(t, true, decoded["email_verified"])
+}
+
 func TestClient_UpsertUser_NonOKResponse_Errors(t *testing.T) {
 	key := []byte("test-key-32-bytes-padding-padding!")
 	signer := headerproxy.NewSigner(headerproxy.SignerConfig{Key: key, Window: time.Minute})

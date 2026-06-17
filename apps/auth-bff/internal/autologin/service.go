@@ -72,12 +72,15 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 		role = r
 	}
 	upsert, err := d.API.UpsertUser(ctx, apiclient.UpsertUserRequest{
-		GIPUid:      tok.UID,
-		GIPTenantID: tok.TenantID,
-		GIPProvider: tok.Provider,
-		AuthPool:    pool,
-		Email:       tok.Email,
-		Role:        role,
+		GIPUid:        tok.UID,
+		GIPTenantID:   tok.TenantID,
+		GIPProvider:   tok.Provider,
+		AuthPool:      pool,
+		Email:         tok.Email,
+		Name:          tok.Name,
+		Avatar:        tok.Picture,
+		EmailVerified: tok.EmailVerified,
+		Role:          role,
 	})
 	if err != nil {
 		return nil, err

@@ -16,9 +16,9 @@ export interface CustomerProfile {
   householdSize?: string;
 }
 
-export interface CustomerProfileResponse {
-  data: CustomerProfile;
-}
+// The Go API returns the profile FLAT (top-level fields), not wrapped in a
+// { data } envelope. Kept as an alias so existing imports keep compiling.
+export type CustomerProfileResponse = CustomerProfile;
 
 export interface AddressListResponse {
   data: Address[];
@@ -40,12 +40,10 @@ export type UpdateProfilePayload = Partial<
 >;
 
 export function useProfile() {
-  return useQuery<CustomerProfileResponse>({
+  return useQuery<CustomerProfile>({
     queryKey: ['profile'],
     queryFn: () =>
-      api
-        .get('/v1/customer/profile')
-        .then((r) => r.data as CustomerProfileResponse),
+      api.get('/v1/customer/profile').then((r) => r.data as CustomerProfile),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -53,11 +51,11 @@ export function useProfile() {
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
 
-  return useMutation<CustomerProfileResponse, Error, UpdateProfilePayload>({
+  return useMutation<CustomerProfile, Error, UpdateProfilePayload>({
     mutationFn: (payload: UpdateProfilePayload) =>
       api
         .put('/v1/customer/profile', payload)
-        .then((r) => r.data as CustomerProfileResponse),
+        .then((r) => r.data as CustomerProfile),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
     },

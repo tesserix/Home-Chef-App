@@ -27,11 +27,15 @@ func (f *fakeGIP) Verify(ctx context.Context, raw, tenant string) (*gip.Verified
 }
 
 type fakeAPI struct {
-	resp *apiclient.UpsertUserResponse
-	err  error
+	resp     *apiclient.UpsertUserResponse
+	err      error
+	lastReq  apiclient.UpsertUserRequest
+	captured bool
 }
 
 func (f *fakeAPI) UpsertUser(ctx context.Context, req apiclient.UpsertUserRequest) (*apiclient.UpsertUserResponse, error) {
+	f.lastReq = req
+	f.captured = true
 	return f.resp, f.err
 }
 
@@ -73,6 +77,33 @@ func TestAutoLogin_Happy(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	assert.Contains(t, w.Body.String(), `"session_token":"sess-abc"`)
 	assert.Contains(t, w.Body.String(), `"id":"u1"`)
+}
+
+func TestAutoLogin_ForwardsNameAvatarEmailVerified(t *testing.T) {
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	deps := newDeps(t,
+		&fakeGIP{tok: &gip.VerifiedToken{
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Customer-rqg8a", Provider: "google.com",
+			Name: "Ada Lovelace", Picture: "https://example.com/ada.png", EmailVerified: true,
+			Claims: map[string]any{},
+		}},
+		api,
+		&fakeSessions{encoded: "sess-abc"},
+	)
+	r := gin.New()
+	NewHandler(deps).Register(r)
+
+	body := `{"id_token":"valid.test.token","expected_tenant_id":"HomeChef-Customer-rqg8a"}`
+	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, 200, w.Code)
+	require.True(t, api.captured)
+	assert.Equal(t, "Ada Lovelace", api.lastReq.Name)
+	assert.Equal(t, "https://example.com/ada.png", api.lastReq.Avatar)
+	assert.True(t, api.lastReq.EmailVerified)
 }
 
 func TestAutoLogin_TenantNotAllowedForMobile_403(t *testing.T) {

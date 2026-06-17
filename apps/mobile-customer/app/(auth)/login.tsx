@@ -101,7 +101,7 @@ export default function LoginPage() {
     // Apple credential exchange in Firebase requires the same rawNonce used in the request;
     // Expo's signInAsync does not surface a raw nonce — pass empty string and rely on Firebase
     // to accept the token. For strict nonce verification a custom nonce should be generated.
-    await signInWithAppleCredential(cred.identityToken, '');
+    await signInWithAppleCredential(cred.identityToken, '', cred.fullName);
     const response = await completeBFFLogin();
     await setAuthResponse(response);
     await completeSignIn();

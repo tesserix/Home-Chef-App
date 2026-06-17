@@ -107,7 +107,8 @@ export default function ProfileScreen() {
   const { data, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
 
-  const profile = data?.data;
+  // The API returns the profile FLAT (no { data } envelope), so read it directly.
+  const profile = data;
 
   const [cuisinePrefs, setCuisinePrefs] = useState<string[]>([]);
 
