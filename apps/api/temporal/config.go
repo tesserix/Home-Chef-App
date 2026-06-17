@@ -14,20 +14,32 @@ type Config struct {
 	HostPort   string // TEMPORAL_HOSTPORT (e.g. temporal-frontend.temporal-system:7233)
 	Namespace  string // TEMPORAL_NAMESPACE (one per product; HomeChef = "homechef")
 	TLSEnabled bool   // TEMPORAL_TLS=true for mTLS / Temporal Cloud
+	enabled    bool   // explicitly configured (see Enabled)
 }
 
 // LoadConfig reads Temporal settings from the environment with dev-safe defaults.
 func LoadConfig() Config {
+	hostPort := os.Getenv("TEMPORAL_HOSTPORT")
 	return Config{
-		HostPort:   env("TEMPORAL_HOSTPORT", "localhost:7233"),
+		// Opt-in: the API only touches Temporal when explicitly configured, so it
+		// keeps booting (with inline fallbacks) until the cluster (#119) exists.
+		enabled:    hostPort != "" || os.Getenv("TEMPORAL_ENABLED") == "true",
+		HostPort:   orDefault(hostPort, "localhost:7233"),
 		Namespace:  env("TEMPORAL_NAMESPACE", "homechef"),
 		TLSEnabled: os.Getenv("TEMPORAL_TLS") == "true",
 	}
 }
 
-// Enabled reports whether Temporal is configured for this process. The API can
-// boot without Temporal during the incremental migration (workers run separately).
-func (c Config) Enabled() bool { return c.HostPort != "" }
+// Enabled reports whether Temporal is configured for this process. When false,
+// callers (e.g. EnqueueNotification) fall back to inline execution.
+func (c Config) Enabled() bool { return c.enabled }
+
+func orDefault(v, def string) string {
+	if v != "" {
+		return v
+	}
+	return def
+}
 
 func env(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {

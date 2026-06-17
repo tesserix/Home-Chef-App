@@ -16,6 +16,7 @@ import (
 	"github.com/homechef/api/logger"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
+	"github.com/homechef/api/temporal"
 	"github.com/homechef/api/tracing"
 
 	// Aligns GOMAXPROCS with the Knative container CPU limit (cgroup quota)
@@ -128,6 +129,20 @@ func main() {
 	// Initialize FCM push notification service
 	if err := services.InitPushService(); err != nil {
 		log.Printf("Warning: Failed to initialize push service: %v", err)
+	}
+
+	// Initialize Temporal (durable execution). Opt-in: only dials when
+	// TEMPORAL_HOSTPORT is set, so the API boots normally with inline fallbacks
+	// until the shared cluster (#119) is deployed. Workers run as a separate
+	// process (cmd/worker); the API is the producer that starts workflows.
+	if tcfg := temporal.LoadConfig(); tcfg.Enabled() {
+		if rt, err := temporal.NewRuntime(); err != nil {
+			log.Printf("Warning: Temporal enabled but connect failed: %v — using inline fallbacks", err)
+		} else {
+			services.SetTemporalRuntime(rt)
+			defer rt.Close()
+			log.Printf("Temporal connected (namespace=%s)", tcfg.Namespace)
+		}
 	}
 
 	// Connect to Redis

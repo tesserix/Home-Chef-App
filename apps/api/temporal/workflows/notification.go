@@ -14,12 +14,14 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// NotificationInput is the message to deliver.
+// NotificationInput is the message to deliver. For "email" the Recipient is an
+// address; for "push" it is the target user ID and Data carries the FCM payload.
 type NotificationInput struct {
-	Channel   string `json:"channel"` // "email" | "push" | "sms"
-	Recipient string `json:"recipient"`
-	Subject   string `json:"subject"`
-	Body      string `json:"body"`
+	Channel   string            `json:"channel"` // "email" | "push"
+	Recipient string            `json:"recipient"`
+	Subject   string            `json:"subject"`
+	Body      string            `json:"body"`
+	Data      map[string]string `json:"data,omitempty"`
 }
 
 // SendFunc is the pluggable transport. The worker wires it to the existing

@@ -68,6 +68,12 @@ func InitEmailService() {
 
 // send dispatches an email via the configured provider chain.
 // Returns nil immediately if no API key is configured.
+// Send dispatches a raw HTML email. Exported wrapper around send for generic
+// senders such as the Temporal notification activity (see services/temporal_notify.go).
+func (s *EmailService) Send(to, subject, htmlBody string) error {
+	return s.send(to, subject, htmlBody)
+}
+
 func (s *EmailService) send(to, subject, htmlBody string) error {
 	if s.mailer == nil {
 		log.Printf("Email skipped (no API key): to=%s subject=%s", to, subject)
