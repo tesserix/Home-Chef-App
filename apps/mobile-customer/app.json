@@ -13,6 +13,9 @@
     ],
     "ios": {
       "bundleIdentifier": "com.tesserix.homechef.customer",
+      "entitlements": {
+        "keychain-access-groups": ["$(AppIdentifierPrefix)$(CFBundleIdentifier)"]
+      },
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
