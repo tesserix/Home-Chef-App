@@ -91,6 +91,16 @@ var (
 		[]string{"type", "success"},
 	)
 
+	// FSSAI lockout metrics (#94): how often the food-safety lockout actually
+	// fires — new orders rejected and chef payouts withheld for an expired licence.
+	fssaiLockoutTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "homechef_fssai_lockout_total",
+			Help: "FSSAI-expiry lockout events by action (order_blocked, payout_withheld)",
+		},
+		[]string{"action"},
+	)
+
 	// Database metrics
 	dbQueryDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -173,6 +183,13 @@ func RecordAuthAttempt(authType string, success bool) {
 		successStr = "true"
 	}
 	authAttempts.WithLabelValues(authType, successStr).Inc()
+}
+
+// RecordFSSAILockout records an FSSAI-expiry lockout event. action is one of
+// "order_blocked" (a new order rejected) or "payout_withheld" (a chef's split
+// frozen at payment time). See issue #94.
+func RecordFSSAILockout(action string) {
+	fssaiLockoutTotal.WithLabelValues(action).Inc()
 }
 
 // RecordDBQuery records a database query duration
