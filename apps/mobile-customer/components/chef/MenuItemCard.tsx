@@ -97,6 +97,17 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </Text>
         ) : null}
 
+        {/* Per-dish rating rolled up from reviews (#145) — charcoal star per spec */}
+        {item.rating != null && item.rating > 0 ? (
+          <View style={styles.ratingRow}>
+            <Text style={styles.ratingStar}>★</Text>
+            <Text style={styles.ratingText}>
+              {item.rating.toFixed(1)}
+              {item.reviewCount ? ` (${item.reviewCount})` : ''}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Price — tabular figures per spec */}
         <Text style={styles.price}>₹{item.price.toFixed(0)}</Text>
 
@@ -268,6 +279,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: customerColors.charcoal.soft,
+  },
+
+  // Per-dish rating — charcoal star + value (spec: charcoal star, NOT gold).
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 4,
+  },
+  ratingStar: {
+    fontSize: 12,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  ratingText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    fontVariant: ['tabular-nums'],
   },
 
   // Price — tabular figures, charcoal (spec: tabular for every price).

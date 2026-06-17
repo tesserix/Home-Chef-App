@@ -112,6 +112,9 @@ export interface MenuItem {
   isFeatured: boolean;
   portionSize?: string;
   serves: number;
+  // Per-dish rating rolled up from DishRating (#145).
+  rating?: number;
+  totalReviews?: number;
 }
 
 // Order types
