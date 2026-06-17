@@ -63,12 +63,15 @@ func TestVerifier_ValidToken_PassesAllChecks(t *testing.T) {
 	require.NoError(t, err)
 
 	tok := tj.signToken(t, jwt.MapClaims{
-		"iss":   "https://securetoken.google.com/tesseracthub-480811",
-		"aud":   "tesseracthub-480811",
-		"sub":   "user-123",
-		"email": "a@b.com",
-		"iat":   time.Now().Unix(),
-		"exp":   time.Now().Add(time.Hour).Unix(),
+		"iss":            "https://securetoken.google.com/tesseracthub-480811",
+		"aud":            "tesseracthub-480811",
+		"sub":            "user-123",
+		"email":          "a@b.com",
+		"name":           "Ada Lovelace",
+		"picture":        "https://example.com/ada.png",
+		"email_verified": true,
+		"iat":            time.Now().Unix(),
+		"exp":            time.Now().Add(time.Hour).Unix(),
 		"firebase": map[string]any{
 			"tenant":           "HomeChef-Customer-aaaaa",
 			"sign_in_provider": "google.com",
@@ -81,6 +84,31 @@ func TestVerifier_ValidToken_PassesAllChecks(t *testing.T) {
 	assert.Equal(t, "a@b.com", got.Email)
 	assert.Equal(t, "HomeChef-Customer-aaaaa", got.TenantID)
 	assert.Equal(t, "google.com", got.Provider)
+	assert.Equal(t, "Ada Lovelace", got.Name)
+	assert.Equal(t, "https://example.com/ada.png", got.Picture)
+	assert.True(t, got.EmailVerified)
+}
+
+func TestVerifier_MissingProfileClaims_DefaultToZeroValues(t *testing.T) {
+	tj := newJWKServer(t)
+	defer tj.srv.Close()
+
+	v, err := New(Config{ProjectID: "p", JWKSURL: tj.srv.URL, Leeway: 10 * time.Second})
+	require.NoError(t, err)
+
+	// No name/picture/email_verified claims present.
+	tok := tj.signToken(t, jwt.MapClaims{
+		"iss": "https://securetoken.google.com/p", "aud": "p", "sub": "u",
+		"email": "a@b.com",
+		"iat":   time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
+		"firebase": map[string]any{"tenant": "T", "sign_in_provider": "password"},
+	})
+
+	got, err := v.Verify(t.Context(), tok, "T")
+	require.NoError(t, err)
+	assert.Equal(t, "", got.Name)
+	assert.Equal(t, "", got.Picture)
+	assert.False(t, got.EmailVerified)
 }
 
 func TestVerifier_WrongTenant_Rejects(t *testing.T) {

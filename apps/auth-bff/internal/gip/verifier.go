@@ -33,7 +33,14 @@ type VerifiedToken struct {
 	Email    string
 	TenantID string
 	Provider string // from firebase.sign_in_provider claim
-	Claims   jwt.MapClaims
+	// Name is the user's display name from the "name" claim (empty if absent).
+	Name string
+	// Picture is the avatar URL from the "picture" claim (empty if absent).
+	Picture string
+	// EmailVerified reflects the "email_verified" claim. GIP tokens from
+	// Google/Apple are always true; only unverified password signups are false.
+	EmailVerified bool
+	Claims        jwt.MapClaims
 }
 
 const defaultJWKSURL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
@@ -80,8 +87,12 @@ func (v *Verifier) Verify(ctx context.Context, raw string, expectedTenantID stri
 	provider, _ := fb["sign_in_provider"].(string)
 	uid, _ := claims["sub"].(string)
 	email, _ := claims["email"].(string)
+	name, _ := claims["name"].(string)
+	picture, _ := claims["picture"].(string)
+	emailVerified, _ := claims["email_verified"].(bool)
 
 	return &VerifiedToken{
-		UID: uid, Email: email, TenantID: tenantID, Provider: provider, Claims: claims,
+		UID: uid, Email: email, TenantID: tenantID, Provider: provider,
+		Name: name, Picture: picture, EmailVerified: emailVerified, Claims: claims,
 	}, nil
 }

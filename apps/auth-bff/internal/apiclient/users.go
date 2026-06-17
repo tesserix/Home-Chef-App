@@ -19,7 +19,13 @@ type UpsertUserRequest struct {
 	AuthPool    string `json:"auth_pool"`
 	Email       string `json:"email"`
 	Name        string `json:"name"`
-	Role        string `json:"role"`
+	// Avatar is the profile picture URL derived from the GIP token's "picture"
+	// claim. apps/api backfills it only when the stored avatar is empty.
+	Avatar string `json:"avatar"`
+	// EmailVerified forwards the GIP token's email_verified claim so apps/api
+	// can gate same-email account re-bind on a verified identity.
+	EmailVerified bool   `json:"email_verified"`
+	Role          string `json:"role"`
 	// MarketingConsent forwards the DPDP §6 opt-in collected at registration
 	// to apps/api. Forwarded as a JSON boolean; omitting it (e.g., from the
 	// social-login / OIDC callback path) defaults to false on the API side.
