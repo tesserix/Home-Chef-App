@@ -165,9 +165,7 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.849928263410-fr3phg8gln1r8f8k03ucko99f6r5oa47"
         }
-      ],
-      "@sentry/react-native/expo",
-      [
+      ],      [
         "expo-build-properties",
         {
           "ios": {
@@ -200,9 +198,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#FA6F5C"
         }
-      ],
-      "@sentry/react-native",
-      "expo-status-bar"
+      ],      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
