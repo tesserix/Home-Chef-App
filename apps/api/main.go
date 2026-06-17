@@ -167,6 +167,10 @@ func main() {
 	defer cronCancel()
 	services.StartFSSAIReminderCron(cronCtx)
 
+	// Keep the homechef_fssai_locked_chefs gauge current (#94) — recounts
+	// locked chefs every 10 min so dashboards/alerts can watch the lockout.
+	services.StartFSSAILockedGaugeUpdater(cronCtx)
+
 	// Background weekly settlement statements: once a Mon–Sun week (IST)
 	// closes, issue an immutable statement + "ready" push per chef. Shares
 	// the cron's lifecycle/idempotency model with the FSSAI reminder.

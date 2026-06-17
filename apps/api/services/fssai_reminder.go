@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // reminderWindowsDays is the set of days-before-expiry at which we ping
@@ -226,4 +228,68 @@ func sendFSSAIReminderPush(chefID uuid.UUID, expiryDate *time.Time, daysOut int)
 	}
 
 	return SendPushNotification(chef.UserID, title, body, data)
+}
+
+// fssaiLockedGauge tracks how many chefs are currently FSSAI-locked, refreshed
+// by StartFSSAILockedGaugeUpdater. Defined here (services) rather than in
+// middleware/metrics.go to avoid an import cycle — middleware imports services.
+var fssaiLockedGauge = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "homechef_fssai_locked_chefs",
+	Help: "Number of chefs currently locked out by an expired FSSAI licence (#94)",
+})
+
+const fssaiGaugeInterval = 10 * time.Minute
+
+// StartFSSAILockedGaugeUpdater keeps homechef_fssai_locked_chefs current by
+// recounting locked chefs every fssaiGaugeInterval (and once on startup). Cheap:
+// it only re-checks chefs that already have an expired verified FSSAI doc, then
+// narrows with IsChefFSSAIExpired so a verified renewal doesn't inflate the
+// count. Pass main.go's root context so SIGTERM stops it cleanly.
+func StartFSSAILockedGaugeUpdater(ctx context.Context) {
+	go func() {
+		updateFSSAILockedGauge()
+		ticker := time.NewTicker(fssaiGaugeInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("fssai-gauge: shutting down on ctx cancel")
+				return
+			case <-ticker.C:
+				updateFSSAILockedGauge()
+			}
+		}
+	}()
+	log.Println("fssai-gauge: locked-chefs updater started (interval=10m)")
+}
+
+func updateFSSAILockedGauge() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("fssai-gauge: panic recovered: %v", r)
+		}
+	}()
+
+	cutoff := time.Now().AddDate(0, 0, -1)
+	var chefIDs []uuid.UUID
+	if err := database.DB.Model(&models.ChefDocument{}).
+		Distinct("chef_id").
+		Where("type = ? AND status = ? AND expiry_date IS NOT NULL AND expiry_date < ?",
+			models.DocFSSAILicense, models.DocStatusVerified, cutoff).
+		Pluck("chef_id", &chefIDs).Error; err != nil {
+		log.Printf("fssai-gauge: query failed: %v", err)
+		return
+	}
+
+	locked := 0
+	for _, chefID := range chefIDs {
+		var chef models.ChefProfile
+		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+			continue
+		}
+		if IsChefFSSAIExpired(&chef) {
+			locked++
+		}
+	}
+	fssaiLockedGauge.Set(float64(locked))
 }
