@@ -5,8 +5,10 @@
 package main
 
 import (
+	"context"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/services"
@@ -27,13 +29,19 @@ func main() {
 		log.Printf("worker: push service init failed (push activities will error): %v", err)
 	}
 
-	// Wire the notification activity's transport to the real senders.
+	// Wire activity transports to the real services.* implementations.
 	workflows.SendFunc = services.DispatchNotification
+	workflows.DispatchFunc = func(_ context.Context, orderID uuid.UUID) error {
+		return services.DispatchOrderDelivery(orderID)
+	}
 
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
 			Workflows(workflows.NotificationWorkflow).
 			Activities(workflows.SendNotificationActivity),
+		temporal.Queue(temporal.TaskQueueDelivery).
+			Workflows(workflows.DeliveryWorkflow).
+			Activities(workflows.DispatchDeliveryActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {

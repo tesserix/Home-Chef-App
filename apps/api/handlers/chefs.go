@@ -507,8 +507,8 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"todayOrders":     todayOrders,
-		"todayRevenue":    todayRevenue,
+		"todayOrders":  todayOrders,
+		"todayRevenue": todayRevenue,
 		// Mobile reads `todayEarnings`; keep `todayRevenue` for any other
 		// consumer.
 		"todayEarnings":   todayRevenue,
@@ -532,17 +532,17 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 // while sending an empty string or zero genuinely clears the value.
 // This unblocks clearing the description / address fields from the app.
 type UpdateChefProfileRequest struct {
-	BusinessName    *string                      `json:"businessName"`
-	Description     *string                      `json:"description"`
-	ProfileImage    *string                      `json:"profileImage"`
-	BannerImage     *string                      `json:"bannerImage"`
-	Cuisines        []string                     `json:"cuisines"`
-	Specialties     []string                     `json:"specialties"`
-	PrepTime        *string                      `json:"prepTime"`
-	MinimumOrder    *float64                     `json:"minimumOrder"`
-	ServiceRadius   *float64                     `json:"serviceRadius"`
-	AcceptingOrders *bool                        `json:"acceptingOrders"`
-	OperatingHours  map[string]*DayHoursUpdate   `json:"operatingHours"`
+	BusinessName    *string                    `json:"businessName"`
+	Description     *string                    `json:"description"`
+	ProfileImage    *string                    `json:"profileImage"`
+	BannerImage     *string                    `json:"bannerImage"`
+	Cuisines        []string                   `json:"cuisines"`
+	Specialties     []string                   `json:"specialties"`
+	PrepTime        *string                    `json:"prepTime"`
+	MinimumOrder    *float64                   `json:"minimumOrder"`
+	ServiceRadius   *float64                   `json:"serviceRadius"`
+	AcceptingOrders *bool                      `json:"acceptingOrders"`
+	OperatingHours  map[string]*DayHoursUpdate `json:"operatingHours"`
 
 	// Address fields — added so the chef can edit their kitchen address
 	// post-onboarding. Backend previously only accepted these during the
@@ -766,12 +766,10 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	// the request path; idempotent so repeated "ready" updates are safe. A
 	// dispatch failure must not fail the chef's status update.
 	if order.Status == models.OrderStatusReady {
-		go func() {
-			if err := services.DispatchOrderDelivery(order.ID); err != nil {
-				log.Printf("Failed to auto-dispatch delivery for order %s: %v", order.ID, err)
-				services.CaptureBackgroundError(err)
-			}
-		}()
+		// Durable dispatch via Temporal when enabled (retries the flaky 3PL
+		// booking, survives crashes); falls back to the inline goroutine
+		// otherwise. Idempotent by order ID, so repeated "ready" updates are safe.
+		services.EnqueueDeliveryDispatch(order.ID)
 	}
 
 	c.JSON(http.StatusOK, order.ToResponse())
@@ -1029,11 +1027,11 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 
 	var req struct {
 		Notifications struct {
-			PushNewOrder     bool `json:"pushNewOrder"`
-			PushOrderUpdate  bool `json:"pushOrderUpdate"`
+			PushNewOrder      bool `json:"pushNewOrder"`
+			PushOrderUpdate   bool `json:"pushOrderUpdate"`
 			EmailDailySummary bool `json:"emailDailySummary"`
 			EmailWeeklyReport bool `json:"emailWeeklyReport"`
-			SmsNewOrder      bool `json:"smsNewOrder"`
+			SmsNewOrder       bool `json:"smsNewOrder"`
 		} `json:"notifications"`
 		AutoAcceptOrders    bool    `json:"autoAcceptOrders"`
 		AutoAcceptThreshold float64 `json:"autoAcceptThreshold"`
@@ -1067,11 +1065,11 @@ func (h *ChefHandler) UpdateChefSettings(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"notifications": gin.H{
-			"pushNewOrder":     settings.PushNewOrder,
-			"pushOrderUpdate":  settings.PushOrderUpdate,
+			"pushNewOrder":      settings.PushNewOrder,
+			"pushOrderUpdate":   settings.PushOrderUpdate,
 			"emailDailySummary": settings.EmailDailySummary,
 			"emailWeeklyReport": settings.EmailWeeklyReport,
-			"smsNewOrder":      settings.SmsNewOrder,
+			"smsNewOrder":       settings.SmsNewOrder,
 		},
 		"autoAcceptOrders":    settings.AutoAcceptOrders,
 		"autoAcceptThreshold": settings.AutoAcceptThreshold,
@@ -1267,9 +1265,9 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 
 	// ── Order & Revenue Trends (grouped by date) ──
 	type dailyStat struct {
-		Date     string  `json:"date"`
-		Orders   int     `json:"orders"`
-		Revenue  float64 `json:"revenue"`
+		Date    string  `json:"date"`
+		Orders  int     `json:"orders"`
+		Revenue float64 `json:"revenue"`
 	}
 	var dailyStats []dailyStat
 	database.DB.Raw(`
@@ -1365,11 +1363,17 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 	peakHours := make([]gin.H, 0)
 	for h := 8; h <= 22; h++ {
 		label := fmt.Sprintf("%d %s", func() int {
-			if h == 12 { return 12 }
-			if h > 12 { return h - 12 }
+			if h == 12 {
+				return 12
+			}
+			if h > 12 {
+				return h - 12
+			}
 			return h
 		}(), func() string {
-			if h >= 12 { return "PM" }
+			if h >= 12 {
+				return "PM"
+			}
 			return "AM"
 		}())
 		peakHours = append(peakHours, gin.H{
