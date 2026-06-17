@@ -90,6 +90,11 @@ type Config struct {
 
 	// Feature Flags
 	EnableMockMode bool
+	// WalletCheckoutEnabled gates applying wallet store-credit at checkout (#141).
+	// Default OFF: the chef/driver top-up uses Razorpay direct transfers
+	// (services.CreateTransfer) which must be verified in the Razorpay sandbox
+	// before it touches live settlement. Enable with WALLET_CHECKOUT_ENABLED=true.
+	WalletCheckoutEnabled bool
 }
 
 var AppConfig *Config
@@ -101,6 +106,7 @@ func Load() {
 	}
 
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
+	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -202,7 +208,8 @@ func Load() {
 		ExchangeRatesAPIKey:    getEnv("EXCHANGERATES_API_KEY", ""),
 
 		// Feature Flags
-		EnableMockMode: enableMock,
+		EnableMockMode:        enableMock,
+		WalletCheckoutEnabled: walletCheckout,
 	}
 }
 
