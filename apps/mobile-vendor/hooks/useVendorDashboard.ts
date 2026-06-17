@@ -9,6 +9,8 @@ export interface DashboardData {
   acceptingOrders: boolean;
   /** ISO timestamp the kitchen auto-reopens, when temporarily paused. */
   pausedUntil?: string | null;
+  /** True when the chef's FSSAI licence has lapsed and they're locked out (#92). */
+  fssaiLocked?: boolean;
   recentOrders: RecentOrder[];
 }
 

@@ -387,7 +387,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		"totalOrders":     chef.TotalOrders,
 		"acceptingOrders": chef.AcceptingOrders,
 		"pausedUntil":     chef.PausedUntil,
-		"recentOrders":    recentOrdersResp,
+		// FSSAI lockout (#92): drives the vendor dashboard's "orders paused —
+		// renew licence" banner. Same helper as the order/payout enforcement.
+		"fssaiLocked":  services.IsChefFSSAIExpired(&chef),
+		"recentOrders": recentOrdersResp,
 	})
 }
 

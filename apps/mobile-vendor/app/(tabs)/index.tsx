@@ -419,6 +419,58 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
+        {/* FSSAI lockout (#92): a lapsed food-safety licence pauses the
+            kitchen entirely (orders blocked + payouts frozen server-side).
+            Headline banner above the action stack — the chef must grasp
+            "you're offline" before anything else. Driven by the authoritative
+            server-computed `fssaiLocked` flag. */}
+        {dashboard?.fssaiLocked && (
+          <Animated.View
+            style={styles.alertSection}
+            entering={
+              reduceMotion
+                ? undefined
+                : FadeInDown.delay(40).duration(250).easing(ENTRANCE_EASING)
+            }
+          >
+            <View style={styles.alertCards}>
+              <Pressable
+                onPress={() => router.push('/documents/renew')}
+                accessibilityRole="button"
+                accessibilityLabel={t('dashboard.fssaiLockedTitle')}
+              >
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.alertCard,
+                      { borderLeftColor: theme.colors.destructive.DEFAULT },
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <View style={styles.alertRowTop}>
+                      <View
+                        style={[
+                          styles.alertDot,
+                          { backgroundColor: theme.colors.destructive.DEFAULT },
+                        ]}
+                      />
+                      <Text style={styles.alertLabel} numberOfLines={2}>
+                        {t('dashboard.fssaiLockedTitle')}
+                      </Text>
+                      <Text style={styles.alertCta}>
+                        {t('dashboard.renewLicence')}
+                      </Text>
+                    </View>
+                    <Text style={styles.alertBody}>
+                      {t('dashboard.fssaiLockedBody')}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Zone B' — single merged ACTION REQUIRED stack (UI-V2 spec §7).
             Admin requests first (an admin explicitly asked the chef for
             something — fresher / higher-friction), then doc expiry (a
