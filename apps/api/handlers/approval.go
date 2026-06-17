@@ -284,9 +284,21 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 		}
 
 	case models.ApprovalDocumentVerification:
+		// Capture FSSAI lock state before verifying, so we can detect a renewal
+		// lifting the lockout and welcome the chef back online (#92).
+		var docChef models.ChefProfile
+		wasFSSAILocked := false
+		if err := database.DB.First(&docChef, "id = ?", approval.ChefID).Error; err == nil {
+			wasFSSAILocked = services.IsChefFSSAIExpired(&docChef)
+		}
 		database.DB.Model(&models.ChefDocument{}).
 			Where("chef_id = ? AND status = ?", approval.ChefID, models.DocStatusPending).
 			Update("status", models.DocStatusVerified)
+		// IsChefFSSAIExpired re-queries the now-verified docs; locked -> unlocked
+		// means this verification was the renewal that brought the chef back.
+		if wasFSSAILocked && !services.IsChefFSSAIExpired(&docChef) {
+			_ = services.SendFSSAIBackOnlinePush(docChef.UserID)
+		}
 
 	case models.ApprovalMenuItemNew, models.ApprovalMenuItemUpdate, models.ApprovalPricingChange:
 		// Approve the menu item - make it visible to customers

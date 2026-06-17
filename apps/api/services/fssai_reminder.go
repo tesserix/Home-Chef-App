@@ -181,6 +181,16 @@ func sendFSSAIExpiredPush(userID uuid.UUID) error {
 	return SendPushNotification(userID, title, body, data)
 }
 
+// SendFSSAIBackOnlinePush tells a chef their FSSAI renewal was verified and the
+// kitchen is live again (#92). Exported so the document-verification handler can
+// fire it the moment a renewal lifts the lockout (event-driven, no cron lag).
+func SendFSSAIBackOnlinePush(userID uuid.UUID) error {
+	title := "You're back online"
+	body := "Your FSSAI licence renewal is verified — your kitchen is live and accepting orders again."
+	data := map[string]string{"type": "fssai_back_online"}
+	return SendPushNotification(userID, title, body, data)
+}
+
 // shouldSendReminder gates each (doc, window, day) tuple through Redis
 // SETNX so two pods running the cron simultaneously don't both push.
 // First caller wins; subsequent callers (or this pod on restart later
