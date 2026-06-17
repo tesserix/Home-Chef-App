@@ -413,6 +413,16 @@ function MenuItemCard({
           <div className="flex items-start justify-between gap-2">
             <div>
               <h3 className="font-semibold text-ink">{item.name}</h3>
+              {/* Per-dish rating rolled up from reviews (#145) */}
+              {item.rating != null && item.rating > 0 && (
+                <div className="mt-0.5 flex items-center gap-1 text-sm">
+                  <Star className="h-3.5 w-3.5 fill-herb text-herb" aria-hidden="true" />
+                  <span className="font-medium text-ink">{item.rating.toFixed(1)}</span>
+                  {item.totalReviews ? (
+                    <span className="text-ink-muted">({item.totalReviews})</span>
+                  ) : null}
+                </div>
+              )}
               <p className="mt-1 text-sm text-ink-muted line-clamp-2">
                 {item.description}
               </p>

@@ -29,6 +29,9 @@ export interface MenuItem {
   category?: string;
   isAvailable: boolean;
   dietaryTags?: string[];
+  // Per-dish rating rolled up from DishRating (#145).
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface CartItem {

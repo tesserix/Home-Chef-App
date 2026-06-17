@@ -56,6 +56,8 @@ interface ApiMenuItem {
   images?: { url?: string }[];
   dietaryTags?: string[];
   isAvailable?: boolean;
+  rating?: number;
+  totalReviews?: number;
 }
 
 function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
@@ -99,6 +101,8 @@ export function mapMenuItem(
     category: m.categoryId ? categoryNames.get(m.categoryId) : undefined,
     isAvailable: m.isAvailable ?? true,
     dietaryTags: m.dietaryTags,
+    rating: m.rating,
+    reviewCount: m.totalReviews,
   };
 }
 
