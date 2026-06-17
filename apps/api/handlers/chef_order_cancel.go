@@ -230,13 +230,10 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		return
 	}
 
-	// Tax share for this line = order.Tax * (line.Subtotal / order.Subtotal).
-	// Computed against the ORIGINAL subtotal/tax so concurrent partial
-	// cancels can't drift the proportional split.
-	lineRefund := target.Subtotal
-	if order.Subtotal > 0 {
-		lineRefund += order.Tax * (target.Subtotal / order.Subtotal)
-	}
+	// Tax share for this line = order.Tax * (line.Subtotal / order.Subtotal),
+	// computed against the ORIGINAL subtotal/tax so concurrent partial cancels
+	// can't drift the proportional split. (see lineRefundAmount)
+	lineRefund := lineRefundAmount(target.Subtotal, order.Subtotal, order.Tax)
 	amountPaise := int(roundPaise(lineRefund))
 	if amountPaise <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "computed refund amount is zero; nothing to do"})
@@ -288,17 +285,10 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 			return err
 		}
 
-		newSubtotal := 0.0
-		for _, it := range fresh.Items {
-			if !it.IsCancelled {
-				newSubtotal += it.Subtotal
-			}
-		}
-		var newTax float64
-		if fresh.Subtotal > 0 {
-			newTax = fresh.Tax * (newSubtotal / fresh.Subtotal)
-		}
-		newTotal := newSubtotal + fresh.DeliveryFee + fresh.ServiceFee + newTax + fresh.Tip - fresh.Discount
+		newSubtotal, newTax, newTotal := recomputeOrderTotals(
+			fresh.Items, fresh.Subtotal, fresh.Tax,
+			fresh.DeliveryFee, fresh.ServiceFee, fresh.Tip, fresh.Discount,
+		)
 
 		return tx.Model(&fresh).Updates(map[string]interface{}{
 			"subtotal":      newSubtotal,
