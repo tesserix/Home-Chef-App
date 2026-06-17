@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 04
 Plan: Not started
 Status: Executing Phase 04
-Last activity: 2026-06-12 - Completed quick task 260612-n0g: polish batch (wordmark, splash/adaptive icons, doc drift, SVG logo)
+Last activity: 2026-06-17 - Completed quick task 260617-due: social-login profile (name+avatar) + account-link hardening + Apple name + profile-save read-envelope fix
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -90,6 +90,7 @@ Recent decisions affecting current work:
 | fast | Android production builds (both apps) green on EAS; vendor required disabling Sentry source-map upload (EU-region sentry-cli routing) + Play android submit profile + EAS Workflow CI scaffold | 2026-06-15 | _(EAS builds + eas.json)_ | _(inline)_ |
 | fast | iOS: both apps built + **submitted to TestFlight**; Apple dist cert + ASC API key set up on EAS (interactive once, now CI-ready); appleTeamId(2CRHRRYBPL)+ascAppId hardcoded in submit profiles (eas submit doesn't interpolate $EAS_SECRET) | 2026-06-16 | _(EAS submit + eas.json)_ | _(inline)_ |
 | fast | Android: both apps published to Play **internal testing** (first manual AAB upload, Play's rule); **Google Play service account** (eas-play-submit@tesseracthub-480811) wired to EAS for BOTH apps + verified via eas submit (auth OK, rejected only on dup versionCode). **Release pipeline now fully automated both stores** — eas submit/release.yml zero-touch; versionCode auto-increments | 2026-06-16 | _(EAS credentials/submit)_ | _(inline)_ |
+| 260617-due | Social-login profile (name+avatar, backfill-only) via GIP claims through verifier→autologin→apiclient→API upsert; email_verified-gated same-email re-bind (anti-hijack hardening); Apple first-auth name→Firebase displayName; **fixed "profile edits don't persist" — mobile read-side `{data}` envelope mismatch** (customer useProfile/profile.tsx read flat; vendor/delivery already flat). Go tests green both services | 2026-06-17 | 5d8e3fc | [260617-due-social-profile-and-profile-save-fix](./quick/260617-due-social-profile-and-profile-save-fix/) |
 
 ### Blockers/Concerns
 
