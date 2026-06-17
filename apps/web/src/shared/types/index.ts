@@ -203,6 +203,9 @@ export interface Review {
   foodRating: number;
   deliveryRating?: number;
   valueRating?: number;
+  // Ratings 2.0 sub-scores (#35)
+  packagingRating?: number;
+  hygieneRating?: number;
   title?: string;
   comment?: string;
   images?: string[];
