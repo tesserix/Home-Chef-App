@@ -30,11 +30,16 @@ COPY go.su[m] ./
 RUN go mod download || go mod tidy
 
 COPY . .
+# Build both the API server (default CMD) and the Temporal worker (#116). The
+# worker shares the same module/deps; the homechef-temporal-worker Deployment
+# runs it via a command override (/usr/local/bin/worker).
 RUN go mod tidy \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/main .
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/main . \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 # ─── runtime ────────────────────────────────────────────────────────────
 FROM ghcr.io/tesserix/base-distroless-static:latest AS runtime
 COPY --from=builder --chown=10001:10001 /out/main /usr/local/bin/main
+COPY --from=builder --chown=10001:10001 /out/worker /usr/local/bin/worker
 EXPOSE 8080
 CMD ["/usr/local/bin/main"]
