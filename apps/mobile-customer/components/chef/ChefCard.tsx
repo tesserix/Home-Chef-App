@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   // Subtle charcoal scrim — only enough to make the white heart legible.
   photoScrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.08)',
   },
 

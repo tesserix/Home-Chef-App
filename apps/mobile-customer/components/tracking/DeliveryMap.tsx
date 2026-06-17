@@ -57,7 +57,7 @@ export function DeliveryMap({
 
   return (
     <MapView
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       provider={PROVIDER_DEFAULT}
       initialRegion={initialRegion}
       showsUserLocation={false}
