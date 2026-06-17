@@ -18,7 +18,13 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // Pin the two classic hook rules instead of spreading the plugin's
+      // `recommended` preset. As of eslint-plugin-react-hooks v7, `recommended`
+      // newly enables the React-Compiler rules (set-state-in-effect, refs, …) as
+      // errors; spreading it would turn a routine dep bump into a monorepo-wide
+      // lint migration. This keeps v5's behaviour and stays stable across v7.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
