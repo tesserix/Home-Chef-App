@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     // box taller — `contentFit="cover"` then crops to fill. (A percentage
     // height on expo-image falls back to the image's intrinsic size and
     // blows out the layout.)
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   coverPlaceholder: {
     flex: 1,
