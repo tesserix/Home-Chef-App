@@ -345,6 +345,8 @@ export interface ChefFilters {
   search?: string;
   rating?: number;
   priceRange?: string;
+  minPrice?: number;
+  maxPrice?: number;
   dietary?: string;
   isOpen?: boolean;
   sort?: 'rating' | 'distance' | 'orders' | 'price';

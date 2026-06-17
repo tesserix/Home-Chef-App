@@ -40,6 +40,15 @@ const SORT_OPTIONS: { label: string; value: ChefFilters['sort'] }[] = [
   { label: 'Top Rated', value: 'rating' },
   { label: 'Newest', value: 'newest' },
   { label: 'Price', value: 'price' },
+  { label: 'Nearest', value: 'distance' },
+];
+
+// Price filter (#36): caps the chef's minimum order. Mirrors the web filter.
+const PRICE_FILTERS: { label: string; value: number | undefined }[] = [
+  { label: 'Any price', value: undefined },
+  { label: '< ₹100', value: 100 },
+  { label: '< ₹250', value: 250 },
+  { label: '< ₹500', value: 500 },
 ];
 
 // Skeleton card matching the photo-led 4:3 ChefCard shape.
@@ -62,6 +71,7 @@ export default function HomeScreen() {
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
   const [isOpenOnly, setIsOpenOnly] = useState(false);
   const [sort, setSort] = useState<ChefFilters['sort']>('rating');
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -84,6 +94,7 @@ export default function HomeScreen() {
     search: debouncedSearch || undefined,
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
     isOpen: isOpenOnly || undefined,
+    maxPrice,
     sort,
     limit: 20,
   };
@@ -146,6 +157,39 @@ export default function HomeScreen() {
                   ]}
                 >
                   {cuisine}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Price filter chips (#36) — same chip styling as cuisines. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRowContent}
+        style={styles.chipRow}
+        accessibilityRole="tablist"
+      >
+        {PRICE_FILTERS.map((p) => {
+          const isSelected = maxPrice === p.value;
+          return (
+            <Pressable
+              key={p.label}
+              onPress={() => setMaxPrice(p.value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`Filter by ${p.label}`}
+            >
+              <View style={[styles.chip, isSelected && styles.chipSelected]}>
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                  ]}
+                >
+                  {p.label}
                 </Text>
               </View>
             </Pressable>

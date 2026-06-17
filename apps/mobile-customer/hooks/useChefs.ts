@@ -8,7 +8,13 @@ export interface ChefFilters {
   dietary?: string;
   rating?: number;
   isOpen?: boolean;
-  sort?: 'rating' | 'orders' | 'newest' | 'price';
+  // #36 discovery: price-range + near-me geo + distance sort (the API params
+  // shipped in #128). Passed straight through as query params by useChefs.
+  minPrice?: number;
+  maxPrice?: number;
+  lat?: number;
+  lng?: number;
+  sort?: 'rating' | 'orders' | 'newest' | 'price' | 'distance';
   page?: number;
   limit?: number;
 }
