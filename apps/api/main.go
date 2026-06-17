@@ -162,16 +162,32 @@ func main() {
 	} else {
 		defer natsClient.Close()
 
-		// Start notification service
+		// Background context for the reliable event backbone (outbox relay +
+		// durable consumers). Cancelled on shutdown to stop the loops cleanly.
+		eventCtx, eventCancel := context.WithCancel(context.Background())
+		defer eventCancel()
+
+		// Transactional outbox relay: durably publishes staged events to JetStream
+		// with PubAck, so events are never lost between commit and publish (#131).
+		services.NewOutboxRelay(database.DB, natsClient).Start(eventCtx)
+
+		// Shared durable-consumer manager: notification + push workers register on
+		// it (ack/retry/idempotency/DLQ). One Stop() drains every consume loop.
+		consumerManager := services.NewConsumerManager(natsClient, database.DB)
+		defer consumerManager.Stop()
+
+		// Start notification service (durable "notify-*" consumers)
 		notificationService := services.GetNotificationService()
-		if err := notificationService.Start(); err != nil {
+		if err := notificationService.Start(consumerManager); err != nil {
 			log.Printf("Warning: Failed to start notification service: %v", err)
 		} else {
 			defer notificationService.Stop()
 		}
 
 		// Register push consumers (NATS → FCM bridge for vendor/driver/customer pushes)
-		handlers.RegisterPushConsumers()
+		if err := handlers.RegisterPushConsumers(eventCtx, consumerManager); err != nil {
+			log.Printf("Warning: Failed to register push consumers: %v", err)
+		}
 	}
 
 	// Background daily scan: ping chefs whose FSSAI license expires

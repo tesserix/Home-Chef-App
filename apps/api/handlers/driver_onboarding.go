@@ -84,10 +84,22 @@ func (h *DriverOnboardingHandler) GetDriverOnboardingStatus(c *gin.Context) {
 			"licenseNumber":       partner.LicenseNumber,
 			"hasDeliveryBoxSpace": partner.HasDeliveryBoxSpace,
 			"payoutMethod":        partner.PayoutMethod,
-			"bankAccountName":     func() string { v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-account-name"); return v }(),
-			"bankAccountNumber":   func() string { v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-account-number"); return maskBankAccount(v) }(),
-			"bankIFSC":            func() string { v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-ifsc"); return v }(),
-			"upiId":               func() string { v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "upi-id"); return maskEmail(v) }(),
+			"bankAccountName": func() string {
+				v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-account-name")
+				return v
+			}(),
+			"bankAccountNumber": func() string {
+				v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-account-number")
+				return maskBankAccount(v)
+			}(),
+			"bankIFSC": func() string {
+				v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "bank-ifsc")
+				return v
+			}(),
+			"upiId": func() string {
+				v, _ := services.GetDriverSecret(c.Request.Context(), partner.ID.String(), "upi-id")
+				return maskEmail(v)
+			}(),
 		},
 		"documentCount": docCount,
 		"payoutSet":     payoutSet,
@@ -479,12 +491,12 @@ func (h *DriverOnboardingHandler) DriverOnboardingSubmit(c *gin.Context) {
 		return
 	}
 
-	// Publish NATS event (non-blocking)
-	if err := services.PublishEvent(services.SubjectDriverOnboardingSubmitted, "driver.onboarding.submitted", userID, map[string]interface{}{
+	// Durable event publication via the transactional outbox.
+	if err := services.EnqueueEvent(database.DB, services.SubjectDriverOnboardingSubmitted, "driver.onboarding.submitted", userID, map[string]interface{}{
 		"partner_id": partner.ID.String(),
 		"city":       partner.City,
 	}); err != nil {
-		log.Printf("Failed to publish driver onboarding submitted event: %v", err)
+		log.Printf("failed to enqueue driver.onboarding.submitted event: %v", err)
 	}
 
 	database.DB.Preload("User").Preload("Documents").First(&partner, "id = ?", partner.ID)

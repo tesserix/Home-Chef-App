@@ -364,15 +364,15 @@ func (h *DeliveryHandler) GetAvailableDeliveries(c *gin.Context) {
 	}
 
 	type AvailableDelivery struct {
-		OrderID         uuid.UUID   `json:"orderId"`
-		OrderNumber     string      `json:"orderNumber"`
-		ChefName        string      `json:"chefName"`
-		ItemCount       int         `json:"itemCount"`
-		PickupAddress   string      `json:"pickupAddress"`
-		DropoffAddress  string      `json:"dropoffAddress"`
-		Distance        float64     `json:"distance"`
-		EstimatedPayout float64     `json:"estimatedPayout"`
-		CreatedAt       time.Time   `json:"createdAt"`
+		OrderID         uuid.UUID `json:"orderId"`
+		OrderNumber     string    `json:"orderNumber"`
+		ChefName        string    `json:"chefName"`
+		ItemCount       int       `json:"itemCount"`
+		PickupAddress   string    `json:"pickupAddress"`
+		DropoffAddress  string    `json:"dropoffAddress"`
+		Distance        float64   `json:"distance"`
+		EstimatedPayout float64   `json:"estimatedPayout"`
+		CreatedAt       time.Time `json:"createdAt"`
 	}
 
 	available := make([]AvailableDelivery, 0, len(orders))
@@ -386,12 +386,12 @@ func (h *DeliveryHandler) GetAvailableDeliveries(c *gin.Context) {
 		}
 
 		available = append(available, AvailableDelivery{
-			OrderID:     order.ID,
-			OrderNumber: order.OrderNumber,
-			ChefName:    order.Chef.BusinessName,
-			ItemCount:   len(order.Items),
-			PickupAddress: order.Chef.AddressLine1 + ", " + order.Chef.City,
-			DropoffAddress: order.DeliveryAddressLine1 + ", " + order.DeliveryAddressCity,
+			OrderID:         order.ID,
+			OrderNumber:     order.OrderNumber,
+			ChefName:        order.Chef.BusinessName,
+			ItemCount:       len(order.Items),
+			PickupAddress:   order.Chef.AddressLine1 + ", " + order.Chef.City,
+			DropoffAddress:  order.DeliveryAddressLine1 + ", " + order.DeliveryAddressCity,
 			Distance:        distance,
 			EstimatedPayout: order.DeliveryFee + order.Tip, // 100% — subscription model, no platform cut
 			CreatedAt:       order.CreatedAt,
@@ -469,13 +469,13 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 
 	// Create delivery
 	delivery := models.Delivery{
-		OrderID:            order.ID,
-		DeliveryPartnerID:  &partner.ID,
-		Status:             models.DeliveryAssigned,
-		PickupAddressLine1: order.Chef.AddressLine1,
-		PickupAddressCity:  order.Chef.City,
-		PickupLatitude:     order.Chef.Latitude,
-		PickupLongitude:    order.Chef.Longitude,
+		OrderID:             order.ID,
+		DeliveryPartnerID:   &partner.ID,
+		Status:              models.DeliveryAssigned,
+		PickupAddressLine1:  order.Chef.AddressLine1,
+		PickupAddressCity:   order.Chef.City,
+		PickupLatitude:      order.Chef.Latitude,
+		PickupLongitude:     order.Chef.Longitude,
 		DropoffAddressLine1: order.DeliveryAddressLine1,
 		DropoffAddressCity:  order.DeliveryAddressCity,
 		DropoffLatitude:     order.DeliveryLatitude,
@@ -506,19 +506,19 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 		return
 	}
 
-	tx.Commit()
+	// Stage the delivery.assigned event in the same transaction (outbox).
+	if err := services.EnqueueEvent(tx, services.SubjectDeliveryAssigned, "delivery.assigned", partner.UserID, map[string]interface{}{
+		"delivery_id":  delivery.ID.String(),
+		"order_id":     order.ID.String(),
+		"order_number": order.OrderNumber,
+		"partner_id":   partner.ID.String(),
+	}); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record delivery event"})
+		return
+	}
 
-	// Publish delivery assigned event
-	go func() {
-		if err := services.PublishEvent(services.SubjectDeliveryAssigned, "delivery.assigned", partner.UserID, map[string]interface{}{
-			"delivery_id":  delivery.ID.String(),
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"partner_id":   partner.ID.String(),
-		}); err != nil {
-			log.Printf("Failed to publish delivery assigned event: %v", err)
-		}
-	}()
+	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"delivery": delivery.ToResponse(),
@@ -591,7 +591,7 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		delivery.PickedUpAt = &now
 		// Update order status
 		database.DB.Model(&delivery.Order).Updates(map[string]interface{}{
-			"status":     models.OrderStatusDelivering,
+			"status":       models.OrderStatusDelivering,
 			"picked_up_at": now,
 		})
 	case models.DeliveryInTransit:
@@ -609,15 +609,15 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			"total_deliveries": partner.TotalDeliveries + 1,
 		})
 
-		// Publish delivery completed event
-		go func() {
-			services.PublishEvent(services.SubjectDeliveryPickedUp, "delivery.delivered", partner.UserID, map[string]interface{}{
-				"delivery_id":  delivery.ID.String(),
-				"order_id":     delivery.OrderID.String(),
-				"partner_id":   partner.ID.String(),
-				"total_payout": delivery.TotalPayout,
-			})
-		}()
+		// Stage the delivery.delivered event durably (outbox) — relay delivers it.
+		if err := services.EnqueueEvent(database.DB, services.SubjectDeliveryPickedUp, "delivery.delivered", partner.UserID, map[string]interface{}{
+			"delivery_id":  delivery.ID.String(),
+			"order_id":     delivery.OrderID.String(),
+			"partner_id":   partner.ID.String(),
+			"total_payout": delivery.TotalPayout,
+		}); err != nil {
+			log.Printf("failed to enqueue delivery.delivered event: %v", err)
+		}
 
 		// Record earnings for subscription billing (driver)
 		go func() {
@@ -1122,10 +1122,10 @@ func (h *DeliveryHandler) AdminListDeliveries(c *gin.Context) {
 	responses := make([]gin.H, len(deliveries))
 	for i, d := range deliveries {
 		resp := gin.H{
-			"id":        d.ID,
-			"orderId":   d.OrderID,
-			"status":    d.Status,
-			"distance":  d.Distance,
+			"id":       d.ID,
+			"orderId":  d.OrderID,
+			"status":   d.Status,
+			"distance": d.Distance,
 			"pickup": gin.H{
 				"address": d.PickupAddressLine1,
 				"city":    d.PickupAddressCity,
@@ -1205,12 +1205,12 @@ func deliveryDetailResponse(d *models.Delivery) gin.H {
 
 	if d.Order.ID != uuid.Nil {
 		resp["order"] = gin.H{
-			"id":          d.Order.ID,
-			"orderNumber": d.Order.OrderNumber,
-			"status":      d.Order.Status,
-			"total":       d.Order.Total,
-			"itemCount":   len(d.Order.Items),
-			"items":       d.Order.Items,
+			"id":                   d.Order.ID,
+			"orderNumber":          d.Order.OrderNumber,
+			"status":               d.Order.Status,
+			"total":                d.Order.Total,
+			"itemCount":            len(d.Order.Items),
+			"items":                d.Order.Items,
 			"specialInstructions":  d.Order.SpecialInstructions,
 			"deliveryInstructions": d.Order.DeliveryInstructions,
 		}
@@ -1383,15 +1383,15 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 	}
 
 	delivery := models.Delivery{
-		OrderID:            order.ID,
-		DeliveryPartnerID:  &partner.ID,
-		Status:             models.DeliveryAssigned,
-		AssignmentType:     models.AssignmentManual,
-		AssignedByID:       &userID,
-		PickupAddressLine1: order.Chef.AddressLine1,
-		PickupAddressCity:  order.Chef.City,
-		PickupLatitude:     order.Chef.Latitude,
-		PickupLongitude:    order.Chef.Longitude,
+		OrderID:             order.ID,
+		DeliveryPartnerID:   &partner.ID,
+		Status:              models.DeliveryAssigned,
+		AssignmentType:      models.AssignmentManual,
+		AssignedByID:        &userID,
+		PickupAddressLine1:  order.Chef.AddressLine1,
+		PickupAddressCity:   order.Chef.City,
+		PickupLatitude:      order.Chef.Latitude,
+		PickupLongitude:     order.Chef.Longitude,
 		DropoffAddressLine1: order.DeliveryAddressLine1,
 		DropoffAddressCity:  order.DeliveryAddressCity,
 		DropoffLatitude:     order.DeliveryLatitude,
@@ -1421,18 +1421,19 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 		return
 	}
 
-	tx.Commit()
+	// Stage the manual-assign event in the same transaction (outbox).
+	if err := services.EnqueueEvent(tx, services.SubjectDeliveryAssigned, "delivery.manual_assigned", partner.UserID, map[string]interface{}{
+		"delivery_id": delivery.ID.String(),
+		"order_id":    order.ID.String(),
+		"partner_id":  partner.ID.String(),
+		"assigned_by": userID.String(),
+	}); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record delivery event"})
+		return
+	}
 
-	go func() {
-		if err := services.PublishEvent(services.SubjectDeliveryAssigned, "delivery.manual_assigned", partner.UserID, map[string]interface{}{
-			"delivery_id":  delivery.ID.String(),
-			"order_id":     order.ID.String(),
-			"partner_id":   partner.ID.String(),
-			"assigned_by":  userID.String(),
-		}); err != nil {
-			log.Printf("Failed to publish manual assign event: %v", err)
-		}
-	}()
+	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"delivery": delivery.ToResponse(),
@@ -1454,19 +1455,19 @@ func (h *DeliveryHandler) UploadPartnerDocument(c *gin.Context) {
 
 	docType := models.PartnerDocType(c.PostForm("type"))
 	validTypes := map[models.PartnerDocType]bool{
-		models.PartnerDocDrivingLicense:      true,
-		models.PartnerDocVehicleRC:           true,
-		models.PartnerDocInsurance:           true,
-		models.PartnerDocAadhaar:             true,
-		models.PartnerDocPanCard:             true,
-		models.PartnerDocPhoto:               true,
-		models.PartnerDocPoliceVerification:  true,
-		models.PartnerDocVehicleFront:        true,
-		models.PartnerDocVehicleBack:         true,
-		models.PartnerDocVehicleLeft:         true,
-		models.PartnerDocVehicleRight:        true,
-		models.PartnerDocVehicleTop:          true,
-		models.PartnerDocVehicleNumberPlate:  true,
+		models.PartnerDocDrivingLicense:     true,
+		models.PartnerDocVehicleRC:          true,
+		models.PartnerDocInsurance:          true,
+		models.PartnerDocAadhaar:            true,
+		models.PartnerDocPanCard:            true,
+		models.PartnerDocPhoto:              true,
+		models.PartnerDocPoliceVerification: true,
+		models.PartnerDocVehicleFront:       true,
+		models.PartnerDocVehicleBack:        true,
+		models.PartnerDocVehicleLeft:        true,
+		models.PartnerDocVehicleRight:       true,
+		models.PartnerDocVehicleTop:         true,
+		models.PartnerDocVehicleNumberPlate: true,
 	}
 	if !validTypes[docType] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document type"})
@@ -1630,23 +1631,23 @@ func (h *DeliveryHandler) ListZones(c *gin.Context) {
 // CreateZone creates a new delivery zone
 func (h *DeliveryHandler) CreateZone(c *gin.Context) {
 	var req struct {
-		Name              string  `json:"name" binding:"required"`
-		City              string  `json:"city" binding:"required"`
-		State             string  `json:"state"`
-		Country           string  `json:"country"`
-		Tier              string  `json:"tier"`
-		MinLatitude       float64 `json:"minLatitude"`
-		MaxLatitude       float64 `json:"maxLatitude"`
-		MinLongitude      float64 `json:"minLongitude"`
-		MaxLongitude      float64 `json:"maxLongitude"`
-		Boundary          string  `json:"boundary"`
-		Currency          string  `json:"currency"`
-		BaseFare          float64 `json:"baseFare"`
-		PerKmRate         float64 `json:"perKmRate"`
-		MinimumFare       float64 `json:"minimumFare"`
-		TipEnabled        *bool   `json:"tipEnabled"`
-		DefaultTipPercent float64 `json:"defaultTipPercent"`
-		MaxTipAmount      float64 `json:"maxTipAmount"`
+		Name                string  `json:"name" binding:"required"`
+		City                string  `json:"city" binding:"required"`
+		State               string  `json:"state"`
+		Country             string  `json:"country"`
+		Tier                string  `json:"tier"`
+		MinLatitude         float64 `json:"minLatitude"`
+		MaxLatitude         float64 `json:"maxLatitude"`
+		MinLongitude        float64 `json:"minLongitude"`
+		MaxLongitude        float64 `json:"maxLongitude"`
+		Boundary            string  `json:"boundary"`
+		Currency            string  `json:"currency"`
+		BaseFare            float64 `json:"baseFare"`
+		PerKmRate           float64 `json:"perKmRate"`
+		MinimumFare         float64 `json:"minimumFare"`
+		TipEnabled          *bool   `json:"tipEnabled"`
+		DefaultTipPercent   float64 `json:"defaultTipPercent"`
+		MaxTipAmount        float64 `json:"maxTipAmount"`
 		DriverPayoutPercent float64 `json:"driverPayoutPercent"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1655,17 +1656,29 @@ func (h *DeliveryHandler) CreateZone(c *gin.Context) {
 	}
 
 	country := req.Country
-	if country == "" { country = "IN" }
+	if country == "" {
+		country = "IN"
+	}
 	currency := req.Currency
-	if currency == "" { currency = "INR" }
+	if currency == "" {
+		currency = "INR"
+	}
 	tier := req.Tier
-	if tier == "" { tier = "standard" }
+	if tier == "" {
+		tier = "standard"
+	}
 	tipEnabled := true
-	if req.TipEnabled != nil { tipEnabled = *req.TipEnabled }
+	if req.TipEnabled != nil {
+		tipEnabled = *req.TipEnabled
+	}
 	defaultTip := req.DefaultTipPercent
-	if defaultTip == 0 { defaultTip = 10 }
+	if defaultTip == 0 {
+		defaultTip = 10
+	}
 	driverPayout := req.DriverPayoutPercent
-	if driverPayout == 0 { driverPayout = 80 }
+	if driverPayout == 0 {
+		driverPayout = 80
+	}
 
 	zone := models.DeliveryZone{
 		Name:                req.Name,
@@ -1709,52 +1722,92 @@ func (h *DeliveryHandler) UpdateZone(c *gin.Context) {
 	}
 
 	var req struct {
-		Name              *string  `json:"name"`
-		City              *string  `json:"city"`
-		State             *string  `json:"state"`
-		Country           *string  `json:"country"`
-		Tier              *string  `json:"tier"`
-		MinLatitude       *float64 `json:"minLatitude"`
-		MaxLatitude       *float64 `json:"maxLatitude"`
-		MinLongitude      *float64 `json:"minLongitude"`
-		MaxLongitude      *float64 `json:"maxLongitude"`
-		Boundary          *string  `json:"boundary"`
-		Currency          *string  `json:"currency"`
-		BaseFare          *float64 `json:"baseFare"`
-		PerKmRate         *float64 `json:"perKmRate"`
-		MinimumFare       *float64 `json:"minimumFare"`
-		SurgeMultiplier   *float64 `json:"surgeMultiplier"`
-		TipEnabled        *bool    `json:"tipEnabled"`
-		DefaultTipPercent *float64 `json:"defaultTipPercent"`
-		MaxTipAmount      *float64 `json:"maxTipAmount"`
+		Name                *string  `json:"name"`
+		City                *string  `json:"city"`
+		State               *string  `json:"state"`
+		Country             *string  `json:"country"`
+		Tier                *string  `json:"tier"`
+		MinLatitude         *float64 `json:"minLatitude"`
+		MaxLatitude         *float64 `json:"maxLatitude"`
+		MinLongitude        *float64 `json:"minLongitude"`
+		MaxLongitude        *float64 `json:"maxLongitude"`
+		Boundary            *string  `json:"boundary"`
+		Currency            *string  `json:"currency"`
+		BaseFare            *float64 `json:"baseFare"`
+		PerKmRate           *float64 `json:"perKmRate"`
+		MinimumFare         *float64 `json:"minimumFare"`
+		SurgeMultiplier     *float64 `json:"surgeMultiplier"`
+		TipEnabled          *bool    `json:"tipEnabled"`
+		DefaultTipPercent   *float64 `json:"defaultTipPercent"`
+		MaxTipAmount        *float64 `json:"maxTipAmount"`
 		DriverPayoutPercent *float64 `json:"driverPayoutPercent"`
-		IsActive          *bool    `json:"isActive"`
+		IsActive            *bool    `json:"isActive"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.Name != nil { zone.Name = *req.Name }
-	if req.City != nil { zone.City = *req.City }
-	if req.State != nil { zone.State = *req.State }
-	if req.Country != nil { zone.Country = *req.Country }
-	if req.Tier != nil { zone.Tier = *req.Tier }
-	if req.MinLatitude != nil { zone.MinLatitude = *req.MinLatitude }
-	if req.MaxLatitude != nil { zone.MaxLatitude = *req.MaxLatitude }
-	if req.MinLongitude != nil { zone.MinLongitude = *req.MinLongitude }
-	if req.MaxLongitude != nil { zone.MaxLongitude = *req.MaxLongitude }
-	if req.Boundary != nil { zone.Boundary = *req.Boundary }
-	if req.Currency != nil { zone.Currency = *req.Currency }
-	if req.BaseFare != nil { zone.BaseFare = *req.BaseFare }
-	if req.PerKmRate != nil { zone.PerKmRate = *req.PerKmRate }
-	if req.MinimumFare != nil { zone.MinimumFare = *req.MinimumFare }
-	if req.SurgeMultiplier != nil { zone.SurgeMultiplier = *req.SurgeMultiplier }
-	if req.TipEnabled != nil { zone.TipEnabled = *req.TipEnabled }
-	if req.DefaultTipPercent != nil { zone.DefaultTipPercent = *req.DefaultTipPercent }
-	if req.MaxTipAmount != nil { zone.MaxTipAmount = *req.MaxTipAmount }
-	if req.DriverPayoutPercent != nil { zone.DriverPayoutPercent = *req.DriverPayoutPercent }
-	if req.IsActive != nil { zone.IsActive = *req.IsActive }
+	if req.Name != nil {
+		zone.Name = *req.Name
+	}
+	if req.City != nil {
+		zone.City = *req.City
+	}
+	if req.State != nil {
+		zone.State = *req.State
+	}
+	if req.Country != nil {
+		zone.Country = *req.Country
+	}
+	if req.Tier != nil {
+		zone.Tier = *req.Tier
+	}
+	if req.MinLatitude != nil {
+		zone.MinLatitude = *req.MinLatitude
+	}
+	if req.MaxLatitude != nil {
+		zone.MaxLatitude = *req.MaxLatitude
+	}
+	if req.MinLongitude != nil {
+		zone.MinLongitude = *req.MinLongitude
+	}
+	if req.MaxLongitude != nil {
+		zone.MaxLongitude = *req.MaxLongitude
+	}
+	if req.Boundary != nil {
+		zone.Boundary = *req.Boundary
+	}
+	if req.Currency != nil {
+		zone.Currency = *req.Currency
+	}
+	if req.BaseFare != nil {
+		zone.BaseFare = *req.BaseFare
+	}
+	if req.PerKmRate != nil {
+		zone.PerKmRate = *req.PerKmRate
+	}
+	if req.MinimumFare != nil {
+		zone.MinimumFare = *req.MinimumFare
+	}
+	if req.SurgeMultiplier != nil {
+		zone.SurgeMultiplier = *req.SurgeMultiplier
+	}
+	if req.TipEnabled != nil {
+		zone.TipEnabled = *req.TipEnabled
+	}
+	if req.DefaultTipPercent != nil {
+		zone.DefaultTipPercent = *req.DefaultTipPercent
+	}
+	if req.MaxTipAmount != nil {
+		zone.MaxTipAmount = *req.MaxTipAmount
+	}
+	if req.DriverPayoutPercent != nil {
+		zone.DriverPayoutPercent = *req.DriverPayoutPercent
+	}
+	if req.IsActive != nil {
+		zone.IsActive = *req.IsActive
+	}
 
 	if err := database.DB.Save(&zone).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update zone"})

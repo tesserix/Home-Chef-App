@@ -253,10 +253,10 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 
 	// Update approval request
 	database.DB.Model(&approval).Updates(map[string]interface{}{
-		"status":        models.ApprovalApproved,
+		"status":         models.ApprovalApproved,
 		"reviewed_by_id": adminUserID,
-		"reviewed_at":   &now,
-		"admin_notes":   req.Notes,
+		"reviewed_at":    &now,
+		"admin_notes":    req.Notes,
 	})
 
 	// Create history entry
@@ -341,8 +341,8 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	if approval.PartnerID != nil {
 		eventData["partner_id"] = approval.PartnerID.String()
 	}
-	if err := services.PublishEvent(services.SubjectApprovalApproved, "approval.approved", adminUserID, eventData); err != nil {
-		log.Printf("Failed to publish approval approved event: %v", err)
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalApproved, "approval.approved", adminUserID, eventData); err != nil {
+		log.Printf("failed to enqueue approval.approved event: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Approval request approved"})
@@ -380,10 +380,10 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 
 	// Update approval request
 	database.DB.Model(&approval).Updates(map[string]interface{}{
-		"status":        models.ApprovalRejected,
+		"status":         models.ApprovalRejected,
 		"reviewed_by_id": adminUserID,
-		"reviewed_at":   &now,
-		"admin_notes":   req.Notes,
+		"reviewed_at":    &now,
+		"admin_notes":    req.Notes,
 	})
 
 	// Create history entry
@@ -450,8 +450,8 @@ func (h *ApprovalHandler) RejectRequest(c *gin.Context) {
 	if approval.PartnerID != nil {
 		eventData["partner_id"] = approval.PartnerID.String()
 	}
-	if err := services.PublishEvent(services.SubjectApprovalRejected, "approval.rejected", adminUserID, eventData); err != nil {
-		log.Printf("Failed to publish approval rejected event: %v", err)
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalRejected, "approval.rejected", adminUserID, eventData); err != nil {
+		log.Printf("failed to enqueue approval.rejected event: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Approval request rejected"})
@@ -491,7 +491,7 @@ func (h *ApprovalHandler) RequestMoreInfo(c *gin.Context) {
 
 	// Update approval request
 	database.DB.Model(&approval).Updates(map[string]interface{}{
-		"status":     models.ApprovalInfoRequested,
+		"status":      models.ApprovalInfoRequested,
 		"admin_notes": req.Notes,
 	})
 
@@ -506,14 +506,14 @@ func (h *ApprovalHandler) RequestMoreInfo(c *gin.Context) {
 	database.DB.Create(&history)
 
 	// Publish NATS event
-	if err := services.PublishEvent(services.SubjectApprovalInfoRequested, "approval.info_requested", adminUserID, map[string]interface{}{
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalInfoRequested, "approval.info_requested", adminUserID, map[string]interface{}{
 		"approval_id": approval.ID.String(),
 		"type":        string(approval.Type),
 		"chef_id":     approval.ChefID,
 		"title":       approval.Title,
 		"notes":       req.Notes,
 	}); err != nil {
-		log.Printf("Failed to publish approval info_requested event: %v", err)
+		log.Printf("failed to enqueue approval.info_requested event: %v", err)
 	}
 
 	// Email the chef in parallel with the NATS event so they see the
@@ -720,14 +720,14 @@ func (h *ApprovalHandler) RespondToApprovalRequest(c *gin.Context) {
 	database.DB.Create(&history)
 
 	// Publish NATS event to notify admins
-	if err := services.PublishEvent(services.SubjectApprovalCreated, "approval.chef_responded", userID, map[string]interface{}{
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.chef_responded", userID, map[string]interface{}{
 		"approval_id": approval.ID.String(),
 		"type":        string(approval.Type),
 		"chef_id":     chef.ID.String(),
 		"title":       approval.Title,
 		"response":    req.Response,
 	}); err != nil {
-		log.Printf("Failed to publish chef response event: %v", err)
+		log.Printf("failed to enqueue approval.chef_responded event: %v", err)
 	}
 
 	// Create notification for all admin users

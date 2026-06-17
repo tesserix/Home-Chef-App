@@ -127,14 +127,16 @@ func (s *ProviderService) CreateProviderDelivery(provider *models.DeliveryProvid
 		response = s.mockProviderDelivery(provider, req)
 	}
 
-	// Publish NATS event
-	_ = PublishEvent(SubjectProviderDeliveryCreated, "provider.delivery.created", uuid.Nil, map[string]interface{}{
+	// Durable event publication via the transactional outbox.
+	if err := EnqueueEvent(database.DB, SubjectProviderDeliveryCreated, "provider.delivery.created", uuid.Nil, map[string]interface{}{
 		"provider_id":          provider.ID.String(),
 		"provider_code":        provider.Code,
 		"order_id":             req.OrderID.String(),
 		"external_delivery_id": response.ExternalDeliveryID,
 		"cost":                 response.Cost,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue provider.delivery.created event: %v", err)
+	}
 
 	return response, nil
 }
@@ -301,8 +303,8 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		return fmt.Errorf("failed to update delivery: %w", err)
 	}
 
-	// Publish NATS event
-	_ = PublishEvent(SubjectProviderDeliveryUpdated, "provider.delivery.updated", uuid.Nil, map[string]interface{}{
+	// Durable event publication via the transactional outbox.
+	if err := EnqueueEvent(database.DB, SubjectProviderDeliveryUpdated, "provider.delivery.updated", uuid.Nil, map[string]interface{}{
 		"provider_id":          provider.ID.String(),
 		"provider_code":        provider.Code,
 		"delivery_id":          delivery.ID.String(),
@@ -310,7 +312,9 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		"old_status":           string(delivery.Status),
 		"new_status":           fe3drStatus,
 		"provider_status":      providerStatus,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue provider.delivery.updated event: %v", err)
+	}
 
 	return nil
 }
