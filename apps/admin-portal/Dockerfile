@@ -10,6 +10,9 @@ USER 0:0
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+# pnpm patchedDependencies (root package.json) needs the patch files present
+# before install; without this a cache-less build fails with ENOENT.
+COPY patches ./patches
 COPY apps/admin-portal/package.json ./apps/admin-portal/
 COPY apps/admin-portal/.npmrc ./apps/admin-portal/
 
