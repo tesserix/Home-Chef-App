@@ -127,6 +127,24 @@ export default function HomeScreen() {
             accessibilityLabel="Search chefs"
           />
         </View>
+        {/* Dish search entry (#143): the pill above filters chefs; this jumps to
+            a dedicated dish-name search, carrying the current query. */}
+        <Pressable
+          onPress={() =>
+            router.push(
+              searchText.trim()
+                ? `/search-dishes?q=${encodeURIComponent(searchText.trim())}`
+                : '/search-dishes'
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Search dishes by name"
+          style={{ paddingTop: 8, paddingHorizontal: 4 }}
+        >
+          <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: customerColors.coral.DEFAULT }}>
+            Search dishes →
+          </Text>
+        </Pressable>
       </View>
 
       {/* Airbnb category chip row: selected = charcoal text + 2px charcoal
