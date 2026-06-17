@@ -37,7 +37,7 @@
     "react-hook-form": "^7.56.4",
     "typescript": "^6.0.3",
     "vitest": "^2.1.9",
-    "zod": "^3.25.33"
+    "zod": "^4.4.3"
   },
   "dependencies": {
     "@react-native-firebase/app": "^24.0.0",
