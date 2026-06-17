@@ -42,7 +42,7 @@
     "expo-image-manipulator": "~55.0.17",
     "expo-image-picker": "~55.0.20",
     "expo-linking": "~55.0.15",
-    "expo-local-authentication": "~55.0.14",
+    "expo-local-authentication": "~56.0.4",
     "expo-localization": "~55.0.15",
     "expo-location": "~55.1.10",
     "expo-notifications": "~55.0.23",
