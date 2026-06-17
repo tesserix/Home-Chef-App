@@ -180,29 +180,17 @@ func main() {
 	// via Redis SETNX (or fails open on Redis outage).
 	cronCtx, cronCancel := context.WithCancel(context.Background())
 	defer cronCancel()
-	services.StartFSSAIReminderCron(cronCtx)
+	// Scheduled jobs: weekly settlement statements, daily reconciliation, FSSAI
+	// expiry reminders, kitchen auto-resume, and audit-log retention. When
+	// Temporal is enabled these run as durable Schedules (exactly-once,
+	// leader-elected, catching up on windows missed during downtime); otherwise
+	// the legacy in-process tickers run unchanged. See #116 / #125.
+	services.StartCronJobs(cronCtx)
 
 	// Keep the homechef_fssai_locked_chefs gauge current (#94) — recounts
 	// locked chefs every 10 min so dashboards/alerts can watch the lockout.
+	// (Prometheus gauge updater, not a Temporal-scheduled job.)
 	services.StartFSSAILockedGaugeUpdater(cronCtx)
-
-	// Background weekly settlement statements: once a Mon–Sun week (IST)
-	// closes, issue an immutable statement + "ready" push per chef. Shares
-	// the cron's lifecycle/idempotency model with the FSSAI reminder.
-	services.StartWeeklyStatementCron(cronCtx)
-
-	// Background settlement reconciliation: daily, cross-check the previous
-	// day's payment/refund records against Razorpay/Stripe and alert on drift.
-	// Read-only — surfaces discrepancies for finance ops, never mutates.
-	services.StartReconciliationCron(cronCtx)
-
-	// Auto-resume timed kitchen pauses ("Back in {15,30,60} min") once the
-	// window elapses. 1-minute granularity; reliable under min-scale:1.
-	services.StartAvailabilityResumeCron(cronCtx)
-
-	// Prune audit_logs past the retention window (~13 months) so the table
-	// stays bounded on the shared db-f1-micro.
-	services.StartAuditRetentionCron(cronCtx)
 
 	// Setup router
 	router := routes.SetupRouter()

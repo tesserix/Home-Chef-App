@@ -10,4 +10,5 @@ const (
 	TaskQueueOnboarding    = "homechef-onboarding"
 	TaskQueueNotifications = "homechef-notifications"
 	TaskQueueSubscriptions = "homechef-subscriptions"
+	TaskQueueCron          = "homechef-cron"
 )

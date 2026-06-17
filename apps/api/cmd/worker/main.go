@@ -34,6 +34,8 @@ func main() {
 		temporal.Queue(temporal.TaskQueueNotifications).
 			Workflows(workflows.NotificationWorkflow).
 			Activities(workflows.SendNotificationActivity),
+		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
+		services.RegisterCronWorker(),
 	); err != nil {
 		log.Fatalf("temporal worker: %v", err)
 	}
