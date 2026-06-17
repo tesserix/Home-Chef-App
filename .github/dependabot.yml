@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # --- Go backend services ---
+  - package-ecosystem: gomod
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      api-go:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: gomod
+    directory: "/apps/auth-bff"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      auth-bff-go:
+        update-types: ["minor", "patch"]
+
+  # --- JS/TS pnpm workspace (root lockfile covers all apps/* and packages/*) ---
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 15
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      js-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # --- GitHub Actions ---
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
