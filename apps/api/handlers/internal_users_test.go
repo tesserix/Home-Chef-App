@@ -157,6 +157,128 @@ func TestUpsert_MissingRequired_400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code, "body: %s", w.Body.String())
 }
 
+func TestUpsert_NewUser_PersistsNameAndAvatar(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+	w := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-av", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "ava@example.com", Name: "Ava Vega",
+		Avatar: "https://example.com/ava.png", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var got models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-av").First(&got).Error)
+	assert.Equal(t, "Ava", got.FirstName)
+	assert.Equal(t, "Vega", got.LastName)
+	assert.Equal(t, "https://example.com/ava.png", got.Avatar)
+}
+
+func TestUpsert_RepeatLogin_DoesNotOverwriteAvatarOrName(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	// First sign-in seeds name + avatar.
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-keep", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "keep@example.com", Name: "Original Name",
+		Avatar: "https://example.com/original.png", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code, "body: %s", w1.Body.String())
+
+	// User then edits their profile out-of-band.
+	require.NoError(t, db.Model(&models.User{}).Where("gip_uid = ?", "gip-keep").
+		Updates(map[string]any{
+			"first_name": "Edited",
+			"last_name":  "Profile",
+			"avatar":     "https://example.com/edited.png",
+		}).Error)
+
+	// Repeat login with a different name/avatar from the provider — must NOT clobber.
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-keep", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "keep@example.com", Name: "Provider Name",
+		Avatar: "https://example.com/provider.png", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code, "body: %s", w2.Body.String())
+
+	var got models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-keep").First(&got).Error)
+	assert.Equal(t, "Edited", got.FirstName, "edited name preserved")
+	assert.Equal(t, "Profile", got.LastName, "edited name preserved")
+	assert.Equal(t, "https://example.com/edited.png", got.Avatar, "edited avatar preserved")
+}
+
+func TestUpsert_UnverifiedEmail_DoesNotRebind_CreatesNewRow(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	// Existing verified social account.
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-social", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "shared@example.com", Name: "Social User",
+		Avatar: "https://example.com/social.png", EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code, "body: %s", w1.Body.String())
+	var social models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-social").First(&social).Error)
+
+	// Unverified password signup with the SAME email + pool, NEW gip_uid.
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-password", GIPTenantID: "T", GIPProvider: "password",
+		AuthPool: "customer", Email: "shared@example.com", Name: "Imposter",
+		EmailVerified: false, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code, "body: %s", w2.Body.String())
+
+	// The original verified row must NOT have been re-bound.
+	var stillSocial models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-social").First(&stillSocial).Error)
+	assert.Equal(t, social.ID, stillSocial.ID)
+	assert.Equal(t, "gip-social", stillSocial.GIPUid, "verified row keeps its gip_uid")
+
+	// A NEW separate row exists for the unverified signup.
+	var imposter models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-password").First(&imposter).Error)
+	assert.NotEqual(t, social.ID, imposter.ID, "unverified signup gets its own row")
+
+	var count int64
+	require.NoError(t, db.Model(&models.User{}).Where("email = ?", "shared@example.com").Count(&count).Error)
+	assert.Equal(t, int64(2), count, "two distinct rows for the shared email")
+}
+
+func TestUpsert_VerifiedEmail_DoesRebind(t *testing.T) {
+	db := setupDB(t)
+	h := NewInternalUsersHandler(db)
+
+	// Existing row (e.g., created via password originally).
+	w1 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-old", GIPTenantID: "T", GIPProvider: "password",
+		AuthPool: "customer", Email: "rebind@example.com", Name: "Re Bind",
+		EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w1.Code, "body: %s", w1.Body.String())
+	var old models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-old").First(&old).Error)
+
+	// New verified GIP identity (new gip_uid) for the same email + pool.
+	w2 := postUpsert(t, h, UpsertUserRequest{
+		GIPUid: "gip-new", GIPTenantID: "T", GIPProvider: "google.com",
+		AuthPool: "customer", Email: "rebind@example.com", Name: "Re Bind",
+		EmailVerified: true, Role: "customer",
+	})
+	require.Equal(t, http.StatusOK, w2.Code, "body: %s", w2.Body.String())
+
+	// Same row re-bound to the new gip_uid — no second row.
+	var count int64
+	require.NoError(t, db.Model(&models.User{}).Where("email = ?", "rebind@example.com").Count(&count).Error)
+	assert.Equal(t, int64(1), count, "verified re-bind reuses the existing row")
+
+	var rebound models.User
+	require.NoError(t, db.Where("gip_uid = ?", "gip-new").First(&rebound).Error)
+	assert.Equal(t, old.ID, rebound.ID, "row id stable across verified re-bind")
+}
+
 func TestUpsert_SameEmailDifferentPool_AllowsTwoRows(t *testing.T) {
 	db := setupDB(t)
 	h := NewInternalUsersHandler(db)
