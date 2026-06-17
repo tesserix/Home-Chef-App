@@ -63,6 +63,14 @@ const RATING_OPTIONS = [
   { value: '3.5', label: '3.5+ Stars' },
 ];
 
+const PRICE_OPTIONS = [
+  { value: '', label: 'Any price' },
+  { value: '100', label: 'Min order under ₹100' },
+  { value: '250', label: 'Min order under ₹250' },
+  { value: '500', label: 'Min order under ₹500' },
+  { value: '1000', label: 'Min order under ₹1000' },
+];
+
 const staggerContainer = {
   hidden: { opacity: 0 },
   visible: {
@@ -86,6 +94,10 @@ export default function BrowseChefsPage() {
     cuisine: searchParams.get('cuisine') || undefined,
     dietary: searchParams.get('dietary') || undefined,
     rating: searchParams.get('rating') ? Number(searchParams.get('rating')) : undefined,
+    maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined,
+    // Near-me coords (set by the geolocation toggle); enable the "Nearest" sort.
+    lat: searchParams.get('lat') ? Number(searchParams.get('lat')) : undefined,
+    lng: searchParams.get('lng') ? Number(searchParams.get('lng')) : undefined,
     isOpen: searchParams.get('isOpen') === 'true' ? true : undefined,
     sort: (searchParams.get('sort') as ChefFilters['sort']) || 'rating',
     page: Number(searchParams.get('page')) || 1,
@@ -242,6 +254,46 @@ export default function BrowseChefsPage() {
                         className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
                       />
                       <span className="text-ink-soft">Open Now</span>
+                    </label>
+                  </div>
+
+                  <SimpleSelect
+                    label="Price"
+                    options={PRICE_OPTIONS}
+                    value={String(filters.maxPrice || '')}
+                    onValueChange={(value) => updateFilters({ maxPrice: value ? Number(value) : undefined })}
+                  />
+
+                  <div role="group" aria-labelledby="browse-nearme-label">
+                    <span id="browse-nearme-label" className="mb-1.5 block text-sm font-medium text-ink-soft">
+                      Near me
+                    </span>
+                    <label className="flex items-center gap-2 cursor-pointer mt-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(filters.lat && filters.lng)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            if (!('geolocation' in navigator)) {
+                              toast.error('Location is not available on this device');
+                              return;
+                            }
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) =>
+                                updateFilters({
+                                  lat: pos.coords.latitude,
+                                  lng: pos.coords.longitude,
+                                  sort: 'distance',
+                                }),
+                              () => toast.error('Could not get your location')
+                            );
+                          } else {
+                            updateFilters({ lat: undefined, lng: undefined });
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-mist-strong text-herb focus-visible:ring-herb"
+                      />
+                      <span className="text-ink-soft">Show nearest</span>
                     </label>
                   </div>
                 </div>
