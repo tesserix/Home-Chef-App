@@ -99,6 +99,13 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
 			order.OrderNumber, order.Chef.ID, chefAmount)
+		// Audit the freeze — legal/regulatory evidence that the chef's split was
+		// withheld, and why (#93). System-triggered, so no actor is recorded.
+		services.LogSystemAudit(c, "chef.payout.fssai_withheld", "chef", order.Chef.ID.String(), nil, map[string]any{
+			"orderNumber":    order.OrderNumber,
+			"withheldAmount": chefAmount,
+			"reason":         "fssai_licence_expired",
+		})
 	}
 	if order.Chef.RazorpayAccountID != "" && chefAmount > 0 && !chefFSSAIExpired {
 		transfers = append(transfers, services.TransferSpec{

@@ -21,6 +21,20 @@ import (
 // oldValue   JSON-marshalable previous state; optional (nil skips)
 // newValue   JSON-marshalable next state; optional (nil skips)
 func LogAudit(c *gin.Context, action, entityType, entityID string, oldValue, newValue any) {
+	logAudit(c, true, action, entityType, entityID, oldValue, newValue)
+}
+
+// LogSystemAudit writes an AuditLog row for a SYSTEM-triggered action — one with
+// no human actor, e.g. the automatic FSSAI payout freeze that fires during a
+// customer's order payment (#93). It mirrors LogAudit but deliberately never
+// records a UserID, so the entry isn't misattributed to whichever customer's
+// request happened to trigger it. IP / correlation-id are still captured from c
+// (when present) so the event stays traceable back to the request that caused it.
+func LogSystemAudit(c *gin.Context, action, entityType, entityID string, oldValue, newValue any) {
+	logAudit(c, false, action, entityType, entityID, oldValue, newValue)
+}
+
+func logAudit(c *gin.Context, recordActor bool, action, entityType, entityID string, oldValue, newValue any) {
 	if action == "" {
 		return
 	}
@@ -37,9 +51,11 @@ func LogAudit(c *gin.Context, action, entityType, entityID string, oldValue, new
 			entry.IPAddress = c.ClientIP()
 			entry.UserAgent = c.Request.UserAgent()
 		}
-		if v, ok := c.Get("userID"); ok {
-			if uid, ok := v.(uuid.UUID); ok {
-				entry.UserID = &uid
+		if recordActor {
+			if v, ok := c.Get("userID"); ok {
+				if uid, ok := v.(uuid.UUID); ok {
+					entry.UserID = &uid
+				}
 			}
 		}
 		if c.Request != nil {

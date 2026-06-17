@@ -616,6 +616,10 @@ func SetupRouter() *gin.Engine {
 			// Chef management
 			admin.GET("/chefs", adminHandler.GetChefs)
 			admin.GET("/chefs/fssai-locked", adminHandler.GetFSSAILockedChefs)
+			admin.POST("/chefs/:id/fssai-override", adminHandler.OverrideFSSAILock)
+			admin.DELETE("/chefs/:id/fssai-override", adminHandler.ClearFSSAILockOverride)
+			admin.GET("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
+			admin.POST("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
 			admin.PUT("/chefs/:id/verify", adminHandler.VerifyChef)
 			admin.PUT("/chefs/:id/reject", adminHandler.RejectChef)
 			admin.PUT("/chefs/:id/suspend", adminHandler.SuspendChef)
