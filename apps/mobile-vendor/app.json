@@ -197,7 +197,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#FA6F5C"
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
