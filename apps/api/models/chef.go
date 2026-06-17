@@ -162,6 +162,9 @@ type ChefProfileResponse struct {
 	TotalReviews    int                    `json:"totalReviews"`
 	TotalOrders     int                    `json:"totalOrders"`
 	IsVerified      bool                   `json:"verified"`
+	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
+	// Set by the handler (needs a DB lookup), so it's false on the bare model.
+	FoodSafetyBadge bool                   `json:"foodSafetyBadge"`
 	IsFeatured      bool                   `json:"isFeatured"`
 	IsOnline        bool                   `json:"isOnline"`
 	AcceptingOrders bool                   `json:"acceptingOrders"`

@@ -155,8 +155,10 @@ func updateChefRating(chefID uuid.UUID) {
 		AvgRating    float64
 		TotalReviews int64
 	}
+	// Exclude hidden reviews (#35 moderation) alongside unapproved/deleted — a
+	// hidden review must not count toward the public rating.
 	database.DB.Model(&models.Review{}).
-		Where("chef_id = ? AND is_approved = ? AND deleted_at IS NULL", chefID, true).
+		Where("chef_id = ? AND is_approved = ? AND is_hidden = ? AND deleted_at IS NULL", chefID, true, false).
 		Select("COALESCE(AVG(overall_rating), 0) as avg_rating, COUNT(*) as total_reviews").
 		Scan(&stats)
 

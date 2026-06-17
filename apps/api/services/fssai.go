@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
@@ -102,4 +103,33 @@ func ExcludeFSSAILocked(db *gorm.DB) *gorm.DB {
 			))`,
 		"IN", now, models.DocFSSAILicense, models.DocStatusVerified, cutoff,
 	)
+}
+
+// ChefsWithValidFSSAI returns, for a set of chef ids, which ones currently hold a
+// verified, non-expired FSSAI licence — the basis for the hygiene/food-safety
+// badge (#35). Batched into a single query so listing pages don't N+1. "Valid"
+// uses the same "through the expiry day" cutoff as the lockout, so the badge and
+// the lockout never contradict each other.
+func ChefsWithValidFSSAI(chefIDs []uuid.UUID) map[uuid.UUID]bool {
+	out := make(map[uuid.UUID]bool, len(chefIDs))
+	if len(chefIDs) == 0 {
+		return out
+	}
+	cutoff := time.Now().AddDate(0, 0, -1)
+	var ids []uuid.UUID
+	database.DB.Model(&models.ChefDocument{}).
+		Where("type = ? AND status = ? AND expiry_date IS NOT NULL AND chef_id IN ?",
+			models.DocFSSAILicense, models.DocStatusVerified, chefIDs).
+		Group("chef_id").
+		Having("MAX(expiry_date) >= ?", cutoff).
+		Pluck("chef_id", &ids)
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
+}
+
+// ChefHasValidFSSAI is the single-chef form of ChefsWithValidFSSAI.
+func ChefHasValidFSSAI(chefID uuid.UUID) bool {
+	return ChefsWithValidFSSAI([]uuid.UUID{chefID})[chefID]
 }

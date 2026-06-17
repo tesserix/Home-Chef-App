@@ -186,6 +186,19 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		responses[i] = chef.ToResponse()
 	}
 
+	// Hygiene/food-safety badge (#35): one batched lookup for the whole page,
+	// so the chef cards can show the badge without an N+1 per chef.
+	if len(chefs) > 0 {
+		chefIDs := make([]uuid.UUID, len(chefs))
+		for i, chef := range chefs {
+			chefIDs[i] = chef.ID
+		}
+		badged := services.ChefsWithValidFSSAI(chefIDs)
+		for i := range responses {
+			responses[i].FoodSafetyBadge = badged[responses[i].ID]
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": responses,
 		"pagination": gin.H{
