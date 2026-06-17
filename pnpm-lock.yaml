@@ -60,8 +60,8 @@ importers:
   apps/admin-portal:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.79.0(react@19.2.3))
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@radix-ui/react-avatar':
         specifier: ^1.1.2
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.3))(react@19.2.3)
@@ -208,8 +208,8 @@ importers:
   apps/delivery-portal:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.79.0(react@19.2.3))
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@radix-ui/react-avatar':
         specifier: ^1.1.2
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.3))(react@19.2.3)
@@ -362,7 +362,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mobile-shared
       '@hookform/resolvers':
-        specifier: ^5.0.1
+        specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@react-native-community/netinfo':
         specifier: ~12.0.1
@@ -501,7 +501,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mobile-shared
       '@hookform/resolvers':
-        specifier: ^5.0.1
+        specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@react-native-community/netinfo':
         specifier: ~12.0.1
@@ -646,7 +646,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mobile-shared
       '@hookform/resolvers':
-        specifier: ^5.0.1
+        specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@react-native-async-storage/async-storage':
         specifier: 2.2.0
@@ -815,8 +815,8 @@ importers:
   apps/vendor-portal:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.79.0(react@19.2.3))
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@radix-ui/react-avatar':
         specifier: ^1.1.2
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.3))(react@19.2.3)
@@ -963,8 +963,8 @@ importers:
   apps/web:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.79.0(react@19.2.3))
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@radix-ui/react-accordion':
         specifier: ^1.2.2
         version: 1.2.14(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.3))(react@19.2.3)
@@ -1215,7 +1215,7 @@ importers:
         version: 5.0.14(@types/react@19.2.17)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
     devDependencies:
       '@hookform/resolvers':
-        specifier: ^5.0.1
+        specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.3))
       '@types/react':
         specifier: ^19.2.0
@@ -2457,11 +2457,6 @@ packages:
     resolution: {integrity: sha512-tMXdRCfYVixjuFK+Hk0Q1s38gV9zDiDJfWL3h1rv4Qc39oILCu1TRTDt7+fGUI8K4G1Fj125Hx/ru3azECWTyQ==}
     engines: {node: '>=6'}
     hasBin: true
-
-  '@hookform/resolvers@3.10.0':
-    resolution: {integrity: sha512-79Dv+3mDF7i+2ajj7SkypSKHhl1cbln1OGavqrsF7p6mbUv11xpqpacPsGDCTRvCSjEEIez2ef1NveSVL3b0Ag==}
-    peerDependencies:
-      react-hook-form: ^7.0.0
 
   '@hookform/resolvers@5.4.0':
     resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
@@ -9992,10 +9987,6 @@ snapshots:
       long: 5.3.2
       protobufjs: 7.6.4
       yargs: 17.7.2
-
-  '@hookform/resolvers@3.10.0(react-hook-form@7.79.0(react@19.2.3))':
-    dependencies:
-      react-hook-form: 7.79.0(react@19.2.3)
 
   '@hookform/resolvers@5.4.0(react-hook-form@7.79.0(react@19.2.3))':
     dependencies:
