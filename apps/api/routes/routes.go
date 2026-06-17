@@ -629,6 +629,11 @@ func SetupRouter() *gin.Engine {
 			// Customer wallet — admin view + audited adjustment (#33)
 			admin.GET("/wallet/:userId", adminHandler.GetCustomerWallet)
 			admin.POST("/wallet/:userId/adjust", adminHandler.AdjustWallet)
+
+			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
+			admin.GET("/reviews", adminHandler.AdminListReviews)
+			admin.PUT("/reviews/:id/hide", adminHandler.AdminHideReview)
+			admin.PUT("/reviews/:id/unhide", adminHandler.AdminUnhideReview)
 			admin.POST("/chefs/:id/fssai-override", adminHandler.OverrideFSSAILock)
 			admin.DELETE("/chefs/:id/fssai-override", adminHandler.ClearFSSAILockOverride)
 			admin.GET("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
