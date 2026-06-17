@@ -132,6 +132,16 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// FSSAI hard lockout (#32): an India chef whose food-safety (FSSAI) licence
+	// has lapsed must not take new orders until a renewal is verified — this
+	// protects customers from food prepared under an expired licence and the
+	// platform from the legal/reputational fallout. Customer-facing copy stays
+	// generic (the chef's compliance state is private).
+	if services.IsChefFSSAIExpired(&chef) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen is temporarily unavailable. Please choose another chef."})
+		return
+	}
+
 	// Get menu items and calculate totals
 	var subtotal float64
 	orderItems := make([]models.OrderItem, len(req.Items))

@@ -89,7 +89,17 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 
 	// Chef transfer: subtotal + tax + chef tip (food amount goes directly to chef)
 	chefAmount := order.Subtotal + order.Tax + order.ChefTip
-	if order.Chef.RazorpayAccountID != "" && chefAmount > 0 {
+	// FSSAI hard lockout (#32): withhold the chef's payout when their food-safety
+	// licence has lapsed. The customer is still charged and the platform/driver
+	// are settled; the chef's split stays in the platform account until a verified
+	// renewal lifts the lock. Defense-in-depth — CreateOrder already blocks new
+	// orders for expired chefs, but any path that reaches payment is covered here.
+	chefFSSAIExpired := services.IsChefFSSAIExpired(&order.Chef)
+	if chefFSSAIExpired {
+		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
+			order.OrderNumber, order.Chef.ID, chefAmount)
+	}
+	if order.Chef.RazorpayAccountID != "" && chefAmount > 0 && !chefFSSAIExpired {
 		transfers = append(transfers, services.TransferSpec{
 			Account:  order.Chef.RazorpayAccountID,
 			Amount:   services.ToPaise(chefAmount),
