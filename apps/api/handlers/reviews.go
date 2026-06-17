@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -148,6 +149,32 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	// Update chef's rating stats
 	go updateChefRating(order.ChefID)
 
+	// Per-dish ratings (#145): optional `dishRatings` JSON form field —
+	// [{ "menuItemId": "...", "rating": 1-5 }]. Each rolls up into the dish's
+	// MenuItem.Rating so customers see per-dish scores, not just a chef average.
+	if raw := c.PostForm("dishRatings"); raw != "" {
+		var dishes []struct {
+			MenuItemID string `json:"menuItemId"`
+			Rating     int    `json:"rating"`
+		}
+		if err := json.Unmarshal([]byte(raw), &dishes); err == nil {
+			affected := map[uuid.UUID]bool{}
+			for _, d := range dishes {
+				mid, perr := uuid.Parse(d.MenuItemID)
+				if perr != nil || d.Rating < 1 || d.Rating > 5 {
+					continue
+				}
+				dr := models.DishRating{ReviewID: review.ID, MenuItemID: mid, ChefID: order.ChefID, Rating: d.Rating}
+				if err := database.DB.Create(&dr).Error; err == nil {
+					affected[mid] = true
+				}
+			}
+			for mid := range affected {
+				recomputeMenuItemRating(mid)
+			}
+		}
+	}
+
 	// Reload with customer for response
 	database.DB.Preload("Customer").First(&review, review.ID)
 
@@ -168,6 +195,25 @@ func updateChefRating(chefID uuid.UUID) {
 		Scan(&stats)
 
 	database.DB.Model(&models.ChefProfile{}).Where("id = ?", chefID).
+		Updates(map[string]interface{}{
+			"rating":        stats.AvgRating,
+			"total_reviews": stats.TotalReviews,
+		})
+}
+
+// recomputeMenuItemRating averages a dish's per-dish ratings (#145) into the
+// MenuItem's Rating + TotalReviews, so each dish carries its own score.
+func recomputeMenuItemRating(menuItemID uuid.UUID) {
+	var stats struct {
+		AvgRating    float64
+		TotalReviews int64
+	}
+	database.DB.Model(&models.DishRating{}).
+		Where("menu_item_id = ?", menuItemID).
+		Select("COALESCE(AVG(rating), 0) as avg_rating, COUNT(*) as total_reviews").
+		Scan(&stats)
+
+	database.DB.Model(&models.MenuItem{}).Where("id = ?", menuItemID).
 		Updates(map[string]interface{}{
 			"rating":        stats.AvgRating,
 			"total_reviews": stats.TotalReviews,
