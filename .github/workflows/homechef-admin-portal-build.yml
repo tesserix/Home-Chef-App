@@ -76,6 +76,10 @@ jobs:
 
       - name: Build and push Docker image
         id: build_push
+        # Dependabot PRs can't read repo secrets, so the private @homechef
+        # npm_token is empty and the image build can't pnpm-install. Skip the
+        # Docker build for Dependabot PRs (human PRs + main still build).
+        if: ${{ github.event_name != 'pull_request' || github.actor != 'dependabot[bot]' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -93,7 +97,7 @@ jobs:
             VITE_GOOGLE_CLIENT_ID=849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
-          cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
+          cache-from: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}', steps.cache.outputs.ref) || '' }}
           # cache write needs GHCR auth (skipped on PRs); read-only cache-from still works
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
