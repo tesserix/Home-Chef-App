@@ -66,3 +66,27 @@ func IsChefFSSAIExpired(chef *models.ChefProfile) bool {
 	// Valid through the expiry date; locked from the following day.
 	return time.Now().After(doc.ExpiryDate.AddDate(0, 0, 1))
 }
+
+// ExcludeFSSAILocked is a GORM scope that removes India chefs whose FSSAI licence
+// has lapsed from a chef_profiles query — the set-based mirror of
+// IsChefFSSAIExpired, for efficient list filtering (no per-row N+1 check).
+//
+// A chef is excluded iff PayoutCountry is "IN" AND the MAX expiry across their
+// verified fssai_license documents is before the same (now - 1 day) cutoff that
+// IsChefFSSAIExpired uses. Using MAX (not "any expired doc") is essential: a chef
+// who renewed still has the old, expired document, and must NOT be hidden — their
+// latest verified expiry is in the future.
+//
+// This query and IsChefFSSAIExpired express the identical rule and MUST stay in
+// sync; the unit tests assert both, including the renewal case.
+func ExcludeFSSAILocked(db *gorm.DB) *gorm.DB {
+	cutoff := time.Now().AddDate(0, 0, -1)
+	return db.Where(
+		`NOT (payout_country = ? AND id IN (
+			SELECT chef_id FROM chef_documents
+			WHERE type = ? AND status = ? AND expiry_date IS NOT NULL
+			GROUP BY chef_id HAVING MAX(expiry_date) < ?
+		))`,
+		"IN", models.DocFSSAILicense, models.DocStatusVerified, cutoff,
+	)
+}
