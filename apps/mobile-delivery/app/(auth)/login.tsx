@@ -87,7 +87,7 @@ export default function LoginPage() {
       ],
     });
     if (!cred.identityToken) throw new Error('Apple sign-in failed: no identity token');
-    await signInWithAppleCredential(cred.identityToken, '');
+    await signInWithAppleCredential(cred.identityToken, '', cred.fullName);
     const response = await completeBFFLogin();
     await setAuthResponse(response);
     await completeSignIn();
