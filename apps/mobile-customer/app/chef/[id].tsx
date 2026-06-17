@@ -322,6 +322,12 @@ export default function ChefDetailScreen() {
 
             {/* Cuisine */}
             <Text style={styles.cuisine}>{chef.cuisine}</Text>
+
+            {/* Hygiene / food-safety badge (#35): verified, non-expired FSSAI.
+                Restrained text — trust signal at the point of ordering. */}
+            {chef.foodSafetyBadge ? (
+              <Text style={styles.foodSafe}>✓ Food safety verified</Text>
+            ) : null}
           </View>
 
           {/* Hairline divider */}
@@ -613,6 +619,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 14,
     color: customerColors.charcoal.soft,
+  },
+  // Food-safety badge (#35) — calm trust-green, matches the ChefCard badge.
+  foodSafe: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#15803D',
+    marginTop: 6,
   },
 
   // ── Hairline divider ──────────────────────────────────────────────────────
