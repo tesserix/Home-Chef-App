@@ -145,7 +145,7 @@ export default function ChefDetailScreen() {
         {chef.imageUrl ? (
           <Image
             source={{ uri: chef.imageUrl }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             contentFit="cover"
             placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
             transition={300}
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.soft,
   },
   heroPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: customerColors.surface.soft,
