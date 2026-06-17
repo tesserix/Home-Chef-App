@@ -30,22 +30,24 @@ const (
 
 type ChefDocument struct {
 	ID              uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	ChefID          uuid.UUID      `gorm:"type:uuid;not null;index" json:"chefId"`
-	Type            DocumentType   `gorm:"type:varchar(50);not null;index" json:"type"`
+	ChefID          uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_chef_doc_fssai,priority:3" json:"chefId"`
+	Type            DocumentType   `gorm:"type:varchar(50);not null;index;index:idx_chef_doc_fssai,priority:1" json:"type"`
 	FileName        string         `gorm:"not null" json:"fileName"`
-	FilePath        string         `gorm:"not null" json:"-"`            // GCS object path (never exposed)
-	FileURL         string         `gorm:"-" json:"fileUrl,omitempty"`   // Computed: public URL or signed URL
-	Bucket          string         `gorm:"not null" json:"-"`            // Which bucket (public/private)
+	FilePath        string         `gorm:"not null" json:"-"`          // GCS object path (never exposed)
+	FileURL         string         `gorm:"-" json:"fileUrl,omitempty"` // Computed: public URL or signed URL
+	Bucket          string         `gorm:"not null" json:"-"`          // Which bucket (public/private)
 	ContentType     string         `gorm:"" json:"contentType"`
 	FileSize        int64          `gorm:"" json:"fileSize"`
-	Status          DocumentStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Status          DocumentStatus `gorm:"type:varchar(20);default:'pending';index:idx_chef_doc_fssai,priority:2" json:"status"`
 	RejectionReason string         `gorm:"" json:"rejectionReason,omitempty"`
 	// ExpiryDate is the document's expiry date (nullable — not all document types
 	// have an expiry, and existing rows will have NULL until re-uploaded).
 	// Used by the FSSAI expiry-reminder endpoint.
-	ExpiryDate      *time.Time     `gorm:"" json:"expiryDate,omitempty"`
-	CreatedAt       time.Time      `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt       time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
+	// Composite index idx_chef_doc_fssai (type, status, chef_id, expiry_date)
+	// backs the FSSAI lockout hot path (ExcludeFSSAILocked / IsChefFSSAIExpired).
+	ExpiryDate *time.Time `gorm:"index:idx_chef_doc_fssai,priority:4" json:"expiryDate,omitempty"`
+	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt  time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Chef ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
 }
