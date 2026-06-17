@@ -38,6 +38,7 @@ const CartPage = lazyWithRetry(() => import('@/features/customer/pages/CartPage'
 const CheckoutPage = lazyWithRetry(() => import('@/features/customer/pages/CheckoutPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/customer/pages/OrdersPage'));
 const OrderDetailPage = lazyWithRetry(() => import('@/features/customer/pages/OrderDetailPage'));
+const ReviewPage = lazyWithRetry(() => import('@/features/customer/pages/ReviewPage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/customer/pages/ProfilePage'));
 const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletPage'));
 const SocialFeedPage = lazyWithRetry(() => import('@/features/social/pages/SocialFeedPage'));
@@ -165,6 +166,14 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <OrderDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="orders/:id/review"
+            element={
+              <ProtectedRoute>
+                <ReviewPage />
               </ProtectedRoute>
             }
           />

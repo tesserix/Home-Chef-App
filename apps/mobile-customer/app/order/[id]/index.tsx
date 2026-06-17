@@ -207,6 +207,21 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
+        {/* Leave a review — primary action once the order is delivered (#145). */}
+        {order.status === 'delivered' && (
+          <View style={styles.ctaWrapper}>
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/review`)}
+              accessibilityRole="button"
+              accessibilityLabel="Leave a review for this order"
+            >
+              <View style={styles.trackButton}>
+                <Text style={styles.trackButtonText}>Leave a Review</Text>
+              </View>
+            </Pressable>
+          </View>
+        )}
+
         {/* Items list — clean rows separated by hairline, tabular prices */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Items</Text>
