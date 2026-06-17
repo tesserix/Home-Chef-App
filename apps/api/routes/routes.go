@@ -615,6 +615,7 @@ func SetupRouter() *gin.Engine {
 
 			// Chef management
 			admin.GET("/chefs", adminHandler.GetChefs)
+			admin.GET("/chefs/fssai-locked", adminHandler.GetFSSAILockedChefs)
 			admin.PUT("/chefs/:id/verify", adminHandler.VerifyChef)
 			admin.PUT("/chefs/:id/reject", adminHandler.RejectChef)
 			admin.PUT("/chefs/:id/suspend", adminHandler.SuspendChef)
