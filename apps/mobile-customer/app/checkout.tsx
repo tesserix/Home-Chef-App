@@ -25,6 +25,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
+import { useWallet } from '../hooks/useWallet';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
   useAddressAutocomplete,
@@ -54,6 +55,10 @@ type AddressFormValues = z.infer<typeof addressSchema>;
 // ─── Razorpay payment data shape ─────────────────────────────────────────────
 
 interface RazorpayPaymentData {
+  // "wallet" + paid:true when store credit covers the full total — no gateway sheet.
+  provider?: string;
+  paid?: boolean;
+  walletApplied?: number;
   razorpayOrderId: string;
   razorpayKeyId: string;
   amount: number;
@@ -66,6 +71,10 @@ interface RazorpayPaymentData {
   };
 }
 
+// Wallet-at-checkout (#141) is gated to match the API's WALLET_CHECKOUT_ENABLED;
+// the toggle stays hidden until both the app build and the server enable it.
+const WALLET_CHECKOUT_ENABLED = process.env.EXPO_PUBLIC_WALLET_CHECKOUT_ENABLED === 'true';
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutScreen() {
@@ -73,10 +82,12 @@ export default function CheckoutScreen() {
   const createOrder = useCreateOrder();
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
+  const { data: wallet } = useWallet();
 
   const addresses = addressData?.data ?? [];
 
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,12 +191,23 @@ export default function CheckoutScreen() {
 
       const orderId = orderResult.data.id;
 
-      // Step 2: Create Razorpay payment order (server-side)
+      // Step 2: Create Razorpay payment order (server-side). Pass any wallet
+      // credit to apply (#141); the server clamps it and reduces the charge.
       const paymentResp = await api.post<{ data: RazorpayPaymentData }>(
         `/v1/payments/order/${orderId}/create`,
-        {}
+        walletApplied > 0 ? { walletAmount: walletApplied } : {}
       );
       const paymentData = paymentResp.data.data ?? (paymentResp.data as unknown as RazorpayPaymentData);
+
+      // Full-wallet order: store credit covered the whole total, so the server
+      // already marked it paid — there is no gateway sheet. Clear the cart and go
+      // straight to the success result.
+      if (paymentData.provider === 'wallet' || paymentData.paid) {
+        useCartStore.getState().clearCart();
+        setIsLoading(false);
+        router.replace(`/payment/result?order_id=${orderId}&razorpay_payment_id=wallet`);
+        return;
+      }
 
       // Step 3: Hand off to the in-app Razorpay checkout (WebView). That screen
       // opens the payment sheet, verifies the result server-side, and routes to
@@ -235,6 +257,13 @@ export default function CheckoutScreen() {
   const subtotal = cartStore.total();
   const deliveryFee = 0; // free for v1
   const total = subtotal + deliveryFee;
+
+  // Wallet store-credit applied at checkout (#141). Apply as much as the balance
+  // and total allow; the remaining payable is what the gateway charges.
+  const walletBalance = wallet?.balance ?? 0;
+  const walletAvailable = WALLET_CHECKOUT_ENABLED && walletBalance > 0;
+  const walletApplied = applyWallet ? Math.min(walletBalance, total) : 0;
+  const payable = Math.max(0, total - walletApplied);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -552,10 +581,43 @@ export default function CheckoutScreen() {
               {/* "Free" in success green per spec */}
               <Text className="text-sm text-success font-medium">Free</Text>
             </View>
+
+            {/* Wallet store-credit toggle (#141) — only when the feature is live
+                and the customer has a balance. */}
+            {walletAvailable && (
+              <Pressable
+                onPress={() => setApplyWallet((v) => !v)}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: applyWallet }}
+                accessibilityLabel="Apply wallet credit"
+                className="flex-row items-center justify-between"
+              >
+                <View className="flex-row items-center gap-2">
+                  <View
+                    className={`h-5 w-5 items-center justify-center rounded border ${
+                      applyWallet ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                    }`}
+                  >
+                    {applyWallet && <Check size={14} color="#FFFFFF" />}
+                  </View>
+                  <Text className="text-sm text-charcoal">
+                    Use wallet credit (₹{walletBalance.toFixed(2)})
+                  </Text>
+                </View>
+                {applyWallet && (
+                  <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
+                    −₹{walletApplied.toFixed(2)}
+                  </Text>
+                )}
+              </Pressable>
+            )}
+
             <View className="flex-row justify-between pt-1 border-t border-hairline">
-              <Text className="text-base font-medium text-charcoal">Total</Text>
+              <Text className="text-base font-medium text-charcoal">
+                {walletApplied > 0 ? 'To pay' : 'Total'}
+              </Text>
               <Text className="text-base font-medium text-charcoal" style={{ fontVariant: ['tabular-nums'] }}>
-                ₹{total.toFixed(2)}
+                ₹{payable.toFixed(2)}
               </Text>
             </View>
           </View>
@@ -683,7 +745,7 @@ export default function CheckoutScreen() {
                 className={`text-base font-semibold ${canPlaceOrder ? 'text-canvas' : 'text-charcoal-soft'}`}
                 style={canPlaceOrder ? { fontVariant: ['tabular-nums'] } : undefined}
               >
-                {isLoading ? 'Processing...' : `Place Order · ₹${total.toFixed(2)}`}
+                {isLoading ? 'Processing...' : `Place Order · ₹${payable.toFixed(2)}`}
               </Text>
             )}
           </View>
