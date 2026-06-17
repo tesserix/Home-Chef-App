@@ -80,16 +80,16 @@ func (h *SubscriptionHandler) GetAvailablePlans(c *gin.Context) {
 			"currency": planCfg.Currency,
 		},
 		{
-			"interval":        "quarterly",
-			"amount":          planCfg.QuarterlyPrice,
-			"currency":        planCfg.Currency,
-			"savingsPercent":  models.RoundAmount((1 - planCfg.QuarterlyPrice/(planCfg.MonthlyPrice*3)) * 100),
+			"interval":       "quarterly",
+			"amount":         planCfg.QuarterlyPrice,
+			"currency":       planCfg.Currency,
+			"savingsPercent": models.RoundAmount((1 - planCfg.QuarterlyPrice/(planCfg.MonthlyPrice*3)) * 100),
 		},
 		{
-			"interval":        "yearly",
-			"amount":          planCfg.YearlyPrice,
-			"currency":        planCfg.Currency,
-			"savingsPercent":  models.RoundAmount((1 - planCfg.YearlyPrice/(planCfg.MonthlyPrice*12)) * 100),
+			"interval":       "yearly",
+			"amount":         planCfg.YearlyPrice,
+			"currency":       planCfg.Currency,
+			"savingsPercent": models.RoundAmount((1 - planCfg.YearlyPrice/(planCfg.MonthlyPrice*12)) * 100),
 		},
 	}
 
@@ -208,16 +208,14 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 		"refund_amount": refundAmount,
 	})
 
-	// Publish event
-	go func() {
-		if err := services.PublishEvent(services.SubjectSubscriptionCancelled, "subscription.cancelled", userID, map[string]interface{}{
-			"subscription_id": sub.ID.String(),
-			"reason":          req.Reason,
-			"refund_amount":   refundAmount,
-		}); err != nil {
-			log.Printf("Failed to publish subscription cancelled event: %v", err)
-		}
-	}()
+	// Durable event publication via the transactional outbox.
+	if err := services.EnqueueEvent(database.DB, services.SubjectSubscriptionCancelled, "subscription.cancelled", userID, map[string]interface{}{
+		"subscription_id": sub.ID.String(),
+		"reason":          req.Reason,
+		"refund_amount":   refundAmount,
+	}); err != nil {
+		log.Printf("failed to enqueue subscription.cancelled event: %v", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"subscription": sub.ToResponse(),

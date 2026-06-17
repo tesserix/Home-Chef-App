@@ -188,10 +188,12 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		SubmittedData: string(submittedData),
 	}
 	database.DB.Create(&approvalReq)
-	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(), "type": string(approvalReq.Type),
 		"chef_id": chef.ID.String(), "title": approvalReq.Title,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue approval.created event: %v", err)
+	}
 
 	c.JSON(http.StatusCreated, gin.H{"item": item})
 }
@@ -316,10 +318,12 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 			SubmittedData: string(submittedData),
 		}
 		database.DB.Create(&approvalReq)
-		services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+		if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 			"approval_id": approvalReq.ID.String(), "type": string(approvalReq.Type),
 			"chef_id": chef.ID.String(), "title": approvalReq.Title,
-		})
+		}); err != nil {
+			log.Printf("failed to enqueue approval.created event: %v", err)
+		}
 	}
 
 	// Reload to return the updated item
@@ -698,11 +702,11 @@ type CreateMenuItemRequest struct {
 	Serves       int      `json:"serves"`
 	SpiceLevel   int      `json:"spiceLevel"`
 	// IsVeg is nullable: send true/false to set, omit/null to leave unset.
-	IsVeg        *bool    `json:"isVeg"`
-	IsFeatured   bool     `json:"isFeatured"`
+	IsVeg      *bool `json:"isVeg"`
+	IsFeatured bool  `json:"isFeatured"`
 	// HSN/SAC code for GST classification. Optional — empty string
 	// causes the DB default ("996331", restaurant services) to apply.
-	HSN          string   `json:"hsn"`
+	HSN string `json:"hsn"`
 }
 
 type UpdateMenuItemRequest struct {
@@ -722,10 +726,10 @@ type UpdateMenuItemRequest struct {
 	// IsVeg: send true/false to set, omit to leave unchanged.
 	// Note: to explicitly clear the flag (reset to "not set"), the API would
 	// need a tri-state sentinel — deferred for v2.
-	IsVeg        *bool     `json:"isVeg"`
-	IsAvailable  *bool     `json:"isAvailable"`
-	HSN          *string   `json:"hsn"`
-	IsFeatured   *bool     `json:"isFeatured"`
+	IsVeg       *bool   `json:"isVeg"`
+	IsAvailable *bool   `json:"isAvailable"`
+	HSN         *string `json:"hsn"`
+	IsFeatured  *bool   `json:"isFeatured"`
 }
 
 type CreateCategoryRequest struct {

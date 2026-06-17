@@ -16,6 +16,7 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -735,32 +736,31 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	order.Status = models.OrderStatus(req.Status)
-	if err := database.DB.Save(&order).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
-		return
+
+	// Determine which subject to publish to based on status.
+	subject := services.SubjectOrderUpdated
+	if order.Status == models.OrderStatusDelivered {
+		subject = services.SubjectOrderDelivered
 	}
 
-	// Publish order status update event
-	go func() {
-		orderEvent := services.OrderEvent{
+	// Persist the status change and stage the event atomically (transactional
+	// outbox) so the status update is delivered durably by the relay (#131).
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		return services.EnqueueOrderEvent(tx, subject, services.OrderEvent{
 			OrderID:     order.ID,
 			OrderNumber: order.OrderNumber,
 			CustomerID:  order.CustomerID,
 			ChefID:      order.ChefID,
 			Status:      string(order.Status),
 			Total:       order.Total,
-		}
-
-		// Determine which subject to publish to based on status
-		subject := services.SubjectOrderUpdated
-		if order.Status == models.OrderStatusDelivered {
-			subject = services.SubjectOrderDelivered
-		}
-
-		if err := services.PublishOrderEvent(subject, orderEvent); err != nil {
-			log.Printf("Failed to publish order status update event: %v", err)
-		}
-	}()
+		})
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
+		return
+	}
 
 	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
 	// the request path; idempotent so repeated "ready" updates are safe. A

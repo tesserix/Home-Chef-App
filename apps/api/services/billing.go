@@ -140,17 +140,15 @@ func CreateTrialSubscription(userID uuid.UUID, subType models.SubscriberType, co
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 
-	// Publish NATS event
-	go func() {
-		if err := PublishEvent(SubjectSubscriptionCreated, "subscription.created", userID, map[string]interface{}{
-			"subscription_id": sub.ID.String(),
-			"subscriber_type": string(subType),
-			"country_code":    sub.CountryCode,
-			"trial_ends_at":   sub.TrialEndsAt.Format(time.RFC3339),
-		}); err != nil {
-			log.Printf("Failed to publish subscription created event: %v", err)
-		}
-	}()
+	// Durable event publication via the transactional outbox.
+	if err := EnqueueEvent(database.DB, SubjectSubscriptionCreated, "subscription.created", userID, map[string]interface{}{
+		"subscription_id": sub.ID.String(),
+		"subscriber_type": string(subType),
+		"country_code":    sub.CountryCode,
+		"trial_ends_at":   sub.TrialEndsAt.Format(time.RFC3339),
+	}); err != nil {
+		log.Printf("failed to enqueue subscription.created event: %v", err)
+	}
 
 	return &sub, nil
 }
@@ -233,17 +231,15 @@ func CheckEarningsThreshold(subscriptionID uuid.UUID) (*models.SubscriptionInvoi
 			database.DB.Model(&sub).Update("billing_starts_at", &now)
 		}
 
-		// Publish threshold met event
-		go func() {
-			if pubErr := PublishEvent(SubjectEarningsThresholdMet, "subscription.earnings.threshold_met", sub.UserID, map[string]interface{}{
-				"subscription_id": sub.ID.String(),
-				"cycle_earnings":  cycleEarnings,
-				"threshold":       planCfg.MinEarningsThreshold,
-				"invoice_id":      invoice.ID.String(),
-			}); pubErr != nil {
-				log.Printf("Failed to publish earnings threshold met event: %v", pubErr)
-			}
-		}()
+		// Durable event publication via the transactional outbox.
+		if err := EnqueueEvent(database.DB, SubjectEarningsThresholdMet, "subscription.earnings.threshold_met", sub.UserID, map[string]interface{}{
+			"subscription_id": sub.ID.String(),
+			"cycle_earnings":  cycleEarnings,
+			"threshold":       planCfg.MinEarningsThreshold,
+			"invoice_id":      invoice.ID.String(),
+		}); err != nil {
+			log.Printf("failed to enqueue subscription.earnings.threshold_met event: %v", err)
+		}
 
 		return invoice, nil
 	}
@@ -278,18 +274,16 @@ func GenerateInvoice(sub *models.Subscription, cycleEarnings float64) (*models.S
 		return nil, fmt.Errorf("failed to create invoice: %w", err)
 	}
 
-	// Publish event
-	go func() {
-		if err := PublishEvent(SubjectSubscriptionInvoiceCreated, "subscription.invoice.created", sub.UserID, map[string]interface{}{
-			"subscription_id": sub.ID.String(),
-			"invoice_id":      invoice.ID.String(),
-			"invoice_number":  invoice.InvoiceNumber,
-			"total_amount":    invoice.TotalAmount,
-			"currency":        invoice.Currency,
-		}); err != nil {
-			log.Printf("Failed to publish invoice created event: %v", err)
-		}
-	}()
+	// Durable event publication via the transactional outbox.
+	if err := EnqueueEvent(database.DB, SubjectSubscriptionInvoiceCreated, "subscription.invoice.created", sub.UserID, map[string]interface{}{
+		"subscription_id": sub.ID.String(),
+		"invoice_id":      invoice.ID.String(),
+		"invoice_number":  invoice.InvoiceNumber,
+		"total_amount":    invoice.TotalAmount,
+		"currency":        invoice.Currency,
+	}); err != nil {
+		log.Printf("failed to enqueue subscription.invoice.created event: %v", err)
+	}
 
 	return &invoice, nil
 }
@@ -367,16 +361,14 @@ func TransitionTrialToActive(subscriptionID uuid.UUID) error {
 		return fmt.Errorf("failed to transition subscription: %w", err)
 	}
 
-	// Publish event
-	go func() {
-		if err := PublishEvent(SubjectSubscriptionActivated, "subscription.activated", sub.UserID, map[string]interface{}{
-			"subscription_id":      sub.ID.String(),
-			"current_period_start": now.Format(time.RFC3339),
-			"current_period_end":   periodEnd.Format(time.RFC3339),
-		}); err != nil {
-			log.Printf("Failed to publish subscription activated event: %v", err)
-		}
-	}()
+	// Durable event publication via the transactional outbox.
+	if err := EnqueueEvent(database.DB, SubjectSubscriptionActivated, "subscription.activated", sub.UserID, map[string]interface{}{
+		"subscription_id":      sub.ID.String(),
+		"current_period_start": now.Format(time.RFC3339),
+		"current_period_end":   periodEnd.Format(time.RFC3339),
+	}); err != nil {
+		log.Printf("failed to enqueue subscription.activated event: %v", err)
+	}
 
 	return nil
 }

@@ -261,6 +261,10 @@ func Migrate() error {
 		// Chat
 		&models.ChatRoom{},
 		&models.ChatMessage{},
+
+		// Reliable event backbone: transactional outbox + consumer idempotency
+		&models.OutboxEvent{},
+		&models.ProcessedEvent{},
 	)
 
 	if err != nil {

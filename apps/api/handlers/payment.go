@@ -15,6 +15,7 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"gorm.io/gorm"
 )
 
 // Currency resolution lives in services.CurrencyForCountry; services.ToMinor
@@ -31,10 +32,11 @@ func NewPaymentHandler() *PaymentHandler {
 // CreateOrderPayment creates a Razorpay order with Route transfers for an order.
 //
 // Payment flow:
-//   Customer pays total → Razorpay splits automatically:
-//     - Chef gets: Subtotal + ChefTip (food cost + chef tip)
-//     - Driver gets: DeliveryFee + DriverTip (delivery fee + driver tip)
-//     - Fe3dr gets: ₹0 from orders (revenue comes only from subscriptions)
+//
+//	Customer pays total → Razorpay splits automatically:
+//	  - Chef gets: Subtotal + ChefTip (food cost + chef tip)
+//	  - Driver gets: DeliveryFee + DriverTip (delivery fee + driver tip)
+//	  - Fe3dr gets: ₹0 from orders (revenue comes only from subscriptions)
 //
 // POST /payments/order/:orderId/create
 func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
@@ -334,20 +336,28 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	database.DB.Model(order).Updates(map[string]interface{}{
-		"payment_status":      models.PaymentCompleted,
-		"payment_method":      payment.Method,
-		"razorpay_payment_id": paymentID,
-	})
-
-	if err := services.PublishEvent("orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
-		"order_id":     order.ID.String(),
-		"order_number": order.OrderNumber,
-		"amount":       services.FromPaise(payment.Amount),
-		"method":       payment.Method,
-		"provider":     "razorpay",
+	// Mark the order paid and stage the order.paid event atomically (transactional
+	// outbox). Payment already captured at the gateway, so a DB hiccup must not
+	// 500 the client — it's logged + sent to Sentry and the reconciliation cron
+	// catches any drift.
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(order).Updates(map[string]interface{}{
+			"payment_status":      models.PaymentCompleted,
+			"payment_method":      payment.Method,
+			"razorpay_payment_id": paymentID,
+		}).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
+			"order_id":     order.ID.String(),
+			"order_number": order.OrderNumber,
+			"amount":       services.FromPaise(payment.Amount),
+			"method":       payment.Method,
+			"provider":     "razorpay",
+		})
 	}); err != nil {
-		log.Printf("Failed to publish order paid event: %v", err)
+		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
+		services.CaptureBackgroundError(err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
@@ -381,24 +391,30 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 		return
 	}
 
-	database.DB.Model(order).Updates(map[string]interface{}{
-		"payment_status": models.PaymentCompleted,
-		"payment_method": "card",
-	})
-
 	eventCurrency := strings.ToLower(order.Currency)
 	if eventCurrency == "" {
 		eventCurrency = "inr"
 	}
-	if err := services.PublishEvent("orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
-		"order_id":     order.ID.String(),
-		"order_number": order.OrderNumber,
-		"amount":       services.FromMinor(pi.Amount, eventCurrency),
-		"method":       "card",
-		"provider":     "stripe",
-		"currency":     order.Currency,
+
+	// Mark paid + stage the order.paid event atomically (transactional outbox).
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(order).Updates(map[string]interface{}{
+			"payment_status": models.PaymentCompleted,
+			"payment_method": "card",
+		}).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
+			"order_id":     order.ID.String(),
+			"order_number": order.OrderNumber,
+			"amount":       services.FromMinor(pi.Amount, eventCurrency),
+			"method":       "card",
+			"provider":     "stripe",
+			"currency":     order.Currency,
+		})
 	}); err != nil {
-		log.Printf("Failed to publish order paid event: %v", err)
+		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
+		services.CaptureBackgroundError(err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
@@ -490,25 +506,31 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			return
 		}
 		now := time.Now()
-		database.DB.Model(&order).Updates(map[string]interface{}{
-			"payment_status":      models.PaymentRefunded,
-			"status":              models.OrderStatusRefunded,
-			"refund_id":           "wallet:" + txn.ID.String(),
-			"refund_amount":       refundAmount,
-			"refund_reason":       req.Reason,
-			"refund_initiated_by": initiatedBy,
-			"refunded_at":         &now,
-		})
+		// Persist the refund and stage the order.refunded event atomically.
+		if err := database.DB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&order).Updates(map[string]interface{}{
+				"payment_status":      models.PaymentRefunded,
+				"status":              models.OrderStatusRefunded,
+				"refund_id":           "wallet:" + txn.ID.String(),
+				"refund_amount":       refundAmount,
+				"refund_reason":       req.Reason,
+				"refund_initiated_by": initiatedBy,
+				"refunded_at":         &now,
+			}).Error; err != nil {
+				return err
+			}
+			return services.EnqueueEvent(tx, "orders.refunded", "order.refunded", userID, map[string]interface{}{
+				"order_id": order.ID.String(), "order_number": order.OrderNumber,
+				"refund_amount": refundAmount, "reason": req.Reason, "initiated_by": initiatedBy,
+				"refund_id": "wallet:" + txn.ID.String(), "provider": "wallet",
+			})
+		}); err != nil {
+			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, err)
+			services.CaptureBackgroundError(err)
+		}
 		services.LogSystemAudit(c, "order.refund.to_wallet", "order", order.ID.String(), nil, map[string]any{
 			"amount": refundAmount, "walletTxnId": txn.ID.String(), "reason": req.Reason, "initiatedBy": initiatedBy,
 		})
-		if err := services.PublishEvent("orders.refunded", "order.refunded", userID, map[string]interface{}{
-			"order_id": order.ID.String(), "order_number": order.OrderNumber,
-			"refund_amount": refundAmount, "reason": req.Reason, "initiated_by": initiatedBy,
-			"refund_id": "wallet:" + txn.ID.String(), "provider": "wallet",
-		}); err != nil {
-			log.Printf("Failed to publish order refunded event: %v", err)
-		}
 		c.JSON(http.StatusOK, gin.H{
 			"message":             "Refund credited to wallet",
 			"refundAmount":        refundAmount,
@@ -591,26 +613,31 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	}
 
 	now := time.Now()
-	database.DB.Model(&order).Updates(map[string]interface{}{
-		"payment_status":      models.PaymentRefunded,
-		"status":              models.OrderStatusRefunded,
-		"refund_id":           refundID,
-		"refund_amount":       refundAmount,
-		"refund_reason":       req.Reason,
-		"refund_initiated_by": initiatedBy,
-		"refunded_at":         &now,
-	})
-
-	if err := services.PublishEvent("orders.refunded", "order.refunded", userID, map[string]interface{}{
-		"order_id":      order.ID.String(),
-		"order_number":  order.OrderNumber,
-		"refund_amount": refundAmount,
-		"reason":        req.Reason,
-		"initiated_by":  initiatedBy,
-		"refund_id":     refundID,
-		"provider":      provider,
+	// Persist the refund and stage the order.refunded event atomically.
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&order).Updates(map[string]interface{}{
+			"payment_status":      models.PaymentRefunded,
+			"status":              models.OrderStatusRefunded,
+			"refund_id":           refundID,
+			"refund_amount":       refundAmount,
+			"refund_reason":       req.Reason,
+			"refund_initiated_by": initiatedBy,
+			"refunded_at":         &now,
+		}).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, "orders.refunded", "order.refunded", userID, map[string]interface{}{
+			"order_id":      order.ID.String(),
+			"order_number":  order.OrderNumber,
+			"refund_amount": refundAmount,
+			"reason":        req.Reason,
+			"initiated_by":  initiatedBy,
+			"refund_id":     refundID,
+			"provider":      provider,
+		})
 	}); err != nil {
-		log.Printf("Failed to publish order refunded event: %v", err)
+		log.Printf("Failed to persist refund + event for order %s: %v", order.ID, err)
+		services.CaptureBackgroundError(err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -824,8 +851,8 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 	}
 
 	var event struct {
-		ID   string          `json:"id"`
-		Type string          `json:"type"`
+		ID   string `json:"id"`
+		Type string `json:"type"`
 		Data struct {
 			Object json.RawMessage `json:"object"`
 		} `json:"data"`
@@ -976,4 +1003,3 @@ func (h *PaymentHandler) handleStripeChargeRefunded(obj json.RawMessage) {
 			"refunded_at": &now,
 		})
 }
-

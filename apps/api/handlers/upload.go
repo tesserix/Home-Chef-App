@@ -29,7 +29,7 @@ func NewUploadHandler() *UploadHandler {
 
 // chef_profiles.business_name carries a unique index, so the doc-upload
 // placeholder cannot reuse the empty string — two concurrent users would
-// otherwise collide on `''` and the second upload would fail. We embed the
+// otherwise collide on `”` and the second upload would fail. We embed the
 // userID so each placeholder is unique-per-user; updateOnboarding overwrites
 // it with the real kitchen name on submit.
 const draftBusinessNamePrefix = "__draft__"
@@ -193,12 +193,14 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 			Update("status", models.ApprovalCancelled)
 		database.DB.Create(&approvalReq)
 
-		services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+		if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 			"approval_id": approvalReq.ID.String(),
 			"type":        string(approvalReq.Type),
 			"chef_id":     chef.ID.String(),
 			"title":       approvalReq.Title,
-		})
+		}); err != nil {
+			log.Printf("failed to enqueue approval.created event: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, doc.ToResponse())
@@ -467,27 +469,27 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 		"approvalStatus": approvalStatus,
 		"adminNotes":     approvalNotes,
 		"profile": gin.H{
-			"businessName":  wireBusinessName,
-			"description":   chef.Description,
-			"cuisines":      chef.Cuisines,
-			"specialties":   chef.Specialties,
-			"profileImage":  chef.ProfileImage,
-			"bannerImage":   chef.BannerImage,
-			"kitchenPhotos": chef.KitchenPhotos,
-			"prepTime":      chef.PrepTime,
-			"serviceRadius": chef.ServiceRadius,
-			"minimumOrder":  chef.MinimumOrder,
+			"businessName":   wireBusinessName,
+			"description":    chef.Description,
+			"cuisines":       chef.Cuisines,
+			"specialties":    chef.Specialties,
+			"profileImage":   chef.ProfileImage,
+			"bannerImage":    chef.BannerImage,
+			"kitchenPhotos":  chef.KitchenPhotos,
+			"prepTime":       chef.PrepTime,
+			"serviceRadius":  chef.ServiceRadius,
+			"minimumOrder":   chef.MinimumOrder,
 			"deliveryRadius": chef.DeliveryRadius,
-			"addressLine1":  chef.AddressLine1,
-			"addressLine2":  chef.AddressLine2,
-			"city":          chef.City,
-			"state":         chef.State,
-			"postalCode":    chef.PostalCode,
-			"latitude":      chef.Latitude,
-			"longitude":     chef.Longitude,
-			"fullName":      chef.User.FirstName + " " + chef.User.LastName,
-			"email":         chef.User.Email,
-			"phone":         chef.User.Phone,
+			"addressLine1":   chef.AddressLine1,
+			"addressLine2":   chef.AddressLine2,
+			"city":           chef.City,
+			"state":          chef.State,
+			"postalCode":     chef.PostalCode,
+			"latitude":       chef.Latitude,
+			"longitude":      chef.Longitude,
+			"fullName":       chef.User.FirstName + " " + chef.User.LastName,
+			"email":          chef.User.Email,
+			"phone":          chef.User.Phone,
 		},
 	})
 }
@@ -554,20 +556,20 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 	}
 
 	chef := models.ChefProfile{
-		UserID:             userID,
-		BusinessName:       req.BusinessName,
-		Description:        req.Description,
-		Cuisines:           pq.StringArray(req.Cuisines),
-		Specialties:        pq.StringArray(req.Specialties),
-		PrepTime:           req.PrepTime,
-		MinimumOrder:       req.MinimumOrder,
-		DeliveryRadius:     req.ServiceRadius,
-		ServiceRadius:      req.ServiceRadius,
-		AddressLine1:       req.KitchenAddress.Line1,
-		AddressLine2:       req.KitchenAddress.Line2,
-		City:               req.KitchenAddress.City,
-		State:              req.KitchenAddress.State,
-		PostalCode:         req.KitchenAddress.PostalCode,
+		UserID:         userID,
+		BusinessName:   req.BusinessName,
+		Description:    req.Description,
+		Cuisines:       pq.StringArray(req.Cuisines),
+		Specialties:    pq.StringArray(req.Specialties),
+		PrepTime:       req.PrepTime,
+		MinimumOrder:   req.MinimumOrder,
+		DeliveryRadius: req.ServiceRadius,
+		ServiceRadius:  req.ServiceRadius,
+		AddressLine1:   req.KitchenAddress.Line1,
+		AddressLine2:   req.KitchenAddress.Line2,
+		City:           req.KitchenAddress.City,
+		State:          req.KitchenAddress.State,
+		PostalCode:     req.KitchenAddress.PostalCode,
 		// Persist the regulatory IDs as structured columns. Previously only
 		// captured in the approval submittedData JSON blob (audit-only),
 		// which left admin queries + Wave 3 invoicing without a queryable
@@ -643,13 +645,15 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		return
 	}
 
-	// Fire-and-forget event publication outside the transaction.
-	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+	// Durable event publication via the transactional outbox.
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(),
 		"type":        string(approvalReq.Type),
 		"chef_id":     chef.ID.String(),
 		"title":       approvalReq.Title,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue approval.created event: %v", err)
+	}
 
 	log.Printf("[onboarding] created user=%s chef=%s approval=%s", userID, chef.ID, approvalReq.ID)
 	c.JSON(http.StatusOK, gin.H{
@@ -757,12 +761,14 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		return
 	}
 
-	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", chef.UserID, map[string]interface{}{
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", chef.UserID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(),
 		"type":        string(approvalReq.Type),
 		"chef_id":     chef.ID.String(),
 		"title":       approvalReq.Title,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue approval.created event: %v", err)
+	}
 
 	log.Printf("[onboarding] updated user=%s chef=%s approval=%s", chef.UserID, chef.ID, approvalReq.ID)
 	c.JSON(http.StatusOK, gin.H{
@@ -962,8 +968,8 @@ type OnboardingRequest struct {
 	// GSTIN is optional — chefs below the GST threshold don't need one.
 	// When provided, persisted to chef_profiles.gstin and printed on
 	// customer invoices alongside the FSSAI number.
-	GSTIN          string                  `json:"gstin"`
-	AcceptedTerms  bool                    `json:"acceptedTerms"`
+	GSTIN         string `json:"gstin"`
+	AcceptedTerms bool   `json:"acceptedTerms"`
 }
 
 type KitchenAddressReq struct {
@@ -1075,9 +1081,9 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 		// at read time by signing file_path), so there is no file_url column.
 		// Writing it via a raw update map throws SQLSTATE 42703 and fails the
 		// whole replace. For public docs the URL already lives in file_path.
-		"bucket":       newBucket,
-		"content_type": contentType,
-		"file_size":    header.Size,
+		"bucket":           newBucket,
+		"content_type":     contentType,
+		"file_size":        header.Size,
 		"status":           models.DocStatusPending,
 		"rejection_reason": "",
 	}
@@ -1113,13 +1119,15 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	}
 	database.DB.Create(&approvalReq)
 
-	services.PublishEvent(services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
+	if err := services.EnqueueEvent(database.DB, services.SubjectApprovalCreated, "approval.created", userID, map[string]interface{}{
 		"approval_id": approvalReq.ID.String(),
 		"type":        string(approvalReq.Type),
 		"chef_id":     chef.ID.String(),
 		"title":       approvalReq.Title,
 		"replaced":    true,
-	})
+	}); err != nil {
+		log.Printf("failed to enqueue approval.created event: %v", err)
+	}
 
 	// Refresh + return so the client sees the new expiry + status.
 	_ = database.DB.First(&doc, "id = ?", doc.ID).Error

@@ -18,6 +18,7 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"gorm.io/gorm"
 )
 
 // wsUpgrader upgrades HTTP connections to WebSocket.
@@ -26,6 +27,7 @@ import (
 // We accept the request when EITHER:
 //   - Origin is empty (native client), OR
 //   - Origin matches the API CORS allowlist (browser).
+//
 // Anything else is rejected to prevent cross-site WS hijacking.
 var wsUpgrader = websocket.Upgrader{
 	CheckOrigin:     allowedWSOrigin,
@@ -69,16 +71,16 @@ func NewOrderHandler() *OrderHandler {
 
 // CreateOrderRequest represents the order creation payload
 type CreateOrderRequest struct {
-	ChefID               uuid.UUID            `json:"chefId" binding:"required"`
-	Items                []CreateOrderItem    `json:"items" binding:"required,min=1"`
-	DeliveryAddressID    *uuid.UUID           `json:"deliveryAddressId"`
+	ChefID               uuid.UUID             `json:"chefId" binding:"required"`
+	Items                []CreateOrderItem     `json:"items" binding:"required,min=1"`
+	DeliveryAddressID    *uuid.UUID            `json:"deliveryAddressId"`
 	DeliveryAddress      *CreateAddressRequest `json:"deliveryAddress"`
-	DeliveryInstructions string               `json:"deliveryInstructions"`
-	SpecialInstructions  string               `json:"specialInstructions"`
-	Tip                  float64              `json:"tip"`
-	PromoCode            string               `json:"promoCode"`
-	PaymentMethodID      *uuid.UUID           `json:"paymentMethodId"`
-	ScheduledFor         *time.Time           `json:"scheduledFor"`
+	DeliveryInstructions string                `json:"deliveryInstructions"`
+	SpecialInstructions  string                `json:"specialInstructions"`
+	Tip                  float64               `json:"tip"`
+	PromoCode            string                `json:"promoCode"`
+	PaymentMethodID      *uuid.UUID            `json:"paymentMethodId"`
+	ScheduledFor         *time.Time            `json:"scheduledFor"`
 }
 
 type CreateOrderItem struct {
@@ -88,11 +90,11 @@ type CreateOrderItem struct {
 }
 
 type CreateAddressRequest struct {
-	Line1      string  `json:"line1" binding:"required"`
-	Line2      string  `json:"line2"`
-	City       string  `json:"city" binding:"required"`
-	State      string  `json:"state" binding:"required"`
-	PostalCode string  `json:"postalCode" binding:"required"`
+	Line1      string `json:"line1" binding:"required"`
+	Line2      string `json:"line2"`
+	City       string `json:"city" binding:"required"`
+	State      string `json:"state" binding:"required"`
+	PostalCode string `json:"postalCode" binding:"required"`
 	// ISO-3166 alpha-2. Optional on the wire — drives per-country tax
 	// lookup, so the frontend should pass it when known. Falls back to
 	// the saved address's country or India when absent.
@@ -384,31 +386,35 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// Clear user's cart for this chef
 	tx.Where("user_id = ? AND chef_id = ?", userID, chef.ID).Delete(&models.Cart{})
 
+	// Stage order events in the SAME transaction (transactional outbox) so they
+	// can never be lost between commit and publish (#131). The relay publishes
+	// them to JetStream with PubAck after commit.
+	orderEvent := services.OrderEvent{
+		OrderID:     order.ID,
+		OrderNumber: order.OrderNumber,
+		CustomerID:  order.CustomerID,
+		ChefID:      order.ChefID,
+		Status:      string(order.Status),
+		Total:       order.Total,
+	}
+	if err := services.EnqueueOrderEvent(tx, services.SubjectOrderCreated, orderEvent); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record order event"})
+		return
+	}
+	if err := services.EnqueueOrderEvent(tx, services.SubjectChefNewOrder, orderEvent); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record order event"})
+		return
+	}
+
 	tx.Commit()
 
 	// Load the created order with items
 	database.DB.Preload("Items").First(&order, order.ID)
 
-	// Publish order created event
-	go func() {
-		orderEvent := services.OrderEvent{
-			OrderID:     order.ID,
-			OrderNumber: order.OrderNumber,
-			CustomerID:  order.CustomerID,
-			ChefID:      order.ChefID,
-			Status:      string(order.Status),
-			Total:       order.Total,
-		}
-		if err := services.PublishOrderEvent(services.SubjectOrderCreated, orderEvent); err != nil {
-			log.Printf("Failed to publish order created event: %v", err)
-		}
-		// Also notify the chef
-		if err := services.PublishOrderEvent(services.SubjectChefNewOrder, orderEvent); err != nil {
-			log.Printf("Failed to publish chef new order event: %v", err)
-		}
-		// Record metrics
-		middleware.RecordOrder(string(order.Status), order.Total)
-	}()
+	// Record metrics (events now flow durably via the outbox relay)
+	middleware.RecordOrder(string(order.Status), order.Total)
 
 	c.JSON(http.StatusCreated, order.ToResponse())
 }
@@ -501,25 +507,24 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	order.CancelledAt = &now
 	order.CancelReason = req.Reason
 
-	if err := database.DB.Save(&order).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel order"})
-		return
-	}
-
-	// Publish order cancelled event
-	go func() {
-		orderEvent := services.OrderEvent{
+	// Persist the cancellation and stage the event atomically (transactional
+	// outbox): the order.cancelled event is delivered durably by the relay (#131).
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		return services.EnqueueOrderEvent(tx, services.SubjectOrderCancelled, services.OrderEvent{
 			OrderID:     order.ID,
 			OrderNumber: order.OrderNumber,
 			CustomerID:  order.CustomerID,
 			ChefID:      order.ChefID,
 			Status:      string(order.Status),
 			Total:       order.Total,
-		}
-		if err := services.PublishOrderEvent(services.SubjectOrderCancelled, orderEvent); err != nil {
-			log.Printf("Failed to publish order cancelled event: %v", err)
-		}
-	}()
+		})
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel order"})
+		return
+	}
 
 	// Cancel any booked 3PL delivery (no-op if none exists yet). Off the
 	// response path; failure must not fail the order cancellation.

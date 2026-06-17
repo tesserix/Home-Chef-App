@@ -112,11 +112,11 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 			Amount: amountPaise,
 			Speed:  "normal",
 			Notes: map[string]string{
-				"order_id":    order.ID.String(),
-				"order_no":    order.OrderNumber,
-				"chef_id":     chef.ID.String(),
-				"reason":      string(reason),
-				"initiator":   "chef",
+				"order_id":  order.ID.String(),
+				"order_no":  order.OrderNumber,
+				"chef_id":   chef.ID.String(),
+				"reason":    string(reason),
+				"initiator": "chef",
 			},
 		})
 		if err != nil {
@@ -152,7 +152,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	services.LogAudit(c, "chef.order.cancel", "order", order.ID.String(),
 		nil, gin.H{"reason": string(reason), "refundAmount": order.RefundAmount, "refundId": refundID})
 
-	go publishOrderCancelled(order)
+	publishOrderCancelled(order)
 
 	// Cancel any booked 3PL delivery (no-op if none / already terminal). Off
 	// the response path; failure must not fail the order cancellation/refund.
@@ -312,7 +312,7 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	services.LogAudit(c, "chef.order.item_cancel", "order_item", target.ID.String(),
 		nil, gin.H{"orderId": order.ID.String(), "reason": string(reason), "refundAmount": lineRefund})
 
-	go publishOrderUpdated(order)
+	publishOrderUpdated(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
 }
@@ -432,7 +432,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	services.LogAudit(c, "chef.order.refund", "order", order.ID.String(),
 		nil, gin.H{"amount": req.Amount, "reason": req.Reason, "refundId": refundResp.ID})
 
-	go publishOrderUpdated(order)
+	publishOrderUpdated(order)
 
 	c.JSON(http.StatusOK, order.ToResponse())
 }
@@ -499,10 +499,11 @@ func roundPaise(rupees float64) float64 {
 	return float64(int64(paise - 0.5))
 }
 
-// publishOrderCancelled emits the NATS event the customer + driver
-// services consume to push notifications + flip dashboards.
+// publishOrderCancelled stages the order.cancelled event the customer + driver
+// services consume. Routed through the durable outbox so it is delivered
+// reliably with retries (#131).
 func publishOrderCancelled(order models.Order) {
-	if err := services.PublishOrderEvent(services.SubjectOrderCancelled, services.OrderEvent{
+	if err := services.EnqueueOrderEvent(database.DB, services.SubjectOrderCancelled, services.OrderEvent{
 		OrderID:     order.ID,
 		OrderNumber: order.OrderNumber,
 		CustomerID:  order.CustomerID,
@@ -510,15 +511,14 @@ func publishOrderCancelled(order models.Order) {
 		Status:      string(order.Status),
 		Total:       order.Total,
 	}); err != nil {
-		log.Printf("failed to publish order.cancelled: %v", err)
+		log.Printf("failed to enqueue order.cancelled: %v", err)
 	}
 }
 
-// publishOrderUpdated emits the generic update event — used after
-// per-line cancels since the order itself stays alive but totals
-// have changed.
+// publishOrderUpdated stages the generic update event — used after per-line
+// cancels since the order itself stays alive but totals have changed.
 func publishOrderUpdated(order models.Order) {
-	if err := services.PublishOrderEvent(services.SubjectOrderUpdated, services.OrderEvent{
+	if err := services.EnqueueOrderEvent(database.DB, services.SubjectOrderUpdated, services.OrderEvent{
 		OrderID:     order.ID,
 		OrderNumber: order.OrderNumber,
 		CustomerID:  order.CustomerID,
@@ -526,7 +526,6 @@ func publishOrderUpdated(order models.Order) {
 		Status:      string(order.Status),
 		Total:       order.Total,
 	}); err != nil {
-		log.Printf("failed to publish order.updated: %v", err)
+		log.Printf("failed to enqueue order.updated: %v", err)
 	}
 }
-

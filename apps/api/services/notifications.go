@@ -15,20 +15,19 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
-// NotificationService handles notification processing
+// NotificationService consumes domain events from durable JetStream consumers
+// and turns them into in-app notifications, emails, pushes and SMS. It binds one
+// durable per source stream; the subject decides which handler runs. Handlers
+// return an error to trigger retry/dead-letter (see ConsumerManager).
 type NotificationService struct {
-	nats          *NATSClient
-	subscriptions []*nats.Subscription
-	consumers     []jetstream.Consumer
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	running       bool
-	mu            sync.Mutex
+	nats    *NATSClient
+	cm      *ConsumerManager
+	ctx     context.Context
+	cancel  context.CancelFunc
+	running bool
+	mu      sync.Mutex
 }
 
 var (
@@ -36,7 +35,7 @@ var (
 	notifOnce           sync.Once
 )
 
-// GetNotificationService returns the singleton notification service
+// GetNotificationService returns the singleton notification service.
 func GetNotificationService() *NotificationService {
 	notifOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -49,451 +48,245 @@ func GetNotificationService() *NotificationService {
 	return notificationService
 }
 
-// Start starts the notification service and subscribes to events
-func (s *NotificationService) Start() error {
+// Start registers the notification service's durable consumers on the shared
+// ConsumerManager. Streams must already exist (NATSClient.Connect sets them up).
+func (s *NotificationService) Start(cm *ConsumerManager) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.running {
 		return nil
 	}
-
-	log.Println("Starting notification service...")
-
-	// Subscribe to order events
-	if err := s.subscribeToOrders(); err != nil {
-		log.Printf("Warning: Failed to subscribe to orders: %v", err)
+	s.cm = cm
+	if err := cm.RegisterAll(s.ctx, s.consumerSpecs()...); err != nil {
+		return err
 	}
-
-	// Subscribe to notification events
-	if err := s.subscribeToNotifications(); err != nil {
-		log.Printf("Warning: Failed to subscribe to notifications: %v", err)
-	}
-
-	// Subscribe to user events
-	if err := s.subscribeToUserEvents(); err != nil {
-		log.Printf("Warning: Failed to subscribe to user events: %v", err)
-	}
-
-	// Subscribe to chef events
-	if err := s.subscribeToChefEvents(); err != nil {
-		log.Printf("Warning: Failed to subscribe to chef events: %v", err)
-	}
-
-	// Subscribe to delivery events
-	if err := s.subscribeToDeliveryEvents(); err != nil {
-		log.Printf("Warning: Failed to subscribe to delivery events: %v", err)
-	}
-
-	// Subscribe to approval events
-	if err := s.subscribeToApprovalEvents(); err != nil {
-		log.Printf("Warning: Failed to subscribe to approval events: %v", err)
-	}
-
 	s.running = true
-	log.Println("Notification service started successfully")
+	log.Println("Notification service started (durable consumers)")
 	return nil
 }
 
-// subscribeToOrders subscribes to order-related events
-func (s *NotificationService) subscribeToOrders() error {
-	// Order created - notify chef
-	sub, err := s.nats.QueueSubscribe(SubjectOrderCreated, "notification-workers", func(msg *nats.Msg) {
-		var event OrderEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal order created event: %v", err)
-			return
-		}
-		s.handleOrderCreated(event)
-	})
-	if err != nil {
-		return err
+// consumerSpecs declares one durable consumer per source stream. The "notify-*"
+// durables are independent of the push-workers (issue #134), so each event is
+// processed once per group.
+func (s *NotificationService) consumerSpecs() []ConsumerSpec {
+	h := s.handleBySubject
+	return []ConsumerSpec{
+		{Stream: "ORDERS", Durable: "notify-orders", Handler: h,
+			Subjects: []string{SubjectOrderCreated, SubjectOrderUpdated, SubjectOrderCancelled, SubjectOrderDelivered}},
+		{Stream: "NOTIFICATIONS", Durable: "notify-dispatch", Handler: h,
+			Subjects: []string{SubjectNotificationEmail, SubjectNotificationPush, SubjectNotificationSMS}},
+		{Stream: "USERS", Durable: "notify-users", Handler: h,
+			Subjects: []string{SubjectUserRegistered}},
+		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
+			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified}},
+		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
+			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted}},
+		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
+			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Order updated - notify customer
-	sub, err = s.nats.QueueSubscribe(SubjectOrderUpdated, "notification-workers", func(msg *nats.Msg) {
-		var event OrderEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal order updated event: %v", err)
-			return
-		}
-		s.handleOrderUpdated(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Order cancelled
-	sub, err = s.nats.QueueSubscribe(SubjectOrderCancelled, "notification-workers", func(msg *nats.Msg) {
-		var event OrderEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal order cancelled event: %v", err)
-			return
-		}
-		s.handleOrderCancelled(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Order delivered
-	sub, err = s.nats.QueueSubscribe(SubjectOrderDelivered, "notification-workers", func(msg *nats.Msg) {
-		var event OrderEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal order delivered event: %v", err)
-			return
-		}
-		s.handleOrderDelivered(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	return nil
 }
 
-// subscribeToNotifications subscribes to notification dispatch events
-func (s *NotificationService) subscribeToNotifications() error {
-	// Email notifications
-	sub, err := s.nats.QueueSubscribe(SubjectNotificationEmail, "notification-workers", func(msg *nats.Msg) {
-		var notif NotificationEvent
-		if err := json.Unmarshal(msg.Data, &notif); err != nil {
-			log.Printf("Failed to unmarshal email notification: %v", err)
-			return
-		}
-		s.sendEmailNotification(notif)
-	})
-	if err != nil {
-		return err
+// handleBySubject decodes the event and routes it to the right handler. A decode
+// error is surfaced (poison message → retry → dead-letter). The earlier giant
+// set of per-subject QueueSubscribe blocks collapses into this single table.
+func (s *NotificationService) handleBySubject(_ context.Context, subject string, data []byte) error {
+	switch subject {
+	case SubjectOrderCreated:
+		return decodeThen(data, s.handleOrderCreated)
+	case SubjectOrderUpdated:
+		return decodeThen(data, s.handleOrderUpdated)
+	case SubjectOrderCancelled:
+		return decodeThen(data, s.handleOrderCancelled)
+	case SubjectOrderDelivered:
+		return decodeThen(data, s.handleOrderDelivered)
+	case SubjectChefNewOrder:
+		return decodeThen(data, s.handleChefNewOrder)
+	case SubjectNotificationEmail:
+		return decodeThen(data, s.sendEmailNotification)
+	case SubjectNotificationPush:
+		return decodeThen(data, s.sendPushNotification)
+	case SubjectNotificationSMS:
+		return decodeThen(data, s.sendSMSNotification)
+	case SubjectUserRegistered:
+		return decodeThen(data, s.handleUserRegistered)
+	case SubjectChefVerified:
+		return decodeThen(data, s.handleChefVerified)
+	case SubjectDeliveryAssigned:
+		return decodeThen(data, s.handleDeliveryAssigned)
+	case SubjectDeliveryPickedUp:
+		return decodeThen(data, s.handleDeliveryPickedUp)
+	case SubjectDriverOnboardingSubmitted:
+		return decodeThen(data, s.handleDriverOnboardingSubmitted)
+	case SubjectApprovalApproved:
+		return decodeThen(data, s.handleApprovalApproved)
+	case SubjectApprovalRejected:
+		return decodeThen(data, s.handleApprovalRejected)
+	case SubjectApprovalInfoRequested:
+		return decodeThen(data, s.handleApprovalInfoRequested)
+	case SubjectApprovalCreated:
+		return decodeThen(data, s.handleApprovalCreated)
+	default:
+		log.Printf("notification: no handler for subject %q", subject)
+		return nil
 	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Push notifications
-	sub, err = s.nats.QueueSubscribe(SubjectNotificationPush, "notification-workers", func(msg *nats.Msg) {
-		var notif NotificationEvent
-		if err := json.Unmarshal(msg.Data, &notif); err != nil {
-			log.Printf("Failed to unmarshal push notification: %v", err)
-			return
-		}
-		s.sendPushNotification(notif)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// SMS notifications
-	sub, err = s.nats.QueueSubscribe(SubjectNotificationSMS, "notification-workers", func(msg *nats.Msg) {
-		var notif NotificationEvent
-		if err := json.Unmarshal(msg.Data, &notif); err != nil {
-			log.Printf("Failed to unmarshal SMS notification: %v", err)
-			return
-		}
-		s.sendSMSNotification(notif)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	return nil
 }
 
-// subscribeToUserEvents subscribes to user-related events
-func (s *NotificationService) subscribeToUserEvents() error {
-	sub, err := s.nats.QueueSubscribe(SubjectUserRegistered, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal user registered event: %v", err)
-			return
-		}
-		s.handleUserRegistered(event)
-	})
+// decodeThen unmarshals data into T then runs fn — the one place JSON decoding
+// for event handlers lives.
+func decodeThen[T any](data []byte, fn func(T) error) error {
+	v, err := decodeEvent[T](data)
 	if err != nil {
-		return err
+		return fmt.Errorf("decode event: %w", err)
 	}
-	s.subscriptions = append(s.subscriptions, sub)
-	return nil
+	return fn(v)
 }
 
-// subscribeToChefEvents subscribes to chef-related events
-func (s *NotificationService) subscribeToChefEvents() error {
-	// New order for chef
-	sub, err := s.nats.QueueSubscribe(SubjectChefNewOrder, "notification-workers", func(msg *nats.Msg) {
-		var event OrderEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal chef new order event: %v", err)
-			return
-		}
-		s.handleChefNewOrder(event)
-	})
-	if err != nil {
-		return err
+// Stop stops the notification service. Consume loops are owned by the shared
+// ConsumerManager (stopped by main); this just cancels the service context.
+func (s *NotificationService) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running {
+		return
 	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Chef verified
-	sub, err = s.nats.QueueSubscribe(SubjectChefVerified, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal chef verified event: %v", err)
-			return
-		}
-		s.handleChefVerified(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	return nil
+	s.cancel()
+	s.running = false
+	log.Println("Notification service stopped")
 }
 
-// subscribeToDeliveryEvents subscribes to delivery-related events
-func (s *NotificationService) subscribeToDeliveryEvents() error {
-	// Delivery assigned
-	sub, err := s.nats.QueueSubscribe(SubjectDeliveryAssigned, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal delivery assigned event: %v", err)
-			return
-		}
-		s.handleDeliveryAssigned(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
+// ── Event handlers ───────────────────────────────────────────────────────────
 
-	// Delivery picked up
-	sub, err = s.nats.QueueSubscribe(SubjectDeliveryPickedUp, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal delivery picked up event: %v", err)
-			return
-		}
-		s.handleDeliveryPickedUp(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Driver onboarding submitted - notify admins
-	sub, err = s.nats.QueueSubscribe(SubjectDriverOnboardingSubmitted, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal driver onboarding submitted event: %v", err)
-			return
-		}
-		s.handleDriverOnboardingSubmitted(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	return nil
-}
-
-// Event handlers
-
-func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) {
-	log.Printf("Processing driver onboarding submitted event: %s", event.ID)
-
+func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) error {
 	city, _ := event.Data["city"].(string)
 
-	// Notify all admin users about new driver application
 	var admins []models.User
 	database.DB.Where("role = ?", models.RoleAdmin).Find(&admins)
 
 	data, _ := json.Marshal(event.Data)
 	for _, admin := range admins {
-		notification := &models.Notification{
+		if err := s.saveNotification(&models.Notification{
 			UserID:  admin.ID,
 			Type:    "driver_onboarding_submitted",
 			Title:   "New Driver Application",
 			Message: fmt.Sprintf("A new driver from %s has submitted their onboarding application for review.", city),
 			Data:    string(data),
-		}
-		if err := s.saveNotification(notification); err != nil {
-			log.Printf("Failed to save driver onboarding notification for admin %s: %v", admin.ID, err)
+		}); err != nil {
+			return fmt.Errorf("save driver onboarding notification for admin %s: %w", admin.ID, err)
 		}
 	}
+	return nil
 }
 
-func (s *NotificationService) handleOrderCreated(event OrderEvent) {
-	log.Printf("Processing order created event: Order #%s", event.OrderID.String())
-
-	// Create notification record in database
-	data, _ := json.Marshal(map[string]interface{}{"order_id": event.OrderID.String(), "total": event.Total})
-	notification := &models.Notification{
+func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "total": event.Total})
+	if err := s.saveNotification(&models.Notification{
 		UserID:  event.ChefID,
 		Type:    "order_created",
 		Title:   "New Order Received",
 		Message: "You have received a new order!",
 		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save order_created notification: %w", err)
 	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save notification: %v", err)
-	}
 
-	// Send push notification to chef
+	// Push to chef + emails to customer and chef (best-effort: they are durable
+	// events on the NOTIFICATIONS stream, retried independently by notify-dispatch).
 	PublishNotification(NotificationEvent{
-		UserID:  event.ChefID,
-		Type:    "push",
-		Title:   "New Order Received",
-		Message: "You have a new order waiting to be prepared!",
-		Data:    map[string]interface{}{"order_id": event.OrderID.String()},
+		UserID: event.ChefID, Type: "push",
+		Title: "New Order Received", Message: "You have a new order waiting to be prepared!",
+		Data: map[string]any{"order_id": event.OrderID.String()},
 	})
-
-	// Send order confirmation email to customer
 	PublishNotification(NotificationEvent{
-		UserID:  event.CustomerID,
-		Type:    "email",
-		Title:   "Order Confirmed",
-		Message: "Your order has been placed successfully!",
-		Data: map[string]interface{}{
-			"type":         "order_confirmation",
-			"order_number": event.OrderNumber,
-			"total":        event.Total,
-		},
+		UserID: event.CustomerID, Type: "email",
+		Title: "Order Confirmed", Message: "Your order has been placed successfully!",
+		Data: map[string]any{"type": "order_confirmation", "order_number": event.OrderNumber, "total": event.Total},
 	})
-
-	// Send new order email to chef
 	PublishNotification(NotificationEvent{
-		UserID:  event.ChefID,
-		Type:    "email",
-		Title:   "New Order Received",
-		Message: "You have a new order to prepare!",
-		Data: map[string]interface{}{
-			"type":         "chef_new_order",
-			"order_number": event.OrderNumber,
-			"total":        event.Total,
-		},
+		UserID: event.ChefID, Type: "email",
+		Title: "New Order Received", Message: "You have a new order to prepare!",
+		Data: map[string]any{"type": "chef_new_order", "order_number": event.OrderNumber, "total": event.Total},
 	})
+	return nil
 }
 
-func (s *NotificationService) handleOrderUpdated(event OrderEvent) {
-	log.Printf("Processing order updated event: Order #%s -> %s", event.OrderID.String(), event.Status)
-
-	// Notify customer about order status change
-	data, _ := json.Marshal(map[string]interface{}{"order_id": event.OrderID.String(), "status": event.Status})
-	notification := &models.Notification{
+func (s *NotificationService) handleOrderUpdated(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "status": event.Status})
+	if err := s.saveNotification(&models.Notification{
 		UserID:  event.CustomerID,
 		Type:    "order_status",
 		Title:   "Order Status Updated",
 		Message: getOrderStatusMessage(event.Status),
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save order_status notification: %w", err)
 	}
 
-	// Send push notification
 	PublishNotification(NotificationEvent{
-		UserID:  event.CustomerID,
-		Type:    "push",
-		Title:   "Order Update",
-		Message: getOrderStatusMessage(event.Status),
-		Data:    map[string]interface{}{"order_id": event.OrderID.String(), "status": event.Status},
+		UserID: event.CustomerID, Type: "push",
+		Title: "Order Update", Message: getOrderStatusMessage(event.Status),
+		Data: map[string]any{"order_id": event.OrderID.String(), "status": event.Status},
 	})
-
-	// Send order status email to customer
 	PublishNotification(NotificationEvent{
-		UserID:  event.CustomerID,
-		Type:    "email",
-		Title:   "Order Update",
-		Message: getOrderStatusMessage(event.Status),
-		Data: map[string]interface{}{
-			"type":         "order_status",
-			"order_number": event.OrderNumber,
-			"status":       event.Status,
-		},
+		UserID: event.CustomerID, Type: "email",
+		Title: "Order Update", Message: getOrderStatusMessage(event.Status),
+		Data: map[string]any{"type": "order_status", "order_number": event.OrderNumber, "status": event.Status},
 	})
+	return nil
 }
 
-func (s *NotificationService) handleOrderCancelled(event OrderEvent) {
-	log.Printf("Processing order cancelled event: Order #%s", event.OrderID.String())
-
-	// Notify both customer and chef
-	data, _ := json.Marshal(map[string]interface{}{"order_id": event.OrderID.String()})
+func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
 	for _, userID := range []uuid.UUID{event.CustomerID, event.ChefID} {
-		notification := &models.Notification{
+		if err := s.saveNotification(&models.Notification{
 			UserID:  userID,
 			Type:    "order_cancelled",
 			Title:   "Order Cancelled",
 			Message: "Order has been cancelled",
 			Data:    string(data),
+		}); err != nil {
+			return fmt.Errorf("save order_cancelled notification for %s: %w", userID, err)
 		}
-		if err := s.saveNotification(notification); err != nil {
-			log.Printf("Failed to save notification: %v", err)
-		}
-
-		// Send push notification
 		PublishNotification(NotificationEvent{
-			UserID:  userID,
-			Type:    "push",
-			Title:   "Order Cancelled",
-			Message: "Order has been cancelled",
-			Data:    map[string]interface{}{"order_id": event.OrderID.String()},
+			UserID: userID, Type: "push",
+			Title: "Order Cancelled", Message: "Order has been cancelled",
+			Data: map[string]any{"order_id": event.OrderID.String()},
 		})
 	}
 
-	// Send cancellation email to customer
 	PublishNotification(NotificationEvent{
-		UserID:  event.CustomerID,
-		Type:    "email",
-		Title:   "Order Cancelled",
-		Message: "Your order has been cancelled",
-		Data: map[string]interface{}{
-			"type":         "order_status",
-			"order_number": event.OrderNumber,
-			"status":       "cancelled",
-		},
+		UserID: event.CustomerID, Type: "email",
+		Title: "Order Cancelled", Message: "Your order has been cancelled",
+		Data: map[string]any{"type": "order_status", "order_number": event.OrderNumber, "status": "cancelled"},
 	})
+	return nil
 }
 
-func (s *NotificationService) handleOrderDelivered(event OrderEvent) {
-	log.Printf("Processing order delivered event: Order #%s", event.OrderID.String())
-
-	// Notify customer
-	data, _ := json.Marshal(map[string]interface{}{"order_id": event.OrderID.String()})
-	notification := &models.Notification{
+func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
+	if err := s.saveNotification(&models.Notification{
 		UserID:  event.CustomerID,
 		Type:    "order_delivered",
 		Title:   "Order Delivered",
 		Message: "Your order has been delivered! Enjoy your meal!",
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save order_delivered notification: %w", err)
 	}
 
-	// Send push notification
 	PublishNotification(NotificationEvent{
-		UserID:  event.CustomerID,
-		Type:    "push",
-		Title:   "Order Delivered",
-		Message: "Your order has been delivered! Enjoy your meal!",
-		Data:    map[string]interface{}{"order_id": event.OrderID.String()},
+		UserID: event.CustomerID, Type: "push",
+		Title: "Order Delivered", Message: "Your order has been delivered! Enjoy your meal!",
+		Data: map[string]any{"order_id": event.OrderID.String()},
 	})
 
-	// Wave 3: auto-email the GST tax invoice PDF to the customer
-	// within minutes of delivery. Generates inline + sends as
-	// attachment. Failure is non-blocking — the in-app notification
-	// + push above are the authoritative confirmation; email is the
-	// permanent record.
+	// Wave 3: auto-email the GST tax invoice PDF to the customer shortly after
+	// delivery. Kept off the worker hot path (PDF render is ~hundreds of ms).
 	go emailDeliveredInvoice(event)
+	return nil
 }
 
-// emailDeliveredInvoice resolves the customer's email and dispatches
-// the PDF invoice. Kept out of the notification handler hot path so
-// PDF rendering (~hundreds of ms) doesn't slow the NATS worker pool.
+// emailDeliveredInvoice resolves the customer's email and dispatches the PDF
+// invoice. Best-effort: the in-app + push confirmations above are authoritative.
 func emailDeliveredInvoice(event OrderEvent) {
 	var customer models.User
 	if err := database.DB.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
@@ -514,200 +307,121 @@ func emailDeliveredInvoice(event OrderEvent) {
 	}
 }
 
-func (s *NotificationService) handleUserRegistered(event Event) {
-	log.Printf("Processing user registered event: User #%s", event.UserID.String())
-
-	// Send welcome email
+func (s *NotificationService) handleUserRegistered(event Event) error {
 	PublishNotification(NotificationEvent{
-		UserID:  event.UserID,
-		Type:    "email",
+		UserID: event.UserID, Type: "email",
 		Title:   "Welcome to HomeChef!",
 		Message: "Thank you for joining HomeChef. Discover amazing home-cooked meals near you!",
 		Data:    event.Data,
 	})
+	return nil
 }
 
-func (s *NotificationService) handleChefNewOrder(event OrderEvent) {
-	log.Printf("Processing chef new order event: Chef #%s, Order #%s", event.ChefID.String(), event.OrderID.String())
-
-	data, _ := json.Marshal(map[string]interface{}{"order_id": event.OrderID.String(), "total": event.Total})
-	notification := &models.Notification{
+func (s *NotificationService) handleChefNewOrder(event OrderEvent) error {
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "total": event.Total})
+	if err := s.saveNotification(&models.Notification{
 		UserID:  event.ChefID,
 		Type:    "new_order",
 		Title:   "New Order!",
 		Message: "You have a new order to prepare",
 		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save new_order notification: %w", err)
 	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save notification: %v", err)
-	}
+	return nil
 }
 
-func (s *NotificationService) handleChefVerified(event Event) {
-	log.Printf("Processing chef verified event: User #%s", event.UserID.String())
-
+func (s *NotificationService) handleChefVerified(event Event) error {
 	data, _ := json.Marshal(event.Data)
-	notification := &models.Notification{
+	if err := s.saveNotification(&models.Notification{
 		UserID:  event.UserID,
 		Type:    "chef_verified",
 		Title:   "Congratulations!",
 		Message: "Your chef profile has been verified. You can now start accepting orders!",
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save chef_verified notification: %w", err)
 	}
 
-	// Send email
 	PublishNotification(NotificationEvent{
-		UserID:  event.UserID,
-		Type:    "email",
+		UserID: event.UserID, Type: "email",
 		Title:   "Your Chef Profile is Verified!",
 		Message: "Congratulations! Your chef profile has been verified. You can now start accepting orders!",
 	})
-}
-
-func (s *NotificationService) handleDeliveryAssigned(event Event) {
-	log.Printf("Processing delivery assigned event")
-
-	if customerIDStr, ok := event.Data["customer_id"].(string); ok {
-		customerID, err := uuid.Parse(customerIDStr)
-		if err != nil {
-			log.Printf("Failed to parse customer_id: %v", err)
-			return
-		}
-		data, _ := json.Marshal(event.Data)
-		notification := &models.Notification{
-			UserID:  customerID,
-			Type:    "delivery_assigned",
-			Title:   "Delivery Partner Assigned",
-			Message: "A delivery partner has been assigned to your order",
-			Data:    string(data),
-		}
-		if err := s.saveNotification(notification); err != nil {
-			log.Printf("Failed to save notification: %v", err)
-		}
-
-		// Send push notification
-		PublishNotification(NotificationEvent{
-			UserID:  customerID,
-			Type:    "push",
-			Title:   "Delivery Partner Assigned",
-			Message: "A delivery partner has been assigned to your order and will pick it up soon!",
-			Data:    event.Data,
-		})
-
-		// Send delivery assigned email
-		PublishNotification(NotificationEvent{
-			UserID:  customerID,
-			Type:    "email",
-			Title:   "Delivery Partner Assigned",
-			Message: "A delivery partner has been assigned to your order",
-			Data: map[string]interface{}{
-				"type":        "delivery_assigned",
-				"driver_name": event.Data["driver_name"],
-				"order_id":    event.Data["order_id"],
-			},
-		})
-	}
-}
-
-func (s *NotificationService) handleDeliveryPickedUp(event Event) {
-	log.Printf("Processing delivery picked up event")
-
-	if customerIDStr, ok := event.Data["customer_id"].(string); ok {
-		customerID, err := uuid.Parse(customerIDStr)
-		if err != nil {
-			log.Printf("Failed to parse customer_id: %v", err)
-			return
-		}
-		data, _ := json.Marshal(event.Data)
-		notification := &models.Notification{
-			UserID:  customerID,
-			Type:    "delivery_picked_up",
-			Title:   "Order Picked Up",
-			Message: "Your order has been picked up and is on its way!",
-			Data:    string(data),
-		}
-		if err := s.saveNotification(notification); err != nil {
-			log.Printf("Failed to save notification: %v", err)
-		}
-
-		// Send push notification
-		PublishNotification(NotificationEvent{
-			UserID:  customerID,
-			Type:    "push",
-			Title:   "Order On The Way!",
-			Message: "Your order has been picked up and is on its way to you!",
-			Data:    event.Data,
-		})
-	}
-}
-
-// subscribeToApprovalEvents subscribes to approval lifecycle events
-func (s *NotificationService) subscribeToApprovalEvents() error {
-	// Approval approved - notify the chef
-	sub, err := s.nats.QueueSubscribe(SubjectApprovalApproved, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal approval approved event: %v", err)
-			return
-		}
-		s.handleApprovalApproved(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Approval rejected - notify the chef
-	sub, err = s.nats.QueueSubscribe(SubjectApprovalRejected, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal approval rejected event: %v", err)
-			return
-		}
-		s.handleApprovalRejected(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Approval info requested - notify the chef
-	sub, err = s.nats.QueueSubscribe(SubjectApprovalInfoRequested, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal approval info_requested event: %v", err)
-			return
-		}
-		s.handleApprovalInfoRequested(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
-	// Approval created - notify all admins
-	sub, err = s.nats.QueueSubscribe(SubjectApprovalCreated, "notification-workers", func(msg *nats.Msg) {
-		var event Event
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			log.Printf("Failed to unmarshal approval created event: %v", err)
-			return
-		}
-		s.handleApprovalCreated(event)
-	})
-	if err != nil {
-		return err
-	}
-	s.subscriptions = append(s.subscriptions, sub)
-
 	return nil
 }
 
-// resolveChefUserID resolves a chef's UserID from a ChefProfile.ID.
-// Falls back to looking up the approval request's SubmittedByID if chef not found.
-func (s *NotificationService) resolveChefUserID(chefIDStr string, eventData map[string]interface{}) (uuid.UUID, error) {
+func (s *NotificationService) handleDeliveryAssigned(event Event) error {
+	customerIDStr, ok := event.Data["customer_id"].(string)
+	if !ok {
+		return nil // no customer to notify
+	}
+	customerID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		return fmt.Errorf("parse customer_id: %w", err)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  customerID,
+		Type:    "delivery_assigned",
+		Title:   "Delivery Partner Assigned",
+		Message: "A delivery partner has been assigned to your order",
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save delivery_assigned notification: %w", err)
+	}
+
+	PublishNotification(NotificationEvent{
+		UserID: customerID, Type: "push",
+		Title:   "Delivery Partner Assigned",
+		Message: "A delivery partner has been assigned to your order and will pick it up soon!",
+		Data:    event.Data,
+	})
+	PublishNotification(NotificationEvent{
+		UserID: customerID, Type: "email",
+		Title:   "Delivery Partner Assigned",
+		Message: "A delivery partner has been assigned to your order",
+		Data: map[string]any{
+			"type":        "delivery_assigned",
+			"driver_name": event.Data["driver_name"],
+			"order_id":    event.Data["order_id"],
+		},
+	})
+	return nil
+}
+
+func (s *NotificationService) handleDeliveryPickedUp(event Event) error {
+	customerIDStr, ok := event.Data["customer_id"].(string)
+	if !ok {
+		return nil
+	}
+	customerID, err := uuid.Parse(customerIDStr)
+	if err != nil {
+		return fmt.Errorf("parse customer_id: %w", err)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  customerID,
+		Type:    "delivery_picked_up",
+		Title:   "Order Picked Up",
+		Message: "Your order has been picked up and is on its way!",
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save delivery_picked_up notification: %w", err)
+	}
+
+	PublishNotification(NotificationEvent{
+		UserID: customerID, Type: "push",
+		Title:   "Order On The Way!",
+		Message: "Your order has been picked up and is on its way to you!",
+		Data:    event.Data,
+	})
+	return nil
+}
+
+// resolveChefUserID resolves a chef's UserID from a ChefProfile.ID, falling back
+// to the approval request's submitter when the chef row is gone.
+func (s *NotificationService) resolveChefUserID(chefIDStr string, eventData map[string]any) (uuid.UUID, error) {
 	chefID, err := uuid.Parse(chefIDStr)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("invalid chef_id: %v", err)
@@ -716,7 +430,6 @@ func (s *NotificationService) resolveChefUserID(chefIDStr string, eventData map[
 	if err := database.DB.First(&chef, "id = ?", chefID).Error; err == nil {
 		return chef.UserID, nil
 	}
-	// Fallback: look up the approval request to find the submitter
 	if approvalIDStr, ok := eventData["approval_id"].(string); ok {
 		approvalID, _ := uuid.Parse(approvalIDStr)
 		var approval models.ApprovalRequest
@@ -727,29 +440,22 @@ func (s *NotificationService) resolveChefUserID(chefIDStr string, eventData map[
 	return uuid.Nil, fmt.Errorf("could not resolve user for chef_id=%s", chefIDStr)
 }
 
-// resolveApprovalUserID resolves the user ID for an approval event.
-// Handles both chef-based and driver/partner-based approvals.
+// resolveApprovalUserID resolves the target user for an approval event, handling
+// both chef and driver/partner approvals.
 func (s *NotificationService) resolveApprovalUserID(event Event) (uuid.UUID, error) {
-	// Try partner_id first (driver approvals)
 	if partnerIDStr, ok := event.Data["partner_id"].(string); ok && partnerIDStr != "" {
-		partnerID, err := uuid.Parse(partnerIDStr)
-		if err == nil {
+		if partnerID, err := uuid.Parse(partnerIDStr); err == nil {
 			var partner models.DeliveryPartner
 			if err := database.DB.First(&partner, "id = ?", partnerID).Error; err == nil {
 				return partner.UserID, nil
 			}
 		}
 	}
-
-	// Try chef_id (chef approvals)
 	if chefIDStr, ok := event.Data["chef_id"].(string); ok && chefIDStr != "" {
-		userID, err := s.resolveChefUserID(chefIDStr, event.Data)
-		if err == nil {
+		if userID, err := s.resolveChefUserID(chefIDStr, event.Data); err == nil {
 			return userID, nil
 		}
 	}
-
-	// Fallback: look up the approval request to find the submitter
 	if approvalIDStr, ok := event.Data["approval_id"].(string); ok {
 		approvalID, _ := uuid.Parse(approvalIDStr)
 		var approval models.ApprovalRequest
@@ -757,255 +463,199 @@ func (s *NotificationService) resolveApprovalUserID(event Event) (uuid.UUID, err
 			return approval.SubmittedByID, nil
 		}
 	}
-
 	return uuid.Nil, fmt.Errorf("could not resolve user for approval event")
 }
 
-func (s *NotificationService) handleApprovalApproved(event Event) {
-	log.Printf("Processing approval approved event: %s", event.ID)
-
+func (s *NotificationService) handleApprovalApproved(event Event) error {
 	approvalType, _ := event.Data["type"].(string)
 	title, _ := event.Data["title"].(string)
 
 	userID, err := s.resolveApprovalUserID(event)
 	if err != nil {
-		log.Printf("Failed to resolve user for approval approved: %v", err)
-		return
+		log.Printf("approval approved: unresolved user (dropping): %v", err)
+		return nil // unresolvable target is not retryable
 	}
 
 	data, _ := json.Marshal(event.Data)
-	notification := &models.Notification{
+	if err := s.saveNotification(&models.Notification{
 		UserID:  userID,
 		Type:    "approval_approved",
 		Title:   "Request Approved",
 		Message: fmt.Sprintf("Your %s has been approved: %s", approvalType, title),
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save approval approved notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save approval_approved notification: %w", err)
 	}
 
-	// Send push notification
 	PublishNotification(NotificationEvent{
-		UserID:  userID,
-		Type:    "push",
-		Title:   "Request Approved!",
-		Message: fmt.Sprintf("Your %s has been approved", approvalType),
-		Data:    event.Data,
+		UserID: userID, Type: "push",
+		Title: "Request Approved!", Message: fmt.Sprintf("Your %s has been approved", approvalType),
+		Data: event.Data,
 	})
+	return nil
 }
 
-func (s *NotificationService) handleApprovalRejected(event Event) {
-	log.Printf("Processing approval rejected event: %s", event.ID)
-
+func (s *NotificationService) handleApprovalRejected(event Event) error {
 	approvalType, _ := event.Data["type"].(string)
 	notes, _ := event.Data["notes"].(string)
 
 	userID, err := s.resolveApprovalUserID(event)
 	if err != nil {
-		log.Printf("Failed to resolve user for approval rejected: %v", err)
-		return
+		log.Printf("approval rejected: unresolved user (dropping): %v", err)
+		return nil
 	}
 
 	message := fmt.Sprintf("Your %s has been rejected.", approvalType)
 	if notes != "" {
 		message += fmt.Sprintf(" Notes: %s", notes)
 	}
-
 	data, _ := json.Marshal(event.Data)
-	notification := &models.Notification{
+	if err := s.saveNotification(&models.Notification{
 		UserID:  userID,
 		Type:    "approval_rejected",
 		Title:   "Request Rejected",
 		Message: message,
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save approval rejected notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save approval_rejected notification: %w", err)
 	}
 
 	PublishNotification(NotificationEvent{
-		UserID:  userID,
-		Type:    "push",
-		Title:   "Request Rejected",
-		Message: message,
-		Data:    event.Data,
+		UserID: userID, Type: "push",
+		Title: "Request Rejected", Message: message, Data: event.Data,
 	})
+	return nil
 }
 
-func (s *NotificationService) handleApprovalInfoRequested(event Event) {
-	log.Printf("Processing approval info_requested event: %s", event.ID)
-
+func (s *NotificationService) handleApprovalInfoRequested(event Event) error {
 	approvalType, _ := event.Data["type"].(string)
 	notes, _ := event.Data["notes"].(string)
 
 	userID, err := s.resolveApprovalUserID(event)
 	if err != nil {
-		log.Printf("Failed to resolve user for approval info_requested: %v", err)
-		return
+		log.Printf("approval info_requested: unresolved user (dropping): %v", err)
+		return nil
 	}
 
 	message := fmt.Sprintf("Admin needs more info about your %s.", approvalType)
 	if notes != "" {
 		message += fmt.Sprintf(" Notes: %s", notes)
 	}
-
 	data, _ := json.Marshal(event.Data)
-	notification := &models.Notification{
+	if err := s.saveNotification(&models.Notification{
 		UserID:  userID,
 		Type:    "approval_info_requested",
 		Title:   "More Information Needed",
 		Message: message,
 		Data:    string(data),
-	}
-	if err := s.saveNotification(notification); err != nil {
-		log.Printf("Failed to save approval info_requested notification: %v", err)
+	}); err != nil {
+		return fmt.Errorf("save approval_info_requested notification: %w", err)
 	}
 
 	PublishNotification(NotificationEvent{
-		UserID:  userID,
-		Type:    "push",
-		Title:   "More Information Needed",
-		Message: message,
-		Data:    event.Data,
+		UserID: userID, Type: "push",
+		Title: "More Information Needed", Message: message, Data: event.Data,
 	})
+	return nil
 }
 
-func (s *NotificationService) handleApprovalCreated(event Event) {
-	log.Printf("Processing approval created event: %s", event.ID)
-
+func (s *NotificationService) handleApprovalCreated(event Event) error {
 	title, _ := event.Data["title"].(string)
 
-	// Notify all admin users
 	var admins []models.User
 	database.DB.Where("role = ?", models.RoleAdmin).Find(&admins)
 
 	data, _ := json.Marshal(event.Data)
 	for _, admin := range admins {
-		notification := &models.Notification{
+		if err := s.saveNotification(&models.Notification{
 			UserID:  admin.ID,
 			Type:    "approval_created",
 			Title:   "New Approval Request",
 			Message: fmt.Sprintf("New approval request pending: %s", title),
 			Data:    string(data),
-		}
-		if err := s.saveNotification(notification); err != nil {
-			log.Printf("Failed to save approval created notification for admin %s: %v", admin.ID, err)
+		}); err != nil {
+			return fmt.Errorf("save approval_created notification for admin %s: %w", admin.ID, err)
 		}
 	}
+	return nil
 }
 
-// Notification dispatch methods
+// ── Notification dispatch (NOTIFICATIONS stream) ─────────────────────────────
 
-func (s *NotificationService) sendEmailNotification(notif NotificationEvent) {
-	log.Printf("Sending email notification to user %s: %s", notif.UserID.String(), notif.Title)
-
+func (s *NotificationService) sendEmailNotification(notif NotificationEvent) error {
 	notifType, _ := notif.Data["type"].(string)
 	if !ShouldSendForType(notif.UserID, notifType, ChannelEmail) {
-		log.Printf("Email dispatch skipped for user %s (category=%s opted-out)",
-			notif.UserID, notificationTypeCategory(notifType))
-		return
+		log.Printf("Email dispatch skipped for user %s (category=%s opted-out)", notif.UserID, notificationTypeCategory(notifType))
+		return nil
 	}
 
-	// Look up user email
 	var user models.User
 	if err := database.DB.Select("id, email, first_name").First(&user, "id = ?", notif.UserID).Error; err != nil {
-		log.Printf("Email dispatch: user %s not found: %v", notif.UserID, err)
-		return
+		log.Printf("Email dispatch: user %s not found (dropping): %v", notif.UserID, err)
+		return nil // missing user is not retryable
 	}
 
 	emailSvc := GetEmailService()
-
-	// Route to the appropriate email template based on notification data
-	// (notifType already extracted above for the opt-out check).
 	switch notifType {
 	case "order_confirmation":
 		orderNumber, _ := notif.Data["order_number"].(string)
 		total, _ := notif.Data["total"].(float64)
-		// TODO(CW-01e-backend): populate OrderInvoiceDetails (GST breakup,
-		// HSN/SAC, chef name + FSSAI, delivery address, ETA, supplier
-		// particulars) from the order so the confirmation email satisfies
-		// CGST Act 2017 §31 + Rule 46. Passing nil keeps the legacy
-		// minimal layout until the order pipeline is wired through.
-		if err := emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total, nil); err != nil {
-			log.Printf("Failed to send order confirmation email: %v", err)
-		}
+		// TODO(CW-01e-backend): populate OrderInvoiceDetails (GST breakup, HSN/SAC,
+		// chef name + FSSAI, address, ETA) so the confirmation email satisfies
+		// CGST Act 2017 §31 + Rule 46. nil keeps the legacy minimal layout.
+		return emailSvc.SendOrderConfirmation(user.Email, orderNumber, nil, total, nil)
 	case "order_status":
 		orderNumber, _ := notif.Data["order_number"].(string)
 		status, _ := notif.Data["status"].(string)
-		if err := emailSvc.SendOrderStatusUpdate(user.Email, orderNumber, status); err != nil {
-			log.Printf("Failed to send order status email: %v", err)
-		}
+		return emailSvc.SendOrderStatusUpdate(user.Email, orderNumber, status)
 	case "chef_new_order":
 		orderNumber, _ := notif.Data["order_number"].(string)
 		total, _ := notif.Data["total"].(float64)
-		if err := emailSvc.SendChefNewOrder(user.Email, orderNumber, total); err != nil {
-			log.Printf("Failed to send chef new order email: %v", err)
-		}
+		return emailSvc.SendChefNewOrder(user.Email, orderNumber, total)
 	case "delivery_assigned":
 		orderID, _ := notif.Data["order_id"].(string)
-		if err := emailSvc.SendDeliveryAssigned(user.Email, orderID, ""); err != nil {
-			log.Printf("Failed to send delivery assigned email: %v", err)
-		}
+		return emailSvc.SendDeliveryAssigned(user.Email, orderID, "")
 	case "chef_verified":
-		if err := emailSvc.SendChefVerificationApproved(user.Email, user.FirstName); err != nil {
-			log.Printf("Failed to send chef verification email: %v", err)
-		}
+		return emailSvc.SendChefVerificationApproved(user.Email, user.FirstName)
 	case "welcome":
-		if err := emailSvc.SendWelcomeEmail(user.Email, user.FirstName); err != nil {
-			log.Printf("Failed to send welcome email: %v", err)
-		}
+		return emailSvc.SendWelcomeEmail(user.Email, user.FirstName)
 	default:
-		// Generic: send as a simple HTML email via the low-level send method
 		html := fmt.Sprintf("<h2>%s</h2><p>%s</p>", notif.Title, notif.Message)
-		if err := emailSvc.send(user.Email, notif.Title, html); err != nil {
-			log.Printf("Failed to send generic email: %v", err)
-		}
+		return emailSvc.send(user.Email, notif.Title, html)
 	}
 }
 
-func (s *NotificationService) sendPushNotification(notif NotificationEvent) {
-	log.Printf("Sending push notification to user %s: %s", notif.UserID.String(), notif.Title)
-
+func (s *NotificationService) sendPushNotification(notif NotificationEvent) error {
 	notifType, _ := notif.Data["type"].(string)
 	if !ShouldSendForType(notif.UserID, notifType, ChannelPush) {
-		log.Printf("Push dispatch skipped for user %s (category=%s opted-out)",
-			notif.UserID, notificationTypeCategory(notifType))
-		return
+		log.Printf("Push dispatch skipped for user %s (category=%s opted-out)", notif.UserID, notificationTypeCategory(notifType))
+		return nil
 	}
 
-	// Convert data map to string map for FCM
-	data := make(map[string]string)
+	data := make(map[string]string, len(notif.Data))
 	for k, v := range notif.Data {
 		data[k] = fmt.Sprintf("%v", v)
 	}
-
-	if err := SendPushNotification(notif.UserID, notif.Title, notif.Message, data); err != nil {
-		log.Printf("Failed to send push notification to user %s: %v", notif.UserID, err)
-	}
+	return SendPushNotification(notif.UserID, notif.Title, notif.Message, data)
 }
 
-func (s *NotificationService) sendSMSNotification(notif NotificationEvent) {
-	log.Printf("Sending SMS notification to user %s: %s", notif.UserID.String(), notif.Title)
-
+func (s *NotificationService) sendSMSNotification(notif NotificationEvent) error {
 	cfg := config.AppConfig
 	if cfg.TwilioAccountSID == "" || cfg.TwilioAuthToken == "" || cfg.TwilioPhoneNumber == "" {
 		log.Printf("SMS skipped (Twilio not configured): user=%s", notif.UserID)
-		return
+		return nil
 	}
 
-	// Look up user phone
 	var user models.User
 	if err := database.DB.Select("id, phone").First(&user, "id = ?", notif.UserID).Error; err != nil {
-		log.Printf("SMS dispatch: user %s not found: %v", notif.UserID, err)
-		return
+		log.Printf("SMS dispatch: user %s not found (dropping): %v", notif.UserID, err)
+		return nil
 	}
 	if user.Phone == "" {
 		log.Printf("SMS skipped: user %s has no phone number", notif.UserID)
-		return
+		return nil
 	}
 
-	// Twilio REST API
 	twilioURL := fmt.Sprintf("https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json", cfg.TwilioAccountSID)
 	formData := fmt.Sprintf("From=%s&To=%s&Body=%s",
 		url.QueryEscape(cfg.TwilioPhoneNumber),
@@ -1015,38 +665,34 @@ func (s *NotificationService) sendSMSNotification(notif NotificationEvent) {
 
 	req, err := http.NewRequest(http.MethodPost, twilioURL, bytes.NewBufferString(formData))
 	if err != nil {
-		log.Printf("SMS: failed to create request: %v", err)
-		return
+		return fmt.Errorf("sms build request: %w", err)
 	}
 	req.SetBasicAuth(cfg.TwilioAccountSID, cfg.TwilioAuthToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("SMS: request failed: %v", err)
-		return
+		return fmt.Errorf("sms request: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode >= 400 {
-		log.Printf("SMS: Twilio returned status %d for user %s", resp.StatusCode, notif.UserID)
-		return
+		return fmt.Errorf("sms: Twilio returned status %d for user %s", resp.StatusCode, notif.UserID)
 	}
-
 	log.Printf("SMS sent to user %s", notif.UserID)
+	return nil
 }
 
-// saveNotification saves a notification to the database and publishes it to the
-// per-user NATS subject so WebSocket clients receive it in real time.
+// saveNotification persists a notification and publishes it to the per-user NATS
+// subject so WebSocket clients update the bell in real time (fire-and-forget —
+// the durable record is the row, the WS push is a best-effort nicety).
 func (s *NotificationService) saveNotification(notification *models.Notification) error {
 	notification.CreatedAt = time.Now()
 	if err := database.DB.Create(notification).Error; err != nil {
 		return err
 	}
 
-	// Publish to per-user subject for real-time bell updates (fire-and-forget)
 	subject := fmt.Sprintf("%s.%s", SubjectNotificationUser, notification.UserID.String())
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"id":        notification.ID.String(),
 		"type":      notification.Type,
 		"title":     notification.Title,
@@ -1061,8 +707,7 @@ func (s *NotificationService) saveNotification(notification *models.Notification
 	return nil
 }
 
-// Helper functions
-
+// getOrderStatusMessage returns a customer-friendly status message.
 func getOrderStatusMessage(status string) string {
 	messages := map[string]string{
 		"confirmed":  "Your order has been confirmed by the chef!",
@@ -1077,27 +722,4 @@ func getOrderStatusMessage(status string) string {
 		return msg
 	}
 	return "Your order status has been updated to: " + status
-}
-
-// Stop stops the notification service
-func (s *NotificationService) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.running {
-		return
-	}
-
-	log.Println("Stopping notification service...")
-	s.cancel()
-
-	// Unsubscribe from all subscriptions
-	for _, sub := range s.subscriptions {
-		sub.Unsubscribe()
-	}
-	s.subscriptions = nil
-
-	s.wg.Wait()
-	s.running = false
-	log.Println("Notification service stopped")
 }

@@ -72,6 +72,17 @@ type Config struct {
 
 	// NATS
 	NATSURL string
+	// NATSStreamReplicas is the JetStream stream replica factor. 1 for local /
+	// single-node dev; set to 3 in prod (3-node JetStream HA cluster).
+	NATSStreamReplicas int
+	// OutboxRelayInterval is how often the transactional-outbox relay scans for
+	// pending events to publish.
+	OutboxRelayInterval time.Duration
+	// OutboxBatchSize is the max number of outbox rows claimed per scan.
+	OutboxBatchSize int
+	// OutboxMaxAttempts is the publish attempt cap before a row is dead-lettered
+	// (kept as status='failed' for inspection/replay).
+	OutboxMaxAttempts int
 
 	// Exchange Rates APIs
 	OpenExchangeRatesAppID string
@@ -180,7 +191,11 @@ func Load() {
 		RedisURL: getEnv("REDIS_URL", "redis://localhost:6379"),
 
 		// NATS
-		NATSURL: getEnv("NATS_URL", "nats://localhost:4222"),
+		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),
+		NATSStreamReplicas:  getEnvInt("NATS_STREAM_REPLICAS", 1),
+		OutboxRelayInterval: time.Duration(getEnvInt("OUTBOX_RELAY_INTERVAL_MS", 1000)) * time.Millisecond,
+		OutboxBatchSize:     getEnvInt("OUTBOX_BATCH_SIZE", 100),
+		OutboxMaxAttempts:   getEnvInt("OUTBOX_MAX_ATTEMPTS", 10),
 
 		// Exchange Rates APIs
 		OpenExchangeRatesAppID: getEnv("OPENEXCHANGERATES_APP_ID", ""),
@@ -194,6 +209,17 @@ func Load() {
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return defaultValue
+}
+
+// getEnvInt reads an integer env var, falling back to defaultValue when unset or
+// unparseable.
+func getEnvInt(key string, defaultValue int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if n, err := strconv.Atoi(value); err == nil {
+			return n
+		}
 	}
 	return defaultValue
 }
