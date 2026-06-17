@@ -25,7 +25,13 @@ WORKDIR /app/apps/web-landing
 RUN pnpm build
 
 # ─── runtime ───────────────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runtime
+# nginx:1.29-alpine aligns with the tesserix base-nginx-spa the other SPAs use.
+# `apk upgrade` pulls the latest patched Alpine packages (openssl/libxml2/zlib/
+# musl/libpng/libexpat) so the image clears the Trivy CRITICAL/HIGH gate (#15)
+# — the pinned base tag lags a few package revisions behind the security feed.
+FROM nginx:1.29-alpine AS runtime
+
+RUN apk upgrade --no-cache
 
 COPY apps/web-landing/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/web-landing/out /usr/share/nginx/html
