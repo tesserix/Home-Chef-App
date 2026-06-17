@@ -294,13 +294,23 @@ func GenerateInvoice(sub *models.Subscription, cycleEarnings float64) (*models.S
 	return &invoice, nil
 }
 
-// CalculateProratedRefund calculates the refund for remaining unused period
+// CalculateProratedRefund calculates the refund for the remaining unused period
+// as of now. Thin wrapper over calculateProratedRefundAt so the time-dependent
+// math can be unit-tested deterministically with a fixed clock.
 func CalculateProratedRefund(sub *models.Subscription) float64 {
+	return calculateProratedRefundAt(sub, time.Now().UTC())
+}
+
+// calculateProratedRefundAt computes the prorated refund/credit for the unused
+// remainder of the current billing period, evaluated at `now`:
+//   - no period end, or period already over → 0
+//   - yearly → remaining full months / 12 * plan amount
+//   - monthly/quarterly → remaining days / total days * plan amount
+func calculateProratedRefundAt(sub *models.Subscription, now time.Time) float64 {
 	if sub.CurrentPeriodEnd == nil {
 		return 0
 	}
 
-	now := time.Now().UTC()
 	if now.After(*sub.CurrentPeriodEnd) {
 		return 0
 	}
