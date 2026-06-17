@@ -8,6 +8,7 @@ import {
   Clock,
   Filter,
   Heart,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -418,11 +419,19 @@ function ChefCardItem({ chef }: { chef: Chef }) {
             className="h-full w-full object-cover transition-transform duration-500 group-hover:opacity-95"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
-          {chef.verified && (
-            <Badge variant="success" size="sm" className="absolute top-2 left-2">
-              Verified
-            </Badge>
-          )}
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {chef.verified && (
+              <Badge variant="success" size="sm">
+                Verified
+              </Badge>
+            )}
+            {chef.foodSafetyBadge && (
+              <Badge variant="success" size="sm">
+                <ShieldCheck aria-hidden="true" className="mr-1 h-3 w-3" />
+                Food Safe
+              </Badge>
+            )}
+          </div>
           <button
             type="button"
             aria-label={favorited ? 'Remove from favorites' : 'Save to favorites'}

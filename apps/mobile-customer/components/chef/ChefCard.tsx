@@ -140,6 +140,14 @@ export function ChefCard({ chef }: ChefCardProps) {
                   {chef.cuisine}
                 </Text>
 
+                {/* Hygiene / food-safety badge (#35): verified, non-expired FSSAI.
+                    Restrained text, in keeping with the card's chrome-light style. */}
+                {chef.foodSafetyBadge && (
+                  <Text style={styles.foodSafe} numberOfLines={1}>
+                    ✓ Food safety verified
+                  </Text>
+                )}
+
                 {/* Delivery time · min-order */}
                 {(chef.deliveryTime != null || chef.minimumOrder != null) && (
                   <Text style={styles.meta} numberOfLines={1}>
@@ -290,6 +298,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     letterSpacing: 0,
+  },
+  foodSafe: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#15803D', // calm trust-green; functional (matches the web success badge)
+    marginTop: 2,
   },
   meta: {
     fontFamily: 'Inter',
