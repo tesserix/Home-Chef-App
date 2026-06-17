@@ -21,7 +21,7 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-  const { login, loginWithEmail } = useAuth();
+  const { loginWithEmail } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
