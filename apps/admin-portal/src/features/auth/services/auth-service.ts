@@ -1,5 +1,4 @@
 import {
-  signInWithPopup,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
