@@ -159,6 +159,7 @@ func SetupRouter() *gin.Engine {
 	adminHandler := handlers.NewAdminHandler()
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
+	walletHandler := handlers.NewWalletHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
@@ -616,6 +617,10 @@ func SetupRouter() *gin.Engine {
 			// Chef management
 			admin.GET("/chefs", adminHandler.GetChefs)
 			admin.GET("/chefs/fssai-locked", adminHandler.GetFSSAILockedChefs)
+
+			// Customer wallet — admin view + audited adjustment (#33)
+			admin.GET("/wallet/:userId", adminHandler.GetCustomerWallet)
+			admin.POST("/wallet/:userId/adjust", adminHandler.AdjustWallet)
 			admin.POST("/chefs/:id/fssai-override", adminHandler.OverrideFSSAILock)
 			admin.DELETE("/chefs/:id/fssai-override", adminHandler.ClearFSSAILockOverride)
 			admin.GET("/fssai-expiry-backfill", adminHandler.FSSAIExpiryBackfill)
@@ -767,6 +772,10 @@ func SetupRouter() *gin.Engine {
 			customer.GET("/onboarding/status", customerHandler.GetOnboardingStatus)
 			customer.POST("/onboarding/complete", customerHandler.CompleteOnboarding)
 			customer.POST("/onboarding/skip", customerHandler.SkipOnboarding)
+
+			// Store-credit wallet (#33)
+			customer.GET("/wallet", walletHandler.GetWallet)
+			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
 		}
 
 		// Reviews (authenticated customers)

@@ -183,6 +183,10 @@ func Migrate() error {
 		// Reviews
 		&models.Review{},
 
+		// Wallet (store-credit ledger, #33)
+		&models.Wallet{},
+		&models.WalletTxn{},
+
 		// Social
 		&models.Post{},
 		&models.PostLike{},
