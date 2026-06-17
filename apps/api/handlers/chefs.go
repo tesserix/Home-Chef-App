@@ -50,7 +50,8 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := database.DB.Model(&models.ChefProfile{}).
-		Where("is_active = ?", true)
+		Where("is_active = ?", true).
+		Scopes(services.ExcludeFSSAILocked) // FSSAI lockout (#91): hide lapsed-licence India chefs
 
 	// Search filter
 	if search != "" {
@@ -143,6 +144,13 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 
 	var chef models.ChefProfile
 	if err := database.DB.Preload("User").First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	// FSSAI lockout (#91): a direct link to a chef whose food-safety licence has
+	// lapsed should read as unavailable, matching their absence from listings.
+	if services.IsChefFSSAIExpired(&chef) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
