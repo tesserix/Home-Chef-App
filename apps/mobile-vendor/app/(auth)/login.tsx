@@ -11,6 +11,7 @@ import {
   useAuth,
   autoLogin,
   getIdToken,
+  resolveAuthErrorMessage,
 } from '@homechef/mobile-shared/auth';
 import { getRawFCMToken, registerDeviceToken, authenticateWithBiometrics } from '@homechef/mobile-shared/hooks';
 import { useAuthStore } from '../../store/auth-store';
@@ -79,9 +80,7 @@ export default function LoginPage() {
       } catch { /* non-fatal */ }
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      Alert.alert('Sign-in failed', msg);
+      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -104,9 +103,7 @@ export default function LoginPage() {
       } catch { /* non-fatal */ }
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      Alert.alert('Sign-in failed', msg);
+      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -118,9 +115,7 @@ export default function LoginPage() {
       if (!accessToken) throw new Error('No saved session found. Please log in with email.');
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      Alert.alert('Sign-in failed', msg);
+      Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
     }
   };
 
@@ -144,9 +139,7 @@ export default function LoginPage() {
           }
           router.replace('/(tabs)');
         } catch (err: unknown) {
-          const msg =
-            err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-          Alert.alert('Sign-in failed', msg);
+          Alert.alert('Sign-in failed', resolveAuthErrorMessage(err));
         }
       }}
       onNavigateToRegister={() => router.push('/(auth)/register')}
