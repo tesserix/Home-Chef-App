@@ -103,8 +103,11 @@ func (h *ChefDPDPHandler) ExportMyData(c *gin.Context) {
 func (h *ChefDPDPHandler) DeleteMyAccount(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
+	// Unscoped so an already-soft-deleted account is still found — otherwise
+	// GORM's default `deleted_at IS NULL` scope hides it and a retried delete
+	// 404s instead of returning the idempotent "already_deleted" below (#106).
 	var user models.User
-	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+	if err := database.DB.Unscoped().First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}

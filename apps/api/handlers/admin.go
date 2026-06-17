@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
@@ -33,12 +35,18 @@ func boolField(name string, present bool) string {
 // lapsed — and who are therefore locked out of new orders and payouts (#32) —
 // so ops can follow up. Reuses services.IsChefFSSAIExpired, so a verified
 // renewal is correctly excluded and this view never disagrees with enforcement.
+//
+// Candidates (a verified FSSAI doc already past expiry) are sorted into two
+// buckets: genuinely "locked", and "overridden" — chefs an admin has granted a
+// time-boxed reprieve (#93). Overridden chefs are surfaced separately (with the
+// reason + expiry) so ops can review or revoke a reprieve, rather than silently
+// dropping them as if they had renewed. It also reports how many chefs have a
+// verified FSSAI doc with no recorded expiry (the backfill target).
 // GET /admin/chefs/fssai-locked
 func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 	cutoff := time.Now().AddDate(0, 0, -1)
 
-	// Candidate chefs: those with a verified FSSAI doc already past expiry. The
-	// per-chef check below narrows to the genuinely-locked.
+	// Candidate chefs: those with a verified FSSAI doc already past expiry.
 	var chefIDs []uuid.UUID
 	database.DB.Model(&models.ChefDocument{}).
 		Distinct("chef_id").
@@ -52,16 +60,17 @@ func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 		BusinessName    string     `json:"businessName"`
 		FSSAIExpiry     *time.Time `json:"fssaiExpiry"`
 		DaysSinceExpiry int        `json:"daysSinceExpiry"`
+		OverrideUntil   *time.Time `json:"overrideUntil,omitempty"`
+		OverrideReason  string     `json:"overrideReason,omitempty"`
+		OverrideBy      *uuid.UUID `json:"overrideBy,omitempty"`
 	}
 
 	locked := make([]lockedChef, 0, len(chefIDs))
+	overridden := make([]lockedChef, 0)
 	for _, chefID := range chefIDs {
 		var chef models.ChefProfile
 		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
 			continue
-		}
-		if !services.IsChefFSSAIExpired(&chef) {
-			continue // renewed / not actually locked
 		}
 		var doc models.ChefDocument
 		database.DB.
@@ -72,16 +81,196 @@ func (h *AdminHandler) GetFSSAILockedChefs(c *gin.Context) {
 		if doc.ExpiryDate != nil {
 			days = int(time.Since(*doc.ExpiryDate).Hours() / 24)
 		}
-		locked = append(locked, lockedChef{
+		row := lockedChef{
 			ChefID:          chef.ID,
 			UserID:          chef.UserID,
 			BusinessName:    chef.BusinessName,
 			FSSAIExpiry:     doc.ExpiryDate,
 			DaysSinceExpiry: days,
+		}
+
+		// Active admin override → reprieved, not locked. Surface separately.
+		if chef.FSSAIOverrideUntil != nil && time.Now().Before(*chef.FSSAIOverrideUntil) {
+			row.OverrideUntil = chef.FSSAIOverrideUntil
+			row.OverrideReason = chef.FSSAIOverrideReason
+			row.OverrideBy = chef.FSSAIOverrideBy
+			overridden = append(overridden, row)
+			continue
+		}
+		if !services.IsChefFSSAIExpired(&chef) {
+			continue // renewed / not actually locked
+		}
+		locked = append(locked, row)
+	}
+
+	// Backfill target: India chefs with a verified FSSAI doc but NULL expiry
+	// (legacy uploads from before expiry capture). Ops can prompt these chefs to
+	// confirm their licence via POST /admin/fssai-expiry-backfill.
+	var missingExpiry int64
+	database.DB.Model(&models.ChefDocument{}).
+		Joins("JOIN chef_profiles ON chef_profiles.id = chef_documents.chef_id").
+		Where("chef_documents.type = ? AND chef_documents.status = ? AND chef_documents.expiry_date IS NULL AND chef_profiles.payout_country = ?",
+			models.DocFSSAILicense, models.DocStatusVerified, "IN").
+		Distinct("chef_documents.chef_id").
+		Count(&missingExpiry)
+
+	c.JSON(http.StatusOK, gin.H{
+		"locked":             locked,
+		"overridden":         overridden,
+		"lockedCount":        len(locked),
+		"overriddenCount":    len(overridden),
+		"missingExpiryCount": missingExpiry,
+	})
+}
+
+type fssaiOverrideRequest struct {
+	Reason string `json:"reason" binding:"required,min=10,max=500"`
+	Days   int    `json:"days" binding:"required,min=1,max=30"`
+}
+
+// OverrideFSSAILock grants a time-boxed, reason-logged reprieve from the FSSAI
+// expiry lockout for one chef (#93). For genuine edge cases only — e.g. a
+// government renewal backlog where the chef's renewal is filed but not yet
+// processed — never a routine way to ship food on a lapsed licence; hence the
+// mandatory reason and the hard 30-day cap. Fully audited (actor, reason,
+// window). POST /admin/chefs/:id/fssai-override
+func (h *AdminHandler) OverrideFSSAILock(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var req fssaiOverrideRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A reason (10–500 chars) and a duration of 1–30 days are required"})
+		return
+	}
+
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	old := map[string]any{
+		"overrideUntil":  chef.FSSAIOverrideUntil,
+		"overrideReason": chef.FSSAIOverrideReason,
+	}
+	until := time.Now().AddDate(0, 0, req.Days)
+	updates := map[string]any{
+		"fssai_override_until":  until,
+		"fssai_override_reason": req.Reason,
+	}
+	if v, ok := c.Get("userID"); ok {
+		if uid, ok := v.(uuid.UUID); ok {
+			updates["fssai_override_by"] = uid
+		}
+	}
+	if err := database.DB.Model(&chef).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply override"})
+		return
+	}
+
+	middleware.RecordFSSAILockout("admin_override_granted")
+	services.LogAudit(c, "chef.fssai.override.grant", "chef", chefID.String(), old, map[string]any{
+		"overrideUntil":  until,
+		"overrideReason": req.Reason,
+		"days":           req.Days,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"chefId":         chefID,
+		"overrideUntil":  until,
+		"overrideReason": req.Reason,
+	})
+}
+
+// ClearFSSAILockOverride revokes an active FSSAI override immediately, so the
+// expiry lockout re-applies at once (#93). Audited.
+// DELETE /admin/chefs/:id/fssai-override
+func (h *AdminHandler) ClearFSSAILockOverride(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	old := map[string]any{
+		"overrideUntil":  chef.FSSAIOverrideUntil,
+		"overrideReason": chef.FSSAIOverrideReason,
+	}
+	// Map-based Updates so the nil values are written as NULL (a struct update
+	// would skip zero values and leave the override in place).
+	if err := database.DB.Model(&chef).Updates(map[string]any{
+		"fssai_override_until":  nil,
+		"fssai_override_reason": "",
+		"fssai_override_by":     nil,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear override"})
+		return
+	}
+	services.LogAudit(c, "chef.fssai.override.clear", "chef", chefID.String(), old, nil)
+	c.JSON(http.StatusOK, gin.H{"chefId": chefID, "cleared": true})
+}
+
+// FSSAIExpiryBackfill surfaces (GET) or notifies (POST) India chefs who have a
+// verified FSSAI document on file with NO recorded expiry date — legacy uploads
+// from before expiry capture (#93). The one-time prompt asks them to confirm
+// their licence expiry so the lockout can protect customers going forward. GET
+// is a safe dry run (count + list); POST sends the "confirm your licence" push
+// and is audited.
+//
+//	GET  /admin/fssai-expiry-backfill  → dry run: count + chef list
+//	POST /admin/fssai-expiry-backfill  → send the confirm-licence push
+func (h *AdminHandler) FSSAIExpiryBackfill(c *gin.Context) {
+	var chefIDs []uuid.UUID
+	database.DB.Model(&models.ChefDocument{}).
+		Joins("JOIN chef_profiles ON chef_profiles.id = chef_documents.chef_id").
+		Where("chef_documents.type = ? AND chef_documents.status = ? AND chef_documents.expiry_date IS NULL AND chef_profiles.payout_country = ?",
+			models.DocFSSAILicense, models.DocStatusVerified, "IN").
+		Distinct().
+		Pluck("chef_documents.chef_id", &chefIDs)
+
+	type backfillChef struct {
+		ChefID       uuid.UUID `json:"chefId"`
+		UserID       uuid.UUID `json:"userId"`
+		BusinessName string    `json:"businessName"`
+	}
+	rows := make([]backfillChef, 0, len(chefIDs))
+	execute := c.Request.Method == http.MethodPost
+	notified := 0
+	for _, chefID := range chefIDs {
+		var chef models.ChefProfile
+		if err := database.DB.First(&chef, "id = ?", chefID).Error; err != nil {
+			continue
+		}
+		rows = append(rows, backfillChef{ChefID: chef.ID, UserID: chef.UserID, BusinessName: chef.BusinessName})
+		if execute {
+			if err := services.SendFSSAIConfirmLicencePush(chef.UserID); err != nil {
+				log.Printf("fssai-backfill: confirm push failed chef=%s: %v", chefID, err)
+				continue
+			}
+			notified++
+		}
+	}
+
+	if execute {
+		services.LogAudit(c, "chef.fssai.expiry_backfill", "chef", "", nil, map[string]any{
+			"candidates": len(rows),
+			"notified":   notified,
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": locked, "count": len(locked)})
+	c.JSON(http.StatusOK, gin.H{
+		"count":    len(rows),
+		"chefs":    rows,
+		"executed": execute,
+		"notified": notified,
+	})
 }
 
 // GetStats returns dashboard statistics

@@ -124,6 +124,26 @@ func TestIsChefFSSAIExpired(t *testing.T) {
 			t.Fatal("verified doc with NULL expiry must not lock (handled by backfill)")
 		}
 	})
+
+	t.Run("active admin override suspends the lockout (#93)", func(t *testing.T) {
+		id := uuid.New()
+		insert(id, models.DocStatusVerified, &past) // lapsed verified licence
+		until := now.AddDate(0, 0, 5)
+		chef := &models.ChefProfile{ID: id, PayoutCountry: "IN", FSSAIOverrideUntil: &until}
+		if IsChefFSSAIExpired(chef) {
+			t.Fatal("an active admin override must suspend the lockout")
+		}
+	})
+
+	t.Run("lapsed admin override lets the lockout re-apply (#93)", func(t *testing.T) {
+		id := uuid.New()
+		insert(id, models.DocStatusVerified, &past) // lapsed verified licence
+		expiredOverride := now.AddDate(0, 0, -1)
+		chef := &models.ChefProfile{ID: id, PayoutCountry: "IN", FSSAIOverrideUntil: &expiredOverride}
+		if !IsChefFSSAIExpired(chef) {
+			t.Fatal("once an override lapses the expiry lockout must re-apply")
+		}
+	})
 }
 
 // TestExcludeFSSAILocked asserts the set-based listing filter (#91) mirrors
@@ -135,7 +155,7 @@ func TestExcludeFSSAILocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.Exec(`CREATE TABLE chef_profiles (id text PRIMARY KEY, payout_country text)`).Error; err != nil {
+	if err := db.Exec(`CREATE TABLE chef_profiles (id text PRIMARY KEY, payout_country text, fssai_override_until datetime)`).Error; err != nil {
 		t.Fatalf("create chef_profiles: %v", err)
 	}
 	if err := db.Exec(`CREATE TABLE chef_documents (
@@ -152,6 +172,15 @@ func TestExcludeFSSAILocked(t *testing.T) {
 		t.Helper()
 		id := uuid.New()
 		if err := db.Exec(`INSERT INTO chef_profiles (id, payout_country) VALUES (?, ?)`, id.String(), country).Error; err != nil {
+			t.Fatalf("insert chef: %v", err)
+		}
+		return id
+	}
+	addChefOverride := func(country string, overrideUntil time.Time) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if err := db.Exec(`INSERT INTO chef_profiles (id, payout_country, fssai_override_until) VALUES (?, ?, ?)`,
+			id.String(), country, overrideUntil).Error; err != nil {
 			t.Fatalf("insert chef: %v", err)
 		}
 		return id
@@ -180,6 +209,10 @@ func TestExcludeFSSAILocked(t *testing.T) {
 	nodoc := addChef("IN")
 	nullexp := addChef("IN")
 	addDoc(nullexp, models.DocStatusVerified, nil)
+	overridden := addChefOverride("IN", future) // expired doc but active override -> visible
+	addDoc(overridden, models.DocStatusVerified, &past)
+	overrideLapsed := addChefOverride("IN", past) // expired doc + lapsed override -> hidden
+	addDoc(overrideLapsed, models.DocStatusVerified, &past)
 
 	var ids []string
 	if err := db.Table("chef_profiles").Scopes(ExcludeFSSAILocked).Pluck("id", &ids).Error; err != nil {
@@ -190,12 +223,14 @@ func TestExcludeFSSAILocked(t *testing.T) {
 		got[id] = true
 	}
 
-	for name, id := range map[string]uuid.UUID{"valid": valid, "renewed": renewed, "non-IN": intl, "no-doc": nodoc, "null-expiry": nullexp} {
+	for name, id := range map[string]uuid.UUID{"valid": valid, "renewed": renewed, "non-IN": intl, "no-doc": nodoc, "null-expiry": nullexp, "overridden": overridden} {
 		if !got[id.String()] {
 			t.Errorf("%s chef should be visible in listings but was hidden", name)
 		}
 	}
-	if got[expired.String()] {
-		t.Error("expired-licence chef must be hidden from listings")
+	for name, id := range map[string]uuid.UUID{"expired": expired, "override-lapsed": overrideLapsed} {
+		if got[id.String()] {
+			t.Errorf("%s chef must be hidden from listings", name)
+		}
 	}
 }

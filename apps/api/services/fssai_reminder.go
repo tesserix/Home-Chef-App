@@ -191,6 +191,21 @@ func SendFSSAIBackOnlinePush(userID uuid.UUID) error {
 	return SendPushNotification(userID, title, body, data)
 }
 
+// SendFSSAIConfirmLicencePush asks a chef to confirm the expiry date of an FSSAI
+// licence we already have on file but with no recorded expiry (a legacy upload).
+// Backs the one-time expiry backfill (#93): until the date is captured the chef
+// can't be expiry-locked, so this closes a compliance blind-spot. Exported so the
+// admin-triggered backfill endpoint can fire it.
+func SendFSSAIConfirmLicencePush(userID uuid.UUID) error {
+	title := "Confirm your FSSAI licence"
+	body := "Please re-enter your FSSAI licence expiry date so we can keep your kitchen compliant and online."
+	data := map[string]string{
+		"type":     "fssai_confirm_expiry",
+		"deeplink": "homechef-vendor:///documents/renew",
+	}
+	return SendPushNotification(userID, title, body, data)
+}
+
 // shouldSendReminder gates each (doc, window, day) tuple through Redis
 // SETNX so two pods running the cron simultaneously don't both push.
 // First caller wins; subsequent callers (or this pod on restart later

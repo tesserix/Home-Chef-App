@@ -90,6 +90,17 @@ type ChefProfile struct {
 	// require a migration.
 	GSTIN              string `gorm:"type:varchar(15)" json:"gstin,omitempty"`
 
+	// FSSAI lockout override (#93). For genuine edge cases — e.g. a government
+	// renewal backlog where a chef's paperwork is filed but not yet processed —
+	// an admin can grant a time-boxed, reason-logged reprieve from the FSSAI
+	// expiry lockout. While FSSAIOverrideUntil is in the future the lockout is
+	// suspended; once it passes the expiry gate re-applies automatically with no
+	// cleanup. Every grant/clear is written to the audit log for compliance
+	// evidence. Reason + granting admin are retained for that paper trail.
+	FSSAIOverrideUntil  *time.Time `gorm:"index" json:"fssaiOverrideUntil,omitempty"`
+	FSSAIOverrideReason string     `gorm:"type:text" json:"fssaiOverrideReason,omitempty"`
+	FSSAIOverrideBy     *uuid.UUID `gorm:"type:uuid" json:"fssaiOverrideBy,omitempty"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 

@@ -356,23 +356,34 @@ func TestDeleteMyAccount_WritesPIISafeAuditLog(t *testing.T) {
 	assert.Contains(t, row.NewValue, "retainUntil", "audit records the retention deadline")
 }
 
-// TestDeleteMyAccount_RetryAfterDelete_DocumentsIdempotencyGap documents the
-// CURRENT behaviour of a retried delete. The handler intends to be idempotent
-// (return 200 "already_deleted" on a repeat), but its initial lookup uses the
-// default-scoped database.DB.First, which filters out soft-deleted rows. So a
-// retry can't find the row and returns 404 — the `already_deleted` branch is
-// effectively unreachable. Captured as a test so the behaviour is explicit;
-// see the PR for the recommended one-line fix (.Unscoped() on the lookup).
-func TestDeleteMyAccount_RetryAfterDelete_DocumentsIdempotencyGap(t *testing.T) {
+// TestDeleteMyAccount_RetryIsIdempotent verifies that a retried delete is safe
+// (DPDP retries from a flaky mobile network must not error). The handler looks
+// up the user with .Unscoped() so an already-soft-deleted account is still
+// found, returning 200 "already_deleted" with the original retention deadline
+// rather than a 404 (#106).
+func TestDeleteMyAccount_RetryIsIdempotent(t *testing.T) {
 	db := setupDPDPDB(t)
 	uid := seedUser(t, db, "chef@example.com", "chef")
 
 	first := doDelete(t, uid, map[string]any{"confirmEmail": "chef@example.com"})
 	require.Equal(t, http.StatusOK, first.Code, "body: %s", first.Body.String())
+	var firstResp struct {
+		Status      string    `json:"status"`
+		RetainUntil time.Time `json:"retainUntil"`
+	}
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstResp))
+	assert.Equal(t, "deleted", firstResp.Status)
 
 	second := doDelete(t, uid, map[string]any{"confirmEmail": "chef@example.com"})
-	assert.Equal(t, http.StatusNotFound, second.Code,
-		"retry currently 404s because First() is soft-delete-scoped (idempotency gap)")
+	require.Equal(t, http.StatusOK, second.Code, "retry must be idempotent, not 404")
+	var secondResp struct {
+		Status      string    `json:"status"`
+		RetainUntil time.Time `json:"retainUntil"`
+	}
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &secondResp))
+	assert.Equal(t, "already_deleted", secondResp.Status, "repeat delete reports already_deleted")
+	assert.WithinDuration(t, firstResp.RetainUntil, secondResp.RetainUntil, time.Second,
+		"retention deadline stays anchored to the original deletion")
 }
 
 // ── sanitizeUserForExport (pure unit, no DB) ─────────────────────────────────

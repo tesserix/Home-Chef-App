@@ -44,6 +44,14 @@ func IsChefFSSAIExpired(chef *models.ChefProfile) bool {
 		return false // FSSAI does not apply outside India.
 	}
 
+	// An active, time-boxed admin override (audited; #93) suspends the lockout
+	// for genuine edge cases — e.g. a government renewal backlog where the chef's
+	// paperwork is filed but not yet processed. Once it lapses the expiry gate
+	// below re-applies automatically, so there is nothing to clean up.
+	if chef.FSSAIOverrideUntil != nil && time.Now().Before(*chef.FSSAIOverrideUntil) {
+		return false
+	}
+
 	var doc models.ChefDocument
 	err := database.DB.
 		Where("chef_id = ? AND type = ? AND status = ? AND expiry_date IS NOT NULL",
@@ -71,22 +79,27 @@ func IsChefFSSAIExpired(chef *models.ChefProfile) bool {
 // has lapsed from a chef_profiles query — the set-based mirror of
 // IsChefFSSAIExpired, for efficient list filtering (no per-row N+1 check).
 //
-// A chef is excluded iff PayoutCountry is "IN" AND the MAX expiry across their
-// verified fssai_license documents is before the same (now - 1 day) cutoff that
-// IsChefFSSAIExpired uses. Using MAX (not "any expired doc") is essential: a chef
-// who renewed still has the old, expired document, and must NOT be hidden — their
-// latest verified expiry is in the future.
+// A chef is excluded iff PayoutCountry is "IN" AND they have no active admin
+// override AND the MAX expiry across their verified fssai_license documents is
+// before the same (now - 1 day) cutoff that IsChefFSSAIExpired uses. Using MAX
+// (not "any expired doc") is essential: a chef who renewed still has the old,
+// expired document, and must NOT be hidden — their latest verified expiry is in
+// the future. The override clause mirrors the early-return in IsChefFSSAIExpired
+// so a time-boxed admin reprieve (#93) keeps the chef visible everywhere.
 //
 // This query and IsChefFSSAIExpired express the identical rule and MUST stay in
-// sync; the unit tests assert both, including the renewal case.
+// sync; the unit tests assert both, including the renewal and override cases.
 func ExcludeFSSAILocked(db *gorm.DB) *gorm.DB {
-	cutoff := time.Now().AddDate(0, 0, -1)
+	now := time.Now()
+	cutoff := now.AddDate(0, 0, -1)
 	return db.Where(
-		`NOT (payout_country = ? AND id IN (
-			SELECT chef_id FROM chef_documents
-			WHERE type = ? AND status = ? AND expiry_date IS NOT NULL
-			GROUP BY chef_id HAVING MAX(expiry_date) < ?
-		))`,
-		"IN", models.DocFSSAILicense, models.DocStatusVerified, cutoff,
+		`NOT (payout_country = ?
+			AND (fssai_override_until IS NULL OR fssai_override_until <= ?)
+			AND id IN (
+				SELECT chef_id FROM chef_documents
+				WHERE type = ? AND status = ? AND expiry_date IS NOT NULL
+				GROUP BY chef_id HAVING MAX(expiry_date) < ?
+			))`,
+		"IN", now, models.DocFSSAILicense, models.DocStatusVerified, cutoff,
 	)
 }
