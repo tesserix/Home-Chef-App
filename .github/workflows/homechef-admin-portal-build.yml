@@ -63,7 +63,8 @@ jobs:
           # the kargo-homechef Project's prod Stage.
           tags: |
             type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=homechef-admin-portal
@@ -93,7 +94,8 @@ jobs:
           secrets: |
             npm_token=${{ secrets.NPM_TOKEN }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
-          cache-to: type=registry,ref=${{ steps.cache.outputs.ref }},mode=max
+          # cache write needs GHCR auth (skipped on PRs); read-only cache-from still works
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
       # Image push only — the deploy bump happens in the `bump-k8s` job
       # below, which writes the new main-<sha7> tag (and Knative
