@@ -138,6 +138,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// platform from the legal/reputational fallout. Customer-facing copy stays
 	// generic (the chef's compliance state is private).
 	if services.IsChefFSSAIExpired(&chef) {
+		middleware.RecordFSSAILockout("order_blocked")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen is temporarily unavailable. Please choose another chef."})
 		return
 	}

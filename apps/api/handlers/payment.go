@@ -96,6 +96,7 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	// orders for expired chefs, but any path that reaches payment is covered here.
 	chefFSSAIExpired := services.IsChefFSSAIExpired(&order.Chef)
 	if chefFSSAIExpired {
+		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
 			order.OrderNumber, order.Chef.ID, chefAmount)
 	}
