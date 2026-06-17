@@ -7,7 +7,12 @@ import {
   MoreHorizontal,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+// SDK 56: expo-router no longer re-exports react-navigation at the bare
+// `@react-navigation/bottom-tabs` specifier, and the root-hoisted copy's
+// `BottomTabBarProps` is a structurally different type from the one
+// expo-router's <Tabs> actually passes to `tabBar`. Import the type from
+// expo-router's own public `tabs` subpath so CustomTabBar matches exactly.
+import type { BottomTabBarProps } from 'expo-router/tabs';
 import { theme } from '@homechef/mobile-shared/theme';
 
 // Custom tab bar — replaces React Navigation's default BottomTabBar so we
@@ -159,18 +164,10 @@ export default function VendorTabsLayout() {
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({
-            color,
-            focused,
-            size,
-          }: {
-            color: string;
-            focused: boolean;
-            size: number;
-          }) => (
+          tabBarIcon: ({ color, focused, size }) => (
             <LayoutDashboard
               size={size}
-              color={color}
+              color={String(color)}
               strokeWidth={focused ? 2.4 : 2}
             />
           ),
@@ -180,18 +177,10 @@ export default function VendorTabsLayout() {
         name="orders"
         options={{
           title: 'Orders',
-          tabBarIcon: ({
-            color,
-            focused,
-            size,
-          }: {
-            color: string;
-            focused: boolean;
-            size: number;
-          }) => (
+          tabBarIcon: ({ color, focused, size }) => (
             <ClipboardList
               size={size}
-              color={color}
+              color={String(color)}
               strokeWidth={focused ? 2.4 : 2}
             />
           ),
@@ -201,18 +190,10 @@ export default function VendorTabsLayout() {
         name="menu"
         options={{
           title: 'Menu',
-          tabBarIcon: ({
-            color,
-            focused,
-            size,
-          }: {
-            color: string;
-            focused: boolean;
-            size: number;
-          }) => (
+          tabBarIcon: ({ color, focused, size }) => (
             <UtensilsCrossed
               size={size}
-              color={color}
+              color={String(color)}
               strokeWidth={focused ? 2.4 : 2}
             />
           ),
@@ -222,18 +203,10 @@ export default function VendorTabsLayout() {
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({
-            color,
-            focused,
-            size,
-          }: {
-            color: string;
-            focused: boolean;
-            size: number;
-          }) => (
+          tabBarIcon: ({ color, focused, size }) => (
             <MoreHorizontal
               size={size}
-              color={color}
+              color={String(color)}
               strokeWidth={focused ? 2.4 : 2}
             />
           ),
