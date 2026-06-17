@@ -72,6 +72,9 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	foodRating := parseIntFormValue(c.PostForm("foodRating"), 0)
 	deliveryRating := parseIntFormValue(c.PostForm("deliveryRating"), 0)
 	valueRating := parseIntFormValue(c.PostForm("valueRating"), 0)
+	// Ratings 2.0 sub-scores (#35), optional.
+	packagingRating := parseIntFormValue(c.PostForm("packagingRating"), 0)
+	hygieneRating := parseIntFormValue(c.PostForm("hygieneRating"), 0)
 
 	if overallRating < 1 || overallRating > 5 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "overallRating must be between 1 and 5"})
@@ -125,13 +128,15 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 		OrderID:        parsedOrderID,
 		CustomerID:     userID,
 		ChefID:         order.ChefID,
-		OverallRating:  overallRating,
-		FoodRating:     foodRating,
-		DeliveryRating: deliveryRating,
-		ValueRating:    valueRating,
-		Title:          title,
-		Comment:        comment,
-		Images:         pq.StringArray(imageURLs),
+		OverallRating:   overallRating,
+		FoodRating:      foodRating,
+		DeliveryRating:  deliveryRating,
+		ValueRating:     valueRating,
+		PackagingRating: packagingRating,
+		HygieneRating:   hygieneRating,
+		Title:           title,
+		Comment:         comment,
+		Images:          pq.StringArray(imageURLs),
 	}
 
 	if err := database.DB.Create(&review).Error; err != nil {

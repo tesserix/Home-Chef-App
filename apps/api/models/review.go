@@ -19,6 +19,9 @@ type Review struct {
 	FoodRating     int `gorm:"" json:"foodRating"`
 	DeliveryRating int `gorm:"" json:"deliveryRating"`
 	ValueRating    int `gorm:"" json:"valueRating"`
+	// Ratings 2.0 sub-scores (#35): packaging + hygiene, 1-5, optional.
+	PackagingRating int `gorm:"" json:"packagingRating"`
+	HygieneRating   int `gorm:"" json:"hygieneRating"`
 
 	// Content
 	Title   string         `gorm:"" json:"title"`
@@ -55,6 +58,8 @@ type ReviewResponse struct {
 	FoodRating      int        `json:"foodRating"`
 	DeliveryRating  int        `json:"deliveryRating"`
 	ValueRating     int        `json:"valueRating"`
+	PackagingRating int        `json:"packagingRating"`
+	HygieneRating   int        `json:"hygieneRating"`
 	Title           string     `json:"title,omitempty"`
 	Comment         string     `json:"comment"`
 	Images          []string   `json:"images"`
@@ -90,6 +95,8 @@ func (r *Review) ToResponse() ReviewResponse {
 		FoodRating:      r.FoodRating,
 		DeliveryRating:  r.DeliveryRating,
 		ValueRating:     r.ValueRating,
+		PackagingRating: r.PackagingRating,
+		HygieneRating:   r.HygieneRating,
 		Title:           r.Title,
 		Comment:         r.Comment,
 		Images:          images,
