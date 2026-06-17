@@ -14,6 +14,9 @@ export interface Chef {
   deliveryTime?: string;
   minimumOrder?: number;
   deliveryFee?: number;
+  // foodSafetyBadge (#35): chef holds a verified, non-expired FSSAI licence;
+  // set from the chef-list API response via mapChef.
+  foodSafetyBadge?: boolean;
 }
 
 export interface MenuItem {

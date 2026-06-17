@@ -36,6 +36,7 @@ interface ApiChefProfile {
   acceptingOrders?: boolean;
   latitude?: number;
   longitude?: number;
+  foodSafetyBadge?: boolean;
 }
 
 interface ApiMenuItem {
@@ -74,6 +75,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     deliveryTime: c.prepTime,
     minimumOrder: c.minimumOrder,
     deliveryFee: c.deliveryFee,
+    foodSafetyBadge: Boolean(c.foodSafetyBadge),
   };
 }
 

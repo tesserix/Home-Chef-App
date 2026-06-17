@@ -59,6 +59,9 @@ export interface Chef {
   operatingHours: OperatingHours;
   verified: boolean;
   verifiedAt?: string;
+  // foodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
+  // Returned by the API on the chef-list card response.
+  foodSafetyBadge?: boolean;
   // TODO(CW-01c): Expose chef FSSAI licence number on the public /chefs/:id API
   // payload. Backend currently stores it on the chef profile (vendor-portal) but
   // does not surface it to the customer storefront. Until then this is undefined
