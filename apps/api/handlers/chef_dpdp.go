@@ -163,7 +163,9 @@ func (h *ChefDPDPHandler) DeleteMyAccount(c *gin.Context) {
 			Update("accepting_orders", false).Error
 	}
 
-	log.Printf("DPDP delete: user=%s email=%s at=%s", user.ID, user.Email, now.Format(time.RFC3339))
+	// Log the user id only — never the email. This is the erasure path; the
+	// email is PII and the audit row (below) already records the deletion.
+	log.Printf("DPDP delete: user=%s at=%s", user.ID, now.Format(time.RFC3339))
 
 	retainUntil := now.Add(30 * 24 * time.Hour)
 

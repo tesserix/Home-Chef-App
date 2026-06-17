@@ -335,7 +335,7 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 		if err := services.GetEmailService().SendStaffInvitation(
 			invitation.Email, inviterName, string(invitation.StaffRole), acceptURL,
 		); err != nil {
-			log.Printf("Warning: failed to send staff invitation email to %s: %v", invitation.Email, err)
+			log.Printf("Warning: failed to send staff invitation %s: %v", invitation.ID, err)
 		}
 	}()
 
