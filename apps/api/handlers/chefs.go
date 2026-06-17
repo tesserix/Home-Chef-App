@@ -16,12 +16,27 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"gorm.io/gorm/clause"
 )
 
 type ChefHandler struct{}
 
 func NewChefHandler() *ChefHandler {
 	return &ChefHandler{}
+}
+
+// chefBoundingBox returns the lat/lng rectangle around (lat,lng) covering
+// radiusKm, used as a cheap SQL-side "near me" prefilter (#36). ~1° latitude ≈
+// 111 km; longitude degrees shrink by cos(lat). A rectangle is a good-enough
+// nearby filter for v1 and, unlike a Go-side circle filter, paginates in SQL.
+func chefBoundingBox(lat, lng, radiusKm float64) (minLat, maxLat, minLng, maxLng float64) {
+	dLat := radiusKm / 111.0
+	cosLat := math.Cos(lat * math.Pi / 180.0)
+	if cosLat < 0.01 {
+		cosLat = 0.01 // guard near the poles; India is mid-latitude so n/a
+	}
+	dLng := radiusKm / (111.0 * cosLat)
+	return lat - dLat, lat + dLat, lng - dLng, lng + dLng
 }
 
 // ListChefs returns a paginated list of chefs
@@ -39,6 +54,19 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	sortBy := c.Query("sortBy")
 	if sortBy == "" {
 		sortBy = c.DefaultQuery("sort", "rating")
+	}
+
+	// Price range + near-me geo (#36).
+	minPriceStr := c.Query("minPrice")
+	maxPriceStr := c.Query("maxPrice")
+	var geoLat, geoLng float64
+	hasGeo := false
+	if latS, lngS := c.Query("lat"), c.Query("lng"); latS != "" && lngS != "" {
+		la, e1 := strconv.ParseFloat(latS, 64)
+		lo, e2 := strconv.ParseFloat(lngS, 64)
+		if e1 == nil && e2 == nil {
+			geoLat, geoLng, hasGeo = la, lo, true
+		}
 	}
 
 	if page < 1 {
@@ -81,6 +109,32 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		query = query.Where("id IN (SELECT chef_id FROM menu_items WHERE ? = ANY(dietary_tags) AND deleted_at IS NULL)", dietary)
 	}
 
+	// Price-range filter on the chef's minimum order (#36).
+	if minPriceStr != "" {
+		if v, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
+			query = query.Where("minimum_order >= ?", v)
+		}
+	}
+	if maxPriceStr != "" {
+		if v, err := strconv.ParseFloat(maxPriceStr, 64); err == nil {
+			query = query.Where("minimum_order <= ?", v)
+		}
+	}
+
+	// Near-me: bounding-box prefilter around the customer's coords (#36). radius
+	// defaults to 15km. Cheap, SQL-side, paginates correctly.
+	if hasGeo {
+		radiusKm := 15.0
+		if rS := c.Query("radius"); rS != "" {
+			if r, err := strconv.ParseFloat(rS, 64); err == nil && r > 0 {
+				radiusKm = r
+			}
+		}
+		minLat, maxLat, minLng, maxLng := chefBoundingBox(geoLat, geoLng, radiusKm)
+		query = query.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
+			minLat, maxLat, minLng, maxLng)
+	}
+
 	// Get total count
 	var total int64
 	query.Count(&total)
@@ -103,6 +157,18 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		query = query.Order(featuredOrder + ", created_at " + dir)
 	case "price":
 		query = query.Order(featuredOrder + ", minimum_order " + dir)
+	case "distance":
+		if hasGeo {
+			// Squared distance on lat/lng — a monotonic proxy for true distance
+			// at city scale; cheap (no trig) and orders nearby chefs correctly.
+			// Closest first.
+			query = query.Order(clause.Expr{
+				SQL:  featuredOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC",
+				Vars: []interface{}{geoLat, geoLat, geoLng, geoLng},
+			})
+		} else {
+			query = query.Order(featuredOrder + ", rating " + dir)
+		}
 	default:
 		query = query.Order(featuredOrder + ", rating " + dir)
 	}
@@ -122,6 +188,60 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": responses,
+		"pagination": gin.H{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": (total + int64(limit) - 1) / int64(limit),
+			"hasNext":    int64(offset+limit) < total,
+			"hasPrev":    page > 1,
+		},
+	})
+}
+
+// SearchDishes searches menu items by name/description across all active,
+// non-FSSAI-locked chefs (#36 — "search by dish"). Returns matching dishes with
+// their chef id so the client can deep-link to the chef. GET /search/dishes
+func (h *ChefHandler) SearchDishes(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	if len(q) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Search query must be at least 2 characters"})
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 50 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	// Restrict to dishes from active, non-locked chefs — mirrors the visibility
+	// rule ListChefs applies (FSSAI lockout #91 included).
+	visibleChefs := database.DB.Model(&models.ChefProfile{}).
+		Where("is_active = ?", true).
+		Scopes(services.ExcludeFSSAILocked).
+		Select("id")
+
+	base := database.DB.Model(&models.MenuItem{}).
+		Where("is_available = ? AND is_approved = ?", true, true).
+		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
+		Where("chef_id IN (?)", visibleChefs)
+
+	var total int64
+	base.Count(&total)
+
+	var items []models.MenuItem
+	if err := base.Order("rating DESC, total_reviews DESC").
+		Offset(offset).Limit(limit).Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": items,
 		"pagination": gin.H{
 			"page":       page,
 			"limit":      limit,
