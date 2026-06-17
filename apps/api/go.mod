@@ -22,6 +22,7 @@ require (
 require (
 	cloud.google.com/go/vision v1.2.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.33.0
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/getsentry/sentry-go v0.47.0
 	github.com/getsentry/sentry-go/gin v0.47.0
 	github.com/gorilla/websocket v1.5.3
@@ -113,6 +114,7 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.42.0 // indirect
