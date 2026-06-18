@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Star,
   Clock,
@@ -16,6 +16,7 @@ import {
   Loader2,
   ChevronRight,
   ShieldCheck,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -24,7 +25,7 @@ import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDate } from '@/shared/utils/format-date';
-import { Button } from '@/shared/components/ui';
+import { Button, SimpleDialog } from '@/shared/components/ui';
 import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
 
 export default function ChefDetailPage() {
@@ -57,6 +58,32 @@ export default function ChefDetailPage() {
   const navigate = useNavigate();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = id ? isFavorite(id) : false;
+  const [groupOpen, setGroupOpen] = useState(false);
+
+  // Group / office orders (#46) — start a shared cart from this chef, then
+  // invite others to add their own items and split the bill.
+  const startGroup = useMutation({
+    mutationFn: (type: 'office' | 'personal') =>
+      apiClient.post<{ groupOrder: { id: string } }>('/group-orders', {
+        chefId: id,
+        type,
+        splitMode: 'split',
+      }),
+    onSuccess: (resp) => {
+      setGroupOpen(false);
+      navigate(`/group-orders/${resp.groupOrder.id}`);
+    },
+    onError: () => toast.error('Could not start a group order. Please try again.'),
+  });
+
+  const openGroup = () => {
+    if (!isAuthenticated) {
+      toast.error('Please log in to start a group order');
+      navigate('/login');
+      return;
+    }
+    setGroupOpen(true);
+  };
 
   const handleFavorite = async () => {
     if (!isAuthenticated) {
@@ -165,6 +192,13 @@ export default function ChefDetailPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    leftIcon={<Users aria-hidden="true" className="h-5 w-5" />}
+                    onClick={openGroup}
+                  >
+                    Group order
+                  </Button>
                   <Button
                     variant="outline"
                     size="icon"
@@ -344,6 +378,36 @@ export default function ChefDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Group / office order chooser (#46) */}
+      <SimpleDialog
+        open={groupOpen}
+        onOpenChange={setGroupOpen}
+        size="sm"
+        title="Start a group order"
+        description={`Order together from ${chef.businessName}. Invite others to add their own dishes — everyone pays their own share, and it arrives in one delivery.`}
+      >
+        <div className="mt-2 grid gap-3">
+          <button
+            type="button"
+            disabled={startGroup.isPending}
+            onClick={() => startGroup.mutate('personal')}
+            className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
+          >
+            <p className="font-medium text-ink">Personal group</p>
+            <p className="mt-0.5 text-sm text-ink-soft">Friends, family, or a casual meet-up.</p>
+          </button>
+          <button
+            type="button"
+            disabled={startGroup.isPending}
+            onClick={() => startGroup.mutate('office')}
+            className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
+          >
+            <p className="font-medium text-ink">Office order</p>
+            <p className="mt-0.5 text-sm text-ink-soft">A team lunch or corporate event.</p>
+          </button>
+        </div>
+      </SimpleDialog>
     </div>
   );
 }
@@ -456,7 +520,14 @@ function MenuItemCard({
               )}
             </div>
 
-            {item.isAvailable ? (
+            {/* Capacity (#48): low-stock hint when capped and not sold out. */}
+            {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
+              <p className="mb-1 text-xs text-ink-muted tabular-nums">{item.remainingToday} left today</p>
+            ) : null}
+
+            {item.soldOut ? (
+              <span className="text-sm font-semibold text-paprika">Sold out today</span>
+            ) : item.isAvailable ? (
               <div className="flex items-center gap-2">
                 {/* Quantity selector */}
                 <div className="flex items-center rounded-lg border">

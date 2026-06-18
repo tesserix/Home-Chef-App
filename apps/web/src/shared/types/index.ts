@@ -115,6 +115,11 @@ export interface MenuItem {
   // Per-dish rating rolled up from DishRating (#145).
   rating?: number;
   totalReviews?: number;
+  // Capacity & cutoff controls (#48). dailyCapacity null/absent = unlimited;
+  // remainingToday/soldOut are server-derived for capped dishes today (IST).
+  dailyCapacity?: number | null;
+  remainingToday?: number | null;
+  soldOut?: boolean;
 }
 
 // Order types

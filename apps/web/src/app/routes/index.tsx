@@ -39,6 +39,9 @@ const CheckoutPage = lazyWithRetry(() => import('@/features/customer/pages/Check
 const OrdersPage = lazyWithRetry(() => import('@/features/customer/pages/OrdersPage'));
 const OrderDetailPage = lazyWithRetry(() => import('@/features/customer/pages/OrderDetailPage'));
 const ReviewPage = lazyWithRetry(() => import('@/features/customer/pages/ReviewPage'));
+const TipPage = lazyWithRetry(() => import('@/features/customer/pages/TipPage'));
+const GroupOrderPage = lazyWithRetry(() => import('@/features/customer/pages/GroupOrderPage'));
+const GroupInvitePage = lazyWithRetry(() => import('@/features/customer/pages/GroupInvitePage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/customer/pages/ProfilePage'));
 const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletPage'));
 const SocialFeedPage = lazyWithRetry(() => import('@/features/social/pages/SocialFeedPage'));
@@ -174,6 +177,32 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <ReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Post-delivery tip (#45) */}
+          <Route
+            path="orders/:id/tip"
+            element={
+              <ProtectedRoute>
+                <TipPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Group / office orders (#46) — shared cart hub + invite landing */}
+          <Route
+            path="group-orders/:id"
+            element={
+              <ProtectedRoute>
+                <GroupOrderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="group/:token"
+            element={
+              <ProtectedRoute>
+                <GroupInvitePage />
               </ProtectedRoute>
             }
           />
