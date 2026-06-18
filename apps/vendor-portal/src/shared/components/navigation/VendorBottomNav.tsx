@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   UtensilsCrossed,
   ClipboardList,
+  ChefHat,
   DollarSign,
   User,
 } from 'lucide-react';
@@ -12,6 +13,7 @@ const bottomNavItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
+  { name: 'Prep', href: '/prep', icon: ChefHat },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Profile', href: '/profile', icon: User },
 ];

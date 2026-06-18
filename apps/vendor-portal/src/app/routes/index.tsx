@@ -43,6 +43,7 @@ const MenuPage = lazyWithRetry(() => import('@/features/menu/pages/MenuPage'));
 const MenuItemFormPage = lazyWithRetry(() => import('@/features/menu/pages/MenuItemFormPage'));
 const MenuItemViewPage = lazyWithRetry(() => import('@/features/menu/pages/MenuItemViewPage'));
 const CapacityPage = lazyWithRetry(() => import('@/features/capacity/pages/CapacityPage'));
+const PrepPage = lazyWithRetry(() => import('@/features/meal-plans/pages/PrepPage'));
 const LiveOrdersPage = lazyWithRetry(() => import('@/features/orders/pages/LiveOrdersPage'));
 const OrderHistoryPage = lazyWithRetry(() => import('@/features/orders/pages/OrderHistoryPage'));
 const EarningsPage = lazyWithRetry(() => import('@/features/earnings/pages/EarningsPage'));
@@ -113,6 +114,7 @@ export function AppRoutes() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="menu" element={<MenuPage />} />
           <Route path="capacity" element={<CapacityPage />} />
+          <Route path="prep" element={<PrepPage />} />
           <Route path="menu/new" element={<MenuItemFormPage />} />
           <Route path="menu/:id" element={<MenuItemViewPage />} />
           <Route path="menu/:id/edit" element={<MenuItemFormPage />} />
