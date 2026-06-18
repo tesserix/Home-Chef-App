@@ -190,6 +190,15 @@ func SetupRouter() *gin.Engine {
 	r.POST("/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
 	r.POST("/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
 
+	// Same webhooks under /api/* too. Publicly, only /api and /ws are routed
+	// to this service (per-host Istio VirtualServices + Cloudflare); the
+	// root /webhooks/* paths fall through to the web frontend and 404. So the
+	// externally-registered webhook URLs use the /api form
+	// (e.g. https://fe3dr.com/api/webhooks/razorpay).
+	r.POST("/api/webhooks/razorpay", webhookLimit, paymentHandler.RazorpayWebhook)
+	r.POST("/api/webhooks/stripe", webhookLimit, paymentHandler.StripeWebhook)
+	r.POST("/api/webhooks/delivery/:provider", webhookLimit, providerHandler.HandleWebhook)
+
 	// WebSocket endpoints live at top-level /ws/* so the per-portal Istio
 	// VirtualServices (fe3dr.com, vendors.fe3dr.com, admin.fe3dr.com, …)
 	// can route /ws/ directly to the API at the 3600s upgrade timeout,
