@@ -10,6 +10,18 @@ export interface CapacitySettings {
   lunchCutoff: string; // "HH:MM" IST, "" = none
   dinnerCutoff: string;
   autoSoldOut: boolean;
+
+  // Scheduled delivery slots (#51). When slotsEnabled, customers pick a
+  // lunch/dinner delivery window at checkout; each slot has a display window
+  // (start–end "HH:MM" IST) and an optional per-day capacity (null = unlimited).
+  // The lunch/dinner cutoff above doubles as that slot's order cutoff.
+  slotsEnabled: boolean;
+  lunchSlotStart: string;
+  lunchSlotEnd: string;
+  dinnerSlotStart: string;
+  dinnerSlotEnd: string;
+  lunchSlotCapacity: number | null;
+  dinnerSlotCapacity: number | null;
 }
 
 export function useCapacitySettings() {

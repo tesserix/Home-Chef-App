@@ -14,6 +14,11 @@ interface CreateOrderPayload {
   // Order-level note to the chef. Backend reads `specialInstructions`
   // (CreateOrderRequest) — a `note` field is silently dropped.
   specialInstructions?: string;
+  // Scheduled delivery slot (#51) — optional. "lunch"|"dinner" + "YYYY-MM-DD"
+  // (IST). When set, the server resolves the slot window → ScheduledFor and
+  // reserves the chef's per-slot daily capacity. Absent = ASAP.
+  deliverySlot?: string;
+  deliveryDate?: string;
 }
 
 export function useCreateOrder() {

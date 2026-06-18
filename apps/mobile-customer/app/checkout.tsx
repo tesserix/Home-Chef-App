@@ -25,6 +25,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
+import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
 import { useWallet } from '../hooks/useWallet';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
@@ -75,6 +76,18 @@ interface RazorpayPaymentData {
 // the toggle stays hidden until both the app build and the server enable it.
 const WALLET_CHECKOUT_ENABLED = process.env.EXPO_PUBLIC_WALLET_CHECKOUT_ENABLED === 'true';
 
+// slotDayLabel turns a "YYYY-MM-DD" slot date into a human label relative to the
+// device's today ("Today" / "Tomorrow" / "Mon, 22 Jun") for the slot picker (#51).
+function slotDayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutScreen() {
@@ -89,6 +102,11 @@ export default function CheckoutScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
+  // Scheduled delivery slot (#51) — null = ASAP. Only shown when the chef
+  // offers slots; the chosen slot+date ride along on the create-order payload.
+  const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
+  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
+  const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -187,6 +205,8 @@ export default function CheckoutScreen() {
         })),
         deliveryAddressId: selectedAddressId,
         specialInstructions: note.trim() || undefined,
+        deliverySlot: selectedSlot?.slot,
+        deliveryDate: selectedSlot?.date,
       });
 
       const orderId = orderResult.data.id;
@@ -622,6 +642,64 @@ export default function CheckoutScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Delivery time / scheduled slot (#51) ── */}
+        {slotsData?.slotsEnabled && (
+          <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+            <Text className="text-sm font-medium text-charcoal-soft mb-3">Delivery time</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {/* ASAP (default) */}
+              <Pressable
+                onPress={() => setSelectedSlot(null)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedSlot === null }}
+              >
+                <View
+                  className={`px-3 py-2 rounded-xl border ${
+                    selectedSlot === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                  }`}
+                >
+                  <Text className={`text-sm font-medium ${selectedSlot === null ? 'text-coral' : 'text-charcoal'}`}>
+                    ASAP
+                  </Text>
+                  <Text className="text-xs text-charcoal-soft">After chef accepts</Text>
+                </View>
+              </Pressable>
+
+              {availableSlots.map((s: DeliverySlot) => {
+                const sel = selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                return (
+                  <Pressable
+                    key={`${s.date}-${s.slot}`}
+                    onPress={() => setSelectedSlot({ slot: s.slot, date: s.date })}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: sel }}
+                    accessibilityLabel={`${slotDayLabel(s.date)} ${s.label} ${s.window}`}
+                  >
+                    <View
+                      className={`px-3 py-2 rounded-xl border ${
+                        sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                      }`}
+                    >
+                      <Text className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}>
+                        {slotDayLabel(s.date)} · {s.label}
+                      </Text>
+                      <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
+                        {s.window}
+                        {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {availableSlots.length === 0 && (
+              <Text className="text-xs text-charcoal-soft mt-1">
+                No delivery windows are open right now — your order will be delivered ASAP.
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* ── Payment & delivery (concise; detail behind policy links) ── */}
         {/* CW-01d / RBI PA MD §8: keeps the required PA + refund-window disclosure
