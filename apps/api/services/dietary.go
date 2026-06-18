@@ -33,20 +33,25 @@ var DietOptions = []DietaryOption{
 	{"low-carb", "Low-Carb"},
 }
 
-// AllergenOptions is the canonical allergen vocabulary (the major declarable
-// allergens). A customer lists the ones they must avoid; a chef declares the
-// ones a dish contains.
+// AllergenOptions is the canonical allergen vocabulary — the full set of major
+// declarable allergens (the EU-14 / FDA "big 9" union, the basis of India's
+// FSSAI labelling rules). A customer lists the ones they must avoid; a chef
+// declares the ones a dish contains.
 var AllergenOptions = []DietaryOption{
+	{"gluten", "Gluten (wheat, barley, rye)"},
 	{"peanuts", "Peanuts"},
 	{"tree-nuts", "Tree Nuts"},
-	{"dairy", "Dairy"},
+	{"dairy", "Dairy (milk)"},
 	{"eggs", "Eggs"},
-	{"gluten", "Gluten"},
 	{"soy", "Soy"},
-	{"shellfish", "Shellfish"},
 	{"fish", "Fish"},
+	{"shellfish", "Shellfish (crustaceans)"},
+	{"molluscs", "Molluscs"},
 	{"sesame", "Sesame"},
 	{"mustard", "Mustard"},
+	{"celery", "Celery"},
+	{"lupin", "Lupin"},
+	{"sulphites", "Sulphites"},
 }
 
 // vegDiets are the diet preferences that a non-vegetarian dish violates.
