@@ -108,6 +108,11 @@ type Config struct {
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
 	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
 	MealPlanEscrowEnabled bool
+	// CateringDepositEnabled gates the catering deposit/advance money flow (#55):
+	// creating a Razorpay deposit order to confirm a catering booking. Default OFF —
+	// the request → quote → accept flow works without it; flip on only after the
+	// Razorpay deposit path is sandbox-verified (#218).
+	CateringDepositEnabled bool
 }
 
 var AppConfig *Config
@@ -123,6 +128,7 @@ func Load() {
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
+	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -229,6 +235,7 @@ func Load() {
 		MealPlanEscrowEnabled:         mealPlanEscrow,
 		GroupOrdersEnabled:            groupOrders,
 		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
+		CateringDepositEnabled:        cateringDeposit,
 	}
 }
 
