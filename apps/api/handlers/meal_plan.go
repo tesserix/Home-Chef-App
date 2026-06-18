@@ -247,6 +247,21 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 	// into the platform account here and the held chef payouts are created; until
 	// then the plan proceeds to the chef without charging (handshake mode).
 	resp := gin.H{"mealPlan": plan, "escrowEnabled": config.AppConfig.MealPlanEscrowEnabled}
+	// Escrow (gated): create the Razorpay advance order for the full total and
+	// hand the client what it needs to launch checkout, then POST verify-payment.
+	if services.MealPlanEscrowActive() {
+		orderID, oerr := services.CreateMealPlanAdvanceOrder(&plan)
+		if oerr != nil {
+			resp["paymentError"] = "Could not start the advance payment; please retry."
+		} else if orderID != "" {
+			database.DB.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+				Update("razorpay_order_id", orderID)
+			resp["razorpayOrderId"] = orderID
+			if rz := services.GetRazorpay(); rz != nil {
+				resp["razorpayKeyId"] = rz.GetKeyID()
+			}
+		}
+	}
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -303,11 +318,11 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	}
 	defer release()
 
-	// The chef-facing event must target the chef's User.ID, not the ChefProfile.ID.
-	// A missing chef row leaves it Nil — the notification consumer drops it gracefully.
-	var chefUserID uuid.UUID
-	database.DB.Model(&models.ChefProfile{}).
-		Where("id = ?", plan.ChefID).Pluck("user_id", &chefUserID)
+	// Load the chef for the recipient User.ID (events target User.ID, not
+	// ChefProfile.ID) and the Razorpay linked account (escrow payouts).
+	var chefProfile models.ChefProfile
+	database.DB.First(&chefProfile, "id = ?", plan.ChefID)
+	chefUserID := chefProfile.UserID
 
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -349,12 +364,23 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 				Updates(map[string]any{"confirmed_at": now, "subtotal": accepted, "total": accepted}).Error; err != nil {
 				return err
 			}
+			// Escrow (gated): refund the declined days, hold the chef's per-day payouts.
+			if err := services.RefundDeclinedDays(tx, &plan, "chef could not cook this day"); err != nil {
+				return err
+			}
+			if err := services.HoldChefPayouts(tx, &plan, chefProfile.RazorpayAccountID); err != nil {
+				return err
+			}
 		} else {
 			plan.Status = models.MealPlanCancelled
 			plan.CancelledAt = &now
 			plan.CancelReason = "customer rejected the chef's revised plan"
 			if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
 				Updates(map[string]any{"cancelled_at": now, "cancel_reason": plan.CancelReason}).Error; err != nil {
+				return err
+			}
+			// Escrow (gated): full refund of everything still in scope.
+			if err := services.RefundUndeliveredDays(tx, &plan, "customer rejected the revised plan"); err != nil {
 				return err
 			}
 		}
@@ -375,9 +401,106 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 		return
 	}
-	// TODO(#194): on approve → refund declined-day amounts to wallet; on reject →
-	// full refund. Gated by config.AppConfig.MealPlanEscrowEnabled.
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+}
+
+// SkipMealPlanDay — PUT /meal-plans/:id/days/:dayId/skip. The customer skips a
+// confirmed day whose order hasn't been generated yet, before the lead-time
+// cutoff; the day is refunded to wallet (escrow; gated).
+func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	dayID, err := uuid.Parse(c.Param("dayId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day id"})
+		return
+	}
+	var day *models.MealPlanDay
+	for i := range plan.Days {
+		if plan.Days[i].ID == dayID {
+			day = &plan.Days[i]
+			break
+		}
+	}
+	if day == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Day not found in this plan"})
+		return
+	}
+	// Only a confirmed day whose order hasn't been generated, before the cutoff.
+	if day.Status != models.MealPlanDayConfirmed || day.OrderID != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
+		return
+	}
+	if day.Date.Before(time.Now().Add(mealPlanLeadTime)) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Too late to skip this day"})
+		return
+	}
+
+	okLock, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("skipday:%s", day.ID))
+	if !okLock {
+		c.JSON(http.StatusConflict, gin.H{"error": "Already processing"})
+		return
+	}
+	defer release()
+
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.MealPlanDay{}).
+			Where("id = ? AND status = ?", day.ID, models.MealPlanDayConfirmed).
+			Update("status", models.MealPlanDaySkipped)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errPlanConflict
+		}
+		day.Status = models.MealPlanDaySkipped
+		if err := services.RefundDay(tx, &plan, day, "customer skipped this day"); err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, services.SubjectMealPlanDayRefunded, "meal_plan_day.skipped", customerID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
+		})
+	}); err != nil {
+		if errors.Is(err, errPlanConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to skip day"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+}
+
+type verifyMealPlanPaymentRequest struct {
+	RazorpayPaymentID string `json:"razorpayPaymentId"`
+}
+
+// VerifyMealPlanPayment — POST /meal-plans/:id/verify-payment. Confirms the
+// customer's advance payment was captured and stamps the escrow payment id.
+// No-op acknowledgement when escrow is off.
+func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	var req verifyMealPlanPaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		return services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID)
+	}); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "paymentVerified": true})
 }
 
 // ───────────────────────── Chef ─────────────────────────
@@ -498,6 +621,13 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 		}
 		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).Updates(upd).Error; err != nil {
 			return err
+		}
+		// Accept-all auto-confirms → hold the chef's per-day payouts now (escrow;
+		// gated). A cherry-pick waits for the customer's approval (finalizeByCustomer).
+		if allAccepted {
+			if err := services.HoldChefPayouts(tx, &plan, chef.RazorpayAccountID); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueEvent(tx, subj, "meal_plan.responded", plan.CustomerID, map[string]any{
 			"meal_plan_id": plan.ID.String(), "all_accepted": allAccepted, "chef_id": chef.ID.String(),

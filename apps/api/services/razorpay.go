@@ -357,6 +357,46 @@ func (c *RazorpayClient) CreateTransfer(req *DirectTransferRequest) (*TransferRe
 	return &result, nil
 }
 
+// ReleaseTransfer clears the on-hold flag on a held Route transfer so Razorpay
+// settles it to the linked account. This is the escrow "release on delivery"
+// primitive the tiffin meal-plan flow needs (#194): chef payouts are created
+// OnHold at confirmation and released per delivered day. Releasing an already
+// released transfer is a no-op on Razorpay's side; callers should also DB-guard
+// to avoid the round-trip.
+func (c *RazorpayClient) ReleaseTransfer(transferID string) (*TransferResponse, error) {
+	body, _ := json.Marshal(map[string]any{"on_hold": false})
+	resp, err := c.doRequest("PATCH", fmt.Sprintf("/transfers/%s", transferID), body)
+	if err != nil {
+		return nil, err
+	}
+	var result TransferResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &result, nil
+}
+
+// ReverseTransfer reverses a (settled or held) Route transfer, returning the
+// funds to the platform balance — used to claw back a chef payout when a
+// confirmed-but-not-yet-delivered day is later refunded (escrow refund path,
+// #194). amountPaise of 0 reverses the full transfer.
+func (c *RazorpayClient) ReverseTransfer(transferID string, amountPaise int) (*TransferResponse, error) {
+	payload := map[string]any{}
+	if amountPaise > 0 {
+		payload["amount"] = amountPaise
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.doRequest("POST", fmt.Sprintf("/transfers/%s/reversals", transferID), body)
+	if err != nil {
+		return nil, err
+	}
+	var result TransferResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &result, nil
+}
+
 // --- Payment Fetch ---
 
 // PaymentResponse from Razorpay

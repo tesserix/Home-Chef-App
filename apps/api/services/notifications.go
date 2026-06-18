@@ -84,7 +84,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
-			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled}},
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded}},
 	}
 }
 
@@ -137,6 +137,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleMealPlanConfirmed)
 	case SubjectMealPlanCancelled:
 		return decodeThen(data, s.handleMealPlanCancelled)
+	case SubjectMealPlanDayDelivered:
+		return decodeThen(data, s.handleMealPlanDayDelivered)
+	case SubjectMealPlanDayRefunded:
+		return decodeThen(data, s.handleMealPlanDayRefunded)
 	default:
 		log.Printf("notification: no handler for subject %q", subject)
 		return nil
@@ -650,6 +654,34 @@ func (s *NotificationService) handleMealPlanConfirmed(event Event) error {
 	return s.notifyMealPlan(event, "meal_plan_confirmed",
 		"Meal plan confirmed",
 		"The customer approved your revised plan. It's confirmed.")
+}
+
+// handleMealPlanDayDelivered → customer: a tiffin day was delivered. In-app only
+// (no push) — per-day delivery is high-frequency and the order pipeline already
+// pushes its own delivery notification.
+func (s *NotificationService) handleMealPlanDayDelivered(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "meal_plan_day_delivered",
+		Title:   "Tiffin delivered",
+		Message: "Today's tiffin from your meal plan was delivered. Enjoy!",
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_day_delivered notification: %w", err)
+	}
+	return nil
+}
+
+// handleMealPlanDayRefunded → customer: a skipped/undelivered day was refunded to
+// the wallet. In-app + push (money movement is worth a push).
+func (s *NotificationService) handleMealPlanDayRefunded(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_day_refunded",
+		"Day refunded to your wallet",
+		"A meal-plan day was refunded to your HomeChef wallet.")
 }
 
 // handleMealPlanCancelled → chef or customer (event.UserID), tailored by cause:

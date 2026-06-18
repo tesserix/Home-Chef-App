@@ -107,6 +107,20 @@ export function useCreateMealPlan() {
   });
 }
 
+/** Skip a confirmed day before its lead-time cutoff (refunded to wallet when escrow is on). */
+export function useSkipMealPlanDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { planId: string; dayId: string }) =>
+      api
+        .put<{ mealPlan: MealPlan }>(
+          `/meal-plans/${vars.planId}/days/${vars.dayId}/skip`,
+        )
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  });
+}
+
 /** Approve or reject the chef's revised (cherry-picked) plan. */
 export function useFinalizeMealPlan() {
   const qc = useQueryClient();

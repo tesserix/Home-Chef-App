@@ -572,6 +572,8 @@ func SetupRouter() *gin.Engine {
 			mealPlans.GET("/:id", mealPlanHandler.GetMealPlan)
 			mealPlans.PUT("/:id/approve", mealPlanHandler.ApproveMealPlan)
 			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
+			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
+			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)
 		}
 
 		// Tiffin meal plans — chef side (#195). Scoped to the authed chef.

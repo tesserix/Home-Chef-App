@@ -54,7 +54,7 @@ func runMealPlanSweep(ctx context.Context) {
 
 func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, reason string) {
 	var plans []models.MealPlan
-	if err := database.DB.
+	if err := database.DB.Preload("Days").
 		Where("status = ? AND "+cutoffWhere, status, now).Find(&plans).Error; err != nil {
 		log.Printf("meal-plan-sweep: query (%s) failed: %v", status, err)
 		return
@@ -89,16 +89,18 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 				return err
 			}
 			if chefUserID != uuid.Nil {
-				return EnqueueEvent(tx, SubjectMealPlanCancelled, "meal_plan.expired", chefUserID, map[string]any{
+				if err := EnqueueEvent(tx, SubjectMealPlanCancelled, "meal_plan.expired", chefUserID, map[string]any{
 					"meal_plan_id": p.ID.String(), "reason": reason,
-				})
+				}); err != nil {
+					return err
+				}
 			}
-			return nil
+			// Escrow (gated): a lapsed plan fully refunds any captured advance to
+			// the customer's wallet (idempotent per day).
+			return RefundUndeliveredDays(tx, &p, "plan expired — "+reason)
 		})
 		if err != nil {
 			log.Printf("meal-plan-sweep: expire %s failed: %v", p.ID, err)
 		}
-		// TODO(#194): when escrow is enabled, fully refund the advance to the
-		// customer's wallet here (CreditWallet, idempotent on the plan id).
 	}
 }
