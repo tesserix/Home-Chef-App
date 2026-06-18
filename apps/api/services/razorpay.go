@@ -376,6 +376,22 @@ func (c *RazorpayClient) ReleaseTransfer(transferID string) (*TransferResponse, 
 	return &result, nil
 }
 
+// FetchOrderTransfers lists the Route transfers attached to a Razorpay order —
+// used to find an order's held chef/rider transfers to release on delivery (#217).
+func (c *RazorpayClient) FetchOrderTransfers(orderID string) ([]TransferResponse, error) {
+	resp, err := c.doRequest("GET", fmt.Sprintf("/orders/%s/transfers", orderID), nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Items []TransferResponse `json:"items"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return result.Items, nil
+}
+
 // ReverseTransfer reverses a (settled or held) Route transfer, returning the
 // funds to the platform balance — used to claw back a chef payout when a
 // confirmed-but-not-yet-delivered day is later refunded (escrow refund path,

@@ -99,6 +99,10 @@ type Config struct {
 	// cart, split payment, and consolidation. Default OFF — the multi-payer money
 	// flow should be verified in the Razorpay sandbox before going live.
 	GroupOrdersEnabled bool
+	// OrderPayoutAutoReleaseEnabled gates auto-releasing a delivered regular
+	// order's held chef/rider Route transfers (#217). Default OFF — moves live
+	// settlement; verify in the Razorpay sandbox (#218) before enabling.
+	OrderPayoutAutoReleaseEnabled bool
 	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):
 	// upfront advance capture, refund of declined/expired days, and per-day payout
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
@@ -118,6 +122,7 @@ func Load() {
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
+	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -219,10 +224,11 @@ func Load() {
 		ExchangeRatesAPIKey:    getEnv("EXCHANGERATES_API_KEY", ""),
 
 		// Feature Flags
-		EnableMockMode:        enableMock,
-		WalletCheckoutEnabled: walletCheckout,
-		MealPlanEscrowEnabled: mealPlanEscrow,
-		GroupOrdersEnabled:    groupOrders,
+		EnableMockMode:                enableMock,
+		WalletCheckoutEnabled:         walletCheckout,
+		MealPlanEscrowEnabled:         mealPlanEscrow,
+		GroupOrdersEnabled:            groupOrders,
+		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
 	}
 }
 
