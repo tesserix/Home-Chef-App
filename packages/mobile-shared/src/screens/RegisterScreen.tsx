@@ -23,7 +23,16 @@ const registerSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Enter a valid email'),
-  phone: z.string().optional(),
+  // Phone stays optional at sign-up (onboarding makes it required), but when a
+  // value IS entered it must match the same 10-digit Indian-mobile rule the
+  // onboarding step enforces — otherwise a malformed number (e.g. 9 digits)
+  // sails through here and only gets rejected later on the onboarding screen.
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^[6-9]\d{9}$/.test(v), {
+      message: 'Enter a valid 10-digit Indian mobile number',
+    }),
   password: z.string().min(8, 'Minimum 8 characters'),
 });
 
@@ -196,12 +205,13 @@ export function RegisterScreen({
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
             label="Phone (optional)"
-            placeholder="+91 98765 43210"
+            placeholder="9876543210"
             keyboardType="phone-pad"
             autoComplete="tel"
             onBlur={onBlur}
             onChangeText={onChange}
             value={value ?? ''}
+            error={errors.phone?.message}
             helper="We use this only for order issues — never shared."
           />
         )}
