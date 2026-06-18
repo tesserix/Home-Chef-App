@@ -26,6 +26,8 @@ const BLANK: MenuItemFormValues = {
   price: '',
   categoryId: '',
   isVeg: true,
+  dietaryTags: [],
+  allergens: [],
   preparationTime: 15,
   hsn: '',
 };
@@ -53,6 +55,8 @@ export default function NewMenuItemScreen() {
         price: Number(values.price),
         categoryId: values.categoryId,
         isVeg: values.isVeg,
+        dietaryTags: values.dietaryTags,
+        allergens: values.allergens,
         preparationTime: values.preparationTime,
         hsn: values.hsn || undefined,
       });
