@@ -85,6 +85,8 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
 			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded}},
+		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
+			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
 }
 
@@ -115,6 +117,12 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleChefVerified)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
 		return decodeThen(data, s.handleTipReceived)
+	case SubjectGroupOrderLocked:
+		return decodeThen(data, s.handleGroupOrderLocked)
+	case SubjectGroupOrderPlaced:
+		return decodeThen(data, s.handleGroupOrderPlaced)
+	case SubjectGroupOrderCancelled:
+		return decodeThen(data, s.handleGroupOrderCancelled)
 	case SubjectDeliveryAssigned:
 		return decodeThen(data, s.handleDeliveryAssigned)
 	case SubjectDeliveryPickedUp:
@@ -373,6 +381,51 @@ func (s *NotificationService) handleTipReceived(event Event) error {
 		Title: title, Message: message, Data: event.Data,
 	})
 	return nil
+}
+
+// ── Group / office orders (#46) ──────────────────────────────────────────────
+
+func (s *NotificationService) notifyGroup(event Event, notifType, title, message string) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    notifType,
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save %s notification: %w", notifType, err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleGroupOrderLocked → participant: pay your share.
+func (s *NotificationService) handleGroupOrderLocked(event Event) error {
+	share, _ := event.Data["share"].(float64)
+	return s.notifyGroup(event, "group_order_locked",
+		"Time to pay your share",
+		fmt.Sprintf("Your group order is locked. Pay your share of ₹%.0f to confirm it.", share))
+}
+
+// handleGroupOrderPlaced → host: the consolidated order is placed.
+func (s *NotificationService) handleGroupOrderPlaced(event Event) error {
+	return s.notifyGroup(event, "group_order_placed",
+		"Group order placed 🎉",
+		"Everyone has paid — your group order is on its way to the chef.")
+}
+
+// handleGroupOrderCancelled → participant: cancelled + refunded.
+func (s *NotificationService) handleGroupOrderCancelled(event Event) error {
+	return s.notifyGroup(event, "group_order_cancelled",
+		"Group order cancelled",
+		"A group order you were part of was cancelled. Any payment was refunded to your wallet.")
 }
 
 func (s *NotificationService) handleChefVerified(event Event) error {

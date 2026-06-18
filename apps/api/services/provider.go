@@ -303,6 +303,14 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		return fmt.Errorf("failed to update delivery: %w", err)
 	}
 
+	// On 3PL delivery, fire the escrow/group payout release hooks (the own-fleet
+	// path does this in handlers/delivery.go). Both are status-guarded no-ops for
+	// orders that aren't meal-plan/group orders.
+	if models.DeliveryStatus(fe3drStatus) == models.DeliveryDelivered && delivery.OrderID != uuid.Nil {
+		MarkMealPlanDayDelivered(delivery.OrderID)
+		MarkGroupOrderDelivered(delivery.OrderID)
+	}
+
 	// Durable event publication via the transactional outbox.
 	if err := EnqueueEvent(database.DB, SubjectProviderDeliveryUpdated, "provider.delivery.updated", uuid.Nil, map[string]interface{}{
 		"provider_id":          provider.ID.String(),
