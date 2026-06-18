@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -145,9 +146,26 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Capacity cutoff (#48): a chef can auto-close ordering once their meal
+	// cutoffs have passed (extends pause-receiving).
+	capSettings := services.GetChefCapacitySettings(req.ChefID)
+	if services.IsPastDailyClose(capSettings, time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
+		return
+	}
+
 	// Get menu items and calculate totals
 	var subtotal float64
 	orderItems := make([]models.OrderItem, len(req.Items))
+
+	// Daily-capacity reservations to apply atomically inside the transaction (#48).
+	type capReservation struct {
+		itemID uuid.UUID
+		name   string
+		qty    int
+		cap    int
+	}
+	var capReservations []capReservation
 
 	for i, item := range req.Items {
 		var menuItem models.MenuItem
@@ -167,6 +185,12 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			Quantity:   item.Quantity,
 			Subtotal:   itemSubtotal,
 			Notes:      item.Notes,
+		}
+
+		if menuItem.DailyCapacity != nil && *menuItem.DailyCapacity > 0 {
+			capReservations = append(capReservations, capReservation{
+				itemID: item.MenuItemID, name: menuItem.Name, qty: item.Quantity, cap: *menuItem.DailyCapacity,
+			})
 		}
 	}
 
@@ -365,6 +389,20 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Atomically reserve daily capacity for capped dishes (#48) — oversell-safe.
+	capDay := services.CapacityDay(time.Now())
+	for _, cr := range capReservations {
+		if err := services.ReserveCapacity(tx, req.ChefID, cr.itemID, cr.qty, cr.cap, capDay); err != nil {
+			tx.Rollback()
+			if errors.Is(err, services.ErrSoldOut) {
+				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("%s is sold out for today", cr.name)})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reserve capacity"})
+			return
+		}
+	}
+
 	// Record promo code usage
 	if appliedPromo != nil {
 		usage := models.PromoCodeUsage{
@@ -485,7 +523,7 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	orderID := c.Param("id")
 
 	var order models.Order
-	if err := database.DB.Where("id = ? AND customer_id = ?", orderID, userID).
+	if err := database.DB.Preload("Items").Where("id = ? AND customer_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
@@ -512,6 +550,14 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&order).Error; err != nil {
 			return err
+		}
+		// Release the reserved daily capacity back to the chef (#48), keyed to the
+		// order's original IST day so a next-day cancel doesn't touch today's count.
+		capDay := services.CapacityDay(order.CreatedAt)
+		for _, it := range order.Items {
+			if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, capDay); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueOrderEvent(tx, services.SubjectOrderCancelled, services.OrderEvent{
 			OrderID:     order.ID,

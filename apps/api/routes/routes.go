@@ -389,6 +389,8 @@ func SetupRouter() *gin.Engine {
 			// Param name MUST match the sibling routes (:itemId) — Gin's radix
 			// tree panics on conflicting wildcard names at the same position.
 			chefMenu.PUT("/items/:itemId/availability", menuHandler.ToggleMenuItemAvailability)
+			// Per-item daily capacity cap (#48).
+			chefMenu.PUT("/items/:itemId/capacity", menuHandler.SetMenuItemCapacity)
 		}
 
 		// Chef dashboard routes (chef only)
@@ -446,6 +448,10 @@ func SetupRouter() *gin.Engine {
 
 			// Post-delivery tips received (#45)
 			chefDashboard.GET("/tips", tipHandler.GetChefTips)
+
+			// Capacity & cutoff controls (#48)
+			chefDashboard.GET("/capacity-settings", chefHandler.GetChefCapacitySettings)
+			chefDashboard.PUT("/capacity-settings", chefHandler.UpdateChefCapacitySettings)
 
 			// Wave 2: chef-side notification gating. GET returns defaults
 			// when no row exists; PUT upserts and reconciles FCM topic

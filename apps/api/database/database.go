@@ -211,6 +211,10 @@ func Migrate() error {
 		&models.GroupOrderParticipant{},
 		&models.GroupOrderItem{},
 
+		// Chef capacity & cutoff controls (#48)
+		&models.MenuItemDailySales{},
+		&models.ChefCapacitySettings{},
+
 		// Addresses
 		&models.Address{},
 
