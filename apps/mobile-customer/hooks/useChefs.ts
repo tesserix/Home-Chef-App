@@ -55,6 +55,8 @@ interface ApiMenuItem {
   imageUrl?: string;
   images?: { url?: string }[];
   dietaryTags?: string[];
+  allergens?: string[];
+  isVeg?: boolean | null;
   isAvailable?: boolean;
   rating?: number;
   totalReviews?: number;
@@ -104,6 +106,8 @@ export function mapMenuItem(
     category: m.categoryId ? categoryNames.get(m.categoryId) : undefined,
     isAvailable: m.isAvailable ?? true,
     dietaryTags: m.dietaryTags,
+    allergens: m.allergens,
+    isVeg: m.isVeg,
     rating: m.rating,
     reviewCount: m.totalReviews,
     dailyCapacity: m.dailyCapacity,

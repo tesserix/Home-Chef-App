@@ -24,6 +24,14 @@ import { ChefCard } from '../../components/chef/ChefCard';
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
+import { DIET_OPTIONS } from '@homechef/mobile-shared/dietary';
+
+// Diet filter chips (#41) — "All" + the canonical diet vocabulary. The value is
+// matched case-insensitively against menu-item dietary tags server-side.
+const DIET_FILTERS: { label: string; value: string }[] = [
+  { label: 'All diets', value: '' },
+  ...DIET_OPTIONS.map((o) => ({ label: o.label, value: o.value })),
+];
 
 const CUISINES = [
   'All',
@@ -69,6 +77,7 @@ export default function HomeScreen() {
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
+  const [selectedDiet, setSelectedDiet] = useState<string>('');
   const [isOpenOnly, setIsOpenOnly] = useState(false);
   const [sort, setSort] = useState<ChefFilters['sort']>('rating');
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
@@ -93,6 +102,7 @@ export default function HomeScreen() {
   const filters: ChefFilters = {
     search: debouncedSearch || undefined,
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
+    dietary: selectedDiet || undefined,
     isOpen: isOpenOnly || undefined,
     maxPrice,
     sort,
@@ -186,6 +196,39 @@ export default function HomeScreen() {
                   ]}
                 >
                   {cuisine}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Diet filter chips (#41) — same chip styling as cuisines. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRowContent}
+        style={styles.chipRow}
+        accessibilityRole="tablist"
+      >
+        {DIET_FILTERS.map((d) => {
+          const isSelected = selectedDiet === d.value;
+          return (
+            <Pressable
+              key={d.value || 'all'}
+              onPress={() => setSelectedDiet(d.value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`Filter by ${d.label}`}
+            >
+              <View style={[styles.chip, isSelected && styles.chipSelected]}>
+                <Text
+                  style={[
+                    styles.chipLabel,
+                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
+                  ]}
+                >
+                  {d.label}
                 </Text>
               </View>
             </Pressable>

@@ -1,8 +1,9 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
+import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
 import { useCartStore } from '../../store/cart-store';
+import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { MenuItem } from '../../types/customer';
 
@@ -18,6 +19,10 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   const updateQty = useCartStore((s) => s.updateQty);
   const cartEntry = cartItems.find((i) => i.menuItemId === item.id);
   const quantity = cartEntry?.quantity ?? 0;
+
+  // Dietary & allergen profile (#41): flag dishes that clash with the customer's
+  // saved diet / allergens.
+  const conflicts = useDietaryConflicts(item);
 
   const handleAdd = () => {
     const cartItem = {
@@ -87,9 +92,30 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </View>
         ) : null}
 
+        {/* Allergen badges (#41) — declared allergens in a cautionary tone */}
+        {item.allergens && item.allergens.length > 0 ? (
+          <View style={styles.tagRow}>
+            {item.allergens.map((a) => (
+              <View key={a} style={styles.allergenTag}>
+                <Text style={styles.allergenLabel}>{a}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.name} numberOfLines={2}>
           {item.name}
         </Text>
+
+        {/* Conflict warning (#41) — dish clashes with the customer's profile */}
+        {conflicts.length > 0 ? (
+          <View style={styles.warnRow}>
+            <AlertTriangle size={13} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+            <Text style={styles.warnText} numberOfLines={2}>
+              {conflicts.map((cf) => cf.detail).join(' · ')}
+            </Text>
+          </View>
+        ) : null}
 
         {item.description ? (
           <Text style={styles.description} numberOfLines={2}>
@@ -269,6 +295,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.2,
     color: customerColors.coral.pressed,
+  },
+  // Allergen badge — cautionary (destructive tint), distinct from diet tags.
+  allergenTag: {
+    backgroundColor: customerColors.destructive.tint,
+    borderRadius: 9999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  allergenLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.2,
+    color: customerColors.destructive.DEFAULT,
+  },
+  // Profile-conflict warning line.
+  warnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  warnText: {
+    flex: 1,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.destructive.DEFAULT,
   },
 
   // Item name — Inter-SemiBold charcoal (spec §2.4).
