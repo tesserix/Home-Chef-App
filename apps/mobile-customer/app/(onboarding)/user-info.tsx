@@ -13,6 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { useAuthStore } from '../../store/auth-store';
 
 const schema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
@@ -25,13 +26,21 @@ const schema = z.object({
 type UserInfoForm = z.infer<typeof schema>;
 
 export default function UserInfoScreen() {
+  // Prefill from whatever the user already gave at sign-up (email signup
+  // captures name + phone into the auth store; social sign-up leaves them
+  // blank). Saves re-typing details we already have.
+  const user = useAuthStore((s) => s.user);
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<UserInfoForm>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName: '', lastName: '', phone: '' },
+    defaultValues: {
+      firstName: user?.firstName ?? '',
+      lastName: user?.lastName ?? '',
+      phone: user?.phone ?? '',
+    },
   });
 
   const onSubmit = (data: UserInfoForm) => {
