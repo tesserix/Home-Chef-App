@@ -1,4 +1,4 @@
-/** Home Chef wordmark — bowl+house+steam glyph (gradient tile) + Geist logotype. */
+/** Fe3dr wordmark — bowl+house+steam glyph (gradient tile) + Geist logotype. */
 export function Wordmark({ inverted = false }: { inverted?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">
@@ -40,7 +40,7 @@ export function Wordmark({ inverted = false }: { inverted?: boolean }) {
           inverted ? 'text-white' : 'text-charcoal'
         }`}
       >
-        Home Chef
+        Fe3dr
       </span>
     </span>
   );

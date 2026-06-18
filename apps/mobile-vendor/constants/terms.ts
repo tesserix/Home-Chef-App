@@ -1,4 +1,4 @@
-export const VENDOR_TERMS_TEXT = `By joining HomeChef as a vendor you agree to maintain food hygiene standards per FSSAI regulations, ensure accurate menu descriptions, prepare orders within your stated prep time, and comply with all applicable local food safety laws. HomeChef reserves the right to suspend accounts that receive repeated hygiene complaints or fail document verification. Full terms available at fe3dr.com/vendor-terms.`;
+export const VENDOR_TERMS_TEXT = `By joining Fe3dr as a vendor you agree to maintain food hygiene standards per FSSAI regulations, ensure accurate menu descriptions, prepare orders within your stated prep time, and comply with all applicable local food safety laws. Fe3dr reserves the right to suspend accounts that receive repeated hygiene complaints or fail document verification. Full terms available at fe3dr.com/vendor-terms.`;
 
 export const CANCELLATION_POLICY_OPTIONS = [
   { label: 'No cancellations after order accepted', value: 'no_cancellations' },

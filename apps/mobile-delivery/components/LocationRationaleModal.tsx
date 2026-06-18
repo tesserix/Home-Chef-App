@@ -16,7 +16,7 @@ export function LocationRationaleModal({ visible, onAllow, onDeny }: Props) {
             Background Location Needed
           </Text>
           <Text className="text-ink-soft mb-2">
-            To keep customers updated on their delivery, HomeChef Delivery
+            To keep customers updated on their delivery, Fe3dr Delivery
             needs to track your location while you are on an active delivery —
             even when the app is in the background.
           </Text>

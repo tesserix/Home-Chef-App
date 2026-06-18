@@ -19,11 +19,11 @@ const inter = Inter({
   display: 'swap',
 });
 
-const TITLE = 'Home Chef — Real home-cooked food, delivered';
+const TITLE = 'Fe3dr — Real home-cooked food, delivered';
 const DESCRIPTION =
   'Order real home-cooked meals from FSSAI-verified home chefs near you. ' +
   'Browse local kitchens, order in a few taps, and track delivery live. ' +
-  'Get the Home Chef app for iOS and Android.';
+  'Get the Fe3dr app for iOS and Android.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -88,7 +88,7 @@ const structuredData = {
     },
     {
       '@type': 'MobileApplication',
-      name: 'Home Chef',
+      name: 'Fe3dr',
       operatingSystem: 'iOS, Android',
       applicationCategory: 'FoodApplication',
       description: DESCRIPTION,

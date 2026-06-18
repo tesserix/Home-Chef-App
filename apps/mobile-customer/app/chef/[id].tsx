@@ -76,7 +76,7 @@ export default function ChefDetailScreen() {
   const handleShare = async () => {
     if (!chef) return;
     try {
-      await Share.share({ message: `Check out ${chef.name} on Home Chef!` });
+      await Share.share({ message: `Check out ${chef.name} on Fe3dr!` });
     } catch {
       // Share cancelled or failed — silently ignore.
     }

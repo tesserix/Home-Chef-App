@@ -6,7 +6,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'This Privacy Policy explains how we collect, use, and protect your personal information when you use the Fe3dr customer app. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). We handle personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India’s Digital Personal Data Protection Act, 2023 (DPDP).';
+  'This Privacy Policy explains how we collect, use, and protect your personal information when you use the Fe3dr customer app. Fe3dr is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). We handle personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India’s Digital Personal Data Protection Act, 2023 (DPDP).';
 
 const SECTIONS: LegalSection[] = [
   {

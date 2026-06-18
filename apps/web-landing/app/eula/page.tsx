@@ -21,7 +21,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Licence grant',
     paragraphs: [
-      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). We grant you a limited, non-exclusive, non-transferable, revocable licence to download and use the Fe3dr mobile apps on devices you own or control, for your personal, non-commercial use, subject to this EULA and to our Terms of Service.`,
+      `Fe3dr is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). We grant you a limited, non-exclusive, non-transferable, revocable licence to download and use the Fe3dr mobile apps on devices you own or control, for your personal, non-commercial use, subject to this EULA and to our Terms of Service.`,
     ],
   },
   {
