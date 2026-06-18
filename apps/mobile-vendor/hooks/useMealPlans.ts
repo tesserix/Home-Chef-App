@@ -87,6 +87,65 @@ export function useChefMealPlanRequests(status: string = 'pending_chef') {
   });
 }
 
+// ── Bulk subscription prep view (#50) ──────────────────────────────────────
+
+export interface PrepManifestLine {
+  slot: MealSlot;
+  variant: MealVariant;
+  dishName: string;
+  total: number;
+  prepared: number;
+}
+
+export interface PrepPackingRow {
+  dayId: string;
+  slot: MealSlot;
+  variant: MealVariant;
+  dishName: string;
+  status: string;
+  planNumber: string;
+  customerName: string;
+}
+
+export interface PrepTotals {
+  lunch: number;
+  dinner: number;
+  total: number;
+  prepared: number;
+}
+
+export interface PrepManifest {
+  date: string; // YYYY-MM-DD
+  manifest: PrepManifestLine[];
+  packingList: PrepPackingRow[];
+  totals: PrepTotals;
+}
+
+/** The day's prep manifest (counts by dish) + packing list. date = YYYY-MM-DD. */
+export function usePrepManifest(date: string) {
+  return useQuery<PrepManifest>({
+    queryKey: ['chef', 'prep', date],
+    queryFn: () => api.get<PrepManifest>(`/chef/prep?date=${date}`).then((r) => r.data),
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  });
+}
+
+/** Mark a whole dish (date+slot+variant+dish) or explicit days prepared. */
+export function useMarkPrepared() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      date?: string;
+      slot?: MealSlot;
+      variant?: MealVariant;
+      dishName?: string;
+      dayIds?: string[];
+    }) => api.post<{ prepared: number }>('/chef/prep/mark', body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['chef', 'prep'] }),
+  });
+}
+
 /** Accept all days, or cherry-pick a subset (the rest are declined). */
 export function useRespondMealPlan() {
   const qc = useQueryClient();
