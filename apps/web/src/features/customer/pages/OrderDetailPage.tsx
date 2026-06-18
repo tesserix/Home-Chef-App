@@ -350,6 +350,13 @@ export default function OrderDetailPage() {
             </Button>
           )}
 
+          {/* Post-delivery tip (#45) — 100% pass-through to chef/rider. */}
+          {order.status === 'delivered' && (
+            <Button asChild variant="outline">
+              <Link to={`/orders/${order.id}/tip`}>Tip your chef / rider</Link>
+            </Button>
+          )}
+
           {/* CW-01e: GST invoice download — shown only once the order is in a
               terminal state with payment captured (delivered or refunded). */}
           {(order.status === 'delivered' || order.status === 'refunded') && (
