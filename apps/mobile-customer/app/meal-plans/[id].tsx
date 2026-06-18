@@ -14,6 +14,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   useFinalizeMealPlan,
   useMealPlan,
+  useSkipMealPlanDay,
   type MealPlanDay,
 } from '../../hooks/useMealPlans';
 import { mealPlanStatusMeta } from '../../lib/meal-plan';
@@ -35,6 +36,7 @@ export default function MealPlanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useMealPlan(id);
   const finalize = useFinalizeMealPlan();
+  const skipDay = useSkipMealPlanDay();
   const plan = data?.mealPlan;
 
   if (isLoading) {
@@ -93,6 +95,35 @@ export default function MealPlanDetailScreen() {
     );
   }
 
+  function confirmSkip(dayId: string) {
+    if (!plan) return;
+    Alert.alert(
+      'Skip this day?',
+      'You won’t be charged for it. This can’t be undone, but you can book again any time.',
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Skip day',
+          style: 'destructive',
+          onPress: () =>
+            skipDay.mutate(
+              { planId: plan.id, dayId },
+              {
+                onError: () =>
+                  Alert.alert(
+                    'Could not skip',
+                    'It may be too close to the delivery day.',
+                  ),
+              },
+            ),
+        },
+      ],
+    );
+  }
+
+  // A confirmed day on a live plan can still be skipped (server enforces the cutoff).
+  const canSkip =
+    plan.status === 'confirmed' || plan.status === 'active';
   const needsApproval = meta.needsAction;
 
   return (
@@ -147,9 +178,21 @@ export default function MealPlanDetailScreen() {
                     </Text>
                   </View>
                 </View>
-                <Text style={[styles.price, declined && styles.dim]}>
-                  ₹{(d.price ?? 0).toFixed(0)}
-                </Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.price, declined && styles.dim]}>
+                    ₹{(d.price ?? 0).toFixed(0)}
+                  </Text>
+                  {canSkip && d.status === 'confirmed' ? (
+                    <Pressable
+                      onPress={() => confirmSkip(d.id)}
+                      hitSlop={8}
+                      disabled={skipDay.isPending}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.skipLink}>Skip</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             );
           })}
@@ -295,6 +338,12 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
   },
   dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
+  skipLink: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: customerColors.coral.DEFAULT,
+    marginTop: 4,
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

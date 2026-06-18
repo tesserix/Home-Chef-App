@@ -30,6 +30,7 @@ func cronJobs() []cronJob {
 		{"availability-resume", availabilityResumeInterval, runAvailabilityResumeScan, StartAvailabilityResumeCron},
 		{"audit-retention", auditRetentionInterval, runAuditRetentionScan, StartAuditRetentionCron},
 		{"meal-plan-sweep", mealPlanSweepInterval, runMealPlanSweep, StartMealPlanCron},
+		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
 	}
 }
 

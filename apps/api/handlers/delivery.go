@@ -604,6 +604,9 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			"status":       models.OrderStatusDelivered,
 			"delivered_at": now,
 		})
+		// If this order belongs to a tiffin meal-plan day, mark the day delivered
+		// and release its held chef payout (escrow; gated). No-op otherwise.
+		services.MarkMealPlanDayDelivered(delivery.OrderID)
 		// Update partner stats
 		database.DB.Model(&partner).Updates(map[string]interface{}{
 			"total_deliveries": partner.TotalDeliveries + 1,
