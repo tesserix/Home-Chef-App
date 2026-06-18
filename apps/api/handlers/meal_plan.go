@@ -29,9 +29,14 @@ import (
 // expiry sweeps run via the Temporal cron (services/meal_plan_cron.go, #197).
 
 const (
-	mealPlanMaxDays   = 31
-	chefRespondWindow = 24 * time.Hour
-	custApproveWindow = 24 * time.Hour
+	mealPlanMaxDays = 31
+	// chefRespondWindow: the chef must accept/cherry-pick within 12h of the
+	// customer's request, else the expiry sweep voids it. custApproveWindow: once
+	// the chef cherry-picks, the customer must approve the revised plan within 6h.
+	// A lapse of either window expires the plan; the customer can always book a
+	// fresh request (no constraint blocks rebooking after expiry).
+	chefRespondWindow = 12 * time.Hour
+	custApproveWindow = 6 * time.Hour
 	// A day must be booked at least this far ahead (lead time before the kitchen
 	// needs to plan). Tunable; IST is the business timezone.
 	mealPlanLeadTime = 12 * time.Hour
