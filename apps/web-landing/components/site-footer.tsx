@@ -76,14 +76,14 @@ export function SiteFooter() {
                 {/* TODO(owner): real social profiles (lib/site.ts). */}
                 <a
                   href={INSTAGRAM_URL}
-                  aria-label="Home Chef on Instagram"
+                  aria-label="Fe3dr on Instagram"
                   className="text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
                 >
                   <InstagramIcon />
                 </a>
                 <a
                   href={X_URL}
-                  aria-label="Home Chef on X"
+                  aria-label="Fe3dr on X"
                   className="text-charcoal-soft transition-colors duration-micro ease-state hover:text-charcoal"
                 >
                   <XIcon />
@@ -94,7 +94,7 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-12 flex flex-col gap-2 border-t border-hairline pt-6 text-sm text-charcoal-soft sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} Home Chef &middot; fe3dr.com</p>
+          <p>&copy; {new Date().getFullYear()} Fe3dr &middot; fe3dr.com</p>
           <p>Made with care, like the food.</p>
         </div>
       </div>

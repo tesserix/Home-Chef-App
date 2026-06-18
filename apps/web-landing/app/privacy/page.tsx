@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How Home Chef collects, uses, and protects your data.',
+  description: 'How Fe3dr collects, uses, and protects your data.',
   alternates: { canonical: '/privacy/' },
 };
 
@@ -23,7 +23,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Who we are',
     paragraphs: [
-      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL}. In this policy we call ourselves "we", "us", or Fe3dr, and we call you "you".`,
+      `Fe3dr is a product of ${LEGAL_OPERATOR_FULL}. In this policy we call ourselves "we", "us", or Fe3dr, and we call you "you".`,
       `${LEGAL_OPERATOR} handles personal data in line with the Australian Privacy Principles (APP) and, for our India operations, in alignment with India's Digital Personal Data Protection Act, 2023 (the DPDP Act). For our India operations we act as the Data Fiduciary — we decide why and how your personal data is processed — and you are the Data Principal, the person the data is about.`,
       'When we say Personal Data, we mean any information that identifies you or could identify you — your name, your phone number, your address, your face in a profile photo. When we say Processing, we mean anything we do with that data: collecting it, storing it, using it, sharing it, or deleting it.',
     ],

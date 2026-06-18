@@ -1,5 +1,5 @@
 /**
- * The Home Chef signature device: a dashed delivery route from a
+ * The Fe3dr signature device: a dashed delivery route from a
  * chef's stove to your door, with a coral dot travelling along it.
  * The dot animates via CSS offset-path (transform-only, see
  * globals.css `.route-dot`); reduced-motion shows it parked mid-route.

@@ -24,7 +24,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '1. Who this agreement is between',
     paragraphs: [
-      `This Chef & Vendor Agreement is between you (the "Chef") and ${LEGAL_OPERATOR}. Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). It governs your use of the Fe3dr vendor app and your sale of home-cooked food to customers through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.`,
+      `This Chef & Vendor Agreement is between you (the "Chef") and ${LEGAL_OPERATOR}. Fe3dr is a product of ${LEGAL_OPERATOR_FULL} ("Fe3dr", "we", "us"). It governs your use of the Fe3dr vendor app and your sale of home-cooked food to customers through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.`,
     ],
   },
   {

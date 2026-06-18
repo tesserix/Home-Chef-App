@@ -4,7 +4,7 @@
  */
 
 export const SITE_URL = 'https://fe3dr.com';
-export const SITE_NAME = 'Home Chef';
+export const SITE_NAME = 'Fe3dr';
 
 // TODO(owner): replace with the real App Store listing URL once the
 // customer app is published (current value is a placeholder).

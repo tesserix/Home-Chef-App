@@ -101,7 +101,7 @@ export default function RegisterPage() {
 
   return (
     <RegisterScreen
-      brand="Home Chef · Vendor"
+      brand="Fe3dr · Vendor"
       title="Open your kitchen"
       subtitle="A few details to get you cooking"
       onRegister={async (data) => {

@@ -9,7 +9,7 @@ const VALUES = [
   },
   {
     title: 'FSSAI-verified kitchens',
-    copy: 'Every chef on Home Chef holds a valid FSSAI registration. We verify documents before a kitchen goes live — no exceptions.',
+    copy: 'Every chef on Fe3dr holds a valid FSSAI registration. We verify documents before a kitchen goes live — no exceptions.',
   },
   {
     title: 'Live delivery tracking',

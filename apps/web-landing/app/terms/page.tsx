@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: 'The terms that govern your use of Home Chef.',
+  description: 'The terms that govern your use of Fe3dr.',
   alternates: { canonical: '/terms/' },
 };
 
@@ -30,7 +30,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: '2. What Fe3dr does',
     paragraphs: [
-      `Home Chef (Fe3dr) is a product of ${LEGAL_OPERATOR_FULL}, and is a technology platform. We connect customers who want home-cooked food with independent home cooks (each a Chef) and independent delivery partners (each a Driver). We list menus, take payments, and pass orders to the right chef and driver.`,
+      `Fe3dr is a product of ${LEGAL_OPERATOR_FULL}, and is a technology platform. We connect customers who want home-cooked food with independent home cooks (each a Chef) and independent delivery partners (each a Driver). We list menus, take payments, and pass orders to the right chef and driver.`,
       'We are a marketplace, not a restaurant. We do not cook your food, store it, package it, or carry it. The chef cooks the food in their own kitchen; the driver picks it up and brings it to you. We verify chefs and drivers before they start and we set service standards, but we do not control the kitchen, the cooking, or the route.',
       'We operate as an intermediary under the Information Technology Act, 2000. Our role and the protection that goes with it is explained in section 11.',
     ],

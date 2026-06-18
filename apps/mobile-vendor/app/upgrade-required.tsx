@@ -76,7 +76,7 @@ export default function UpgradeRequiredScreen() {
       </Pressable>
       {!storeUrl && (
         <Text style={styles.hint}>
-          Search "Home Chef Vendor" in the App Store.
+          Search "Fe3dr Vendor" in the App Store.
         </Text>
       )}
     </View>

@@ -121,7 +121,7 @@ export default function LoginPage() {
 
   return (
     <LoginScreen
-      brand="Home Chef · Vendor"
+      brand="Fe3dr · Vendor"
       title="Welcome back"
       subtitle="Sign in to keep your kitchen running"
       onLogin={async ({ email, password }) => {

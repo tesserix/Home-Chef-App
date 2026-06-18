@@ -30,7 +30,7 @@ export function CookWithUs() {
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/75">
               If you cook well, you already have everything you need. Cook when
-              it suits you — Home Chef brings the orders, the payments, and the
+              it suits you — Fe3dr brings the orders, the payments, and the
               delivery.
             </p>
           </Reveal>
@@ -39,13 +39,13 @@ export function CookWithUs() {
               {/* TODO(owner): point at the chef onboarding flow / vendor app
                   listing once it's live; mailto is the interim channel. */}
               <a
-                href={`mailto:${CHEFS_EMAIL}?subject=I want to cook on Home Chef`}
+                href={`mailto:${CHEFS_EMAIL}?subject=I want to cook on Fe3dr`}
                 className="inline-flex h-12 items-center rounded-full bg-white px-7 text-[15px] font-semibold text-charcoal transition-opacity duration-micro ease-state hover:opacity-90"
               >
                 Become a home chef
               </a>
               <p className="text-sm text-white/60">
-                The Home Chef vendor app arrives with our launch.
+                The Fe3dr vendor app arrives with our launch.
               </p>
             </div>
           </Reveal>

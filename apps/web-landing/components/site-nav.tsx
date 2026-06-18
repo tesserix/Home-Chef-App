@@ -31,7 +31,7 @@ export function SiteNav() {
       >
         <a
           href="/"
-          aria-label="Home Chef — home"
+          aria-label="Fe3dr — home"
           className="flex items-center gap-2.5 rounded"
         >
           <Wordmark />

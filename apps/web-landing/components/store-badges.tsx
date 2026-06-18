@@ -21,14 +21,14 @@ export function StoreBadges({ height = 52, className }: StoreBadgesProps) {
     <div className={`flex flex-wrap items-center gap-3 ${className ?? ''}`}>
       <a
         href={APP_STORE_URL}
-        aria-label="Download Home Chef on the App Store"
+        aria-label="Download Fe3dr on the App Store"
         className="inline-flex rounded-lg transition-opacity duration-micro ease-state hover:opacity-80"
       >
         <AppStoreBadge height={height} />
       </a>
       <a
         href={PLAY_STORE_URL}
-        aria-label="Get Home Chef on Google Play"
+        aria-label="Get Fe3dr on Google Play"
         className="inline-flex rounded-lg transition-opacity duration-micro ease-state hover:opacity-80"
       >
         <GooglePlayBadge height={height} />

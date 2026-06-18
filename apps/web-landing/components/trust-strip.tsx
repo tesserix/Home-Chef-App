@@ -28,7 +28,7 @@ export function TrustStrip() {
     <section aria-labelledby="trust-heading" className="border-t border-hairline">
       <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:py-24">
         <h2 id="trust-heading" className="sr-only">
-          Why you can trust Home Chef
+          Why you can trust Fe3dr
         </h2>
         <ul className="grid gap-10 sm:grid-cols-3 sm:gap-6">
           {SIGNALS.map((signal, index) => (

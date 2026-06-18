@@ -67,7 +67,7 @@ export async function startTracking(): Promise<void> {
     distanceInterval: 30, // Minimum 30 metres movement (avoids updates while stationary)
     foregroundService: {
       // Android only — required for background on Android (D-05)
-      notificationTitle: 'HomeChef Delivery',
+      notificationTitle: 'Fe3dr Delivery',
       notificationBody: 'Tracking your location during delivery',
       notificationColor: '#C2410C',
     },

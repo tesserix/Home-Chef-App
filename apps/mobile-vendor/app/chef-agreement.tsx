@@ -7,7 +7,7 @@ import { LegalScreen, type LegalSection } from '../components/legal/LegalScreen'
 const LAST_UPDATED = '11 June 2026';
 
 const INTRO =
-  'This Chef & Vendor Agreement is between you, an independent home chef, and Tesserix Pty Ltd. Home Chef (Fe3dr) is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). It governs your use of the vendor app and your sale of home-cooked food through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.';
+  'This Chef & Vendor Agreement is between you, an independent home chef, and Tesserix Pty Ltd. Fe3dr is a product of Tesserix Pty Ltd (ACN 694 070 865, ABN 59 694 070 865), registered in New South Wales, Australia ("Fe3dr", "we", "us"). It governs your use of the vendor app and your sale of home-cooked food through the platform. By submitting a kitchen application and listing a menu, you accept this agreement.';
 
 const SECTIONS: LegalSection[] = [
   {

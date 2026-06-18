@@ -178,7 +178,7 @@ async function triggerTestNotification(orderId: string | null): Promise<void> {
   if (settings.status !== 'granted') {
     Alert.alert(
       'Notifications blocked',
-      'Enable notifications for HomeChef Vendor in Settings to test.',
+      'Enable notifications for Fe3dr Vendor in Settings to test.',
     );
     return;
   }

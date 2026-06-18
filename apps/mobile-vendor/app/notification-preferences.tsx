@@ -220,7 +220,7 @@ export default function NotificationPreferencesScreen() {
           />
           <ToggleRow
             label="Promotions"
-            caption="Tips, news, and platform updates from Home Chef"
+            caption="Tips, news, and platform updates from Fe3dr"
             value={prefs.promo}
             onValueChange={(v) => persist({ promo: v })}
             hasBorderBottom={false}

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "HomeChef Delivery",
+    "name": "Fe3dr Delivery",
     "slug": "homechef-delivery",
     "scheme": "homechef-delivery",
     "version": "1.0.0",
@@ -19,8 +19,8 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to log in quickly",
         "NSCameraUsageDescription": "Used to take photos",
-        "NSLocationWhenInUseUsageDescription": "HomeChef Delivery needs your location to show your position on the delivery map.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "HomeChef Delivery tracks your location in the background to keep customers updated on their delivery status.",
+        "NSLocationWhenInUseUsageDescription": "Fe3dr Delivery needs your location to show your position on the delivery map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Fe3dr Delivery tracks your location in the background to keep customers updated on their delivery status.",
         "UIBackgroundModes": [
           "location",
           "fetch"
@@ -74,7 +74,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "HomeChef Delivery tracks your location during deliveries to keep customers updated.",
+          "locationAlwaysAndWhenInUsePermission": "Fe3dr Delivery tracks your location during deliveries to keep customers updated.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
