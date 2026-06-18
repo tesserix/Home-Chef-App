@@ -78,9 +78,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
 			Subjects: []string{SubjectUserRegistered}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
-			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified}},
+			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
-			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted}},
+			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
@@ -113,6 +113,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleUserRegistered)
 	case SubjectChefVerified:
 		return decodeThen(data, s.handleChefVerified)
+	case SubjectChefTipReceived, SubjectDriverTipReceived:
+		return decodeThen(data, s.handleTipReceived)
 	case SubjectDeliveryAssigned:
 		return decodeThen(data, s.handleDeliveryAssigned)
 	case SubjectDeliveryPickedUp:
@@ -344,6 +346,32 @@ func (s *NotificationService) handleChefNewOrder(event OrderEvent) error {
 	}); err != nil {
 		return fmt.Errorf("save new_order notification: %w", err)
 	}
+	return nil
+}
+
+// handleTipReceived → chef or rider (event.UserID): a post-delivery tip (#45).
+// In-app + push; the amount is the beneficiary's share.
+func (s *NotificationService) handleTipReceived(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	amount, _ := event.Data["amount"].(float64)
+	title := "You received a tip! 🎉"
+	message := fmt.Sprintf("A customer tipped you ₹%.0f — it's on its way to your payout.", amount)
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "tip_received",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save tip_received notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
 	return nil
 }
 

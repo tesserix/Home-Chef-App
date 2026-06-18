@@ -164,6 +164,7 @@ func SetupRouter() *gin.Engine {
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
 	paymentHandler := handlers.NewPaymentHandler()
+	tipHandler := handlers.NewTipHandler()
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
 	socialHandler := handlers.NewSocialHandler()
@@ -442,6 +443,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
 
+			// Post-delivery tips received (#45)
+			chefDashboard.GET("/tips", tipHandler.GetChefTips)
+
 			// Wave 2: chef-side notification gating. GET returns defaults
 			// when no row exists; PUT upserts and reconciles FCM topic
 			// subscriptions in the background.
@@ -641,6 +645,9 @@ func SetupRouter() *gin.Engine {
 			orderPayments.POST("/order/:orderId/create", paymentHandler.CreateOrderPayment)
 			orderPayments.POST("/order/:orderId/verify", paymentHandler.VerifyPayment)
 			orderPayments.POST("/order/:orderId/refund", paymentHandler.InitiateRefund)
+			// Post-delivery tips (#45) — 100% pass-through to chef/rider.
+			orderPayments.POST("/order/:orderId/tip", tipHandler.CreateOrderTip)
+			orderPayments.POST("/tip/:tipId/verify", tipHandler.VerifyTip)
 		}
 
 		// Admin routes
