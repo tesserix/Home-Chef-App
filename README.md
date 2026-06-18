@@ -1,15 +1,16 @@
 # HomeChef
 
 [![HomeChef API](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-api-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-api-build.yml)
-[![HomeChef Web](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-build.yml)
 [![HomeChef Admin Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml)
-[![HomeChef Vendor Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-vendor-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-vendor-portal-build.yml)
-[![HomeChef Delivery Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-delivery-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-delivery-portal-build.yml)
+[![HomeChef Auth BFF](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-auth-bff-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-auth-bff-build.yml)
+[![HomeChef Web Landing](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-landing-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-landing-build.yml)
 
 Food-delivery platform at [fe3dr.com](https://fe3dr.com) — home chefs cook,
-drivers deliver, customers order. Go / Gin backend, four React SPAs,
-three Expo mobile apps, all deployed as Knative services on GKE behind
-Istio.
+drivers deliver, customers order. Go / Gin backend, a Next.js marketing site
+(`web-landing`), three React ops SPAs (admin / vendor / delivery), and three
+Expo mobile apps — the customer storefront is mobile-first (the old `apps/web`
+customer SPA is sunset, see `apps/web/SUNSET.md`). All deployed as Knative
+services on GKE behind Istio.
 
 ---
 
@@ -18,7 +19,7 @@ Istio.
 | Layer          | Tech                                                        |
 |----------------|-------------------------------------------------------------|
 | Backend API    | Go 1.26.1, Gin, GORM, PostgreSQL 16, Redis 7, NATS 2.10 JS  |
-| Web apps       | React 19, Vite 6, Tailwind v4, Radix UI, TanStack Query     |
+| Web apps       | React 19, Vite 8, Tailwind v4, Radix UI, TanStack Query (ops SPAs); Next.js for `web-landing` |
 | Mobile         | Expo (React Native), `@tesserix/native` design system       |
 | Auth           | Google Identity Platform (GIP) via `apps/auth-bff` (3 tenant pools) |
 | Payments       | Razorpay Route (split payments)                             |
@@ -35,17 +36,18 @@ Istio.
 Home-Chef-App/
 ├── apps/
 │   ├── api/                 Go / Gin backend (port 8080)
-│   ├── web/                 Customer SPA — fe3dr.com
+│   ├── web/                 Customer SPA — SUNSET, app-only (kept for history; see apps/web/SUNSET.md)
+│   ├── web-landing/         Next.js marketing site — fe3dr.com
 │   ├── admin-portal/        Internal admin SPA — admin.fe3dr.com
 │   ├── vendor-portal/       Chef / vendor SPA — vendors.fe3dr.com
 │   ├── delivery-portal/     Driver SPA — delivery.fe3dr.com
-│   ├── mobile-customer/     Expo (iOS + Android)
+│   ├── mobile-customer/     Expo (iOS + Android) — customer storefront
 │   ├── mobile-vendor/       Expo (iOS + Android)
 │   └── mobile-delivery/     Expo (iOS + Android)
-├── packages/                Shared TS libs (if any)
-├── docker-compose.yml       Local stack — Postgres, Redis, NATS, API, web
+├── packages/                Shared TS libs (mobile-shared, etc.)
+├── docker-compose.yml       Local stack — Postgres, Redis, NATS, API
 ├── pnpm-workspace.yaml      Workspace definition (apps/* + packages/*)
-└── .github/workflows/       7 CI workflows + base-image-refresh
+└── .github/workflows/       7 workflows (5 build/release + dependabot-auto-merge + base-image-refresh)
 ```
 
 Each app has its own `Dockerfile` — all built from the monorepo root
@@ -83,12 +85,15 @@ docker compose up -d
 Then run the frontends directly so Vite HMR works:
 
 ```bash
-pnpm dev             # @homechef/web       → http://localhost:5173
-pnpm dev:vendor      # @homechef/vendor-portal
+pnpm dev:landing     # @homechef/web-landing  → http://localhost:5173 (fe3dr.com marketing)
 pnpm dev:admin       # @homechef/admin-portal
+pnpm dev:vendor      # @homechef/vendor-portal
 pnpm dev:delivery    # @homechef/delivery-portal
 pnpm dev:api         # Go backend (also runs in compose, this is for edits)
 ```
+
+The customer storefront is the `mobile-customer` Expo app (see below) — the old
+`pnpm dev` / `apps/web` customer SPA is sunset and no longer built or deployed.
 
 Mobile apps (each opens Expo Dev Tools):
 
@@ -142,22 +147,30 @@ Formatting is Prettier + `prettier-plugin-tailwindcss`; run
 
 ## Deployment
 
-Deploys are driven by the five CI workflows under `.github/workflows/`:
+Deploys are driven by the build workflows under `.github/workflows/`:
 
 | Workflow                              | Image                                                   | Knative ksvc             |
 |---------------------------------------|---------------------------------------------------------|--------------------------|
 | `homechef-api-build.yml`              | `ghcr.io/tesserix/home-chef-app/homechef-api`           | `homechef-api`           |
-| `homechef-web-build.yml`              | `ghcr.io/tesserix/home-chef-app/homechef-web`           | `homechef-web`           |
 | `homechef-admin-portal-build.yml`     | `ghcr.io/tesserix/home-chef-app/homechef-admin-portal`  | `homechef-admin-portal`  |
-| `homechef-vendor-portal-build.yml`    | `ghcr.io/tesserix/home-chef-app/homechef-vendor-portal` | `homechef-vendor-portal` |
-| `homechef-delivery-portal-build.yml`  | `ghcr.io/tesserix/home-chef-app/homechef-delivery-portal` | `homechef-delivery-portal` |
+| `homechef-auth-bff-build.yml`         | `ghcr.io/tesserix/home-chef-app/homechef-auth-bff`      | `homechef-auth-bff`      |
+| `homechef-web-landing-build.yml`      | `ghcr.io/tesserix/home-chef-app/homechef-web-landing`   | `homechef-web` (cutover slot) |
+
+> `apps/web` (the old customer SPA) is sunset — its `homechef-web-build.yml` /
+> `homechef-web-release.yml` workflows were removed, and `fe3dr.com` is migrating
+> to the `web-landing` image. The `vendor-portal` and `delivery-portal` SPAs do
+> not yet have dedicated build workflows in this repo.
 
 Each workflow:
 
 1. Builds a multi-stage Docker image against `ghcr.io/tesserix/base-*`.
-2. Pushes to GHCR with `main`, `latest`, and `main-<shortsha>` tags.
-3. Authenticates to GKE via Workload Identity Federation and
-   `kubectl patch ksvc` to roll the Knative service.
+2. Pushes to GHCR tagged `<branch>` and `main-<shortsha>` (no `:latest` —
+   Kargo selects the newest matching tag from the mirror).
+3. On push to `main`, the `bump-k8s` job commits the new image tag (+
+   `updateTimestamp`) into `argocd/prod/apps/homechef/homechef-<svc>.yaml`
+   in [`tesserix-k8s`](https://github.com/tesserix/tesserix-k8s); Argo CD
+   (via the `kargo-homechef` prod Stage) rolls the Knative service. No
+   manual `kubectl apply`.
 4. **Trivy CRITICAL+HIGH gate** (`ignore-unfixed: true`) — a fresh CVE
    fails the run and short-circuits the deploy.
 5. Uploads a SARIF report to the GitHub Security tab.
@@ -170,9 +183,8 @@ without a per-image PR.
 
 ## Release images
 
-`homechef-api-release.yml` and `homechef-web-release.yml` publish
-semver-tagged immutable release images (same Trivy gate + SBOM +
-attestation).
+`homechef-api-release.yml` publishes semver-tagged immutable release images
+(same Trivy gate + SBOM + attestation).
 
 ---
 
