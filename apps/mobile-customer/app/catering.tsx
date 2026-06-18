@@ -34,11 +34,11 @@ const cateringSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
     .refine((d) => new Date(d) > new Date(), 'Event date must be in the future'),
   guestCount: z
-    .number({ invalid_type_error: 'Guest count must be a number' })
+    .number({ error: 'Guest count must be a number' })
     .int()
     .min(1, 'At least 1 guest required'),
   budget: z
-    .number({ invalid_type_error: 'Budget must be a number' })
+    .number({ error: 'Budget must be a number' })
     .positive('Budget must be positive')
     .optional(),
   city: z.string().min(1, 'City is required'),
