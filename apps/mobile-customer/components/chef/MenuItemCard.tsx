@@ -111,8 +111,15 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         {/* Price — tabular figures per spec */}
         <Text style={styles.price}>₹{item.price.toFixed(0)}</Text>
 
+        {/* Capacity (#48): low-stock hint for a capped dish that isn't sold out. */}
+        {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
+          <Text style={styles.remainingCaption}>{item.remainingToday} left today</Text>
+        ) : null}
+
         {/* Add / quantity control — coral, sits at bottom of text column */}
-        {item.isAvailable ? (
+        {item.soldOut ? (
+          <Text style={styles.soldOut}>Sold out today</Text>
+        ) : item.isAvailable ? (
           quantity === 0 ? (
             // Initial add button — plain wrapper to dodge iOS Pressable array bug.
             <View style={styles.addWrapper}>
@@ -369,6 +376,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     marginTop: 6,
+  },
+  // Capacity (#48): sold-out label + low-stock caption.
+  soldOut: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.destructive.DEFAULT,
+    marginTop: 6,
+  },
+  remainingCaption: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
 
   // ---- Photo ----

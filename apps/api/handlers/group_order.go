@@ -322,6 +322,13 @@ func (h *GroupOrderHandler) AddGroupItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Item not available from this chef"})
 		return
 	}
+	// Capacity backstop (#48): don't let a sold-out dish into the shared cart.
+	// (Group orders consolidate after payment, so this add-time guard is the
+	// enforcement point — full reservation-at-consolidation is a tracked follow-up.)
+	if _, soldOut := services.RemainingToday(item.ID, item.DailyCapacity, services.CapacityDay(time.Now())); soldOut {
+		c.JSON(http.StatusConflict, gin.H{"error": item.Name + " is sold out for today"})
+		return
+	}
 	gi := models.GroupOrderItem{
 		GroupOrderID:  g.ID,
 		ParticipantID: me.ID,

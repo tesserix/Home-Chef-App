@@ -176,15 +176,28 @@ export default function GroupOrderHubScreen() {
                   <View style={styles.menuRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.menuName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.menuPrice}>₹{item.price.toFixed(0)}</Text>
+                      <Text style={styles.menuPrice}>
+                        ₹{item.price.toFixed(0)}
+                        {item.soldOut
+                          ? ' · Sold out'
+                          : item.remainingToday != null && item.remainingToday > 0
+                            ? ` · ${item.remainingToday} left`
+                            : ''}
+                      </Text>
                     </View>
-                    <Pressable
-                      onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
-                      style={styles.addBtn}
-                      accessibilityLabel={`Add ${item.name}`}
-                    >
-                      <Plus size={18} color="#fff" strokeWidth={2.5} />
-                    </Pressable>
+                    {item.soldOut ? (
+                      <View style={[styles.addBtn, styles.addBtnDisabled]}>
+                        <Plus size={18} color="#fff" strokeWidth={2.5} />
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
+                        style={styles.addBtn}
+                        accessibilityLabel={`Add ${item.name}`}
+                      >
+                        <Plus size={18} color="#fff" strokeWidth={2.5} />
+                      </Pressable>
+                    )}
                   </View>
                 )}
               />
@@ -350,6 +363,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addBtnDisabled: { backgroundColor: customerColors.charcoal.soft, opacity: 0.5 },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,

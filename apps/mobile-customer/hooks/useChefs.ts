@@ -58,6 +58,9 @@ interface ApiMenuItem {
   isAvailable?: boolean;
   rating?: number;
   totalReviews?: number;
+  dailyCapacity?: number;
+  remainingToday?: number;
+  soldOut?: boolean;
 }
 
 function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
@@ -103,6 +106,9 @@ export function mapMenuItem(
     dietaryTags: m.dietaryTags,
     rating: m.rating,
     reviewCount: m.totalReviews,
+    dailyCapacity: m.dailyCapacity,
+    remainingToday: m.remainingToday,
+    soldOut: m.soldOut,
   };
 }
 

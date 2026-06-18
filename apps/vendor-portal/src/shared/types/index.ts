@@ -191,6 +191,11 @@ export interface MenuItem {
   isFeatured: boolean;
   portionSize?: string;
   serves: number;
+  // Capacity & cutoff controls (#48). dailyCapacity null/absent = unlimited;
+  // remainingToday/soldOut are server-derived for capped dishes today (IST).
+  dailyCapacity?: number | null;
+  remainingToday?: number | null;
+  soldOut?: boolean;
 }
 
 // Order types
