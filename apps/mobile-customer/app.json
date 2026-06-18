@@ -13,6 +13,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.tesserix.homechef.customer",
+      "associatedDomains": ["applinks:fe3dr.com"],
       "entitlements": {
         "keychain-access-groups": ["$(AppIdentifierPrefix)$(CFBundleIdentifier)"]
       },
@@ -112,6 +113,21 @@
           "data": [
             {
               "scheme": "homechef-customer"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "fe3dr.com",
+              "pathPrefix": "/chef"
             }
           ],
           "category": [

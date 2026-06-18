@@ -35,7 +35,12 @@ export default function ChefDetailScreen() {
   const cartSheetRef = useRef<BottomSheet>(null);
 
   const { data: chefData, isLoading: chefLoading, isError: chefError } = useChef(id ?? '');
-  const { data: menuData, isLoading: menuLoading, isError: menuError } = useChefMenu(id ?? '');
+  // The route param may be a slug (SEO/universal links, #58) or a UUID. GetChef
+  // resolves both; the menu endpoint takes a UUID, so use the resolved chef.id
+  // once it loads (falls back to the raw param for the initial render).
+  const { data: menuData, isLoading: menuLoading, isError: menuError } = useChefMenu(
+    chefData?.data?.id ?? id ?? ''
+  );
   const { data: favData } = useFavorites();
   const toggleFavorite = useToggleFavorite();
 
