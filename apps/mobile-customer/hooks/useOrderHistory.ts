@@ -47,6 +47,7 @@ interface ApiOrder {
   id: string;
   orderNumber: string;
   status: Order['status'];
+  paymentStatus?: Order['paymentStatus'];
   total?: number;
   items?: ApiOrderItem[];
   deliveryAddress?: ApiAddress;
@@ -73,6 +74,7 @@ function mapOrder(raw: ApiOrder): Order {
     id: raw.id,
     orderNumber: raw.orderNumber,
     status: raw.status,
+    paymentStatus: raw.paymentStatus,
     // Chef is now sent by the order API (OrderChefResponse: id/name/imageUrl).
     // Fill the rest of the Chef shape with neutral defaults — the order
     // list/detail only render name (and optionally image).
@@ -120,11 +122,21 @@ export function useOrders(params: OrderListParams = {}) {
   });
 }
 
-export function useOrder(id: string) {
+// `pollUntilPaid` keeps refetching every 2s while paymentStatus is still
+// pending — used by the payment-result screen to pick up the server-side
+// confirmation (webhook or verify) even if the client-side verify failed.
+export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
   return useQuery<{ data: Order }>({
     queryKey: ['order', id],
     queryFn: () =>
       api.get<ApiOrder>(`/v1/orders/${id}`).then((r) => ({ data: mapOrder(r.data) })),
     enabled: !!id,
+    refetchInterval: opts.pollUntilPaid
+      ? (query) => {
+          const ps = query.state.data?.data?.paymentStatus;
+          // Stop once payment reaches a terminal state; keep polling while pending.
+          return ps && ps !== 'pending' ? false : 2000;
+        }
+      : undefined,
   });
 }

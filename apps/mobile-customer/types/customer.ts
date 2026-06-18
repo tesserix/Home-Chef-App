@@ -70,6 +70,10 @@ export interface Order {
   id: string;
   orderNumber: string;
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  // Payment lifecycle — distinct from `status` (order lifecycle). A paid order
+  // can still sit at status='pending' until the chef accepts, so this is the
+  // only reliable signal of whether money has been captured.
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'refunded';
   // Optional: the order API's OrderResponse (ToResponse) carries no chef object
   // or chefId, so this is undefined on list/detail. Render defensively until the
   // backend adds it. See hooks/useOrderHistory.ts mapper.

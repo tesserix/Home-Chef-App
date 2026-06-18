@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
+import { startOrderPayment } from '../../../lib/payment';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -95,6 +96,7 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data, isLoading, isError } = useOrder(id ?? '');
+  const [paying, setPaying] = React.useState(false);
 
   if (isLoading) {
     return (
@@ -143,6 +145,22 @@ export default function OrderDetailScreen() {
     router.push(`/order/${order.id}/track`);
   }
 
+  // An order can be created but unpaid (verify failed, sheet dismissed, etc.).
+  // Surface a clear Pay-now path so the customer can complete payment.
+  const needsPayment =
+    (order.paymentStatus === 'pending' || order.paymentStatus === 'failed') &&
+    order.status !== 'cancelled' &&
+    order.status !== 'delivered';
+
+  async function handlePayNow() {
+    setPaying(true);
+    try {
+      await startOrderPayment(order.id);
+    } finally {
+      setPaying(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -188,7 +206,32 @@ export default function OrderDetailScreen() {
               ETA: {order.estimatedDeliveryTime}
             </Text>
           ) : null}
+          {needsPayment ? (
+            <Text style={styles.paymentPendingText}>
+              Payment pending — complete it to confirm your order.
+            </Text>
+          ) : null}
         </View>
+
+        {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
+        {needsPayment && (
+          <View style={styles.ctaWrapper}>
+            <Pressable
+              onPress={handlePayNow}
+              disabled={paying}
+              accessibilityRole="button"
+              accessibilityLabel="Pay now for this order"
+            >
+              <View style={styles.trackButton}>
+                {paying ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text style={styles.trackButtonText}>Pay now</Text>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        )}
 
         {/* Track Order CTA — coral filled, only for active/in-flight orders.
             Spec §2.6: coral when the order is in-flight.
@@ -411,6 +454,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: customerColors.charcoal.soft,
     fontVariant: ['tabular-nums'],
+  },
+  paymentPendingText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.coral.DEFAULT,
+    marginTop: 4,
   },
 
   // Track Order CTA container — horizontal padding
