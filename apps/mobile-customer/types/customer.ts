@@ -32,6 +32,11 @@ export interface MenuItem {
   // Per-dish rating rolled up from DishRating (#145).
   rating?: number;
   reviewCount?: number;
+  // Capacity & cutoff controls (#48). dailyCapacity absent/0 = unlimited;
+  // remainingToday/soldOut are server-derived for capped dishes today (IST).
+  dailyCapacity?: number;
+  remainingToday?: number;
+  soldOut?: boolean;
 }
 
 export interface CartItem {
