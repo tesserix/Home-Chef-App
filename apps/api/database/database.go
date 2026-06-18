@@ -310,8 +310,38 @@ func Migrate() error {
 		}
 	}
 
+	// Backfill SEO slugs for chefs created before the slug column existed (#58),
+	// so they're resolvable by slug via GET /chefs/:slug. Idempotent — only fills
+	// empty slugs; new/updated chefs get one from ChefProfile.BeforeSave.
+	backfillChefSlugs()
+
 	log.Println("Database migrations completed")
 	return nil
+}
+
+// backfillChefSlugs stamps a slug on any chef missing one. Best-effort: logs and
+// continues on error so startup is never blocked by it.
+func backfillChefSlugs() {
+	var chefs []models.ChefProfile
+	if err := DB.Where("slug = '' OR slug IS NULL").Find(&chefs).Error; err != nil {
+		log.Printf("chef-slug backfill: query failed: %v", err)
+		return
+	}
+	filled := 0
+	for i := range chefs {
+		slug := models.ChefSlug(chefs[i].BusinessName)
+		if slug == "" {
+			continue
+		}
+		if err := DB.Model(&models.ChefProfile{}).Where("id = ?", chefs[i].ID).Update("slug", slug).Error; err != nil {
+			log.Printf("chef-slug backfill: update %s failed: %v", chefs[i].ID, err)
+			continue
+		}
+		filled++
+	}
+	if filled > 0 {
+		log.Printf("chef-slug backfill: stamped %d chef slugs", filled)
+	}
 }
 
 func Close() error {
