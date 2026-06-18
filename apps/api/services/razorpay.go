@@ -29,10 +29,14 @@ const razorpayCacheTTL = 5 * time.Minute
 // product-scoped ("homechef-") so they don't collide with other products
 // sharing project tesseracthub-480811. These are the source of truth for
 // both reads (GetRazorpay) and writes (admin UpdatePaymentGatewayKeys).
+// Exported so the admin write path (UpdatePaymentGatewayKeys) and the read
+// path (GetRazorpay) share one source of truth — a previous drift wrote keys
+// to "prod-razorpay-*" while reads used "prod-homechef-razorpay-*", so
+// admin-entered keys were silently never picked up.
 const (
-	secretRazorpayKeyID         = "prod-homechef-razorpay-key-id"
-	secretRazorpayKeySecret     = "prod-homechef-razorpay-key-secret"
-	secretRazorpayWebhookSecret = "prod-homechef-razorpay-webhook-secret"
+	SecretRazorpayKeyID         = "prod-homechef-razorpay-key-id"
+	SecretRazorpayKeySecret     = "prod-homechef-razorpay-key-secret"
+	SecretRazorpayWebhookSecret = "prod-homechef-razorpay-webhook-secret"
 )
 
 // RazorpayClient handles all Razorpay API interactions.
@@ -61,10 +65,10 @@ func isPlaceholderValue(v string) bool {
 // — but only if they look real (not blank, not "placeholder"). This keeps
 // local dev working without GCP access.
 func fetchRazorpayFromSM(ctx context.Context) (*RazorpayClient, error) {
-	keyID, idErr := GetPlatformSecret(ctx, secretRazorpayKeyID)
-	keySecret, secErr := GetPlatformSecret(ctx, secretRazorpayKeySecret)
+	keyID, idErr := GetPlatformSecret(ctx, SecretRazorpayKeyID)
+	keySecret, secErr := GetPlatformSecret(ctx, SecretRazorpayKeySecret)
 	// Webhook secret is optional — webhooks simply won't verify if it's missing.
-	webhookSecret, _ := GetPlatformSecret(ctx, secretRazorpayWebhookSecret)
+	webhookSecret, _ := GetPlatformSecret(ctx, SecretRazorpayWebhookSecret)
 
 	if idErr != nil || secErr != nil || isPlaceholderValue(keyID) || isPlaceholderValue(keySecret) {
 		// Dev fallback: env-provided credentials (never used in prod since prod
