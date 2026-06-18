@@ -5,6 +5,7 @@ import {
   BarChart2,
   Bell,
   CalendarDays,
+  Gauge,
   ChevronRight,
   DollarSign,
   FileText,
@@ -34,6 +35,7 @@ interface NavRow {
 const NAV_ROWS: NavRow[] = [
   { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
   { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
+  { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },
   { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
   { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
   { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
