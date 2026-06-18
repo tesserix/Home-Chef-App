@@ -34,6 +34,33 @@ const addressSchema = z.object({
 
 type AddressFormData = z.infer<typeof addressSchema>;
 
+// Scheduled delivery slots (#51) — mirrors the API GET /chefs/:id/delivery-slots
+// response (services.SlotAvailability).
+interface DeliverySlot {
+  date: string; // "YYYY-MM-DD" IST
+  slot: 'lunch' | 'dinner';
+  label: string;
+  window: string; // "12:00–14:00"
+  remaining: number | null; // null = unlimited
+  available: boolean;
+}
+interface DeliverySlotsResponse {
+  slotsEnabled: boolean;
+  slots: DeliverySlot[];
+}
+
+// slotDayLabel turns a "YYYY-MM-DD" slot date into a label relative to today
+// ("Today" / "Tomorrow" / "Mon, 22 Jun").
+function slotDayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 // Saved addresses come from /api/v1/addresses (see useQuery below). The old
 // hardcoded list shipped mock ids "1" and "2" which the backend rejected at
 // order creation with "invalid UUID length" because deliveryAddressId is a
@@ -66,7 +93,17 @@ export default function CheckoutPage() {
     }
   }, [savedAddresses, selectedAddress]);
   const [showNewAddress, setShowNewAddress] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState<string>('asap');
+  // Scheduled delivery slot (#51) — null = ASAP. The picker below only offers
+  // slots when the chef has enabled them.
+  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
+  const { data: slotsData } = useQuery({
+    queryKey: ['delivery-slots', cart.chefId],
+    queryFn: () =>
+      apiClient.get<DeliverySlotsResponse>(`/chefs/${cart.chefId}/delivery-slots`),
+    enabled: Boolean(cart.chefId),
+    staleTime: 60_000,
+  });
+  const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
   const [tip, setTip] = useState<number>(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -139,7 +176,8 @@ export default function CheckoutPage() {
         deliveryAddressId: selectedAddress,
         tip,
         specialInstructions: specialInstructions || undefined,
-        scheduledFor: scheduledTime !== 'asap' ? scheduledTime : undefined,
+        deliverySlot: selectedSlot?.slot,
+        deliveryDate: selectedSlot?.date,
       });
 
       // Step 2: Ask the backend to prepare a payment. The response shape
@@ -478,9 +516,10 @@ export default function CheckoutPage() {
               </h2>
 
               <div className="mt-4 space-y-3">
+                {/* ASAP (default) */}
                 <label
                   className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                    scheduledTime === 'asap'
+                    selectedSlot === null
                       ? 'border-herb bg-herb-tint'
                       : 'border-mist hover:bg-paper'
                   }`}
@@ -488,9 +527,8 @@ export default function CheckoutPage() {
                   <input
                     type="radio"
                     name="time"
-                    value="asap"
-                    checked={scheduledTime === 'asap'}
-                    onChange={(e) => setScheduledTime(e.target.value)}
+                    checked={selectedSlot === null}
+                    onChange={() => setSelectedSlot(null)}
                     className="h-4 w-4 text-herb focus-visible:ring-herb"
                   />
                   <div>
@@ -501,41 +539,44 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 </label>
-                <label
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                    scheduledTime !== 'asap'
-                      ? 'border-herb bg-herb-tint'
-                      : 'border-mist hover:bg-paper'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="time"
-                    value="scheduled"
-                    checked={scheduledTime !== 'asap'}
-                    onChange={() => setScheduledTime('12:00')}
-                    className="h-4 w-4 text-herb focus-visible:ring-herb"
-                  />
-                  <div className="flex-1">
-                    <span className="font-medium text-ink">Schedule for later</span>
-                    {scheduledTime !== 'asap' && (
-                      <select
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                        className="input-base mt-2"
+
+                {/* Scheduled slots (#51) — only when the chef offers them */}
+                {slotsData?.slotsEnabled &&
+                  availableSlots.map((s) => {
+                    const sel =
+                      selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                    return (
+                      <label
+                        key={`${s.date}-${s.slot}`}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                          sel ? 'border-herb bg-herb-tint' : 'border-mist hover:bg-paper'
+                        }`}
                       >
-                        <option value="12:00">12:00 PM</option>
-                        <option value="12:30">12:30 PM</option>
-                        <option value="13:00">1:00 PM</option>
-                        <option value="13:30">1:30 PM</option>
-                        <option value="18:00">6:00 PM</option>
-                        <option value="18:30">6:30 PM</option>
-                        <option value="19:00">7:00 PM</option>
-                        <option value="19:30">7:30 PM</option>
-                      </select>
-                    )}
-                  </div>
-                </label>
+                        <input
+                          type="radio"
+                          name="time"
+                          checked={sel}
+                          onChange={() => setSelectedSlot({ slot: s.slot, date: s.date })}
+                          className="h-4 w-4 text-herb focus-visible:ring-herb"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium text-ink">
+                            {slotDayLabel(s.date)} · {s.label}
+                          </span>
+                          <p className="text-sm text-ink-muted tabular-nums">
+                            {s.window}
+                            {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+
+                {slotsData?.slotsEnabled && availableSlots.length === 0 && (
+                  <p className="text-sm text-ink-muted">
+                    No delivery windows are open right now — your order will be delivered ASAP.
+                  </p>
+                )}
               </div>
             </section>
 

@@ -82,6 +82,12 @@ type CreateOrderRequest struct {
 	PromoCode            string                `json:"promoCode"`
 	PaymentMethodID      *uuid.UUID            `json:"paymentMethodId"`
 	ScheduledFor         *time.Time            `json:"scheduledFor"`
+	// Scheduled delivery slot (#51). When DeliverySlot is "lunch"/"dinner" and
+	// the chef offers it, the server resolves the slot window → ScheduledFor and
+	// reserves the chef's per-slot daily capacity. DeliveryDate is "YYYY-MM-DD"
+	// IST (empty = today, bounded by the booking horizon).
+	DeliverySlot string `json:"deliverySlot"`
+	DeliveryDate string `json:"deliveryDate"`
 }
 
 type CreateOrderItem struct {
@@ -152,6 +158,32 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	if services.IsPastDailyClose(capSettings, time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
 		return
+	}
+
+	// Scheduled delivery slot (#51): when the customer picks a lunch/dinner slot
+	// the chef offers, resolve the slot window → ScheduledFor and remember the
+	// per-slot daily capacity to reserve inside the order transaction below.
+	var slotScheduledFor *time.Time
+	var slotBookingDay time.Time
+	slotToReserve, slotCap := "", 0
+	if req.DeliverySlot != "" {
+		sf, day, err := services.ResolveSlotSchedule(capSettings, req.DeliverySlot, req.DeliveryDate, time.Now())
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrSlotClosed):
+				c.JSON(http.StatusConflict, gin.H{"error": "That delivery slot has closed. Please pick another time."})
+			case errors.Is(err, services.ErrSlotDateInvalid):
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Please choose a valid delivery date."})
+			default: // ErrSlotNotOffered
+				c.JSON(http.StatusBadRequest, gin.H{"error": "This chef doesn't offer that delivery slot."})
+			}
+			return
+		}
+		slotScheduledFor = &sf
+		slotBookingDay = day
+		if capLimit := services.SlotCapacity(capSettings, req.DeliverySlot); capLimit != nil {
+			slotToReserve, slotCap = req.DeliverySlot, *capLimit
+		}
 	}
 
 	// Get menu items and calculate totals
@@ -366,7 +398,12 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		DeliveryInstructions:      req.DeliveryInstructions,
 		SpecialInstructions:       req.SpecialInstructions,
 		ScheduledFor:              req.ScheduledFor,
+		DeliverySlot:              req.DeliverySlot,
 		EstimatedPrepTime:         30, // Default, could be calculated
+	}
+	// A resolved slot window is authoritative over any client-sent ScheduledFor.
+	if slotScheduledFor != nil {
+		order.ScheduledFor = slotScheduledFor
 	}
 
 	// Start transaction
@@ -399,6 +436,20 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reserve capacity"})
+			return
+		}
+	}
+
+	// Reserve the scheduled delivery slot's per-day capacity (#51) — one booking
+	// per order, keyed to its delivery day. Oversell-safe.
+	if slotToReserve != "" {
+		if err := services.ReserveSlot(tx, req.ChefID, slotToReserve, 1, slotCap, slotBookingDay); err != nil {
+			tx.Rollback()
+			if errors.Is(err, services.ErrSlotFull) {
+				c.JSON(http.StatusConflict, gin.H{"error": "That delivery slot just filled up. Please pick another time."})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reserve delivery slot"})
 			return
 		}
 	}
@@ -556,6 +607,13 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		capDay := services.CapacityDay(order.CreatedAt)
 		for _, it := range order.Items {
 			if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, capDay); err != nil {
+				return err
+			}
+		}
+		// Release the scheduled delivery-slot booking (#51), keyed to the order's
+		// scheduled delivery day (not CreatedAt — the slot may be for a future day).
+		if order.DeliverySlot != "" && order.ScheduledFor != nil {
+			if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
 				return err
 			}
 		}

@@ -215,6 +215,9 @@ func Migrate() error {
 		&models.MenuItemDailySales{},
 		&models.ChefCapacitySettings{},
 
+		// Scheduled delivery slots (#51)
+		&models.ChefSlotDailyBookings{},
+
 		// Addresses
 		&models.Address{},
 
