@@ -24,6 +24,11 @@ on:
       - 'apps/web-landing/**'
       - '.github/workflows/homechef-web-landing-build.yml'
   workflow_dispatch:
+  # Nightly rebuild to refresh the build-time SEO chef/cuisine/area pages (#58)
+  # from current chef data — the pages are generated at build, so a periodic
+  # rebuild + deploy is how new/updated chefs get indexed.
+  schedule:
+    - cron: '17 2 * * *'
 
 permissions:
   contents: read
@@ -129,7 +134,7 @@ jobs:
   # auto-syncs the homechef-web Knative service → fe3dr.com serves the landing.
   bump-k8s:
     name: Bump tesserix-k8s image tag via API
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
     needs: [build]
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     env:
