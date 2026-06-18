@@ -969,9 +969,9 @@ func (h *AdminHandler) UpdatePaymentGatewayKeys(c *gin.Context) {
 	// creates the secret on first call (idempotent) and appends a new version
 	// on subsequent calls, so the most recent version is always "latest".
 	secretMap := map[string]string{
-		"prod-razorpay-key-id":         req.KeyID,
-		"prod-razorpay-key-secret":     req.KeySecret,
-		"prod-razorpay-webhook-secret": req.WebhookSecret,
+		services.SecretRazorpayKeyID:         req.KeyID,
+		services.SecretRazorpayKeySecret:     req.KeySecret,
+		services.SecretRazorpayWebhookSecret: req.WebhookSecret,
 	}
 	for secretName, value := range secretMap {
 		if value == "" {
