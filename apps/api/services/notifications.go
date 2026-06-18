@@ -83,6 +83,8 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
+		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled}},
 	}
 }
 
@@ -125,6 +127,16 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleApprovalInfoRequested)
 	case SubjectApprovalCreated:
 		return decodeThen(data, s.handleApprovalCreated)
+	case SubjectMealPlanCreated:
+		return decodeThen(data, s.handleMealPlanCreated)
+	case SubjectMealPlanAcceptedFull:
+		return decodeThen(data, s.handleMealPlanAcceptedFull)
+	case SubjectMealPlanModified:
+		return decodeThen(data, s.handleMealPlanModified)
+	case SubjectMealPlanConfirmed:
+		return decodeThen(data, s.handleMealPlanConfirmed)
+	case SubjectMealPlanCancelled:
+		return decodeThen(data, s.handleMealPlanCancelled)
 	default:
 		log.Printf("notification: no handler for subject %q", subject)
 		return nil
@@ -578,6 +590,83 @@ func (s *NotificationService) handleApprovalCreated(event Event) error {
 		}
 	}
 	return nil
+}
+
+// ── Meal-plan (tiffin) lifecycle (MEAL_PLANS stream, #198) ───────────────────
+//
+// The producer sets event.UserID to the recipient's User.ID already — the chef's
+// User.ID for chef-facing events, the customer's User.ID for customer-facing ones
+// (see handlers/meal_plan.go + meal_plan_cron.go). So these handlers notify
+// event.UserID directly; no chef-profile→user resolution is needed here.
+
+// notifyMealPlan persists an in-app notification and emits a push to the event's
+// target user. A nil target is dropped (unresolvable → not retryable). Idempotency
+// is handled upstream by the durable consumer (msg-id dedup).
+func (s *NotificationService) notifyMealPlan(event Event, notifType, title, message string) error {
+	if event.UserID == uuid.Nil {
+		log.Printf("meal-plan notification %q: nil target user (dropping)", notifType)
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    notifType,
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save %s notification: %w", notifType, err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleMealPlanCreated → chef: a customer pre-booked a tiffin plan to review.
+func (s *NotificationService) handleMealPlanCreated(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_request",
+		"New tiffin request",
+		"A customer pre-booked a meal plan. Review the days you can cook and respond.")
+}
+
+// handleMealPlanAcceptedFull → customer: chef accepted every requested day.
+func (s *NotificationService) handleMealPlanAcceptedFull(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_accepted",
+		"Your meal plan is confirmed",
+		"Your chef accepted every day of your tiffin plan. You're all set!")
+}
+
+// handleMealPlanModified → customer: chef cherry-picked a subset; approval needed.
+func (s *NotificationService) handleMealPlanModified(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_modified",
+		"Your chef revised the plan",
+		"Your chef can cook some of the days you picked. Review and approve the updated plan.")
+}
+
+// handleMealPlanConfirmed → chef: customer approved the revised plan.
+func (s *NotificationService) handleMealPlanConfirmed(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_confirmed",
+		"Meal plan confirmed",
+		"The customer approved your revised plan. It's confirmed.")
+}
+
+// handleMealPlanCancelled → chef or customer (event.UserID), tailored by cause:
+// expiry sweep (no response in time) vs the customer declining the revised plan.
+func (s *NotificationService) handleMealPlanCancelled(event Event) error {
+	title, message := "Meal plan cancelled", "This tiffin meal plan was cancelled."
+	switch {
+	case event.Type == "meal_plan.expired":
+		title = "Meal plan expired"
+		message = "A tiffin meal plan expired because it wasn't responded to in time."
+	default:
+		if approved, ok := event.Data["approved"].(bool); ok && !approved {
+			title = "Customer declined the revised plan"
+			message = "The customer declined your revised meal plan, so it was cancelled."
+		}
+	}
+	return s.notifyMealPlan(event, "meal_plan_cancelled", title, message)
 }
 
 // ── Notification dispatch (NOTIFICATIONS stream) ─────────────────────────────
