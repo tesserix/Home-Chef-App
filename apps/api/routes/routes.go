@@ -168,6 +168,7 @@ func SetupRouter() *gin.Engine {
 	providerHandler := handlers.NewDeliveryProviderHandler()
 	socialHandler := handlers.NewSocialHandler()
 	cateringHandler := handlers.NewCateringHandler()
+	mealPlanHandler := handlers.NewMealPlanHandler()
 	supportHandler := handlers.NewSupportHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
@@ -559,6 +560,26 @@ func SetupRouter() *gin.Engine {
 			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
 			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
 			chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
+		}
+
+		// Tiffin meal plans — customer side (#195/#196). Scoped to the authed
+		// customer inside the handlers (per-customer isolation).
+		mealPlans := v1.Group("/meal-plans")
+		mealPlans.Use(bffAuth(bffKey, bffWindow))
+		{
+			mealPlans.POST("", mealPlanHandler.CreateMealPlan)
+			mealPlans.GET("", mealPlanHandler.GetMyMealPlans)
+			mealPlans.GET("/:id", mealPlanHandler.GetMealPlan)
+			mealPlans.PUT("/:id/approve", mealPlanHandler.ApproveMealPlan)
+			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
+		}
+
+		// Tiffin meal plans — chef side (#195). Scoped to the authed chef.
+		chefMealPlans := v1.Group("/chef/meal-plans")
+		chefMealPlans.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefMealPlans.GET("", mealPlanHandler.GetChefMealPlanRequests)
+			chefMealPlans.POST("/:id/respond", mealPlanHandler.RespondMealPlan)
 		}
 
 		// Delivery staff routes — enforced with granular staff permissions

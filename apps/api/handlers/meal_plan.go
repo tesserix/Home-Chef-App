@@ -1,0 +1,433 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/middleware"
+	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
+)
+
+// meal_plan.go — the tiffin meal-plan handshake (#194/#195/#196): customer creates
+// a multi-day calendar request from one chef → chef accepts all or cherry-picks →
+// customer approves any trim → confirmed. Integration: DB transactions, NATS
+// transactional outbox (meal_plans.*), a Redis idempotency lock per mutation, and
+// strict per-customer / per-vendor isolation (every query scoped to the authed
+// owner; 404 — never 403 — to avoid leaking existence). The escrow money flow
+// (capture/refund/release) is gated by config.MealPlanEscrowEnabled (#194) and the
+// expiry sweeps run via the Temporal cron (services/meal_plan_cron.go, #197).
+
+const (
+	mealPlanMaxDays   = 31
+	chefRespondWindow = 24 * time.Hour
+	custApproveWindow = 24 * time.Hour
+	// A day must be booked at least this far ahead (lead time before the kitchen
+	// needs to plan). Tunable; IST is the business timezone.
+	mealPlanLeadTime = 12 * time.Hour
+)
+
+// MealPlanHandler owns the customer + chef meal-plan endpoints.
+type MealPlanHandler struct{}
+
+func NewMealPlanHandler() *MealPlanHandler { return &MealPlanHandler{} }
+
+// idempotencyGuard takes a short-lived Redis lock so a double-submitted mutation
+// (retry, double-tap) is processed once. Fails OPEN if Redis is down (the DB
+// state-machine guards are the real backstop).
+func idempotencyGuard(ctx context.Context, key string) (bool, func()) {
+	r := services.GetRedisClient()
+	if r == nil || !r.IsConnected() {
+		return true, func() {}
+	}
+	ok, err := r.SetNX(ctx, "mealplan:lock:"+key, "1", 30*time.Second)
+	if err != nil {
+		return true, func() {} // fail open
+	}
+	if !ok {
+		return false, func() {}
+	}
+	return true, func() { _ = r.Del(ctx, "mealplan:lock:"+key) }
+}
+
+func mealPlanNumber() string {
+	return "MP-" + uuid.NewString()[:8]
+}
+
+// ───────────────────────── Customer ─────────────────────────
+
+type createMealPlanDayInput struct {
+	Date    string `json:"date"`    // YYYY-MM-DD
+	Slot    string `json:"slot"`    // lunch|dinner
+	Variant string `json:"variant"` // veg|nonveg
+}
+
+type createMealPlanRequest struct {
+	ChefID string                   `json:"chefId"`
+	Days   []createMealPlanDayInput `json:"days"`
+}
+
+// CreateMealPlan — POST /meal-plans. Customer books a calendar of days from one chef.
+func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+
+	var req createMealPlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	chefID, err := uuid.Parse(req.ChefID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chefId"})
+		return
+	}
+	if len(req.Days) == 0 || len(req.Days) > mealPlanMaxDays {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("a plan needs between 1 and %d days", mealPlanMaxDays)})
+		return
+	}
+
+	ok, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("create:%s:%s", customerID, chefID))
+	if !ok {
+		c.JSON(http.StatusConflict, gin.H{"error": "A request is already in progress"})
+		return
+	}
+	defer release()
+
+	// Chef must exist, be active, and hold a valid FSSAI licence (#91 gate).
+	var chef models.ChefProfile
+	if err := database.DB.Where("id = ? AND is_active = ?", chefID, true).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	if services.IsChefFSSAIExpired(&chef) {
+		c.JSON(http.StatusConflict, gin.H{"error": "This chef isn't accepting orders right now"})
+		return
+	}
+
+	// Resolve each booked cell against the chef's PUBLISHED weekly menu (#192).
+	var cells []models.WeeklyMenuItem
+	database.DB.Where("chef_id = ?", chefID).Find(&cells)
+	cellBy := map[string]models.WeeklyMenuItem{}
+	for _, cell := range cells {
+		cellBy[fmt.Sprintf("%d|%s|%s", cell.DayOfWeek, cell.Slot, cell.Variant)] = cell
+	}
+
+	cutoff := time.Now().Add(mealPlanLeadTime)
+	seen := map[string]bool{}
+	days := make([]models.MealPlanDay, 0, len(req.Days))
+	var subtotal float64
+	var minDate, maxDate time.Time
+
+	for _, d := range req.Days {
+		date, derr := time.Parse("2006-01-02", d.Date)
+		if derr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "date must be YYYY-MM-DD"})
+			return
+		}
+		if !validSlot(d.Slot) || !validVariant(d.Variant) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot must be lunch|dinner, variant veg|nonveg"})
+			return
+		}
+		// One booking per (date, slot) — can't double-book a slot.
+		key := d.Date + "|" + d.Slot
+		if seen[key] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "duplicate day+slot: " + key})
+			return
+		}
+		seen[key] = true
+		if date.Before(cutoff) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "day " + d.Date + " is past the booking cutoff"})
+			return
+		}
+		cell, has := cellBy[fmt.Sprintf("%d|%s|%s", int(date.Weekday()), d.Slot, d.Variant)]
+		if !has {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("chef has no %s %s on %s", d.Variant, d.Slot, d.Date)})
+			return
+		}
+		subtotal += cell.Price
+		cellID := cell.ID
+		days = append(days, models.MealPlanDay{
+			Date:             date,
+			Slot:             models.MealSlot(d.Slot),
+			Variant:          models.MealVariant(d.Variant),
+			WeeklyMenuItemID: &cellID,
+			DishName:         cell.Name,
+			Price:            cell.Price,
+			Status:           models.MealPlanDayRequested,
+		})
+		if minDate.IsZero() || date.Before(minDate) {
+			minDate = date
+		}
+		if date.After(maxDate) {
+			maxDate = date
+		}
+	}
+
+	respondBy := time.Now().Add(chefRespondWindow)
+	plan := models.MealPlan{
+		MealPlanNumber: mealPlanNumber(),
+		CustomerID:     customerID,
+		ChefID:         chefID,
+		Status:         models.MealPlanPendingChef,
+		StartDate:      minDate,
+		EndDate:        maxDate,
+		Subtotal:       subtotal,
+		Total:          subtotal, // tax/GST + delivery resolved at per-day order generation (#197)
+		Currency:       "INR",
+		ChefRespondBy:  &respondBy,
+		Days:           days,
+	}
+
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&plan).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, services.SubjectMealPlanCreated, "meal_plan.created", chef.UserID, map[string]any{
+			"meal_plan_id": plan.ID.String(),
+			"meal_plan_no": plan.MealPlanNumber,
+			"customer_id":  customerID.String(),
+			"chef_id":      chefID.String(),
+			"day_count":    len(days),
+			"total":        subtotal,
+		})
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create meal plan"})
+		return
+	}
+
+	// Escrow advance (#194) — gated. When enabled, the customer pays the advance
+	// into the platform account here and the held chef payouts are created; until
+	// then the plan proceeds to the chef without charging (handshake mode).
+	resp := gin.H{"mealPlan": plan, "escrowEnabled": config.AppConfig.MealPlanEscrowEnabled}
+	c.JSON(http.StatusCreated, resp)
+}
+
+// GetMyMealPlans — GET /meal-plans. Customer's own plans only (isolation).
+func (h *MealPlanHandler) GetMyMealPlans(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	var plans []models.MealPlan
+	database.DB.Where("customer_id = ?", customerID).Preload("Days").Order("created_at DESC").Find(&plans)
+	c.JSON(http.StatusOK, gin.H{"data": plans})
+}
+
+// GetMealPlan — GET /meal-plans/:id. Scoped to the authed customer (404 if not theirs).
+func (h *MealPlanHandler) GetMealPlan(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+}
+
+// ApproveMealPlan — PUT /meal-plans/:id/approve. Customer accepts the chef's
+// trimmed set; declined days are refunded (escrow), the rest is confirmed.
+func (h *MealPlanHandler) ApproveMealPlan(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	h.finalizeByCustomer(c, customerID, true)
+}
+
+// RejectMealPlan — PUT /meal-plans/:id/reject. Customer declines the trim → full
+// cancel + refund.
+func (h *MealPlanHandler) RejectMealPlan(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	h.finalizeByCustomer(c, customerID, false)
+}
+
+func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUID, approve bool) {
+	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	if plan.Status != models.MealPlanAwaitingCustomer {
+		c.JSON(http.StatusConflict, gin.H{"error": "This plan is not awaiting your approval"})
+		return
+	}
+
+	guardKey := fmt.Sprintf("finalize:%s", plan.ID)
+	okLock, release := idempotencyGuard(c.Request.Context(), guardKey)
+	if !okLock {
+		c.JSON(http.StatusConflict, gin.H{"error": "Already processing"})
+		return
+	}
+	defer release()
+
+	now := time.Now()
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if approve {
+			plan.Status = models.MealPlanConfirmed
+			plan.ConfirmedAt = &now
+			// Accepted days → confirmed; declined days stay declined (refunded by #194).
+			if err := tx.Model(&models.MealPlanDay{}).
+				Where("meal_plan_id = ? AND status = ?", plan.ID, models.MealPlanDayAccepted).
+				Update("status", models.MealPlanDayConfirmed).Error; err != nil {
+				return err
+			}
+		} else {
+			plan.Status = models.MealPlanCancelled
+			plan.CancelledAt = &now
+			plan.CancelReason = "customer rejected the chef's revised plan"
+		}
+		if err := tx.Save(&plan).Error; err != nil {
+			return err
+		}
+		subj := services.SubjectMealPlanConfirmed
+		if !approve {
+			subj = services.SubjectMealPlanCancelled
+		}
+		return services.EnqueueEvent(tx, subj, "meal_plan.finalized", plan.ChefID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "approved": approve, "customer_id": customerID.String(),
+		})
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
+		return
+	}
+	// TODO(#194): on approve → refund declined-day amounts to wallet; on reject →
+	// full refund. Gated by config.AppConfig.MealPlanEscrowEnabled.
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+}
+
+// ───────────────────────── Chef ─────────────────────────
+
+// GetChefMealPlanRequests — GET /chef/meal-plans. Pending requests for the authed chef only.
+func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
+	chef, ok := authedChef(c)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	status := c.DefaultQuery("status", string(models.MealPlanPendingChef))
+	var plans []models.MealPlan
+	database.DB.Where("chef_id = ? AND status = ?", chef.ID, status).
+		Preload("Days").Order("created_at DESC").Find(&plans)
+	c.JSON(http.StatusOK, gin.H{"data": plans})
+}
+
+type respondMealPlanRequest struct {
+	AcceptAll      bool     `json:"acceptAll"`
+	AcceptedDayIDs []string `json:"acceptedDayIds"` // when not acceptAll: the days the chef will cook
+}
+
+// RespondMealPlan — POST /chef/meal-plans/:id/respond. Chef accepts all days or
+// cherry-picks a subset. All accepted → auto-confirm (customer just gets notified);
+// a trim → back to the customer for approval.
+func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
+	chef, ok := authedChef(c)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	plan, ok := loadScopedPlan(c.Param("id"), "chef_id", chef.ID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	if plan.Status != models.MealPlanPendingChef {
+		c.JSON(http.StatusConflict, gin.H{"error": "This plan has already been responded to"})
+		return
+	}
+
+	var req respondMealPlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	accepted := map[uuid.UUID]bool{}
+	for _, raw := range req.AcceptedDayIDs {
+		if id, perr := uuid.Parse(raw); perr == nil {
+			accepted[id] = true
+		}
+	}
+	if !req.AcceptAll && len(accepted) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "accept at least one day, or set acceptAll"})
+		return
+	}
+
+	okLock, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("respond:%s", plan.ID))
+	if !okLock {
+		c.JSON(http.StatusConflict, gin.H{"error": "Already processing"})
+		return
+	}
+	defer release()
+
+	allAccepted := true
+	for i := range plan.Days {
+		if req.AcceptAll || accepted[plan.Days[i].ID] {
+			plan.Days[i].Status = models.MealPlanDayAccepted
+		} else {
+			plan.Days[i].Status = models.MealPlanDayDeclined
+			allAccepted = false
+		}
+	}
+
+	now := time.Now()
+	subj := services.SubjectMealPlanModified
+	if allAccepted {
+		plan.Status = models.MealPlanConfirmed
+		plan.ConfirmedAt = &now
+		// Accepted-all → confirm the days immediately too.
+		for i := range plan.Days {
+			plan.Days[i].Status = models.MealPlanDayConfirmed
+		}
+		subj = services.SubjectMealPlanAcceptedFull
+	} else {
+		plan.Status = models.MealPlanAwaitingCustomer
+		approveBy := now.Add(custApproveWindow)
+		plan.CustomerApproveBy = &approveBy
+	}
+
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		for i := range plan.Days {
+			if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", plan.Days[i].ID).
+				Update("status", plan.Days[i].Status).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Save(&plan).Error; err != nil {
+			return err
+		}
+		return services.EnqueueEvent(tx, subj, "meal_plan.responded", plan.CustomerID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "all_accepted": allAccepted, "chef_id": chef.ID.String(),
+		})
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record response"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "allAccepted": allAccepted})
+}
+
+// ───────────────────────── helpers ─────────────────────────
+
+// loadScopedPlan loads a plan by id ONLY if it belongs to the given owner column
+// (customer_id or chef_id) = ownerID — per-customer / per-vendor isolation.
+func loadScopedPlan(idParam, ownerCol string, ownerID uuid.UUID) (models.MealPlan, bool) {
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return models.MealPlan{}, false
+	}
+	var plan models.MealPlan
+	if err := database.DB.Preload("Days").
+		Where("id = ? AND "+ownerCol+" = ?", id, ownerID).First(&plan).Error; err != nil {
+		return models.MealPlan{}, false
+	}
+	return plan, true
+}
+
+func authedChef(c *gin.Context) (models.ChefProfile, bool) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		return models.ChefProfile{}, false
+	}
+	return chef, true
+}

@@ -95,6 +95,11 @@ type Config struct {
 	// (services.CreateTransfer) which must be verified in the Razorpay sandbox
 	// before it touches live settlement. Enable with WALLET_CHECKOUT_ENABLED=true.
 	WalletCheckoutEnabled bool
+	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):
+	// upfront advance capture, refund of declined/expired days, and per-day payout
+	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
+	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
+	MealPlanEscrowEnabled bool
 }
 
 var AppConfig *Config
@@ -107,6 +112,7 @@ func Load() {
 
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
+	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -210,6 +216,7 @@ func Load() {
 		// Feature Flags
 		EnableMockMode:        enableMock,
 		WalletCheckoutEnabled: walletCheckout,
+		MealPlanEscrowEnabled: mealPlanEscrow,
 	}
 }
 
