@@ -16,9 +16,24 @@ interface CapacitySettings {
   lunchCutoff: string; // "HH:MM" IST, "" = none
   dinnerCutoff: string;
   autoSoldOut: boolean;
+  // Scheduled delivery slots (#51)
+  slotsEnabled: boolean;
+  lunchSlotStart: string;
+  lunchSlotEnd: string;
+  dinnerSlotStart: string;
+  dinnerSlotEnd: string;
+  lunchSlotCapacity: number | null;
+  dinnerSlotCapacity: number | null;
 }
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// slotWindowOrdered: a slot's start must precede its end (blank/invalid skipped —
+// those are caught by the HH:MM check). Zero-padded "HH:MM" compares lexically.
+function slotWindowOrdered(start: string, end: string): boolean {
+  if (!HHMM.test(start) || !HHMM.test(end)) return true;
+  return start < end;
+}
 
 export default function CapacityPage() {
   const queryClient = useQueryClient();
@@ -35,6 +50,14 @@ export default function CapacityPage() {
   const [lunch, setLunch] = useState('');
   const [dinner, setDinner] = useState('');
   const [autoSoldOut, setAutoSoldOut] = useState(true);
+  // Scheduled delivery slots (#51)
+  const [slotsEnabled, setSlotsEnabled] = useState(false);
+  const [lunchStart, setLunchStart] = useState('');
+  const [lunchEnd, setLunchEnd] = useState('');
+  const [dinnerStart, setDinnerStart] = useState('');
+  const [dinnerEnd, setDinnerEnd] = useState('');
+  const [lunchCap, setLunchCap] = useState('');
+  const [dinnerCap, setDinnerCap] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -43,6 +66,14 @@ export default function CapacityPage() {
     setLunch(settings.lunchCutoff ?? '');
     setDinner(settings.dinnerCutoff ?? '');
     setAutoSoldOut(settings.autoSoldOut);
+    setSlotsEnabled(settings.slotsEnabled ?? false);
+    setLunchStart(settings.lunchSlotStart ?? '');
+    setLunchEnd(settings.lunchSlotEnd ?? '');
+    setDinnerStart(settings.dinnerSlotStart ?? '');
+    setDinnerEnd(settings.dinnerSlotEnd ?? '');
+    const capStr = (n: number | null | undefined) => (n != null && n > 0 ? String(n) : '');
+    setLunchCap(capStr(settings.lunchSlotCapacity));
+    setDinnerCap(capStr(settings.dinnerSlotCapacity));
     setHydrated(true);
   }, [settings, hydrated]);
 
@@ -69,13 +100,45 @@ export default function CapacityPage() {
   });
 
   function onSaveSettings() {
-    for (const [label, v] of [['Lunch', lunch], ['Dinner', dinner]] as const) {
+    const timeFields: [string, string][] = [
+      ['Lunch cutoff', lunch],
+      ['Dinner cutoff', dinner],
+    ];
+    if (slotsEnabled) {
+      timeFields.push(
+        ['Lunch slot start', lunchStart],
+        ['Lunch slot end', lunchEnd],
+        ['Dinner slot start', dinnerStart],
+        ['Dinner slot end', dinnerEnd],
+      );
+    }
+    for (const [label, v] of timeFields) {
       if (v !== '' && !HHMM.test(v)) {
-        toast.error(`${label} cutoff must be HH:MM (24h), e.g. 10:00`);
+        toast.error(`${label} must be HH:MM (24h), e.g. 10:00`);
         return;
       }
     }
-    saveSettings.mutate({ cutoffEnabled, lunchCutoff: lunch, dinnerCutoff: dinner, autoSoldOut });
+    if (slotsEnabled && (!slotWindowOrdered(lunchStart, lunchEnd) || !slotWindowOrdered(dinnerStart, dinnerEnd))) {
+      toast.error('A slot start time must be before its end time');
+      return;
+    }
+    const toCap = (s: string): number | null => {
+      const n = parseInt(s.trim(), 10);
+      return s.trim() === '' || isNaN(n) || n <= 0 ? null : n;
+    };
+    saveSettings.mutate({
+      cutoffEnabled,
+      lunchCutoff: lunch,
+      dinnerCutoff: dinner,
+      autoSoldOut,
+      slotsEnabled,
+      lunchSlotStart: lunchStart,
+      lunchSlotEnd: lunchEnd,
+      dinnerSlotStart: dinnerStart,
+      dinnerSlotEnd: dinnerEnd,
+      lunchSlotCapacity: toCap(lunchCap),
+      dinnerSlotCapacity: toCap(dinnerCap),
+    });
   }
 
   if (isLoading) {
@@ -116,6 +179,48 @@ export default function CapacityPage() {
           checked={autoSoldOut}
           onChange={() => setAutoSoldOut((v) => !v)}
         />
+        <Button isLoading={saveSettings.isPending} onClick={onSaveSettings}>
+          Save settings
+        </Button>
+      </div>
+
+      {/* Scheduled delivery slots (#51) */}
+      <div className="rounded-xl border border-mist bg-bone p-6 space-y-5">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+          <Clock className="h-5 w-5 text-herb" /> Scheduled delivery slots
+        </h2>
+        <ToggleRow
+          label="Enable delivery slots"
+          description="Let customers pick a lunch or dinner delivery window, with a cap per slot."
+          checked={slotsEnabled}
+          onChange={() => setSlotsEnabled((v) => !v)}
+        />
+        {slotsEnabled && (
+          <>
+            <SlotEditor
+              label="Lunch"
+              start={lunchStart}
+              end={lunchEnd}
+              cap={lunchCap}
+              onStart={setLunchStart}
+              onEnd={setLunchEnd}
+              onCap={setLunchCap}
+            />
+            <SlotEditor
+              label="Dinner"
+              start={dinnerStart}
+              end={dinnerEnd}
+              cap={dinnerCap}
+              onStart={setDinnerStart}
+              onEnd={setDinnerEnd}
+              onCap={setDinnerCap}
+            />
+            <p className="text-xs text-ink-muted">
+              Leave a capacity blank for unlimited. The lunch/dinner cutoff above is each
+              slot's order deadline.
+            </p>
+          </>
+        )}
         <Button isLoading={saveSettings.isPending} onClick={onSaveSettings}>
           Save settings
         </Button>
@@ -172,6 +277,67 @@ function CapRow({ item, onSave }: { item: MenuItem; onSave: (cap: number | null)
       >
         Set
       </Button>
+    </div>
+  );
+}
+
+// SlotEditor — a slot's delivery window (start–end) + per-day capacity (#51).
+function SlotEditor({
+  label,
+  start,
+  end,
+  cap,
+  onStart,
+  onEnd,
+  onCap,
+}: {
+  label: string;
+  start: string;
+  end: string;
+  cap: string;
+  onStart: (s: string) => void;
+  onEnd: (s: string) => void;
+  onCap: (s: string) => void;
+}) {
+  const onTime = (fn: (s: string) => void) => (v: string) =>
+    fn(v.replace(/[^0-9:]/g, '').slice(0, 5));
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-end gap-4 sm:grid-cols-[1fr_1fr_auto]">
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-ink">{label} window</span>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="12:00"
+            value={start}
+            onChange={(e) => onTime(onStart)(e.target.value)}
+            className="w-full rounded-lg border border-mist-strong px-3 py-2 text-sm text-ink focus:border-herb focus:outline-none"
+            aria-label={`${label} window start`}
+          />
+          <span className="text-ink-muted">–</span>
+          <input
+            type="text"
+            placeholder="14:00"
+            value={end}
+            onChange={(e) => onTime(onEnd)(e.target.value)}
+            className="w-full rounded-lg border border-mist-strong px-3 py-2 text-sm text-ink focus:border-herb focus:outline-none"
+            aria-label={`${label} window end`}
+          />
+        </div>
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-ink">Cap</span>
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          placeholder="∞"
+          value={cap}
+          onChange={(e) => onCap(e.target.value.replace(/[^0-9]/g, ''))}
+          className="w-20 rounded-lg border border-mist-strong px-3 py-2 text-sm text-ink focus:border-herb focus:outline-none"
+          aria-label={`${label} slot capacity`}
+        />
+      </label>
     </div>
   );
 }
