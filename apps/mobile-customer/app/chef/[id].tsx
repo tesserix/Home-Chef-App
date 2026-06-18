@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   ScrollView,
@@ -12,11 +13,12 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarDays, ChevronLeft, Heart, Share2, UtensilsCrossed } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, Heart, Share2, UtensilsCrossed, Users } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
+import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
@@ -43,6 +45,24 @@ export default function ChefDetailScreen() {
   );
   const { data: favData } = useFavorites();
   const toggleFavorite = useToggleFavorite();
+  const createGroup = useCreateGroupOrder();
+
+  // Start a group / office order (#46): pick the context, then open the hub.
+  function startGroupOrder(chefId: string) {
+    const start = (type: GroupType) =>
+      createGroup.mutate(
+        { chefId, type, splitMode: 'split' },
+        {
+          onSuccess: (d) => router.push(`/group-order/${d.groupOrder.id}` as never),
+          onError: () => Alert.alert('Could not start', 'Group orders may not be enabled yet.'),
+        },
+      );
+    Alert.alert('Start a group order', 'Who is this for?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Office / corporate', onPress: () => start('office') },
+      { text: 'Personal group', onPress: () => start('personal') },
+    ]);
+  }
 
   const chef = chefData?.data;
   const menuItems = menuData?.data ?? [];
@@ -351,6 +371,23 @@ export default function ChefDetailScreen() {
                 <Text style={mealPlanCtaStyles.title}>Plan a week of meals</Text>
                 <Text style={mealPlanCtaStyles.caption}>
                   Pre-book tiffin from this chef
+                </Text>
+              </View>
+              <Text style={mealPlanCtaStyles.chevron}>›</Text>
+            </Pressable>
+
+            {/* Group / office order entry (#46) — shared cart, split pay. */}
+            <Pressable
+              onPress={() => startGroupOrder(chef.id)}
+              accessibilityRole="button"
+              accessibilityLabel="Start a group or office order"
+              style={mealPlanCtaStyles.cta}
+            >
+              <Users size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
+              <View style={{ flex: 1 }}>
+                <Text style={mealPlanCtaStyles.title}>Start a group / office order</Text>
+                <Text style={mealPlanCtaStyles.caption}>
+                  Everyone adds their own items, split the bill
                 </Text>
               </View>
               <Text style={mealPlanCtaStyles.chevron}>›</Text>

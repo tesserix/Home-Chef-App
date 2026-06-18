@@ -13,9 +13,13 @@
     ],
     "ios": {
       "bundleIdentifier": "com.tesserix.homechef.customer",
-      "associatedDomains": ["applinks:fe3dr.com"],
+      "associatedDomains": [
+        "applinks:fe3dr.com"
+      ],
       "entitlements": {
-        "keychain-access-groups": ["$(AppIdentifierPrefix)$(CFBundleIdentifier)"]
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)$(CFBundleIdentifier)"
+        ]
       },
       "supportsTablet": false,
       "usesAppleSignIn": true,
@@ -128,6 +132,21 @@
               "scheme": "https",
               "host": "fe3dr.com",
               "pathPrefix": "/chef"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "fe3dr.com",
+              "pathPrefix": "/group"
             }
           ],
           "category": [
