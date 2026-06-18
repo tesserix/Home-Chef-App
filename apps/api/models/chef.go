@@ -1,17 +1,22 @@
 package models
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 type ChefProfile struct {
 	ID             uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID         uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
 	BusinessName   string         `gorm:"uniqueIndex;not null" json:"businessName"`
+	// Slug is the URL-safe identifier for SEO chef pages + app universal links
+	// (#58). Derived from BusinessName by BeforeSave; resolvable via GetChef.
+	Slug           string         `gorm:"index" json:"slug"`
 	Description    string         `gorm:"type:text" json:"description"`
 	ProfileImage   string         `gorm:"" json:"profileImage"`
 	BannerImage    string         `gorm:"" json:"bannerImage"`
@@ -143,11 +148,49 @@ type ChefSettings struct {
 	Chef ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
 }
 
+// slugApostrophes are stripped (not dashed) so "amma's" → "ammas"; slugNonWord
+// collapses every other run of non-alphanumerics to a single dash.
+var (
+	slugApostrophes = regexp.MustCompile(`['’]`)
+	slugNonWord     = regexp.MustCompile(`[^a-z0-9]+`)
+)
+
+// ChefSlug builds a URL-safe slug from a chef's business name for SEO landing
+// pages and app universal links (#58). e.g. "Amma's Kitchen!" → "ammas-kitchen".
+func ChefSlug(businessName string) string {
+	s := strings.ToLower(strings.TrimSpace(businessName))
+	s = slugApostrophes.ReplaceAllString(s, "")
+	s = slugNonWord.ReplaceAllString(s, "-")
+	return strings.Trim(s, "-")
+}
+
+// EffectiveSlug returns the stored slug, falling back to one derived from the
+// business name so API responses always carry a slug even before backfill.
+func (c *ChefProfile) EffectiveSlug() string {
+	if c.Slug != "" {
+		return c.Slug
+	}
+	return ChefSlug(c.BusinessName)
+}
+
+// BeforeSave stamps a slug on create/update when one isn't set, so SEO pages and
+// app universal links can resolve a chef by slug (#58). Stored (not derived on
+// read) so the lookup is a simple indexed equality. Collisions are rare
+// (BusinessName is unique) and resolve to the oldest chef; uniqueness hardening
+// is a follow-up.
+func (c *ChefProfile) BeforeSave(*gorm.DB) error {
+	if c.Slug == "" && c.BusinessName != "" {
+		c.Slug = ChefSlug(c.BusinessName)
+	}
+	return nil
+}
+
 // DTOs
 type ChefProfileResponse struct {
 	ID              uuid.UUID              `json:"id"`
 	UserID          uuid.UUID              `json:"userId"`
 	BusinessName    string                 `json:"businessName"`
+	Slug            string                 `json:"slug"`
 	Description     string                 `json:"description"`
 	ProfileImage    string                 `json:"profileImage"`
 	BannerImage     string                 `json:"bannerImage"`
@@ -222,6 +265,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		ID:              c.ID,
 		UserID:          c.UserID,
 		BusinessName:    c.BusinessName,
+		Slug:            c.EffectiveSlug(),
 		Description:     c.Description,
 		ProfileImage:    c.ProfileImage,
 		BannerImage:     c.BannerImage,

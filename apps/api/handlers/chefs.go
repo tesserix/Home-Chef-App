@@ -269,15 +269,19 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 
 // GetChef returns a single chef by ID
 func (h *ChefHandler) GetChef(c *gin.Context) {
-	id := c.Param("id")
-	chefID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
-		return
+	// Accept either a UUID or an SEO slug (#58), so app universal links and
+	// landing pages can use /chefs/<slug> as well as /chefs/<uuid>.
+	idOrSlug := c.Param("id")
+	q := database.DB.Preload("User")
+	if chefID, err := uuid.Parse(idOrSlug); err == nil {
+		q = q.Where("id = ?", chefID)
+	} else {
+		// Oldest match wins on the (rare) slug collision — stable canonical target.
+		q = q.Where("slug = ?", idOrSlug).Order("created_at")
 	}
 
 	var chef models.ChefProfile
-	if err := database.DB.Preload("User").First(&chef, "id = ?", chefID).Error; err != nil {
+	if err := q.First(&chef).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
