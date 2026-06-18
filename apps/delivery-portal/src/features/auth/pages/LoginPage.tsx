@@ -11,7 +11,7 @@ import { GoogleSignInButton } from '@/features/auth/components/GoogleSignInButto
  * staff-profile API endpoint, not from a separate auth mode here.
  */
 export default function LoginPage() {
-  const { login, loginWithEmail } = useAuth();
+  const { loginWithEmail } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
