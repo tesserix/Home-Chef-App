@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  CalendarDays,
   ChevronRight,
   MessageSquare,
   UtensilsCrossed,
@@ -452,6 +453,12 @@ export default function ProfileScreen() {
               icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
               label="Catering"
               onPress={() => router.push('/catering')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<CalendarDays size={18} color={customerColors.charcoal.soft} />}
+              label="My meal plans"
+              onPress={() => router.push('/meal-plans' as never)}
               isLast
             />
           </View>

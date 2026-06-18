@@ -12,7 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Heart, Share2, UtensilsCrossed } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, Heart, Share2, UtensilsCrossed } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
@@ -333,6 +333,28 @@ export default function ChefDetailScreen() {
             {chef.foodSafetyBadge ? (
               <Text style={styles.foodSafe}>✓ Food safety verified</Text>
             ) : null}
+
+            {/* Tiffin pre-booking entry (#196) — plan a week/fortnight of meals
+                from this chef's weekly menu, paid in advance. */}
+            <Pressable
+              onPress={() => router.push(`/book-meal-plan?chefId=${chef.id}` as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Plan a week of meals"
+              style={mealPlanCtaStyles.cta}
+            >
+              <CalendarDays
+                size={18}
+                color={customerColors.coral.DEFAULT}
+                strokeWidth={2}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={mealPlanCtaStyles.title}>Plan a week of meals</Text>
+                <Text style={mealPlanCtaStyles.caption}>
+                  Pre-book tiffin from this chef
+                </Text>
+              </View>
+              <Text style={mealPlanCtaStyles.chevron}>›</Text>
+            </Pressable>
           </View>
 
           {/* Hairline divider */}
@@ -740,5 +762,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: customerColors.canvas,
     fontVariant: ['tabular-nums'],
+  },
+});
+
+// Tiffin pre-booking CTA on the chef profile (#196) — kept in its own sheet so
+// the addition doesn't churn the main styles block.
+const mealPlanCtaStyles = StyleSheet.create({
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: customerColors.coral.tint,
+    backgroundColor: customerColors.coral.tint,
+  },
+  title: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  caption: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    marginTop: 1,
+  },
+  chevron: {
+    fontFamily: 'Inter',
+    fontSize: 22,
+    color: customerColors.coral.DEFAULT,
   },
 });
