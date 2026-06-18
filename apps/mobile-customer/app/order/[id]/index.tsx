@@ -13,6 +13,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { startOrderPayment } from '../../../lib/payment';
+import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -194,12 +195,16 @@ export default function OrderDetailScreen() {
 
         {/* Status chip + ETA — spec §2.7 + §0 chip pattern */}
         <View style={styles.statusSection}>
-          <View
-            style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}
-          >
-            <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
-              {chipStyle.label}
-            </Text>
+          <View style={styles.statusChipRow}>
+            {/* Live cooking animation while the chef is preparing the order (#50) */}
+            {order.status === 'preparing' ? (
+              <CookingIndicator size={20} color={customerColors.coral.DEFAULT} />
+            ) : null}
+            <View style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}>
+              <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
+                {order.status === 'preparing' ? 'Cooking now' : chipStyle.label}
+              </Text>
+            </View>
           </View>
           {order.estimatedDeliveryTime ? (
             <Text style={styles.etaText}>
@@ -447,6 +452,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  statusChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   // Spec §2.7: radius-full chip, tint bg + family text color
   statusChip: {

@@ -74,6 +74,34 @@ export function mealPlanStatusMeta(status: string): StatusMeta {
   }
 }
 
+// Per-day status presentation (#50). `cooking` flags the live "being prepared"
+// state that drives the animated cooking indicator the customer sees.
+export interface DayStatusMeta extends StatusMeta {
+  cooking: boolean;
+}
+
+export function mealPlanDayStatusMeta(status: string): DayStatusMeta {
+  const base = { needsAction: false, cooking: false };
+  switch (status) {
+    case 'requested':
+    case 'accepted':
+    case 'confirmed':
+      return { ...base, label: 'Scheduled', color: customerColors.charcoal.soft, bg: customerColors.surface.soft };
+    case 'prepared':
+      // The chef is cooking this dish right now — animate it.
+      return { ...base, cooking: true, label: 'Being prepared', color: customerColors.coral.pressed, bg: customerColors.coral.tint };
+    case 'delivered':
+      return { ...base, label: 'Delivered', color: customerColors.success.DEFAULT, bg: customerColors.success.tint };
+    case 'declined':
+    case 'skipped':
+    case 'cancelled':
+    case 'refunded':
+      return { ...base, label: status.charAt(0).toUpperCase() + status.slice(1), color: customerColors.charcoal.soft, bg: customerColors.surface.soft };
+    default:
+      return { ...base, label: status, color: customerColors.charcoal.soft, bg: customerColors.surface.soft };
+  }
+}
+
 export function formatDateRange(start?: string, end?: string): string {
   if (!start || !end) return '';
   const fmt = (iso: string) =>
