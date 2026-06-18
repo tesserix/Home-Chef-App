@@ -22,7 +22,11 @@ const queryClient = new QueryClient({
 // Set global notification handler at module level — before any notification arrives.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    // SDK 53 split shouldShowAlert into banner + list; keep the legacy field
+    // for older runtimes and add the new required ones.
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),

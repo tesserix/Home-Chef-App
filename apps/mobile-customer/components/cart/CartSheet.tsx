@@ -112,7 +112,6 @@ export const CartSheet = forwardRef<BottomSheetMethods>((_: unknown, ref: React.
   };
 
   return (
-    // @ts-expect-error — @gorhom/bottom-sheet ref types not yet updated for React 19
     <BottomSheet
       ref={ref}
       index={-1}
@@ -120,7 +119,6 @@ export const CartSheet = forwardRef<BottomSheetMethods>((_: unknown, ref: React.
       enablePanDownToClose
       backgroundStyle={{ borderRadius: 24 }}
     >
-      {/* @ts-expect-error — BottomSheetView children prop not compatible with React 19 JSX types */}
       <BottomSheetView style={{ flex: 1, paddingHorizontal: 16 }}>
         <View className="pb-2">
           <Text className="text-lg font-semibold text-charcoal">Your Cart</Text>
