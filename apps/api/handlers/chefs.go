@@ -300,11 +300,24 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 }
 
 // GetChefMenu returns the menu items and categories for a chef
+// resolveChefID maps a :id route param (a UUID or an SEO slug, #58) to the chef's
+// UUID, so every chef endpoint can be addressed by /chefs/<slug>. Returns false
+// when no chef matches.
+func resolveChefID(idOrSlug string) (uuid.UUID, bool) {
+	if id, err := uuid.Parse(idOrSlug); err == nil {
+		return id, true
+	}
+	var chef models.ChefProfile
+	if err := database.DB.Select("id").Where("slug = ?", idOrSlug).Order("created_at").First(&chef).Error; err != nil {
+		return uuid.Nil, false
+	}
+	return chef.ID, true
+}
+
 func (h *ChefHandler) GetChefMenu(c *gin.Context) {
-	id := c.Param("id")
-	chefID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
+	chefID, ok := resolveChefID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
 
@@ -340,10 +353,9 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 // GetChefReviews returns reviews for a chef
 func (h *ChefHandler) GetChefReviews(c *gin.Context) {
-	id := c.Param("id")
-	chefID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
+	chefID, ok := resolveChefID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
 
