@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -411,6 +412,63 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "allAccepted": allAccepted})
+}
+
+// ───────────────────────── Admin (oversight, #199) ─────────────────────────
+
+// AdminListMealPlans — GET /admin/meal-plans. Platform-wide, read-only oversight.
+// The route is gated by middleware.RequireAdmin (no per-row owner scoping here —
+// that's the whole point of admin oversight). Paginated, optional status filter.
+func (h *MealPlanHandler) AdminListMealPlans(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	q := database.DB.Model(&models.MealPlan{})
+	if status := c.Query("status"); status != "" {
+		q = q.Where("status = ?", status)
+	}
+
+	var total int64
+	q.Count(&total)
+
+	var plans []models.MealPlan
+	q.Preload("Days").Preload("Customer").Preload("Chef").
+		Order("created_at DESC").Offset(offset).Limit(limit).Find(&plans)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": plans,
+		"pagination": gin.H{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": (total + int64(limit) - 1) / int64(limit),
+			"hasNext":    int64(offset+limit) < total,
+		},
+	})
+}
+
+// AdminGetMealPlan — GET /admin/meal-plans/:id. Full plan (days + parties) for
+// oversight; admin-gated, not owner-scoped.
+func (h *MealPlanHandler) AdminGetMealPlan(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
+		return
+	}
+	var plan models.MealPlan
+	if err := database.DB.Preload("Days").Preload("Customer").Preload("Chef").
+		First(&plan, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
 // ───────────────────────── helpers ─────────────────────────
