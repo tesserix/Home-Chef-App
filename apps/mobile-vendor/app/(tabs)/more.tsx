@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import {
   BarChart2,
   Bell,
+  CalendarDays,
   ChevronRight,
   DollarSign,
   FileText,
@@ -32,6 +33,7 @@ interface NavRow {
 
 const NAV_ROWS: NavRow[] = [
   { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
+  { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
   { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
   { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
   { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
