@@ -262,6 +262,12 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	}
 	defer release()
 
+	// The chef-facing event must target the chef's User.ID, not the ChefProfile.ID.
+	// A missing chef row leaves it Nil — the notification consumer drops it gracefully.
+	var chefUserID uuid.UUID
+	database.DB.Model(&models.ChefProfile{}).
+		Where("id = ?", plan.ChefID).Pluck("user_id", &chefUserID)
+
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if approve {
@@ -285,8 +291,9 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		if !approve {
 			subj = services.SubjectMealPlanCancelled
 		}
-		return services.EnqueueEvent(tx, subj, "meal_plan.finalized", plan.ChefID, map[string]any{
-			"meal_plan_id": plan.ID.String(), "approved": approve, "customer_id": customerID.String(),
+		return services.EnqueueEvent(tx, subj, "meal_plan.finalized", chefUserID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
+			"approved": approve, "customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
 		})
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})

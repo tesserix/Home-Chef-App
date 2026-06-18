@@ -40,11 +40,11 @@ const (
 	SubjectApprovalInfoRequested = "approvals.info_requested"
 
 	// Tiffin meal plans (#193) — the request→accept→approve handshake + per-day lifecycle.
-	SubjectMealPlanCreated     = "meal_plans.created"      // → chef: new request
+	SubjectMealPlanCreated      = "meal_plans.created"       // → chef: new request
 	SubjectMealPlanAcceptedFull = "meal_plans.accepted_full" // → customer: notify only
-	SubjectMealPlanModified    = "meal_plans.modified"     // → customer: approve the trim
-	SubjectMealPlanConfirmed   = "meal_plans.confirmed"
-	SubjectMealPlanCancelled   = "meal_plans.cancelled"
+	SubjectMealPlanModified     = "meal_plans.modified"      // → customer: approve the trim
+	SubjectMealPlanConfirmed    = "meal_plans.confirmed"
+	SubjectMealPlanCancelled    = "meal_plans.cancelled"
 	SubjectMealPlanDayDelivered = "meal_plans.day_delivered"
 	SubjectMealPlanDayRefunded  = "meal_plans.day_refunded"
 
@@ -206,6 +206,7 @@ func (n *NATSClient) setupStreams() error {
 		{"CATERING", "Catering events", []string{"catering.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"APPROVALS", "Approval lifecycle events", []string{"approvals.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"SUBSCRIPTIONS", "Subscription billing events", []string{"subscription.>"}, 30 * 24 * time.Hour, gib / 2},
+		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"DLQ", "Dead-letter: events that exhausted consumer retries", []string{DLQSubjectPrefix + ".>"}, 30 * 24 * time.Hour, gib},
 	}
