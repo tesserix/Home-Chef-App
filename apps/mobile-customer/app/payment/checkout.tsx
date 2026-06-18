@@ -25,6 +25,10 @@ interface PaymentCheckoutParams {
   name?: string;
   email?: string;
   phone?: string;
+  // kind='tip' reuses this sheet for a post-delivery tip charge (#45): it
+  // verifies via /payments/tip/:tipId/verify and returns to a tip-success.
+  kind?: string;
+  tipId?: string;
 }
 
 // Bridge message shapes posted by the embedded checkout.js below.
@@ -146,6 +150,18 @@ export default function PaymentCheckout() {
       // Success — confirm server-side before celebrating.
       setVerifying(true);
       try {
+        // Post-delivery tip (#45): verify the tip charge, then show tip success.
+        if (params.kind === 'tip') {
+          await api.post(`/v1/payments/tip/${params.tipId}/verify`, {
+            razorpayPaymentId: msg.razorpay_payment_id,
+            razorpayOrderId: msg.razorpay_order_id,
+          });
+          router.replace({
+            pathname: '/payment/result',
+            params: { tip: '1', order_id: params.orderId },
+          });
+          return;
+        }
         await api.post(`/v1/payments/order/${params.orderId}/verify`, {
           razorpayPaymentId: msg.razorpay_payment_id,
           razorpayOrderId: msg.razorpay_order_id,
@@ -169,7 +185,7 @@ export default function PaymentCheckout() {
         });
       }
     },
-    [params.orderId],
+    [params.orderId, params.kind, params.tipId],
   );
 
   return (

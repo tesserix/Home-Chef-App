@@ -262,6 +262,17 @@ export default function OrderDetailScreen() {
                 <Text style={styles.trackButtonText}>Leave a Review</Text>
               </View>
             </Pressable>
+            {/* Tip your chef / rider (#45) — 100% pass-through. */}
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/tip`)}
+              accessibilityRole="button"
+              accessibilityLabel="Tip your chef or rider"
+              style={{ marginTop: 12 }}
+            >
+              <View style={styles.tipButton}>
+                <Text style={styles.tipButtonText}>Tip your chef / rider</Text>
+              </View>
+            </Pressable>
           </View>
         )}
 
@@ -480,6 +491,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.canvas,
+  },
+  // Secondary CTA (coral outline) — tip sits below the filled review button.
+  tipButton: {
+    backgroundColor: customerColors.canvas,
+    borderRadius: 8,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: customerColors.coral.DEFAULT,
+  },
+  tipButtonText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.coral.DEFAULT,
   },
 
   // Content section — direct on white, no card bg

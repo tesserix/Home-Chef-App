@@ -203,6 +203,9 @@ func Migrate() error {
 		&models.MealPlan{},
 		&models.MealPlanDay{},
 
+		// Post-delivery tips (#45)
+		&models.Tip{},
+
 		// Addresses
 		&models.Address{},
 

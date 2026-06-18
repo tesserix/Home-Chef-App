@@ -20,6 +20,8 @@ const (
 	SubjectOrderCancelled    = "orders.cancelled"
 	SubjectOrderDelivered    = "orders.delivered"
 	SubjectChefNewOrder      = "chef.new_order"
+	SubjectChefTipReceived   = "chef.tip_received"   // → chef: post-delivery tip
+	SubjectDriverTipReceived = "driver.tip_received" // → rider: post-delivery tip
 	SubjectDeliveryAssigned  = "delivery.assigned"
 	SubjectDeliveryPickedUp  = "delivery.picked_up"
 	SubjectDeliveryLocation  = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}

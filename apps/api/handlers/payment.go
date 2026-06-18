@@ -876,6 +876,9 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	if res.RowsAffected == 0 {
 		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
 	}
+	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
+	// (idempotent). Harmless no-op when payment.OrderID isn't a tip charge.
+	markTipPaidByRazorpayOrder(payment.OrderID, payment.ID)
 }
 
 func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
