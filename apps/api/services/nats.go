@@ -22,19 +22,25 @@ const (
 	SubjectChefNewOrder      = "chef.new_order"
 	SubjectChefTipReceived   = "chef.tip_received"   // → chef: post-delivery tip
 	SubjectDriverTipReceived = "driver.tip_received" // → rider: post-delivery tip
-	SubjectDeliveryAssigned  = "delivery.assigned"
-	SubjectDeliveryPickedUp  = "delivery.picked_up"
-	SubjectDeliveryLocation  = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
-	SubjectPaymentSuccess    = "payments.success"
-	SubjectPaymentFailed     = "payments.failed"
-	SubjectUserRegistered    = "users.registered"
-	SubjectChefVerified      = "chef.verified"
-	SubjectReviewPosted      = "reviews.posted"
-	SubjectCateringRequest   = "catering.request"
-	SubjectCateringQuote     = "catering.quote"
-	SubjectNotificationEmail = "notifications.email"
-	SubjectNotificationPush  = "notifications.push"
-	SubjectNotificationSMS   = "notifications.sms"
+
+	// Group / office orders (#46)
+	SubjectGroupOrderInvited   = "group_orders.invited"   // → guest: invited/joined
+	SubjectGroupOrderLocked    = "group_orders.locked"    // → participants: pay your share
+	SubjectGroupOrderPlaced    = "group_orders.placed"    // → host: order placed
+	SubjectGroupOrderCancelled = "group_orders.cancelled" // → participants: cancelled/refunded
+	SubjectDeliveryAssigned    = "delivery.assigned"
+	SubjectDeliveryPickedUp    = "delivery.picked_up"
+	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
+	SubjectPaymentSuccess      = "payments.success"
+	SubjectPaymentFailed       = "payments.failed"
+	SubjectUserRegistered      = "users.registered"
+	SubjectChefVerified        = "chef.verified"
+	SubjectReviewPosted        = "reviews.posted"
+	SubjectCateringRequest     = "catering.request"
+	SubjectCateringQuote       = "catering.quote"
+	SubjectNotificationEmail   = "notifications.email"
+	SubjectNotificationPush    = "notifications.push"
+	SubjectNotificationSMS     = "notifications.sms"
 
 	SubjectApprovalCreated       = "approvals.created"
 	SubjectApprovalApproved      = "approvals.approved"
@@ -209,6 +215,7 @@ func (n *NATSClient) setupStreams() error {
 		{"APPROVALS", "Approval lifecycle events", []string{"approvals.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"SUBSCRIPTIONS", "Subscription billing events", []string{"subscription.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
+		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"DLQ", "Dead-letter: events that exhausted consumer retries", []string{DLQSubjectPrefix + ".>"}, 30 * 24 * time.Hour, gib},
 	}

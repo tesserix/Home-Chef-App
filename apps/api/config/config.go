@@ -95,6 +95,10 @@ type Config struct {
 	// (services.CreateTransfer) which must be verified in the Razorpay sandbox
 	// before it touches live settlement. Enable with WALLET_CHECKOUT_ENABLED=true.
 	WalletCheckoutEnabled bool
+	// GroupOrdersEnabled gates the group / office orders feature (#46): shared
+	// cart, split payment, and consolidation. Default OFF — the multi-payer money
+	// flow should be verified in the Razorpay sandbox before going live.
+	GroupOrdersEnabled bool
 	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):
 	// upfront advance capture, refund of declined/expired days, and per-day payout
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
@@ -113,6 +117,7 @@ func Load() {
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
+	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -217,6 +222,7 @@ func Load() {
 		EnableMockMode:        enableMock,
 		WalletCheckoutEnabled: walletCheckout,
 		MealPlanEscrowEnabled: mealPlanEscrow,
+		GroupOrdersEnabled:    groupOrders,
 	}
 }
 

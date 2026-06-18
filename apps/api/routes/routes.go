@@ -165,6 +165,7 @@ func SetupRouter() *gin.Engine {
 	subscriptionHandler := handlers.NewSubscriptionHandler()
 	paymentHandler := handlers.NewPaymentHandler()
 	tipHandler := handlers.NewTipHandler()
+	groupOrderHandler := handlers.NewGroupOrderHandler()
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
 	socialHandler := handlers.NewSocialHandler()
@@ -578,6 +579,25 @@ func SetupRouter() *gin.Engine {
 			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
 			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
 			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)
+		}
+
+		// Group / office orders (#46). Public invite preview by token + authed
+		// accept; the rest scoped to participants inside the handlers.
+		v1.GET("/group-invites/:token", groupOrderHandler.GroupJoinPreview)
+		v1.POST("/group-invites/:token/accept", bffAuth(bffKey, bffWindow), groupOrderHandler.JoinGroupOrder)
+		groupOrders := v1.Group("/group-orders")
+		groupOrders.Use(bffAuth(bffKey, bffWindow))
+		{
+			groupOrders.POST("", groupOrderHandler.CreateGroupOrder)
+			groupOrders.GET("", groupOrderHandler.GetMyGroupOrders)
+			groupOrders.GET("/:id", groupOrderHandler.GetGroupOrder)
+			groupOrders.POST("/:id/items", groupOrderHandler.AddGroupItem)
+			groupOrders.DELETE("/:id/items/:itemId", groupOrderHandler.RemoveGroupItem)
+			groupOrders.POST("/:id/lock", groupOrderHandler.LockGroupOrder)
+			groupOrders.POST("/:id/pay", groupOrderHandler.PayGroupShare)
+			groupOrders.POST("/:id/pay/verify", groupOrderHandler.VerifyGroupShare)
+			groupOrders.POST("/:id/cancel", groupOrderHandler.CancelGroupOrder)
+			groupOrders.POST("/:id/leave", groupOrderHandler.LeaveGroupOrder)
 		}
 
 		// Tiffin meal plans — chef side (#195). Scoped to the authed chef.

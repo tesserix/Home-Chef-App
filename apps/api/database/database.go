@@ -206,6 +206,11 @@ func Migrate() error {
 		// Post-delivery tips (#45)
 		&models.Tip{},
 
+		// Group / office orders (#46)
+		&models.GroupOrder{},
+		&models.GroupOrderParticipant{},
+		&models.GroupOrderItem{},
+
 		// Addresses
 		&models.Address{},
 
