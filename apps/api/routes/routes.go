@@ -336,6 +336,7 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id", chefHandler.GetChef)
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
+			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu) // #192 tiffin menu
 		}
 
 		// Dish search across chefs (#36) — its own path so it doesn't collide
@@ -394,6 +395,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
 			chefDashboard.PUT("/profile", chefHandler.UpdateChefProfile)
+			// Weekly fixed menu (#192) — veg/nonveg dish per (day × slot).
+			chefDashboard.GET("/weekly-menu", chefHandler.GetMyWeeklyMenu)
+			chefDashboard.PUT("/weekly-menu", chefHandler.PutWeeklyMenu)
 			chefDashboard.GET("/orders", chefHandler.GetChefOrders)
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
