@@ -109,6 +109,10 @@ func (h *MenuHandler) SetMenuItemCapacity(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.DailyCapacity != nil && *req.DailyCapacity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dailyCapacity cannot be negative (use 0 or null for unlimited)"})
+		return
+	}
 	// Owner-scoped update → 404 (not 403) if the item isn't this chef's.
 	res := database.DB.Model(&models.MenuItem{}).
 		Where("id = ? AND chef_id = ?", itemID, chef.ID).

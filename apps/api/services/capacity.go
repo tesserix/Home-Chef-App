@@ -13,6 +13,15 @@ import (
 
 // capacity.go — chef capacity & cutoff controls (#48). Atomic per-dish daily caps
 // (oversell-safe under concurrency) + IST per-meal cutoff helpers.
+//
+// Scope: caps + cutoffs apply to à-la-carte CreateOrder (the dominant channel).
+// Group/office orders (#46) and meal-plan/subscription orders (#193/#197) are
+// SEPARATE channels — group items are reserved/released through their own
+// lifecycle and meal-plan days book weekly-menu cells (distinct inventory), so
+// neither consumes the à-la-carte MenuItem cap today. Extending caps to those
+// channels (reserve at group-lock / plan-confirm, with their own release) is a
+// tracked follow-up. IsPastSlotCutoff is exported for that subscription-timing
+// use.
 
 // capacityIST is the business timezone for the daily-cap calendar day and the
 // "HH:MM" cutoff comparisons (IST has no DST). Containers run UTC, so all

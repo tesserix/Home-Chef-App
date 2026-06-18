@@ -342,13 +342,14 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	capDay := services.CapacityDay(time.Now())
 	responses := make([]models.MenuItemResponse, len(items))
-	for i, item := range items {
-		responses[i] = item.ToResponse()
+	for i := range items {
 		// Surface today's remaining count + sold-out for capped dishes (#48).
-		if rem, soldOut := services.RemainingToday(item.ID, item.DailyCapacity, capDay); rem != nil {
-			responses[i].RemainingToday = rem
-			responses[i].SoldOut = soldOut
+		// Set on the model so ToResponse carries it (single source of truth).
+		if rem, soldOut := services.RemainingToday(items[i].ID, items[i].DailyCapacity, capDay); rem != nil {
+			items[i].RemainingToday = rem
+			items[i].SoldOut = soldOut
 		}
+		responses[i] = items[i].ToResponse()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
