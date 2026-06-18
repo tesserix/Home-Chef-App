@@ -340,9 +340,15 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 	database.DB.Where("chef_id = ? AND is_active = ?", chefID, true).
 		Order("sort_order, name").Find(&categories)
 
+	capDay := services.CapacityDay(time.Now())
 	responses := make([]models.MenuItemResponse, len(items))
 	for i, item := range items {
 		responses[i] = item.ToResponse()
+		// Surface today's remaining count + sold-out for capped dishes (#48).
+		if rem, soldOut := services.RemainingToday(item.ID, item.DailyCapacity, capDay); rem != nil {
+			responses[i].RemainingToday = rem
+			responses[i].SoldOut = soldOut
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -738,7 +744,7 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	var order models.Order
-	if err := database.DB.Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
+	if err := database.DB.Preload("Items").Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
@@ -751,7 +757,14 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
+	priorStatus := order.Status
 	order.Status = models.OrderStatus(req.Status)
+	// A chef rejecting via status="cancelled" should release the reserved daily
+	// capacity (#48), but only on the first transition out of a live state.
+	releaseCap := order.Status == models.OrderStatusCancelled &&
+		priorStatus != models.OrderStatusCancelled &&
+		priorStatus != models.OrderStatusRefunded &&
+		priorStatus != models.OrderStatusDelivered
 
 	// Determine which subject to publish to based on status.
 	subject := services.SubjectOrderUpdated
@@ -764,6 +777,14 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&order).Error; err != nil {
 			return err
+		}
+		if releaseCap {
+			capDay := services.CapacityDay(order.CreatedAt)
+			for _, it := range order.Items {
+				if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, capDay); err != nil {
+					return err
+				}
+			}
 		}
 		return services.EnqueueOrderEvent(tx, subject, services.OrderEvent{
 			OrderID:     order.ID,
@@ -789,6 +810,67 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, order.ToResponse())
+}
+
+// GetChefCapacitySettings — GET /chef/capacity-settings (#48). Cutoffs + auto-sold-out.
+func (h *ChefHandler) GetChefCapacitySettings(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	c.JSON(http.StatusOK, services.GetChefCapacitySettings(chef.ID))
+}
+
+type updateCapacitySettingsRequest struct {
+	CutoffEnabled *bool   `json:"cutoffEnabled"`
+	LunchCutoff   *string `json:"lunchCutoff"`
+	DinnerCutoff  *string `json:"dinnerCutoff"`
+	AutoSoldOut   *bool   `json:"autoSoldOut"`
+}
+
+// UpdateChefCapacitySettings — PUT /chef/capacity-settings (#48, upsert).
+func (h *ChefHandler) UpdateChefCapacitySettings(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	var req updateCapacitySettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	for _, v := range []*string{req.LunchCutoff, req.DinnerCutoff} {
+		if v != nil && *v != "" {
+			if _, _, ok := services.ParseCutoff(*v); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "cutoff must be HH:MM (24h), e.g. 10:00"})
+				return
+			}
+		}
+	}
+	var s models.ChefCapacitySettings
+	database.DB.Where("chef_id = ?", chef.ID).FirstOrInit(&s)
+	s.ChefID = chef.ID
+	if req.CutoffEnabled != nil {
+		s.CutoffEnabled = *req.CutoffEnabled
+	}
+	if req.LunchCutoff != nil {
+		s.LunchCutoff = *req.LunchCutoff
+	}
+	if req.DinnerCutoff != nil {
+		s.DinnerCutoff = *req.DinnerCutoff
+	}
+	if req.AutoSoldOut != nil {
+		s.AutoSoldOut = *req.AutoSoldOut
+	}
+	if err := database.DB.Save(&s).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
+		return
+	}
+	c.JSON(http.StatusOK, s)
 }
 
 // GetOrderDetail returns a single order's full detail for the authenticated chef.

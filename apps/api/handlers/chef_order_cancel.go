@@ -146,6 +146,12 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}
+	// Release the reserved daily capacity (#48) — these dishes won't be made.
+	// Runs once per cancel (the already-cancelled guard above prevents re-entry).
+	capDay := services.CapacityDay(order.CreatedAt)
+	for _, it := range order.Items {
+		_ = services.ReleaseCapacity(database.DB, it.MenuItemID, it.Quantity, capDay)
+	}
 	// Refresh the in-memory copy so the response reflects the saved state.
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
@@ -275,6 +281,12 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 			"refund_id":        refundResp.ID,
 			"refund_amount":    lineRefund,
 		}).Error; err != nil {
+			return err
+		}
+
+		// Release this line's reserved daily capacity (#48). Guarded by the
+		// IsCancelled idempotency check above so it runs once.
+		if err := services.ReleaseCapacity(tx, target.MenuItemID, target.Quantity, services.CapacityDay(order.CreatedAt)); err != nil {
 			return err
 		}
 

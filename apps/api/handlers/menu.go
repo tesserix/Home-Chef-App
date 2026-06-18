@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -52,6 +53,7 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 	}).Order("sort_order ASC, created_at DESC").Find(&items)
 
 	// Ensure nil slices are returned as empty arrays in JSON
+	capDay := services.CapacityDay(time.Now())
 	for i := range items {
 		if items[i].DietaryTags == nil {
 			items[i].DietaryTags = pq.StringArray{}
@@ -64,6 +66,11 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 		}
 		if items[i].Images == nil {
 			items[i].Images = []models.MenuItemImage{}
+		}
+		// Derive today's remaining/sold-out from the capacity counter (#48).
+		if rem, soldOut := services.RemainingToday(items[i].ID, items[i].DailyCapacity, capDay); rem != nil {
+			items[i].RemainingToday = rem
+			items[i].SoldOut = soldOut
 		}
 	}
 
@@ -78,6 +85,43 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 		"items":      items,
 		"categories": categories,
 	})
+}
+
+type setCapacityRequest struct {
+	DailyCapacity *int `json:"dailyCapacity"` // nil or <= 0 = unlimited
+}
+
+// SetMenuItemCapacity — PUT /chef/menu/items/:itemId/capacity (#48). Owner-scoped.
+func (h *MenuHandler) SetMenuItemCapacity(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	itemID, err := uuid.Parse(c.Param("itemId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item id"})
+		return
+	}
+	var req setCapacityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Owner-scoped update → 404 (not 403) if the item isn't this chef's.
+	res := database.DB.Model(&models.MenuItem{}).
+		Where("id = ? AND chef_id = ?", itemID, chef.ID).
+		Updates(map[string]interface{}{"daily_capacity": req.DailyCapacity})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update capacity"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": true, "dailyCapacity": req.DailyCapacity})
 }
 
 // GetMenuItem returns a single menu item by ID (must belong to authenticated chef).
