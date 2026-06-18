@@ -26,10 +26,12 @@ interface PaymentCheckoutParams {
   email?: string;
   phone?: string;
   // kind='tip' reuses this sheet for a post-delivery tip charge (#45); kind='group'
-  // for a group-order share (#46, verifies via /group-orders/:groupId/pay/verify).
+  // for a group-order share (#46); kind='catering' for a catering deposit (#55,
+  // verifies via /catering/requests/:cateringId/deposit/verify).
   kind?: string;
   tipId?: string;
   groupId?: string;
+  cateringId?: string;
 }
 
 // Bridge message shapes posted by the embedded checkout.js below.
@@ -172,6 +174,15 @@ export default function PaymentCheckout() {
           router.replace(`/group-order/${params.groupId}` as never);
           return;
         }
+        // Catering deposit (#55): verify the advance, return to the booking.
+        if (params.kind === 'catering') {
+          await api.post(`/v1/catering/requests/${params.cateringId}/deposit/verify`, {
+            razorpayPaymentId: msg.razorpay_payment_id,
+            razorpayOrderId: msg.razorpay_order_id,
+          });
+          router.replace(`/catering/${params.cateringId}` as never);
+          return;
+        }
         await api.post(`/v1/payments/order/${params.orderId}/verify`, {
           razorpayPaymentId: msg.razorpay_payment_id,
           razorpayOrderId: msg.razorpay_order_id,
@@ -195,7 +206,7 @@ export default function PaymentCheckout() {
         });
       }
     },
-    [params.orderId, params.kind, params.tipId, params.groupId],
+    [params.orderId, params.kind, params.tipId, params.groupId, params.cateringId],
   );
 
   return (
