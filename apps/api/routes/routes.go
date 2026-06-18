@@ -631,6 +631,16 @@ func SetupRouter() *gin.Engine {
 			chefMealPlans.POST("/:id/respond", mealPlanHandler.RespondMealPlan)
 		}
 
+		// Bulk subscription prep view (#50) — own group so its static paths don't
+		// collide with the meal-plans :id routes.
+		chefPrep := v1.Group("/chef/prep")
+		chefPrep.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefPrep.GET("", mealPlanHandler.GetPrepManifest)
+			chefPrep.POST("/mark", mealPlanHandler.MarkPrepBulk)
+			chefPrep.POST("/day/:dayId", mealPlanHandler.MarkDayPrepared)
+		}
+
 		// Delivery staff routes — enforced with granular staff permissions
 		deliveryStaff := v1.Group("/delivery/staff")
 		deliveryStaff.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())

@@ -17,7 +17,8 @@ import {
   useSkipMealPlanDay,
   type MealPlanDay,
 } from '../../hooks/useMealPlans';
-import { mealPlanStatusMeta } from '../../lib/meal-plan';
+import { mealPlanStatusMeta, mealPlanDayStatusMeta } from '../../lib/meal-plan';
+import { CookingIndicator } from '../../components/status/CookingIndicator';
 
 const DECLINED = new Set(['declined', 'skipped', 'cancelled', 'refunded']);
 
@@ -177,6 +178,24 @@ export default function MealPlanDetailScreen() {
                       {d.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {d.dishName ?? '—'}
                     </Text>
                   </View>
+                  {/* Live per-day status (#50) — animated while being cooked */}
+                  {d.status === 'prepared' || d.status === 'delivered' ? (
+                    (() => {
+                      const meta = mealPlanDayStatusMeta(d.status);
+                      return (
+                        <View style={styles.dayStatusRow}>
+                          {meta.cooking ? (
+                            <CookingIndicator size={14} color={customerColors.coral.DEFAULT} />
+                          ) : null}
+                          <View style={[styles.dayStatusPill, { backgroundColor: meta.bg }]}>
+                            <Text style={[styles.dayStatusText, { color: meta.color }]}>
+                              {meta.label}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })()
+                  ) : null}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[styles.price, declined && styles.dim]}>
@@ -330,6 +349,14 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
   },
   dayMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  dayStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
+  dayStatusPill: {
+    borderRadius: 9999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  dayStatusText: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.2 },
   dot: { width: 8, height: 8, borderRadius: 2 },
   daySub: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
   price: {

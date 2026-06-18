@@ -115,8 +115,11 @@ type MealPlanDay struct {
 	// Fulfilment + money links (#194/#197).
 	OrderID          *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
 	PayoutTransferID string     `gorm:"" json:"payoutTransferId,omitempty"`
-	DeliveredAt      *time.Time `gorm:"" json:"deliveredAt,omitempty"`
-	RefundTxnID      *uuid.UUID `gorm:"type:uuid" json:"refundTxnId,omitempty"`
+	// PreparedAt is stamped when the chef marks the dish prepared from the prep
+	// view (#50) — the "being cooked" signal the customer sees live.
+	PreparedAt  *time.Time `gorm:"" json:"preparedAt,omitempty"`
+	DeliveredAt *time.Time `gorm:"" json:"deliveredAt,omitempty"`
+	RefundTxnID *uuid.UUID `gorm:"type:uuid" json:"refundTxnId,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`

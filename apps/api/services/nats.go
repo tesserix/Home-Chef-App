@@ -53,6 +53,7 @@ const (
 	SubjectMealPlanModified     = "meal_plans.modified"      // → customer: approve the trim
 	SubjectMealPlanConfirmed    = "meal_plans.confirmed"
 	SubjectMealPlanCancelled    = "meal_plans.cancelled"
+	SubjectMealPlanDayPrepared  = "meal_plans.day_prepared" // → customer: dish is being cooked (#50)
 	SubjectMealPlanDayDelivered = "meal_plans.day_delivered"
 	SubjectMealPlanDayRefunded  = "meal_plans.day_refunded"
 

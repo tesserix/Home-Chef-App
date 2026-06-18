@@ -1,7 +1,7 @@
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { CalendarDays, ChevronLeft, Inbox, UtensilsCrossed } from 'lucide-react-native';
+import { CalendarDays, ChefHat, ChevronLeft, Inbox, UtensilsCrossed } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
 import { useChefMealPlanRequests } from '../../hooks/useMealPlans';
@@ -46,6 +46,27 @@ export default function MealPlansScreen() {
               <Text style={styles.menuCtaTitle}>Weekly menu</Text>
               <Text style={styles.menuCtaCaption}>
                 Set the dishes customers can pre-book, per day
+              </Text>
+            </View>
+            <CalendarDays size={18} color={theme.colors.ink.muted} />
+          </View>
+        )}
+      </Pressable>
+
+      {/* Bulk prep view entry (#50) */}
+      <Pressable
+        onPress={() => router.push('/meal-plans/prep' as never)}
+        accessibilityRole="button"
+      >
+        {({ pressed }) => (
+          <View style={[styles.menuCta, pressed && styles.pressed]}>
+            <View style={styles.menuIcon}>
+              <ChefHat size={20} color={theme.colors.herb.DEFAULT} strokeWidth={1.75} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuCtaTitle}>Tomorrow's prep</Text>
+              <Text style={styles.menuCtaCaption}>
+                What you owe tomorrow, by dish — with a packing list
               </Text>
             </View>
             <CalendarDays size={18} color={theme.colors.ink.muted} />

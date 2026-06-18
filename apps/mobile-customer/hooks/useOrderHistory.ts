@@ -131,12 +131,17 @@ export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
     queryFn: () =>
       api.get<ApiOrder>(`/v1/orders/${id}`).then((r) => ({ data: mapOrder(r.data) })),
     enabled: !!id,
-    refetchInterval: opts.pollUntilPaid
-      ? (query) => {
-          const ps = query.state.data?.data?.paymentStatus;
-          // Stop once payment reaches a terminal state; keep polling while pending.
-          return ps && ps !== 'pending' ? false : 2000;
-        }
-      : undefined,
+    // Keep the order live: fast-poll while waiting for payment, then keep the
+    // status fresh while the order is in flight (#50 — drives the cooking
+    // animation), and stop once it's terminal.
+    refetchInterval: (query) => {
+      const o = query.state.data?.data;
+      if (!o) return false;
+      if (opts.pollUntilPaid && o.paymentStatus === 'pending') return 2000;
+      const active = ['pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'delivering'].includes(
+        o.status,
+      );
+      return active ? 15000 : false;
+    },
   });
 }

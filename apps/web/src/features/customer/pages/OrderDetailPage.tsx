@@ -196,8 +196,13 @@ export default function OrderDetailPage() {
             </div>
 
             <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 ${status.bgColor}`}>
-              <StatusIcon className={`h-5 w-5 ${status.color}`} />
-              <span className={`font-medium ${status.color}`}>{status.label}</span>
+              {/* Live cooking animation while the chef is preparing (#50) */}
+              <StatusIcon
+                className={`h-5 w-5 ${status.color} ${order.status === 'preparing' ? 'animate-bounce' : ''}`}
+              />
+              <span className={`font-medium ${status.color}`}>
+                {order.status === 'preparing' ? 'Cooking now' : status.label}
+              </span>
             </div>
           </div>
 

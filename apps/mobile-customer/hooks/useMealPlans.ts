@@ -82,13 +82,18 @@ export function useMyMealPlans() {
   });
 }
 
-/** One meal plan by id (scoped to the authed customer server-side). */
+/** One meal plan by id (scoped to the authed customer server-side). Polls while
+ *  the plan is live so the per-day cooking status updates in near-real-time (#50). */
 export function useMealPlan(id: string | undefined) {
   return useQuery<{ mealPlan: MealPlan }>({
     queryKey: ['meal-plans', id],
     queryFn: () =>
       api.get<{ mealPlan: MealPlan }>(`/meal-plans/${id}`).then((r) => r.data),
     enabled: Boolean(id),
+    refetchInterval: (query) => {
+      const s = query.state.data?.mealPlan?.status;
+      return s === 'confirmed' || s === 'active' ? 20000 : false;
+    },
   });
 }
 
