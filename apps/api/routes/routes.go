@@ -562,7 +562,12 @@ func SetupRouter() *gin.Engine {
 			catering.GET("/requests", cateringHandler.GetMyRequests)
 			catering.GET("/requests/:id", cateringHandler.GetRequest)
 			catering.GET("/requests/:id/quotes", cateringHandler.GetQuotes)
+			catering.POST("/requests/:id/cancel", cateringHandler.CancelRequest)
 			catering.POST("/quotes/:id/accept", cateringHandler.AcceptQuote)
+			catering.POST("/quotes/:id/decline", cateringHandler.DeclineQuote)
+			// Deposit / advance payment (#55) — flag-gated (CATERING_DEPOSIT_ENABLED).
+			catering.POST("/requests/:id/deposit", cateringHandler.CreateDeposit)
+			catering.POST("/requests/:id/deposit/verify", cateringHandler.VerifyDeposit)
 		}
 
 		// Chef catering (chef only)
@@ -572,6 +577,8 @@ func SetupRouter() *gin.Engine {
 			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
 			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
 			chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
+			chefCatering.GET("/bookings", cateringHandler.GetChefBookings)
+			chefCatering.POST("/requests/:id/complete", cateringHandler.CompleteBooking)
 		}
 
 		// Tiffin meal plans — customer side (#195/#196). Scoped to the authed
