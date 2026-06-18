@@ -79,6 +79,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await clearTokens();
+    // Reset the PERSISTED onboarding flag too — it's a device-local flag, so
+    // without this the next user to sign in on this device inherits the
+    // previous user's "onboarding complete" state and skips the wizard.
+    await setOnboardingCompleteInStore(false);
     set({
       user: null,
       accessToken: null,

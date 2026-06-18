@@ -73,7 +73,18 @@ export async function autoLogin(
 // the caught error here rather than rendering `err.message` directly —
 // it's almost always more cryptic than is friendly.
 export function resolveAuthErrorMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
+  // React Native Firebase puts the error code (e.g. "auth/email-already-in-use")
+  // on `err.code`, which isn't always reflected in `err.message`. Match against
+  // both so Firebase errors don't fall through to the generic fallback below.
+  const e = err as { code?: unknown; message?: unknown } | null;
+  const code = e && typeof e.code === 'string' ? e.code : '';
+  const message =
+    err instanceof Error
+      ? err.message
+      : e && typeof e.message === 'string'
+        ? e.message
+        : String(err);
+  const raw = `${code} ${message}`.trim();
   const codeMap: Record<string, string> = {
     auto_login_invalid_token: "We couldn't verify your sign-in. Please try again.",
     auto_login_tenant_not_allowed:
@@ -92,6 +103,8 @@ export function resolveAuthErrorMessage(err: unknown): string {
   // Common Firebase Auth errors
   if (raw.includes('auth/user-not-found')) return 'No account found for that email.';
   if (raw.includes('auth/wrong-password')) return 'Wrong password. Please try again.';
+  if (raw.includes('auth/invalid-credential'))
+    return 'Wrong email or password. Please try again.';
   if (raw.includes('auth/invalid-email')) return 'That email address looks off.';
   if (raw.includes('auth/email-already-in-use')) return 'An account already exists for that email.';
   if (raw.includes('auth/network-request-failed')) return 'Network connection lost. Try again.';

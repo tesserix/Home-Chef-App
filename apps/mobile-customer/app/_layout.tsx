@@ -39,6 +39,19 @@ export default function RootLayout() {
     hydrateFromStorage();
   }, []);
 
+  // Wipe the React Query cache whenever the signed-in identity changes (logout,
+  // or login as a different user). Without this, the previous user's cached
+  // profile/orders/addresses leak into the next session until staleTime expires
+  // — e.g. log out as A, sign up as B, and B briefly sees A's account.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const prevUserIdRef = useRef<string | null>(userId);
+  useEffect(() => {
+    if (prevUserIdRef.current !== userId) {
+      queryClient.clear();
+      prevUserIdRef.current = userId;
+    }
+  }, [userId]);
+
   // useBiometricLock internally waits for isLoading === false before registering
   // the AppState listener — safe to call unconditionally here.
   useBiometricLock({

@@ -48,6 +48,14 @@ export default function RegisterPage() {
   const { setAuthResponse } = useAuthStore();
   const { completeSignIn } = useAuth();
 
+  // After auth, send the user to onboarding unless they've already completed it
+  // (matches the root layout's gate). A brand-new sign-up has onboardingComplete
+  // = false, so it lands on the onboarding wizard — not the dashboard.
+  const routeAfterAuth = () => {
+    const done = useAuthStore.getState().onboardingComplete;
+    router.replace(done ? '/(tabs)' : '/(onboarding)/user-info');
+  };
+
   useEffect(() => {
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     if (!webClientId) {
@@ -74,7 +82,7 @@ export default function RegisterPage() {
     } catch {
       // Non-fatal: push registration failure should not block sign-up
     }
-    router.replace('/(tabs)');
+    routeAfterAuth();
   };
 
   const handleGoogleSignIn = async () => {
@@ -117,7 +125,7 @@ export default function RegisterPage() {
         } catch {
           // Non-fatal: push registration failure should not block registration
         }
-        router.replace('/(tabs)');
+        routeAfterAuth();
       }}
       onGoogleSignIn={handleGoogleSignIn}
       onAppleSignIn={Platform.OS === 'ios' ? handleAppleSignIn : undefined}

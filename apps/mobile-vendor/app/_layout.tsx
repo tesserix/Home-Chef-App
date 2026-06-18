@@ -141,6 +141,18 @@ function AppNavigator() {
     hydratePersistedLocale();
   }, []);
 
+  // Wipe the React Query cache whenever the signed-in identity changes (logout,
+  // or login as a different user). Without this, the previous user's cached
+  // data leaks into the next session until staleTime expires.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const prevUserIdRef = useRef<string | null>(userId);
+  useEffect(() => {
+    if (prevUserIdRef.current !== userId) {
+      queryClient.clear();
+      prevUserIdRef.current = userId;
+    }
+  }, [userId]);
+
   // useBiometricLock internally waits for isLoading === false before registering
   // the AppState listener — safe to call unconditionally here.
   useBiometricLock({
