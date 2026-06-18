@@ -680,6 +680,10 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/orders", adminHandler.GetAllOrders)
 			admin.GET("/orders/:id", adminHandler.GetOrderDetails)
 
+			// Tiffin meal-plan oversight (#199) — read-only, platform-wide
+			admin.GET("/meal-plans", mealPlanHandler.AdminListMealPlans)
+			admin.GET("/meal-plans/:id", mealPlanHandler.AdminGetMealPlan)
+
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)
 			admin.GET("/promotions/stats", promotionHandler.AdminGetPromotionStats)

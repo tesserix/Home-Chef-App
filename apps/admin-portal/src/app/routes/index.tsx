@@ -30,6 +30,8 @@ const ChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/ChefsPage')
 const FssaiLockedChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/FssaiLockedChefsPage'));
 const WalletAdminPage = lazyWithRetry(() => import('@/features/wallet/pages/WalletAdminPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/orders/pages/OrdersPage'));
+const MealPlansPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlansPage'));
+const MealPlanDetailPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlanDetailPage'));
 const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/AnalyticsPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
 const SecuritySettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SecuritySettingsPage'));
@@ -98,6 +100,8 @@ export function AppRoutes() {
           <Route path="fssai-lockouts" element={<FssaiLockedChefsPage />} />
           <Route path="wallets" element={<WalletAdminPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="meal-plans" element={<MealPlansPage />} />
+          <Route path="meal-plans/:id" element={<MealPlanDetailPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="approvals/:id" element={<ApprovalDetailPage />} />
           <Route path="delivery" element={<DeliveryPage />} />
