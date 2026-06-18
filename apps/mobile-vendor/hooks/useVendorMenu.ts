@@ -27,6 +27,11 @@ export interface MenuItem {
   // override per item when their tax advisor wants a more specific
   // code. Printed on customer invoices.
   hsn?: string;
+  // Capacity & cutoff controls (#48). dailyCapacity null/absent = unlimited;
+  // remainingToday/soldOut reflect today's IST cap usage (derived server-side).
+  dailyCapacity?: number | null;
+  remainingToday?: number | null;
+  soldOut?: boolean;
 }
 
 // Treat any of these tag strings as "vegetarian". Lowercased + trimmed
