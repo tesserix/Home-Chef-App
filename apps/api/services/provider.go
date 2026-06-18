@@ -309,6 +309,7 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	if models.DeliveryStatus(fe3drStatus) == models.DeliveryDelivered && delivery.OrderID != uuid.Nil {
 		MarkMealPlanDayDelivered(delivery.OrderID)
 		MarkGroupOrderDelivered(delivery.OrderID)
+		ReleaseOrderPayouts(delivery.OrderID)
 	}
 
 	// Durable event publication via the transactional outbox.

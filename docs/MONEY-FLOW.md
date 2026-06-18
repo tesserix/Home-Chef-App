@@ -44,10 +44,11 @@ single reference for the payment lifecycle and the cancellation/refund policy.
 3. **Fulfilment:** chef accepts → prepares → ready → dispatch → delivered.
 4. **Cancel/refund:** see §3. Refunding the payment **auto-reverses** the chef's payment-linked transfer.
 
-> ⚠️ **Known platform gap:** regular-order chef transfers are created `OnHold:true`
-> but there is **no automatic release on delivery** for this channel today — they
-> rely on Razorpay's hold settings / manual release. The per-day release mechanism
-> built for escrow/group (§2.3/§2.4) is the template to extend here. (Tracked.)
+> **Release on delivery (#217):** regular-order chef transfers are created
+> `OnHold:true`; on delivery, `services.ReleaseOrderPayouts` fetches the order's
+> Route transfers and releases the held ones (hooked at the delivery-delivered
+> transition, own-fleet + 3PL). **Gated by `ORDER_PAYOUT_AUTO_RELEASE_ENABLED`
+> (default OFF)** — enable after the Razorpay-sandbox sign-off (#218).
 
 ### 2.2 Tips — chefs / riders (`handlers/tips.go`, #45)
 - A **separate** Razorpay charge, post-delivery. Route-split **100%** to the chef
@@ -116,7 +117,11 @@ explicitly (`ReverseTransfer`).
 |---|---|---|---|
 | `MEAL_PLAN_ESCROW_ENABLED` | OFF | Tiffin advance capture / hold / release / refund (#194) | Sandbox-verify capture → hold → release → refund; wire the customer advance-checkout |
 | `GROUP_ORDERS_ENABLED` | OFF | Group/office orders end-to-end (#46) | Sandbox-verify the multi-payer charge → consolidate → hold → release → refund |
+| `ORDER_PAYOUT_AUTO_RELEASE_ENABLED` | OFF | Auto-release a delivered regular order's held chef/rider transfers (#217) | Sandbox-verify hold → release on delivery |
 | `WALLET_CHECKOUT_ENABLED` | OFF | Applying store credit at checkout (#141) | Verify direct-transfer top-ups in sandbox |
+
+See **`docs/RAZORPAY-SANDBOX-VERIFICATION.md`** for the step-by-step sign-off
+runbook (#218) to run before flipping any of these on.
 
 Tips (#45) and capacity (#48) are **not** flagged — tips are a standard charge
 (reuses the proven checkout) and caps move no money.
@@ -125,7 +130,7 @@ Tips (#45) and capacity (#48) are **not** flagged — tips are a standard charge
 
 ## 6. Open / tracked gaps (see GitHub issues)
 
-1. **Regular-order held transfers are never auto-released on delivery** — pre-existing platform gap; extend the escrow/group release hook to this channel.
-2. **Group + escrow money flows need Razorpay-sandbox sign-off** before flipping their flags.
-3. **Group & meal-plan orders bypass the à-la-carte daily cap** — capacity is enforced only on the regular `CreateOrder` path + an add-time sold-out guard for group carts; full reserve-at-lock/confirm with its own release is a follow-up.
+1. **Regular-order held-transfer release (#217)** — IMPLEMENTED, gated by `ORDER_PAYOUT_AUTO_RELEASE_ENABLED`; enable after sandbox (#218).
+2. **Group + escrow + order-release money flows need Razorpay-sandbox sign-off (#218)** before flipping their flags — see `docs/RAZORPAY-SANDBOX-VERIFICATION.md`.
+3. **Group orders now consume the à-la-carte cap** (reserve at lock, release on cancel, #219). **Meal-plan** orders book weekly-menu cells (separate inventory) — per-cell caps remain a distinct follow-up.
 4. **Escrow vs. UPI-Autopay model decision** for tiffin (#1/#2) is still open.

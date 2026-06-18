@@ -480,6 +480,32 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 		// Participants with no items still owe nothing in split mode.
 	}
 
+	// Aggregate quantities per dish so we can reserve à-la-carte daily capacity at
+	// lock (#48/#219) — pre-payment, so a sold-out dish blocks the lock rather than
+	// stranding a paid group. Released if the group is cancelled.
+	qtyByItem := map[uuid.UUID]int{}
+	for _, it := range g.Items {
+		qtyByItem[it.MenuItemID] += it.Quantity
+	}
+	capByItem := map[uuid.UUID]int{}
+	nameByItem := map[uuid.UUID]string{}
+	if len(qtyByItem) > 0 {
+		ids := make([]uuid.UUID, 0, len(qtyByItem))
+		for id := range qtyByItem {
+			ids = append(ids, id)
+		}
+		var menuItems []models.MenuItem
+		database.DB.Where("id IN ?", ids).Find(&menuItems)
+		for _, mi := range menuItems {
+			nameByItem[mi.ID] = mi.Name
+			if mi.DailyCapacity != nil && *mi.DailyCapacity > 0 {
+				capByItem[mi.ID] = *mi.DailyCapacity
+			}
+		}
+	}
+	capDay := services.CapacityDay(now)
+	var soldOutName string
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&models.GroupOrder{}).
 			Where("id = ? AND status = ?", g.ID, models.GroupOrderOpen).
@@ -529,8 +555,23 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 				}
 			}
 		}
+		// Reserve daily capacity for capped dishes (#219) — oversell-safe; a
+		// sold-out dish aborts the lock so no one pays for a dish that can't be made.
+		for itemID, capLimit := range capByItem {
+			if err := services.ReserveCapacity(tx, g.ChefID, itemID, qtyByItem[itemID], capLimit, capDay); err != nil {
+				if err == services.ErrSoldOut {
+					soldOutName = nameByItem[itemID]
+					return errGroupSoldOut
+				}
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
+		if err == errGroupSoldOut {
+			c.JSON(http.StatusConflict, gin.H{"error": soldOutName + " is sold out for today — remove it before locking"})
+			return
+		}
 		if err == errGroupConflict {
 			c.JSON(http.StatusConflict, gin.H{"error": "This group order is already locked"})
 			return
@@ -817,6 +858,20 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 				return err
 			}
 		}
+		// Release reserved daily capacity (#219) — only a locked group reserved it.
+		// ReleaseCapacity is a no-op for items with no counter row (uncapped).
+		if g.LockedAt != nil {
+			relQty := map[uuid.UUID]int{}
+			for _, it := range g.Items {
+				relQty[it.MenuItemID] += it.Quantity
+			}
+			relDay := services.CapacityDay(*g.LockedAt)
+			for itemID, qty := range relQty {
+				if err := services.ReleaseCapacity(tx, itemID, qty, relDay); err != nil {
+					return err
+				}
+			}
+		}
 		// Cancel the consolidated order too if it was placed.
 		if g.OrderID != nil {
 			tx.Model(&models.Order{}).Where("id = ?", *g.OrderID).
@@ -872,6 +927,9 @@ func (h *GroupOrderHandler) LeaveGroupOrder(c *gin.Context) {
 // ───────────────────────── helpers ─────────────────────────
 
 var errGroupConflict = fmt.Errorf("group order state changed concurrently")
+
+// errGroupSoldOut aborts a lock when a capped dish is sold out for the day (#219).
+var errGroupSoldOut = fmt.Errorf("a dish is sold out for today")
 
 // groupFullyPaid reports whether every required participant has paid (split: all
 // with a share; host: the host).
