@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // weekly_menu.go — a chef's fixed weekly menu (#1/#192). Each cell is a dish for a
@@ -34,6 +35,11 @@ type WeeklyMenuItem struct {
 	Description string      `gorm:"type:text" json:"description,omitempty"`
 	Price       float64     `gorm:"default:0" json:"price"`
 	ImageURL    string      `gorm:"" json:"imageUrl,omitempty"`
+	// Dietary & allergen tags (#41). The veg/non-veg signal is the cell's Variant;
+	// these add finer diet tags (e.g. jain, gluten-free) and declared allergens so
+	// the tiffin menu can render badges + warn like the à-la-carte menu.
+	DietaryTags pq.StringArray `gorm:"type:text[]" json:"dietaryTags"`
+	Allergens   pq.StringArray `gorm:"type:text[]" json:"allergens"`
 	// MenuItemID optionally links the cell to an à-la-carte MenuItem (reuse its image).
 	MenuItemID *uuid.UUID `gorm:"type:uuid" json:"menuItemId,omitempty"`
 	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`

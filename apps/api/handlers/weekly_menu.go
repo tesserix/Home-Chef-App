@@ -17,14 +17,16 @@ import (
 // tiffin meal-plan (#193) resolves each booked (day × slot × variant) to a cell here.
 
 type weeklyMenuCellInput struct {
-	DayOfWeek   int     `json:"dayOfWeek"` // 0=Sun..6=Sat
-	Slot        string  `json:"slot"`      // lunch|dinner
-	Variant     string  `json:"variant"`   // veg|nonveg
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	ImageURL    string  `json:"imageUrl"`
-	MenuItemID  *string `json:"menuItemId"`
+	DayOfWeek   int      `json:"dayOfWeek"` // 0=Sun..6=Sat
+	Slot        string   `json:"slot"`      // lunch|dinner
+	Variant     string   `json:"variant"`   // veg|nonveg
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Price       float64  `json:"price"`
+	ImageURL    string   `json:"imageUrl"`
+	DietaryTags []string `json:"dietaryTags"` // #41
+	Allergens   []string `json:"allergens"`   // #41
+	MenuItemID  *string  `json:"menuItemId"`
 }
 
 type weeklyMenuUpsertRequest struct {
@@ -103,6 +105,8 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 			Description: in.Description,
 			Price:       in.Price,
 			ImageURL:    in.ImageURL,
+			DietaryTags: ensureStringArray(in.DietaryTags),
+			Allergens:   ensureStringArray(in.Allergens),
 			MenuItemID:  menuItemID,
 		})
 	}
