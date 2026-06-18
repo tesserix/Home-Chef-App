@@ -21,6 +21,7 @@ import {
 } from '../hooks/useMealPlans';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
+const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
 
 interface Selected {
   date: string; // YYYY-MM-DD
@@ -64,9 +65,14 @@ export default function BookMealPlanScreen() {
     if (items.length === 0) return [];
     const out: { date: string; label: string; cells: WeeklyMenuItem[] }[] = [];
     const base = new Date();
+    // Skip days the server's lead-time cutoff would reject (a late-evening
+    // booking can't take tomorrow's meal). Mirrors mealPlanLeadTime on the API.
+    const cutoff = base.getTime() + LEAD_MS;
     for (let i = 1; i <= HORIZON_DAYS; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
+      d.setHours(0, 0, 0, 0);
+      if (d.getTime() < cutoff) continue;
       const cells = items
         .filter((it) => it.dayOfWeek === d.getDay())
         .sort((a, b) =>

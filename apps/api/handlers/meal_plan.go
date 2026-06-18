@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -35,6 +36,31 @@ const (
 	// needs to plan). Tunable; IST is the business timezone.
 	mealPlanLeadTime = 12 * time.Hour
 )
+
+// istLoc is the business timezone (IST, no DST). Booking dates (YYYY-MM-DD) are
+// interpreted as IST midnight so the lead-time cutoff is correct regardless of
+// the server clock's zone (containers run UTC).
+var istLoc = time.FixedZone("IST", 5*3600+30*60)
+
+// errPlanConflict signals that a meal-plan transition lost a race — the row was
+// no longer in the expected status (e.g. the expiry cron got there first). The
+// handler maps it to 409 rather than 500.
+var errPlanConflict = errors.New("meal plan state changed concurrently")
+
+// parsePlanDate parses a YYYY-MM-DD booking date as IST midnight.
+func parsePlanDate(s string) (time.Time, error) {
+	return time.ParseInLocation("2006-01-02", s, istLoc)
+}
+
+// dayBeforeCutoff reports whether a booked day starts before the lead-time
+// cutoff (now + mealPlanLeadTime). Extracted for unit testing.
+func dayBeforeCutoff(dateStr string, now time.Time) (bool, error) {
+	d, err := parsePlanDate(dateStr)
+	if err != nil {
+		return false, err
+	}
+	return d.Before(now.Add(mealPlanLeadTime)), nil
+}
 
 // MealPlanHandler owns the customer + chef meal-plan endpoints.
 type MealPlanHandler struct{}
@@ -113,6 +139,14 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		return
 	}
 
+	// The chef must have a PUBLISHED weekly menu — draft cells exist in the items
+	// table but are not bookable (the public read gates on is_published too).
+	if err := database.DB.Where("chef_id = ? AND is_published = ?", chefID, true).
+		First(&models.WeeklyMenu{}).Error; err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "This chef hasn't published a weekly menu yet"})
+		return
+	}
+
 	// Resolve each booked cell against the chef's PUBLISHED weekly menu (#192).
 	var cells []models.WeeklyMenuItem
 	database.DB.Where("chef_id = ?", chefID).Find(&cells)
@@ -128,7 +162,7 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 	var minDate, maxDate time.Time
 
 	for _, d := range req.Days {
-		date, derr := time.Parse("2006-01-02", d.Date)
+		date, derr := parsePlanDate(d.Date)
 		if derr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "date must be YYYY-MM-DD"})
 			return
@@ -215,7 +249,8 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 func (h *MealPlanHandler) GetMyMealPlans(c *gin.Context) {
 	customerID, _ := middleware.GetUserID(c)
 	var plans []models.MealPlan
-	database.DB.Where("customer_id = ?", customerID).Preload("Days").Order("created_at DESC").Find(&plans)
+	database.DB.Where("customer_id = ?", customerID).
+		Preload("Days").Preload("Chef").Order("created_at DESC").Find(&plans)
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
@@ -271,23 +306,54 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 
 	now := time.Now()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		newStatus := models.MealPlanConfirmed
+		if !approve {
+			newStatus = models.MealPlanCancelled
+		}
+		// Status-guarded transition: only act if still awaiting_customer. A
+		// concurrent expiry sweep (or double-submit) that already moved the row
+		// loses here, so we never overwrite a terminal state.
+		res := tx.Model(&models.MealPlan{}).
+			Where("id = ? AND status = ?", plan.ID, models.MealPlanAwaitingCustomer).
+			Update("status", newStatus)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errPlanConflict
+		}
+
 		if approve {
-			plan.Status = models.MealPlanConfirmed
-			plan.ConfirmedAt = &now
 			// Accepted days → confirmed; declined days stay declined (refunded by #194).
 			if err := tx.Model(&models.MealPlanDay{}).
 				Where("meal_plan_id = ? AND status = ?", plan.ID, models.MealPlanDayAccepted).
 				Update("status", models.MealPlanDayConfirmed).Error; err != nil {
 				return err
 			}
+			for i := range plan.Days {
+				if plan.Days[i].Status == models.MealPlanDayAccepted {
+					plan.Days[i].Status = models.MealPlanDayConfirmed
+				}
+			}
+			plan.Status = models.MealPlanConfirmed
+			plan.ConfirmedAt = &now
+			// Charge basis = only the accepted days, not the original full request.
+			accepted := plan.AcceptedTotal()
+			plan.Subtotal, plan.Total = accepted, accepted
+			if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+				Updates(map[string]any{"confirmed_at": now, "subtotal": accepted, "total": accepted}).Error; err != nil {
+				return err
+			}
 		} else {
 			plan.Status = models.MealPlanCancelled
 			plan.CancelledAt = &now
 			plan.CancelReason = "customer rejected the chef's revised plan"
+			if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+				Updates(map[string]any{"cancelled_at": now, "cancel_reason": plan.CancelReason}).Error; err != nil {
+				return err
+			}
 		}
-		if err := tx.Save(&plan).Error; err != nil {
-			return err
-		}
+
 		subj := services.SubjectMealPlanConfirmed
 		if !approve {
 			subj = services.SubjectMealPlanCancelled
@@ -297,6 +363,10 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 			"approved": approve, "customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
 		})
 	}); err != nil {
+		if errors.Is(err, errPlanConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This plan is no longer awaiting your approval"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 		return
 	}
@@ -317,7 +387,7 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 	status := c.DefaultQuery("status", string(models.MealPlanPendingChef))
 	var plans []models.MealPlan
 	database.DB.Where("chef_id = ? AND status = ?", chef.ID, status).
-		Preload("Days").Order("created_at DESC").Find(&plans)
+		Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
@@ -394,23 +464,48 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 		plan.CustomerApproveBy = &approveBy
 	}
 
+	// Charge basis = the accepted days only (declined days are excluded).
+	acceptedTotal := plan.AcceptedTotal()
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Status-guarded transition from pending_chef — a concurrent expiry sweep
+		// (or double-submit) that already moved the row loses here.
+		res := tx.Model(&models.MealPlan{}).
+			Where("id = ? AND status = ?", plan.ID, models.MealPlanPendingChef).
+			Update("status", plan.Status)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errPlanConflict
+		}
 		for i := range plan.Days {
-			if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", plan.Days[i].ID).
+			if err := tx.Model(&models.MealPlanDay{}).
+				Where("id = ? AND meal_plan_id = ?", plan.Days[i].ID, plan.ID).
 				Update("status", plan.Days[i].Status).Error; err != nil {
 				return err
 			}
 		}
-		if err := tx.Save(&plan).Error; err != nil {
+		upd := map[string]any{"subtotal": acceptedTotal, "total": acceptedTotal}
+		if allAccepted {
+			upd["confirmed_at"] = now
+		} else {
+			upd["customer_approve_by"] = plan.CustomerApproveBy
+		}
+		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).Updates(upd).Error; err != nil {
 			return err
 		}
 		return services.EnqueueEvent(tx, subj, "meal_plan.responded", plan.CustomerID, map[string]any{
 			"meal_plan_id": plan.ID.String(), "all_accepted": allAccepted, "chef_id": chef.ID.String(),
 		})
 	}); err != nil {
+		if errors.Is(err, errPlanConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This plan is no longer pending your response"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record response"})
 		return
 	}
+	plan.Subtotal, plan.Total = acceptedTotal, acceptedTotal
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "allAccepted": allAccepted})
 }
 
@@ -481,7 +576,7 @@ func loadScopedPlan(idParam, ownerCol string, ownerID uuid.UUID) (models.MealPla
 		return models.MealPlan{}, false
 	}
 	var plan models.MealPlan
-	if err := database.DB.Preload("Days").
+	if err := database.DB.Preload("Days").Preload("Chef").Preload("Customer").
 		Where("id = ? AND "+ownerCol+" = ?", id, ownerID).First(&plan).Error; err != nil {
 		return models.MealPlan{}, false
 	}
