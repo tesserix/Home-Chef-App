@@ -624,6 +624,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				return err
 			}
 		}
+		// Release the scheduled delivery-slot booking too (#51), keyed to the
+		// order's scheduled delivery day.
+		if order.DeliverySlot != "" && order.ScheduledFor != nil {
+			if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 

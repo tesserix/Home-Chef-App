@@ -786,6 +786,13 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 					return err
 				}
 			}
+			// Release the scheduled delivery-slot booking too (#51), keyed to the
+			// order's scheduled delivery day.
+			if order.DeliverySlot != "" && order.ScheduledFor != nil {
+				if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
+					return err
+				}
+			}
 		}
 		return services.EnqueueOrderEvent(tx, subject, services.OrderEvent{
 			OrderID:     order.ID,
@@ -829,6 +836,15 @@ type updateCapacitySettingsRequest struct {
 	LunchCutoff   *string `json:"lunchCutoff"`
 	DinnerCutoff  *string `json:"dinnerCutoff"`
 	AutoSoldOut   *bool   `json:"autoSoldOut"`
+
+	// Scheduled delivery slots (#51)
+	SlotsEnabled       *bool   `json:"slotsEnabled"`
+	LunchSlotStart     *string `json:"lunchSlotStart"`
+	LunchSlotEnd       *string `json:"lunchSlotEnd"`
+	DinnerSlotStart    *string `json:"dinnerSlotStart"`
+	DinnerSlotEnd      *string `json:"dinnerSlotEnd"`
+	LunchSlotCapacity  *int    `json:"lunchSlotCapacity"`
+	DinnerSlotCapacity *int    `json:"dinnerSlotCapacity"`
 }
 
 // UpdateChefCapacitySettings — PUT /chef/capacity-settings (#48, upsert).
@@ -844,13 +860,23 @@ func (h *ChefHandler) UpdateChefCapacitySettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	for _, v := range []*string{req.LunchCutoff, req.DinnerCutoff} {
+	// All "HH:MM" fields (cutoffs + slot windows) must parse when non-empty.
+	for _, v := range []*string{
+		req.LunchCutoff, req.DinnerCutoff,
+		req.LunchSlotStart, req.LunchSlotEnd, req.DinnerSlotStart, req.DinnerSlotEnd,
+	} {
 		if v != nil && *v != "" {
 			if _, _, ok := services.ParseCutoff(*v); !ok {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "cutoff must be HH:MM (24h), e.g. 10:00"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "time must be HH:MM (24h), e.g. 10:00"})
 				return
 			}
 		}
+	}
+	// Each slot window must have start before end when both are given.
+	if !slotWindowOrdered(req.LunchSlotStart, req.LunchSlotEnd) ||
+		!slotWindowOrdered(req.DinnerSlotStart, req.DinnerSlotEnd) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slot window start must be before end"})
+		return
 	}
 	var s models.ChefCapacitySettings
 	database.DB.Where("chef_id = ?", chef.ID).FirstOrInit(&s)
@@ -867,11 +893,81 @@ func (h *ChefHandler) UpdateChefCapacitySettings(c *gin.Context) {
 	if req.AutoSoldOut != nil {
 		s.AutoSoldOut = *req.AutoSoldOut
 	}
+	if req.SlotsEnabled != nil {
+		s.SlotsEnabled = *req.SlotsEnabled
+	}
+	if req.LunchSlotStart != nil {
+		s.LunchSlotStart = *req.LunchSlotStart
+	}
+	if req.LunchSlotEnd != nil {
+		s.LunchSlotEnd = *req.LunchSlotEnd
+	}
+	if req.DinnerSlotStart != nil {
+		s.DinnerSlotStart = *req.DinnerSlotStart
+	}
+	if req.DinnerSlotEnd != nil {
+		s.DinnerSlotEnd = *req.DinnerSlotEnd
+	}
+	// Capacity: negative is rejected; 0 means "unlimited" (stored as nil).
+	if req.LunchSlotCapacity != nil {
+		if *req.LunchSlotCapacity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot capacity cannot be negative"})
+			return
+		}
+		s.LunchSlotCapacity = normalizeCapacity(*req.LunchSlotCapacity)
+	}
+	if req.DinnerSlotCapacity != nil {
+		if *req.DinnerSlotCapacity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot capacity cannot be negative"})
+			return
+		}
+		s.DinnerSlotCapacity = normalizeCapacity(*req.DinnerSlotCapacity)
+	}
 	if err := database.DB.Save(&s).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
 		return
 	}
 	c.JSON(http.StatusOK, s)
+}
+
+// slotWindowOrdered reports whether a slot's start time precedes its end time.
+// True when either bound is absent/blank (nothing to compare).
+func slotWindowOrdered(start, end *string) bool {
+	if start == nil || end == nil || *start == "" || *end == "" {
+		return true
+	}
+	sh, sm, sok := services.ParseCutoff(*start)
+	eh, em, eok := services.ParseCutoff(*end)
+	if !sok || !eok {
+		return true // already flagged by the HH:MM validation above
+	}
+	return sh*60+sm < eh*60+em
+}
+
+// normalizeCapacity maps a capacity input to storage: 0 → nil (unlimited),
+// positive → a pointer to that value.
+func normalizeCapacity(n int) *int {
+	if n <= 0 {
+		return nil
+	}
+	return &n
+}
+
+// GetChefDeliverySlots — GET /chefs/:id/delivery-slots (PUBLIC). Returns the
+// chef's offered scheduled-delivery slots across the booking horizon with
+// per-day remaining capacity and open/closed state, for the checkout picker (#51).
+func (h *ChefHandler) GetChefDeliverySlots(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	s := services.GetChefCapacitySettings(chefID)
+	slots := services.BuildSlotAvailability(s, chefID, time.Now())
+	c.JSON(http.StatusOK, gin.H{
+		"slotsEnabled": s.SlotsEnabled,
+		"slots":        slots,
+	})
 }
 
 // GetOrderDetail returns a single order's full detail for the authenticated chef.

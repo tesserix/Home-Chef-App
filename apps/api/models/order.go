@@ -48,46 +48,51 @@ type Order struct {
 	// TaxRate / TaxName freeze the rule applied when the order was placed so
 	// that later edits to TaxRate rows don't retroactively change historical
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
-	TaxRate float64 `gorm:"default:0" json:"taxRate"`
-	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
-	Tip     float64 `gorm:"default:0" json:"tip"`       // Legacy: total tip (kept for backward compat)
-	ChefTip float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
-	DriverTip   float64 `gorm:"default:0" json:"driverTip"`   // Tip for the delivery driver
-	Discount    float64 `gorm:"default:0" json:"discount"`
-	Total       float64 `gorm:"not null" json:"total"`
+	TaxRate   float64 `gorm:"default:0" json:"taxRate"`
+	TaxName   string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	Tip       float64 `gorm:"default:0" json:"tip"`       // Legacy: total tip (kept for backward compat)
+	ChefTip   float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
+	DriverTip float64 `gorm:"default:0" json:"driverTip"` // Tip for the delivery driver
+	Discount  float64 `gorm:"default:0" json:"discount"`
+	Total     float64 `gorm:"not null" json:"total"`
 	// WalletApplied is the store credit applied at checkout (#141). The customer
 	// is charged (Total − WalletApplied) at the gateway; the chef/driver splits are
 	// still settled in full (the wallet-covered slice is topped up from the platform
 	// balance). Recorded at payment-create, debited from the wallet on capture.
 	WalletApplied float64 `gorm:"default:0" json:"walletApplied"`
-	PromoCode   string  `gorm:"" json:"promoCode,omitempty"`
+	PromoCode     string  `gorm:"" json:"promoCode,omitempty"`
 	// Currency is the 3-letter ISO code the customer is charged in. Frozen
 	// at order creation from the chef's settlement currency so later edits
 	// on the chef profile don't invalidate an in-flight payment.
 	Currency string `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 
 	// Delivery Address
-	DeliveryAddressLine1      string  `gorm:"" json:"deliveryAddressLine1"`
-	DeliveryAddressLine2      string  `gorm:"" json:"deliveryAddressLine2"`
-	DeliveryAddressCity       string  `gorm:"" json:"deliveryAddressCity"`
-	DeliveryAddressState      string  `gorm:"" json:"deliveryAddressState"`
-	DeliveryAddressPostalCode string  `gorm:"" json:"deliveryAddressPostalCode"`
+	DeliveryAddressLine1      string `gorm:"" json:"deliveryAddressLine1"`
+	DeliveryAddressLine2      string `gorm:"" json:"deliveryAddressLine2"`
+	DeliveryAddressCity       string `gorm:"" json:"deliveryAddressCity"`
+	DeliveryAddressState      string `gorm:"" json:"deliveryAddressState"`
+	DeliveryAddressPostalCode string `gorm:"" json:"deliveryAddressPostalCode"`
 	// ISO-3166 alpha-2 country used to pick the tax rule and for invoicing.
-	DeliveryAddressCountry string `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry"`
-	DeliveryLatitude          float64 `gorm:"" json:"deliveryLatitude"`
-	DeliveryLongitude         float64 `gorm:"" json:"deliveryLongitude"`
-	DeliveryInstructions      string  `gorm:"type:text" json:"deliveryInstructions"`
+	DeliveryAddressCountry string  `gorm:"type:varchar(2);default:'IN'" json:"deliveryAddressCountry"`
+	DeliveryLatitude       float64 `gorm:"" json:"deliveryLatitude"`
+	DeliveryLongitude      float64 `gorm:"" json:"deliveryLongitude"`
+	DeliveryInstructions   string  `gorm:"type:text" json:"deliveryInstructions"`
 
 	// Timing
 	EstimatedPrepTime     int        `gorm:"" json:"estimatedPrepTime"` // minutes
 	EstimatedDeliveryTime int        `gorm:"" json:"estimatedDeliveryTime"`
 	ScheduledFor          *time.Time `gorm:"" json:"scheduledFor,omitempty"`
-	AcceptedAt            *time.Time `gorm:"" json:"acceptedAt,omitempty"`
-	PreparedAt            *time.Time `gorm:"" json:"preparedAt,omitempty"`
-	PickedUpAt            *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
-	DeliveredAt           *time.Time `gorm:"" json:"deliveredAt,omitempty"`
-	CancelledAt           *time.Time `gorm:"" json:"cancelledAt,omitempty"`
-	CancelReason          string     `gorm:"" json:"cancelReason,omitempty"`
+	// DeliverySlot is the named scheduled-delivery slot this order was placed
+	// for (#51): "" (ASAP / unscheduled), "lunch", or "dinner". When set,
+	// ScheduledFor holds the slot window start on the chosen IST day and the
+	// chef's per-slot daily capacity was reserved at order time.
+	DeliverySlot string     `gorm:"type:varchar(8)" json:"deliverySlot,omitempty"`
+	AcceptedAt   *time.Time `gorm:"" json:"acceptedAt,omitempty"`
+	PreparedAt   *time.Time `gorm:"" json:"preparedAt,omitempty"`
+	PickedUpAt   *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
+	DeliveredAt  *time.Time `gorm:"" json:"deliveredAt,omitempty"`
+	CancelledAt  *time.Time `gorm:"" json:"cancelledAt,omitempty"`
+	CancelReason string     `gorm:"" json:"cancelReason,omitempty"`
 
 	// Special Instructions
 	SpecialInstructions string `gorm:"type:text" json:"specialInstructions"`
@@ -97,15 +102,15 @@ type Order struct {
 	// provider-specific ID below. Inherited from ChefProfile.PaymentProvider
 	// at order creation time so late-switching a chef doesn't invalidate
 	// already-placed orders.
-	PaymentProvider       string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
-	StripePaymentIntentID string `gorm:"" json:"-"`          // Stripe PaymentIntent ID
-	RazorpayOrderID       string `gorm:"" json:"-"`          // Razorpay order ID
-	RazorpayPaymentID     string `gorm:"" json:"-"`          // Razorpay payment ID
-	RefundID              string `gorm:"" json:"-"`          // Gateway refund ID (if refunded)
+	PaymentProvider       string     `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	StripePaymentIntentID string     `gorm:"" json:"-"` // Stripe PaymentIntent ID
+	RazorpayOrderID       string     `gorm:"" json:"-"` // Razorpay order ID
+	RazorpayPaymentID     string     `gorm:"" json:"-"` // Razorpay payment ID
+	RefundID              string     `gorm:"" json:"-"` // Gateway refund ID (if refunded)
 	RefundedAt            *time.Time `gorm:"" json:"refundedAt,omitempty"`
-	RefundAmount          float64 `gorm:"default:0" json:"refundAmount"`
-	RefundReason          string  `gorm:"" json:"refundReason,omitempty"`
-	RefundInitiatedBy     string  `gorm:"type:varchar(20)" json:"refundInitiatedBy,omitempty"` // chef, admin, system
+	RefundAmount          float64    `gorm:"default:0" json:"refundAmount"`
+	RefundReason          string     `gorm:"" json:"refundReason,omitempty"`
+	RefundInitiatedBy     string     `gorm:"type:varchar(20)" json:"refundInitiatedBy,omitempty"` // chef, admin, system
 
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -163,7 +168,7 @@ type OrderItem struct {
 type CancelReason string
 
 const (
-	CancelReasonOutOfIngredient CancelReason = "out_of_ingredient"
+	CancelReasonOutOfIngredient  CancelReason = "out_of_ingredient"
 	CancelReasonEquipmentFailure CancelReason = "equipment_failure"
 	CancelReasonCustomerRequest  CancelReason = "customer_request"
 	CancelReasonOther            CancelReason = "other"
@@ -183,18 +188,18 @@ func (r CancelReason) IsValid() bool {
 
 // DTOs
 type OrderResponse struct {
-	ID              uuid.UUID           `json:"id"`
-	OrderNumber     string              `json:"orderNumber"`
-	Status          OrderStatus         `json:"status"`
-	PaymentStatus   PaymentStatus       `json:"paymentStatus"`
-	PaymentProvider string              `json:"paymentProvider,omitempty"`
-	Currency        string              `json:"currency"`
+	ID              uuid.UUID     `json:"id"`
+	OrderNumber     string        `json:"orderNumber"`
+	Status          OrderStatus   `json:"status"`
+	PaymentStatus   PaymentStatus `json:"paymentStatus"`
+	PaymentProvider string        `json:"paymentProvider,omitempty"`
+	Currency        string        `json:"currency"`
 	// CustomerName and CustomerPhone are populated by handlers that load the
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints
 	// cannot accidentally return chef-side data.
-	CustomerName  string              `json:"customerName,omitempty"`
-	CustomerPhone string              `json:"customerPhone,omitempty"`
+	CustomerName    string              `json:"customerName,omitempty"`
+	CustomerPhone   string              `json:"customerPhone,omitempty"`
 	Subtotal        float64             `json:"subtotal"`
 	DeliveryFee     float64             `json:"deliveryFee"`
 	ServiceFee      float64             `json:"serviceFee"`
@@ -211,8 +216,13 @@ type OrderResponse struct {
 	// Chef is populated when the handler preloads the Chef relation
 	// (customer order list/detail). Omitted otherwise so chef-facing
 	// endpoints don't carry a redundant self-reference.
-	Chef      *OrderChefResponse `json:"chef,omitempty"`
-	CreatedAt time.Time          `json:"createdAt"`
+	Chef *OrderChefResponse `json:"chef,omitempty"`
+	// Scheduled delivery slot (#51) — surfaced so the customer order
+	// list/detail can show "Lunch · Mon 12:00" instead of "ASAP". Both omit
+	// when the order is unscheduled (ASAP).
+	ScheduledFor *time.Time `json:"scheduledFor,omitempty"`
+	DeliverySlot string     `json:"deliverySlot,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -225,26 +235,26 @@ type OrderChefResponse struct {
 }
 
 type OrderItemResponse struct {
-	ID                   uuid.UUID `json:"id"`
-	MenuItemID           uuid.UUID `json:"menuItemId"`
-	Name                 string    `json:"name"`
-	Price                float64   `json:"price"`
-	Quantity             int       `json:"quantity"`
-	Subtotal             float64   `json:"subtotal"`
-	Notes                string    `json:"notes,omitempty"`
+	ID         uuid.UUID `json:"id"`
+	MenuItemID uuid.UUID `json:"menuItemId"`
+	Name       string    `json:"name"`
+	Price      float64   `json:"price"`
+	Quantity   int       `json:"quantity"`
+	Subtotal   float64   `json:"subtotal"`
+	Notes      string    `json:"notes,omitempty"`
 	// SpecialInstructions is an alias for Notes exposed in the vendor detail view.
-	SpecialInstructions  string    `json:"specialInstructions,omitempty"`
+	SpecialInstructions string `json:"specialInstructions,omitempty"`
 	// IsVeg is resolved live from the MenuItem at response time. Omitted when nil
 	// (legacy items predating the column, or items with no veg flag).
-	IsVeg                *bool     `json:"isVeg,omitempty"`
+	IsVeg *bool `json:"isVeg,omitempty"`
 	// Per-line cancellation state. Surfaced so the mobile order detail
 	// can render the cancelled line with strikethrough + "Refunded ₹X"
 	// while the rest of the order continues prep. Mirror of the same-
 	// named columns on the OrderItem GORM model.
-	IsCancelled          bool       `json:"isCancelled,omitempty"`
-	CancelledReason      string     `json:"cancelledReason,omitempty"`
-	CancelledAt          *time.Time `json:"cancelledAt,omitempty"`
-	RefundAmount         float64    `json:"refundAmount,omitempty"`
+	IsCancelled     bool       `json:"isCancelled,omitempty"`
+	CancelledReason string     `json:"cancelledReason,omitempty"`
+	CancelledAt     *time.Time `json:"cancelledAt,omitempty"`
+	RefundAmount    float64    `json:"refundAmount,omitempty"`
 }
 
 type AddressResponse struct {
@@ -340,7 +350,9 @@ func (o *Order) ToResponse() OrderResponse {
 			State:      o.DeliveryAddressState,
 			PostalCode: o.DeliveryAddressPostalCode,
 		},
-		Chef:      chef,
-		CreatedAt: o.CreatedAt,
+		Chef:         chef,
+		ScheduledFor: o.ScheduledFor,
+		DeliverySlot: o.DeliverySlot,
+		CreatedAt:    o.CreatedAt,
 	}
 }

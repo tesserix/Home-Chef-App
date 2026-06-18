@@ -339,7 +339,8 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id", chefHandler.GetChef)
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
-			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu) // #192 tiffin menu
+			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
+			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
 		}
 
 		// Dish search across chefs (#36) — its own path so it doesn't collide

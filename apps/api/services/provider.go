@@ -26,6 +26,12 @@ type ProviderDeliveryRequest struct {
 	CustomerPhone   string
 	ItemDescription string
 	Weight          float64 // estimated weight in kg
+	// ScheduledPickupAt is the order's scheduled delivery-slot pickup time (#51),
+	// nil for ASAP orders. Adapters that support scheduled bookings should pass
+	// it to the 3PL so the rider is timed to the slot; adapters that don't may
+	// ignore it. NOTE: deferring the dispatch *trigger* itself until close to the
+	// slot (vs booking immediately at chef-ready) is tracked separately under #7.
+	ScheduledPickupAt *time.Time
 }
 
 // ProviderDeliveryResponse represents the provider's response
