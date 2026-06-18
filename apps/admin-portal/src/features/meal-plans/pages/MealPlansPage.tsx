@@ -42,6 +42,7 @@ const STATUS_OPTIONS = [
   'all',
   'pending_chef',
   'awaiting_customer',
+  'chef_modified',
   'confirmed',
   'active',
   'completed',

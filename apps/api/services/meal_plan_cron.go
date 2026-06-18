@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
@@ -60,6 +61,13 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 	}
 	for i := range plans {
 		p := plans[i]
+		// When an awaiting_customer plan expires, the chef cherry-picked and was
+		// waiting too — notify both parties (not just the customer).
+		var chefUserID uuid.UUID
+		if status == models.MealPlanAwaitingCustomer {
+			database.DB.Model(&models.ChefProfile{}).
+				Where("id = ?", p.ChefID).Pluck("user_id", &chefUserID)
+		}
 		err := database.DB.Transaction(func(tx *gorm.DB) error {
 			// Guard on the current status so a concurrent customer/chef action wins.
 			res := tx.Model(&models.MealPlan{}).
@@ -75,9 +83,17 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 			if res.RowsAffected == 0 {
 				return nil // already transitioned by a live action
 			}
-			return EnqueueEvent(tx, SubjectMealPlanCancelled, "meal_plan.expired", p.CustomerID, map[string]any{
+			if err := EnqueueEvent(tx, SubjectMealPlanCancelled, "meal_plan.expired", p.CustomerID, map[string]any{
 				"meal_plan_id": p.ID.String(), "reason": reason,
-			})
+			}); err != nil {
+				return err
+			}
+			if chefUserID != uuid.Nil {
+				return EnqueueEvent(tx, SubjectMealPlanCancelled, "meal_plan.expired", chefUserID, map[string]any{
+					"meal_plan_id": p.ID.String(), "reason": reason,
+				})
+			}
+			return nil
 		})
 		if err != nil {
 			log.Printf("meal-plan-sweep: expire %s failed: %v", p.ID, err)
