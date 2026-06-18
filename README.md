@@ -8,9 +8,9 @@
 Food-delivery platform at [fe3dr.com](https://fe3dr.com) — home chefs cook,
 drivers deliver, customers order. Go / Gin backend, a Next.js marketing site
 (`web-landing`), three React ops SPAs (admin / vendor / delivery), and three
-Expo mobile apps — the customer storefront is mobile-first (the old `apps/web`
-customer SPA is sunset, see `apps/web/SUNSET.md`). All deployed as Knative
-services on GKE behind Istio.
+Expo mobile apps — the customer storefront is mobile-first for now (the
+`apps/web` customer SPA is temporarily **disabled** / paused, planned to return;
+see `apps/web/SUNSET.md`). All deployed as Knative services on GKE behind Istio.
 
 ---
 
@@ -36,7 +36,7 @@ services on GKE behind Istio.
 Home-Chef-App/
 ├── apps/
 │   ├── api/                 Go / Gin backend (port 8080)
-│   ├── web/                 Customer SPA — SUNSET, app-only (kept for history; see apps/web/SUNSET.md)
+│   ├── web/                 Customer SPA — DISABLED / paused (planned to return; see apps/web/SUNSET.md)
 │   ├── web-landing/         Next.js marketing site — fe3dr.com
 │   ├── admin-portal/        Internal admin SPA — admin.fe3dr.com
 │   ├── vendor-portal/       Chef / vendor SPA — vendors.fe3dr.com
@@ -92,8 +92,9 @@ pnpm dev:delivery    # @homechef/delivery-portal
 pnpm dev:api         # Go backend (also runs in compose, this is for edits)
 ```
 
-The customer storefront is the `mobile-customer` Expo app (see below) — the old
-`pnpm dev` / `apps/web` customer SPA is sunset and no longer built or deployed.
+The customer storefront is the `mobile-customer` Expo app (see below) for now —
+the `pnpm dev` / `apps/web` customer SPA is temporarily disabled (paused, planned
+to return), so it is not built or deployed at the moment.
 
 Mobile apps (each opens Expo Dev Tools):
 
@@ -156,10 +157,12 @@ Deploys are driven by the build workflows under `.github/workflows/`:
 | `homechef-auth-bff-build.yml`         | `ghcr.io/tesserix/home-chef-app/homechef-auth-bff`      | `homechef-auth-bff`      |
 | `homechef-web-landing-build.yml`      | `ghcr.io/tesserix/home-chef-app/homechef-web-landing`   | `homechef-web` (cutover slot) |
 
-> `apps/web` (the old customer SPA) is sunset — its `homechef-web-build.yml` /
-> `homechef-web-release.yml` workflows were removed, and `fe3dr.com` is migrating
-> to the `web-landing` image. The `vendor-portal` and `delivery-portal` SPAs do
-> not yet have dedicated build workflows in this repo.
+> `apps/web` (the customer SPA) is temporarily **disabled** / paused — its CI
+> build is currently turned off (the `homechef-web-build.yml` /
+> `homechef-web-release.yml` workflows aren't active right now) and `fe3dr.com`
+> is served by `web-landing` for now. The app code is kept and it's planned to
+> return. The `vendor-portal` and `delivery-portal` SPAs do not yet have
+> dedicated build workflows in this repo.
 
 Each workflow:
 
