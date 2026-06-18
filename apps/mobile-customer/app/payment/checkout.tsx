@@ -25,10 +25,11 @@ interface PaymentCheckoutParams {
   name?: string;
   email?: string;
   phone?: string;
-  // kind='tip' reuses this sheet for a post-delivery tip charge (#45): it
-  // verifies via /payments/tip/:tipId/verify and returns to a tip-success.
+  // kind='tip' reuses this sheet for a post-delivery tip charge (#45); kind='group'
+  // for a group-order share (#46, verifies via /group-orders/:groupId/pay/verify).
   kind?: string;
   tipId?: string;
+  groupId?: string;
 }
 
 // Bridge message shapes posted by the embedded checkout.js below.
@@ -162,6 +163,15 @@ export default function PaymentCheckout() {
           });
           return;
         }
+        // Group / office order share (#46): verify the share, return to the group.
+        if (params.kind === 'group') {
+          await api.post(`/v1/group-orders/${params.groupId}/pay/verify`, {
+            razorpayPaymentId: msg.razorpay_payment_id,
+            razorpayOrderId: msg.razorpay_order_id,
+          });
+          router.replace(`/group-order/${params.groupId}` as never);
+          return;
+        }
         await api.post(`/v1/payments/order/${params.orderId}/verify`, {
           razorpayPaymentId: msg.razorpay_payment_id,
           razorpayOrderId: msg.razorpay_order_id,
@@ -185,7 +195,7 @@ export default function PaymentCheckout() {
         });
       }
     },
-    [params.orderId, params.kind, params.tipId],
+    [params.orderId, params.kind, params.tipId, params.groupId],
   );
 
   return (
