@@ -20,6 +20,8 @@ export interface MenuItem {
   // the public type so UI code stays simple.
   isVeg: boolean;
   dietaryTags: string[];
+  // Declared allergens (#41) — surfaced as customer badges + checkout warnings.
+  allergens: string[];
   images: MenuItemImage[];
   preparationTime: number;
   // HSN/SAC code for GST classification. Surfaces the backend's value
@@ -61,6 +63,11 @@ export interface CreateMenuItemPayload {
   // Frontend convenience flag. The mutation translates this into a
   // `dietaryTags: ['vegetarian']` array before hitting the backend.
   isVeg: boolean;
+  // Extra diet tags beyond veg/non-veg (e.g. jain, gluten-free) — merged with
+  // the veg tag on save (#41).
+  dietaryTags?: string[];
+  // Declared allergens (#41).
+  allergens?: string[];
   preparationTime: number;
   // Optional HSN — empty string lets the DB default (996331) apply.
   hsn?: string;
@@ -92,6 +99,7 @@ const MENU_KEY = ['chef', 'menu'] as const;
 function normalizeItem(
   item: MenuItem & {
     dietaryTags?: string[] | null;
+    allergens?: string[] | null;
     prepTime?: number;
     preparationTime?: number;
     isVeg?: boolean | null;
@@ -106,10 +114,20 @@ function normalizeItem(
   return {
     ...item,
     dietaryTags: tags,
+    allergens: item.allergens ?? [],
     isVeg,
     preparationTime: prep,
     hsn: (item as { hsn?: string }).hsn ?? '',
   };
+}
+
+// VEG_FLAG_TAGS are the tokens tagsForIsVeg owns; extra diet tags exclude them
+// so the veg flag and the extra tags don't fight on save (#41).
+const VEG_FLAG_TAGS = new Set(['vegetarian', 'non-vegetarian', 'veg', 'non-veg', 'nonveg']);
+
+/** The diet tags a chef edits directly (everything except the veg-flag tokens). */
+export function extraDietTags(tags: string[] | null | undefined): string[] {
+  return (tags ?? []).filter((t) => !VEG_FLAG_TAGS.has(t.trim().toLowerCase()));
 }
 
 export function useVendorMenu() {
@@ -139,15 +157,15 @@ export function useCreateMenuItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateMenuItemPayload) => {
-      const { isVeg, preparationTime, ...rest } = payload;
+      const { isVeg, preparationTime, dietaryTags: extraDiet, allergens, ...rest } = payload;
       const body = {
         ...rest,
         // Send BOTH: dietaryTags drives the vendor-app diet icon, while the
         // backend's nullable `isVeg` column is what the customer storefront
-        // and order detail read. Omitting isVeg here left new items unflagged
-        // (null → shown non-veg on the storefront) even though the chef chose
-        // a diet in the form.
-        dietaryTags: tagsForIsVeg(isVeg),
+        // and order detail read. The veg-flag tag is merged with any extra
+        // diet tags the chef picked (#41).
+        dietaryTags: [...tagsForIsVeg(isVeg), ...(extraDiet ?? [])],
+        allergens: allergens ?? [],
         isVeg,
         prepTime: preparationTime,
       };
@@ -177,11 +195,16 @@ export function useUpdateMenuItem() {
       //    edits leave it stale).
       //  - `preparationTime` → `prepTime` (backend never read the former,
       //    so prep time changes were silently dropped before this fix).
-      const { isVeg, preparationTime, hsn, ...rest } = payload;
+      const { isVeg, preparationTime, hsn, dietaryTags: extraDiet, allergens, ...rest } = payload;
       const body: Record<string, unknown> = { ...rest };
       if (typeof isVeg === 'boolean') {
-        body.dietaryTags = tagsForIsVeg(isVeg);
+        body.dietaryTags = [...tagsForIsVeg(isVeg), ...(extraDiet ?? [])];
         body.isVeg = isVeg;
+      } else if (extraDiet) {
+        body.dietaryTags = extraDiet;
+      }
+      if (allergens) {
+        body.allergens = allergens;
       }
       if (typeof preparationTime === 'number') {
         body.prepTime = preparationTime;

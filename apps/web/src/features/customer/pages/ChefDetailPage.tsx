@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -24,6 +25,7 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { findItemConflicts, type DietaryProfile } from '@/shared/utils/dietary';
 import { formatDate } from '@/shared/utils/format-date';
 import { Button, SimpleDialog } from '@/shared/components/ui';
 import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
@@ -58,6 +60,14 @@ export default function ChefDetailPage() {
   const navigate = useNavigate();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = id ? isFavorite(id) : false;
+  // Dietary profile (#41) — used to flag menu items that clash with the
+  // customer's saved diet / allergens. Only fetched when signed in.
+  const { data: dietaryProfile } = useQuery({
+    queryKey: ['customer-profile', 'dietary'],
+    queryFn: () => apiClient.get<DietaryProfile>('/customer/profile'),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
   const [groupOpen, setGroupOpen] = useState(false);
 
   // Group / office orders (#46) — start a shared cart from this chef, then
@@ -343,6 +353,7 @@ export default function ChefDetailPage() {
                       key={item.id}
                       item={item}
                       chefId={chef.id}
+                      profile={dietaryProfile}
                       chefInfo={{
                         id: chef.id,
                         businessName: chef.businessName,
@@ -415,9 +426,11 @@ export default function ChefDetailPage() {
 function MenuItemCard({
   item,
   chefInfo,
+  profile,
 }: {
   item: MenuItem;
   chefId?: string;
+  profile?: DietaryProfile;
   chefInfo: {
     id: string;
     businessName: string;
@@ -427,6 +440,7 @@ function MenuItemCard({
   };
 }) {
   const [quantity, setQuantity] = useState(1);
+  const conflicts = profile ? findItemConflicts(profile, item) : [];
   const fp = useFormatPrice();
   const cart = useCartStore();
 
@@ -505,6 +519,28 @@ function MenuItemCard({
                 </span>
               ))}
             </div>
+          )}
+
+          {/* Allergen badges (#41) — cautionary tone */}
+          {item.allergens.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {item.allergens.map((a) => (
+                <span
+                  key={a}
+                  className="rounded bg-paprika-tint px-2 py-0.5 text-xs text-paprika"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Dietary conflict warning (#41) */}
+          {conflicts.length > 0 && (
+            <p className="mt-2 flex items-start gap-1 text-xs font-medium text-paprika">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+              <span>{conflicts.map((cf) => cf.detail).join(' · ')}</span>
+            </p>
           )}
 
           {/* Price and Actions */}

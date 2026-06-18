@@ -19,13 +19,14 @@ import {
   View,
 } from 'react-native';
 import { Link, router, type Href } from 'expo-router';
-import { Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
+import { AlertTriangle, Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
+import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
@@ -107,6 +108,12 @@ export default function CheckoutScreen() {
   const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
   const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+
+  // Dietary & allergen conflict warning (#41) — checks the cart's items against
+  // the customer's saved profile server-side. Non-blocking.
+  const cartItemIds = cartStore.items.map((i) => i.menuItemId);
+  const { data: dietaryCheck } = useDietaryCheck(cartItemIds);
+  const dietaryWarnings = dietaryCheck?.warnings ?? [];
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -642,6 +649,28 @@ export default function CheckoutScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Dietary / allergen conflict warning (#41) ── */}
+        {dietaryWarnings.length > 0 && (
+          <View className="mx-4 mt-4 bg-destructive-tint border border-destructive/30 rounded-2xl p-4">
+            <View className="flex-row items-center gap-2 mb-1">
+              <AlertTriangle size={16} color="#B22B0E" />
+              <Text className="text-sm font-semibold text-destructive">Check your order</Text>
+            </View>
+            <Text className="text-sm text-destructive leading-5 mb-2">
+              Some items may not match your dietary profile:
+            </Text>
+            {dietaryWarnings.map((w) => (
+              <Text key={w.menuItemId} className="text-sm text-destructive leading-5">
+                • {w.name} — {w.conflicts.map((cf) => cf.detail).join(', ')}
+              </Text>
+            ))}
+            <Text className="text-xs text-charcoal-soft mt-2 leading-5">
+              You can still place this order. Review your items or update your dietary profile in
+              your account.
+            </Text>
+          </View>
+        )}
 
         {/* ── Delivery time / scheduled slot (#51) ── */}
         {slotsData?.slotsEnabled && (

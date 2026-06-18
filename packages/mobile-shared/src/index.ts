@@ -8,6 +8,7 @@
 //   import { Button, Screen, Input } from '@homechef/mobile-shared/ui'
 
 export * from './api';
+export * from './dietary';
 export * from './hooks';
 export * from './types';
 export * from './utils';

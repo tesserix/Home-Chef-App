@@ -11,6 +11,7 @@ import {
   Check,
   FileText,
   Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCartStore } from '@/app/store/cart-store';
@@ -47,6 +48,17 @@ interface DeliverySlot {
 interface DeliverySlotsResponse {
   slotsEnabled: boolean;
   slots: DeliverySlot[];
+}
+
+// Dietary conflict check (#41) — mirrors POST /dietary/check.
+interface DietaryWarning {
+  menuItemId: string;
+  name: string;
+  conflicts: { type: string; label: string; detail: string }[];
+}
+interface DietaryCheckResult {
+  hasConflicts: boolean;
+  warnings: DietaryWarning[];
 }
 
 // slotDayLabel turns a "YYYY-MM-DD" slot date into a label relative to today
@@ -104,6 +116,18 @@ export default function CheckoutPage() {
     staleTime: 60_000,
   });
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+  // Dietary & allergen conflict warning (#41) — server-checks the cart's items
+  // against the customer's saved profile. Non-blocking.
+  const cartItemIds = cart.items.map((i) => i.menuItemId);
+  const { data: dietaryCheck } = useQuery({
+    queryKey: ['dietary-check', cartItemIds],
+    queryFn: () =>
+      apiClient.post<DietaryCheckResult>('/dietary/check', { menuItemIds: cartItemIds }),
+    enabled: cartItemIds.length > 0,
+    staleTime: 60_000,
+  });
+  const dietaryWarnings = dietaryCheck?.warnings ?? [];
+
   const [tip, setTip] = useState<number>(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -507,6 +531,30 @@ export default function CheckoutPage() {
                 </div>
               )}
             </section>
+
+            {/* Dietary / allergen conflict warning (#41) — non-blocking */}
+            {dietaryWarnings.length > 0 && (
+              <section className="rounded-xl border border-paprika/30 bg-paprika-tint p-6 shadow-1">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-paprika">
+                  <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                  Check your order
+                </h2>
+                <p className="mt-1 text-sm text-paprika">
+                  Some items may not match your dietary profile:
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {dietaryWarnings.map((w) => (
+                    <li key={w.menuItemId} className="text-sm text-paprika">
+                      • {w.name} — {w.conflicts.map((cf) => cf.detail).join(', ')}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-ink-muted">
+                  You can still place this order. Review your items or update your dietary profile in
+                  your account.
+                </p>
+              </section>
+            )}
 
             {/* Delivery Time */}
             <section className="rounded-xl bg-bone p-6 shadow-1">

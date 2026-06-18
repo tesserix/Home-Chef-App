@@ -244,6 +244,11 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
 		Where("chef_id IN (?)", visibleChefs)
 
+	// Optional diet filter (#41) — case-insensitive match on a dietary tag.
+	if dietary := strings.TrimSpace(c.Query("dietary")); dietary != "" {
+		base = base.Where("EXISTS (SELECT 1 FROM unnest(dietary_tags) AS t WHERE lower(t) = lower(?))", dietary)
+	}
+
 	var total int64
 	base.Count(&total)
 
@@ -327,6 +332,10 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)
+	}
+	// Diet filter (#41) — case-insensitive match on a dietary tag (e.g. veg).
+	if dietary := c.Query("dietary"); dietary != "" {
+		query = query.Where("EXISTS (SELECT 1 FROM unnest(dietary_tags) AS t WHERE lower(t) = lower(?))", dietary)
 	}
 
 	var items []models.MenuItem

@@ -29,6 +29,10 @@ export interface MenuItem {
   category?: string;
   isAvailable: boolean;
   dietaryTags?: string[];
+  // Dietary & allergen profile (#41): declared allergens + veg flag, used for
+  // per-item badges and at-checkout conflict warnings.
+  allergens?: string[];
+  isVeg?: boolean | null;
   // Per-dish rating rolled up from DishRating (#145).
   rating?: number;
   reviewCount?: number;

@@ -155,6 +155,7 @@ func SetupRouter() *gin.Engine {
 	customerHandler := handlers.NewCustomerHandler()
 	addressHandler := handlers.NewAddressHandler()
 	preferenceHandler := handlers.NewPreferenceHandler()
+	dietaryHandler := handlers.NewDietaryHandler()
 	currencyHandler := handlers.NewCurrencyHandler()
 	adminHandler := handlers.NewAdminHandler()
 	approvalHandler := handlers.NewApprovalHandler()
@@ -287,6 +288,14 @@ func SetupRouter() *gin.Engine {
 
 		// Preference options (public)
 		v1.GET("/preferences", preferenceHandler.GetPreferenceOptions)
+
+		// Dietary & allergen taxonomy (public) + per-cart conflict check (#41).
+		v1.GET("/dietary/options", dietaryHandler.GetDietaryOptions)
+		dietary := v1.Group("/dietary")
+		dietary.Use(bffAuth(bffKey, bffWindow))
+		{
+			dietary.POST("/check", dietaryHandler.CheckDietary)
+		}
 
 		// Public platform config — fees + operating-hours status for checkout
 		v1.GET("/platform/config", platformHandler.GetPublicConfig)
