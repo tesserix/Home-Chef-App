@@ -495,6 +495,7 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
+			orders.POST("/:id/reorder", orderHandler.ReorderOrder) // #238
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
@@ -901,15 +902,6 @@ func SetupRouter() *gin.Engine {
 			// Store-credit wallet (#33)
 			customer.GET("/wallet", walletHandler.GetWallet)
 			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
-		}
-
-		// Profile (authenticated) — push device-token registration (#236). The
-		// mobile apps PUT their raw FCM token here on launch / token rotation;
-		// without it User.FCMToken stays empty and no push can be delivered.
-		profileGroup := v1.Group("/profile")
-		profileGroup.Use(bffAuth(bffKey, bffWindow))
-		{
-			profileGroup.PUT("/device-token", customerHandler.UpdateDeviceToken)
 		}
 
 		// Reviews (authenticated customers)
