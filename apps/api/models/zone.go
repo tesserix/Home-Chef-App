@@ -13,7 +13,7 @@ type DeliveryZone struct {
 	City    string    `gorm:"type:varchar(100);not null;index" json:"city"`
 	State   string    `gorm:"type:varchar(100)" json:"state"`
 	Country string    `gorm:"type:varchar(2);default:'IN';index" json:"country"` // ISO 3166-1 alpha-2
-	Tier    string    `gorm:"type:varchar(20);default:'standard'" json:"tier"`    // metro, mid_tier, standard, regional
+	Tier    string    `gorm:"type:varchar(20);default:'standard'" json:"tier"`   // metro, mid_tier, standard, regional
 
 	// Bounding box for quick filtering
 	MinLatitude  float64 `gorm:"" json:"minLatitude"`
@@ -32,9 +32,9 @@ type DeliveryZone struct {
 	SurgeMultiplier float64 `gorm:"default:1.0" json:"surgeMultiplier"`
 
 	// Tipping
-	TipEnabled       bool    `gorm:"default:true" json:"tipEnabled"`
+	TipEnabled        bool    `gorm:"default:true" json:"tipEnabled"`
 	DefaultTipPercent float64 `gorm:"default:10" json:"defaultTipPercent"` // Suggested tip %
-	MaxTipAmount     float64 `gorm:"default:0" json:"maxTipAmount"`       // 0 = no cap
+	MaxTipAmount      float64 `gorm:"default:0" json:"maxTipAmount"`       // 0 = no cap
 
 	// Driver payout share — 100% (subscription model, no platform commission)
 	DriverPayoutPercent float64 `gorm:"default:100" json:"driverPayoutPercent"` // % of delivery fee to driver

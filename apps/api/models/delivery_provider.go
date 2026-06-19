@@ -10,37 +10,37 @@ import (
 // DeliveryProvider represents a third-party delivery service integration
 type DeliveryProvider struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`                           // e.g. "Dunzo", "Porter", "Shadowfax"
-	Code        string    `gorm:"uniqueIndex;not null" json:"code"`               // unique, lowercase slug: "dunzo", "porter", "shadowfax"
+	Name        string    `gorm:"not null" json:"name"`             // e.g. "Dunzo", "Porter", "Shadowfax"
+	Code        string    `gorm:"uniqueIndex;not null" json:"code"` // unique, lowercase slug: "dunzo", "porter", "shadowfax"
 	Description string    `gorm:"" json:"description"`
-	LogoURL     string    `gorm:"" json:"logoUrl"`                                // provider logo for admin UI
+	LogoURL     string    `gorm:"" json:"logoUrl"` // provider logo for admin UI
 
 	// API Configuration
-	APIBaseURL    string `gorm:"" json:"apiBaseUrl"`             // e.g. "https://api.dunzo.com/v1"
-	APIKey        string `gorm:"" json:"-"`                      // encrypted, never exposed
+	APIBaseURL    string `gorm:"" json:"apiBaseUrl"` // e.g. "https://api.dunzo.com/v1"
+	APIKey        string `gorm:"" json:"-"`          // encrypted, never exposed
 	APISecret     string `gorm:"" json:"-"`
-	WebhookSecret string `gorm:"" json:"-"`                      // for verifying inbound webhooks
+	WebhookSecret string `gorm:"" json:"-"` // for verifying inbound webhooks
 
 	// Status mapping — maps provider statuses to Fe3dr DeliveryStatus
 	// e.g. {"PICKED_UP": "picked_up", "DELIVERED": "delivered", "CANCELLED": "cancelled"}
 	StatusMapping string `gorm:"type:jsonb;default:'{}'" json:"statusMapping"`
 
 	// Configuration
-	SupportedCities    string  `gorm:"type:jsonb;default:'[]'" json:"supportedCities"`       // JSON array of city names
+	SupportedCities    string  `gorm:"type:jsonb;default:'[]'" json:"supportedCities"`          // JSON array of city names
 	SupportedCountries string  `gorm:"type:jsonb;default:'[\"IN\"]'" json:"supportedCountries"` // JSON array of country codes
-	MaxDistance        float64 `gorm:"default:20" json:"maxDistance"`                        // max delivery distance in km
-	AvgPickupTime      int     `gorm:"default:15" json:"avgPickupTime"`                     // avg minutes to pickup
+	MaxDistance        float64 `gorm:"default:20" json:"maxDistance"`                           // max delivery distance in km
+	AvgPickupTime      int     `gorm:"default:15" json:"avgPickupTime"`                         // avg minutes to pickup
 
 	// Pricing — what Fe3dr pays the provider per delivery
 	PricingModel string  `gorm:"type:varchar(20);default:'per_delivery'" json:"pricingModel"` // per_delivery, per_km, flat_rate
-	BaseCost     float64 `gorm:"default:0" json:"baseCost"`                                  // base cost per delivery
-	PerKmCost    float64 `gorm:"default:0" json:"perKmCost"`                                 // additional per km
+	BaseCost     float64 `gorm:"default:0" json:"baseCost"`                                   // base cost per delivery
+	PerKmCost    float64 `gorm:"default:0" json:"perKmCost"`                                  // additional per km
 	Currency     string  `gorm:"type:varchar(3);default:'INR'" json:"currency"`
 
 	// Priority & Control
-	Priority  int  `gorm:"default:1" json:"priority"`      // lower = higher priority (tried first)
+	Priority  int  `gorm:"default:1" json:"priority"` // lower = higher priority (tried first)
 	IsEnabled bool `gorm:"default:false" json:"isEnabled"`
-	IsActive  bool `gorm:"default:true" json:"isActive"`   // soft disable without deleting
+	IsActive  bool `gorm:"default:true" json:"isActive"` // soft disable without deleting
 
 	// Rate limiting
 	MaxConcurrentDeliveries int `gorm:"default:100" json:"maxConcurrentDeliveries"` // max concurrent active deliveries
@@ -117,7 +117,7 @@ func (p *DeliveryProvider) ToResponse() DeliveryProviderResponse {
 		StatusMapping:           p.StatusMapping,
 		SupportedCities:         p.SupportedCities,
 		SupportedCountries:      p.SupportedCountries,
-		MaxDistance:              p.MaxDistance,
+		MaxDistance:             p.MaxDistance,
 		AvgPickupTime:           p.AvgPickupTime,
 		PricingModel:            p.PricingModel,
 		BaseCost:                p.BaseCost,

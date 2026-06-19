@@ -34,10 +34,10 @@ type Post struct {
 	SharesCount   int `gorm:"default:0" json:"sharesCount"`
 
 	// Moderation
-	IsModerated    bool   `gorm:"default:false" json:"isModerated"`
-	ModeratedAt    *time.Time `gorm:"" json:"moderatedAt,omitempty"`
-	ModeratorNote  string `gorm:"" json:"moderatorNote,omitempty"`
-	ContactInfoDetected bool `gorm:"default:false" json:"contactInfoDetected"`
+	IsModerated         bool       `gorm:"default:false" json:"isModerated"`
+	ModeratedAt         *time.Time `gorm:"" json:"moderatedAt,omitempty"`
+	ModeratorNote       string     `gorm:"" json:"moderatorNote,omitempty"`
+	ContactInfoDetected bool       `gorm:"default:false" json:"contactInfoDetected"`
 
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -61,14 +61,14 @@ type PostLike struct {
 }
 
 type PostComment struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	PostID    uuid.UUID `gorm:"type:uuid;not null;index" json:"postId"`
-	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	PostID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"postId"`
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`
 	ParentID  *uuid.UUID `gorm:"type:uuid;index" json:"parentId,omitempty"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	IsHidden  bool      `gorm:"default:false" json:"isHidden"`
-	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	Content   string     `gorm:"type:text;not null" json:"content"`
+	IsHidden  bool       `gorm:"default:false" json:"isHidden"`
+	CreatedAt time.Time  `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Post    Post          `gorm:"foreignKey:PostID" json:"-"`
 	User    User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -77,19 +77,19 @@ type PostComment struct {
 
 // DTOs
 type PostResponse struct {
-	ID            uuid.UUID       `json:"id"`
-	ChefID        uuid.UUID       `json:"chefId"`
-	Chef          ChefPostInfo    `json:"chef"`
-	Status        PostStatus      `json:"status"`
-	Content       string          `json:"content"`
-	Images        []string        `json:"images"`
-	Hashtags      []string        `json:"hashtags"`
-	MenuItemID    *uuid.UUID      `json:"menuItemId,omitempty"`
-	MenuItem      *MenuItemBasic  `json:"menuItem,omitempty"`
-	LikesCount    int             `json:"likesCount"`
-	CommentsCount int             `json:"commentsCount"`
-	IsLiked       bool            `json:"isLiked"`
-	CreatedAt     time.Time       `json:"createdAt"`
+	ID            uuid.UUID      `json:"id"`
+	ChefID        uuid.UUID      `json:"chefId"`
+	Chef          ChefPostInfo   `json:"chef"`
+	Status        PostStatus     `json:"status"`
+	Content       string         `json:"content"`
+	Images        []string       `json:"images"`
+	Hashtags      []string       `json:"hashtags"`
+	MenuItemID    *uuid.UUID     `json:"menuItemId,omitempty"`
+	MenuItem      *MenuItemBasic `json:"menuItem,omitempty"`
+	LikesCount    int            `json:"likesCount"`
+	CommentsCount int            `json:"commentsCount"`
+	IsLiked       bool           `json:"isLiked"`
+	CreatedAt     time.Time      `json:"createdAt"`
 }
 
 type ChefPostInfo struct {

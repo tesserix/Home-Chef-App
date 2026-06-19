@@ -11,13 +11,13 @@ import (
 type TicketCategory string
 
 const (
-	TicketCategoryOrderIssue         TicketCategory = "order_issue"
-	TicketCategoryPaymentIssue       TicketCategory = "payment_issue"
-	TicketCategoryAccountIssue       TicketCategory = "account_issue"
-	TicketCategoryChefComplaint      TicketCategory = "chef_complaint"
-	TicketCategoryDeliveryComplaint  TicketCategory = "delivery_complaint"
-	TicketCategoryTechnical          TicketCategory = "technical"
-	TicketCategoryOther              TicketCategory = "other"
+	TicketCategoryOrderIssue        TicketCategory = "order_issue"
+	TicketCategoryPaymentIssue      TicketCategory = "payment_issue"
+	TicketCategoryAccountIssue      TicketCategory = "account_issue"
+	TicketCategoryChefComplaint     TicketCategory = "chef_complaint"
+	TicketCategoryDeliveryComplaint TicketCategory = "delivery_complaint"
+	TicketCategoryTechnical         TicketCategory = "technical"
+	TicketCategoryOther             TicketCategory = "other"
 )
 
 type TicketPriority string
@@ -167,4 +167,3 @@ func (t *SupportTicket) ToResponse(includeInternal bool) SupportTicketResponse {
 	}
 	return out
 }
-

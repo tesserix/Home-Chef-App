@@ -9,16 +9,16 @@ import (
 type DeliveryStatus string
 
 const (
-	DeliveryPending    DeliveryStatus = "pending"
-	DeliveryAssigned   DeliveryStatus = "assigned"
-	DeliveryAtPickup   DeliveryStatus = "at_pickup"
-	DeliveryPickedUp   DeliveryStatus = "picked_up"
-	DeliveryInTransit  DeliveryStatus = "in_transit"
-	DeliveryAtDropoff  DeliveryStatus = "at_dropoff"
-	DeliveryDelivered  DeliveryStatus = "delivered"
-	DeliveryFailed     DeliveryStatus = "failed"
-	DeliveryReturned   DeliveryStatus = "returned"
-	DeliveryCancelled  DeliveryStatus = "cancelled"
+	DeliveryPending   DeliveryStatus = "pending"
+	DeliveryAssigned  DeliveryStatus = "assigned"
+	DeliveryAtPickup  DeliveryStatus = "at_pickup"
+	DeliveryPickedUp  DeliveryStatus = "picked_up"
+	DeliveryInTransit DeliveryStatus = "in_transit"
+	DeliveryAtDropoff DeliveryStatus = "at_dropoff"
+	DeliveryDelivered DeliveryStatus = "delivered"
+	DeliveryFailed    DeliveryStatus = "failed"
+	DeliveryReturned  DeliveryStatus = "returned"
+	DeliveryCancelled DeliveryStatus = "cancelled"
 )
 
 type AgentType string
@@ -47,20 +47,20 @@ const (
 )
 
 type DeliveryPartner struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID          uuid.UUID  `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
-	VehicleType     string     `gorm:"" json:"vehicleType"` // bike, scooter, car
-	VehicleNumber   string     `gorm:"" json:"vehicleNumber"`
-	LicenseNumber   string     `gorm:"" json:"licenseNumber"`
-	IsVerified      bool       `gorm:"default:false" json:"verified"`
-	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
-	IsActive        bool       `gorm:"default:true" json:"isActive"`
-	IsOnline        bool       `gorm:"default:false" json:"isOnline"`
-	CurrentLatitude float64    `gorm:"" json:"currentLatitude"`
-	CurrentLongitude float64   `gorm:"" json:"currentLongitude"`
-	Rating          float64    `gorm:"default:0" json:"rating"`
-	TotalDeliveries int        `gorm:"default:0" json:"totalDeliveries"`
-	TotalReviews    int        `gorm:"default:0" json:"totalReviews"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID           uuid.UUID  `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
+	VehicleType      string     `gorm:"" json:"vehicleType"` // bike, scooter, car
+	VehicleNumber    string     `gorm:"" json:"vehicleNumber"`
+	LicenseNumber    string     `gorm:"" json:"licenseNumber"`
+	IsVerified       bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt       *time.Time `gorm:"" json:"verifiedAt"`
+	IsActive         bool       `gorm:"default:true" json:"isActive"`
+	IsOnline         bool       `gorm:"default:false" json:"isOnline"`
+	CurrentLatitude  float64    `gorm:"" json:"currentLatitude"`
+	CurrentLongitude float64    `gorm:"" json:"currentLongitude"`
+	Rating           float64    `gorm:"default:0" json:"rating"`
+	TotalDeliveries  int        `gorm:"default:0" json:"totalDeliveries"`
+	TotalReviews     int        `gorm:"default:0" json:"totalReviews"`
 
 	// Agent classification
 	AgentType  AgentType `gorm:"type:varchar(20);default:'freelance'" json:"agentType"`
@@ -74,12 +74,12 @@ type DeliveryPartner struct {
 	MaxConcurrent int `gorm:"default:1" json:"maxConcurrent"`
 
 	// Performance metrics
-	AcceptanceRate float64 `gorm:"default:0" json:"acceptanceRate"`
-	OnTimeRate     float64 `gorm:"default:0" json:"onTimeRate"`
-	CSATScore      float64 `gorm:"default:0" json:"csatScore"`
-	OfferedCount   int     `gorm:"default:0" json:"offeredCount"`
-	AcceptedCount  int     `gorm:"default:0" json:"acceptedCount"`
-	CompletedOnTime int    `gorm:"default:0" json:"completedOnTime"`
+	AcceptanceRate  float64 `gorm:"default:0" json:"acceptanceRate"`
+	OnTimeRate      float64 `gorm:"default:0" json:"onTimeRate"`
+	CSATScore       float64 `gorm:"default:0" json:"csatScore"`
+	OfferedCount    int     `gorm:"default:0" json:"offeredCount"`
+	AcceptedCount   int     `gorm:"default:0" json:"acceptedCount"`
+	CompletedOnTime int     `gorm:"default:0" json:"completedOnTime"`
 
 	// Verification
 	VerificationStatus VerificationStatus `gorm:"type:varchar(20);default:'pending'" json:"verificationStatus"`
@@ -116,8 +116,8 @@ type DeliveryPartner struct {
 	ReferredByID *uuid.UUID `gorm:"type:uuid" json:"referredById,omitempty"`
 
 	// Payment gateway linked accounts
-	StripeAccountID    string `gorm:"" json:"-"`
-	RazorpayAccountID  string `gorm:"" json:"-"` // Razorpay Route linked account ID
+	StripeAccountID   string `gorm:"" json:"-"`
+	RazorpayAccountID string `gorm:"" json:"-"` // Razorpay Route linked account ID
 	// PaymentProvider controls how earnings are paid out. "razorpay" (India)
 	// or "stripe" (international). Defaults to razorpay so existing driver
 	// rows behave identically after the column is added.
@@ -132,10 +132,10 @@ type DeliveryPartner struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	// Relationships
-	User       User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Deliveries []Delivery `gorm:"foreignKey:DeliveryPartnerID" json:"deliveries,omitempty"`
+	User       User                      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Deliveries []Delivery                `gorm:"foreignKey:DeliveryPartnerID" json:"deliveries,omitempty"`
 	Documents  []DeliveryPartnerDocument `gorm:"foreignKey:PartnerID" json:"documents,omitempty"`
-	VerifiedBy *User      `gorm:"foreignKey:VerifiedByID" json:"verifiedBy,omitempty"`
+	VerifiedBy *User                     `gorm:"foreignKey:VerifiedByID" json:"verifiedBy,omitempty"`
 }
 
 // DeliveryPartnerDocument stores verification documents uploaded by delivery partners
@@ -160,19 +160,19 @@ type DeliveryPartnerDocument struct {
 type PartnerDocType string
 
 const (
-	PartnerDocDrivingLicense      PartnerDocType = "driving_license"
-	PartnerDocVehicleRC           PartnerDocType = "vehicle_rc"
-	PartnerDocInsurance           PartnerDocType = "insurance"
-	PartnerDocAadhaar             PartnerDocType = "aadhaar"
-	PartnerDocPanCard             PartnerDocType = "pan_card"
-	PartnerDocPhoto               PartnerDocType = "photo"
-	PartnerDocPoliceVerification  PartnerDocType = "police_verification"
-	PartnerDocVehicleFront        PartnerDocType = "vehicle_front"
-	PartnerDocVehicleBack         PartnerDocType = "vehicle_back"
-	PartnerDocVehicleLeft         PartnerDocType = "vehicle_left"
-	PartnerDocVehicleRight        PartnerDocType = "vehicle_right"
-	PartnerDocVehicleTop          PartnerDocType = "vehicle_top"
-	PartnerDocVehicleNumberPlate  PartnerDocType = "vehicle_number_plate"
+	PartnerDocDrivingLicense     PartnerDocType = "driving_license"
+	PartnerDocVehicleRC          PartnerDocType = "vehicle_rc"
+	PartnerDocInsurance          PartnerDocType = "insurance"
+	PartnerDocAadhaar            PartnerDocType = "aadhaar"
+	PartnerDocPanCard            PartnerDocType = "pan_card"
+	PartnerDocPhoto              PartnerDocType = "photo"
+	PartnerDocPoliceVerification PartnerDocType = "police_verification"
+	PartnerDocVehicleFront       PartnerDocType = "vehicle_front"
+	PartnerDocVehicleBack        PartnerDocType = "vehicle_back"
+	PartnerDocVehicleLeft        PartnerDocType = "vehicle_left"
+	PartnerDocVehicleRight       PartnerDocType = "vehicle_right"
+	PartnerDocVehicleTop         PartnerDocType = "vehicle_top"
+	PartnerDocVehicleNumberPlate PartnerDocType = "vehicle_number_plate"
 )
 
 // IsVehiclePhoto returns true for vehicle photo types (stored in public bucket like profile photo)
@@ -230,7 +230,7 @@ type Delivery struct {
 	DropoffLongitude    float64 `gorm:"" json:"dropoffLongitude"`
 
 	// Tracking
-	Distance          float64 `gorm:"" json:"distance"` // in km
+	Distance          float64 `gorm:"" json:"distance"`          // in km
 	EstimatedDuration int     `gorm:"" json:"estimatedDuration"` // in minutes
 	ActualDuration    int     `gorm:"" json:"actualDuration"`
 
@@ -254,11 +254,11 @@ type Delivery struct {
 	// 3PL rider — populated from provider webhooks. For own-fleet deliveries
 	// the rider's live position lives on DeliveryPartner instead; ToResponse
 	// prefers these when set so the customer map shows the real 3PL rider.
-	RiderName       string  `gorm:"" json:"riderName,omitempty"`
-	RiderPhone      string  `gorm:"" json:"riderPhone,omitempty"`
-	RiderLatitude   float64 `gorm:"" json:"riderLatitude,omitempty"`
-	RiderLongitude  float64 `gorm:"" json:"riderLongitude,omitempty"`
-	ProviderStatus  string  `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
+	RiderName      string  `gorm:"" json:"riderName,omitempty"`
+	RiderPhone     string  `gorm:"" json:"riderPhone,omitempty"`
+	RiderLatitude  float64 `gorm:"" json:"riderLatitude,omitempty"`
+	RiderLongitude float64 `gorm:"" json:"riderLongitude,omitempty"`
+	ProviderStatus string  `gorm:"" json:"providerStatus,omitempty"` // raw provider status, pre-mapping
 
 	// Earnings
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
@@ -273,22 +273,22 @@ type Delivery struct {
 	CancelReason string     `gorm:"" json:"cancelReason,omitempty"`
 
 	// Relationships
-	Order           Order           `gorm:"foreignKey:OrderID" json:"order,omitempty"`
-	DeliveryPartner DeliveryPartner  `gorm:"foreignKey:DeliveryPartnerID" json:"deliveryPartner,omitempty"`
-	AssignedBy      *User            `gorm:"foreignKey:AssignedByID" json:"assignedBy,omitempty"`
+	Order           Order             `gorm:"foreignKey:OrderID" json:"order,omitempty"`
+	DeliveryPartner DeliveryPartner   `gorm:"foreignKey:DeliveryPartnerID" json:"deliveryPartner,omitempty"`
+	AssignedBy      *User             `gorm:"foreignKey:AssignedByID" json:"assignedBy,omitempty"`
 	Provider        *DeliveryProvider `gorm:"foreignKey:ProviderID" json:"provider,omitempty"`
 }
 
 // DTOs
 type DeliveryPartnerResponse struct {
-	ID              uuid.UUID `json:"id"`
-	UserID          uuid.UUID `json:"userId"`
-	VehicleType     string    `json:"vehicleType"`
-	IsVerified      bool      `json:"verified"`
-	IsOnline        bool      `json:"isOnline"`
-	Rating          float64   `json:"rating"`
-	TotalDeliveries int       `json:"totalDeliveries"`
-	AgentType       AgentType `json:"agentType"`
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"userId"`
+	VehicleType        string             `json:"vehicleType"`
+	IsVerified         bool               `json:"verified"`
+	IsOnline           bool               `json:"isOnline"`
+	Rating             float64            `json:"rating"`
+	TotalDeliveries    int                `json:"totalDeliveries"`
+	AgentType          AgentType          `json:"agentType"`
 	VerificationStatus VerificationStatus `json:"verificationStatus"`
 }
 
@@ -371,74 +371,74 @@ type DeliveryPartnerDetailResponse struct {
 	Avatar           string     `json:"avatar,omitempty"`
 
 	// Extended fields
-	AgentType          AgentType          `json:"agentType"`
-	EmployeeID         string             `json:"employeeId,omitempty"`
-	MaxConcurrent      int                `json:"maxConcurrent"`
-	AcceptanceRate     float64            `json:"acceptanceRate"`
-	OnTimeRate         float64            `json:"onTimeRate"`
-	CSATScore          float64            `json:"csatScore"`
-	OfferedCount       int                `json:"offeredCount"`
-	AcceptedCount      int                `json:"acceptedCount"`
-	CompletedOnTime    int                `json:"completedOnTime"`
-	VerificationStatus VerificationStatus `json:"verificationStatus"`
-	RejectionReason    string             `json:"rejectionReason,omitempty"`
+	AgentType          AgentType                 `json:"agentType"`
+	EmployeeID         string                    `json:"employeeId,omitempty"`
+	MaxConcurrent      int                       `json:"maxConcurrent"`
+	AcceptanceRate     float64                   `json:"acceptanceRate"`
+	OnTimeRate         float64                   `json:"onTimeRate"`
+	CSATScore          float64                   `json:"csatScore"`
+	OfferedCount       int                       `json:"offeredCount"`
+	AcceptedCount      int                       `json:"acceptedCount"`
+	CompletedOnTime    int                       `json:"completedOnTime"`
+	VerificationStatus VerificationStatus        `json:"verificationStatus"`
+	RejectionReason    string                    `json:"rejectionReason,omitempty"`
 	Documents          []PartnerDocumentResponse `json:"documents,omitempty"`
 
 	// Onboarding fields
-	City               string `json:"city,omitempty"`
-	EmergencyContact   string `json:"emergencyContact,omitempty"`
-	EmergencyPhone     string `json:"emergencyPhone,omitempty"`
+	City                string `json:"city,omitempty"`
+	EmergencyContact    string `json:"emergencyContact,omitempty"`
+	EmergencyPhone      string `json:"emergencyPhone,omitempty"`
 	VehicleMake         string `json:"vehicleMake,omitempty"`
 	VehicleModel        string `json:"vehicleModel,omitempty"`
 	VehicleYear         int    `json:"vehicleYear,omitempty"`
 	VehicleColor        string `json:"vehicleColor,omitempty"`
 	HasDeliveryBoxSpace bool   `json:"hasDeliveryBoxSpace,omitempty"`
 	PayoutMethod        string `json:"payoutMethod,omitempty"`
-	OnboardingStep     int    `json:"onboardingStep"`
-	OnboardingComplete bool   `json:"onboardingComplete"`
-	ReferralCode       string `json:"referralCode,omitempty"`
+	OnboardingStep      int    `json:"onboardingStep"`
+	OnboardingComplete  bool   `json:"onboardingComplete"`
+	ReferralCode        string `json:"referralCode,omitempty"`
 }
 
 func (p *DeliveryPartner) ToDetailResponse() DeliveryPartnerDetailResponse {
 	resp := DeliveryPartnerDetailResponse{
-		ID:                 p.ID,
-		UserID:             p.UserID,
-		VehicleType:        p.VehicleType,
-		VehicleNumber:      p.VehicleNumber,
-		LicenseNumber:      p.LicenseNumber,
-		IsVerified:         p.IsVerified,
-		VerifiedAt:         p.VerifiedAt,
-		IsActive:           p.IsActive,
-		IsOnline:           p.IsOnline,
-		CurrentLatitude:    p.CurrentLatitude,
-		CurrentLongitude:   p.CurrentLongitude,
-		Rating:             p.Rating,
-		TotalDeliveries:    p.TotalDeliveries,
-		TotalReviews:       p.TotalReviews,
-		CreatedAt:          p.CreatedAt,
-		AgentType:          p.AgentType,
-		EmployeeID:         p.EmployeeID,
-		MaxConcurrent:      p.MaxConcurrent,
-		AcceptanceRate:     p.AcceptanceRate,
-		OnTimeRate:         p.OnTimeRate,
-		CSATScore:          p.CSATScore,
-		OfferedCount:       p.OfferedCount,
-		AcceptedCount:      p.AcceptedCount,
-		CompletedOnTime:    p.CompletedOnTime,
-		VerificationStatus: p.VerificationStatus,
-		RejectionReason:    p.RejectionReason,
-		City:               p.City,
-		EmergencyContact:   p.EmergencyContact,
-		EmergencyPhone:     p.EmergencyPhone,
-		VehicleMake:        p.VehicleMake,
-		VehicleModel:       p.VehicleModel,
-		VehicleYear:        p.VehicleYear,
+		ID:                  p.ID,
+		UserID:              p.UserID,
+		VehicleType:         p.VehicleType,
+		VehicleNumber:       p.VehicleNumber,
+		LicenseNumber:       p.LicenseNumber,
+		IsVerified:          p.IsVerified,
+		VerifiedAt:          p.VerifiedAt,
+		IsActive:            p.IsActive,
+		IsOnline:            p.IsOnline,
+		CurrentLatitude:     p.CurrentLatitude,
+		CurrentLongitude:    p.CurrentLongitude,
+		Rating:              p.Rating,
+		TotalDeliveries:     p.TotalDeliveries,
+		TotalReviews:        p.TotalReviews,
+		CreatedAt:           p.CreatedAt,
+		AgentType:           p.AgentType,
+		EmployeeID:          p.EmployeeID,
+		MaxConcurrent:       p.MaxConcurrent,
+		AcceptanceRate:      p.AcceptanceRate,
+		OnTimeRate:          p.OnTimeRate,
+		CSATScore:           p.CSATScore,
+		OfferedCount:        p.OfferedCount,
+		AcceptedCount:       p.AcceptedCount,
+		CompletedOnTime:     p.CompletedOnTime,
+		VerificationStatus:  p.VerificationStatus,
+		RejectionReason:     p.RejectionReason,
+		City:                p.City,
+		EmergencyContact:    p.EmergencyContact,
+		EmergencyPhone:      p.EmergencyPhone,
+		VehicleMake:         p.VehicleMake,
+		VehicleModel:        p.VehicleModel,
+		VehicleYear:         p.VehicleYear,
 		VehicleColor:        p.VehicleColor,
 		HasDeliveryBoxSpace: p.HasDeliveryBoxSpace,
 		PayoutMethod:        p.PayoutMethod,
-		OnboardingStep:     p.OnboardingStep,
-		OnboardingComplete: p.OnboardingComplete,
-		ReferralCode:       p.ReferralCode,
+		OnboardingStep:      p.OnboardingStep,
+		OnboardingComplete:  p.OnboardingComplete,
+		ReferralCode:        p.ReferralCode,
 	}
 	if p.User.ID != uuid.Nil {
 		resp.Name = p.User.FirstName + " " + p.User.LastName

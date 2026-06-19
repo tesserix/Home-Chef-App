@@ -124,30 +124,30 @@ func (h *DeliveryProviderHandler) GetProvider(c *gin.Context) {
 // CreateProvider creates a new delivery provider
 func (h *DeliveryProviderHandler) CreateProvider(c *gin.Context) {
 	var req struct {
-		Name               string  `json:"name" binding:"required"`
-		Code               string  `json:"code" binding:"required"`
-		Description        string  `json:"description"`
-		LogoURL            string  `json:"logoUrl"`
-		APIBaseURL         string  `json:"apiBaseUrl"`
-		APIKey             string  `json:"apiKey"`
-		APISecret          string  `json:"apiSecret"`
-		WebhookSecret      string  `json:"webhookSecret"`
-		StatusMapping      string  `json:"statusMapping"`
-		SupportedCities    string  `json:"supportedCities"`
-		SupportedCountries string  `json:"supportedCountries"`
-		MaxDistance         *float64 `json:"maxDistance"`
-		AvgPickupTime      *int     `json:"avgPickupTime"`
-		PricingModel       string  `json:"pricingModel"`
-		BaseCost           *float64 `json:"baseCost"`
-		PerKmCost          *float64 `json:"perKmCost"`
-		Currency           string  `json:"currency"`
-		Priority           *int     `json:"priority"`
-		MaxConcurrentDeliveries *int `json:"maxConcurrentDeliveries"`
-		DailyLimit         *int     `json:"dailyLimit"`
-		ContactName        string  `json:"contactName"`
-		ContactEmail       string  `json:"contactEmail"`
-		ContactPhone       string  `json:"contactPhone"`
-		Notes              string  `json:"notes"`
+		Name                    string   `json:"name" binding:"required"`
+		Code                    string   `json:"code" binding:"required"`
+		Description             string   `json:"description"`
+		LogoURL                 string   `json:"logoUrl"`
+		APIBaseURL              string   `json:"apiBaseUrl"`
+		APIKey                  string   `json:"apiKey"`
+		APISecret               string   `json:"apiSecret"`
+		WebhookSecret           string   `json:"webhookSecret"`
+		StatusMapping           string   `json:"statusMapping"`
+		SupportedCities         string   `json:"supportedCities"`
+		SupportedCountries      string   `json:"supportedCountries"`
+		MaxDistance             *float64 `json:"maxDistance"`
+		AvgPickupTime           *int     `json:"avgPickupTime"`
+		PricingModel            string   `json:"pricingModel"`
+		BaseCost                *float64 `json:"baseCost"`
+		PerKmCost               *float64 `json:"perKmCost"`
+		Currency                string   `json:"currency"`
+		Priority                *int     `json:"priority"`
+		MaxConcurrentDeliveries *int     `json:"maxConcurrentDeliveries"`
+		DailyLimit              *int     `json:"dailyLimit"`
+		ContactName             string   `json:"contactName"`
+		ContactEmail            string   `json:"contactEmail"`
+		ContactPhone            string   `json:"contactPhone"`
+		Notes                   string   `json:"notes"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -281,31 +281,31 @@ func (h *DeliveryProviderHandler) UpdateProvider(c *gin.Context) {
 	}
 
 	var req struct {
-		Name               *string  `json:"name"`
-		Description        *string  `json:"description"`
-		LogoURL            *string  `json:"logoUrl"`
-		APIBaseURL         *string  `json:"apiBaseUrl"`
-		APIKey             *string  `json:"apiKey"`
-		APISecret          *string  `json:"apiSecret"`
-		WebhookSecret      *string  `json:"webhookSecret"`
-		StatusMapping      *string  `json:"statusMapping"`
-		SupportedCities    *string  `json:"supportedCities"`
-		SupportedCountries *string  `json:"supportedCountries"`
-		MaxDistance         *float64 `json:"maxDistance"`
-		AvgPickupTime      *int     `json:"avgPickupTime"`
-		PricingModel       *string  `json:"pricingModel"`
-		BaseCost           *float64 `json:"baseCost"`
-		PerKmCost          *float64 `json:"perKmCost"`
-		Currency           *string  `json:"currency"`
-		Priority           *int     `json:"priority"`
-		IsEnabled          *bool    `json:"isEnabled"`
-		IsActive           *bool    `json:"isActive"`
-		MaxConcurrentDeliveries *int `json:"maxConcurrentDeliveries"`
-		DailyLimit         *int     `json:"dailyLimit"`
-		ContactName        *string  `json:"contactName"`
-		ContactEmail       *string  `json:"contactEmail"`
-		ContactPhone       *string  `json:"contactPhone"`
-		Notes              *string  `json:"notes"`
+		Name                    *string  `json:"name"`
+		Description             *string  `json:"description"`
+		LogoURL                 *string  `json:"logoUrl"`
+		APIBaseURL              *string  `json:"apiBaseUrl"`
+		APIKey                  *string  `json:"apiKey"`
+		APISecret               *string  `json:"apiSecret"`
+		WebhookSecret           *string  `json:"webhookSecret"`
+		StatusMapping           *string  `json:"statusMapping"`
+		SupportedCities         *string  `json:"supportedCities"`
+		SupportedCountries      *string  `json:"supportedCountries"`
+		MaxDistance             *float64 `json:"maxDistance"`
+		AvgPickupTime           *int     `json:"avgPickupTime"`
+		PricingModel            *string  `json:"pricingModel"`
+		BaseCost                *float64 `json:"baseCost"`
+		PerKmCost               *float64 `json:"perKmCost"`
+		Currency                *string  `json:"currency"`
+		Priority                *int     `json:"priority"`
+		IsEnabled               *bool    `json:"isEnabled"`
+		IsActive                *bool    `json:"isActive"`
+		MaxConcurrentDeliveries *int     `json:"maxConcurrentDeliveries"`
+		DailyLimit              *int     `json:"dailyLimit"`
+		ContactName             *string  `json:"contactName"`
+		ContactEmail            *string  `json:"contactEmail"`
+		ContactPhone            *string  `json:"contactPhone"`
+		Notes                   *string  `json:"notes"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

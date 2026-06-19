@@ -169,11 +169,15 @@ func TestRemoveAndListFavoriteDishIDs(t *testing.T) {
 
 	// Remove d1.
 	wd := favDishReq(t, uid, http.MethodDelete, fmt.Sprintf("/favorites/dishes/%s", d1),
-		func(r *gin.Engine, h *FavoriteHandler) { r.DELETE("/favorites/dishes/:menuItemId", h.RemoveFavoriteDish) }, nil)
+		func(r *gin.Engine, h *FavoriteHandler) {
+			r.DELETE("/favorites/dishes/:menuItemId", h.RemoveFavoriteDish)
+		}, nil)
 	assert.Equal(t, http.StatusOK, wd.Code)
 
 	// Removing again → 404.
 	wd2 := favDishReq(t, uid, http.MethodDelete, fmt.Sprintf("/favorites/dishes/%s", d1),
-		func(r *gin.Engine, h *FavoriteHandler) { r.DELETE("/favorites/dishes/:menuItemId", h.RemoveFavoriteDish) }, nil)
+		func(r *gin.Engine, h *FavoriteHandler) {
+			r.DELETE("/favorites/dishes/:menuItemId", h.RemoveFavoriteDish)
+		}, nil)
 	assert.Equal(t, http.StatusNotFound, wd2.Code)
 }

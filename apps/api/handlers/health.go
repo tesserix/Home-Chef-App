@@ -27,10 +27,10 @@ type HealthStatus struct {
 
 // CheckResult represents a single health check result
 type CheckResult struct {
-	Status   string        `json:"status"`
-	Duration string        `json:"duration,omitempty"`
-	Message  string        `json:"message,omitempty"`
-	Details  interface{}   `json:"details,omitempty"`
+	Status   string      `json:"status"`
+	Duration string      `json:"duration,omitempty"`
+	Message  string      `json:"message,omitempty"`
+	Details  interface{} `json:"details,omitempty"`
 }
 
 // ReadinessStatus represents the readiness status
@@ -42,10 +42,10 @@ type ReadinessStatus struct {
 
 // SystemInfo represents system information
 type SystemInfo struct {
-	Uptime       string `json:"uptime"`
-	GoVersion    string `json:"goVersion"`
-	NumGoroutine int    `json:"numGoroutine"`
-	NumCPU       int    `json:"numCPU"`
+	Uptime       string  `json:"uptime"`
+	GoVersion    string  `json:"goVersion"`
+	NumGoroutine int     `json:"numGoroutine"`
+	NumCPU       int     `json:"numCPU"`
 	MemStats     MemInfo `json:"memStats"`
 }
 

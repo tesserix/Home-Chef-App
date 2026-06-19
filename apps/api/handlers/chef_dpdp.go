@@ -129,8 +129,8 @@ func (h *ChefDPDPHandler) DeleteMyAccount(c *gin.Context) {
 	// Already-deleted? Don't error — DPDP retries should be safe.
 	if user.DeletedAt.Valid {
 		c.JSON(http.StatusOK, gin.H{
-			"status":     "already_deleted",
-			"deletedAt":  user.DeletedAt.Time,
+			"status":      "already_deleted",
+			"deletedAt":   user.DeletedAt.Time,
 			"retainUntil": user.DeletedAt.Time.Add(30 * 24 * time.Hour),
 		})
 		return
@@ -197,13 +197,13 @@ func findByChef(chefID interface{}, dest interface{}) interface{} {
 // portability rights, and exporting it adds unnecessary risk.
 func sanitizeUserForExport(u models.User) map[string]interface{} {
 	return map[string]interface{}{
-		"id":         u.ID,
-		"email":      u.Email,
-		"firstName":  u.FirstName,
-		"lastName":   u.LastName,
-		"phone":      u.Phone,
-		"role":       u.Role,
-		"createdAt":  u.CreatedAt,
-		"updatedAt":  u.UpdatedAt,
+		"id":        u.ID,
+		"email":     u.Email,
+		"firstName": u.FirstName,
+		"lastName":  u.LastName,
+		"phone":     u.Phone,
+		"role":      u.Role,
+		"createdAt": u.CreatedAt,
+		"updatedAt": u.UpdatedAt,
 	}
 }

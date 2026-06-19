@@ -19,15 +19,20 @@ import (
 // IdempotencyConfig configures the Idempotency-Key middleware.
 //
 // IncludedPathPrefixes — only POST/PUT/PATCH requests whose path
-//                        starts with one of these are deduped. Lets
-//                        us scope to the mutations that actually
-//                        need it (orders / payments / docs / menu)
-//                        rather than every mutation in the API.
+//
+//	starts with one of these are deduped. Lets
+//	us scope to the mutations that actually
+//	need it (orders / payments / docs / menu)
+//	rather than every mutation in the API.
+//
 // ResponseTTL          — how long to cache a non-5xx response.
-//                        24h matches the Wave 1 backend design.
+//
+//	24h matches the Wave 1 backend design.
+//
 // PendingTTL           — how long the "in flight" marker survives
-//                        if the handler crashes. Should be longer
-//                        than any reasonable single-request timeout.
+//
+//	if the handler crashes. Should be longer
+//	than any reasonable single-request timeout.
 type IdempotencyConfig struct {
 	IncludedPathPrefixes []string
 	ResponseTTL          time.Duration

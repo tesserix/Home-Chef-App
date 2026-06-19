@@ -77,13 +77,13 @@ const (
 
 // Subscription represents a chef or driver billing subscription
 type Subscription struct {
-	ID             uuid.UUID          `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID         uuid.UUID          `gorm:"type:uuid;not null;index" json:"userId"`
-	SubscriberType SubscriberType     `gorm:"type:varchar(10);not null" json:"subscriberType"`
-	CountryCode    string             `gorm:"type:varchar(3);not null" json:"countryCode"`
-	Currency       string             `gorm:"type:varchar(3);not null" json:"currency"`
-	BillingInterval BillingInterval   `gorm:"type:varchar(10);not null" json:"billingInterval"`
-	Status         SubscriptionStatus `gorm:"type:varchar(20);default:'trial'" json:"status"`
+	ID              uuid.UUID          `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID          uuid.UUID          `gorm:"type:uuid;not null;index" json:"userId"`
+	SubscriberType  SubscriberType     `gorm:"type:varchar(10);not null" json:"subscriberType"`
+	CountryCode     string             `gorm:"type:varchar(3);not null" json:"countryCode"`
+	Currency        string             `gorm:"type:varchar(3);not null" json:"currency"`
+	BillingInterval BillingInterval    `gorm:"type:varchar(10);not null" json:"billingInterval"`
+	Status          SubscriptionStatus `gorm:"type:varchar(20);default:'trial'" json:"status"`
 	// Tier is the plan tier (#44): standard (baseline) or premium (paid upgrade).
 	Tier       SubscriptionTier `gorm:"type:varchar(10);not null;default:'standard'" json:"tier"`
 	PlanAmount float64          `gorm:"not null" json:"planAmount"`
@@ -152,10 +152,10 @@ type SubscriptionInvoice struct {
 	NextRetryAt   *time.Time `gorm:"" json:"nextRetryAt,omitempty"`
 
 	// Settlement
-	PaidAt       *time.Time `gorm:"" json:"paidAt,omitempty"`
-	RefundedAt   *time.Time `gorm:"" json:"refundedAt,omitempty"`
-	RefundAmount float64    `gorm:"default:0" json:"refundAmount"`
-	FailureReason string   `gorm:"" json:"failureReason,omitempty"`
+	PaidAt        *time.Time `gorm:"" json:"paidAt,omitempty"`
+	RefundedAt    *time.Time `gorm:"" json:"refundedAt,omitempty"`
+	RefundAmount  float64    `gorm:"default:0" json:"refundAmount"`
+	FailureReason string     `gorm:"" json:"failureReason,omitempty"`
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -193,26 +193,26 @@ type EarningsLedger struct {
 
 // SubscriptionResponse is the API response for a subscription
 type SubscriptionResponse struct {
-	ID              uuid.UUID          `json:"id"`
-	UserID          uuid.UUID          `json:"userId"`
-	SubscriberType  SubscriberType     `json:"subscriberType"`
-	CountryCode     string             `json:"countryCode"`
-	Currency        string             `json:"currency"`
-	BillingInterval BillingInterval    `json:"billingInterval"`
-	Status          SubscriptionStatus `json:"status"`
-	Tier            SubscriptionTier   `json:"tier"`
-	PlanAmount      float64            `json:"planAmount"`
-	TrialStartsAt   time.Time          `json:"trialStartsAt"`
-	TrialEndsAt     time.Time          `json:"trialEndsAt"`
-	CurrentPeriodStart *time.Time      `json:"currentPeriodStart,omitempty"`
-	CurrentPeriodEnd   *time.Time      `json:"currentPeriodEnd,omitempty"`
-	BillingStartsAt    *time.Time      `json:"billingStartsAt,omitempty"`
-	GraceEndsAt        *time.Time      `json:"graceEndsAt,omitempty"`
-	CancelledAt        *time.Time      `json:"cancelledAt,omitempty"`
-	CancelReason       string          `json:"cancelReason,omitempty"`
-	RefundAmount       float64         `json:"refundAmount"`
-	PaymentGateway     string          `json:"paymentGateway,omitempty"`
-	CreatedAt          time.Time       `json:"createdAt"`
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"userId"`
+	SubscriberType     SubscriberType     `json:"subscriberType"`
+	CountryCode        string             `json:"countryCode"`
+	Currency           string             `json:"currency"`
+	BillingInterval    BillingInterval    `json:"billingInterval"`
+	Status             SubscriptionStatus `json:"status"`
+	Tier               SubscriptionTier   `json:"tier"`
+	PlanAmount         float64            `json:"planAmount"`
+	TrialStartsAt      time.Time          `json:"trialStartsAt"`
+	TrialEndsAt        time.Time          `json:"trialEndsAt"`
+	CurrentPeriodStart *time.Time         `json:"currentPeriodStart,omitempty"`
+	CurrentPeriodEnd   *time.Time         `json:"currentPeriodEnd,omitempty"`
+	BillingStartsAt    *time.Time         `json:"billingStartsAt,omitempty"`
+	GraceEndsAt        *time.Time         `json:"graceEndsAt,omitempty"`
+	CancelledAt        *time.Time         `json:"cancelledAt,omitempty"`
+	CancelReason       string             `json:"cancelReason,omitempty"`
+	RefundAmount       float64            `json:"refundAmount"`
+	PaymentGateway     string             `json:"paymentGateway,omitempty"`
+	CreatedAt          time.Time          `json:"createdAt"`
 }
 
 // SubscriptionInvoiceResponse is the API response for an invoice
@@ -236,15 +236,15 @@ type SubscriptionInvoiceResponse struct {
 
 // EarningsSummary is the API response for current cycle earnings
 type EarningsSummary struct {
-	CycleStart       *time.Time `json:"cycleStart,omitempty"`
-	CycleEnd         *time.Time `json:"cycleEnd,omitempty"`
-	TotalEarnings    float64    `json:"totalEarnings"`
-	OrderRevenue     float64    `json:"orderRevenue"`
-	DeliveryFees     float64    `json:"deliveryFees"`
-	Tips             float64    `json:"tips"`
-	Threshold        float64    `json:"threshold"`
-	ThresholdMet     bool       `json:"thresholdMet"`
-	Currency         string     `json:"currency"`
+	CycleStart    *time.Time `json:"cycleStart,omitempty"`
+	CycleEnd      *time.Time `json:"cycleEnd,omitempty"`
+	TotalEarnings float64    `json:"totalEarnings"`
+	OrderRevenue  float64    `json:"orderRevenue"`
+	DeliveryFees  float64    `json:"deliveryFees"`
+	Tips          float64    `json:"tips"`
+	Threshold     float64    `json:"threshold"`
+	ThresholdMet  bool       `json:"thresholdMet"`
+	Currency      string     `json:"currency"`
 }
 
 // ToResponse converts Subscription to SubscriptionResponse
@@ -263,13 +263,13 @@ func (s *Subscription) ToResponse() SubscriptionResponse {
 		TrialEndsAt:        s.TrialEndsAt,
 		CurrentPeriodStart: s.CurrentPeriodStart,
 		CurrentPeriodEnd:   s.CurrentPeriodEnd,
-		BillingStartsAt:   s.BillingStartsAt,
-		GraceEndsAt:       s.GraceEndsAt,
-		CancelledAt:       s.CancelledAt,
-		CancelReason:      s.CancelReason,
-		RefundAmount:      s.RefundAmount,
-		PaymentGateway:    s.PaymentGateway,
-		CreatedAt:         s.CreatedAt,
+		BillingStartsAt:    s.BillingStartsAt,
+		GraceEndsAt:        s.GraceEndsAt,
+		CancelledAt:        s.CancelledAt,
+		CancelReason:       s.CancelReason,
+		RefundAmount:       s.RefundAmount,
+		PaymentGateway:     s.PaymentGateway,
+		CreatedAt:          s.CreatedAt,
 	}
 }
 

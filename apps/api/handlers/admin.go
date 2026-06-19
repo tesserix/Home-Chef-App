@@ -593,14 +593,14 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 	// Enrich with stats
 	type ChefWithStats struct {
 		models.ChefProfile
-		OwnerName      string  `json:"ownerName"`
-		OwnerEmail     string  `json:"ownerEmail"`
-		OwnerPhone     string  `json:"ownerPhone"`
-		TotalOrders    int     `json:"totalOrders"`
-		TotalRevenue   float64 `json:"totalRevenue"`
-		MenuItemCount  int     `json:"menuItemCount"`
-		DocumentCount  int     `json:"documentCount"`
-		OnlineStatus   string  `json:"onlineStatus"`
+		OwnerName     string  `json:"ownerName"`
+		OwnerEmail    string  `json:"ownerEmail"`
+		OwnerPhone    string  `json:"ownerPhone"`
+		TotalOrders   int     `json:"totalOrders"`
+		TotalRevenue  float64 `json:"totalRevenue"`
+		MenuItemCount int     `json:"menuItemCount"`
+		DocumentCount int     `json:"documentCount"`
+		OnlineStatus  string  `json:"onlineStatus"`
 	}
 
 	var response []ChefWithStats

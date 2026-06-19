@@ -29,17 +29,17 @@ var istLocation = time.FixedZone("IST", 5*3600+1800)
 // order financials plus the owning chef's identity + home state (for the
 // intra/inter-state GST split).
 type statementOrderRow struct {
-	OrderID       uuid.UUID `gorm:"column:id"`
-	OrderNumber   string    `gorm:"column:order_number"`
-	CompletedAt   time.Time `gorm:"column:delivered_at"`
+	OrderID            uuid.UUID `gorm:"column:id"`
+	OrderNumber        string    `gorm:"column:order_number"`
+	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
 	DeliveryState      string    `gorm:"column:delivery_address_state"`
 	ChefID             uuid.UUID `gorm:"column:chef_id"`
-	UserID        uuid.UUID `gorm:"column:user_id"`
-	ChefState     string    `gorm:"column:chef_state"`
+	UserID             uuid.UUID `gorm:"column:user_id"`
+	ChefState          string    `gorm:"column:chef_state"`
 }
 
 // MostRecentClosedWeek returns the [start, end) bounds — in UTC — of the most

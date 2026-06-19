@@ -37,9 +37,9 @@ func NewChefEarningsHandler() *ChefEarningsHandler {
 
 // earningsOrderRow is an intermediate scan target used by the DB query.
 type earningsOrderRow struct {
-	OrderID       uuid.UUID `gorm:"column:id"`
-	OrderNumber   string    `gorm:"column:order_number"`
-	CompletedAt   time.Time `gorm:"column:delivered_at"`
+	OrderID            uuid.UUID `gorm:"column:id"`
+	OrderNumber        string    `gorm:"column:order_number"`
+	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`

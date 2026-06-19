@@ -14,9 +14,9 @@ type Cart struct {
 	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	// Relationships
-	User  User        `gorm:"foreignKey:UserID" json:"-"`
+	User  User         `gorm:"foreignKey:UserID" json:"-"`
 	Chef  *ChefProfile `gorm:"foreignKey:ChefID" json:"chef,omitempty"`
-	Items []CartItem  `gorm:"foreignKey:CartID" json:"items,omitempty"`
+	Items []CartItem   `gorm:"foreignKey:CartID" json:"items,omitempty"`
 }
 
 type CartItem struct {

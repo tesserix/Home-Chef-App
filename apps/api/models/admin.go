@@ -7,24 +7,24 @@ import (
 )
 
 type PlatformSettings struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Key       string    `gorm:"uniqueIndex;not null" json:"key"`
-	Value     string    `gorm:"type:text" json:"value"`
-	Type      string    `gorm:"default:'string'" json:"type"` // string, number, boolean, json
+	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Key       string     `gorm:"uniqueIndex;not null" json:"key"`
+	Value     string     `gorm:"type:text" json:"value"`
+	Type      string     `gorm:"default:'string'" json:"type"` // string, number, boolean, json
 	UpdatedBy *uuid.UUID `gorm:"type:uuid" json:"updatedBy,omitempty"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 }
 
 type AuditLog struct {
-	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ID         uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID     *uuid.UUID `gorm:"type:uuid;index" json:"userId,omitempty"`
-	Action     string    `gorm:"not null" json:"action"`
-	EntityType string    `gorm:"" json:"entityType"`
-	EntityID   string    `gorm:"" json:"entityId"`
-	OldValue   string    `gorm:"type:text" json:"oldValue,omitempty"`
-	NewValue   string    `gorm:"type:text" json:"newValue,omitempty"`
-	IPAddress  string    `gorm:"" json:"ipAddress"`
-	UserAgent  string    `gorm:"" json:"userAgent"`
+	Action     string     `gorm:"not null" json:"action"`
+	EntityType string     `gorm:"" json:"entityType"`
+	EntityID   string     `gorm:"" json:"entityId"`
+	OldValue   string     `gorm:"type:text" json:"oldValue,omitempty"`
+	NewValue   string     `gorm:"type:text" json:"newValue,omitempty"`
+	IPAddress  string     `gorm:"" json:"ipAddress"`
+	UserAgent  string     `gorm:"" json:"userAgent"`
 	// CorrelationID ties this audit row to the request's structured logs and
 	// trace (X-Request-ID). Indexed so an investigator can pivot from a log
 	// line to the exact mutation it caused.
@@ -49,16 +49,16 @@ type Notification struct {
 }
 
 type Transaction struct {
-	ID              uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID          uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
-	OrderID         *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
-	Type            string    `gorm:"not null" json:"type"` // payment, refund, payout, fee
-	Amount          float64   `gorm:"not null" json:"amount"`
-	Currency        string    `gorm:"default:'USD'" json:"currency"`
-	Status          string    `gorm:"default:'pending'" json:"status"` // pending, completed, failed
-	StripeID        string    `gorm:"" json:"-"`
-	Description     string    `gorm:"" json:"description"`
-	CreatedAt       time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID      uuid.UUID  `gorm:"type:uuid;not null;index" json:"userId"`
+	OrderID     *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
+	Type        string     `gorm:"not null" json:"type"` // payment, refund, payout, fee
+	Amount      float64    `gorm:"not null" json:"amount"`
+	Currency    string     `gorm:"default:'USD'" json:"currency"`
+	Status      string     `gorm:"default:'pending'" json:"status"` // pending, completed, failed
+	StripeID    string     `gorm:"" json:"-"`
+	Description string     `gorm:"" json:"description"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 
 	User  User   `gorm:"foreignKey:UserID" json:"-"`
 	Order *Order `gorm:"foreignKey:OrderID" json:"-"`
@@ -110,13 +110,13 @@ type AdminAnalytics struct {
 
 // Notification DTOs
 type NotificationResponse struct {
-	ID        uuid.UUID  `json:"id"`
-	Type      string     `json:"type"`
-	Title     string     `json:"title"`
-	Message   string     `json:"message"`
-	Data      string     `json:"data,omitempty"`
-	IsRead    bool       `json:"isRead"`
-	CreatedAt time.Time  `json:"createdAt"`
+	ID        uuid.UUID `json:"id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
+	Data      string    `json:"data,omitempty"`
+	IsRead    bool      `json:"isRead"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 func (n *Notification) ToResponse() NotificationResponse {

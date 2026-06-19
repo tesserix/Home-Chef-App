@@ -498,9 +498,9 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
-			orders.POST("/:id/reorder", orderHandler.ReorderOrder) // #238
+			orders.POST("/:id/reorder", orderHandler.ReorderOrder)          // #238
 			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue) // #37
-			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)    // #37
+			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)   // #37
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)

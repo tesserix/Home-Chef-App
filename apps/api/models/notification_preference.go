@@ -37,14 +37,14 @@ func AllNotificationCategories() []NotificationCategory {
 // Missing rows fall through to DefaultNotificationPreference — we store only
 // explicit overrides rather than seeding a row per user per category.
 type NotificationPreference struct {
-	ID          uuid.UUID            `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID      uuid.UUID            `gorm:"type:uuid;not null;index:idx_notif_pref_user_cat,unique,composite:user_cat" json:"userId"`
-	Category    NotificationCategory `gorm:"type:varchar(32);not null;index:idx_notif_pref_user_cat,unique,composite:user_cat" json:"category"`
-	EmailEnabled bool                `gorm:"default:true" json:"emailEnabled"`
-	PushEnabled  bool                `gorm:"default:true" json:"pushEnabled"`
-	SMSEnabled   bool                `gorm:"default:false" json:"smsEnabled"`
-	UpdatedAt   time.Time            `gorm:"autoUpdateTime" json:"updatedAt"`
-	CreatedAt   time.Time            `gorm:"autoCreateTime" json:"createdAt"`
+	ID           uuid.UUID            `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID       uuid.UUID            `gorm:"type:uuid;not null;index:idx_notif_pref_user_cat,unique,composite:user_cat" json:"userId"`
+	Category     NotificationCategory `gorm:"type:varchar(32);not null;index:idx_notif_pref_user_cat,unique,composite:user_cat" json:"category"`
+	EmailEnabled bool                 `gorm:"default:true" json:"emailEnabled"`
+	PushEnabled  bool                 `gorm:"default:true" json:"pushEnabled"`
+	SMSEnabled   bool                 `gorm:"default:false" json:"smsEnabled"`
+	UpdatedAt    time.Time            `gorm:"autoUpdateTime" json:"updatedAt"`
+	CreatedAt    time.Time            `gorm:"autoCreateTime" json:"createdAt"`
 }
 
 // DefaultNotificationPreference is what the system assumes when a user
