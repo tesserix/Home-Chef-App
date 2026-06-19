@@ -79,6 +79,11 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 			Subjects: []string{SubjectUserRegistered}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
 			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived}},
+		// Follower fan-out when a favorited chef publishes a weekly menu (#239).
+		// Its own durable so the (potentially large) fan-out is processed
+		// independently of the chef-facing notifications above.
+		{Stream: "CHEF", Durable: "notify-weekly-menu", Handler: h,
+			Subjects: []string{SubjectWeeklyMenuPublished}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
@@ -115,6 +120,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleUserRegistered)
 	case SubjectChefVerified:
 		return decodeThen(data, s.handleChefVerified)
+	case SubjectWeeklyMenuPublished:
+		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
 		return decodeThen(data, s.handleTipReceived)
 	case SubjectGroupOrderLocked:
@@ -445,6 +452,56 @@ func (s *NotificationService) handleChefVerified(event Event) error {
 		Title:   "Your Chef Profile is Verified!",
 		Message: "Congratulations! Your chef profile has been verified. You can now start accepting orders!",
 	})
+	return nil
+}
+
+// handleWeeklyMenuPublished fans a "menu drop" out to every customer who has
+// favorited the chef (#239): an in-app feed entry (+ real-time bell) and a push,
+// each gated by the user's "favorites" notification preference. The heavy FCM
+// call is offloaded — we publish to notifications.push and let notify-dispatch
+// deliver, so this handler stays fast even for a chef with many followers.
+func (s *NotificationService) handleWeeklyMenuPublished(event Event) error {
+	chefIDStr, _ := event.Data["chef_id"].(string)
+	chefName, _ := event.Data["chef_name"].(string)
+	chefID, err := uuid.Parse(chefIDStr)
+	if err != nil {
+		return fmt.Errorf("weekly_menu_published: bad chef_id %q: %w", chefIDStr, err)
+	}
+	if chefName == "" {
+		chefName = "A chef you follow"
+	}
+
+	var favorites []models.FavoriteChef
+	if err := database.DB.Where("chef_id = ?", chefID).Find(&favorites).Error; err != nil {
+		return fmt.Errorf("weekly_menu_published: load followers: %w", err)
+	}
+
+	title := "New menu just dropped"
+	message := fmt.Sprintf("%s published a new weekly menu — take a look!", chefName)
+	inAppData, _ := json.Marshal(map[string]any{"type": "weekly_menu_published", "chefId": chefIDStr})
+
+	for _, fav := range favorites {
+		if err := s.saveNotification(&models.Notification{
+			UserID:  fav.UserID,
+			Type:    "weekly_menu_published",
+			Title:   title,
+			Message: message,
+			Data:    string(inAppData),
+		}); err != nil {
+			// Don't fail the whole fan-out for one follower — log and continue so
+			// the rest still get notified (and the consumer doesn't redeliver the
+			// entire batch).
+			log.Printf("weekly_menu_published: save notification for %s: %v", fav.UserID, err)
+			continue
+		}
+		PublishNotification(NotificationEvent{
+			UserID:  fav.UserID,
+			Type:    "push",
+			Title:   title,
+			Message: message,
+			Data:    map[string]any{"type": "weekly_menu_published", "chefId": chefIDStr},
+		})
+	}
 	return nil
 }
 
