@@ -263,6 +263,16 @@ func (h *PromoHandler) AdminUpdatePromo(c *gin.Context) {
 		updates["discount_type"] = *req.DiscountType
 	}
 	if req.DiscountValue != nil {
+		// Guard percentage bounds (Create enforces the same) — the effective type is
+		// the one being set this request, else the promo's current type.
+		effectiveType := promo.DiscountType
+		if req.DiscountType != nil {
+			effectiveType = *req.DiscountType
+		}
+		if effectiveType == "percentage" && (*req.DiscountValue <= 0 || *req.DiscountValue > 100) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Percentage discount must be between 0 and 100"})
+			return
+		}
 		updates["discount_value"] = *req.DiscountValue
 	}
 	if req.MinOrderAmount != nil {

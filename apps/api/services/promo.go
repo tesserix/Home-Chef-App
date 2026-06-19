@@ -107,10 +107,15 @@ func CheckPromoEligibility(promo *models.PromoCode, ctx PromoContext, discount f
 			return ErrPromoReturningOnly
 		}
 	}
-	// Chef-funded promos only apply to their funding chef's orders. Skip the
-	// check in preview (ChefID unknown / no ChefID set on the promo).
-	if promo.FundingSource == models.PromoFundingChef && promo.ChefID != nil && ctx.ChefID != uuid.Nil {
-		if *promo.ChefID != ctx.ChefID {
+	// Chef-funded promos only apply to their funding chef's orders. A chef-funded
+	// code with no ChefID is malformed (can't happen via the API, but guard against
+	// a legacy/hand-inserted row billing an arbitrary chef) — reject it.
+	if promo.FundingSource == models.PromoFundingChef {
+		if promo.ChefID == nil {
+			return ErrPromoWrongChef
+		}
+		// Skip the match only in preview (cart chef unknown); enforced at order time.
+		if ctx.ChefID != uuid.Nil && *promo.ChefID != ctx.ChefID {
 			return ErrPromoWrongChef
 		}
 	}
@@ -148,4 +153,19 @@ func ClaimPromoRedemption(tx *gorm.DB, promoID uuid.UUID, discount float64) (boo
 		return false, res.Error
 	}
 	return res.RowsAffected == 1, nil
+}
+
+// UserPromoRedemptions counts how many times a user has already redeemed a promo.
+// Call this AFTER ClaimPromoRedemption inside the SAME transaction: the claim's
+// conditional UPDATE holds a row lock on the promo, serializing concurrent
+// redemptions of that code, so this count sees every committed prior usage and
+// makes the per-user cap race-safe (the read-only check in CheckPromoEligibility
+// is only a fast fail before the tx). The current order's usage row isn't written
+// until after this, so the count reflects only previous redemptions.
+func UserPromoRedemptions(tx *gorm.DB, promoID, userID uuid.UUID) int64 {
+	var n int64
+	tx.Model(&models.PromoCodeUsage{}).
+		Where("promo_code_id = ? AND user_id = ?", promoID, userID).
+		Count(&n)
+	return n
 }

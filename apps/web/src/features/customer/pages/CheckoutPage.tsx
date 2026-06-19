@@ -244,8 +244,24 @@ export default function CheckoutPage() {
       } else {
         await confirmRazorpayPayment(order, paymentData);
       }
-    } catch {
-      toast.error('Failed to initiate payment. Please try again.');
+    } catch (e: unknown) {
+      // Surface a promo failure specifically (e.g. the code was exhausted between
+      // applying it and checkout) and drop it so the retry isn't blocked (#39).
+      const raw = (e as { error?: unknown })?.error;
+      const msg =
+        typeof raw === 'string'
+          ? raw
+          : raw && typeof raw === 'object' && 'message' in raw
+            ? String((raw as { message?: unknown }).message ?? '')
+            : e instanceof Error
+              ? e.message
+              : '';
+      if (/promo/i.test(msg)) {
+        cart.clearPromo();
+        toast.error(msg || 'That promo code is no longer available. Please try again.');
+      } else {
+        toast.error('Failed to initiate payment. Please try again.');
+      }
     } finally {
       setIsProcessing(false);
     }

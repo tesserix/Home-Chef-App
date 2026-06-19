@@ -546,6 +546,16 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "This promo code is no longer available"})
 			return
 		}
+		// Per-user cap, race-safe: the claim above locked the promo row, so this
+		// count sees all committed prior redemptions and two concurrent same-user
+		// orders can't both slip past a "N per user" limit (#39). Roll back the
+		// claim's increments if the user is already at their limit.
+		if appliedPromo.PerUserLimit > 0 &&
+			services.UserPromoRedemptions(tx, appliedPromo.ID, userID) >= int64(appliedPromo.PerUserLimit) {
+			tx.Rollback()
+			c.JSON(http.StatusConflict, gin.H{"error": "You have already used this promo code the maximum number of times"})
+			return
+		}
 		usage := models.PromoCodeUsage{
 			PromoCodeID: appliedPromo.ID,
 			UserID:      userID,

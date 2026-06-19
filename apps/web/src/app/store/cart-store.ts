@@ -84,7 +84,9 @@ export const useCartStore = create<CartStore>()(
             existing.quantity += quantity;
             if (notes) existing.notes = notes;
           }
-          set({ items: updated });
+          // Changing the cart invalidates any applied promo preview (#39) — drop
+          // it so the customer re-validates against the new subtotal.
+          set({ items: updated, promoCode: null, promoDiscount: 0 });
         } else {
           // Unit price includes any modifier deltas.
           const unitPrice = item.price + (modifiers ?? []).reduce((s, m) => s + m.priceDelta, 0);
@@ -102,6 +104,8 @@ export const useCartStore = create<CartStore>()(
           set({
             items: [...items, newItem],
             chefId: item.chefId,
+            promoCode: null,
+            promoDiscount: 0,
           });
         }
       },
@@ -113,6 +117,9 @@ export const useCartStore = create<CartStore>()(
           items: updated,
           chefId: updated.length === 0 ? null : get().chefId,
           chef: updated.length === 0 ? null : get().chef,
+          // Cart changed → drop the applied promo preview (#39).
+          promoCode: null,
+          promoDiscount: 0,
         });
       },
 
@@ -126,7 +133,7 @@ export const useCartStore = create<CartStore>()(
         const updated = items.map((i) =>
           i.id === itemId ? { ...i, quantity } : i
         );
-        set({ items: updated });
+        set({ items: updated, promoCode: null, promoDiscount: 0 });
       },
 
       updateNotes: (itemId, notes) => {

@@ -26,7 +26,7 @@ func TestComputePromoDiscount(t *testing.T) {
 	fixed := func(v float64) *models.PromoCode {
 		return &models.PromoCode{DiscountType: PromoDiscountFixed, DiscountValue: v}
 	}
-	assert.Equal(t, 100.0, ComputePromoDiscount(pct(20, 0), 500))   // 20% of 500
+	assert.Equal(t, 100.0, ComputePromoDiscount(pct(20, 0), 500))    // 20% of 500
 	assert.Equal(t, 150.0, ComputePromoDiscount(pct(20, 150), 1000)) // capped at MaxDiscount
 	assert.Equal(t, 75.0, ComputePromoDiscount(fixed(75), 500))      // flat
 	assert.Equal(t, 500.0, ComputePromoDiscount(fixed(800), 500))    // never exceeds the base
@@ -35,12 +35,12 @@ func TestComputePromoDiscount(t *testing.T) {
 
 func activePromo() *models.PromoCode {
 	return &models.PromoCode{
-		IsActive:     true,
-		DiscountType: PromoDiscountPercentage,
+		IsActive:      true,
+		DiscountType:  PromoDiscountPercentage,
 		DiscountValue: 10,
-		ValidFrom:    time.Now().Add(-time.Hour),
+		ValidFrom:     time.Now().Add(-time.Hour),
 		FundingSource: models.PromoFundingPlatform,
-		ApplicableTo: "all",
+		ApplicableTo:  "all",
 	}
 }
 
@@ -112,8 +112,8 @@ func TestCheckPromoEligibility(t *testing.T) {
 	t.Run("budget cap blocks the redemption that would exceed it", func(t *testing.T) {
 		p := activePromo()
 		p.BudgetCap, p.BudgetSpent = 1000, 970
-		assert.NoError(t, CheckPromoEligibility(p, base, 30))                                  // 970+30 = 1000, exactly at cap
-		assert.ErrorIs(t, CheckPromoEligibility(p, base, 31), ErrPromoBudgetExhausted)         // 970+31 > 1000
+		assert.NoError(t, CheckPromoEligibility(p, base, 30))                          // 970+30 = 1000, exactly at cap
+		assert.ErrorIs(t, CheckPromoEligibility(p, base, 31), ErrPromoBudgetExhausted) // 970+31 > 1000
 	})
 }
 
@@ -132,6 +132,8 @@ func setupPromoDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE promo_codes (
 		id TEXT PRIMARY KEY, code TEXT, usage_limit INTEGER DEFAULT 0, usage_count INTEGER DEFAULT 0,
 		budget_cap REAL DEFAULT 0, budget_spent REAL DEFAULT 0, updated_at DATETIME, deleted_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE promo_code_usages (
+		id TEXT PRIMARY KEY, promo_code_id TEXT, user_id TEXT, order_id TEXT, discount REAL, used_at DATETIME)`).Error)
 	return db
 }
 
@@ -179,4 +181,20 @@ func TestClaimPromoRedemption(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 	})
+}
+
+func TestUserPromoRedemptions(t *testing.T) {
+	db := setupPromoDB(t)
+	promo, user, other := uuid.New(), uuid.New(), uuid.New()
+	// user has redeemed this promo twice; another user once.
+	for i := 0; i < 2; i++ {
+		require.NoError(t, db.Exec(`INSERT INTO promo_code_usages (id, promo_code_id, user_id, order_id, discount) VALUES (?, ?, ?, ?, 10)`,
+			uuid.New().String(), promo.String(), user.String(), uuid.New().String()).Error)
+	}
+	require.NoError(t, db.Exec(`INSERT INTO promo_code_usages (id, promo_code_id, user_id, order_id, discount) VALUES (?, ?, ?, ?, 10)`,
+		uuid.New().String(), promo.String(), other.String(), uuid.New().String()).Error)
+
+	assert.Equal(t, int64(2), UserPromoRedemptions(db, promo, user))
+	assert.Equal(t, int64(1), UserPromoRedemptions(db, promo, other))
+	assert.Equal(t, int64(0), UserPromoRedemptions(db, promo, uuid.New()))
 }

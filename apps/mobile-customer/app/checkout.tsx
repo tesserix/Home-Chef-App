@@ -222,6 +222,11 @@ export default function CheckoutScreen() {
       // scroll body, far from the sticky button, so a failed tap otherwise
       // reads as "nothing happened" (e.g. the delivery-zone coordinate gate).
       const message = friendlyErrorMessage(err, 'Order creation failed. Please try again.');
+      // If the promo was rejected at order time (e.g. exhausted since applying),
+      // drop it so the retry isn't blocked by a dead code (#39).
+      if (/promo/i.test(message)) {
+        removePromo();
+      }
       setError(message);
       Alert.alert('Could not place order', message);
       setIsLoading(false);
