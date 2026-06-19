@@ -16,9 +16,9 @@ import (
 // region wins over it. Rows with is_active=false are excluded from lookup
 // so admins can disable a rule without deleting history.
 type TaxRate struct {
-	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	CountryCode string     `gorm:"type:varchar(2);not null;index:idx_tax_lookup" json:"countryCode"`
-	Region      string     `gorm:"type:varchar(10);default:'';index:idx_tax_lookup" json:"region"`
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	CountryCode string    `gorm:"type:varchar(2);not null;index:idx_tax_lookup" json:"countryCode"`
+	Region      string    `gorm:"type:varchar(10);default:'';index:idx_tax_lookup" json:"region"`
 	// Human-readable name shown on invoices ("GST", "VAT", "Sales Tax"). Also
 	// used as the fallback label when a jurisdiction has no better label.
 	TaxName string `gorm:"type:varchar(40);not null" json:"taxName"`

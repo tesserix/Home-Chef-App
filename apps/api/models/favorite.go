@@ -18,10 +18,10 @@ type FavoriteChef struct {
 }
 
 type FavoriteChefResponse struct {
-	ID        uuid.UUID            `json:"id"`
-	ChefID    uuid.UUID            `json:"chefId"`
-	Chef      ChefProfileResponse  `json:"chef"`
-	CreatedAt time.Time            `json:"createdAt"`
+	ID        uuid.UUID           `json:"id"`
+	ChefID    uuid.UUID           `json:"chefId"`
+	Chef      ChefProfileResponse `json:"chef"`
+	CreatedAt time.Time           `json:"createdAt"`
 }
 
 // FavoriteDish represents a customer's saved/favorited menu item (#237). Unlike

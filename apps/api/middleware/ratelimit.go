@@ -137,7 +137,8 @@ func toString(v any) string {
 // AuthedPerMin   — request budget per authenticated user per minute.
 // UnauthedPerMin — request budget per IP per minute when no user is set.
 // ExcludedPaths  — exact path prefix matches that bypass the limiter
-//                  (typically /health, /metrics, /api/v1/mobile/min-version).
+//
+//	(typically /health, /metrics, /api/v1/mobile/min-version).
 //
 // Fixed-window counter (key TTL = 70s, slightly larger than the window).
 // This is less smooth than a true sliding-window token bucket but

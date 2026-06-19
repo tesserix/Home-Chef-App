@@ -11,11 +11,11 @@ import (
 type StaffRole string
 
 const (
-	StaffRoleSuperAdmin  StaffRole = "super_admin"
-	StaffRoleAdmin       StaffRole = "admin"
+	StaffRoleSuperAdmin   StaffRole = "super_admin"
+	StaffRoleAdmin        StaffRole = "admin"
 	StaffRoleFleetManager StaffRole = "fleet_manager"
-	StaffRoleDeliveryOps StaffRole = "delivery_ops"
-	StaffRoleSupport     StaffRole = "support"
+	StaffRoleDeliveryOps  StaffRole = "delivery_ops"
+	StaffRoleSupport      StaffRole = "support"
 )
 
 // StaffPermission represents a granular permission
@@ -23,29 +23,29 @@ type StaffPermission string
 
 const (
 	// Admin portal permissions
-	SPViewDashboard      StaffPermission = "dashboard:view"
-	SPManageUsers        StaffPermission = "users:manage"
-	SPViewUsers          StaffPermission = "users:view"
-	SPManageChefs        StaffPermission = "chefs:manage"
-	SPVerifyChefs        StaffPermission = "chefs:verify"
-	SPViewChefs          StaffPermission = "chefs:view"
-	SPManageOrders       StaffPermission = "orders:manage"
-	SPViewOrders         StaffPermission = "orders:view"
-	SPRefundOrders       StaffPermission = "orders:refund"
-	SPViewAnalytics      StaffPermission = "analytics:view"
-	SPManageSettings     StaffPermission = "settings:manage"
-	SPViewSettings       StaffPermission = "settings:view"
-	SPManageApprovals    StaffPermission = "approvals:manage"
-	SPViewApprovals      StaffPermission = "approvals:view"
-	SPManageStaff        StaffPermission = "staff:manage"
-	SPInviteStaff        StaffPermission = "staff:invite"
-	SPViewStaff          StaffPermission = "staff:view"
-	SPModerateContent    StaffPermission = "content:moderate"
+	SPViewDashboard   StaffPermission = "dashboard:view"
+	SPManageUsers     StaffPermission = "users:manage"
+	SPViewUsers       StaffPermission = "users:view"
+	SPManageChefs     StaffPermission = "chefs:manage"
+	SPVerifyChefs     StaffPermission = "chefs:verify"
+	SPViewChefs       StaffPermission = "chefs:view"
+	SPManageOrders    StaffPermission = "orders:manage"
+	SPViewOrders      StaffPermission = "orders:view"
+	SPRefundOrders    StaffPermission = "orders:refund"
+	SPViewAnalytics   StaffPermission = "analytics:view"
+	SPManageSettings  StaffPermission = "settings:manage"
+	SPViewSettings    StaffPermission = "settings:view"
+	SPManageApprovals StaffPermission = "approvals:manage"
+	SPViewApprovals   StaffPermission = "approvals:view"
+	SPManageStaff     StaffPermission = "staff:manage"
+	SPInviteStaff     StaffPermission = "staff:invite"
+	SPViewStaff       StaffPermission = "staff:view"
+	SPModerateContent StaffPermission = "content:moderate"
 
 	// Delivery portal permissions
-	SPViewDeliveryDashboard StaffPermission = "delivery:dashboard"
-	SPManageFleet           StaffPermission = "fleet:manage"
-	SPViewFleet             StaffPermission = "fleet:view"
+	SPViewDeliveryDashboard  StaffPermission = "delivery:dashboard"
+	SPManageFleet            StaffPermission = "fleet:manage"
+	SPViewFleet              StaffPermission = "fleet:view"
 	SPManageDeliveryPartners StaffPermission = "delivery_partners:manage"
 	SPVerifyDeliveryPartners StaffPermission = "delivery_partners:verify"
 	SPViewDeliveryPartners   StaffPermission = "delivery_partners:view"
@@ -106,23 +106,23 @@ var DefaultStaffPermissions = map[StaffRole][]StaffPermission{
 
 // StaffMember represents an internal staff member (admin/delivery portals)
 type StaffMember struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID      uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
-	StaffRole   StaffRole      `gorm:"type:varchar(30);not null" json:"staffRole"`
-	Permissions []byte         `gorm:"type:jsonb;default:'[]'" json:"-"` // Custom permission overrides (JSONB)
-	Department  string         `gorm:"type:varchar(50)" json:"department"`
-	Title       string         `gorm:"type:varchar(100)" json:"title"`
-	InvitedByID *uuid.UUID     `gorm:"type:uuid" json:"invitedById,omitempty"`
-	IsActive    bool           `gorm:"default:true" json:"isActive"`
-	JoinedAt    time.Time      `gorm:"autoCreateTime" json:"joinedAt"`
-	LastActiveAt *time.Time    `gorm:"" json:"lastActiveAt,omitempty"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID       uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
+	StaffRole    StaffRole      `gorm:"type:varchar(30);not null" json:"staffRole"`
+	Permissions  []byte         `gorm:"type:jsonb;default:'[]'" json:"-"` // Custom permission overrides (JSONB)
+	Department   string         `gorm:"type:varchar(50)" json:"department"`
+	Title        string         `gorm:"type:varchar(100)" json:"title"`
+	InvitedByID  *uuid.UUID     `gorm:"type:uuid" json:"invitedById,omitempty"`
+	IsActive     bool           `gorm:"default:true" json:"isActive"`
+	JoinedAt     time.Time      `gorm:"autoCreateTime" json:"joinedAt"`
+	LastActiveAt *time.Time     `gorm:"" json:"lastActiveAt,omitempty"`
+	CreatedAt    time.Time      `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt    time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
-	User      User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	InvitedBy *User        `gorm:"foreignKey:InvitedByID" json:"invitedBy,omitempty"`
+	User      User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	InvitedBy *User `gorm:"foreignKey:InvitedByID" json:"invitedBy,omitempty"`
 }
 
 // InvitationStatus tracks the state of a staff invitation
@@ -137,19 +137,19 @@ const (
 
 // StaffInvitation represents a pending invitation for someone to join as staff
 type StaffInvitation struct {
-	ID          uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Email       string           `gorm:"not null;index" json:"email"`
-	StaffRole   StaffRole        `gorm:"type:varchar(30);not null" json:"staffRole"`
-	Department  string           `gorm:"type:varchar(50)" json:"department"`
-	Title       string           `gorm:"type:varchar(100)" json:"title"`
-	Token       string           `gorm:"uniqueIndex;not null" json:"-"`
-	InvitedByID uuid.UUID        `gorm:"type:uuid;not null" json:"invitedById"`
-	Status      InvitationStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
-	Message     string           `gorm:"type:text" json:"message,omitempty"`
-	ExpiresAt   time.Time        `gorm:"not null" json:"expiresAt"`
-	AcceptedAt  *time.Time       `gorm:"" json:"acceptedAt,omitempty"`
-	AcceptedByID *uuid.UUID      `gorm:"type:uuid" json:"acceptedById,omitempty"`
-	CreatedAt   time.Time        `gorm:"autoCreateTime" json:"createdAt"`
+	ID           uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Email        string           `gorm:"not null;index" json:"email"`
+	StaffRole    StaffRole        `gorm:"type:varchar(30);not null" json:"staffRole"`
+	Department   string           `gorm:"type:varchar(50)" json:"department"`
+	Title        string           `gorm:"type:varchar(100)" json:"title"`
+	Token        string           `gorm:"uniqueIndex;not null" json:"-"`
+	InvitedByID  uuid.UUID        `gorm:"type:uuid;not null" json:"invitedById"`
+	Status       InvitationStatus `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Message      string           `gorm:"type:text" json:"message,omitempty"`
+	ExpiresAt    time.Time        `gorm:"not null" json:"expiresAt"`
+	AcceptedAt   *time.Time       `gorm:"" json:"acceptedAt,omitempty"`
+	AcceptedByID *uuid.UUID       `gorm:"type:uuid" json:"acceptedById,omitempty"`
+	CreatedAt    time.Time        `gorm:"autoCreateTime" json:"createdAt"`
 
 	// Relationships
 	InvitedBy  User  `gorm:"foreignKey:InvitedByID" json:"invitedBy,omitempty"`
@@ -159,21 +159,21 @@ type StaffInvitation struct {
 // DTOs
 
 type StaffMemberResponse struct {
-	ID          uuid.UUID `json:"id"`
-	UserID      uuid.UUID `json:"userId"`
-	Email       string    `json:"email"`
-	FirstName   string    `json:"firstName"`
-	LastName    string    `json:"lastName"`
-	Avatar      string    `json:"avatar,omitempty"`
-	Phone       string    `json:"phone,omitempty"`
-	StaffRole   StaffRole `json:"staffRole"`
-	Department  string    `json:"department"`
-	Title       string    `json:"title"`
-	IsActive    bool      `json:"isActive"`
-	JoinedAt    time.Time `json:"joinedAt"`
-	LastActiveAt *time.Time `json:"lastActiveAt,omitempty"`
-	Permissions []StaffPermission `json:"permissions"`
-	InvitedBy   *StaffInviterResponse `json:"invitedBy,omitempty"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"userId"`
+	Email        string                `json:"email"`
+	FirstName    string                `json:"firstName"`
+	LastName     string                `json:"lastName"`
+	Avatar       string                `json:"avatar,omitempty"`
+	Phone        string                `json:"phone,omitempty"`
+	StaffRole    StaffRole             `json:"staffRole"`
+	Department   string                `json:"department"`
+	Title        string                `json:"title"`
+	IsActive     bool                  `json:"isActive"`
+	JoinedAt     time.Time             `json:"joinedAt"`
+	LastActiveAt *time.Time            `json:"lastActiveAt,omitempty"`
+	Permissions  []StaffPermission     `json:"permissions"`
+	InvitedBy    *StaffInviterResponse `json:"invitedBy,omitempty"`
 }
 
 type StaffInviterResponse struct {
@@ -183,18 +183,18 @@ type StaffInviterResponse struct {
 }
 
 type StaffInvitationResponse struct {
-	ID         uuid.UUID        `json:"id"`
-	Email      string           `json:"email"`
-	StaffRole  StaffRole        `json:"staffRole"`
-	Department string           `json:"department"`
-	Title      string           `json:"title"`
-	Status     InvitationStatus `json:"status"`
-	Message    string           `json:"message,omitempty"`
-	InviteURL  string           `json:"inviteUrl,omitempty"`
-	ExpiresAt  time.Time        `json:"expiresAt"`
-	AcceptedAt *time.Time       `json:"acceptedAt,omitempty"`
+	ID         uuid.UUID            `json:"id"`
+	Email      string               `json:"email"`
+	StaffRole  StaffRole            `json:"staffRole"`
+	Department string               `json:"department"`
+	Title      string               `json:"title"`
+	Status     InvitationStatus     `json:"status"`
+	Message    string               `json:"message,omitempty"`
+	InviteURL  string               `json:"inviteUrl,omitempty"`
+	ExpiresAt  time.Time            `json:"expiresAt"`
+	AcceptedAt *time.Time           `json:"acceptedAt,omitempty"`
 	InvitedBy  StaffInviterResponse `json:"invitedBy"`
-	CreatedAt  time.Time        `json:"createdAt"`
+	CreatedAt  time.Time            `json:"createdAt"`
 }
 
 func (s *StaffMember) ToResponse() StaffMemberResponse {

@@ -529,7 +529,7 @@ func (h *StaffHandler) AcceptInvitation(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Invitation accepted. Welcome to the team!",
+		"message":   "Invitation accepted. Welcome to the team!",
 		"staffRole": staff.StaffRole,
 	})
 }

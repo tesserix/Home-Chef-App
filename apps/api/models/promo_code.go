@@ -16,20 +16,20 @@ const (
 )
 
 type PromoCode struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Code           string         `gorm:"uniqueIndex;not null" json:"code"`
-	Description    string         `gorm:"type:text" json:"description"`
-	DiscountType   string         `gorm:"type:varchar(20);not null" json:"discountType"` // "percentage" or "fixed"
-	DiscountValue  float64        `gorm:"not null" json:"discountValue"`
-	MinOrderAmount float64        `gorm:"default:0" json:"minOrderAmount"`
-	MaxDiscount    float64        `gorm:"default:0" json:"maxDiscount"`
-	UsageLimit     int            `gorm:"default:0" json:"usageLimit"`
-	UsageCount     int            `gorm:"default:0" json:"usageCount"`
-	PerUserLimit   int            `gorm:"default:0" json:"perUserLimit"`
-	ValidFrom      time.Time      `gorm:"not null" json:"validFrom"`
-	ValidUntil     *time.Time     `gorm:"" json:"validUntil,omitempty"`
-	IsActive       bool           `gorm:"default:true" json:"isActive"`
-	ApplicableTo   string         `gorm:"type:varchar(30);default:'all'" json:"applicableTo"` // "all", "new_users", "returning_users"
+	ID             uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Code           string     `gorm:"uniqueIndex;not null" json:"code"`
+	Description    string     `gorm:"type:text" json:"description"`
+	DiscountType   string     `gorm:"type:varchar(20);not null" json:"discountType"` // "percentage" or "fixed"
+	DiscountValue  float64    `gorm:"not null" json:"discountValue"`
+	MinOrderAmount float64    `gorm:"default:0" json:"minOrderAmount"`
+	MaxDiscount    float64    `gorm:"default:0" json:"maxDiscount"`
+	UsageLimit     int        `gorm:"default:0" json:"usageLimit"`
+	UsageCount     int        `gorm:"default:0" json:"usageCount"`
+	PerUserLimit   int        `gorm:"default:0" json:"perUserLimit"`
+	ValidFrom      time.Time  `gorm:"not null" json:"validFrom"`
+	ValidUntil     *time.Time `gorm:"" json:"validUntil,omitempty"`
+	IsActive       bool       `gorm:"default:true" json:"isActive"`
+	ApplicableTo   string     `gorm:"type:varchar(30);default:'all'" json:"applicableTo"` // "all", "new_users", "returning_users"
 	// FundingSource (#39): "platform" (default) or "chef". ChefID is required and
 	// scopes the promo to that chef's orders when funding is "chef".
 	FundingSource string     `gorm:"type:varchar(16);default:'platform'" json:"fundingSource"`

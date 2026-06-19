@@ -175,7 +175,7 @@ func (h *CustomerHandler) GetOnboardingStatus(c *gin.Context) {
 		// No profile yet = not completed
 		c.JSON(http.StatusOK, gin.H{
 			"onboardingCompleted": false,
-			"onboardingStep":     0,
+			"onboardingStep":      0,
 		})
 		return
 	}

@@ -11,9 +11,9 @@ import (
 )
 
 type ChefProfile struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID         uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
-	BusinessName   string         `gorm:"uniqueIndex;not null" json:"businessName"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID       uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"userId"`
+	BusinessName string    `gorm:"uniqueIndex;not null" json:"businessName"`
 	// Slug is the URL-safe identifier for SEO chef pages + app universal links
 	// (#58). Derived from BusinessName by BeforeSave; resolvable via GetChef.
 	Slug           string         `gorm:"index" json:"slug"`
@@ -31,16 +31,16 @@ type ChefProfile struct {
 	TotalOrders    int            `gorm:"default:0" json:"totalOrders"`
 	// IssueCount is the number of customer-reported order issues (#37); the issue
 	// rate (issues/orders) feeds the chef's quality signal.
-	IssueCount     int            `gorm:"default:0" json:"issueCount"`
-	IsVerified     bool           `gorm:"default:false" json:"verified"`
-	VerifiedAt     *time.Time     `gorm:"" json:"verifiedAt"`
-	IsActive       bool           `gorm:"default:true" json:"isActive"`
-	AcceptingOrders bool           `gorm:"default:true" json:"acceptingOrders"`
+	IssueCount      int        `gorm:"default:0" json:"issueCount"`
+	IsVerified      bool       `gorm:"default:false" json:"verified"`
+	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
+	IsActive        bool       `gorm:"default:true" json:"isActive"`
+	AcceptingOrders bool       `gorm:"default:true" json:"acceptingOrders"`
 	// PausedUntil powers "Back in {15,30,60} min": when set in the future the
 	// kitchen is temporarily closed (AcceptingOrders is flipped false alongside
 	// it). The auto-resume cron clears it + reopens once the time passes.
 	PausedUntil   *time.Time     `gorm:"" json:"pausedUntil,omitempty"`
-	KitchenPhotos   pq.StringArray `gorm:"type:text[]" json:"kitchenPhotos"`
+	KitchenPhotos pq.StringArray `gorm:"type:text[]" json:"kitchenPhotos"`
 
 	// Address
 	AddressLine1 string  `gorm:"" json:"addressLine1"`
@@ -56,8 +56,8 @@ type ChefProfile struct {
 	FeaturedUntil *time.Time `gorm:"" json:"featuredUntil,omitempty"`
 
 	// Payment gateway linked accounts
-	StripeAccountID    string `gorm:"" json:"-"`
-	RazorpayAccountID  string `gorm:"" json:"-"` // Razorpay Route linked account ID
+	StripeAccountID   string `gorm:"" json:"-"`
+	RazorpayAccountID string `gorm:"" json:"-"` // Razorpay Route linked account ID
 	// PaymentProvider picks which gateway a customer's order gets routed
 	// through. "razorpay" (India) or "stripe" (international). Defaults to
 	// razorpay so existing chefs keep working after the column is added.
@@ -96,7 +96,7 @@ type ChefProfile struct {
 	// varchar(15) without format enforcement at the DB level —
 	// validation lives in the handler so future format changes don't
 	// require a migration.
-	GSTIN              string `gorm:"type:varchar(15)" json:"gstin,omitempty"`
+	GSTIN string `gorm:"type:varchar(15)" json:"gstin,omitempty"`
 
 	// FSSAI lockout override (#93). For genuine edge cases — e.g. a government
 	// renewal backlog where a chef's paperwork is filed but not yet processed —
@@ -136,17 +136,17 @@ type ChefSchedule struct {
 
 // ChefSettings stores vendor preferences (notifications, auto-accept, etc.)
 type ChefSettings struct {
-	ID                   uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	ChefID               uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"chefId"`
-	AutoAcceptOrders     bool      `gorm:"default:false" json:"autoAcceptOrders"`
-	AutoAcceptThreshold  float64   `gorm:"default:0" json:"autoAcceptThreshold"`
-	PushNewOrder         bool      `gorm:"default:true" json:"pushNewOrder"`
-	PushOrderUpdate      bool      `gorm:"default:true" json:"pushOrderUpdate"`
-	EmailDailySummary    bool      `gorm:"default:true" json:"emailDailySummary"`
-	EmailWeeklyReport    bool      `gorm:"default:true" json:"emailWeeklyReport"`
-	SmsNewOrder          bool      `gorm:"default:false" json:"smsNewOrder"`
-	CreatedAt            time.Time `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt            time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
+	ID                  uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ChefID              uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"chefId"`
+	AutoAcceptOrders    bool      `gorm:"default:false" json:"autoAcceptOrders"`
+	AutoAcceptThreshold float64   `gorm:"default:0" json:"autoAcceptThreshold"`
+	PushNewOrder        bool      `gorm:"default:true" json:"pushNewOrder"`
+	PushOrderUpdate     bool      `gorm:"default:true" json:"pushOrderUpdate"`
+	EmailDailySummary   bool      `gorm:"default:true" json:"emailDailySummary"`
+	EmailWeeklyReport   bool      `gorm:"default:true" json:"emailWeeklyReport"`
+	SmsNewOrder         bool      `gorm:"default:false" json:"smsNewOrder"`
+	CreatedAt           time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt           time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Chef ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
 }
@@ -190,27 +190,27 @@ func (c *ChefProfile) BeforeSave(*gorm.DB) error {
 
 // DTOs
 type ChefProfileResponse struct {
-	ID              uuid.UUID              `json:"id"`
-	UserID          uuid.UUID              `json:"userId"`
-	BusinessName    string                 `json:"businessName"`
-	Slug            string                 `json:"slug"`
-	Description     string                 `json:"description"`
-	ProfileImage    string                 `json:"profileImage"`
-	BannerImage     string                 `json:"bannerImage"`
-	Cuisines        []string               `json:"cuisines"`
-	Specialties     []string               `json:"specialties"`
-	PrepTime        string                 `json:"prepTime"`
-	MinimumOrder    float64                `json:"minimumOrder"`
-	DeliveryFee     float64                `json:"deliveryFee"`
-	PriceRange      string                 `json:"priceRange"`
-	ServiceRadius   float64                `json:"serviceRadius"`
-	Rating          float64                `json:"rating"`
-	TotalReviews    int                    `json:"totalReviews"`
-	TotalOrders     int                    `json:"totalOrders"`
-	IsVerified      bool                   `json:"verified"`
+	ID            uuid.UUID `json:"id"`
+	UserID        uuid.UUID `json:"userId"`
+	BusinessName  string    `json:"businessName"`
+	Slug          string    `json:"slug"`
+	Description   string    `json:"description"`
+	ProfileImage  string    `json:"profileImage"`
+	BannerImage   string    `json:"bannerImage"`
+	Cuisines      []string  `json:"cuisines"`
+	Specialties   []string  `json:"specialties"`
+	PrepTime      string    `json:"prepTime"`
+	MinimumOrder  float64   `json:"minimumOrder"`
+	DeliveryFee   float64   `json:"deliveryFee"`
+	PriceRange    string    `json:"priceRange"`
+	ServiceRadius float64   `json:"serviceRadius"`
+	Rating        float64   `json:"rating"`
+	TotalReviews  int       `json:"totalReviews"`
+	TotalOrders   int       `json:"totalOrders"`
+	IsVerified    bool      `json:"verified"`
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
 	// Set by the handler (needs a DB lookup), so it's false on the bare model.
-	FoodSafetyBadge bool                   `json:"foodSafetyBadge"`
+	FoodSafetyBadge bool `json:"foodSafetyBadge"`
 	// ProBadge: chef has an active premium subscription — the Verified-Pro badge
 	// (#44). Like FoodSafetyBadge it needs a DB lookup, so the handler populates it.
 	ProBadge        bool                   `json:"proBadge"`
@@ -221,7 +221,7 @@ type ChefProfileResponse struct {
 	KitchenPhotos   []string               `json:"kitchenPhotos"`
 	City            string                 `json:"city"`
 	State           string                 `json:"state"`
-	Country         string                 `json:"country"` // chef's PayoutCountry (ISO alpha-2)
+	Country         string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
 	Currency        string                 `json:"currency"` // ISO-4217, derived from country
 	Latitude        float64                `json:"latitude"`
 	Longitude       float64                `json:"longitude"`

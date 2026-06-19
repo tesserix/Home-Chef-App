@@ -106,10 +106,10 @@ func (c *shadowfaxClient) CreateTask(ctx context.Context, req ProviderDeliveryRe
 
 	// TODO(shadowfax-creds): confirm create-order response field names.
 	var out struct {
-		OrderID     string  `json:"order_id"`      // Shadowfax's task id
-		TrackingID  string  `json:"tracking_id"`   //
-		TrackingURL string  `json:"tracking_url"`  //
-		Price       float64 `json:"price"`         // what Shadowfax charges Fe3dr
+		OrderID     string  `json:"order_id"`     // Shadowfax's task id
+		TrackingID  string  `json:"tracking_id"`  //
+		TrackingURL string  `json:"tracking_url"` //
+		Price       float64 `json:"price"`        // what Shadowfax charges Fe3dr
 		PickupETA   int     `json:"pickup_eta_min"`
 		DropETA     int     `json:"drop_eta_min"`
 	}

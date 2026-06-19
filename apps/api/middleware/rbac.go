@@ -19,15 +19,15 @@ type Permission string
 
 const (
 	// Customer permissions
-	PermBrowseChefs      Permission = "browse_chefs"
-	PermViewMenu         Permission = "view_menu"
-	PermPlaceOrder       Permission = "place_order"
-	PermViewOwnOrders    Permission = "view_own_orders"
-	PermWriteReview      Permission = "write_review"
-	PermManageCart       Permission = "manage_cart"
-	PermViewSocialFeed   Permission = "view_social_feed"
-	PermLikeComment      Permission = "like_comment"
-	PermCreateCatering   Permission = "create_catering_request"
+	PermBrowseChefs    Permission = "browse_chefs"
+	PermViewMenu       Permission = "view_menu"
+	PermPlaceOrder     Permission = "place_order"
+	PermViewOwnOrders  Permission = "view_own_orders"
+	PermWriteReview    Permission = "write_review"
+	PermManageCart     Permission = "manage_cart"
+	PermViewSocialFeed Permission = "view_social_feed"
+	PermLikeComment    Permission = "like_comment"
+	PermCreateCatering Permission = "create_catering_request"
 
 	// Chef permissions
 	PermManageMenu          Permission = "manage_menu"
@@ -39,19 +39,19 @@ const (
 	PermSubmitCateringQuote Permission = "submit_catering_quote"
 
 	// Delivery permissions
-	PermViewDeliveries     Permission = "view_deliveries"
-	PermAcceptDelivery     Permission = "accept_delivery"
-	PermUpdateDelivery     Permission = "update_delivery"
+	PermViewDeliveries       Permission = "view_deliveries"
+	PermAcceptDelivery       Permission = "accept_delivery"
+	PermUpdateDelivery       Permission = "update_delivery"
 	PermViewDeliveryEarnings Permission = "view_delivery_earnings"
 
 	// Admin permissions
-	PermViewAllUsers       Permission = "view_all_users"
-	PermManageUsers        Permission = "manage_users"
-	PermVerifyChefs        Permission = "verify_chefs"
-	PermViewAllOrders      Permission = "view_all_orders"
-	PermViewAnalytics      Permission = "view_analytics"
-	PermManageSettings     Permission = "manage_settings"
-	PermModerateContent    Permission = "moderate_content"
+	PermViewAllUsers    Permission = "view_all_users"
+	PermManageUsers     Permission = "manage_users"
+	PermVerifyChefs     Permission = "verify_chefs"
+	PermViewAllOrders   Permission = "view_all_orders"
+	PermViewAnalytics   Permission = "view_analytics"
+	PermManageSettings  Permission = "manage_settings"
+	PermModerateContent Permission = "moderate_content"
 )
 
 // RolePermissions maps roles to their allowed permissions

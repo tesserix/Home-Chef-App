@@ -61,7 +61,7 @@ func (h *PromotionHandler) PurchaseFeaturedAd(c *gin.Context) {
 	// Check if already featured
 	if chef.IsFeatured && chef.FeaturedUntil != nil && chef.FeaturedUntil.After(time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":        "Your kitchen is already featured",
+			"error":         "Your kitchen is already featured",
 			"featuredUntil": chef.FeaturedUntil,
 		})
 		return
@@ -226,8 +226,8 @@ func (h *PromotionHandler) GetMyPromotions(c *gin.Context) {
 	database.DB.Where("chef_id = ?", chef.ID).Order("created_at DESC").Find(&promos)
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":       promos,
-		"isFeatured": chef.IsFeatured && chef.FeaturedUntil != nil && chef.FeaturedUntil.After(time.Now()),
+		"data":          promos,
+		"isFeatured":    chef.IsFeatured && chef.FeaturedUntil != nil && chef.FeaturedUntil.After(time.Now()),
 		"featuredUntil": chef.FeaturedUntil,
 	})
 }
@@ -252,9 +252,9 @@ func (h *PromotionHandler) AdminGetPromotionStats(c *gin.Context) {
 		Count(&totalCount)
 
 	c.JSON(http.StatusOK, gin.H{
-		"totalRevenue":    totalRevenue,
+		"totalRevenue":     totalRevenue,
 		"activePromotions": activeCount,
-		"totalPurchases":  totalCount,
+		"totalPurchases":   totalCount,
 	})
 }
 
@@ -263,8 +263,12 @@ func (h *PromotionHandler) AdminGetPromotionStats(c *gin.Context) {
 func (h *PromotionHandler) AdminListPromotions(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	if page < 1 { page = 1 }
-	if limit > 100 { limit = 100 }
+	if page < 1 {
+		page = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
 	offset := (page - 1) * limit
 
 	var total int64

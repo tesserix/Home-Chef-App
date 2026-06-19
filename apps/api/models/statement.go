@@ -44,9 +44,9 @@ type WeeklyStatement struct {
 	// gated on an Indian entity — see payment-structuring decision). Admin
 	// marks each statement paid after sending the transfer, recording the
 	// gateway/bank reference.
-	Status   PayoutStatus `gorm:"type:varchar(20);default:'pending';index" json:"status"`
-	PaidAt   *time.Time   `gorm:"" json:"paidAt,omitempty"`
-	PayoutRef string      `gorm:"" json:"payoutRef,omitempty"` // UTR / RazorpayX payout id / bank ref
+	Status    PayoutStatus `gorm:"type:varchar(20);default:'pending';index" json:"status"`
+	PaidAt    *time.Time   `gorm:"" json:"paidAt,omitempty"`
+	PayoutRef string       `gorm:"" json:"payoutRef,omitempty"` // UTR / RazorpayX payout id / bank ref
 
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }

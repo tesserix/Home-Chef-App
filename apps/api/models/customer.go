@@ -39,9 +39,9 @@ type CustomerProfileResponse struct {
 	CuisinePreferences  []string   `json:"cuisinePreferences"`
 	SpiceTolerance      string     `json:"spiceTolerance"`
 	HouseholdSize       string     `json:"householdSize"`
-	OnboardingCompleted bool   `json:"onboardingCompleted"`
-	OnboardingStep      int    `json:"onboardingStep"`
-	PreferredCurrency   string `json:"preferredCurrency"`
+	OnboardingCompleted bool       `json:"onboardingCompleted"`
+	OnboardingStep      int        `json:"onboardingStep"`
+	PreferredCurrency   string     `json:"preferredCurrency"`
 }
 
 func (cp *CustomerProfile) ToResponse(user *User) CustomerProfileResponse {

@@ -112,11 +112,11 @@ func TestRoundPaise_RoundsRupeesToPaise(t *testing.T) {
 		{0, 0},
 		{12.34, 1234},
 		{99.99, 9999},
-		{0.001, 0},    // 0.1 paise → 0
-		{0.999, 100},  // 99.9 paise → 100
-		{2.999, 300},  // 299.9 paise → 300
-		{2.5, 250},    // exact
-		{-2.5, -250},  // negative branch (round away from zero)
+		{0.001, 0},   // 0.1 paise → 0
+		{0.999, 100}, // 99.9 paise → 100
+		{2.999, 300}, // 299.9 paise → 300
+		{2.5, 250},   // exact
+		{-2.5, -250}, // negative branch (round away from zero)
 		{-12.34, -1234},
 	}
 	for _, c := range cases {

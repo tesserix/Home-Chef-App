@@ -150,9 +150,9 @@ func reconcileChefFCMTopics(userID interface{}, prev, next models.ChefNotificati
 	// Topics map 1:1 to category names so admin tooling and analytics
 	// can refer to them by the same string everywhere.
 	type topicSync struct {
-		topic    string
-		wasOn    bool
-		nowOn    bool
+		topic string
+		wasOn bool
+		nowOn bool
 	}
 	syncs := []topicSync{
 		{topic: "chef-new-orders", wasOn: prev.NewOrders, nowOn: next.NewOrders},

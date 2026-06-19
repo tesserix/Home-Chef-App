@@ -9,10 +9,10 @@ import (
 )
 
 type Review struct {
-	ID         uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	OrderID    uuid.UUID      `gorm:"type:uuid;uniqueIndex;not null" json:"orderId"`
-	CustomerID uuid.UUID      `gorm:"type:uuid;not null;index" json:"customerId"`
-	ChefID     uuid.UUID      `gorm:"type:uuid;not null;index" json:"chefId"`
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	OrderID    uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"orderId"`
+	CustomerID uuid.UUID `gorm:"type:uuid;not null;index" json:"customerId"`
+	ChefID     uuid.UUID `gorm:"type:uuid;not null;index" json:"chefId"`
 
 	// Ratings (1-5 stars)
 	OverallRating  int `gorm:"not null" json:"overallRating"`
@@ -29,12 +29,12 @@ type Review struct {
 	Images  pq.StringArray `gorm:"type:text[]" json:"images"`
 
 	// Moderation
-	IsApproved bool   `gorm:"default:true" json:"isApproved"`
-	IsHidden   bool   `gorm:"default:false" json:"isHidden"`
+	IsApproved   bool   `gorm:"default:true" json:"isApproved"`
+	IsHidden     bool   `gorm:"default:false" json:"isHidden"`
 	HiddenReason string `gorm:"" json:"hiddenReason,omitempty"`
 
 	// Response
-	ChefResponse   string     `gorm:"type:text" json:"chefResponse,omitempty"`
+	ChefResponse    string     `gorm:"type:text" json:"chefResponse,omitempty"`
 	ChefRespondedAt *time.Time `gorm:"" json:"chefRespondedAt,omitempty"`
 
 	// Helpful votes

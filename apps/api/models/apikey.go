@@ -15,7 +15,7 @@ import (
 type ApiKey struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	Name       string     `gorm:"not null" json:"name"`
-	Prefix     string     `gorm:"index;not null" json:"prefix"` // e.g. "hc_abcd1234" — shown in UI
+	Prefix     string     `gorm:"index;not null" json:"prefix"`  // e.g. "hc_abcd1234" — shown in UI
 	KeyHash    string     `gorm:"uniqueIndex;not null" json:"-"` // SHA-256(full key)
 	Scopes     string     `gorm:"type:text" json:"scopes"`       // comma-separated: "read,write,admin"
 	CreatedBy  uuid.UUID  `gorm:"type:uuid;index" json:"createdBy"`

@@ -126,9 +126,9 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	}
 
 	review := models.Review{
-		OrderID:        parsedOrderID,
-		CustomerID:     userID,
-		ChefID:         order.ChefID,
+		OrderID:         parsedOrderID,
+		CustomerID:      userID,
+		ChefID:          order.ChefID,
 		OverallRating:   overallRating,
 		FoodRating:      foodRating,
 		DeliveryRating:  deliveryRating,

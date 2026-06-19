@@ -28,13 +28,13 @@ type tierPricing struct {
 }
 
 type subscriptionPricingResponse struct {
-	Country              string      `json:"country"`
-	Currency             string      `json:"currency"`
-	TrialDays            int         `json:"trialDays"`
-	MinEarningsThreshold float64     `json:"minEarningsThreshold"`
-	Standard             tierPricing `json:"standard"`
-	Premium              tierPricing `json:"premium"`
-	PremiumCommissionRate float64    `json:"premiumCommissionRate"`
+	Country               string      `json:"country"`
+	Currency              string      `json:"currency"`
+	TrialDays             int         `json:"trialDays"`
+	MinEarningsThreshold  float64     `json:"minEarningsThreshold"`
+	Standard              tierPricing `json:"standard"`
+	Premium               tierPricing `json:"premium"`
+	PremiumCommissionRate float64     `json:"premiumCommissionRate"`
 }
 
 func pricingCountry(c *gin.Context) string {
@@ -56,12 +56,12 @@ func (h *AdminHandler) GetSubscriptionPricing(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, subscriptionPricingResponse{
-		Country:              cc,
-		Currency:             cfg.Currency,
-		TrialDays:            cfg.TrialDays,
-		MinEarningsThreshold: cfg.MinEarningsThreshold,
-		Standard:             tierPricing{Monthly: cfg.MonthlyPrice, Quarterly: cfg.QuarterlyPrice, Yearly: cfg.YearlyPrice},
-		Premium:              tierPricing{Monthly: cfg.PremiumMonthlyPrice, Quarterly: cfg.PremiumQuarterlyPrice, Yearly: cfg.PremiumYearlyPrice},
+		Country:               cc,
+		Currency:              cfg.Currency,
+		TrialDays:             cfg.TrialDays,
+		MinEarningsThreshold:  cfg.MinEarningsThreshold,
+		Standard:              tierPricing{Monthly: cfg.MonthlyPrice, Quarterly: cfg.QuarterlyPrice, Yearly: cfg.YearlyPrice},
+		Premium:               tierPricing{Monthly: cfg.PremiumMonthlyPrice, Quarterly: cfg.PremiumQuarterlyPrice, Yearly: cfg.PremiumYearlyPrice},
 		PremiumCommissionRate: cfg.PremiumCommissionRate,
 	})
 }
@@ -73,7 +73,7 @@ func (h *AdminHandler) UpdateSubscriptionPricing(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
 	var req struct {
-		Country  string `json:"country"`
+		Country  string  `json:"country"`
 		Currency *string `json:"currency"`
 		Standard *struct {
 			Monthly   *float64 `json:"monthly"`
@@ -143,12 +143,12 @@ func (h *AdminHandler) UpdateSubscriptionPricing(c *gin.Context) {
 	// Return the fresh effective pricing so the admin UI can confirm.
 	cfg, _ := services.GetPlanSettings(cc, models.SubscriberChef)
 	c.JSON(http.StatusOK, subscriptionPricingResponse{
-		Country:              cc,
-		Currency:             cfg.Currency,
-		TrialDays:            cfg.TrialDays,
-		MinEarningsThreshold: cfg.MinEarningsThreshold,
-		Standard:             tierPricing{Monthly: cfg.MonthlyPrice, Quarterly: cfg.QuarterlyPrice, Yearly: cfg.YearlyPrice},
-		Premium:              tierPricing{Monthly: cfg.PremiumMonthlyPrice, Quarterly: cfg.PremiumQuarterlyPrice, Yearly: cfg.PremiumYearlyPrice},
+		Country:               cc,
+		Currency:              cfg.Currency,
+		TrialDays:             cfg.TrialDays,
+		MinEarningsThreshold:  cfg.MinEarningsThreshold,
+		Standard:              tierPricing{Monthly: cfg.MonthlyPrice, Quarterly: cfg.QuarterlyPrice, Yearly: cfg.YearlyPrice},
+		Premium:               tierPricing{Monthly: cfg.PremiumMonthlyPrice, Quarterly: cfg.PremiumQuarterlyPrice, Yearly: cfg.PremiumYearlyPrice},
 		PremiumCommissionRate: cfg.PremiumCommissionRate,
 	})
 }

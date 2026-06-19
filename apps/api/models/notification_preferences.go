@@ -45,10 +45,10 @@ type ChefNotificationPreferences struct {
 func DefaultNotificationPreferences(chefID uuid.UUID) ChefNotificationPreferences {
 	return ChefNotificationPreferences{
 		ChefID:            chefID,
-		NewOrders:        true,
-		Payouts:          true,
-		CustomerMessages: true,
-		Promo:            false,
+		NewOrders:         true,
+		Payouts:           true,
+		CustomerMessages:  true,
+		Promo:             false,
 		QuietHoursEnabled: false,
 		QuietHoursStart:   "22:00",
 		QuietHoursEnd:     "07:00",
