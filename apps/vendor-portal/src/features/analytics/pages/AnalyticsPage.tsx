@@ -6,6 +6,7 @@ import { apiClient } from '@/shared/services/api-client';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 
 interface AnalyticsData {
+  summary?: { orders: number; revenue: number; aov: number; repeatRate: number; prevRevenue: number };
   orderTrends: { labels: string[]; data: number[] };
   revenueTrends: { labels: string[]; data: number[] };
   popularItems: { name: string; orders: number; percentage: number }[];
@@ -13,12 +14,40 @@ interface AnalyticsData {
   revenueByCategory: { category: string; revenue: number; percentage: number }[];
 }
 
+interface SubscriptionMetrics {
+  activePlans: number;
+  subscribers: number;
+  churnRate: number;
+  adherenceRate: number;
+}
+
+interface DemandForecast {
+  date: string;
+  subscriptionMeals: number;
+  subscriptionLunch: number;
+  subscriptionDinner: number;
+  alaCarteForecast: number;
+  totalExpected: number;
+  likelyDishes: { name: string; expected: number }[];
+  basis: string;
+}
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
 
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['chef-analytics', period],
     queryFn: () => apiClient.get<AnalyticsData>('/chef/analytics', { period }),
+  });
+  const { data: subs } = useQuery({
+    queryKey: ['chef-analytics-subscriptions'],
+    queryFn: () => apiClient.get<SubscriptionMetrics>('/chef/analytics/subscriptions'),
+  });
+  const { data: forecast } = useQuery({
+    queryKey: ['chef-analytics-forecast'],
+    queryFn: () => apiClient.get<DemandForecast>('/chef/analytics/forecast'),
   });
 
   if (isLoading || !analytics) {
@@ -72,6 +101,44 @@ export default function AnalyticsPage() {
           })}
         </div>
       </motion.div>
+
+      {/* Summary stat cards (#228) */}
+      {analytics.summary && (
+        <motion.div variants={fadeInUp} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Revenue" value={inr(analytics.summary.revenue)} />
+          <StatCard label="Orders" value={String(analytics.summary.orders)} />
+          <StatCard label="Avg order" value={inr(analytics.summary.aov)} />
+          <StatCard label="Repeat customers" value={`${analytics.summary.repeatRate}%`} sub="ordered 2+ times" />
+        </motion.div>
+      )}
+
+      {/* Tomorrow's demand forecast (#230) */}
+      {forecast && forecast.totalExpected > 0 && (
+        <motion.div variants={fadeInUp} className="rounded-xl bg-herb-tint p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">Tomorrow's demand</h2>
+          <p className="mt-1 font-display text-3xl font-semibold text-ink">~{forecast.totalExpected} meals</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            {forecast.subscriptionMeals} subscription ({forecast.subscriptionLunch} lunch · {forecast.subscriptionDinner} dinner)
+            {' '}+ ~{forecast.alaCarteForecast} à-la-carte
+          </p>
+          {forecast.likelyDishes.length > 0 && (
+            <p className="mt-2 text-xs text-ink-soft">
+              Likely: {forecast.likelyDishes.map((d) => `${d.name} (~${d.expected})`).join(', ')}
+            </p>
+          )}
+          <p className="mt-2 text-xs text-ink-muted">{forecast.basis}</p>
+        </motion.div>
+      )}
+
+      {/* Subscription health (#229) */}
+      {subs && (subs.activePlans > 0 || subs.subscribers > 0) && (
+        <motion.div variants={fadeInUp} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Active plans" value={String(subs.activePlans)} />
+          <StatCard label="Subscribers" value={String(subs.subscribers)} />
+          <StatCard label="Churn" value={`${subs.churnRate}%`} />
+          <StatCard label="Adherence" value={`${subs.adherenceRate}%`} sub="days delivered" />
+        </motion.div>
+      )}
 
       {/* Order Trends */}
       <motion.div variants={fadeInUp} className="rounded-xl border border-mist bg-bone p-6">
@@ -208,5 +275,16 @@ export default function AnalyticsPage() {
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+// Reusable headline stat tile (#49).
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-xl border border-mist bg-bone p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-ink">{value}</p>
+      {sub ? <p className="mt-0.5 text-xs text-ink-muted">{sub}</p> : null}
+    </div>
   );
 }

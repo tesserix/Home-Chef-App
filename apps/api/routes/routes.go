@@ -451,6 +451,8 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/settings", chefHandler.GetChefSettings)
 			chefDashboard.PUT("/settings", chefHandler.UpdateChefSettings)
 			chefDashboard.GET("/analytics", chefHandler.GetChefAnalytics)
+			chefDashboard.GET("/analytics/subscriptions", chefHandler.GetSubscriptionMetrics) // #229
+			chefDashboard.GET("/analytics/forecast", chefHandler.GetDemandForecast)           // #230
 			chefDashboard.GET("/payout", chefHandler.GetPayoutDetails)
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
