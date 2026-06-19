@@ -267,6 +267,102 @@ func (h *MessagingHandler) AdminSendMessage(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"data": m})
 }
 
+// ── Attachments (#304) ──────────────────────────────────────────────────────
+
+// uploadAttachment is the shared upload path for customer + chef. It validates,
+// stores the file in GridFS, and records a pending attachment message.
+func (h *MessagingHandler) uploadAttachment(c *gin.Context, role string) {
+	svc := svcOr503(c)
+	if svc == nil {
+		return
+	}
+	userID, _ := middleware.GetUserID(c)
+	orderID, err := orderIDFromParam(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order id"})
+		return
+	}
+	custID, chefID, ok := orderParticipants(c, orderID, userID, role)
+	if !ok {
+		return
+	}
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A file is required"})
+		return
+	}
+	defer file.Close()
+	contentType := header.Header.Get("Content-Type")
+	if !services.AllowedChatAttachmentType(contentType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported file type (images or PDF only)"})
+		return
+	}
+	if header.Size > services.MaxChatAttachmentBytes() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large (max 10 MB)"})
+		return
+	}
+	attachmentID, err := services.UploadChatAttachment(c.Request.Context(), header.Filename, contentType, file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload attachment"})
+		return
+	}
+	caption := c.PostForm("caption")
+	var m *services.MediatedMessage
+	if role == services.MsgRoleChef {
+		m, err = svc.ChefSendAttachment(c.Request.Context(), orderID.String(), custID, chefID, attachmentID, header.Filename, contentType, caption)
+	} else {
+		m, err = svc.CustomerSendAttachment(c.Request.Context(), orderID.String(), custID, chefID, attachmentID, header.Filename, contentType, caption)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to attach file"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": m})
+}
+
+// CustomerUploadAttachment — POST /customer/orders/:id/attachments (multipart: file, caption?)
+func (h *MessagingHandler) CustomerUploadAttachment(c *gin.Context) {
+	h.uploadAttachment(c, services.MsgRoleCustomer)
+}
+
+// ChefUploadAttachment — POST /chef/orders/:orderId/attachments
+func (h *MessagingHandler) ChefUploadAttachment(c *gin.Context) {
+	h.uploadAttachment(c, services.MsgRoleChef)
+}
+
+// DownloadAttachment — GET /chat/attachments/:id. Streams the file when the
+// requester is authorized (admin always; a participant for their own or a
+// relayed message).
+func (h *MessagingHandler) DownloadAttachment(c *gin.Context) {
+	svc := svcOr503(c)
+	if svc == nil {
+		return
+	}
+	userID, _ := middleware.GetUserID(c)
+	var user models.User
+	if err := database.DB.Select("id", "role").First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	attachmentID := c.Param("id")
+	msg, ok, err := svc.AuthorizeAttachmentDownload(c.Request.Context(), attachmentID, userID.String(), string(user.Role))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Attachment not found"})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Not authorized to view this attachment"})
+		return
+	}
+	c.Header("Content-Type", msg.ContentType)
+	c.Header("Content-Disposition", "inline; filename=\""+msg.Filename+"\"")
+	c.Header("Cache-Control", "private, no-store")
+	if err := services.DownloadChatAttachment(c.Request.Context(), attachmentID, c.Writer); err != nil {
+		// Headers may already be flushed; nothing more we can do but log upstream.
+		return
+	}
+}
+
 func messagingActionError(c *gin.Context, err error) {
 	switch err {
 	case services.ErrMessageNotFound:

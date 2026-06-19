@@ -436,6 +436,7 @@ func SetupRouter() *gin.Engine {
 			// In-app messaging (#53) — admin-mediated, order-scoped.
 			chefDashboard.POST("/orders/:orderId/messages", messagingHandler.ChefSendMessage)
 			chefDashboard.GET("/orders/:orderId/messages", messagingHandler.ChefListMessages)
+			chefDashboard.POST("/orders/:orderId/attachments", messagingHandler.ChefUploadAttachment)
 			// Chef-side cancellation (Wave 2). Whole-order issues a full
 			// Razorpay refund; per-line issues a partial and recomputes
 			// the order totals so the remaining items continue prep.
@@ -560,6 +561,15 @@ func SetupRouter() *gin.Engine {
 			chat.GET("/:roomId/messages", chatHandler.GetMessages)
 			chat.POST("/:roomId/messages", chatHandler.SendMessage)
 			chat.PUT("/:roomId/messages/:messageId/read", chatHandler.MarkAsRead)
+		}
+
+		// Mediated-chat attachment download (#53/#304) — separate prefix so it
+		// doesn't collide with the legacy /chat/:roomId wildcard. Any
+		// authenticated participant; authorization is enforced in the handler.
+		chatAttachments := v1.Group("/chat-attachments")
+		chatAttachments.Use(bffAuth(bffKey, bffWindow))
+		{
+			chatAttachments.GET("/:id", messagingHandler.DownloadAttachment)
 		}
 
 		// Support ticket routes (authenticated)
@@ -990,6 +1000,7 @@ func SetupRouter() *gin.Engine {
 			// In-app messaging (#53) — admin-mediated, order-scoped.
 			customer.POST("/orders/:id/messages", messagingHandler.CustomerSendMessage)
 			customer.GET("/orders/:id/messages", messagingHandler.CustomerListMessages)
+			customer.POST("/orders/:id/attachments", messagingHandler.CustomerUploadAttachment)
 
 			// Referral program (#38)
 			customer.GET("/referral", referralHandler.GetMyReferral)

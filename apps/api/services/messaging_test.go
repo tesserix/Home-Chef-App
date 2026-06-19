@@ -79,6 +79,14 @@ func (f *fakeStore) ListPendingRelay(_ context.Context) ([]MediatedMessage, erro
 	}
 	return out, nil
 }
+func (f *fakeStore) GetMessageByAttachment(_ context.Context, attachmentID string) (*MediatedMessage, error) {
+	for _, id := range f.order {
+		if m := f.msgs[id]; m.AttachmentID == attachmentID {
+			return m, nil
+		}
+	}
+	return nil, ErrMessageNotFound
+}
 func (f *fakeStore) TouchConversation(_ context.Context, conversationID string, at time.Time) error {
 	if c, ok := f.convs[conversationID]; ok {
 		c.LastMessageAt = &at
@@ -188,6 +196,45 @@ func TestAdminSend_DeliveredImmediately(t *testing.T) {
 
 	customerThread, _ := svc.ThreadFor(context.Background(), conv.ID, MsgRoleCustomer)
 	require.Len(t, customerThread, 1)
+}
+
+func TestCustomerSendAttachment_HeldPendingWithMeta(t *testing.T) {
+	svc := NewMessagingService(newFakeStore())
+	order, cust, chef, _ := ids()
+
+	m, err := svc.CustomerSendAttachment(context.Background(), order, cust, chef, "att-123", "prescription.pdf", "application/pdf", "")
+	require.NoError(t, err)
+	require.Equal(t, RelayPending, m.RelayStatus) // mediated like text
+	require.Equal(t, "att-123", m.AttachmentID)
+	require.Equal(t, "prescription.pdf", m.Filename)
+	require.Equal(t, "application/pdf", m.ContentType)
+}
+
+func TestAuthorizeAttachmentDownload_Rules(t *testing.T) {
+	stubMessagingPush(t)
+	svc := NewMessagingService(newFakeStore())
+	order, cust, chef, admin := ids()
+	other := uuid.NewString()
+
+	// Customer attaches a file (pending).
+	m, err := svc.CustomerSendAttachment(context.Background(), order, cust, chef, "att-x", "photo.jpg", "image/jpeg", "")
+	require.NoError(t, err)
+
+	check := func(userID, role string) bool {
+		_, ok, err := svc.AuthorizeAttachmentDownload(context.Background(), "att-x", userID, role)
+		require.NoError(t, err)
+		return ok
+	}
+
+	require.True(t, check(admin, MsgRoleAdmin))   // admin always
+	require.True(t, check(cust, MsgRoleCustomer))  // sender can re-download
+	require.False(t, check(chef, MsgRoleChef))     // recipient denied while pending
+	require.False(t, check(other, MsgRoleCustomer)) // non-participant denied
+
+	// After relay, the recipient (chef) may download.
+	_, err = svc.AdminRelay(context.Background(), m.ID, admin)
+	require.NoError(t, err)
+	require.True(t, check(chef, MsgRoleChef))
 }
 
 func TestCustomerSend_EmptyRejected(t *testing.T) {

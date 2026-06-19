@@ -68,8 +68,12 @@ type MediatedMessage struct {
 	RelayStatus    string     `bson:"relayStatus" json:"relayStatus"`
 	RelayedByID    string     `bson:"relayedById,omitempty" json:"relayedById,omitempty"`
 	RelayedAt      *time.Time `bson:"relayedAt,omitempty" json:"relayedAt,omitempty"`
-	AttachmentID   string     `bson:"attachmentId,omitempty" json:"attachmentId,omitempty"`
-	CreatedAt      time.Time  `bson:"createdAt" json:"createdAt"`
+	// Attachment (#304) — the file lives in GridFS; these describe it for the UI
+	// + the authorized download.
+	AttachmentID  string    `bson:"attachmentId,omitempty" json:"attachmentId,omitempty"`
+	Filename      string    `bson:"filename,omitempty" json:"filename,omitempty"`
+	ContentType   string    `bson:"contentType,omitempty" json:"contentType,omitempty"`
+	CreatedAt     time.Time `bson:"createdAt" json:"createdAt"`
 }
 
 // MessageStore is the persistence boundary (Mongo in prod, a fake in tests).
@@ -82,6 +86,7 @@ type MessageStore interface {
 	SetRelayStatus(ctx context.Context, id, status, adminID string, at time.Time) error
 	ListPendingRelay(ctx context.Context) ([]MediatedMessage, error)
 	TouchConversation(ctx context.Context, conversationID string, at time.Time) error
+	GetMessageByAttachment(ctx context.Context, attachmentID string) (*MediatedMessage, error)
 }
 
 // pushSender is the push hook (so tests can stub it); defaults to the real push.
@@ -239,6 +244,73 @@ func (s *MessagingService) ThreadFor(ctx context.Context, conversationID, role s
 // AdminInbox returns all messages awaiting relay (the mediation queue).
 func (s *MessagingService) AdminInbox(ctx context.Context) ([]MediatedMessage, error) {
 	return s.store.ListPendingRelay(ctx)
+}
+
+// sendAttachment persists a pending attachment message (the file is already in
+// GridFS). Caption is optional; the content falls back to the filename.
+func (s *MessagingService) sendAttachment(ctx context.Context, conv *Conversation, senderID, senderRole, recipientRole, attachmentID, filename, contentType, caption string) (*MediatedMessage, error) {
+	content := caption
+	if content == "" {
+		content = "📎 " + filename
+	}
+	sanitized, hasPII, _ := FilterChatMessage(content)
+	now := time.Now()
+	msg := &MediatedMessage{
+		ID: uuid.NewString(), ConversationID: conv.ID, OrderID: conv.OrderID,
+		SenderID: senderID, SenderRole: senderRole, RecipientRole: recipientRole,
+		Content: sanitized, PIIDetected: hasPII, RelayStatus: RelayPending,
+		AttachmentID: attachmentID, Filename: filename, ContentType: contentType, CreatedAt: now,
+	}
+	if err := s.store.InsertMessage(ctx, msg); err != nil {
+		return nil, err
+	}
+	_ = s.store.TouchConversation(ctx, conv.ID, now)
+	return msg, nil
+}
+
+// CustomerSendAttachment records a customer's attachment to the chef (pending relay).
+func (s *MessagingService) CustomerSendAttachment(ctx context.Context, orderID, customerID, chefID, attachmentID, filename, contentType, caption string) (*MediatedMessage, error) {
+	conv, err := s.store.GetOrCreateConversation(ctx, orderID, customerID, chefID)
+	if err != nil {
+		return nil, err
+	}
+	return s.sendAttachment(ctx, conv, customerID, MsgRoleCustomer, MsgRoleChef, attachmentID, filename, contentType, caption)
+}
+
+// ChefSendAttachment records a chef's attachment to the customer (pending relay).
+func (s *MessagingService) ChefSendAttachment(ctx context.Context, orderID, customerID, chefID, attachmentID, filename, contentType, caption string) (*MediatedMessage, error) {
+	conv, err := s.store.GetOrCreateConversation(ctx, orderID, customerID, chefID)
+	if err != nil {
+		return nil, err
+	}
+	return s.sendAttachment(ctx, conv, chefID, MsgRoleChef, MsgRoleCustomer, attachmentID, filename, contentType, caption)
+}
+
+// AuthorizeAttachmentDownload checks that requesterUserID may download the
+// attachment, and returns the message (for its content type). Admins always may;
+// a participant may download the sender's own message, or a relayed one addressed
+// to them. Returns the message + ok.
+func (s *MessagingService) AuthorizeAttachmentDownload(ctx context.Context, attachmentID, requesterUserID, requesterRole string) (*MediatedMessage, bool, error) {
+	msg, err := s.store.GetMessageByAttachment(ctx, attachmentID)
+	if err != nil {
+		return nil, false, err
+	}
+	if requesterRole == MsgRoleAdmin {
+		return msg, true, nil
+	}
+	conv, err := s.store.GetConversation(ctx, msg.ConversationID)
+	if err != nil {
+		return nil, false, err
+	}
+	isParticipant := requesterUserID == conv.CustomerID || requesterUserID == conv.ChefID
+	if !isParticipant {
+		return msg, false, nil
+	}
+	// The sender can always re-download; the recipient only once relayed.
+	if msg.SenderID == requesterUserID || msg.RelayStatus == RelayRelayed {
+		return msg, true, nil
+	}
+	return msg, false, nil
 }
 
 // OrderThread resolves (or creates) the order's conversation and returns the
