@@ -861,6 +861,20 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
+	// Forward the lifecycle transition to the Order saga (#122) when enabled —
+	// the saga awaits these as signals. No-op when ORDER_SAGA_ENABLED is off, so
+	// this is invisible until ops cuts over.
+	switch order.Status {
+	case models.OrderStatusAccepted:
+		services.SignalOrderChefDecision(order.ID, true, "")
+	case models.OrderStatusReady:
+		services.SignalOrderReady(order.ID)
+	case models.OrderStatusDelivered:
+		services.SignalOrderDelivered(order.ID)
+	case models.OrderStatusCancelled:
+		services.SignalOrderCancelled(order.ID, "cancelled by chef")
+	}
+
 	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
 	// the request path; idempotent so repeated "ready" updates are safe. A
 	// dispatch failure must not fail the chef's status update.

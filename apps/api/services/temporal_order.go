@@ -1,0 +1,134 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/homechef/api/config"
+	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
+	apitemporal "github.com/homechef/api/temporal"
+	"github.com/homechef/api/temporal/workflows"
+)
+
+// temporal_order.go — start + signal forwarding for the Order lifecycle Saga
+// (#122), plus the idempotent service ops its activities wrap. Everything here is
+// gated behind config.OrderSagaEnabled (default OFF) so prod behaviour is
+// unchanged until ops validates the saga on the cluster; the synchronous HTTP
+// handlers stay authoritative meanwhile. Because the activities are idempotent,
+// enabling the saga never double-acts alongside any residual handler logic.
+
+func orderSagaID(orderID uuid.UUID) string { return "homechef:order:" + orderID.String() }
+
+// sagaActive reports whether the saga should be driven (Temporal up + flag on).
+func sagaActive() bool {
+	return temporalRT != nil && config.AppConfig != nil && config.AppConfig.OrderSagaEnabled
+}
+
+// StartOrderSaga durably starts the post-payment order lifecycle. Idempotent on
+// the order-keyed workflow ID, so a re-trigger (e.g. a retried payment webhook)
+// never starts a second saga. No-op when the saga is disabled.
+func StartOrderSaga(orderID uuid.UUID) {
+	if !sagaActive() {
+		return
+	}
+	id := orderSagaID(orderID)
+	if _, err := temporalRT.Start(context.Background(), apitemporal.TaskQueueOrders, id, workflows.OrderSagaWorkflow, workflows.OrderSagaInput{OrderID: orderID}); err != nil {
+		// An "already started" error is the expected idempotent case; anything
+		// else is logged (the synchronous handlers remain the safety net).
+		log.Printf("order saga: start failed for %s: %v", orderID, err)
+	}
+}
+
+// signalOrderSaga forwards a lifecycle signal to a running saga. Best-effort: if
+// the saga isn't running (flag flipped on after the order was paid) the signal
+// is dropped with a log — the synchronous handler already did the work.
+func signalOrderSaga(orderID uuid.UUID, signal string, arg any) {
+	if !sagaActive() {
+		return
+	}
+	if err := temporalRT.Signal(context.Background(), orderSagaID(orderID), signal, arg); err != nil {
+		log.Printf("order saga: signal %s for %s dropped: %v", signal, orderID, err)
+	}
+}
+
+// SignalOrderChefDecision forwards the chef's accept/reject.
+func SignalOrderChefDecision(orderID uuid.UUID, accepted bool, reason string) {
+	signalOrderSaga(orderID, workflows.SignalChefDecision, workflows.ChefDecisionSignal{Accepted: accepted, Reason: reason})
+}
+
+// SignalOrderReady forwards the chef marking the order ready for pickup.
+func SignalOrderReady(orderID uuid.UUID) { signalOrderSaga(orderID, workflows.SignalOrderReady, nil) }
+
+// SignalOrderDelivered forwards the delivery completion.
+func SignalOrderDelivered(orderID uuid.UUID) {
+	signalOrderSaga(orderID, workflows.SignalOrderDelivered, nil)
+}
+
+// SignalOrderCancelled forwards a cancellation so the saga compensates (refund).
+func SignalOrderCancelled(orderID uuid.UUID, reason string) {
+	signalOrderSaga(orderID, workflows.SignalOrderCancelled, workflows.OrderCancelSignal{Reason: reason})
+}
+
+// ─── Activity implementations (wired onto the workflows.* Funcs by the worker) ──
+
+// NotifyChefNewOrder publishes the new-order notification to the chef via the
+// transactional outbox. Mirrors what CreateOrder enqueues; safe to call from the
+// retried saga activity.
+func NotifyChefNewOrder(_ context.Context, orderID uuid.UUID) error {
+	var order models.Order
+	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
+		return fmt.Errorf("notify chef: load order %s: %w", orderID, err)
+	}
+	return EnqueueOrderEvent(database.DB, SubjectChefNewOrder, OrderEvent{
+		OrderID:     order.ID,
+		OrderNumber: order.OrderNumber,
+		CustomerID:  order.CustomerID,
+		ChefID:      order.ChefID,
+		Status:      string(order.Status),
+		Total:       order.Total,
+	})
+}
+
+// SettleOrderPayouts releases a delivered order's held payouts. The actual Route
+// transfer release lands in the payments slice (#123); for now it's a logged
+// no-op so the saga's happy path completes end-to-end.
+func SettleOrderPayouts(_ context.Context, orderID uuid.UUID) error {
+	log.Printf("order saga: settle payouts for %s (release deferred to #123)", orderID)
+	return nil
+}
+
+// CompensateOrderRefund is the saga's compensation — refund the customer to
+// wallet store credit and mark the order refunded. Idempotent: the RefundedAt
+// guard + the wallet idempotency key make a retry a no-op. (Gateway refund to
+// the original method is upgraded in #123; wallet credit is the existing,
+// fully-idempotent refund path used elsewhere.)
+func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) error {
+	var order models.Order
+	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
+		return fmt.Errorf("refund: load order %s: %w", orderID, err)
+	}
+	if order.RefundedAt != nil {
+		return nil // already refunded
+	}
+	if order.Total > 0 {
+		if _, err := CreditWallet(database.DB, order.CustomerID, order.Total,
+			models.WalletSourceRefund, &order.ID,
+			fmt.Sprintf("Order %s refunded: %s", order.OrderNumber, reason),
+			"saga-refund:"+order.ID.String(), nil); err != nil {
+			return fmt.Errorf("refund: credit wallet for %s: %w", orderID, err)
+		}
+	}
+	now := time.Now()
+	return database.DB.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]any{
+		"status":         models.OrderStatusRefunded,
+		"payment_status": models.PaymentRefunded,
+		"refunded_at":    &now,
+		"refund_amount":  order.Total,
+		"refund_reason":  reason,
+	}).Error
+}
