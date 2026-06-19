@@ -172,9 +172,14 @@ func (h *FavoriteHandler) ListFavoriteDishes(c *gin.Context) {
 		return
 	}
 
-	responses := make([]models.FavoriteDishResponse, len(favorites))
-	for i, fav := range favorites {
-		responses[i] = models.FavoriteDishResponse{
+	responses := make([]models.FavoriteDishResponse, 0, len(favorites))
+	for _, fav := range favorites {
+		// The Preload skips soft-deleted dishes, leaving a zero-valued MenuItem.
+		// Skip those so a deleted dish doesn't render as a blank ₹0 row.
+		if fav.MenuItem.ID == uuid.Nil {
+			continue
+		}
+		responses = append(responses, models.FavoriteDishResponse{
 			ID:         fav.ID,
 			MenuItemID: fav.MenuItemID,
 			MenuItem:   fav.MenuItem.ToResponse(),
@@ -184,7 +189,7 @@ func (h *FavoriteHandler) ListFavoriteDishes(c *gin.Context) {
 				ProfileImage: fav.MenuItem.Chef.ProfileImage,
 			},
 			CreatedAt: fav.CreatedAt,
-		}
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{

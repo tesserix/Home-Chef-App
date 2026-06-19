@@ -142,7 +142,8 @@ export default function OrderDetailPage() {
         cart.clearCart();
       }
       for (const it of available) {
-        const base = it.unitPrice - it.modifiers.reduce((s, m) => s + m.priceDelta, 0);
+        const mods = it.modifiers ?? [];
+        const base = it.unitPrice - mods.reduce((s, m) => s + m.priceDelta, 0);
         // Construct the minimal MenuItem the cart needs; addItem re-applies the
         // modifier deltas, so we pass the base price.
         const menuItem = {
@@ -158,7 +159,7 @@ export default function OrderDetailPage() {
           isFeatured: false,
           serves: 1,
         } as MenuItem;
-        cart.addItem(menuItem, it.quantity, it.notes, it.modifiers.length ? it.modifiers : undefined);
+        cart.addItem(menuItem, it.quantity, it.notes, mods.length ? mods : undefined);
       }
       const dropped = res.items.length - available.length;
       if (dropped > 0) toast.warning(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available`);

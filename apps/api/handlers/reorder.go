@@ -123,11 +123,14 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 			continue
 		}
 
+		// Always emit a non-nil modifiers array so clients can safely
+		// .map/.reduce over it (a Go nil slice would marshal to JSON null).
 		line := ReorderItemResponse{
 			MenuItemID: oi.MenuItemID,
 			Name:       oi.Name,
 			Quantity:   oi.Quantity,
 			Notes:      oi.Notes,
+			Modifiers:  []ReorderModifier{},
 		}
 
 		var mi models.MenuItem
@@ -141,6 +144,10 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 
 		line.ImageURL = mi.ImageURL
 		switch {
+		case mi.ChefID != order.ChefID:
+			// Defensive: never resolve a dish that isn't this chef's.
+			line.Available = false
+			line.Reason = "No longer on the menu"
 		case !mi.IsAvailable:
 			line.Available = false
 			line.Reason = "Currently unavailable"
@@ -156,7 +163,9 @@ func (h *OrderHandler) ReorderOrder(c *gin.Context) {
 				delta += m.PriceDelta
 			}
 			line.Available = true
-			line.Modifiers = mods
+			if len(mods) > 0 {
+				line.Modifiers = mods
+			}
 			line.UnitPrice = mi.Price + delta
 			line.NeedsReview = !allMatched
 		}
