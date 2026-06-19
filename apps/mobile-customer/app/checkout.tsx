@@ -1,8 +1,8 @@
 // Checkout screen — address selection, order summary, then Razorpay payment.
 //
-// Payment runs in-app via the WebView screen at app/payment/checkout.tsx
-// (Razorpay Standard Checkout). This screen creates the order + Razorpay order,
-// then hands off to that screen, which verifies the result server-side.
+// This screen creates the order, then calls startOrderPayment (lib/payment),
+// which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
+// routes to /payment/result. No WebView, no visible web page load.
 
 import { useEffect, useState } from 'react';
 import {
@@ -33,7 +33,7 @@ import {
   useAddressAutocomplete,
   type AddressSuggestion,
 } from '../hooks/useLocations';
-import { api } from '../lib/api';
+import { startOrderPayment } from '../lib/payment';
 import { friendlyErrorMessage } from '../lib/errors';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
@@ -53,25 +53,6 @@ const addressSchema = z.object({
 });
 
 type AddressFormValues = z.infer<typeof addressSchema>;
-
-// ─── Razorpay payment data shape ─────────────────────────────────────────────
-
-interface RazorpayPaymentData {
-  // "wallet" + paid:true when store credit covers the full total — no gateway sheet.
-  provider?: string;
-  paid?: boolean;
-  walletApplied?: number;
-  razorpayOrderId: string;
-  razorpayKeyId: string;
-  amount: number;
-  currency: string;
-  orderNumber?: string;
-  prefill?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-}
 
 // Wallet-at-checkout (#141) is gated to match the API's WALLET_CHECKOUT_ENABLED;
 // the toggle stays hidden until both the app build and the server enable it.
@@ -220,42 +201,13 @@ export default function CheckoutScreen() {
 
       const orderId = orderResult.data.id;
 
-      // Step 2: Create Razorpay payment order (server-side). Pass any wallet
-      // credit to apply (#141); the server clamps it and reduces the charge.
-      const paymentResp = await api.post<{ data: RazorpayPaymentData }>(
-        `/v1/payments/order/${orderId}/create`,
-        walletApplied > 0 ? { walletAmount: walletApplied } : {}
-      );
-      const paymentData = paymentResp.data.data ?? (paymentResp.data as unknown as RazorpayPaymentData);
-
-      // Full-wallet order: store credit covered the whole total, so the server
-      // already marked it paid — there is no gateway sheet. Clear the cart and go
-      // straight to the success result.
-      if (paymentData.provider === 'wallet' || paymentData.paid) {
-        useCartStore.getState().clearCart();
-        setIsLoading(false);
-        router.replace(`/payment/result?order_id=${orderId}&razorpay_payment_id=wallet`);
-        return;
-      }
-
-      // Step 3: Hand off to the in-app Razorpay checkout (WebView). That screen
-      // opens the payment sheet, verifies the result server-side, and routes to
-      // /payment/result. Clear our loading state so checkout is usable if the
-      // user backs out of the payment sheet.
+      // Steps 2–3: create the Razorpay payment and open the NATIVE checkout
+      // sheet. startOrderPayment handles the full-wallet (already-paid) shortcut
+      // and routes to /payment/result, which polls the authoritative payment
+      // status. Clear loading first so the screen stays usable if the user
+      // dismisses the sheet.
       setIsLoading(false);
-      router.push({
-        pathname: '/payment/checkout',
-        params: {
-          orderId,
-          razorpayOrderId: paymentData.razorpayOrderId,
-          razorpayKeyId: paymentData.razorpayKeyId,
-          amount: String(paymentData.amount),
-          currency: paymentData.currency ?? 'INR',
-          name: paymentData.prefill?.name ?? '',
-          email: paymentData.prefill?.email ?? '',
-          phone: paymentData.prefill?.phone ?? '',
-        },
-      });
+      await startOrderPayment(orderId, { walletAmount: walletApplied });
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
       // scroll body, far from the sticky button, so a failed tap otherwise

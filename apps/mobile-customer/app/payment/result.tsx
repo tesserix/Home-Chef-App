@@ -79,7 +79,7 @@ export default function PaymentResult() {
     }
     setRetrying(true);
     try {
-      await startOrderPayment(orderId, { replace: true });
+      await startOrderPayment(orderId);
     } catch {
       // Stay on the failure screen; the order is unpaid and can be retried.
       setRetrying(false);
