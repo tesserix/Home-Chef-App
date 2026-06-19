@@ -603,6 +603,37 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
+	// Release reserved daily capacity (#48) only on a FULL refund of an order that
+	// hasn't been delivered yet — those dishes won't be made. Partial and
+	// post-delivery refunds keep the capacity consumed.
+	releaseCapOnRefund := refundAmount >= order.Total &&
+		order.Status != models.OrderStatusDelivered &&
+		order.Status != models.OrderStatusCancelled &&
+		order.Status != models.OrderStatusRefunded
+	refundCapDay := services.CapacityDay(order.CreatedAt)
+	releaseRefundCapacity := func(tx *gorm.DB) error {
+		if !releaseCapOnRefund {
+			return nil
+		}
+		var items []models.OrderItem
+		if err := tx.Where("order_id = ?", order.ID).Find(&items).Error; err != nil {
+			return err
+		}
+		for _, it := range items {
+			if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, refundCapDay); err != nil {
+				return err
+			}
+		}
+		// Release the scheduled delivery-slot booking too (#51), keyed to the
+		// order's scheduled delivery day.
+		if order.DeliverySlot != "" && order.ScheduledFor != nil {
+			if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	// Refund-to-wallet (#33): credit the customer's store credit instead of
 	// reversing the gateway charge. Faster for the customer (no gateway round
 	// trip) and the platform keeps the cash. The idempotency key ties the credit
@@ -630,6 +661,9 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				"refund_initiated_by": initiatedBy,
 				"refunded_at":         &now,
 			}).Error; err != nil {
+				return err
+			}
+			if err := releaseRefundCapacity(tx); err != nil {
 				return err
 			}
 			return services.EnqueueEvent(tx, "orders.refunded", "order.refunded", userID, map[string]interface{}{
@@ -775,6 +809,9 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}).Error; err != nil {
 			return err
 		}
+		if err := releaseRefundCapacity(tx); err != nil {
+			return err
+		}
 		return services.EnqueueEvent(tx, "orders.refunded", "order.refunded", userID, map[string]interface{}{
 			"order_id":      order.ID.String(),
 			"order_number":  order.OrderNumber,
@@ -876,6 +913,9 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	if res.RowsAffected == 0 {
 		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
 	}
+	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
+	// (idempotent). Harmless no-op when payment.OrderID isn't a tip charge.
+	markTipPaidByRazorpayOrder(payment.OrderID, payment.ID)
 }
 
 func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {

@@ -161,6 +161,11 @@ func Migrate() error {
 		&models.MenuItem{},
 		&models.MenuItemImage{},
 
+		// Add-ons / combos (#52)
+		&models.ModifierGroup{},
+		&models.ModifierOption{},
+		&models.ComboItem{},
+
 		// Orders
 		&models.Order{},
 		&models.OrderItem{},
@@ -196,6 +201,27 @@ func Migrate() error {
 		// Catering
 		&models.CateringRequest{},
 		&models.CateringQuote{},
+
+		// Tiffin weekly menu (#192) + meal plans (#193)
+		&models.WeeklyMenu{},
+		&models.WeeklyMenuItem{},
+		&models.MealPlan{},
+		&models.MealPlanDay{},
+
+		// Post-delivery tips (#45)
+		&models.Tip{},
+
+		// Group / office orders (#46)
+		&models.GroupOrder{},
+		&models.GroupOrderParticipant{},
+		&models.GroupOrderItem{},
+
+		// Chef capacity & cutoff controls (#48)
+		&models.MenuItemDailySales{},
+		&models.ChefCapacitySettings{},
+
+		// Scheduled delivery slots (#51)
+		&models.ChefSlotDailyBookings{},
 
 		// Addresses
 		&models.Address{},

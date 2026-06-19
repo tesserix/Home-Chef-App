@@ -25,13 +25,24 @@ import * as ImagePicker from 'expo-image-picker';
 import { ChevronLeft, Plus } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
+import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
-import type { MenuItemImage, Category } from '../../hooks/useVendorMenu';
+import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
+import type {
+  MenuItemImage,
+  Category,
+  ModifierGroupInput,
+  ComboItemInput,
+} from '../../hooks/useVendorMenu';
 
 // ---- Constants ---------------------------------------------------------------
 
 const PREP_TIME_OPTIONS = [5, 10, 15, 20, 30, 45, 60] as const;
 type PrepTime = (typeof PREP_TIME_OPTIONS)[number];
+
+// Diet tags the chef adds beyond the veg/non-veg toggle (#41). "vegetarian" is
+// excluded — that's the DIET toggle's job.
+const EXTRA_DIET_OPTIONS = DIET_OPTIONS.filter((o) => o.value !== 'vegetarian');
 
 // ---- Public types ------------------------------------------------------------
 
@@ -41,6 +52,13 @@ export interface MenuItemFormValues {
   price: string;
   categoryId: string;
   isVeg: boolean;
+  // Extra diet tags + declared allergens (#41).
+  dietaryTags: string[];
+  allergens: string[];
+  // Add-ons / combos (#52).
+  isCombo: boolean;
+  modifierGroups: ModifierGroupInput[];
+  comboItems: ComboItemInput[];
   preparationTime: number;
   // HSN/SAC — optional. Backend defaults to 996331 (restaurant
   // services) when empty. Most chefs leave this alone; surfaces as
@@ -58,6 +76,8 @@ export interface MenuItemFormProps {
   existingPhotos?: MenuItemImage[];
   /** All available categories from the menu cache. */
   categories: Category[];
+  /** The chef's other menu items, for the combo builder's item picker (#52). */
+  menuItems?: { id: string; name: string }[];
   /** Called when the chef confirms deletion (edit mode only). */
   onDelete?: () => void;
   /** True while the delete mutation is in-flight. */
@@ -259,6 +279,32 @@ function DietTab({ label, optionIsVeg, active, onPress }: DietTabProps) {
   );
 }
 
+// ---- Multi-select chip (diet tags + allergens, #41) -------------------------
+
+interface MultiChipProps {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}
+
+function MultiChip({ label, active, onPress }: MultiChipProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: active }}
+      accessibilityLabel={label}
+    >
+      {({ pressed }) => (
+        <View style={[chipStyles.root, active && chipStyles.rootActive, pressed && { opacity: 0.7 }]}>
+          <Text style={[chipStyles.label, active && chipStyles.labelActive]}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 // ---- Photo thumb + Add tile -------------------------------------------------
 
 interface PhotoThumbProps {
@@ -368,6 +414,7 @@ export function MenuItemForm({
   initialValues,
   existingPhotos = [],
   categories,
+  menuItems,
   onDelete,
   isDeleting = false,
   onSave,
@@ -386,8 +433,17 @@ export function MenuItemForm({
   const [price, setPrice] = useState(initialValues.price);
   const [categoryId, setCategoryId] = useState(initialValues.categoryId);
   const [isVeg, setIsVeg] = useState(initialValues.isVeg);
+  const [dietTags, setDietTags] = useState<string[]>(initialValues.dietaryTags ?? []);
+  const [allergens, setAllergens] = useState<string[]>(initialValues.allergens ?? []);
+  // Add-ons / combos (#52).
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroupInput[]>(initialValues.modifierGroups ?? []);
+  const [comboItems, setComboItems] = useState<ComboItemInput[]>(initialValues.comboItems ?? []);
+  const [isCombo, setIsCombo] = useState(initialValues.isCombo ?? false);
   const [preparationTime, setPreparationTime] = useState(initialValues.preparationTime);
   const [hsn, setHsn] = useState(initialValues.hsn);
+
+  const toggleIn = (set: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
+    set((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
 
   // Local photo URIs (new-mode queuing or pre-upload preview)
   const [localPhotoUris, setLocalPhotoUris] = useState<string[]>([]);
@@ -407,6 +463,11 @@ export function MenuItemForm({
     price !== initialValues.price ||
     categoryId !== initialValues.categoryId ||
     isVeg !== initialValues.isVeg ||
+    dietTags.join('|') !== (initialValues.dietaryTags ?? []).join('|') ||
+    allergens.join('|') !== (initialValues.allergens ?? []).join('|') ||
+    isCombo !== (initialValues.isCombo ?? false) ||
+    JSON.stringify(modifierGroups) !== JSON.stringify(initialValues.modifierGroups ?? []) ||
+    JSON.stringify(comboItems) !== JSON.stringify(initialValues.comboItems ?? []) ||
     preparationTime !== initialValues.preparationTime ||
     hsn !== initialValues.hsn ||
     localPhotoUris.length > 0 ||
@@ -446,7 +507,24 @@ export function MenuItemForm({
   function handleSave() {
     if (!validate()) return;
     onSave(
-      { name: name.trim(), description: description.trim(), price, categoryId, isVeg, preparationTime, hsn: hsn.trim() },
+      {
+        name: name.trim(),
+        description: description.trim(),
+        price,
+        categoryId,
+        isVeg,
+        dietaryTags: dietTags,
+        allergens,
+        isCombo,
+        // Drop blank groups/options so a half-filled row doesn't persist (#52).
+        modifierGroups: modifierGroups
+          .filter((g) => g.name.trim() !== '')
+          .map((g) => ({ ...g, options: g.options.filter((o) => o.name.trim() !== '') }))
+          .filter((g) => g.options.length > 0),
+        comboItems: isCombo ? comboItems : [],
+        preparationTime,
+        hsn: hsn.trim(),
+      },
       localPhotoUris,
     );
   }
@@ -791,6 +869,50 @@ export function MenuItemForm({
             </View>
           </View>
 
+          {/* DIETARY TAGS section (#41) — extra diet suitability beyond veg/non-veg */}
+          <Text style={styles.sectionLabel}>DIETARY TAGS</Text>
+          <View style={styles.card}>
+            <View style={styles.wrapChips}>
+              {EXTRA_DIET_OPTIONS.map((opt) => (
+                <MultiChip
+                  key={opt.value}
+                  label={opt.label}
+                  active={dietTags.includes(opt.value)}
+                  onPress={() => toggleIn(setDietTags)(opt.value)}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* ALLERGENS section (#41) — declared for customer safety + warnings */}
+          <Text style={styles.sectionLabel}>ALLERGENS</Text>
+          <View style={styles.card}>
+            <Text style={styles.allergenHint}>
+              Declare every allergen this dish contains — customers who flag these are warned.
+            </Text>
+            <View style={styles.wrapChips}>
+              {ALLERGEN_OPTIONS.map((opt) => (
+                <MultiChip
+                  key={opt.value}
+                  label={opt.label}
+                  active={allergens.includes(opt.value)}
+                  onPress={() => toggleIn(setAllergens)(opt.value)}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* ADD-ONS + COMBO sections (#52) */}
+          <ModifierComboEditor
+            groups={modifierGroups}
+            setGroups={setModifierGroups}
+            isCombo={isCombo}
+            setIsCombo={setIsCombo}
+            comboItems={comboItems}
+            setComboItems={setComboItems}
+            menuItems={menuItems ?? []}
+          />
+
           {/* PREP TIME section — own header so it sits in the same
               rhythm as CATEGORY (caps label + hairline group + scrollable
               underline tab strip). */}
@@ -1060,6 +1182,20 @@ const styles = StyleSheet.create({
   dietTabBar: {
     flexDirection: 'row',
     gap: theme.spacing[2],
+  },
+
+  // Wrap-flow chips for the multi-select diet-tag + allergen sections (#41).
+  wrapChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing[2],
+  },
+  allergenHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    lineHeight: 16,
+    color: theme.colors.ink.soft,
+    marginBottom: theme.spacing[3],
   },
 
   // Sticky footer — white bar lifted off the canvas with a top shadow

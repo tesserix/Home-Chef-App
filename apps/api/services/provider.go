@@ -26,6 +26,12 @@ type ProviderDeliveryRequest struct {
 	CustomerPhone   string
 	ItemDescription string
 	Weight          float64 // estimated weight in kg
+	// ScheduledPickupAt is the order's scheduled delivery-slot pickup time (#51),
+	// nil for ASAP orders. Adapters that support scheduled bookings should pass
+	// it to the 3PL so the rider is timed to the slot; adapters that don't may
+	// ignore it. NOTE: deferring the dispatch *trigger* itself until close to the
+	// slot (vs booking immediately at chef-ready) is tracked separately under #7.
+	ScheduledPickupAt *time.Time
 }
 
 // ProviderDeliveryResponse represents the provider's response
@@ -301,6 +307,15 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 
 	if err := database.DB.Model(&delivery).Updates(updates).Error; err != nil {
 		return fmt.Errorf("failed to update delivery: %w", err)
+	}
+
+	// On 3PL delivery, fire the escrow/group payout release hooks (the own-fleet
+	// path does this in handlers/delivery.go). Both are status-guarded no-ops for
+	// orders that aren't meal-plan/group orders.
+	if models.DeliveryStatus(fe3drStatus) == models.DeliveryDelivered && delivery.OrderID != uuid.Nil {
+		MarkMealPlanDayDelivered(delivery.OrderID)
+		MarkGroupOrderDelivered(delivery.OrderID)
+		ReleaseOrderPayouts(delivery.OrderID)
 	}
 
 	// Durable event publication via the transactional outbox.

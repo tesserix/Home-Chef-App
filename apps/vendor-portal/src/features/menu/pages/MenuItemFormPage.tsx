@@ -35,8 +35,15 @@ import {
   SimpleDialog,
   DialogFooter,
 } from '@/shared/components/ui/Dialog';
-import type { MenuItem, MenuCategory, MenuItemImage } from '@/shared/types';
+import type {
+  MenuItem,
+  MenuCategory,
+  MenuItemImage,
+  ModifierGroupInput,
+  ComboItemInput,
+} from '@/shared/types';
 import { useDraftForm } from '@/shared/hooks/useDraftForm';
+import { ModifierComboEditor } from '../components/ModifierComboEditor';
 
 // --- Zod validation schema ---
 
@@ -73,6 +80,13 @@ const menuItemSchema = z.object({
 });
 
 type MenuItemFormValues = z.infer<typeof menuItemSchema>;
+
+/** Form values plus the add-ons / combo fields sent to the API (#52). */
+type MenuItemSavePayload = MenuItemFormValues & {
+  isCombo: boolean;
+  modifierGroups: ModifierGroupInput[];
+  comboItems: ComboItemInput[];
+};
 
 const DIETARY_TAG_OPTIONS = [
   { value: 'vegetarian', label: 'Vegetarian' },
@@ -215,6 +229,14 @@ export default function MenuItemFormPage() {
   const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
+  // Add-ons / combo state (#52) — held outside RHF since it's nested + dynamic.
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroupInput[]>([]);
+  const [isCombo, setIsCombo] = useState(false);
+  const [comboItems, setComboItems] = useState<ComboItemInput[]>([]);
+  // Flips true on any add-on/combo edit so the Save button enables in edit mode
+  // (RHF's isDirty only tracks the registered fields).
+  const [addonsDirty, setAddonsDirty] = useState(false);
+
   const isEditMode = Boolean(id);
   const draftKey = isEditMode ? `menu-item-edit-${id}` : 'menu-item-new';
   const { loadDraft, saveDraft, clearDraft } = useDraftForm<MenuItemFormValues>(draftKey);
@@ -235,6 +257,15 @@ export default function MenuItemFormPage() {
     queryKey: ['chef-menu-categories'],
     queryFn: () => apiClient.get<MenuCategory[]>('/chef/menu/categories'),
   });
+
+  // The chef's other dishes, for the combo picker (#52). Excludes this item.
+  const { data: allMenuItems = [] } = useQuery<MenuItem[]>({
+    queryKey: ['chef-menu'],
+    queryFn: () => apiClient.get<MenuItem[]>('/chef/menu'),
+  });
+  const comboPickerItems = allMenuItems
+    .filter((m) => m.id !== id)
+    .map((m) => ({ id: m.id, name: m.name }));
 
   // Create category mutation
   const createCategory = useMutation({
@@ -317,6 +348,28 @@ export default function MenuItemFormPage() {
       // In edit mode, always use server data (not stale drafts from other items)
       clearDraft();
       reset(serverValues);
+      // Seed add-ons / combo from the server (read → input shapes, drop ids).
+      setIsCombo(existingItem.isCombo ?? false);
+      setModifierGroups(
+        (existingItem.modifierGroups ?? []).map((g) => ({
+          name: g.name,
+          required: g.required,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: (g.options ?? []).map((o) => ({
+            name: o.name,
+            priceDelta: o.priceDelta,
+            isAvailable: o.isAvailable,
+          })),
+        }))
+      );
+      setComboItems(
+        (existingItem.comboItems ?? []).map((c) => ({
+          menuItemId: c.menuItemId,
+          quantity: c.quantity,
+        }))
+      );
+      setAddonsDirty(false);
     } else {
       // New mode: restore draft if available
       const draft = loadDraft();
@@ -339,7 +392,7 @@ export default function MenuItemFormPage() {
 
   // Create mutation
   const createItem = useMutation({
-    mutationFn: (data: MenuItemFormValues) => {
+    mutationFn: (data: MenuItemSavePayload) => {
       return apiClient.post<MenuItem>('/chef/menu/items', data);
     },
     onSuccess: async (newItem) => {
@@ -359,7 +412,7 @@ export default function MenuItemFormPage() {
 
   // Update mutation
   const updateItem = useMutation({
-    mutationFn: (data: MenuItemFormValues) => {
+    mutationFn: (data: MenuItemSavePayload) => {
       return apiClient.put<MenuItem>(`/chef/menu/items/${id}`, data);
     },
     onSuccess: async () => {
@@ -383,10 +436,27 @@ export default function MenuItemFormPage() {
       toast.error('At least one image is required');
       return;
     }
+    // Sanitize add-ons: drop blank groups / blank options. minSelect is forced
+    // to 1 server-side when the group is required, so no need to set it here.
+    const cleanGroups: ModifierGroupInput[] = modifierGroups
+      .map((g) => ({
+        ...g,
+        name: g.name.trim(),
+        options: g.options
+          .map((o) => ({ ...o, name: o.name.trim() }))
+          .filter((o) => o.name.length > 0),
+      }))
+      .filter((g) => g.name.length > 0 && g.options.length > 0);
+    const payload: MenuItemSavePayload = {
+      ...data,
+      isCombo,
+      modifierGroups: cleanGroups,
+      comboItems: isCombo ? comboItems : [],
+    };
     if (isEditMode) {
-      updateItem.mutate(data);
+      updateItem.mutate(payload);
     } else {
-      createItem.mutate(data);
+      createItem.mutate(payload);
     }
   };
 
@@ -759,6 +829,26 @@ export default function MenuItemFormPage() {
           </Card>
         </motion.div>
 
+        {/* Add-ons & combos (#52) */}
+        <ModifierComboEditor
+          groups={modifierGroups}
+          setGroups={(g) => {
+            setModifierGroups(g);
+            setAddonsDirty(true);
+          }}
+          isCombo={isCombo}
+          setIsCombo={(v) => {
+            setIsCombo(v);
+            setAddonsDirty(true);
+          }}
+          comboItems={comboItems}
+          setComboItems={(c) => {
+            setComboItems(c);
+            setAddonsDirty(true);
+          }}
+          menuItems={comboPickerItems}
+        />
+
         {/* Images */}
         <motion.div variants={fadeInUp}>
           <Card>
@@ -879,7 +969,7 @@ export default function MenuItemFormPage() {
           <Button
             type="submit"
             isLoading={isSubmitting}
-            disabled={isSubmitting || (isEditMode && !isDirty)}
+            disabled={isSubmitting || (isEditMode && !isDirty && !addonsDirty)}
             leftIcon={<Save className="h-4 w-4" />}
           >
             {isEditMode ? 'Save Changes' : 'Create Item'}

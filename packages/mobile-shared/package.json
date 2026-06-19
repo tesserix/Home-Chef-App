@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
     "./auth": "./src/auth/index.ts",
+    "./dietary": "./src/dietary/index.ts",
     "./hooks": "./src/hooks/index.ts",
     "./types": "./src/types/index.ts",
     "./utils": "./src/utils/index.ts",

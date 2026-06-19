@@ -19,12 +19,14 @@ import {
   View,
 } from 'react-native';
 import { Link, router, type Href } from 'expo-router';
-import { Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
+import { AlertTriangle, Check, ChevronLeft, Clock, MapPin, Plus, Search } from 'lucide-react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
+import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
+import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
 import {
@@ -56,6 +58,18 @@ type AddressFormValues = z.infer<typeof addressSchema>;
 // the toggle stays hidden until both the app build and the server enable it.
 const WALLET_CHECKOUT_ENABLED = process.env.EXPO_PUBLIC_WALLET_CHECKOUT_ENABLED === 'true';
 
+// slotDayLabel turns a "YYYY-MM-DD" slot date into a human label relative to the
+// device's today ("Today" / "Tomorrow" / "Mon, 22 Jun") for the slot picker (#51).
+function slotDayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutScreen() {
@@ -70,6 +84,17 @@ export default function CheckoutScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
+  // Scheduled delivery slot (#51) — null = ASAP. Only shown when the chef
+  // offers slots; the chosen slot+date ride along on the create-order payload.
+  const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
+  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
+  const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+
+  // Dietary & allergen conflict warning (#41) — checks the cart's items against
+  // the customer's saved profile server-side. Non-blocking.
+  const cartItemIds = cartStore.items.map((i) => i.menuItemId);
+  const { data: dietaryCheck } = useDietaryCheck(cartItemIds);
+  const dietaryWarnings = dietaryCheck?.warnings ?? [];
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -165,9 +190,13 @@ export default function CheckoutScreen() {
           menuItemId: i.menuItemId,
           quantity: i.quantity,
           notes: i.instructions?.trim() || undefined,
+          // Selected add-on option ids for this line (#232).
+          modifierOptionIds: i.modifiers?.map((m) => m.optionId),
         })),
         deliveryAddressId: selectedAddressId,
         specialInstructions: note.trim() || undefined,
+        deliverySlot: selectedSlot?.slot,
+        deliveryDate: selectedSlot?.date,
       });
 
       const orderId = orderResult.data.id;
@@ -500,15 +529,23 @@ export default function CheckoutScreen() {
           <Text className="text-base font-semibold text-charcoal px-4 pt-4 pb-2">Order Summary</Text>
           <FlatList
             data={cartStore.items}
-            keyExtractor={(item) => item.menuItemId}
+            keyExtractor={(item) => item.lineId}
             scrollEnabled={false}
             renderItem={({ item }) => (
-              <View className="flex-row items-center px-4 py-2 gap-2">
+              <View className="flex-row items-start px-4 py-2 gap-2">
                 {/* Quantity chip — coral-tint bg, coral text */}
-                <View className="w-6 h-6 rounded-full bg-coral-tint items-center justify-center">
+                <View className="w-6 h-6 rounded-full bg-coral-tint items-center justify-center mt-0.5">
                   <Text className="text-xs font-medium text-coral">{item.quantity}</Text>
                 </View>
-                <Text className="flex-1 text-sm text-charcoal">{item.name}</Text>
+                <View className="flex-1">
+                  <Text className="text-sm text-charcoal">{item.name}</Text>
+                  {/* Selected add-ons (#232) */}
+                  {item.modifiers && item.modifiers.length > 0 ? (
+                    <Text className="text-xs text-charcoal-soft">
+                      {item.modifiers.map((m) => m.optionName).join(', ')}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text className="text-sm font-medium text-charcoal" style={{ fontVariant: ['tabular-nums'] }}>
                   ₹{(item.price * item.quantity).toFixed(2)}
                 </Text>
@@ -574,6 +611,86 @@ export default function CheckoutScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Dietary / allergen conflict warning (#41) ── */}
+        {dietaryWarnings.length > 0 && (
+          <View className="mx-4 mt-4 bg-destructive-tint border border-destructive/30 rounded-2xl p-4">
+            <View className="flex-row items-center gap-2 mb-1">
+              <AlertTriangle size={16} color="#B22B0E" />
+              <Text className="text-sm font-semibold text-destructive">Check your order</Text>
+            </View>
+            <Text className="text-sm text-destructive leading-5 mb-2">
+              Some items may not match your dietary profile:
+            </Text>
+            {dietaryWarnings.map((w) => (
+              <Text key={w.menuItemId} className="text-sm text-destructive leading-5">
+                • {w.name} — {w.conflicts.map((cf) => cf.detail).join(', ')}
+              </Text>
+            ))}
+            <Text className="text-xs text-charcoal-soft mt-2 leading-5">
+              You can still place this order. Review your items or update your dietary profile in
+              your account.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Delivery time / scheduled slot (#51) ── */}
+        {slotsData?.slotsEnabled && (
+          <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+            <Text className="text-sm font-medium text-charcoal-soft mb-3">Delivery time</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {/* ASAP (default) */}
+              <Pressable
+                onPress={() => setSelectedSlot(null)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedSlot === null }}
+              >
+                <View
+                  className={`px-3 py-2 rounded-xl border ${
+                    selectedSlot === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                  }`}
+                >
+                  <Text className={`text-sm font-medium ${selectedSlot === null ? 'text-coral' : 'text-charcoal'}`}>
+                    ASAP
+                  </Text>
+                  <Text className="text-xs text-charcoal-soft">After chef accepts</Text>
+                </View>
+              </Pressable>
+
+              {availableSlots.map((s: DeliverySlot) => {
+                const sel = selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                return (
+                  <Pressable
+                    key={`${s.date}-${s.slot}`}
+                    onPress={() => setSelectedSlot({ slot: s.slot, date: s.date })}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: sel }}
+                    accessibilityLabel={`${slotDayLabel(s.date)} ${s.label} ${s.window}`}
+                  >
+                    <View
+                      className={`px-3 py-2 rounded-xl border ${
+                        sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                      }`}
+                    >
+                      <Text className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}>
+                        {slotDayLabel(s.date)} · {s.label}
+                      </Text>
+                      <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
+                        {s.window}
+                        {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {availableSlots.length === 0 && (
+              <Text className="text-xs text-charcoal-soft mt-1">
+                No delivery windows are open right now — your order will be delivered ASAP.
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* ── Payment & delivery (concise; detail behind policy links) ── */}
         {/* CW-01d / RBI PA MD §8: keeps the required PA + refund-window disclosure

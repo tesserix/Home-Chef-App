@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -47,11 +48,15 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 	}
 
 	var items []models.MenuItem
-	database.DB.Where("chef_id = ?", chef.ID).Preload("Images", func(db *gorm.DB) *gorm.DB {
-		return db.Order("sort_order ASC")
-	}).Order("sort_order ASC, created_at DESC").Find(&items)
+	database.DB.Where("chef_id = ?", chef.ID).
+		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC") }).
+		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Order("sort_order ASC, created_at DESC").Find(&items)
 
 	// Ensure nil slices are returned as empty arrays in JSON
+	capDay := services.CapacityDay(time.Now())
 	for i := range items {
 		if items[i].DietaryTags == nil {
 			items[i].DietaryTags = pq.StringArray{}
@@ -64,6 +69,11 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 		}
 		if items[i].Images == nil {
 			items[i].Images = []models.MenuItemImage{}
+		}
+		// Derive today's remaining/sold-out from the capacity counter (#48).
+		if rem, soldOut := services.RemainingToday(items[i].ID, items[i].DailyCapacity, capDay); rem != nil {
+			items[i].RemainingToday = rem
+			items[i].SoldOut = soldOut
 		}
 	}
 
@@ -80,6 +90,47 @@ func (h *MenuHandler) GetChefMenuItems(c *gin.Context) {
 	})
 }
 
+type setCapacityRequest struct {
+	DailyCapacity *int `json:"dailyCapacity"` // nil or <= 0 = unlimited
+}
+
+// SetMenuItemCapacity — PUT /chef/menu/items/:itemId/capacity (#48). Owner-scoped.
+func (h *MenuHandler) SetMenuItemCapacity(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	itemID, err := uuid.Parse(c.Param("itemId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item id"})
+		return
+	}
+	var req setCapacityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.DailyCapacity != nil && *req.DailyCapacity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dailyCapacity cannot be negative (use 0 or null for unlimited)"})
+		return
+	}
+	// Owner-scoped update → 404 (not 403) if the item isn't this chef's.
+	res := database.DB.Model(&models.MenuItem{}).
+		Where("id = ? AND chef_id = ?", itemID, chef.ID).
+		Updates(map[string]interface{}{"daily_capacity": req.DailyCapacity})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update capacity"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": true, "dailyCapacity": req.DailyCapacity})
+}
+
 // GetMenuItem returns a single menu item by ID (must belong to authenticated chef).
 // GET /chef/menu/items/:itemId
 func (h *MenuHandler) GetMenuItem(c *gin.Context) {
@@ -93,9 +144,12 @@ func (h *MenuHandler) GetMenuItem(c *gin.Context) {
 	}
 
 	var item models.MenuItem
-	if err := database.DB.Preload("Images", func(db *gorm.DB) *gorm.DB {
-		return db.Order("sort_order ASC")
-	}).Where("id = ? AND chef_id = ?", itemID, chef.ID).First(&item).Error; err != nil {
+	if err := database.DB.
+		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC") }).
+		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Where("id = ? AND chef_id = ?", itemID, chef.ID).First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Menu item not found"})
 		return
 	}
@@ -152,6 +206,7 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		IsAvailable:  true,
 		IsFeatured:   req.IsFeatured,
 		HSN:          req.HSN,
+		IsCombo:      req.IsCombo,
 	}
 
 	if req.CategoryID != "" {
@@ -165,6 +220,11 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		log.Printf("Failed to create menu item: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create menu item"})
 		return
+	}
+
+	// Save add-on groups + combo components (#52, replace-all).
+	if err := saveItemModifiers(item.ID, chef.ID, req.ModifierGroups, req.ComboItems); err != nil {
+		log.Printf("Failed to save item modifiers/combo: %v", err)
 	}
 
 	// Create approval request for admin review
@@ -273,6 +333,9 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	if req.HSN != nil {
 		updates["hsn"] = *req.HSN
 	}
+	if req.IsCombo != nil {
+		updates["is_combo"] = *req.IsCombo
+	}
 	if req.CategoryID != nil {
 		if *req.CategoryID == "" {
 			updates["category_id"] = nil
@@ -296,6 +359,21 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 			log.Printf("Failed to update menu item: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update menu item"})
 			return
+		}
+	}
+
+	// Replace add-on groups + combo components when the chef edited them (#52).
+	if req.ModifierGroups != nil || req.ComboItems != nil {
+		groups := []ModifierGroupInput{}
+		if req.ModifierGroups != nil {
+			groups = *req.ModifierGroups
+		}
+		combos := []ComboItemInput{}
+		if req.ComboItems != nil {
+			combos = *req.ComboItems
+		}
+		if err := saveItemModifiers(item.ID, chef.ID, groups, combos); err != nil {
+			log.Printf("Failed to save item modifiers/combo: %v", err)
 		}
 	}
 
@@ -707,6 +785,31 @@ type CreateMenuItemRequest struct {
 	// HSN/SAC code for GST classification. Optional — empty string
 	// causes the DB default ("996331", restaurant services) to apply.
 	HSN string `json:"hsn"`
+	// Add-ons / combos (#52). ModifierGroups + ComboItems replace-all on save.
+	IsCombo        bool                 `json:"isCombo"`
+	ModifierGroups []ModifierGroupInput `json:"modifierGroups"`
+	ComboItems     []ComboItemInput     `json:"comboItems"`
+}
+
+// ModifierGroupInput / ModifierOptionInput / ComboItemInput are the nested save
+// shapes a chef sends with a menu item (#52).
+type ModifierGroupInput struct {
+	Name      string                `json:"name"`
+	Required  bool                  `json:"required"`
+	MinSelect int                   `json:"minSelect"`
+	MaxSelect int                   `json:"maxSelect"`
+	Options   []ModifierOptionInput `json:"options"`
+}
+
+type ModifierOptionInput struct {
+	Name        string  `json:"name"`
+	PriceDelta  float64 `json:"priceDelta"`
+	IsAvailable *bool   `json:"isAvailable"`
+}
+
+type ComboItemInput struct {
+	MenuItemID string `json:"menuItemId"`
+	Quantity   int    `json:"quantity"`
 }
 
 type UpdateMenuItemRequest struct {
@@ -730,6 +833,10 @@ type UpdateMenuItemRequest struct {
 	IsAvailable *bool   `json:"isAvailable"`
 	HSN         *string `json:"hsn"`
 	IsFeatured  *bool   `json:"isFeatured"`
+	// Add-ons / combos (#52) — when present, replace-all the item's groups/combo.
+	IsCombo        *bool                 `json:"isCombo"`
+	ModifierGroups *[]ModifierGroupInput `json:"modifierGroups"`
+	ComboItems     *[]ComboItemInput     `json:"comboItems"`
 }
 
 type CreateCategoryRequest struct {
@@ -752,4 +859,87 @@ func ensureStringArray(arr []string) pq.StringArray {
 		return pq.StringArray{}
 	}
 	return pq.StringArray(arr)
+}
+
+// saveItemModifiers replaces a menu item's modifier groups (+ options) and combo
+// components in one transaction (#52). Replace-all keeps the editor simple: the
+// chef sends the full desired set on every save. Blank-named entries are skipped;
+// combo components are validated to belong to the same chef (name snapshotted).
+func saveItemModifiers(itemID, chefID uuid.UUID, groups []ModifierGroupInput, combos []ComboItemInput) error {
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// Replace modifier groups + their options.
+		var old []models.ModifierGroup
+		tx.Where("menu_item_id = ?", itemID).Find(&old)
+		for _, g := range old {
+			if err := tx.Where("group_id = ?", g.ID).Delete(&models.ModifierOption{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("menu_item_id = ?", itemID).Delete(&models.ModifierGroup{}).Error; err != nil {
+			return err
+		}
+		for gi, g := range groups {
+			if g.Name == "" {
+				continue
+			}
+			grp := models.ModifierGroup{
+				MenuItemID: itemID,
+				Name:       g.Name,
+				Required:   g.Required,
+				MinSelect:  g.MinSelect,
+				MaxSelect:  g.MaxSelect,
+				SortOrder:  gi,
+			}
+			if err := tx.Create(&grp).Error; err != nil {
+				return err
+			}
+			for oi, o := range g.Options {
+				if o.Name == "" {
+					continue
+				}
+				avail := true
+				if o.IsAvailable != nil {
+					avail = *o.IsAvailable
+				}
+				if err := tx.Create(&models.ModifierOption{
+					GroupID:     grp.ID,
+					Name:        o.Name,
+					PriceDelta:  o.PriceDelta,
+					IsAvailable: avail,
+					SortOrder:   oi,
+				}).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Replace combo components.
+		if err := tx.Where("combo_id = ?", itemID).Delete(&models.ComboItem{}).Error; err != nil {
+			return err
+		}
+		for ci, comp := range combos {
+			mid, err := uuid.Parse(comp.MenuItemID)
+			if err != nil || mid == itemID {
+				continue // skip invalid ids and self-reference
+			}
+			var inc models.MenuItem
+			if tx.Select("name").Where("id = ? AND chef_id = ?", mid, chefID).First(&inc).Error != nil {
+				continue // only the chef's own items can be bundled
+			}
+			qty := comp.Quantity
+			if qty < 1 {
+				qty = 1
+			}
+			if err := tx.Create(&models.ComboItem{
+				ComboID:    itemID,
+				MenuItemID: mid,
+				Name:       inc.Name,
+				Quantity:   qty,
+				SortOrder:  ci,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

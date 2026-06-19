@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  CalendarDays,
   ChevronRight,
   MessageSquare,
   UtensilsCrossed,
@@ -28,6 +29,7 @@ import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 
 // Threat model T-02-05-01: Zod validates profile fields before PATCH
 const profileSchema = z.object({
@@ -112,6 +114,9 @@ export default function ProfileScreen() {
   const profile = data;
 
   const [cuisinePrefs, setCuisinePrefs] = useState<string[]>([]);
+  // Dietary profile (#41) — diet types + allergens to avoid.
+  const [dietPrefs, setDietPrefs] = useState<string[]>([]);
+  const [allergyPrefs, setAllergyPrefs] = useState<string[]>([]);
 
   const {
     control,
@@ -132,6 +137,8 @@ export default function ProfileScreen() {
         phone: profile.phone ?? '',
       });
       setCuisinePrefs(profile.cuisinePreferences ?? []);
+      setDietPrefs(profile.dietaryPreferences ?? []);
+      setAllergyPrefs(profile.foodAllergies ?? []);
     }
   }, [profile, reset]);
 
@@ -140,6 +147,20 @@ export default function ProfileScreen() {
       prev.includes(cuisine)
         ? prev.filter((c) => c !== cuisine)
         : [...prev, cuisine],
+    );
+  }
+
+  const toggleFrom = (set: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
+    set((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+
+  function saveDietaryProfile() {
+    updateProfile.mutate(
+      { dietaryPreferences: dietPrefs, foodAllergies: allergyPrefs },
+      {
+        onSuccess: () => Alert.alert('Saved', 'Dietary profile updated.'),
+        onError: (error) =>
+          Alert.alert('Error', friendlyErrorMessage(error, 'Could not save dietary profile.')),
+      },
     );
   }
 
@@ -420,6 +441,92 @@ export default function ProfileScreen() {
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════════
+            Section — Dietary Profile (#41)
+        ═══════════════════════════════════════════════════════════════════ */}
+        <SectionLabel>Dietary Profile</SectionLabel>
+
+        <View className="px-4">
+          <Text className="text-xs text-charcoal-soft mb-2">
+            We'll flag dishes that don't match your diet or contain allergens you avoid.
+          </Text>
+
+          <Text className="text-sm font-semibold text-charcoal mb-2">Diet</Text>
+          <View className="flex-row flex-wrap gap-2 mb-4">
+            {DIET_OPTIONS.map((opt) => {
+              const isSelected = dietPrefs.includes(opt.value);
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => toggleFrom(setDietPrefs)(opt.value)}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={opt.label}
+                  accessibilityState={{ checked: isSelected }}
+                >
+                  <View
+                    className={`px-4 py-2 rounded-full border ${
+                      isSelected ? 'bg-coral-tint border-coral' : 'bg-canvas border-hairline'
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-medium ${
+                        isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft'
+                      }`}
+                    >
+                      {opt.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text className="text-sm font-semibold text-charcoal mb-2">Allergies to avoid</Text>
+          <View className="flex-row flex-wrap gap-2 mb-3">
+            {ALLERGEN_OPTIONS.map((opt) => {
+              const isSelected = allergyPrefs.includes(opt.value);
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => toggleFrom(setAllergyPrefs)(opt.value)}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={opt.label}
+                  accessibilityState={{ checked: isSelected }}
+                >
+                  <View
+                    className={`px-4 py-2 rounded-full border ${
+                      isSelected ? 'bg-destructive-tint border-destructive' : 'bg-canvas border-hairline'
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-medium ${
+                        isSelected ? 'text-destructive font-semibold' : 'text-charcoal-soft'
+                      }`}
+                    >
+                      {opt.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable
+            onPress={saveDietaryProfile}
+            disabled={updateProfile.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Save dietary profile"
+          >
+            {({ pressed }) => (
+              <View
+                className={`rounded-lg min-h-[52px] items-center justify-center bg-coral ${pressed ? 'opacity-90' : ''}`}
+              >
+                <Text className="text-canvas font-semibold text-base">Save Dietary Profile</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
+        {/* ═══════════════════════════════════════════════════════════════════
             Section — More (iOS grouped nav rows)
         ═══════════════════════════════════════════════════════════════════ */}
         <SectionLabel>More</SectionLabel>
@@ -452,6 +559,12 @@ export default function ProfileScreen() {
               icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
               label="Catering"
               onPress={() => router.push('/catering')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<CalendarDays size={18} color={customerColors.charcoal.soft} />}
+              label="My meal plans"
+              onPress={() => router.push('/meal-plans' as never)}
               isLast
             />
           </View>

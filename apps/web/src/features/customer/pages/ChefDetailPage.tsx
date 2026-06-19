@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Star,
   Clock,
@@ -16,6 +16,8 @@ import {
   Loader2,
   ChevronRight,
   ShieldCheck,
+  Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
@@ -23,9 +25,10 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
+import { findItemConflicts, type DietaryProfile } from '@/shared/utils/dietary';
 import { formatDate } from '@/shared/utils/format-date';
-import { Button } from '@/shared/components/ui';
-import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
+import { Button, SimpleDialog } from '@/shared/components/ui';
+import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse, SelectedModifier } from '@/shared/types';
 
 export default function ChefDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +60,40 @@ export default function ChefDetailPage() {
   const navigate = useNavigate();
   const { isFavorite, toggle } = useFavoritesStore();
   const favorited = id ? isFavorite(id) : false;
+  // Dietary profile (#41) — used to flag menu items that clash with the
+  // customer's saved diet / allergens. Only fetched when signed in.
+  const { data: dietaryProfile } = useQuery({
+    queryKey: ['customer-profile', 'dietary'],
+    queryFn: () => apiClient.get<DietaryProfile>('/customer/profile'),
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+  const [groupOpen, setGroupOpen] = useState(false);
+
+  // Group / office orders (#46) — start a shared cart from this chef, then
+  // invite others to add their own items and split the bill.
+  const startGroup = useMutation({
+    mutationFn: (type: 'office' | 'personal') =>
+      apiClient.post<{ groupOrder: { id: string } }>('/group-orders', {
+        chefId: id,
+        type,
+        splitMode: 'split',
+      }),
+    onSuccess: (resp) => {
+      setGroupOpen(false);
+      navigate(`/group-orders/${resp.groupOrder.id}`);
+    },
+    onError: () => toast.error('Could not start a group order. Please try again.'),
+  });
+
+  const openGroup = () => {
+    if (!isAuthenticated) {
+      toast.error('Please log in to start a group order');
+      navigate('/login');
+      return;
+    }
+    setGroupOpen(true);
+  };
 
   const handleFavorite = async () => {
     if (!isAuthenticated) {
@@ -165,6 +202,13 @@ export default function ChefDetailPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    leftIcon={<Users aria-hidden="true" className="h-5 w-5" />}
+                    onClick={openGroup}
+                  >
+                    Group order
+                  </Button>
                   <Button
                     variant="outline"
                     size="icon"
@@ -309,6 +353,7 @@ export default function ChefDetailPage() {
                       key={item.id}
                       item={item}
                       chefId={chef.id}
+                      profile={dietaryProfile}
                       chefInfo={{
                         id: chef.id,
                         businessName: chef.businessName,
@@ -344,6 +389,36 @@ export default function ChefDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Group / office order chooser (#46) */}
+      <SimpleDialog
+        open={groupOpen}
+        onOpenChange={setGroupOpen}
+        size="sm"
+        title="Start a group order"
+        description={`Order together from ${chef.businessName}. Invite others to add their own dishes — everyone pays their own share, and it arrives in one delivery.`}
+      >
+        <div className="mt-2 grid gap-3">
+          <button
+            type="button"
+            disabled={startGroup.isPending}
+            onClick={() => startGroup.mutate('personal')}
+            className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
+          >
+            <p className="font-medium text-ink">Personal group</p>
+            <p className="mt-0.5 text-sm text-ink-soft">Friends, family, or a casual meet-up.</p>
+          </button>
+          <button
+            type="button"
+            disabled={startGroup.isPending}
+            onClick={() => startGroup.mutate('office')}
+            className="rounded-xl border border-mist bg-paper p-4 text-left transition-colors hover:border-herb disabled:opacity-50"
+          >
+            <p className="font-medium text-ink">Office order</p>
+            <p className="mt-0.5 text-sm text-ink-soft">A team lunch or corporate event.</p>
+          </button>
+        </div>
+      </SimpleDialog>
     </div>
   );
 }
@@ -351,9 +426,11 @@ export default function ChefDetailPage() {
 function MenuItemCard({
   item,
   chefInfo,
+  profile,
 }: {
   item: MenuItem;
   chefId?: string;
+  profile?: DietaryProfile;
   chefInfo: {
     id: string;
     businessName: string;
@@ -363,18 +440,21 @@ function MenuItemCard({
   };
 }) {
   const [quantity, setQuantity] = useState(1);
+  const conflicts = profile ? findItemConflicts(profile, item) : [];
   const fp = useFormatPrice();
   const cart = useCartStore();
 
   const cartItem = cart.items.find((i) => i.menuItemId === item.id);
 
-  const handleAddToCart = () => {
+  // Add-ons (#232): items with modifier groups open a picker before adding.
+  const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
+  const [modOpen, setModOpen] = useState(false);
+  const [picks, setPicks] = useState<Record<string, string[]>>({});
+
+  const addLine = (modifiers?: SelectedModifier[]) => {
     try {
-      // Set chef if this is first item
-      if (cart.items.length === 0) {
-        cart.setChef(chefInfo);
-      }
-      cart.addItem(item, quantity);
+      if (cart.items.length === 0) cart.setChef(chefInfo);
+      cart.addItem(item, quantity, undefined, modifiers);
       toast.success(`Added ${item.name} to cart`);
       setQuantity(1);
     } catch (error) {
@@ -383,6 +463,35 @@ function MenuItemCard({
       }
     }
   };
+
+  const handleAddToCart = () => {
+    if (hasModifiers) {
+      setModOpen(true);
+      return;
+    }
+    addLine();
+  };
+
+  // Build the selection, delta + whether required groups are satisfied.
+  const groups = item.modifierGroups ?? [];
+  const selectedModifiers: SelectedModifier[] = [];
+  let modValid = true;
+  for (const g of groups) {
+    const chosen = picks[g.id] ?? [];
+    const minSel = g.required ? Math.max(1, g.minSelect) : g.minSelect;
+    if (chosen.length < minSel) modValid = false;
+    if (g.maxSelect > 0 && chosen.length > g.maxSelect) modValid = false;
+    for (const oid of chosen) {
+      const o = g.options.find((x) => x.id === oid);
+      if (o) selectedModifiers.push({ groupId: g.id, groupName: g.name, optionId: o.id, optionName: o.name, priceDelta: o.priceDelta });
+    }
+  }
+  const toggleOption = (groupId: string, optionId: string, single: boolean) =>
+    setPicks((prev) => {
+      const cur = prev[groupId] ?? [];
+      if (single) return { ...prev, [groupId]: cur.includes(optionId) ? [] : [optionId] };
+      return { ...prev, [groupId]: cur.includes(optionId) ? cur.filter((id) => id !== optionId) : [...cur, optionId] };
+    });
 
   return (
     <div className="card overflow-hidden">
@@ -426,6 +535,12 @@ function MenuItemCard({
               <p className="mt-1 text-sm text-ink-muted line-clamp-2">
                 {item.description}
               </p>
+              {/* Combo includes (#233) */}
+              {item.isCombo && item.comboItems && item.comboItems.length > 0 && (
+                <p className="mt-1 text-xs font-medium text-herb">
+                  Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
+                </p>
+              )}
             </div>
           </div>
 
@@ -443,6 +558,28 @@ function MenuItemCard({
             </div>
           )}
 
+          {/* Allergen badges (#41) — cautionary tone */}
+          {item.allergens.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {item.allergens.map((a) => (
+                <span
+                  key={a}
+                  className="rounded bg-paprika-tint px-2 py-0.5 text-xs text-paprika"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Dietary conflict warning (#41) */}
+          {conflicts.length > 0 && (
+            <p className="mt-2 flex items-start gap-1 text-xs font-medium text-paprika">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+              <span>{conflicts.map((cf) => cf.detail).join(' · ')}</span>
+            </p>
+          )}
+
           {/* Price and Actions */}
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-baseline gap-2">
@@ -456,7 +593,14 @@ function MenuItemCard({
               )}
             </div>
 
-            {item.isAvailable ? (
+            {/* Capacity (#48): low-stock hint when capped and not sold out. */}
+            {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
+              <p className="mb-1 text-xs text-ink-muted tabular-nums">{item.remainingToday} left today</p>
+            ) : null}
+
+            {item.soldOut ? (
+              <span className="text-sm font-semibold text-paprika">Sold out today</span>
+            ) : item.isAvailable ? (
               <div className="flex items-center gap-2">
                 {/* Quantity selector */}
                 <div className="flex items-center rounded-lg border">
@@ -485,6 +629,63 @@ function MenuItemCard({
           </div>
         </div>
       </div>
+
+      {/* Add-on picker (#232) */}
+      {hasModifiers && (
+        <SimpleDialog open={modOpen} onOpenChange={setModOpen} size="md" title={item.name}>
+          <div className="space-y-4">
+            {groups.map((g) => {
+              const single = g.maxSelect === 1;
+              const chosen = picks[g.id] ?? [];
+              return (
+                <div key={g.id}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-medium text-ink">{g.name}</span>
+                    <span className="text-xs text-ink-muted">
+                      {g.required ? 'Required' : 'Optional'}
+                      {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {g.options.map((o) => {
+                      const on = chosen.includes(o.id);
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          disabled={!o.isAvailable}
+                          onClick={() => toggleOption(g.id, o.id, single)}
+                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
+                            on ? 'border-herb bg-herb-tint' : 'border-mist'
+                          } ${!o.isAvailable ? 'opacity-40' : ''}`}
+                        >
+                          <span className="text-ink">{o.name}</span>
+                          <span className="text-ink-muted tabular-nums">
+                            {o.priceDelta !== 0 ? `${o.priceDelta > 0 ? '+' : ''}${fp(o.priceDelta)}` : 'Free'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              variant="primary"
+              fullWidth
+              disabled={!modValid}
+              onClick={() => {
+                setModOpen(false);
+                addLine(selectedModifiers);
+                setPicks({});
+              }}
+            >
+              Add · {fp(item.price + selectedModifiers.reduce((s, m) => s + m.priceDelta, 0))}
+            </Button>
+            {!modValid && <p className="text-center text-xs text-ink-muted">Choose the required options to continue</p>}
+          </div>
+        </SimpleDialog>
+      )}
     </div>
   );
 }

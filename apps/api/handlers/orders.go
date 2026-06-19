@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -81,12 +83,73 @@ type CreateOrderRequest struct {
 	PromoCode            string                `json:"promoCode"`
 	PaymentMethodID      *uuid.UUID            `json:"paymentMethodId"`
 	ScheduledFor         *time.Time            `json:"scheduledFor"`
+	// Scheduled delivery slot (#51). When DeliverySlot is "lunch"/"dinner" and
+	// the chef offers it, the server resolves the slot window → ScheduledFor and
+	// reserves the chef's per-slot daily capacity. DeliveryDate is "YYYY-MM-DD"
+	// IST (empty = today, bounded by the booking horizon).
+	DeliverySlot string `json:"deliverySlot"`
+	DeliveryDate string `json:"deliveryDate"`
 }
 
 type CreateOrderItem struct {
 	MenuItemID uuid.UUID `json:"menuItemId" binding:"required"`
 	Quantity   int       `json:"quantity" binding:"required,min=1"`
 	Notes      string    `json:"notes"`
+	// ModifierOptionIDs are the selected add-on options for this line (#232).
+	// The server validates them against the item's groups, prices them, and
+	// snapshots the selection onto the order line.
+	ModifierOptionIDs []uuid.UUID `json:"modifierOptionIds"`
+}
+
+// validateAndPriceModifiers checks the selected option ids against a menu item's
+// modifier groups — enforcing required/min/max per group and option availability —
+// and returns the per-unit price delta + the snapshot to persist (#232). Pure
+// (no DB) so it's unit-tested. Returns a customer-facing error for a bad selection.
+func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UUID) (float64, []models.OrderItemModifier, error) {
+	sel := make(map[uuid.UUID]bool, len(selected))
+	for _, id := range selected {
+		sel[id] = true
+	}
+
+	var delta float64
+	snapshot := []models.OrderItemModifier{}
+	matched := map[uuid.UUID]bool{}
+
+	for _, g := range groups {
+		count := 0
+		for _, o := range g.Options {
+			if !sel[o.ID] {
+				continue
+			}
+			if !o.IsAvailable {
+				return 0, nil, fmt.Errorf("%s is no longer available", o.Name)
+			}
+			count++
+			delta += o.PriceDelta
+			snapshot = append(snapshot, models.OrderItemModifier{
+				GroupName: g.Name, OptionName: o.Name, PriceDelta: o.PriceDelta,
+			})
+			matched[o.ID] = true
+		}
+		minSel := g.MinSelect
+		if g.Required && minSel < 1 {
+			minSel = 1
+		}
+		if count < minSel {
+			return 0, nil, fmt.Errorf("please choose an option for %q", g.Name)
+		}
+		if g.MaxSelect > 0 && count > g.MaxSelect {
+			return 0, nil, fmt.Errorf("too many options chosen for %q", g.Name)
+		}
+	}
+
+	// Every selected id must belong to one of this item's groups.
+	for _, id := range selected {
+		if !matched[id] {
+			return 0, nil, fmt.Errorf("invalid add-on selection")
+		}
+	}
+	return delta, snapshot, nil
 }
 
 type CreateAddressRequest struct {
@@ -145,9 +208,52 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Capacity cutoff (#48): a chef can auto-close ordering once their meal
+	// cutoffs have passed (extends pause-receiving).
+	capSettings := services.GetChefCapacitySettings(req.ChefID)
+	if services.IsPastDailyClose(capSettings, time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
+		return
+	}
+
+	// Scheduled delivery slot (#51): when the customer picks a lunch/dinner slot
+	// the chef offers, resolve the slot window → ScheduledFor and remember the
+	// per-slot daily capacity to reserve inside the order transaction below.
+	var slotScheduledFor *time.Time
+	var slotBookingDay time.Time
+	slotToReserve, slotCap := "", 0
+	if req.DeliverySlot != "" {
+		sf, day, err := services.ResolveSlotSchedule(capSettings, req.DeliverySlot, req.DeliveryDate, time.Now())
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrSlotClosed):
+				c.JSON(http.StatusConflict, gin.H{"error": "That delivery slot has closed. Please pick another time."})
+			case errors.Is(err, services.ErrSlotDateInvalid):
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Please choose a valid delivery date."})
+			default: // ErrSlotNotOffered
+				c.JSON(http.StatusBadRequest, gin.H{"error": "This chef doesn't offer that delivery slot."})
+			}
+			return
+		}
+		slotScheduledFor = &sf
+		slotBookingDay = day
+		if capLimit := services.SlotCapacity(capSettings, req.DeliverySlot); capLimit != nil {
+			slotToReserve, slotCap = req.DeliverySlot, *capLimit
+		}
+	}
+
 	// Get menu items and calculate totals
 	var subtotal float64
 	orderItems := make([]models.OrderItem, len(req.Items))
+
+	// Daily-capacity reservations to apply atomically inside the transaction (#48).
+	type capReservation struct {
+		itemID uuid.UUID
+		name   string
+		qty    int
+		cap    int
+	}
+	var capReservations []capReservation
 
 	for i, item := range req.Items {
 		var menuItem models.MenuItem
@@ -157,16 +263,36 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			return
 		}
 
-		itemSubtotal := menuItem.Price * float64(item.Quantity)
+		// Validate + price the selected add-on modifiers (#232). The per-unit
+		// price includes the modifier deltas so Price × Quantity == Subtotal.
+		var groups []models.ModifierGroup
+		database.DB.Preload("Options").Where("menu_item_id = ?", item.MenuItemID).
+			Order("sort_order").Find(&groups)
+		modDelta, modSnapshot, merr := validateAndPriceModifiers(groups, item.ModifierOptionIDs)
+		if merr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": merr.Error()})
+			return
+		}
+		modJSON, _ := json.Marshal(modSnapshot)
+
+		unitPrice := menuItem.Price + modDelta
+		itemSubtotal := unitPrice * float64(item.Quantity)
 		subtotal += itemSubtotal
 
 		orderItems[i] = models.OrderItem{
 			MenuItemID: item.MenuItemID,
 			Name:       menuItem.Name,
-			Price:      menuItem.Price,
+			Price:      unitPrice,
 			Quantity:   item.Quantity,
 			Subtotal:   itemSubtotal,
 			Notes:      item.Notes,
+			Modifiers:  string(modJSON),
+		}
+
+		if menuItem.DailyCapacity != nil && *menuItem.DailyCapacity > 0 {
+			capReservations = append(capReservations, capReservation{
+				itemID: item.MenuItemID, name: menuItem.Name, qty: item.Quantity, cap: *menuItem.DailyCapacity,
+			})
 		}
 	}
 
@@ -342,7 +468,12 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		DeliveryInstructions:      req.DeliveryInstructions,
 		SpecialInstructions:       req.SpecialInstructions,
 		ScheduledFor:              req.ScheduledFor,
+		DeliverySlot:              req.DeliverySlot,
 		EstimatedPrepTime:         30, // Default, could be calculated
+	}
+	// A resolved slot window is authoritative over any client-sent ScheduledFor.
+	if slotScheduledFor != nil {
+		order.ScheduledFor = slotScheduledFor
 	}
 
 	// Start transaction
@@ -363,6 +494,34 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order items"})
 		return
+	}
+
+	// Atomically reserve daily capacity for capped dishes (#48) — oversell-safe.
+	capDay := services.CapacityDay(time.Now())
+	for _, cr := range capReservations {
+		if err := services.ReserveCapacity(tx, req.ChefID, cr.itemID, cr.qty, cr.cap, capDay); err != nil {
+			tx.Rollback()
+			if errors.Is(err, services.ErrSoldOut) {
+				c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("%s is sold out for today", cr.name)})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reserve capacity"})
+			return
+		}
+	}
+
+	// Reserve the scheduled delivery slot's per-day capacity (#51) — one booking
+	// per order, keyed to its delivery day. Oversell-safe.
+	if slotToReserve != "" {
+		if err := services.ReserveSlot(tx, req.ChefID, slotToReserve, 1, slotCap, slotBookingDay); err != nil {
+			tx.Rollback()
+			if errors.Is(err, services.ErrSlotFull) {
+				c.JSON(http.StatusConflict, gin.H{"error": "That delivery slot just filled up. Please pick another time."})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reserve delivery slot"})
+			return
+		}
 	}
 
 	// Record promo code usage
@@ -485,7 +644,7 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	orderID := c.Param("id")
 
 	var order models.Order
-	if err := database.DB.Where("id = ? AND customer_id = ?", orderID, userID).
+	if err := database.DB.Preload("Items").Where("id = ? AND customer_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
@@ -512,6 +671,21 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&order).Error; err != nil {
 			return err
+		}
+		// Release the reserved daily capacity back to the chef (#48), keyed to the
+		// order's original IST day so a next-day cancel doesn't touch today's count.
+		capDay := services.CapacityDay(order.CreatedAt)
+		for _, it := range order.Items {
+			if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, capDay); err != nil {
+				return err
+			}
+		}
+		// Release the scheduled delivery-slot booking (#51), keyed to the order's
+		// scheduled delivery day (not CreatedAt — the slot may be for a future day).
+		if order.DeliverySlot != "" && order.ScheduledFor != nil {
+			if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueOrderEvent(tx, services.SubjectOrderCancelled, services.OrderEvent{
 			OrderID:     order.ID,

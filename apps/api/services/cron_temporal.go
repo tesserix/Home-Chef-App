@@ -29,6 +29,9 @@ func cronJobs() []cronJob {
 		{"fssai-reminder", fssaiReminderInterval, runFSSAIReminderScan, StartFSSAIReminderCron},
 		{"availability-resume", availabilityResumeInterval, runAvailabilityResumeScan, StartAvailabilityResumeCron},
 		{"audit-retention", auditRetentionInterval, runAuditRetentionScan, StartAuditRetentionCron},
+		{"meal-plan-sweep", mealPlanSweepInterval, runMealPlanSweep, StartMealPlanCron},
+		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
+		{"group-order-sweep", groupOrderSweepInterval, runGroupOrderSweep, StartGroupOrderCron},
 	}
 }
 

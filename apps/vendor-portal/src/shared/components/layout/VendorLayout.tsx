@@ -7,6 +7,7 @@ import {
   User,
   Star,
   BarChart3,
+  Gauge,
   Settings,
   Menu,
   X,
@@ -27,6 +28,7 @@ import { ThemeToggle } from '@/shared/theme';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
+  { name: 'Capacity', href: '/capacity', icon: Gauge },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },

@@ -9,68 +9,32 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
-import { api } from '../lib/api';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type Period = 'week' | 'month' | 'year';
-
-interface PopularItem {
-  name: string;
-  orders: number;
-  // The backend (apps/api/handlers/chefs.go:1089) returns `percentage` —
-  // share of the chef's total order count — and does NOT return `revenue`.
-  // `revenue` is kept here as optional for forward compatibility if the
-  // API later adds it; until then we render the percentage instead.
-  percentage?: number;
-  revenue?: number;
-}
-
-interface DailyRevenue {
-  date: string;
-  revenue: number;
-}
-
-interface AnalyticsResponse {
-  period: string;
-  totalOrders: number;
-  totalRevenue: number;
-  popularItems: PopularItem[];
-  // dailyRevenue retained for future sparkline once API ships a
-  // previousPeriodRevenue baseline and we have ≥8 gap-free data points.
-  dailyRevenue: DailyRevenue[];
-}
-
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
-function useAnalytics(period: Period) {
-  return useQuery<AnalyticsResponse>({
-    queryKey: ['chef', 'analytics', period],
-    queryFn: () =>
-      api
-        .get<AnalyticsResponse>(`/chef/analytics?period=${period}`)
-        .then((r) => r.data),
-    staleTime: 60_000,
-  });
-}
+import { DashboardStatsCard } from '../components/vendor/DashboardStatsCard';
+import {
+  useChefAnalytics,
+  useSubscriptionMetrics,
+  useDemandForecast,
+  type AnalyticsPeriod,
+  type PopularItem,
+  type Trend,
+} from '../hooks/useChefAnalytics';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PERIODS: { label: string; value: Period }[] = [
-  { label: 'Week', value: 'week' },
-  { label: 'Month', value: 'month' },
-  { label: 'Year', value: 'year' },
+const PERIODS: { label: string; value: AnalyticsPeriod }[] = [
+  { label: '7 Days', value: '7d' },
+  { label: '30 Days', value: '30d' },
+  { label: '90 Days', value: '90d' },
 ];
+
+function inr(n: number): string {
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -121,14 +85,30 @@ function PopularItemRow({ item, rank, isLast }: PopularItemRowProps) {
         <View style={rowStyles.right}>
           <Text style={rowStyles.orders}>{item.orders} orders</Text>
           <Text style={rowStyles.revenue}>
-            {typeof item.revenue === 'number'
-              ? `₹${item.revenue.toLocaleString('en-IN')}`
-              : typeof item.percentage === 'number'
-                ? `${item.percentage}% of orders`
-                : ''}
+            {typeof item.percentage === 'number' ? `${item.percentage}% of orders` : ''}
           </Text>
         </View>
       </View>
+    </View>
+  );
+}
+
+// Hand-rolled bar chart (no charting dependency) for a revenue/orders trend.
+function TrendBars({ trend }: { trend: Trend }) {
+  const max = Math.max(1, ...trend.data);
+  const labelEvery = Math.max(1, Math.ceil(trend.data.length / 6));
+  return (
+    <View style={styles.barsRow}>
+      {trend.data.map((v, i) => (
+        <View key={`${i}-${trend.labels[i] ?? ''}`} style={styles.barCol}>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { height: `${Math.max(3, (v / max) * 100)}%` }]} />
+          </View>
+          <Text style={styles.barLabel} numberOfLines={1}>
+            {i % labelEvery === 0 ? (trend.labels[i] ?? '') : ''}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -138,13 +118,16 @@ function PopularItemRow({ item, rank, isLast }: PopularItemRowProps) {
 // ---------------------------------------------------------------------------
 
 export default function AnalyticsScreen() {
-  const [period, setPeriod] = useState<Period>('week');
+  const [period, setPeriod] = useState<AnalyticsPeriod>('7d');
   const { data, isLoading, isError, isRefetching, refetch } =
-    useAnalytics(period);
+    useChefAnalytics(period);
+  const { data: subs } = useSubscriptionMetrics();
+  const { data: forecast } = useDemandForecast();
 
+  const summary = data?.summary;
   const hasData =
-    (data?.totalOrders ?? 0) > 0 ||
-    (data?.totalRevenue ?? 0) > 0 ||
+    (summary?.orders ?? 0) > 0 ||
+    (summary?.revenue ?? 0) > 0 ||
     (data?.popularItems?.length ?? 0) > 0;
 
   return (
@@ -231,25 +214,77 @@ export default function AnalyticsScreen() {
             />
           }
         >
-          {/* Hero — revenue + orders on a white paper card (UI-V2-SPEC §1).
-              Same visual grammar as the dashboard TODAY stat card so the
-              chef reads the figures fluently. */}
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryCol}>
-              <Text style={styles.summaryRevenue}>
-                ₹{(data?.totalRevenue ?? 0).toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.summaryColLabel}>Revenue</Text>
+          {/* Summary — 2×2 stat grid (#228): revenue, orders, AOV, repeat rate. */}
+          <View style={styles.statGrid}>
+            <View style={styles.statRow}>
+              <DashboardStatsCard
+                title="Revenue"
+                value={inr(summary?.revenue ?? 0)}
+                subtitle={
+                  summary && summary.prevRevenue > 0
+                    ? `${summary.revenue >= summary.prevRevenue ? '▲' : '▼'} vs last period`
+                    : undefined
+                }
+              />
+              <DashboardStatsCard title="Orders" value={summary?.orders ?? 0} />
             </View>
-            <View style={styles.summaryCol}>
-              <Text style={styles.summaryOrders}>
-                {data?.totalOrders ?? 0}
-              </Text>
-              <Text style={styles.summaryColLabel}>
-                {(data?.totalOrders ?? 0) === 1 ? 'Order' : 'Orders'}
-              </Text>
+            <View style={styles.statRow}>
+              <DashboardStatsCard title="Avg order" value={inr(summary?.aov ?? 0)} />
+              <DashboardStatsCard
+                title="Repeat customers"
+                value={`${summary?.repeatRate ?? 0}%`}
+                subtitle="ordered 2+ times"
+              />
             </View>
           </View>
+
+          {/* Revenue trend (#228) — hand-rolled bars, no charting dependency. */}
+          {(data?.revenueTrends?.data?.length ?? 0) > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>REVENUE TREND</Text>
+              <View style={styles.chartCard}>
+                <TrendBars trend={data!.revenueTrends} />
+              </View>
+            </View>
+          )}
+
+          {/* Tomorrow's demand forecast (#230) */}
+          {forecast && forecast.totalExpected > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>TOMORROW'S DEMAND</Text>
+              <View style={styles.forecastCard}>
+                <Text style={styles.forecastBig}>
+                  ~{forecast.totalExpected} meals
+                </Text>
+                <Text style={styles.forecastSub}>
+                  {forecast.subscriptionMeals} subscription ({forecast.subscriptionLunch} lunch ·{' '}
+                  {forecast.subscriptionDinner} dinner) + ~{forecast.alaCarteForecast} à-la-carte
+                </Text>
+                {forecast.likelyDishes.length > 0 && (
+                  <Text style={styles.forecastDishes}>
+                    Likely: {forecast.likelyDishes.map((d) => `${d.name} (~${d.expected})`).join(', ')}
+                  </Text>
+                )}
+                <Text style={styles.forecastBasis}>{forecast.basis}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Subscription health (#229) */}
+          {subs && (subs.activePlans > 0 || subs.subscribers > 0) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>SUBSCRIPTIONS</Text>
+              <View style={styles.statRow}>
+                <DashboardStatsCard title="Active plans" value={subs.activePlans} />
+                <DashboardStatsCard title="Churn" value={`${subs.churnRate}%`} />
+                <DashboardStatsCard
+                  title="Adherence"
+                  value={`${subs.adherenceRate}%`}
+                  subtitle="days delivered"
+                />
+              </View>
+            </View>
+          )}
 
           {/* Popular items section — white group card */}
           {(data?.popularItems?.length ?? 0) > 0 && (
@@ -373,6 +408,45 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.muted,
     marginBottom: theme.spacing[2],
   },
+
+  // Summary 2×2 stat grid (#228)
+  statGrid: { gap: theme.spacing[3] },
+  statRow: { flexDirection: 'row', gap: theme.spacing[3] },
+
+  // Revenue trend bars (#228)
+  chartCard: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+    ...theme.shadow[1],
+  },
+  barsRow: { flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 3 },
+  barCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
+  barTrack: { width: '100%', flex: 1, justifyContent: 'flex-end' },
+  barFill: {
+    width: '70%',
+    alignSelf: 'center',
+    backgroundColor: theme.colors.herb.DEFAULT,
+    borderRadius: 3,
+    minHeight: 3,
+  },
+  barLabel: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    color: theme.colors.ink.muted,
+    marginTop: 4,
+  },
+
+  // Demand forecast card (#230)
+  forecastCard: {
+    backgroundColor: theme.colors.herb.tint,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+  },
+  forecastBig: { fontFamily: 'Geist-Bold', fontSize: 26, color: theme.colors.ink.DEFAULT },
+  forecastSub: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.soft, marginTop: 4 },
+  forecastDishes: { fontFamily: 'Inter', fontSize: 12, color: theme.colors.ink.soft, marginTop: 6 },
+  forecastBasis: { fontFamily: 'Inter', fontSize: 11, color: theme.colors.ink.muted, marginTop: 6 },
   // White group card for the popular-items rows (UI-V2-SPEC §1)
   groupCard: {
     backgroundColor: theme.colors.paper,

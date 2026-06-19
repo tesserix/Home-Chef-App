@@ -191,6 +191,55 @@ export interface MenuItem {
   isFeatured: boolean;
   portionSize?: string;
   serves: number;
+  // Capacity & cutoff controls (#48). dailyCapacity null/absent = unlimited;
+  // remainingToday/soldOut are server-derived for capped dishes today (IST).
+  dailyCapacity?: number | null;
+  remainingToday?: number | null;
+  soldOut?: boolean;
+  // Add-ons / combos (#52).
+  isCombo?: boolean;
+  modifierGroups?: ModifierGroup[];
+  comboItems?: ComboItemRef[];
+}
+
+/** Per-item add-on modifier group, read shape from the API (#52). */
+export interface ModifierOption {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+}
+export interface ModifierGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: ModifierOption[];
+}
+/** Included dish in a combo (#52). */
+export interface ComboItemRef {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+}
+
+// --- Modifier / combo write shapes (form → API payload, #52) ---
+export interface ModifierOptionInput {
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+}
+export interface ModifierGroupInput {
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: ModifierOptionInput[];
+}
+export interface ComboItemInput {
+  menuItemId: string;
+  quantity: number;
 }
 
 // Order types

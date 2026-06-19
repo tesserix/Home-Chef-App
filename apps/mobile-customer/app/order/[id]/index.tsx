@@ -13,6 +13,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { startOrderPayment } from '../../../lib/payment';
+import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -194,12 +195,16 @@ export default function OrderDetailScreen() {
 
         {/* Status chip + ETA — spec §2.7 + §0 chip pattern */}
         <View style={styles.statusSection}>
-          <View
-            style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}
-          >
-            <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
-              {chipStyle.label}
-            </Text>
+          <View style={styles.statusChipRow}>
+            {/* Live cooking animation while the chef is preparing the order (#50) */}
+            {order.status === 'preparing' ? (
+              <CookingIndicator size={20} color={customerColors.coral.DEFAULT} />
+            ) : null}
+            <View style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}>
+              <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
+                {order.status === 'preparing' ? 'Cooking now' : chipStyle.label}
+              </Text>
+            </View>
           </View>
           {order.estimatedDeliveryTime ? (
             <Text style={styles.etaText}>
@@ -260,6 +265,17 @@ export default function OrderDetailScreen() {
             >
               <View style={styles.trackButton}>
                 <Text style={styles.trackButtonText}>Leave a Review</Text>
+              </View>
+            </Pressable>
+            {/* Tip your chef / rider (#45) — 100% pass-through. */}
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/tip`)}
+              accessibilityRole="button"
+              accessibilityLabel="Tip your chef or rider"
+              style={{ marginTop: 12 }}
+            >
+              <View style={styles.tipButton}>
+                <Text style={styles.tipButtonText}>Tip your chef / rider</Text>
               </View>
             </Pressable>
           </View>
@@ -437,6 +453,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  statusChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   // Spec §2.7: radius-full chip, tint bg + family text color
   statusChip: {
     paddingHorizontal: 14,
@@ -480,6 +501,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.canvas,
+  },
+  // Secondary CTA (coral outline) — tip sits below the filled review button.
+  tipButton: {
+    backgroundColor: customerColors.canvas,
+    borderRadius: 8,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: customerColors.coral.DEFAULT,
+  },
+  tipButtonText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.coral.DEFAULT,
   },
 
   // Content section — direct on white, no card bg

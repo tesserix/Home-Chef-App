@@ -244,6 +244,11 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
 		Where("chef_id IN (?)", visibleChefs)
 
+	// Optional diet filter (#41) — case-insensitive match on a dietary tag.
+	if dietary := strings.TrimSpace(c.Query("dietary")); dietary != "" {
+		base = base.Where("EXISTS (SELECT 1 FROM unnest(dietary_tags) AS t WHERE lower(t) = lower(?))", dietary)
+	}
+
 	var total int64
 	base.Count(&total)
 
@@ -300,20 +305,43 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 }
 
 // GetChefMenu returns the menu items and categories for a chef
+// resolveChefID maps a :id route param (a UUID or an SEO slug, #58) to the chef's
+// UUID, so every chef endpoint can be addressed by /chefs/<slug>. Returns false
+// when no chef matches.
+func resolveChefID(idOrSlug string) (uuid.UUID, bool) {
+	if id, err := uuid.Parse(idOrSlug); err == nil {
+		return id, true
+	}
+	var chef models.ChefProfile
+	if err := database.DB.Select("id").Where("slug = ?", idOrSlug).Order("created_at").First(&chef).Error; err != nil {
+		return uuid.Nil, false
+	}
+	return chef.ID, true
+}
+
 func (h *ChefHandler) GetChefMenu(c *gin.Context) {
-	id := c.Param("id")
-	chefID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
+	chefID, ok := resolveChefID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
 
 	category := c.Query("category")
 
-	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).Preload("Images")
+	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).
+		Preload("Images").
+		// Add-ons + combo composition (#52) so the customer can pick modifiers
+		// and see what a combo includes.
+		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") })
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)
+	}
+	// Diet filter (#41) — case-insensitive match on a dietary tag (e.g. veg).
+	if dietary := c.Query("dietary"); dietary != "" {
+		query = query.Where("EXISTS (SELECT 1 FROM unnest(dietary_tags) AS t WHERE lower(t) = lower(?))", dietary)
 	}
 
 	var items []models.MenuItem
@@ -327,9 +355,16 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 	database.DB.Where("chef_id = ? AND is_active = ?", chefID, true).
 		Order("sort_order, name").Find(&categories)
 
+	capDay := services.CapacityDay(time.Now())
 	responses := make([]models.MenuItemResponse, len(items))
-	for i, item := range items {
-		responses[i] = item.ToResponse()
+	for i := range items {
+		// Surface today's remaining count + sold-out for capped dishes (#48).
+		// Set on the model so ToResponse carries it (single source of truth).
+		if rem, soldOut := services.RemainingToday(items[i].ID, items[i].DailyCapacity, capDay); rem != nil {
+			items[i].RemainingToday = rem
+			items[i].SoldOut = soldOut
+		}
+		responses[i] = items[i].ToResponse()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -340,10 +375,9 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 // GetChefReviews returns reviews for a chef
 func (h *ChefHandler) GetChefReviews(c *gin.Context) {
-	id := c.Param("id")
-	chefID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
+	chefID, ok := resolveChefID(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return
 	}
 
@@ -726,7 +760,7 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	var order models.Order
-	if err := database.DB.Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
+	if err := database.DB.Preload("Items").Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
@@ -739,7 +773,14 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
+	priorStatus := order.Status
 	order.Status = models.OrderStatus(req.Status)
+	// A chef rejecting via status="cancelled" should release the reserved daily
+	// capacity (#48), but only on the first transition out of a live state.
+	releaseCap := order.Status == models.OrderStatusCancelled &&
+		priorStatus != models.OrderStatusCancelled &&
+		priorStatus != models.OrderStatusRefunded &&
+		priorStatus != models.OrderStatusDelivered
 
 	// Determine which subject to publish to based on status.
 	subject := services.SubjectOrderUpdated
@@ -752,6 +793,21 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&order).Error; err != nil {
 			return err
+		}
+		if releaseCap {
+			capDay := services.CapacityDay(order.CreatedAt)
+			for _, it := range order.Items {
+				if err := services.ReleaseCapacity(tx, it.MenuItemID, it.Quantity, capDay); err != nil {
+					return err
+				}
+			}
+			// Release the scheduled delivery-slot booking too (#51), keyed to the
+			// order's scheduled delivery day.
+			if order.DeliverySlot != "" && order.ScheduledFor != nil {
+				if err := services.ReleaseSlot(tx, order.ChefID, order.DeliverySlot, 1, services.CapacityDay(*order.ScheduledFor)); err != nil {
+					return err
+				}
+			}
 		}
 		return services.EnqueueOrderEvent(tx, subject, services.OrderEvent{
 			OrderID:     order.ID,
@@ -777,6 +833,156 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, order.ToResponse())
+}
+
+// GetChefCapacitySettings — GET /chef/capacity-settings (#48). Cutoffs + auto-sold-out.
+func (h *ChefHandler) GetChefCapacitySettings(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	c.JSON(http.StatusOK, services.GetChefCapacitySettings(chef.ID))
+}
+
+type updateCapacitySettingsRequest struct {
+	CutoffEnabled *bool   `json:"cutoffEnabled"`
+	LunchCutoff   *string `json:"lunchCutoff"`
+	DinnerCutoff  *string `json:"dinnerCutoff"`
+	AutoSoldOut   *bool   `json:"autoSoldOut"`
+
+	// Scheduled delivery slots (#51)
+	SlotsEnabled       *bool   `json:"slotsEnabled"`
+	LunchSlotStart     *string `json:"lunchSlotStart"`
+	LunchSlotEnd       *string `json:"lunchSlotEnd"`
+	DinnerSlotStart    *string `json:"dinnerSlotStart"`
+	DinnerSlotEnd      *string `json:"dinnerSlotEnd"`
+	LunchSlotCapacity  *int    `json:"lunchSlotCapacity"`
+	DinnerSlotCapacity *int    `json:"dinnerSlotCapacity"`
+}
+
+// UpdateChefCapacitySettings — PUT /chef/capacity-settings (#48, upsert).
+func (h *ChefHandler) UpdateChefCapacitySettings(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	var req updateCapacitySettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// All "HH:MM" fields (cutoffs + slot windows) must parse when non-empty.
+	for _, v := range []*string{
+		req.LunchCutoff, req.DinnerCutoff,
+		req.LunchSlotStart, req.LunchSlotEnd, req.DinnerSlotStart, req.DinnerSlotEnd,
+	} {
+		if v != nil && *v != "" {
+			if _, _, ok := services.ParseCutoff(*v); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "time must be HH:MM (24h), e.g. 10:00"})
+				return
+			}
+		}
+	}
+	// Each slot window must have start before end when both are given.
+	if !slotWindowOrdered(req.LunchSlotStart, req.LunchSlotEnd) ||
+		!slotWindowOrdered(req.DinnerSlotStart, req.DinnerSlotEnd) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slot window start must be before end"})
+		return
+	}
+	var s models.ChefCapacitySettings
+	database.DB.Where("chef_id = ?", chef.ID).FirstOrInit(&s)
+	s.ChefID = chef.ID
+	if req.CutoffEnabled != nil {
+		s.CutoffEnabled = *req.CutoffEnabled
+	}
+	if req.LunchCutoff != nil {
+		s.LunchCutoff = *req.LunchCutoff
+	}
+	if req.DinnerCutoff != nil {
+		s.DinnerCutoff = *req.DinnerCutoff
+	}
+	if req.AutoSoldOut != nil {
+		s.AutoSoldOut = *req.AutoSoldOut
+	}
+	if req.SlotsEnabled != nil {
+		s.SlotsEnabled = *req.SlotsEnabled
+	}
+	if req.LunchSlotStart != nil {
+		s.LunchSlotStart = *req.LunchSlotStart
+	}
+	if req.LunchSlotEnd != nil {
+		s.LunchSlotEnd = *req.LunchSlotEnd
+	}
+	if req.DinnerSlotStart != nil {
+		s.DinnerSlotStart = *req.DinnerSlotStart
+	}
+	if req.DinnerSlotEnd != nil {
+		s.DinnerSlotEnd = *req.DinnerSlotEnd
+	}
+	// Capacity: negative is rejected; 0 means "unlimited" (stored as nil).
+	if req.LunchSlotCapacity != nil {
+		if *req.LunchSlotCapacity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot capacity cannot be negative"})
+			return
+		}
+		s.LunchSlotCapacity = normalizeCapacity(*req.LunchSlotCapacity)
+	}
+	if req.DinnerSlotCapacity != nil {
+		if *req.DinnerSlotCapacity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot capacity cannot be negative"})
+			return
+		}
+		s.DinnerSlotCapacity = normalizeCapacity(*req.DinnerSlotCapacity)
+	}
+	if err := database.DB.Save(&s).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save settings"})
+		return
+	}
+	c.JSON(http.StatusOK, s)
+}
+
+// slotWindowOrdered reports whether a slot's start time precedes its end time.
+// True when either bound is absent/blank (nothing to compare).
+func slotWindowOrdered(start, end *string) bool {
+	if start == nil || end == nil || *start == "" || *end == "" {
+		return true
+	}
+	sh, sm, sok := services.ParseCutoff(*start)
+	eh, em, eok := services.ParseCutoff(*end)
+	if !sok || !eok {
+		return true // already flagged by the HH:MM validation above
+	}
+	return sh*60+sm < eh*60+em
+}
+
+// normalizeCapacity maps a capacity input to storage: 0 → nil (unlimited),
+// positive → a pointer to that value.
+func normalizeCapacity(n int) *int {
+	if n <= 0 {
+		return nil
+	}
+	return &n
+}
+
+// GetChefDeliverySlots — GET /chefs/:id/delivery-slots (PUBLIC). Returns the
+// chef's offered scheduled-delivery slots across the booking horizon with
+// per-day remaining capacity and open/closed state, for the checkout picker (#51).
+func (h *ChefHandler) GetChefDeliverySlots(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	s := services.GetChefCapacitySettings(chefID)
+	slots := services.BuildSlotAvailability(s, chefID, time.Now())
+	c.JSON(http.StatusOK, gin.H{
+		"slotsEnabled": s.SlotsEnabled,
+		"slots":        slots,
+	})
 }
 
 // GetOrderDetail returns a single order's full detail for the authenticated chef.
@@ -1421,11 +1627,63 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 		}
 	}
 
+	// ── Summary headline metrics (#228): orders, revenue, AOV, repeat-rate ──
+	totalOrders := 0
+	var totalRevenue float64
+	for i := range orderData {
+		totalOrders += orderData[i]
+		totalRevenue += revenueData[i]
+	}
+	aov := 0.0
+	if totalOrders > 0 {
+		aov = totalRevenue / float64(totalOrders)
+	}
+
+	// Prior period of equal length, for a trend delta.
+	prevSince := time.Now().AddDate(0, 0, -2*days)
+	var prevRevenue float64
+	database.DB.Raw(`
+		SELECT COALESCE(SUM(total), 0) FROM orders
+		WHERE chef_id = ? AND created_at >= ? AND created_at < ? AND deleted_at IS NULL
+	`, chef.ID, prevSince, since).Scan(&prevRevenue)
+
 	c.JSON(http.StatusOK, gin.H{
+		"summary": gin.H{
+			"orders":      totalOrders,
+			"revenue":     math.Round(totalRevenue*100) / 100,
+			"aov":         math.Round(aov*100) / 100,
+			"repeatRate":  chefRepeatRate(chef.ID),
+			"prevRevenue": math.Round(prevRevenue*100) / 100,
+		},
 		"orderTrends":       gin.H{"labels": orderLabels, "data": orderData},
 		"revenueTrends":     gin.H{"labels": revenueLabels, "data": revenueData},
 		"popularItems":      popularItemsResp,
 		"peakHours":         peakHours,
 		"revenueByCategory": revByCat,
 	})
+}
+
+// chefRepeatRate returns the lifetime repeat-customer percentage for a chef:
+// distinct customers with ≥2 orders ÷ distinct customers, ×100 (#228). Reused
+// across the analytics surfaces.
+func chefRepeatRate(chefID uuid.UUID) float64 {
+	var row struct {
+		Repeat int
+		Total  int
+	}
+	database.DB.Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE cnt >= 2) AS repeat,
+			COUNT(*) AS total
+		FROM (
+			SELECT customer_id, COUNT(*) AS cnt
+			FROM orders
+			WHERE chef_id = ? AND deleted_at IS NULL
+			GROUP BY customer_id
+		) t
+	`, chefID).Scan(&row)
+	if row.Total == 0 {
+		return 0
+	}
+	return math.Round(float64(row.Repeat)/float64(row.Total)*1000) / 10
 }

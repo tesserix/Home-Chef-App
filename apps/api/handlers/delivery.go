@@ -604,6 +604,15 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			"status":       models.OrderStatusDelivered,
 			"delivered_at": now,
 		})
+		// If this order belongs to a tiffin meal-plan day, mark the day delivered
+		// and release its held chef payout (escrow; gated). No-op otherwise.
+		services.MarkMealPlanDayDelivered(delivery.OrderID)
+		// If this order is a consolidated group/office order, mark it delivered
+		// and release the chef payout (#46). No-op otherwise.
+		services.MarkGroupOrderDelivered(delivery.OrderID)
+		// Release the regular order's held chef/rider payouts (#217, gated). No-op
+		// for orders without a Razorpay order id (meal-plan/group settle their own).
+		services.ReleaseOrderPayouts(delivery.OrderID)
 		// Update partner stats
 		database.DB.Model(&partner).Updates(map[string]interface{}{
 			"total_deliveries": partner.TotalDeliveries + 1,

@@ -78,11 +78,15 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
 			Subjects: []string{SubjectUserRegistered}},
 		{Stream: "CHEF", Durable: "notify-chef", Handler: h,
-			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified}},
+			Subjects: []string{SubjectChefNewOrder, SubjectChefVerified, SubjectChefTipReceived}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
-			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted}},
+			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
+		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded}},
+		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
+			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
 }
 
@@ -111,6 +115,14 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleUserRegistered)
 	case SubjectChefVerified:
 		return decodeThen(data, s.handleChefVerified)
+	case SubjectChefTipReceived, SubjectDriverTipReceived:
+		return decodeThen(data, s.handleTipReceived)
+	case SubjectGroupOrderLocked:
+		return decodeThen(data, s.handleGroupOrderLocked)
+	case SubjectGroupOrderPlaced:
+		return decodeThen(data, s.handleGroupOrderPlaced)
+	case SubjectGroupOrderCancelled:
+		return decodeThen(data, s.handleGroupOrderCancelled)
 	case SubjectDeliveryAssigned:
 		return decodeThen(data, s.handleDeliveryAssigned)
 	case SubjectDeliveryPickedUp:
@@ -125,6 +137,20 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleApprovalInfoRequested)
 	case SubjectApprovalCreated:
 		return decodeThen(data, s.handleApprovalCreated)
+	case SubjectMealPlanCreated:
+		return decodeThen(data, s.handleMealPlanCreated)
+	case SubjectMealPlanAcceptedFull:
+		return decodeThen(data, s.handleMealPlanAcceptedFull)
+	case SubjectMealPlanModified:
+		return decodeThen(data, s.handleMealPlanModified)
+	case SubjectMealPlanConfirmed:
+		return decodeThen(data, s.handleMealPlanConfirmed)
+	case SubjectMealPlanCancelled:
+		return decodeThen(data, s.handleMealPlanCancelled)
+	case SubjectMealPlanDayDelivered:
+		return decodeThen(data, s.handleMealPlanDayDelivered)
+	case SubjectMealPlanDayRefunded:
+		return decodeThen(data, s.handleMealPlanDayRefunded)
 	default:
 		log.Printf("notification: no handler for subject %q", subject)
 		return nil
@@ -329,6 +355,77 @@ func (s *NotificationService) handleChefNewOrder(event OrderEvent) error {
 		return fmt.Errorf("save new_order notification: %w", err)
 	}
 	return nil
+}
+
+// handleTipReceived → chef or rider (event.UserID): a post-delivery tip (#45).
+// In-app + push; the amount is the beneficiary's share.
+func (s *NotificationService) handleTipReceived(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	amount, _ := event.Data["amount"].(float64)
+	title := "You received a tip! 🎉"
+	message := fmt.Sprintf("A customer tipped you ₹%.0f — it's on its way to your payout.", amount)
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "tip_received",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save tip_received notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// ── Group / office orders (#46) ──────────────────────────────────────────────
+
+func (s *NotificationService) notifyGroup(event Event, notifType, title, message string) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    notifType,
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save %s notification: %w", notifType, err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleGroupOrderLocked → participant: pay your share.
+func (s *NotificationService) handleGroupOrderLocked(event Event) error {
+	share, _ := event.Data["share"].(float64)
+	return s.notifyGroup(event, "group_order_locked",
+		"Time to pay your share",
+		fmt.Sprintf("Your group order is locked. Pay your share of ₹%.0f to confirm it.", share))
+}
+
+// handleGroupOrderPlaced → host: the consolidated order is placed.
+func (s *NotificationService) handleGroupOrderPlaced(event Event) error {
+	return s.notifyGroup(event, "group_order_placed",
+		"Group order placed 🎉",
+		"Everyone has paid — your group order is on its way to the chef.")
+}
+
+// handleGroupOrderCancelled → participant: cancelled + refunded.
+func (s *NotificationService) handleGroupOrderCancelled(event Event) error {
+	return s.notifyGroup(event, "group_order_cancelled",
+		"Group order cancelled",
+		"A group order you were part of was cancelled. Any payment was refunded to your wallet.")
 }
 
 func (s *NotificationService) handleChefVerified(event Event) error {
@@ -578,6 +675,111 @@ func (s *NotificationService) handleApprovalCreated(event Event) error {
 		}
 	}
 	return nil
+}
+
+// ── Meal-plan (tiffin) lifecycle (MEAL_PLANS stream, #198) ───────────────────
+//
+// The producer sets event.UserID to the recipient's User.ID already — the chef's
+// User.ID for chef-facing events, the customer's User.ID for customer-facing ones
+// (see handlers/meal_plan.go + meal_plan_cron.go). So these handlers notify
+// event.UserID directly; no chef-profile→user resolution is needed here.
+
+// notifyMealPlan persists an in-app notification and emits a push to the event's
+// target user. A nil target is dropped (unresolvable → not retryable). Idempotency
+// is handled upstream by the durable consumer (msg-id dedup).
+func (s *NotificationService) notifyMealPlan(event Event, notifType, title, message string) error {
+	if event.UserID == uuid.Nil {
+		log.Printf("meal-plan notification %q: nil target user (dropping)", notifType)
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    notifType,
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save %s notification: %w", notifType, err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleMealPlanCreated → chef: a customer pre-booked a tiffin plan to review.
+func (s *NotificationService) handleMealPlanCreated(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_request",
+		"New tiffin request",
+		"A customer pre-booked a meal plan. Review the days you can cook and respond.")
+}
+
+// handleMealPlanAcceptedFull → customer: chef accepted every requested day.
+func (s *NotificationService) handleMealPlanAcceptedFull(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_accepted",
+		"Your meal plan is confirmed",
+		"Your chef accepted every day of your tiffin plan. You're all set!")
+}
+
+// handleMealPlanModified → customer: chef cherry-picked a subset; approval needed.
+func (s *NotificationService) handleMealPlanModified(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_modified",
+		"Your chef revised the plan",
+		"Your chef can cook some of the days you picked. Review and approve the updated plan.")
+}
+
+// handleMealPlanConfirmed → chef: customer approved the revised plan.
+func (s *NotificationService) handleMealPlanConfirmed(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_confirmed",
+		"Meal plan confirmed",
+		"The customer approved your revised plan. It's confirmed.")
+}
+
+// handleMealPlanDayDelivered → customer: a tiffin day was delivered. In-app only
+// (no push) — per-day delivery is high-frequency and the order pipeline already
+// pushes its own delivery notification.
+func (s *NotificationService) handleMealPlanDayDelivered(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "meal_plan_day_delivered",
+		Title:   "Tiffin delivered",
+		Message: "Today's tiffin from your meal plan was delivered. Enjoy!",
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save meal_plan_day_delivered notification: %w", err)
+	}
+	return nil
+}
+
+// handleMealPlanDayRefunded → customer: a skipped/undelivered day was refunded to
+// the wallet. In-app + push (money movement is worth a push).
+func (s *NotificationService) handleMealPlanDayRefunded(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_day_refunded",
+		"Day refunded to your wallet",
+		"A meal-plan day was refunded to your HomeChef wallet.")
+}
+
+// handleMealPlanCancelled → chef or customer (event.UserID), tailored by cause:
+// expiry sweep (no response in time) vs the customer declining the revised plan.
+func (s *NotificationService) handleMealPlanCancelled(event Event) error {
+	title, message := "Meal plan cancelled", "This tiffin meal plan was cancelled."
+	switch {
+	case event.Type == "meal_plan.expired":
+		title = "Meal plan expired"
+		message = "A tiffin meal plan expired because it wasn't responded to in time."
+	default:
+		if approved, ok := event.Data["approved"].(bool); ok && !approved {
+			title = "Customer declined the revised plan"
+			message = "The customer declined your revised meal plan, so it was cancelled."
+		}
+	}
+	return s.notifyMealPlan(event, "meal_plan_cancelled", title, message)
 }
 
 // ── Notification dispatch (NOTIFICATIONS stream) ─────────────────────────────

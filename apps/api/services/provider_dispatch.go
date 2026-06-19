@@ -57,17 +57,18 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 	}
 
 	req := ProviderDeliveryRequest{
-		OrderID:         order.ID,
-		PickupAddress:   joinAddress(order.Chef.AddressLine1, order.Chef.City),
-		PickupLat:       order.Chef.Latitude,
-		PickupLng:       order.Chef.Longitude,
-		DropoffAddress:  joinAddress(order.DeliveryAddressLine1, order.DeliveryAddressCity),
-		DropoffLat:      order.DeliveryLatitude,
-		DropoffLng:      order.DeliveryLongitude,
-		CustomerName:    strings.TrimSpace(order.Customer.FirstName + " " + order.Customer.LastName),
-		CustomerPhone:   order.Customer.Phone,
-		ItemDescription: fmt.Sprintf("Order %s", order.OrderNumber),
-		Weight:          1.0, // TODO: derive from item count/weights when available
+		OrderID:           order.ID,
+		PickupAddress:     joinAddress(order.Chef.AddressLine1, order.Chef.City),
+		PickupLat:         order.Chef.Latitude,
+		PickupLng:         order.Chef.Longitude,
+		DropoffAddress:    joinAddress(order.DeliveryAddressLine1, order.DeliveryAddressCity),
+		DropoffLat:        order.DeliveryLatitude,
+		DropoffLng:        order.DeliveryLongitude,
+		CustomerName:      strings.TrimSpace(order.Customer.FirstName + " " + order.Customer.LastName),
+		CustomerPhone:     order.Customer.Phone,
+		ItemDescription:   fmt.Sprintf("Order %s", order.OrderNumber),
+		Weight:            1.0,                // TODO: derive from item count/weights when available
+		ScheduledPickupAt: order.ScheduledFor, // #51: timed to the chosen delivery slot
 	}
 
 	resp, err := svc.CreateProviderDelivery(provider, req)

@@ -11,6 +11,7 @@ import {
   Check,
   FileText,
   Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCartStore } from '@/app/store/cart-store';
@@ -33,6 +34,44 @@ const addressSchema = z.object({
 });
 
 type AddressFormData = z.infer<typeof addressSchema>;
+
+// Scheduled delivery slots (#51) — mirrors the API GET /chefs/:id/delivery-slots
+// response (services.SlotAvailability).
+interface DeliverySlot {
+  date: string; // "YYYY-MM-DD" IST
+  slot: 'lunch' | 'dinner';
+  label: string;
+  window: string; // "12:00–14:00"
+  remaining: number | null; // null = unlimited
+  available: boolean;
+}
+interface DeliverySlotsResponse {
+  slotsEnabled: boolean;
+  slots: DeliverySlot[];
+}
+
+// Dietary conflict check (#41) — mirrors POST /dietary/check.
+interface DietaryWarning {
+  menuItemId: string;
+  name: string;
+  conflicts: { type: string; label: string; detail: string }[];
+}
+interface DietaryCheckResult {
+  hasConflicts: boolean;
+  warnings: DietaryWarning[];
+}
+
+// slotDayLabel turns a "YYYY-MM-DD" slot date into a label relative to today
+// ("Today" / "Tomorrow" / "Mon, 22 Jun").
+function slotDayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
 
 // Saved addresses come from /api/v1/addresses (see useQuery below). The old
 // hardcoded list shipped mock ids "1" and "2" which the backend rejected at
@@ -66,7 +105,29 @@ export default function CheckoutPage() {
     }
   }, [savedAddresses, selectedAddress]);
   const [showNewAddress, setShowNewAddress] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState<string>('asap');
+  // Scheduled delivery slot (#51) — null = ASAP. The picker below only offers
+  // slots when the chef has enabled them.
+  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
+  const { data: slotsData } = useQuery({
+    queryKey: ['delivery-slots', cart.chefId],
+    queryFn: () =>
+      apiClient.get<DeliverySlotsResponse>(`/chefs/${cart.chefId}/delivery-slots`),
+    enabled: Boolean(cart.chefId),
+    staleTime: 60_000,
+  });
+  const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+  // Dietary & allergen conflict warning (#41) — server-checks the cart's items
+  // against the customer's saved profile. Non-blocking.
+  const cartItemIds = cart.items.map((i) => i.menuItemId);
+  const { data: dietaryCheck } = useQuery({
+    queryKey: ['dietary-check', cartItemIds],
+    queryFn: () =>
+      apiClient.post<DietaryCheckResult>('/dietary/check', { menuItemIds: cartItemIds }),
+    enabled: cartItemIds.length > 0,
+    staleTime: 60_000,
+  });
+  const dietaryWarnings = dietaryCheck?.warnings ?? [];
+
   const [tip, setTip] = useState<number>(0);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -134,12 +195,19 @@ export default function CheckoutPage() {
       // Step 1: Create order. The backend decides which gateway to use
       // based on the chef's PaymentProvider setting.
       const order = await apiClient.post<Order>('/orders', {
-        items: cart.items,
+        // Map cart lines to the API item shape, including selected add-ons (#232).
+        items: cart.items.map((i) => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          notes: i.notes || undefined,
+          modifierOptionIds: i.modifiers?.map((m) => m.optionId),
+        })),
         chefId: cart.chefId,
         deliveryAddressId: selectedAddress,
         tip,
         specialInstructions: specialInstructions || undefined,
-        scheduledFor: scheduledTime !== 'asap' ? scheduledTime : undefined,
+        deliverySlot: selectedSlot?.slot,
+        deliveryDate: selectedSlot?.date,
       });
 
       // Step 2: Ask the backend to prepare a payment. The response shape
@@ -470,6 +538,30 @@ export default function CheckoutPage() {
               )}
             </section>
 
+            {/* Dietary / allergen conflict warning (#41) — non-blocking */}
+            {dietaryWarnings.length > 0 && (
+              <section className="rounded-xl border border-paprika/30 bg-paprika-tint p-6 shadow-1">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-paprika">
+                  <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                  Check your order
+                </h2>
+                <p className="mt-1 text-sm text-paprika">
+                  Some items may not match your dietary profile:
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {dietaryWarnings.map((w) => (
+                    <li key={w.menuItemId} className="text-sm text-paprika">
+                      • {w.name} — {w.conflicts.map((cf) => cf.detail).join(', ')}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-ink-muted">
+                  You can still place this order. Review your items or update your dietary profile in
+                  your account.
+                </p>
+              </section>
+            )}
+
             {/* Delivery Time */}
             <section className="rounded-xl bg-bone p-6 shadow-1">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
@@ -478,9 +570,10 @@ export default function CheckoutPage() {
               </h2>
 
               <div className="mt-4 space-y-3">
+                {/* ASAP (default) */}
                 <label
                   className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                    scheduledTime === 'asap'
+                    selectedSlot === null
                       ? 'border-herb bg-herb-tint'
                       : 'border-mist hover:bg-paper'
                   }`}
@@ -488,9 +581,8 @@ export default function CheckoutPage() {
                   <input
                     type="radio"
                     name="time"
-                    value="asap"
-                    checked={scheduledTime === 'asap'}
-                    onChange={(e) => setScheduledTime(e.target.value)}
+                    checked={selectedSlot === null}
+                    onChange={() => setSelectedSlot(null)}
                     className="h-4 w-4 text-herb focus-visible:ring-herb"
                   />
                   <div>
@@ -501,41 +593,44 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 </label>
-                <label
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
-                    scheduledTime !== 'asap'
-                      ? 'border-herb bg-herb-tint'
-                      : 'border-mist hover:bg-paper'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="time"
-                    value="scheduled"
-                    checked={scheduledTime !== 'asap'}
-                    onChange={() => setScheduledTime('12:00')}
-                    className="h-4 w-4 text-herb focus-visible:ring-herb"
-                  />
-                  <div className="flex-1">
-                    <span className="font-medium text-ink">Schedule for later</span>
-                    {scheduledTime !== 'asap' && (
-                      <select
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                        className="input-base mt-2"
+
+                {/* Scheduled slots (#51) — only when the chef offers them */}
+                {slotsData?.slotsEnabled &&
+                  availableSlots.map((s) => {
+                    const sel =
+                      selectedSlot?.slot === s.slot && selectedSlot?.date === s.date;
+                    return (
+                      <label
+                        key={`${s.date}-${s.slot}`}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 ${
+                          sel ? 'border-herb bg-herb-tint' : 'border-mist hover:bg-paper'
+                        }`}
                       >
-                        <option value="12:00">12:00 PM</option>
-                        <option value="12:30">12:30 PM</option>
-                        <option value="13:00">1:00 PM</option>
-                        <option value="13:30">1:30 PM</option>
-                        <option value="18:00">6:00 PM</option>
-                        <option value="18:30">6:30 PM</option>
-                        <option value="19:00">7:00 PM</option>
-                        <option value="19:30">7:30 PM</option>
-                      </select>
-                    )}
-                  </div>
-                </label>
+                        <input
+                          type="radio"
+                          name="time"
+                          checked={sel}
+                          onChange={() => setSelectedSlot({ slot: s.slot, date: s.date })}
+                          className="h-4 w-4 text-herb focus-visible:ring-herb"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium text-ink">
+                            {slotDayLabel(s.date)} · {s.label}
+                          </span>
+                          <p className="text-sm text-ink-muted tabular-nums">
+                            {s.window}
+                            {s.remaining != null ? ` · ${s.remaining} left` : ''}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+
+                {slotsData?.slotsEnabled && availableSlots.length === 0 && (
+                  <p className="text-sm text-ink-muted">
+                    No delivery windows are open right now — your order will be delivered ASAP.
+                  </p>
+                )}
               </div>
             </section>
 

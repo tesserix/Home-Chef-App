@@ -95,6 +95,24 @@ type Config struct {
 	// (services.CreateTransfer) which must be verified in the Razorpay sandbox
 	// before it touches live settlement. Enable with WALLET_CHECKOUT_ENABLED=true.
 	WalletCheckoutEnabled bool
+	// GroupOrdersEnabled gates the group / office orders feature (#46): shared
+	// cart, split payment, and consolidation. Default OFF — the multi-payer money
+	// flow should be verified in the Razorpay sandbox before going live.
+	GroupOrdersEnabled bool
+	// OrderPayoutAutoReleaseEnabled gates auto-releasing a delivered regular
+	// order's held chef/rider Route transfers (#217). Default OFF — moves live
+	// settlement; verify in the Razorpay sandbox (#218) before enabling.
+	OrderPayoutAutoReleaseEnabled bool
+	// MealPlanEscrowEnabled gates the tiffin meal-plan ESCROW money flow (#194):
+	// upfront advance capture, refund of declined/expired days, and per-day payout
+	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
+	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
+	MealPlanEscrowEnabled bool
+	// CateringDepositEnabled gates the catering deposit/advance money flow (#55):
+	// creating a Razorpay deposit order to confirm a catering booking. Default OFF —
+	// the request → quote → accept flow works without it; flip on only after the
+	// Razorpay deposit path is sandbox-verified (#218).
+	CateringDepositEnabled bool
 }
 
 var AppConfig *Config
@@ -107,6 +125,10 @@ func Load() {
 
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
+	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
+	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
+	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
+	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -208,8 +230,12 @@ func Load() {
 		ExchangeRatesAPIKey:    getEnv("EXCHANGERATES_API_KEY", ""),
 
 		// Feature Flags
-		EnableMockMode:        enableMock,
-		WalletCheckoutEnabled: walletCheckout,
+		EnableMockMode:                enableMock,
+		WalletCheckoutEnabled:         walletCheckout,
+		MealPlanEscrowEnabled:         mealPlanEscrow,
+		GroupOrdersEnabled:            groupOrders,
+		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
+		CateringDepositEnabled:        cateringDeposit,
 	}
 }
 

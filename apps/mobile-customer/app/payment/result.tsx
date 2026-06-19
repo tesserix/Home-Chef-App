@@ -32,6 +32,7 @@ interface PaymentParams {
   razorpay_order_id?: string;
   order_id?: string; // the internal order id passed when launching checkout
   error?: string;
+  tip?: string; // '1' when this is a post-delivery tip charge (#45)
 }
 
 // How long to keep polling for a 'pending' order before declaring failure.
@@ -87,6 +88,33 @@ export default function PaymentResult() {
 
   function handleViewOrder() {
     router.replace(orderId ? `/order/${orderId}` : '/(tabs)/orders');
+  }
+
+  // ── Tip success (#45) ─────────────────────────────────────────────────────
+  // A tip is its own charge already verified by the checkout sheet — no order
+  // payment to poll. Show a static thank-you.
+  if (params.tip === '1') {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right', 'bottom']}>
+        <View style={styles.centered}>
+          <View style={styles.successCircle}>
+            <CheckCircle2 size={48} color={customerColors.success.DEFAULT} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.successTitle}>Tip sent! 🎉</Text>
+          <Text style={styles.successBody}>
+            Thank you for supporting your chef and rider — 100% of your tip goes
+            straight to them.
+          </Text>
+          <Pressable onPress={handleViewOrder} accessibilityRole="button" accessibilityLabel="Back to order" style={styles.ctaWrapper}>
+            {({ pressed }) => (
+              <View style={[styles.ctaPrimary, pressed && styles.ctaPressed]}>
+                <Text style={styles.ctaPrimaryLabel}>Done</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   // ── Checking (polling) ──────────────────────────────────────────────────────

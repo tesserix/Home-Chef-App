@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
-import { useCartStore } from '../../store/cart-store';
+import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
+import { useCartStore, makeLineId } from '../../store/cart-store';
+import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
+import { ModifierSheet } from '../cart/ModifierSheet';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import type { MenuItem } from '../../types/customer';
+import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -19,37 +22,64 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   const cartEntry = cartItems.find((i) => i.menuItemId === item.id);
   const quantity = cartEntry?.quantity ?? 0;
 
+  // Dietary & allergen profile (#41): flag dishes that clash with the customer's
+  // saved diet / allergens.
+  const conflicts = useDietaryConflicts(item);
+
+  // Add-ons (#232): items with modifier groups open a picker before adding.
+  const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const addToCart = (cartItem: CartItem) => {
+    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
+    if (result === 'cross_chef_conflict') {
+      Alert.alert('Replace Cart?', 'You have items from another chef. Replace cart?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Replace',
+          style: 'destructive',
+          onPress: () => {
+            useCartStore.getState().clearCart();
+            useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          },
+        },
+      ]);
+    } else {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   const handleAdd = () => {
-    const cartItem = {
+    if (hasModifiers) {
+      setSheetOpen(true);
+      return;
+    }
+    addToCart({
+      lineId: item.id,
       menuItemId: item.id,
       name: item.name,
       price: item.price,
       quantity: 1,
       imageUrl: item.imageUrl,
-    };
+    });
+  };
 
-    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-
-    if (result === 'cross_chef_conflict') {
-      Alert.alert(
-        'Replace Cart?',
-        'You have items from another chef. Replace cart?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Replace',
-            style: 'destructive',
-            onPress: () => {
-              useCartStore.getState().clearCart();
-              useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            },
-          },
-        ]
-      );
-    } else {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+  const handleModifierConfirm = (
+    modifiers: SelectedModifier[],
+    unitPrice: number,
+    quantity: number,
+  ) => {
+    setSheetOpen(false);
+    addToCart({
+      lineId: makeLineId(item.id, modifiers),
+      menuItemId: item.id,
+      name: item.name,
+      price: unitPrice,
+      quantity,
+      imageUrl: item.imageUrl,
+      modifiers,
+    });
   };
 
   const handleDecrement = () => {
@@ -87,13 +117,41 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </View>
         ) : null}
 
+        {/* Allergen badges (#41) — declared allergens in a cautionary tone */}
+        {item.allergens && item.allergens.length > 0 ? (
+          <View style={styles.tagRow}>
+            {item.allergens.map((a) => (
+              <View key={a} style={styles.allergenTag}>
+                <Text style={styles.allergenLabel}>{a}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.name} numberOfLines={2}>
           {item.name}
         </Text>
 
+        {/* Conflict warning (#41) — dish clashes with the customer's profile */}
+        {conflicts.length > 0 ? (
+          <View style={styles.warnRow}>
+            <AlertTriangle size={13} color={customerColors.destructive.DEFAULT} strokeWidth={2} />
+            <Text style={styles.warnText} numberOfLines={2}>
+              {conflicts.map((cf) => cf.detail).join(' · ')}
+            </Text>
+          </View>
+        ) : null}
+
         {item.description ? (
           <Text style={styles.description} numberOfLines={2}>
             {item.description}
+          </Text>
+        ) : null}
+
+        {/* Combo includes (#233) */}
+        {item.isCombo && item.comboItems && item.comboItems.length > 0 ? (
+          <Text style={styles.comboIncludes} numberOfLines={2}>
+            Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
           </Text>
         ) : null}
 
@@ -111,9 +169,18 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         {/* Price — tabular figures per spec */}
         <Text style={styles.price}>₹{item.price.toFixed(0)}</Text>
 
+        {/* Capacity (#48): low-stock hint for a capped dish that isn't sold out. */}
+        {item.remainingToday != null && item.remainingToday > 0 && !item.soldOut ? (
+          <Text style={styles.remainingCaption}>{item.remainingToday} left today</Text>
+        ) : null}
+
         {/* Add / quantity control — coral, sits at bottom of text column */}
-        {item.isAvailable ? (
-          quantity === 0 ? (
+        {item.soldOut ? (
+          <Text style={styles.soldOut}>Sold out today</Text>
+        ) : item.isAvailable ? (
+          // Modifier items always show "Add" (it opens the picker); a no-modifier
+          // item shows the inline stepper once it's in the cart (#232).
+          hasModifiers || quantity === 0 ? (
             // Initial add button — plain wrapper to dodge iOS Pressable array bug.
             <View style={styles.addWrapper}>
               <Pressable
@@ -220,6 +287,16 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </View>
         )}
       </View>
+
+      {/* Add-on picker (#232) — opens for items with modifier groups. */}
+      {hasModifiers ? (
+        <ModifierSheet
+          item={item}
+          visible={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          onConfirm={handleModifierConfirm}
+        />
+      ) : null}
     </View>
   );
 }
@@ -263,6 +340,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: customerColors.coral.pressed,
   },
+  // Allergen badge — cautionary (destructive tint), distinct from diet tags.
+  allergenTag: {
+    backgroundColor: customerColors.destructive.tint,
+    borderRadius: 9999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  allergenLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.2,
+    color: customerColors.destructive.DEFAULT,
+  },
+  // Profile-conflict warning line.
+  warnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  warnText: {
+    flex: 1,
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.destructive.DEFAULT,
+  },
 
   // Item name — Inter-SemiBold charcoal (spec §2.4).
   name: {
@@ -279,6 +382,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: customerColors.charcoal.soft,
+  },
+  // Combo "includes" line (#233).
+  comboIncludes: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: customerColors.coral.pressed,
+    marginTop: 2,
   },
 
   // Per-dish rating — charcoal star + value (spec: charcoal star, NOT gold).
@@ -369,6 +480,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     marginTop: 6,
+  },
+  // Capacity (#48): sold-out label + low-stock caption.
+  soldOut: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.destructive.DEFAULT,
+    marginTop: 6,
+  },
+  remainingCaption: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
 
   // ---- Photo ----

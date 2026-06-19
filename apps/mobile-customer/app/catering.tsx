@@ -14,10 +14,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { UtensilsCrossed } from 'lucide-react-native';
+import { ChevronRight, UtensilsCrossed } from 'lucide-react-native';
 import {
   useCateringRequests,
   useCreateCateringRequest,
@@ -58,6 +59,22 @@ const EVENT_TYPES = [
   'Other',
 ];
 
+// Preference options mirror the web catering request form's "preferences" step.
+const CUISINES = [
+  'North Indian',
+  'South Indian',
+  'Chinese',
+  'Continental',
+  'Italian',
+  'Mughlai',
+  'Bengali',
+  'Gujarati',
+  'Punjabi',
+  'Street Food',
+];
+const DIETARY = ['Vegetarian', 'Vegan', 'Jain', 'Halal', 'Gluten-Free', 'Nut-Free', 'Eggless'];
+const MENU_STYLES = ['Buffet', 'Plated', 'Food Stations', 'Family Style'];
+
 type TabKey = 'request' | 'my-requests';
 
 // ─── Status chip ─────────────────────────────────────────────────────────────
@@ -73,6 +90,8 @@ function getStatusConfig(status: CateringRequest['status']): StatusConfig {
       return { label: 'Quoted', bg: customerColors.coral.tint, text: customerColors.coral.pressed };
     case 'accepted':
       return { label: 'Accepted', bg: customerColors.coral.tint, text: customerColors.coral.pressed };
+    case 'confirmed':
+      return { label: 'Confirmed', bg: customerColors.success.tint, text: customerColors.success.DEFAULT };
     case 'completed':
       return { label: 'Completed', bg: customerColors.success.tint, text: customerColors.success.DEFAULT };
     case 'cancelled':
@@ -84,8 +103,30 @@ function getStatusConfig(status: CateringRequest['status']): StatusConfig {
 
 // ─── Request card ─────────────────────────────────────────────────────────────
 
+// Per-status one-line hint shown at the bottom of a request card.
+function statusHint(request: CateringRequest): string | null {
+  switch (request.status) {
+    case 'quoted':
+      return 'Quotes available — tap to review';
+    case 'accepted':
+      return request.depositStatus === 'pending'
+        ? 'Pay the deposit to confirm your booking'
+        : 'Quote accepted — tap to continue';
+    case 'confirmed':
+      return 'Booking confirmed 🎉';
+    default:
+      return null;
+  }
+}
+
 function RequestCard({ request }: { request: CateringRequest }) {
   const { label, bg, text } = getStatusConfig(request.status);
+  const hint = statusHint(request);
+  const eventDate = new Date(request.eventDate).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
   return (
     /* Shadow on outer View, overflow+radius on inner clip View */
@@ -99,44 +140,47 @@ function RequestCard({ request }: { request: CateringRequest }) {
         marginBottom: 12,
       }}
     >
-      <View className="bg-canvas rounded-xl overflow-hidden">
-        <View className="p-4">
-          {/* Header row: event type + status chip */}
-          <View className="flex-row items-center justify-between mb-2">
-            <Text className="text-base font-bold text-charcoal font-display flex-1 mr-2">
-              {request.eventType}
-            </Text>
-            <View
-              className="rounded-full px-3 py-1"
-              style={{ backgroundColor: bg }}
-            >
-              <Text className="text-xs font-semibold" style={{ color: text }}>
-                {label}
+      <Pressable
+        onPress={() => router.push(`/catering/${request.id}` as never)}
+        accessibilityRole="button"
+        accessibilityLabel={`${request.eventType} catering request — view details`}
+      >
+        <View className="bg-canvas rounded-xl overflow-hidden">
+          <View className="p-4">
+            {/* Header row: event type + status chip */}
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-base font-bold text-charcoal font-display flex-1 mr-2">
+                {request.eventType}
               </Text>
+              <View className="rounded-full px-3 py-1" style={{ backgroundColor: bg }}>
+                <Text className="text-xs font-semibold" style={{ color: text }}>
+                  {label}
+                </Text>
+              </View>
+            </View>
+
+            {/* Meta info */}
+            <Text className="text-sm text-charcoal-soft">
+              {request.guestCount} guests · {eventDate} · {request.city}, {request.state}
+            </Text>
+
+            {/* Budget */}
+            {request.budget != null ? (
+              <Text className="text-sm text-charcoal mt-1">Budget: ₹{request.budget}</Text>
+            ) : null}
+
+            {/* Status hint + chevron */}
+            <View className="flex-row items-center justify-between mt-2">
+              {hint ? (
+                <Text className="text-xs text-coral font-medium flex-1">{hint}</Text>
+              ) : (
+                <Text className="text-xs text-charcoal-soft flex-1">Tap to view details</Text>
+              )}
+              <ChevronRight size={16} color={customerColors.charcoal.soft} />
             </View>
           </View>
-
-          {/* Meta info */}
-          <Text className="text-sm text-charcoal-soft">
-            {request.guestCount} guests · {request.eventDate} · {request.city},{' '}
-            {request.state}
-          </Text>
-
-          {/* Budget */}
-          {request.budget != null ? (
-            <Text className="text-sm text-charcoal mt-1">
-              Budget: ₹{request.budget}
-            </Text>
-          ) : null}
-
-          {/* Quoted hint in coral */}
-          {request.status === 'quoted' ? (
-            <Text className="text-xs text-coral font-medium mt-2">
-              Quotes available — view details
-            </Text>
-          ) : null}
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -186,9 +230,63 @@ function InputWrap({ hasError, children }: StyledInputProps) {
   );
 }
 
+// ChipGroup — wrap-flow selectable chips for single or multi select, matching
+// the event-type chip styling. Used for cuisine, dietary, and menu-style.
+function ChipGroup({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      {options.map((opt) => {
+        const isSelected = selected.includes(opt);
+        return (
+          <Pressable
+            key={opt}
+            onPress={() => onToggle(opt)}
+            accessibilityRole="button"
+            accessibilityLabel={opt}
+            accessibilityState={{ selected: isSelected }}
+          >
+            <View
+              className={`px-3 py-2 rounded-full border ${
+                isSelected ? 'bg-coral-tint border-coral' : 'bg-canvas border-hairline'
+              }`}
+            >
+              <Text
+                className={`text-sm ${
+                  isSelected ? 'text-coral font-semibold' : 'text-charcoal-soft font-medium'
+                }`}
+              >
+                {opt}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function RequestForm({ onSuccess }: { onSuccess: () => void }) {
   const createRequest = useCreateCateringRequest();
   const [selectedEventType, setSelectedEventType] = useState('');
+  // Preferences + location managed outside RHF (optional, no validation).
+  const [cuisines, setCuisines] = useState<string[]>([]);
+  const [dietary, setDietary] = useState<string[]>([]);
+  const [menuStyle, setMenuStyle] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [venueName, setVenueName] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+
+  const toggleIn = (list: string[], set: (v: string[]) => void) => (value: string) =>
+    set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
   const {
     control,
@@ -219,10 +317,17 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
       {
         eventType: values.eventType,
         eventDate: values.eventDate,
+        eventTime: eventTime.trim() || undefined,
         guestCount: values.guestCount,
         budget: values.budget,
+        cuisineTypes: cuisines.length ? cuisines : undefined,
+        dietaryNeeds: dietary.length ? dietary : undefined,
+        menuStyle: menuStyle || undefined,
+        venueName: venueName.trim() || undefined,
+        addressLine1: addressLine1.trim() || undefined,
         city: values.city,
         state: values.state,
+        postalCode: postalCode.trim() || undefined,
         description: values.description,
       },
       {
@@ -233,6 +338,13 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
           );
           reset();
           setSelectedEventType('');
+          setCuisines([]);
+          setDietary([]);
+          setMenuStyle('');
+          setEventTime('');
+          setVenueName('');
+          setAddressLine1('');
+          setPostalCode('');
           onSuccess();
         },
         onError: (err) => {
@@ -363,6 +475,35 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
         <Text className="text-xs text-coral-pressed mt-1">{errors.budget.message}</Text>
       ) : null}
 
+      {/* Event time (optional) */}
+      <FieldLabel>Event Time</FieldLabel>
+      <InputWrap hasError={false}>
+        <TextInput
+          className="text-base text-charcoal"
+          value={eventTime}
+          onChangeText={setEventTime}
+          placeholder="e.g. 7:00 PM"
+          placeholderTextColor={customerColors.charcoal.soft}
+          accessibilityLabel="Event time"
+        />
+      </InputWrap>
+
+      {/* Cuisine preferences (multi-select) */}
+      <FieldLabel>Cuisine Preferences</FieldLabel>
+      <ChipGroup options={CUISINES} selected={cuisines} onToggle={toggleIn(cuisines, setCuisines)} />
+
+      {/* Dietary needs (multi-select) */}
+      <FieldLabel>Dietary Needs</FieldLabel>
+      <ChipGroup options={DIETARY} selected={dietary} onToggle={toggleIn(dietary, setDietary)} />
+
+      {/* Menu style (single-select) */}
+      <FieldLabel>Menu Style</FieldLabel>
+      <ChipGroup
+        options={MENU_STYLES}
+        selected={menuStyle ? [menuStyle] : []}
+        onToggle={(v) => setMenuStyle((cur) => (cur === v ? '' : v))}
+      />
+
       {/* City */}
       <FieldLabel>City *</FieldLabel>
       <Controller
@@ -410,6 +551,46 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
       {errors.state ? (
         <Text className="text-xs text-coral-pressed mt-1">{errors.state.message}</Text>
       ) : null}
+
+      {/* Venue name (optional) */}
+      <FieldLabel>Venue Name</FieldLabel>
+      <InputWrap hasError={false}>
+        <TextInput
+          className="text-base text-charcoal"
+          value={venueName}
+          onChangeText={setVenueName}
+          placeholder="e.g. Grand Ballroom"
+          placeholderTextColor={customerColors.charcoal.soft}
+          accessibilityLabel="Venue name"
+        />
+      </InputWrap>
+
+      {/* Address line 1 (optional) */}
+      <FieldLabel>Address</FieldLabel>
+      <InputWrap hasError={false}>
+        <TextInput
+          className="text-base text-charcoal"
+          value={addressLine1}
+          onChangeText={setAddressLine1}
+          placeholder="Street address"
+          placeholderTextColor={customerColors.charcoal.soft}
+          accessibilityLabel="Address line 1"
+        />
+      </InputWrap>
+
+      {/* Postal code (optional) */}
+      <FieldLabel>Postal Code</FieldLabel>
+      <InputWrap hasError={false}>
+        <TextInput
+          className="text-base text-charcoal"
+          value={postalCode}
+          onChangeText={setPostalCode}
+          placeholder="400001"
+          placeholderTextColor={customerColors.charcoal.soft}
+          keyboardType="number-pad"
+          accessibilityLabel="Postal code"
+        />
+      </InputWrap>
 
       {/* Additional Details */}
       <FieldLabel>Additional Details</FieldLabel>

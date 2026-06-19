@@ -42,9 +42,16 @@ type MenuItem struct {
 	// IsVeg is a nullable boolean: true = veg, false = non-veg, nil = not set
 	// (legacy rows before the column was added). Frontend renders the FSSAI
 	// green/brown dot only when the value is non-nil.
-	IsVeg        *bool          `gorm:"" json:"isVeg,omitempty"`
-	IsAvailable  bool           `gorm:"default:true" json:"isAvailable"`
-	IsApproved   bool           `gorm:"default:false" json:"isApproved"`
+	IsVeg       *bool `gorm:"" json:"isVeg,omitempty"`
+	IsAvailable bool  `gorm:"default:true" json:"isAvailable"`
+	IsApproved  bool  `gorm:"default:false" json:"isApproved"`
+	// DailyCapacity caps how many of this dish the chef will make per day (#48).
+	// nil or <= 0 means unlimited. Remaining/sold-out are derived from the
+	// MenuItemDailySales counter (IST calendar day), not a mutated flag.
+	DailyCapacity *int `gorm:"" json:"dailyCapacity,omitempty"`
+	// Transient capacity state (#48), populated by handlers, never persisted.
+	RemainingToday *int `gorm:"-" json:"remainingToday,omitempty"`
+	SoldOut        bool `gorm:"-" json:"soldOut"`
 	// HSN code per HSN/SAC (GST harmonized system). Defaults to 996331
 	// — the SAC for "Services provided by Restaurants … and others"
 	// which covers prepared-food sales for our home-chef model. Chef
@@ -60,10 +67,17 @@ type MenuItem struct {
 	UpdatedAt    time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
+	// IsCombo marks this item as a combo/bundle (#233): its Price is the bundle
+	// price and ComboItems lists the included dishes (informational).
+	IsCombo bool `gorm:"default:false" json:"isCombo"`
+
 	// Relationships
 	Chef     ChefProfile     `gorm:"foreignKey:ChefID" json:"-"`
 	Category *MenuCategory   `gorm:"foreignKey:CategoryID" json:"-"`
 	Images   []MenuItemImage `gorm:"foreignKey:MenuItemID" json:"images,omitempty"`
+	// Add-on / combo composition (#52). Preloaded by the menu read handlers.
+	ModifierGroups []ModifierGroup `gorm:"foreignKey:MenuItemID" json:"modifierGroups,omitempty"`
+	ComboItems     []ComboItem     `gorm:"foreignKey:ComboID" json:"comboItems,omitempty"`
 }
 
 type MenuItemImage struct {
@@ -104,11 +118,21 @@ type MenuItemResponse struct {
 	Allergens    []string                `json:"allergens"`
 	SpiceLevel   int                     `json:"spiceLevel"`
 	// IsVeg is omitted from JSON when nil (legacy items where the flag was not set).
-	IsVeg        *bool                   `json:"isVeg,omitempty"`
-	IsAvailable  bool                    `json:"isAvailable"`
-	IsFeatured   bool                    `json:"isFeatured"`
-	Rating       float64                 `json:"rating"`
-	HSN          string                  `json:"hsn,omitempty"`
+	IsVeg       *bool   `json:"isVeg,omitempty"`
+	IsAvailable bool    `json:"isAvailable"`
+	IsFeatured  bool    `json:"isFeatured"`
+	Rating      float64 `json:"rating"`
+	HSN         string  `json:"hsn,omitempty"`
+	// Capacity (#48). DailyCapacity nil = unlimited. RemainingToday + SoldOut are
+	// populated by handlers that have DB access (the daily-sales counter); they're
+	// omitted when the item is uncapped.
+	DailyCapacity  *int `json:"dailyCapacity,omitempty"`
+	RemainingToday *int `json:"remainingToday,omitempty"`
+	SoldOut        bool `json:"soldOut"`
+	// Add-ons / combos (#52). Empty unless the read handler preloaded them.
+	IsCombo        bool            `json:"isCombo"`
+	ModifierGroups []ModifierGroup `json:"modifierGroups"`
+	ComboItems     []ComboItem     `json:"comboItems"`
 }
 
 func (m *MenuItem) ToResponse() MenuItemResponse {
@@ -134,25 +158,52 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 	}
 
 	return MenuItemResponse{
-		ID:           m.ID,
-		ChefID:       m.ChefID,
-		CategoryID:   m.CategoryID,
-		Name:         m.Name,
-		Description:  m.Description,
-		Price:        m.Price,
-		ComparePrice: m.ComparePrice,
-		ImageURL:     m.ImageURL,
-		Images:       images,
-		PrepTime:     m.PrepTime,
-		PortionSize:  m.PortionSize,
-		Serves:       m.Serves,
-		DietaryTags:  dietaryTags,
-		Allergens:    allergens,
-		SpiceLevel:   m.SpiceLevel,
-		IsVeg:        m.IsVeg,
-		IsAvailable:  m.IsAvailable,
-		IsFeatured:   m.IsFeatured,
-		Rating:       m.Rating,
-		HSN:          m.HSN,
+		ID:             m.ID,
+		ChefID:         m.ChefID,
+		CategoryID:     m.CategoryID,
+		Name:           m.Name,
+		Description:    m.Description,
+		Price:          m.Price,
+		ComparePrice:   m.ComparePrice,
+		ImageURL:       m.ImageURL,
+		Images:         images,
+		PrepTime:       m.PrepTime,
+		PortionSize:    m.PortionSize,
+		Serves:         m.Serves,
+		DietaryTags:    dietaryTags,
+		Allergens:      allergens,
+		SpiceLevel:     m.SpiceLevel,
+		IsVeg:          m.IsVeg,
+		IsAvailable:    m.IsAvailable,
+		IsFeatured:     m.IsFeatured,
+		Rating:         m.Rating,
+		HSN:            m.HSN,
+		DailyCapacity:  m.DailyCapacity,
+		RemainingToday: m.RemainingToday,
+		SoldOut:        m.SoldOut,
+		IsCombo:        m.IsCombo,
+		ModifierGroups: ensureGroups(m.ModifierGroups),
+		ComboItems:     ensureCombo(m.ComboItems),
 	}
+}
+
+// ensureGroups / ensureCombo render nil slices as empty arrays so the JSON is
+// always [] (clients can map without null-guards).
+func ensureGroups(g []ModifierGroup) []ModifierGroup {
+	if g == nil {
+		return []ModifierGroup{}
+	}
+	for i := range g {
+		if g[i].Options == nil {
+			g[i].Options = []ModifierOption{}
+		}
+	}
+	return g
+}
+
+func ensureCombo(c []ComboItem) []ComboItem {
+	if c == nil {
+		return []ComboItem{}
+	}
+	return c
 }

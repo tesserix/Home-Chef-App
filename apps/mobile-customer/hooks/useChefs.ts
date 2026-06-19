@@ -55,9 +55,18 @@ interface ApiMenuItem {
   imageUrl?: string;
   images?: { url?: string }[];
   dietaryTags?: string[];
+  allergens?: string[];
+  isVeg?: boolean | null;
   isAvailable?: boolean;
   rating?: number;
   totalReviews?: number;
+  dailyCapacity?: number;
+  remainingToday?: number;
+  soldOut?: boolean;
+  // Add-ons / combos (#52)
+  isCombo?: boolean;
+  modifierGroups?: import('../types/customer').ModifierGroup[];
+  comboItems?: import('../types/customer').ComboItemRef[];
 }
 
 function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
@@ -101,8 +110,16 @@ export function mapMenuItem(
     category: m.categoryId ? categoryNames.get(m.categoryId) : undefined,
     isAvailable: m.isAvailable ?? true,
     dietaryTags: m.dietaryTags,
+    allergens: m.allergens,
+    isVeg: m.isVeg,
+    isCombo: m.isCombo,
+    modifierGroups: m.modifierGroups,
+    comboItems: m.comboItems,
     rating: m.rating,
     reviewCount: m.totalReviews,
+    dailyCapacity: m.dailyCapacity,
+    remainingToday: m.remainingToday,
+    soldOut: m.soldOut,
   };
 }
 

@@ -20,24 +20,42 @@ const (
 	SubjectOrderCancelled    = "orders.cancelled"
 	SubjectOrderDelivered    = "orders.delivered"
 	SubjectChefNewOrder      = "chef.new_order"
-	SubjectDeliveryAssigned  = "delivery.assigned"
-	SubjectDeliveryPickedUp  = "delivery.picked_up"
-	SubjectDeliveryLocation  = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
-	SubjectPaymentSuccess    = "payments.success"
-	SubjectPaymentFailed     = "payments.failed"
-	SubjectUserRegistered    = "users.registered"
-	SubjectChefVerified      = "chef.verified"
-	SubjectReviewPosted      = "reviews.posted"
-	SubjectCateringRequest   = "catering.request"
-	SubjectCateringQuote     = "catering.quote"
-	SubjectNotificationEmail = "notifications.email"
-	SubjectNotificationPush  = "notifications.push"
-	SubjectNotificationSMS   = "notifications.sms"
+	SubjectChefTipReceived   = "chef.tip_received"   // → chef: post-delivery tip
+	SubjectDriverTipReceived = "driver.tip_received" // → rider: post-delivery tip
+
+	// Group / office orders (#46)
+	SubjectGroupOrderInvited   = "group_orders.invited"   // → guest: invited/joined
+	SubjectGroupOrderLocked    = "group_orders.locked"    // → participants: pay your share
+	SubjectGroupOrderPlaced    = "group_orders.placed"    // → host: order placed
+	SubjectGroupOrderCancelled = "group_orders.cancelled" // → participants: cancelled/refunded
+	SubjectDeliveryAssigned    = "delivery.assigned"
+	SubjectDeliveryPickedUp    = "delivery.picked_up"
+	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
+	SubjectPaymentSuccess      = "payments.success"
+	SubjectPaymentFailed       = "payments.failed"
+	SubjectUserRegistered      = "users.registered"
+	SubjectChefVerified        = "chef.verified"
+	SubjectReviewPosted        = "reviews.posted"
+	SubjectCateringRequest     = "catering.request"
+	SubjectCateringQuote       = "catering.quote"
+	SubjectNotificationEmail   = "notifications.email"
+	SubjectNotificationPush    = "notifications.push"
+	SubjectNotificationSMS     = "notifications.sms"
 
 	SubjectApprovalCreated       = "approvals.created"
 	SubjectApprovalApproved      = "approvals.approved"
 	SubjectApprovalRejected      = "approvals.rejected"
 	SubjectApprovalInfoRequested = "approvals.info_requested"
+
+	// Tiffin meal plans (#193) — the request→accept→approve handshake + per-day lifecycle.
+	SubjectMealPlanCreated      = "meal_plans.created"       // → chef: new request
+	SubjectMealPlanAcceptedFull = "meal_plans.accepted_full" // → customer: notify only
+	SubjectMealPlanModified     = "meal_plans.modified"      // → customer: approve the trim
+	SubjectMealPlanConfirmed    = "meal_plans.confirmed"
+	SubjectMealPlanCancelled    = "meal_plans.cancelled"
+	SubjectMealPlanDayPrepared  = "meal_plans.day_prepared" // → customer: dish is being cooked (#50)
+	SubjectMealPlanDayDelivered = "meal_plans.day_delivered"
+	SubjectMealPlanDayRefunded  = "meal_plans.day_refunded"
 
 	SubjectDriverOnboardingSubmitted = "driver.onboarding.submitted"
 
@@ -197,6 +215,8 @@ func (n *NATSClient) setupStreams() error {
 		{"CATERING", "Catering events", []string{"catering.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"APPROVALS", "Approval lifecycle events", []string{"approvals.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"SUBSCRIPTIONS", "Subscription billing events", []string{"subscription.>"}, 30 * 24 * time.Hour, gib / 2},
+		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
+		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"DLQ", "Dead-letter: events that exhausted consumer retries", []string{DLQSubjectPrefix + ".>"}, 30 * 24 * time.Hour, gib},
 	}

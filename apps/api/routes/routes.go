@@ -155,6 +155,7 @@ func SetupRouter() *gin.Engine {
 	customerHandler := handlers.NewCustomerHandler()
 	addressHandler := handlers.NewAddressHandler()
 	preferenceHandler := handlers.NewPreferenceHandler()
+	dietaryHandler := handlers.NewDietaryHandler()
 	currencyHandler := handlers.NewCurrencyHandler()
 	adminHandler := handlers.NewAdminHandler()
 	approvalHandler := handlers.NewApprovalHandler()
@@ -164,10 +165,13 @@ func SetupRouter() *gin.Engine {
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
 	paymentHandler := handlers.NewPaymentHandler()
+	tipHandler := handlers.NewTipHandler()
+	groupOrderHandler := handlers.NewGroupOrderHandler()
 	promotionHandler := handlers.NewPromotionHandler()
 	providerHandler := handlers.NewDeliveryProviderHandler()
 	socialHandler := handlers.NewSocialHandler()
 	cateringHandler := handlers.NewCateringHandler()
+	mealPlanHandler := handlers.NewMealPlanHandler()
 	supportHandler := handlers.NewSupportHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
@@ -285,6 +289,14 @@ func SetupRouter() *gin.Engine {
 		// Preference options (public)
 		v1.GET("/preferences", preferenceHandler.GetPreferenceOptions)
 
+		// Dietary & allergen taxonomy (public) + per-cart conflict check (#41).
+		v1.GET("/dietary/options", dietaryHandler.GetDietaryOptions)
+		dietary := v1.Group("/dietary")
+		dietary.Use(bffAuth(bffKey, bffWindow))
+		{
+			dietary.POST("/check", dietaryHandler.CheckDietary)
+		}
+
 		// Public platform config — fees + operating-hours status for checkout
 		v1.GET("/platform/config", platformHandler.GetPublicConfig)
 		// Check if a lat/lon falls inside a configured delivery zone.
@@ -336,6 +348,8 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id", chefHandler.GetChef)
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
+			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
+			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
 		}
 
 		// Dish search across chefs (#36) — its own path so it doesn't collide
@@ -385,6 +399,8 @@ func SetupRouter() *gin.Engine {
 			// Param name MUST match the sibling routes (:itemId) — Gin's radix
 			// tree panics on conflicting wildcard names at the same position.
 			chefMenu.PUT("/items/:itemId/availability", menuHandler.ToggleMenuItemAvailability)
+			// Per-item daily capacity cap (#48).
+			chefMenu.PUT("/items/:itemId/capacity", menuHandler.SetMenuItemCapacity)
 		}
 
 		// Chef dashboard routes (chef only)
@@ -394,6 +410,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
 			chefDashboard.PUT("/profile", chefHandler.UpdateChefProfile)
+			// Weekly fixed menu (#192) — veg/nonveg dish per (day × slot).
+			chefDashboard.GET("/weekly-menu", chefHandler.GetMyWeeklyMenu)
+			chefDashboard.PUT("/weekly-menu", chefHandler.PutWeeklyMenu)
 			chefDashboard.GET("/orders", chefHandler.GetChefOrders)
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
@@ -432,10 +451,19 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/settings", chefHandler.GetChefSettings)
 			chefDashboard.PUT("/settings", chefHandler.UpdateChefSettings)
 			chefDashboard.GET("/analytics", chefHandler.GetChefAnalytics)
+			chefDashboard.GET("/analytics/subscriptions", chefHandler.GetSubscriptionMetrics) // #229
+			chefDashboard.GET("/analytics/forecast", chefHandler.GetDemandForecast)           // #230
 			chefDashboard.GET("/payout", chefHandler.GetPayoutDetails)
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
+
+			// Post-delivery tips received (#45)
+			chefDashboard.GET("/tips", tipHandler.GetChefTips)
+
+			// Capacity & cutoff controls (#48)
+			chefDashboard.GET("/capacity-settings", chefHandler.GetChefCapacitySettings)
+			chefDashboard.PUT("/capacity-settings", chefHandler.UpdateChefCapacitySettings)
 
 			// Wave 2: chef-side notification gating. GET returns defaults
 			// when no row exists; PUT upserts and reconciles FCM topic
@@ -545,7 +573,12 @@ func SetupRouter() *gin.Engine {
 			catering.GET("/requests", cateringHandler.GetMyRequests)
 			catering.GET("/requests/:id", cateringHandler.GetRequest)
 			catering.GET("/requests/:id/quotes", cateringHandler.GetQuotes)
+			catering.POST("/requests/:id/cancel", cateringHandler.CancelRequest)
 			catering.POST("/quotes/:id/accept", cateringHandler.AcceptQuote)
+			catering.POST("/quotes/:id/decline", cateringHandler.DeclineQuote)
+			// Deposit / advance payment (#55) — flag-gated (CATERING_DEPOSIT_ENABLED).
+			catering.POST("/requests/:id/deposit", cateringHandler.CreateDeposit)
+			catering.POST("/requests/:id/deposit/verify", cateringHandler.VerifyDeposit)
 		}
 
 		// Chef catering (chef only)
@@ -555,6 +588,59 @@ func SetupRouter() *gin.Engine {
 			chefCatering.GET("/requests", cateringHandler.GetAvailableRequests)
 			chefCatering.POST("/requests/:id/quote", cateringHandler.SubmitQuote)
 			chefCatering.GET("/quotes", cateringHandler.GetChefQuotes)
+			chefCatering.GET("/bookings", cateringHandler.GetChefBookings)
+			chefCatering.POST("/requests/:id/complete", cateringHandler.CompleteBooking)
+		}
+
+		// Tiffin meal plans — customer side (#195/#196). Scoped to the authed
+		// customer inside the handlers (per-customer isolation).
+		mealPlans := v1.Group("/meal-plans")
+		mealPlans.Use(bffAuth(bffKey, bffWindow))
+		{
+			mealPlans.POST("", mealPlanHandler.CreateMealPlan)
+			mealPlans.GET("", mealPlanHandler.GetMyMealPlans)
+			mealPlans.GET("/:id", mealPlanHandler.GetMealPlan)
+			mealPlans.PUT("/:id/approve", mealPlanHandler.ApproveMealPlan)
+			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
+			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
+			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)
+		}
+
+		// Group / office orders (#46). Public invite preview by token + authed
+		// accept; the rest scoped to participants inside the handlers.
+		v1.GET("/group-invites/:token", groupOrderHandler.GroupJoinPreview)
+		v1.POST("/group-invites/:token/accept", bffAuth(bffKey, bffWindow), groupOrderHandler.JoinGroupOrder)
+		groupOrders := v1.Group("/group-orders")
+		groupOrders.Use(bffAuth(bffKey, bffWindow))
+		{
+			groupOrders.POST("", groupOrderHandler.CreateGroupOrder)
+			groupOrders.GET("", groupOrderHandler.GetMyGroupOrders)
+			groupOrders.GET("/:id", groupOrderHandler.GetGroupOrder)
+			groupOrders.POST("/:id/items", groupOrderHandler.AddGroupItem)
+			groupOrders.DELETE("/:id/items/:itemId", groupOrderHandler.RemoveGroupItem)
+			groupOrders.POST("/:id/lock", groupOrderHandler.LockGroupOrder)
+			groupOrders.POST("/:id/pay", groupOrderHandler.PayGroupShare)
+			groupOrders.POST("/:id/pay/verify", groupOrderHandler.VerifyGroupShare)
+			groupOrders.POST("/:id/cancel", groupOrderHandler.CancelGroupOrder)
+			groupOrders.POST("/:id/leave", groupOrderHandler.LeaveGroupOrder)
+		}
+
+		// Tiffin meal plans — chef side (#195). Scoped to the authed chef.
+		chefMealPlans := v1.Group("/chef/meal-plans")
+		chefMealPlans.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefMealPlans.GET("", mealPlanHandler.GetChefMealPlanRequests)
+			chefMealPlans.POST("/:id/respond", mealPlanHandler.RespondMealPlan)
+		}
+
+		// Bulk subscription prep view (#50) — own group so its static paths don't
+		// collide with the meal-plans :id routes.
+		chefPrep := v1.Group("/chef/prep")
+		chefPrep.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
+		{
+			chefPrep.GET("", mealPlanHandler.GetPrepManifest)
+			chefPrep.POST("/mark", mealPlanHandler.MarkPrepBulk)
+			chefPrep.POST("/day/:dayId", mealPlanHandler.MarkDayPrepared)
 		}
 
 		// Delivery staff routes — enforced with granular staff permissions
@@ -614,6 +700,9 @@ func SetupRouter() *gin.Engine {
 			orderPayments.POST("/order/:orderId/create", paymentHandler.CreateOrderPayment)
 			orderPayments.POST("/order/:orderId/verify", paymentHandler.VerifyPayment)
 			orderPayments.POST("/order/:orderId/refund", paymentHandler.InitiateRefund)
+			// Post-delivery tips (#45) — 100% pass-through to chef/rider.
+			orderPayments.POST("/order/:orderId/tip", tipHandler.CreateOrderTip)
+			orderPayments.POST("/tip/:tipId/verify", tipHandler.VerifyTip)
 		}
 
 		// Admin routes
@@ -654,6 +743,10 @@ func SetupRouter() *gin.Engine {
 			// Order management
 			admin.GET("/orders", adminHandler.GetAllOrders)
 			admin.GET("/orders/:id", adminHandler.GetOrderDetails)
+
+			// Tiffin meal-plan oversight (#199) — read-only, platform-wide
+			admin.GET("/meal-plans", mealPlanHandler.AdminListMealPlans)
+			admin.GET("/meal-plans/:id", mealPlanHandler.AdminGetMealPlan)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)
