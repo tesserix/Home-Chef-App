@@ -54,6 +54,36 @@ export interface MealPlan {
   customer?: { firstName?: string; lastName?: string; email?: string } | null;
 }
 
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Mirrors the API's validatePublishableGrid (#1): a publishable week must have
+ * every offered (day × slot) filled — no holes. Returns a human-readable message
+ * for the first missing cell, or null when complete. Used to block publish
+ * client-side so the chef sees the real reason, not a generic 400.
+ */
+export function weeklyMenuHole(items: WeeklyMenuItem[]): string | null {
+  if (items.length === 0) return 'Add at least one dish before publishing.';
+  const days = new Set<number>();
+  const slots = new Set<MealSlot>();
+  const present = new Set<string>();
+  for (const it of items) {
+    days.add(it.dayOfWeek);
+    slots.add(it.slot);
+    present.add(`${it.dayOfWeek}|${it.slot}`);
+  }
+  for (let day = 0; day < 7; day++) {
+    if (!days.has(day)) continue;
+    for (const slot of ['lunch', 'dinner'] as MealSlot[]) {
+      if (!slots.has(slot)) continue;
+      if (!present.has(`${day}|${slot}`)) {
+        return `${WEEKDAY_SHORT[day]} is missing its ${slot} dish — every offered day needs a ${slot} dish.`;
+      }
+    }
+  }
+  return null;
+}
+
 /** The authed chef's weekly menu (published or draft). */
 export function useWeeklyMenu() {
   return useQuery<WeeklyMenu>({

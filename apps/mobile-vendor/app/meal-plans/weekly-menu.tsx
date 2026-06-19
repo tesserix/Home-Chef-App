@@ -18,6 +18,7 @@ import { Button } from '@homechef/mobile-shared/ui';
 import {
   useSaveWeeklyMenu,
   useWeeklyMenu,
+  weeklyMenuHole,
   type MealSlot,
   type MealVariant,
   type WeeklyMenuItem,
@@ -140,12 +141,14 @@ export default function WeeklyMenuEditorScreen() {
 
   function onSave(nextPublished: boolean) {
     const items = buildItems();
-    if (nextPublished && items.length === 0) {
-      Alert.alert(
-        'Add a dish first',
-        'Add at least one dish before publishing your weekly menu.',
-      );
-      return;
+    if (nextPublished) {
+      // Match the API's complete-grid rule (#1) so the chef sees the real reason
+      // (e.g. "Tue is missing its dinner dish") instead of a generic 400.
+      const hole = weeklyMenuHole(items);
+      if (hole) {
+        Alert.alert('Finish the week first', hole);
+        return;
+      }
     }
     save.mutate(
       { isPublished: nextPublished, items },
