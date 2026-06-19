@@ -34,6 +34,10 @@ func main() {
 	workflows.DispatchFunc = func(_ context.Context, orderID uuid.UUID) error {
 		return services.DispatchOrderDelivery(orderID)
 	}
+	// Order lifecycle saga activities (#122).
+	workflows.NotifyChefFunc = services.NotifyChefNewOrder
+	workflows.OrderSettleFunc = services.SettleOrderPayouts
+	workflows.OrderRefundFunc = services.CompensateOrderRefund
 
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
@@ -42,6 +46,12 @@ func main() {
 		temporal.Queue(temporal.TaskQueueDelivery).
 			Workflows(workflows.DeliveryWorkflow).
 			Activities(workflows.DispatchDeliveryActivity),
+		// Order lifecycle saga (#122) — notify → accept → ready → dispatch →
+		// delivered → settle, with refund compensation.
+		temporal.Queue(temporal.TaskQueueOrders).
+			Workflows(workflows.OrderSagaWorkflow).
+			Activities(workflows.NotifyChefActivity, workflows.DispatchDeliveryActivity,
+				workflows.OrderSettleActivity, workflows.OrderRefundActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {

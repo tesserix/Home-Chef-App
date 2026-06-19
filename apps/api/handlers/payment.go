@@ -274,6 +274,8 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 	} else {
 		// Referral reward (#38) on the referee's first paid order — idempotent.
 		services.MaybeGrantReward(database.DB, order.ID)
+		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
+		services.StartOrderSaga(order.ID)
 	}
 
 	// Pay the chef/driver from the platform balance (the whole split is a top-up).
@@ -477,6 +479,8 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		// Referral reward (#38) on the referee's first paid order — idempotent,
 		// so a later webhook for the same order won't double-pay.
 		services.MaybeGrantReward(database.DB, order.ID)
+		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
+		services.StartOrderSaga(order.ID)
 	}
 
 	// Wallet-at-checkout settlement (#141): now that the gateway capture is
@@ -548,6 +552,9 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 	}); err != nil {
 		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
 		services.CaptureBackgroundError(err)
+	} else {
+		// Start the durable order saga (#122) — gated, idempotent, no-op when off.
+		services.StartOrderSaga(order.ID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
@@ -938,6 +945,8 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 		var ord models.Order
 		if err := database.DB.Select("id").Where("razorpay_order_id = ?", payment.OrderID).First(&ord).Error; err == nil {
 			services.MaybeGrantReward(database.DB, ord.ID)
+			// Start the durable order saga (#122) — gated, idempotent, no-op when off.
+			services.StartOrderSaga(ord.ID)
 		}
 	}
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too

@@ -113,6 +113,13 @@ type Config struct {
 	// the request → quote → accept flow works without it; flip on only after the
 	// Razorpay deposit path is sandbox-verified (#218).
 	CateringDepositEnabled bool
+	// OrderSagaEnabled gates orchestrating the post-payment order lifecycle as a
+	// durable Temporal saga (#122): notify chef → await accept → await ready →
+	// dispatch → await delivered → settle, with refund compensation. Default OFF —
+	// the existing synchronous handlers are authoritative until ops validates the
+	// saga end-to-end on the cluster; the saga's activities are idempotent so
+	// enabling it never double-acts alongside residual handler logic.
+	OrderSagaEnabled bool
 }
 
 var AppConfig *Config
@@ -129,6 +136,7 @@ func Load() {
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
+	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -236,6 +244,7 @@ func Load() {
 		GroupOrdersEnabled:            groupOrders,
 		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
 		CateringDepositEnabled:        cateringDeposit,
+		OrderSagaEnabled:              orderSaga,
 	}
 }
 

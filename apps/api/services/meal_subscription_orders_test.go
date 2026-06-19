@@ -28,7 +28,13 @@ func TestIsMealDeliveryDay(t *testing.T) {
 }
 
 func nextWeekday(wd time.Weekday) time.Time {
-	d := time.Now()
+	// Normalize to UTC midnight: the sqlite test driver's date() comparison in
+	// isMealDateSkipped normalizes a local-midnight (+offset) timestamp to the
+	// previous UTC day, so a wall-clock-carrying time.Now() made the skip lookup
+	// flaky by time-of-day. A UTC date is stable on every driver (Postgres prod
+	// is unaffected — it stores proper timestamps).
+	n := time.Now().UTC()
+	d := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
 	for d.Weekday() != wd {
 		d = d.AddDate(0, 0, 1)
 	}
