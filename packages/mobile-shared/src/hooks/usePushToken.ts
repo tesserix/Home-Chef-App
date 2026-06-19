@@ -56,11 +56,14 @@ export async function registerDeviceToken(
   client: AxiosInstance,
   token: string
 ): Promise<void> {
+  // Path is /v1/... because the client baseURL ends at /api (matches every
+  // other call, e.g. /v1/favorites/chefs) → /api/v1/profile/device-token.
+  //
   // skipAuthFailure: a 401 here (e.g. registration racing a session refresh on
   // cold start) must NOT clear the session and bounce the user to login — this
   // is a best-effort call. The client's response interceptor honours this flag.
   const config: AxiosRequestConfig & { skipAuthFailure: boolean } = {
     skipAuthFailure: true,
   };
-  await client.put('/profile/device-token', { token }, config);
+  await client.put('/v1/profile/device-token', { token }, config);
 }

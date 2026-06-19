@@ -63,10 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handler);
   }, [clearAuth, navigate, location.pathname, location.search]);
 
-  // Load favorite chef IDs once authenticated
+  // Load favorite chef + dish IDs once authenticated (#237)
   useEffect(() => {
     if (isAuthenticated) {
       useFavoritesStore.getState().load();
+      useFavoritesStore.getState().loadDishes();
     } else {
       useFavoritesStore.getState().clear();
     }

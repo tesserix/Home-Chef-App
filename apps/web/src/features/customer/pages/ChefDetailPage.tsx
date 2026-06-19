@@ -444,6 +444,16 @@ function MenuItemCard({
   const fp = useFormatPrice();
   const cart = useCartStore();
 
+  // Favorite dish (#237) — heart in the card header.
+  const { isFavoriteDish, toggleDish } = useFavoritesStore();
+  const dishSaved = isFavoriteDish(item.id);
+  const handleToggleDish = async () => {
+    const r = await toggleDish(item.id);
+    if (r === 'unauthorized') toast.error('Please sign in to save dishes');
+    else if (r === 'max_limit') toast.error("You've reached the maximum number of saved dishes");
+    else if (r === 'error') toast.error('Could not update your saved dishes');
+  };
+
   const cartItem = cart.items.find((i) => i.menuItemId === item.id);
 
   // Add-ons (#232): items with modifier groups open a picker before adding.
@@ -542,6 +552,17 @@ function MenuItemCard({
                 </p>
               )}
             </div>
+
+            {/* Save/favorite heart (#237) */}
+            <button
+              type="button"
+              onClick={handleToggleDish}
+              aria-pressed={dishSaved}
+              aria-label={dishSaved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+              className="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-ink-muted transition-colors hover:bg-mist"
+            >
+              <Heart className={`h-5 w-5 ${dishSaved ? 'fill-paprika text-paprika' : ''}`} aria-hidden="true" />
+            </button>
           </div>
 
           {/* Tags */}

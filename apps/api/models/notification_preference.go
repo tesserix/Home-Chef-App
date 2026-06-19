@@ -17,6 +17,7 @@ const (
 	NotifCategoryDelivery  NotificationCategory = "delivery"  // driver assignment, pickup, drop-off
 	NotifCategoryAccount   NotificationCategory = "account"   // welcome, password, approvals
 	NotifCategoryMarketing NotificationCategory = "marketing" // promos, newsletters
+	NotifCategoryFavorites NotificationCategory = "favorites" // updates from chefs you follow (#239)
 )
 
 // AllNotificationCategories powers the admin/user settings UI so the list of
@@ -28,6 +29,7 @@ func AllNotificationCategories() []NotificationCategory {
 		NotifCategoryDelivery,
 		NotifCategoryAccount,
 		NotifCategoryMarketing,
+		NotifCategoryFavorites,
 	}
 }
 

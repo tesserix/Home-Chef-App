@@ -459,3 +459,12 @@ export interface FavoriteChef {
   chef: Chef;
   createdAt: string;
 }
+
+/** A saved/favorited menu item (#237). */
+export interface FavoriteDish {
+  id: string;
+  menuItemId: string;
+  menuItem: MenuItem;
+  chef: { id: string; businessName: string; profileImage?: string };
+  createdAt: string;
+}
