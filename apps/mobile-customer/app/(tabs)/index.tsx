@@ -35,6 +35,7 @@ import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderCard } from '../../components/orders/ActiveOrderCard';
+import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
@@ -189,6 +190,9 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Win-back offer (#42) — surfaces an active offer; auto-prefills checkout. */}
+      <WinbackBanner />
 
       {/* ── Row 2: Cuisine category scroller (primary browse axis) ── */}
       {/* Airbnb-style: selected = charcoal text + 2px charcoal underline;
