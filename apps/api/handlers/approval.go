@@ -272,15 +272,14 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	// Apply side effects based on type
 	switch approval.Type {
 	case models.ApprovalKitchenOnboarding:
-		database.DB.Model(&models.ChefProfile{}).Where("id = ?", approval.ChefID).Updates(map[string]interface{}{
-			"is_verified": true,
-			"verified_at": &now,
-			"is_active":   true,
-		})
-		// Update user role to chef
-		var chef models.ChefProfile
-		if err := database.DB.First(&chef, "id = ?", approval.ChefID).Error; err == nil {
-			database.DB.Model(&models.User{}).Where("id = ?", chef.UserID).Update("role", models.RoleChef)
+		// Activation (verify + activate chef, promote user role). Runs durably via
+		// a Temporal workflow when ONBOARDING_WORKFLOW_ENABLED is on — so a crash
+		// mid-activation retries instead of leaving the chef approved-but-inactive
+		// — otherwise inline. Same idempotent op either way (#126).
+		if services.OnboardingWorkflowActive() {
+			services.StartOnboardingActivation(approval.ID)
+		} else if err := services.ActivateChefOnboarding(database.DB, approval.ID); err != nil {
+			log.Printf("onboarding: inline activation failed for approval %s: %v", approval.ID, err)
 		}
 
 	case models.ApprovalDocumentVerification:

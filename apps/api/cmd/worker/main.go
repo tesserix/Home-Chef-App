@@ -38,6 +38,8 @@ func main() {
 	workflows.NotifyChefFunc = services.NotifyChefNewOrder
 	workflows.OrderSettleFunc = services.SettleOrderPayouts
 	workflows.OrderRefundFunc = services.CompensateOrderRefund
+	// Onboarding activation (#126).
+	workflows.ActivateChefFunc = services.ActivateChefOnboardingFromActivity
 
 	if err := temporal.RunWorkers(
 		temporal.Queue(temporal.TaskQueueNotifications).
@@ -52,6 +54,10 @@ func main() {
 			Workflows(workflows.OrderSagaWorkflow).
 			Activities(workflows.NotifyChefActivity, workflows.DispatchDeliveryActivity,
 				workflows.OrderSettleActivity, workflows.OrderRefundActivity),
+		// Durable chef-onboarding activation (#126).
+		temporal.Queue(temporal.TaskQueueOnboarding).
+			Workflows(workflows.OnboardingActivationWorkflow).
+			Activities(workflows.ActivateChefOnboardingActivity),
 		// Scheduled jobs (statements, reconciliation, FSSAI, availability, audit).
 		services.RegisterCronWorker(),
 	); err != nil {
