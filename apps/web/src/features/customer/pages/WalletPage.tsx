@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, Loader2, Gift, ChevronRight } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { Card } from '@/shared/components/ui';
 import { useFormatPrice } from '@/shared/utils/format-price';
@@ -76,6 +77,21 @@ export default function WalletPage() {
             </div>
           </div>
         </Card>
+
+        {/* Refer & Earn CTA (#38) — the reward lands here in the wallet. */}
+        <Link
+          to="/referral"
+          className="mt-4 flex items-center gap-3 rounded-xl bg-herb-tint p-4 transition-colors hover:bg-herb-tint/80"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-paper text-herb">
+            <Gift aria-hidden="true" className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-ink">Refer &amp; Earn</p>
+            <p className="text-sm text-ink-soft">Invite friends — you both get wallet credit.</p>
+          </div>
+          <ChevronRight aria-hidden="true" className="h-5 w-5 text-ink-muted" />
+        </Link>
 
         <h2 className="mt-8 text-lg font-semibold text-ink">Transactions</h2>
         {txnLoading ? (
