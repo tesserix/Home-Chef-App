@@ -94,12 +94,12 @@ func NotifyChefNewOrder(_ context.Context, orderID uuid.UUID) error {
 	})
 }
 
-// SettleOrderPayouts releases a delivered order's held payouts. The actual Route
-// transfer release lands in the payments slice (#123); for now it's a logged
-// no-op so the saga's happy path completes end-to-end.
+// SettleOrderPayouts releases a delivered order's held Route transfers (#123).
+// Durable + retried (the activity retries on a transient gateway failure) and
+// idempotent (releasing an already-released transfer is a no-op). No-op unless
+// ORDER_PAYOUT_AUTO_RELEASE_ENABLED is on.
 func SettleOrderPayouts(_ context.Context, orderID uuid.UUID) error {
-	log.Printf("order saga: settle payouts for %s (release deferred to #123)", orderID)
-	return nil
+	return ReleaseOrderPayouts(orderID)
 }
 
 // CompensateOrderRefund is the saga's compensation — refund the customer to
@@ -114,6 +114,12 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	}
 	if order.RefundedAt != nil {
 		return nil // already refunded
+	}
+	// Claw back the chef/rider Route split first (#123) — the platform must not
+	// pay out an order it is refunding. No-op unless live payout movement is on;
+	// guarded by RefundedAt above so it only runs once per order.
+	if err := ReverseOrderPayouts(orderID); err != nil {
+		return fmt.Errorf("refund: reverse payouts for %s: %w", orderID, err)
 	}
 	if order.Total > 0 {
 		if _, err := CreditWallet(database.DB, order.CustomerID, order.Total,
