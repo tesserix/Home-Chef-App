@@ -7,7 +7,9 @@ package services
 // no-show) credits the next cycle (reuses the #281 credit path).
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -151,9 +153,53 @@ func MarkMealFulfillmentMissed(db *gorm.DB, fulfillmentID uuid.UUID) error {
 		Where("id = ? AND status <> ?", fulfillmentID, models.MealFulfillMissed).
 		Update("status", models.MealFulfillMissed)
 	if res.RowsAffected == 1 {
+		// A missed day breaks the customer's loyalty streak (#40). Best-effort:
+		// the credit below is the authoritative compensation.
+		if err := ResetLoyaltyStreak(db, f.CustomerID); err != nil {
+			log.Printf("loyalty streak reset failed for customer %s: %v", f.CustomerID, err)
+		}
 		return CreditMealSubscription(db, f.MealSubscriptionID, f.Price)
 	}
 	return nil
+}
+
+// MarkMealFulfillmentDelivered transitions the meal-subscription fulfillment
+// linked to a delivered order into the "delivered" state and advances the
+// customer's loyalty streak (#40). It fills the gap where a delivered order
+// never flipped its fulfillment row. A no-op for a normal (non-subscription)
+// order, and idempotent — a redelivered event neither re-transitions nor
+// re-advances the streak.
+func MarkMealFulfillmentDelivered(db *gorm.DB, orderID uuid.UUID) error {
+	var f models.MealSubscriptionFulfillment
+	err := db.Where("order_id = ?", orderID).First(&f).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // not a meal-subscription order
+		}
+		return err
+	}
+	// Only advance from a non-terminal state — never resurrect a missed/skipped
+	// day, and never re-count an already-delivered one.
+	if f.Status == models.MealFulfillDelivered || f.Status == models.MealFulfillMissed || f.Status == models.MealFulfillSkipped {
+		return nil
+	}
+	cfg := GetLoyaltyConfig(db)
+	return db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.MealSubscriptionFulfillment{}).
+			Where("id = ? AND status = ?", f.ID, f.Status).
+			Update("status", models.MealFulfillDelivered)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // a concurrent transition won — don't double-advance
+		}
+		if !cfg.Enabled {
+			return nil
+		}
+		_, _, err := advanceStreakInTx(tx, f.CustomerID, f.Date, cfg)
+		return err
+	})
 }
 
 // MealAdherence is delivered vs scheduled for a subscription.

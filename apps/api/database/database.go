@@ -193,6 +193,10 @@ func Migrate() error {
 		&models.Wallet{},
 		&models.WalletTxn{},
 
+		// Loyalty (points ledger + streaks, #40)
+		&models.LoyaltyAccount{},
+		&models.LoyaltyTransaction{},
+
 		// Social
 		&models.Post{},
 		&models.PostLike{},

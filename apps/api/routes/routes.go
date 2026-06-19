@@ -161,6 +161,7 @@ func SetupRouter() *gin.Engine {
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
+	loyaltyHandler := handlers.NewLoyaltyHandler()
 	referralHandler := handlers.NewReferralHandler()
 	winbackHandler := handlers.NewWinbackHandler()
 	orderIssueHandler := handlers.NewOrderIssueHandler()
@@ -876,6 +877,10 @@ func SetupRouter() *gin.Engine {
 
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
+			// Loyalty program (#40) — config + analytics.
+			admin.GET("/loyalty/config", adminHandler.GetLoyaltyConfig)
+			admin.PUT("/loyalty/config", adminHandler.UpdateLoyaltyConfig)
+			admin.GET("/loyalty/analytics", adminHandler.GetLoyaltyAnalytics)
 			// Win-back program (#42) — config + reactivation analytics.
 			admin.GET("/winback/config", adminHandler.GetWinbackConfig)
 			admin.PUT("/winback/config", adminHandler.UpdateWinbackConfig)
@@ -949,6 +954,11 @@ func SetupRouter() *gin.Engine {
 			// Store-credit wallet (#33)
 			customer.GET("/wallet", walletHandler.GetWallet)
 			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
+
+			// Loyalty points & streaks (#40)
+			customer.GET("/loyalty", loyaltyHandler.GetLoyalty)
+			customer.GET("/loyalty/transactions", loyaltyHandler.GetLoyaltyTransactions)
+			customer.POST("/loyalty/redeem", loyaltyHandler.RedeemLoyalty)
 
 			// Referral program (#38)
 			customer.GET("/referral", referralHandler.GetMyReferral)

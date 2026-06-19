@@ -92,6 +92,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// Referral reward granted → notify the referrer (#38).
 		{Stream: "REFERRAL", Durable: "notify-referral", Handler: h,
 			Subjects: []string{SubjectReferralRewarded}},
+		// Loyalty points earned / redeemed → notify the customer (#40).
+		{Stream: "LOYALTY", Durable: "notify-loyalty", Handler: h,
+			Subjects: []string{SubjectLoyaltyEarned, SubjectLoyaltyRedeemed}},
 		// Win-back offer issued → nudge the lapsed/cancelled user (#42).
 		{Stream: "SUBSCRIPTIONS", Durable: "notify-winback", Handler: h,
 			Subjects: []string{SubjectSubscriptionWinbackOffered}},
@@ -138,6 +141,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
+	case SubjectLoyaltyEarned:
+		return decodeThen(data, s.handleLoyaltyEarned)
+	case SubjectLoyaltyRedeemed:
+		return decodeThen(data, s.handleLoyaltyRedeemed)
 	case SubjectSubscriptionWinbackOffered:
 		return decodeThen(data, s.handleSubscriptionWinbackOffered)
 	case SubjectMealSubscriptionCreated:
@@ -319,6 +326,20 @@ func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
 }
 
 func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
+	// Award loyalty points for the delivered order (#40). Idempotent on the
+	// order id, so a redelivered event never double-earns; best-effort so a
+	// transient points failure never blocks or duplicates the delivery
+	// confirmation below.
+	if _, err := AwardOrderLoyalty(database.DB, event.CustomerID, event.OrderID, event.Total); err != nil {
+		log.Printf("loyalty award failed for order %s: %v", event.OrderID, err)
+	}
+	// If this delivered order is a meal-subscription fulfillment, flip its
+	// fulfillment row to delivered and advance the adherence streak (#40).
+	// No-op for normal orders; idempotent on redelivery.
+	if err := MarkMealFulfillmentDelivered(database.DB, event.OrderID); err != nil {
+		log.Printf("meal fulfillment delivered transition failed for order %s: %v", event.OrderID, err)
+	}
+
 	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.CustomerID,
@@ -555,6 +576,67 @@ func (s *NotificationService) handleReferralRewarded(event Event) error {
 		Title:   title,
 		Message: message,
 		Data:    map[string]any{"type": "referral_rewarded"},
+	})
+	return nil
+}
+
+// handleLoyaltyEarned → customer: points landed from a delivered order or a
+// meal-subscription streak (#40). In-app + push; the body adapts to whether it
+// was an order earn or a streak bonus.
+func (s *NotificationService) handleLoyaltyEarned(event Event) error {
+	points, _ := event.Data["points"].(float64)
+	if points <= 0 {
+		return nil
+	}
+	source, _ := event.Data["source"].(string)
+	title := "You earned loyalty points!"
+	message := fmt.Sprintf("You just earned %.0f points. Redeem them for wallet credit anytime.", points)
+	if source == string(models.LoyaltySourceStreak) {
+		streak, _ := event.Data["streak"].(float64)
+		title = "Streak bonus unlocked! 🔥"
+		message = fmt.Sprintf("%.0f days in a row — here's %.0f bonus points. Keep the streak going!", streak, points)
+	}
+	data, _ := json.Marshal(map[string]any{"type": "loyalty_earned", "points": points})
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "loyalty_earned",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save loyalty_earned notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message,
+		Data: map[string]any{"type": "loyalty_earned", "points": points},
+	})
+	return nil
+}
+
+// handleLoyaltyRedeemed → customer: points converted to wallet store credit (#40).
+func (s *NotificationService) handleLoyaltyRedeemed(event Event) error {
+	points, _ := event.Data["points"].(float64)
+	amount, _ := event.Data["amount"].(float64)
+	if points <= 0 || amount <= 0 {
+		return nil
+	}
+	title := "Points redeemed"
+	message := fmt.Sprintf("You redeemed %.0f points for ₹%.0f wallet credit. Use it on your next order!", points, amount)
+	data, _ := json.Marshal(map[string]any{"type": "loyalty_redeemed", "points": points, "amount": amount})
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "loyalty_redeemed",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save loyalty_redeemed notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message,
+		Data: map[string]any{"type": "loyalty_redeemed"},
 	})
 	return nil
 }
