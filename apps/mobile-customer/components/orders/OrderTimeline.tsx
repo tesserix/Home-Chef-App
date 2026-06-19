@@ -22,7 +22,7 @@ function getStepIndex(status: Order['status']): number {
   switch (status) {
     case 'pending':
       return -1;
-    case 'confirmed':
+    case 'accepted':
       return 0;
     case 'preparing':
       return 1;
@@ -30,6 +30,8 @@ function getStepIndex(status: Order['status']): number {
       return 1; // "ready" sits between preparing and picked_up
     case 'picked_up':
       return 2;
+    case 'delivering':
+      return 2; // out for delivery — same step as picked_up
     case 'delivered':
       return 3;
     case 'cancelled':

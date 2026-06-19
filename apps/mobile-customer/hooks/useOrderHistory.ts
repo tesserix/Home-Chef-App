@@ -138,7 +138,7 @@ export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
       const o = query.state.data?.data;
       if (!o) return false;
       if (opts.pollUntilPaid && o.paymentStatus === 'pending') return 2000;
-      const active = ['pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'delivering'].includes(
+      const active = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering'].includes(
         o.status,
       );
       return active ? 15000 : false;

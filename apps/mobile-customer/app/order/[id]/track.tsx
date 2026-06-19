@@ -22,13 +22,15 @@ const PROGRESS_STEP_COUNT = 4;
 
 function getProgressIndex(status: string): number {
   switch (status) {
-    case 'confirmed':
+    case 'accepted':
       return 0;
     case 'preparing':
       return 1;
     case 'ready':
       return 1;
     case 'picked_up':
+      return 2;
+    case 'delivering':
       return 2;
     case 'delivered':
       return 3;
@@ -194,11 +196,11 @@ export default function TrackOrderScreen() {
 
           {/* Status label — current step text */}
           <Text style={styles.statusText}>
-            {tracking.status === 'picked_up'
+            {tracking.status === 'picked_up' || tracking.status === 'delivering'
               ? 'Your order is on the way'
               : tracking.status === 'preparing'
                 ? 'Chef is preparing your order'
-                : tracking.status === 'confirmed'
+                : tracking.status === 'accepted'
                   ? 'Order confirmed'
                   : tracking.status === 'ready'
                     ? 'Ready for pickup'

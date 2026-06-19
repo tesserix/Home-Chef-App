@@ -21,7 +21,7 @@ function getStatusChip(status: Order['status']): ChipStyle {
         text: customerColors.coral.pressed,
         label: 'Pending',
       };
-    case 'confirmed':
+    case 'accepted':
       return {
         bg: customerColors.coral.tint,
         text: customerColors.coral.pressed,
@@ -44,6 +44,12 @@ function getStatusChip(status: Order['status']): ChipStyle {
         bg: customerColors.success.tint,
         text: customerColors.success.DEFAULT,
         label: 'Picked Up',
+      };
+    case 'delivering':
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Out for Delivery',
       };
     case 'delivered':
       return {
