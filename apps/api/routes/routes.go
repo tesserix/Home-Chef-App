@@ -167,6 +167,7 @@ func SetupRouter() *gin.Engine {
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
+	mealSubHandler := handlers.NewMealSubscriptionHandler()
 	paymentHandler := handlers.NewPaymentHandler()
 	tipHandler := handlers.NewTipHandler()
 	groupOrderHandler := handlers.NewGroupOrderHandler()
@@ -352,6 +353,7 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
 			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
+			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)        // #280 tiffin offer
 			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
 		}
 
@@ -413,6 +415,9 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/dashboard", chefHandler.GetChefDashboard)
 			chefDashboard.GET("/profile", chefHandler.GetChefProfile)
 			chefDashboard.PUT("/profile", chefHandler.UpdateChefProfile)
+			// Tiffin meal-subscription offer config (#4/#280).
+			chefDashboard.GET("/subscription-config", mealSubHandler.GetChefSubscriptionConfig)
+			chefDashboard.PUT("/subscription-config", mealSubHandler.UpdateChefSubscriptionConfig)
 			// Weekly fixed menu (#192) — veg/nonveg dish per (day × slot).
 			chefDashboard.GET("/weekly-menu", chefHandler.GetMyWeeklyMenu)
 			chefDashboard.PUT("/weekly-menu", chefHandler.PutWeeklyMenu)
@@ -510,6 +515,19 @@ func SetupRouter() *gin.Engine {
 			orders.GET("/:id/invoice.pdf", orderHandler.GetOrderInvoicePDF)
 			// Order-specific chat rooms
 			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
+		}
+
+		// Customer tiffin meal subscriptions (#2/#3/#280).
+		mealSubs := v1.Group("/meal-subscriptions")
+		mealSubs.Use(bffAuth(bffKey, bffWindow))
+		{
+			mealSubs.POST("/preview", mealSubHandler.PreviewPrice)
+			mealSubs.POST("", mealSubHandler.Subscribe)
+			mealSubs.GET("", mealSubHandler.GetMySubscriptions)
+			mealSubs.POST("/:id/pause", mealSubHandler.Pause)
+			mealSubs.POST("/:id/resume", mealSubHandler.Resume)
+			mealSubs.POST("/:id/skip", mealSubHandler.Skip)
+			mealSubs.POST("/:id/cancel", mealSubHandler.Cancel)
 		}
 
 		// Shared authenticated profile routes (any logged-in role). The mobile
