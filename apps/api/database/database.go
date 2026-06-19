@@ -197,6 +197,10 @@ func Migrate() error {
 		&models.LoyaltyAccount{},
 		&models.LoyaltyTransaction{},
 
+		// Marketing campaigns (#56)
+		&models.Campaign{},
+		&models.CampaignDelivery{},
+
 		// Social
 		&models.Post{},
 		&models.PostLike{},

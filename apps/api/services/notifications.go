@@ -95,6 +95,11 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// Loyalty points earned / redeemed → notify the customer (#40).
 		{Stream: "LOYALTY", Durable: "notify-loyalty", Handler: h,
 			Subjects: []string{SubjectLoyaltyEarned, SubjectLoyaltyRedeemed}},
+		// Marketing campaign dispatch → fan out to the segment (#56). Long
+		// AckWait (the fan-out can take a while) and few retries (the delivery
+		// ledger makes a retry a cheap resume, not a re-send).
+		{Stream: "CAMPAIGNS", Durable: "campaign-dispatch", Handler: h,
+			Subjects: []string{SubjectCampaignDispatch}, AckWait: 10 * time.Minute, MaxDeliver: 3},
 		// Win-back offer issued → nudge the lapsed/cancelled user (#42).
 		{Stream: "SUBSCRIPTIONS", Durable: "notify-winback", Handler: h,
 			Subjects: []string{SubjectSubscriptionWinbackOffered}},
@@ -145,6 +150,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleLoyaltyEarned)
 	case SubjectLoyaltyRedeemed:
 		return decodeThen(data, s.handleLoyaltyRedeemed)
+	case SubjectCampaignDispatch:
+		return decodeThen(data, s.handleCampaignDispatch)
 	case SubjectSubscriptionWinbackOffered:
 		return decodeThen(data, s.handleSubscriptionWinbackOffered)
 	case SubjectMealSubscriptionCreated:
@@ -639,6 +646,19 @@ func (s *NotificationService) handleLoyaltyRedeemed(event Event) error {
 		Data: map[string]any{"type": "loyalty_redeemed"},
 	})
 	return nil
+}
+
+// handleCampaignDispatch fans a marketing campaign out to its segment (#56).
+// Idempotent + resumable — DispatchCampaign skips recipients already sent, so a
+// redelivery is a cheap resume.
+func (s *NotificationService) handleCampaignDispatch(event Event) error {
+	idStr, _ := event.Data["campaign_id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		log.Printf("campaign dispatch: bad campaign_id %q — dropping", idStr)
+		return nil
+	}
+	return DispatchCampaign(s.ctx, database.DB, id)
 }
 
 // handleSubscriptionWinbackOffered nudges a lapsed/cancelled user about their
