@@ -27,6 +27,11 @@ interface CartState {
   items: CartItem[];
   chefId: string | null;
   chef: Pick<Chef, 'id' | 'businessName' | 'profileImage' | 'deliveryFee' | 'minimumOrder'> | null;
+  // Applied promo (#39). Persisted from the cart so it survives the hop to
+  // checkout; the server re-validates + recomputes the real discount at order
+  // time, so promoDiscount here is only a preview for display.
+  promoCode: string | null;
+  promoDiscount: number;
 }
 
 interface CartActions {
@@ -35,6 +40,8 @@ interface CartActions {
   updateQuantity: (itemId: string, quantity: number) => void;
   updateNotes: (itemId: string, notes: string) => void;
   setChef: (chef: CartState['chef']) => void;
+  setPromo: (code: string, discount: number) => void;
+  clearPromo: () => void;
   clearCart: () => void;
   getSubtotal: () => number;
   getItemCount: () => number;
@@ -46,6 +53,8 @@ const initialState: CartState = {
   items: [],
   chefId: null,
   chef: null,
+  promoCode: null,
+  promoDiscount: 0,
 };
 
 export const useCartStore = create<CartStore>()(
@@ -131,6 +140,9 @@ export const useCartStore = create<CartStore>()(
       setChef: (chef) => {
         set({ chef, chefId: chef?.id ?? null });
       },
+
+      setPromo: (code, discount) => set({ promoCode: code, promoDiscount: discount }),
+      clearPromo: () => set({ promoCode: null, promoDiscount: 0 }),
 
       clearCart: () => set(initialState),
 
