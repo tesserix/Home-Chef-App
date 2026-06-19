@@ -28,7 +28,7 @@ import { useFormatPrice } from '@/shared/utils/format-price';
 import { findItemConflicts, type DietaryProfile } from '@/shared/utils/dietary';
 import { formatDate } from '@/shared/utils/format-date';
 import { Button, SimpleDialog } from '@/shared/components/ui';
-import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse, SelectedModifier } from '@/shared/types';
+import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse, SelectedModifier, WeeklyMenu, WeeklyMenuItem } from '@/shared/types';
 
 export default function ChefDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +51,13 @@ export default function ChefDetailPage() {
     queryKey: ['chef', id, 'reviews'],
     queryFn: () => apiClient.get<PaginatedResponse<Review>>(`/chefs/${id}/reviews`),
     enabled: !!id && showReviews,
+  });
+
+  // Chef's published fixed weekly menu (#1) — read-only preview.
+  const { data: weeklyMenu } = useQuery({
+    queryKey: ['chef', id, 'weekly-menu'],
+    queryFn: () => apiClient.get<WeeklyMenu>(`/chefs/${id}/weekly-menu`),
+    enabled: !!id,
   });
 
   const fp = useFormatPrice();
@@ -283,6 +290,13 @@ export default function ChefDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Fixed weekly menu (#1) — read-only, only when the chef has published. */}
+      {weeklyMenu?.isPublished && (weeklyMenu.items?.length ?? 0) > 0 && (
+        <div className="container-app mt-8">
+          <WeeklyMenuSection items={weeklyMenu.items} fp={fp} />
+        </div>
+      )}
 
       {/* Menu Section */}
       <div className="container-app mt-8 pb-32">
@@ -761,5 +775,62 @@ function ReviewsList({ reviews }: { reviews: Review[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// Read-only fixed weekly menu on chef detail (#1). Grouped by day (Mon-first),
+// each cell shows a veg/non-veg dot, slot, dish, price. Presentational.
+const WM_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const WM_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WM_SLOT_ORDER: WeeklyMenuItem['slot'][] = ['lunch', 'dinner'];
+
+function WeeklyMenuSection({ items, fp }: { items: WeeklyMenuItem[]; fp: (amount: number) => string }) {
+  const byDay = new Map<number, WeeklyMenuItem[]>();
+  for (const it of items) {
+    const arr = byDay.get(it.dayOfWeek) ?? [];
+    arr.push(it);
+    byDay.set(it.dayOfWeek, arr);
+  }
+  const days = WM_DAY_ORDER.filter((d) => byDay.has(d));
+
+  return (
+    <section aria-label="This week's menu">
+      <h2 className="font-display text-display-xs text-ink">This week&apos;s menu</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        A fixed menu — every subscriber gets the same dish each day.
+      </p>
+      <div className="mt-4 space-y-5">
+        {days.map((day) => {
+          const cells = (byDay.get(day) ?? []).slice().sort((a, b) => {
+            const s = WM_SLOT_ORDER.indexOf(a.slot) - WM_SLOT_ORDER.indexOf(b.slot);
+            return s !== 0 ? s : a.variant.localeCompare(b.variant);
+          });
+          return (
+            <div key={day}>
+              <h3 className="mb-2 text-sm font-semibold text-ink">{WM_DAY_NAMES[day]}</h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {cells.map((c, i) => {
+                  const isVeg = c.variant === 'veg';
+                  return (
+                    <div key={c.id ?? `${day}-${c.slot}-${c.variant}-${i}`} className="rounded-lg border border-mist bg-paper p-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 rounded-sm ${isVeg ? 'bg-herb' : 'bg-paprika'}`} aria-hidden="true" />
+                        <span className="text-xs font-medium text-ink-soft">
+                          {c.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {isVeg ? 'Veg' : 'Non-veg'}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink">{c.name}</p>
+                      {c.price > 0 ? (
+                        <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{fp(c.price)}</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
