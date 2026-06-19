@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,6 +74,10 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 	return []ConsumerSpec{
 		{Stream: "ORDERS", Durable: "notify-orders", Handler: h,
 			Subjects: []string{SubjectOrderCreated, SubjectOrderUpdated, SubjectOrderCancelled, SubjectOrderDelivered}},
+		// Order issue reported → notify the chef (#37). Own durable so the
+		// issue fan-out is independent of the order-lifecycle notifications.
+		{Stream: "ORDERS", Durable: "notify-order-issue", Handler: h,
+			Subjects: []string{SubjectOrderIssueReported}},
 		{Stream: "NOTIFICATIONS", Durable: "notify-dispatch", Handler: h,
 			Subjects: []string{SubjectNotificationEmail, SubjectNotificationPush, SubjectNotificationSMS}},
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
@@ -127,6 +132,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
+	case SubjectOrderIssueReported:
+		return decodeThen(data, s.handleOrderIssueReported)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
 		return decodeThen(data, s.handleTipReceived)
 	case SubjectGroupOrderLocked:
@@ -536,6 +543,37 @@ func (s *NotificationService) handleReferralRewarded(event Event) error {
 		Title:   title,
 		Message: message,
 		Data:    map[string]any{"type": "referral_rewarded"},
+	})
+	return nil
+}
+
+// handleOrderIssueReported notifies the chef that a customer reported an issue on
+// one of their orders (#37): in-app feed + push. event.UserID is the chef's user.
+func (s *NotificationService) handleOrderIssueReported(event Event) error {
+	orderNumber, _ := event.Data["order_number"].(string)
+	reason, _ := event.Data["reason"].(string)
+	orderID, _ := event.Data["order_id"].(string)
+	issueID, _ := event.Data["issue_id"].(string)
+
+	title := "A customer reported an issue"
+	message := fmt.Sprintf("Order %s — %s. Our team is reviewing it.", orderNumber, strings.ReplaceAll(reason, "_", " "))
+	data, _ := json.Marshal(map[string]any{"type": "order_issue_reported", "orderId": orderID, "issueId": issueID})
+
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "order_issue_reported",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save order_issue_reported notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID:  event.UserID,
+		Type:    "push",
+		Title:   title,
+		Message: message,
+		Data:    map[string]any{"type": "order_issue_reported", "orderId": orderID},
 	})
 	return nil
 }

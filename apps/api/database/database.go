@@ -244,6 +244,7 @@ func Migrate() error {
 		&models.FavoriteDish{},
 		&models.ReferralCode{},
 		&models.Referral{},
+		&models.OrderIssue{},
 
 		// Notifications
 		&models.Notification{},

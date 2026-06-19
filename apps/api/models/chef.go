@@ -29,6 +29,9 @@ type ChefProfile struct {
 	Rating         float64        `gorm:"default:0" json:"rating"`
 	TotalReviews   int            `gorm:"default:0" json:"totalReviews"`
 	TotalOrders    int            `gorm:"default:0" json:"totalOrders"`
+	// IssueCount is the number of customer-reported order issues (#37); the issue
+	// rate (issues/orders) feeds the chef's quality signal.
+	IssueCount     int            `gorm:"default:0" json:"issueCount"`
 	IsVerified     bool           `gorm:"default:false" json:"verified"`
 	VerifiedAt     *time.Time     `gorm:"" json:"verifiedAt"`
 	IsActive       bool           `gorm:"default:true" json:"isActive"`
