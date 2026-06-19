@@ -46,6 +46,10 @@ type EarningsInput struct {
 	DeliveryFee   float64
 	ChefTip       float64
 	DeliveryState string
+	// CommissionRate overrides the platform take-rate for this order (#44 premium
+	// tier). Zero/unset uses the standard RateCommission, so existing callers are
+	// unaffected.
+	CommissionRate float64
 }
 
 // OrderEarnings is the computed per-order breakdown.
@@ -86,7 +90,12 @@ type EarningsTotals struct {
 //	tds        = RateTDS × gross
 //	netPayout  = gross − commission − tds   (GST is not deducted from chef)
 func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
-	commission := Round2(RateCommission * in.ItemRevenue)
+	// Premium chefs (#44) carry a lower commission rate; 0/unset = the standard rate.
+	rate := in.CommissionRate
+	if rate <= 0 || rate >= 1 {
+		rate = RateCommission
+	}
+	commission := Round2(rate * in.ItemRevenue)
 	gross := Round2(in.ItemRevenue + in.DeliveryFee + in.ChefTip)
 
 	var cgst, sgst, igst float64

@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 
@@ -68,6 +69,7 @@ export default function PlatformSettingsPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <CommissionSection />
+        <SubscriptionPricingSection />
         <DeliveryFeesSection />
         <OperatingHoursSection />
         <ServiceAreasSection />
@@ -190,6 +192,111 @@ function CommissionSection() {
             saving={save.isPending}
             onCancel={() => setDraft({})}
             onSave={() => save.mutate(draft)}
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ============================================================
+// Subscription pricing — standard + premium chef tiers (#44)
+// ============================================================
+
+interface SubscriptionPricing {
+  country: string;
+  currency: string;
+  trialDays: number;
+  minEarningsThreshold: number;
+  standard: { monthly: number; quarterly: number; yearly: number };
+  premium: { monthly: number; quarterly: number; yearly: number };
+  premiumCommissionRate: number;
+}
+
+function SubscriptionPricingSection() {
+  const qc = useQueryClient();
+  const feedback = useFeedback();
+  const { data } = useQuery({
+    queryKey: ['subscription-pricing'],
+    queryFn: () => apiClient.get<SubscriptionPricing>('/admin/subscription-pricing'),
+  });
+
+  const [draft, setDraft] = useState<Partial<{
+    standardMonthly: number;
+    standardQuarterly: number;
+    standardYearly: number;
+    premiumMonthly: number;
+    premiumQuarterly: number;
+    premiumYearly: number;
+    premiumCommissionPct: number;
+  }>>({});
+
+  const save = useMutation({
+    mutationFn: (body: unknown) =>
+      apiClient.put<SubscriptionPricing>('/admin/subscription-pricing', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['subscription-pricing'] });
+      setDraft({});
+      feedback.setState({ kind: 'success', message: 'Subscription pricing updated' });
+    },
+    onError: (err) => {
+      const e = err as Partial<ApiError>;
+      feedback.setState({ kind: 'error', message: e?.error?.message ?? 'Failed to save' });
+    },
+  });
+
+  const cur = data
+    ? {
+        standardMonthly: draft.standardMonthly ?? data.standard.monthly,
+        standardQuarterly: draft.standardQuarterly ?? data.standard.quarterly,
+        standardYearly: draft.standardYearly ?? data.standard.yearly,
+        premiumMonthly: draft.premiumMonthly ?? data.premium.monthly,
+        premiumQuarterly: draft.premiumQuarterly ?? data.premium.quarterly,
+        premiumYearly: draft.premiumYearly ?? data.premium.yearly,
+        premiumCommissionPct: draft.premiumCommissionPct ?? Math.round(data.premiumCommissionRate * 1000) / 10,
+      }
+    : null;
+
+  return (
+    <Card
+      icon={<Sparkles className="h-5 w-5 text-primary" />}
+      title="Subscription pricing"
+      description="Standard + Premium chef plan prices — reflected on the vendor app instantly"
+    >
+      <FeedbackBanner value={feedback.state} onDismiss={() => feedback.setState(null)} />
+      {!data || !cur ? (
+        <p className="py-4 text-sm text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Standard ({data.currency})
+            </p>
+            <NumberField label="Monthly" value={cur.standardMonthly} onChange={(v) => setDraft((d) => ({ ...d, standardMonthly: v }))} min={0} step={50} />
+            <NumberField label="Quarterly" value={cur.standardQuarterly} onChange={(v) => setDraft((d) => ({ ...d, standardQuarterly: v }))} min={0} step={50} />
+            <NumberField label="Yearly" value={cur.standardYearly} onChange={(v) => setDraft((d) => ({ ...d, standardYearly: v }))} min={0} step={50} />
+          </div>
+          <div className="space-y-3 border-t border-border pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Premium ({data.currency})
+            </p>
+            <NumberField label="Monthly" value={cur.premiumMonthly} onChange={(v) => setDraft((d) => ({ ...d, premiumMonthly: v }))} min={0} step={50} />
+            <NumberField label="Quarterly" value={cur.premiumQuarterly} onChange={(v) => setDraft((d) => ({ ...d, premiumQuarterly: v }))} min={0} step={50} />
+            <NumberField label="Yearly" value={cur.premiumYearly} onChange={(v) => setDraft((d) => ({ ...d, premiumYearly: v }))} min={0} step={50} />
+            <NumberField label="Premium commission (%)" value={cur.premiumCommissionPct} onChange={(v) => setDraft((d) => ({ ...d, premiumCommissionPct: v }))} min={0} max={30} step={0.5} />
+          </div>
+          <SaveRow
+            dirty={Object.keys(draft).length > 0}
+            saving={save.isPending}
+            onCancel={() => setDraft({})}
+            onSave={() =>
+              save.mutate({
+                country: data.country,
+                standard: { monthly: cur.standardMonthly, quarterly: cur.standardQuarterly, yearly: cur.standardYearly },
+                premium: { monthly: cur.premiumMonthly, quarterly: cur.premiumQuarterly, yearly: cur.premiumYearly },
+                premiumCommissionRate: cur.premiumCommissionPct / 100,
+              })
+            }
           />
         </div>
       )}

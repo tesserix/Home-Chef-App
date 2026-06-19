@@ -146,32 +146,40 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		dir = "ASC"
 	}
 
-	// Featured chefs ranked first: active featured status (is_featured=true AND featured_until > now)
+	// Ranking priority (best first): premium chefs (#44), then active featured
+	// chefs (paid promotion), then everyone — within each band by the chosen sort.
+	// Premium gets top placement in search & discovery; the correlated EXISTS
+	// keys off the chef's user's active/trial premium subscription.
+	premiumOrder := "CASE WHEN EXISTS (" +
+		"SELECT 1 FROM subscriptions s WHERE s.user_id = chef_profiles.user_id " +
+		"AND s.tier = 'premium' AND s.status IN ('trial','active') AND s.deleted_at IS NULL" +
+		") THEN 0 ELSE 1 END ASC"
 	featuredOrder := "CASE WHEN is_featured = true AND featured_until > NOW() THEN 0 ELSE 1 END ASC"
+	rankOrder := premiumOrder + ", " + featuredOrder
 
 	switch sortBy {
 	case "rating":
-		query = query.Order(featuredOrder + ", rating " + dir)
+		query = query.Order(rankOrder + ", rating " + dir)
 	case "orders":
-		query = query.Order(featuredOrder + ", total_orders " + dir)
+		query = query.Order(rankOrder + ", total_orders " + dir)
 	case "newest":
-		query = query.Order(featuredOrder + ", created_at " + dir)
+		query = query.Order(rankOrder + ", created_at " + dir)
 	case "price":
-		query = query.Order(featuredOrder + ", minimum_order " + dir)
+		query = query.Order(rankOrder + ", minimum_order " + dir)
 	case "distance":
 		if hasGeo {
 			// Squared distance on lat/lng — a monotonic proxy for true distance
 			// at city scale; cheap (no trig) and orders nearby chefs correctly.
 			// Closest first.
 			query = query.Order(clause.Expr{
-				SQL:  featuredOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC",
+				SQL:  rankOrder + ", ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) ASC",
 				Vars: []interface{}{geoLat, geoLat, geoLng, geoLng},
 			})
 		} else {
-			query = query.Order(featuredOrder + ", rating " + dir)
+			query = query.Order(rankOrder + ", rating " + dir)
 		}
 	default:
-		query = query.Order(featuredOrder + ", rating " + dir)
+		query = query.Order(rankOrder + ", rating " + dir)
 	}
 
 	// Get chefs
@@ -195,8 +203,11 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 			chefIDs[i] = chef.ID
 		}
 		badged := services.ChefsWithValidFSSAI(chefIDs)
+		// Verified-Pro badge (#44) — one batched lookup for the whole page.
+		premium := services.PremiumChefIDs(chefIDs)
 		for i := range responses {
 			responses[i].FoodSafetyBadge = badged[responses[i].ID]
+			responses[i].ProBadge = premium[responses[i].ID]
 		}
 	}
 
@@ -301,7 +312,9 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	var schedules []models.ChefSchedule
 	database.DB.Where("chef_id = ?", chef.ID).Find(&schedules)
 
-	c.JSON(http.StatusOK, chef.ToPublicResponse(schedules))
+	resp := chef.ToPublicResponse(schedules)
+	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetChefMenu returns the menu items and categories for a chef

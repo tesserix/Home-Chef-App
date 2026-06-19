@@ -65,25 +65,29 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 
 	// Group rows by chef so each chef's totals are computed in one pass.
 	type chefBucket struct {
-		userID    uuid.UUID
-		chefState string
-		totals    EarningsTotals
+		userID         uuid.UUID
+		chefState      string
+		commissionRate float64
+		totals         EarningsTotals
 	}
 	buckets := make(map[uuid.UUID]*chefBucket)
 	for _, r := range rows {
 		b := buckets[r.ChefID]
 		if b == nil {
-			b = &chefBucket{userID: r.UserID, chefState: r.ChefState}
+			// Premium commission (#44) resolved once per chef → their actual
+			// payout reflects the lower rate.
+			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: PremiumCommissionRateForChef(r.ChefID)}
 			buckets[r.ChefID] = b
 		}
 		b.totals.Add(ComputeOrderEarnings(EarningsInput{
-			OrderID:       r.OrderID,
-			OrderNumber:   r.OrderNumber,
-			CompletedAt:   r.CompletedAt,
-			ItemRevenue:   r.ItemRevenue,
-			DeliveryFee:   r.DeliveryFee,
-			ChefTip:       r.ChefTip,
-			DeliveryState: r.DeliveryState,
+			OrderID:        r.OrderID,
+			OrderNumber:    r.OrderNumber,
+			CompletedAt:    r.CompletedAt,
+			ItemRevenue:    r.ItemRevenue,
+			DeliveryFee:    r.DeliveryFee,
+			ChefTip:        r.ChefTip,
+			DeliveryState:  r.DeliveryState,
+			CommissionRate: b.commissionRate,
 		}, b.chefState))
 	}
 

@@ -5,6 +5,38 @@ import (
 	"time"
 )
 
+func TestComputeOrderEarnings_PremiumCommissionOverride(t *testing.T) {
+	// Premium chef (#44): a 12% commission override instead of the default 15%.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:    1000,
+		DeliveryFee:    50,
+		ChefTip:        20,
+		DeliveryState:  "maharashtra",
+		CommissionRate: 0.12,
+	}, "Maharashtra")
+
+	// commission 12% of 1000 = 120 (not 150)
+	if got.PlatformCommission != 120 {
+		t.Errorf("commission = %.2f, want 120 (12%% override)", got.PlatformCommission)
+	}
+	// GST is computed off the (lower) commission: 9% each side of 120 = 10.8
+	if got.CGST != 10.8 || got.SGST != 10.8 {
+		t.Errorf("cgst/sgst = %.2f/%.2f, want 10.8/10.8", got.CGST, got.SGST)
+	}
+	// net = gross 1070 - commission 120 - tds 10.7 = 939.3
+	if got.NetPayout != 939.3 {
+		t.Errorf("netPayout = %.2f, want 939.3", got.NetPayout)
+	}
+}
+
+func TestComputeOrderEarnings_ZeroRateFallsBackToDefault(t *testing.T) {
+	// A 0 / unset CommissionRate must use the standard 15% (back-compat).
+	got := ComputeOrderEarnings(EarningsInput{ItemRevenue: 1000, DeliveryState: "x"}, "y")
+	if got.PlatformCommission != 150 {
+		t.Errorf("commission = %.2f, want 150 (default rate)", got.PlatformCommission)
+	}
+}
+
 func TestComputeOrderEarnings_IntraState(t *testing.T) {
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:   1000,

@@ -208,6 +208,9 @@ type ChefProfileResponse struct {
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
 	// Set by the handler (needs a DB lookup), so it's false on the bare model.
 	FoodSafetyBadge bool                   `json:"foodSafetyBadge"`
+	// ProBadge: chef has an active premium subscription — the Verified-Pro badge
+	// (#44). Like FoodSafetyBadge it needs a DB lookup, so the handler populates it.
+	ProBadge        bool                   `json:"proBadge"`
 	IsFeatured      bool                   `json:"isFeatured"`
 	IsOnline        bool                   `json:"isOnline"`
 	AcceptingOrders bool                   `json:"acceptingOrders"`

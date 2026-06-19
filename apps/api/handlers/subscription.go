@@ -73,25 +73,26 @@ func (h *SubscriptionHandler) GetAvailablePlans(c *gin.Context) {
 		return
 	}
 
-	plans := []gin.H{
-		{
-			"interval": "monthly",
-			"amount":   planCfg.MonthlyPrice,
-			"currency": planCfg.Currency,
-		},
-		{
-			"interval":       "quarterly",
-			"amount":         planCfg.QuarterlyPrice,
-			"currency":       planCfg.Currency,
-			"savingsPercent": models.RoundAmount((1 - planCfg.QuarterlyPrice/(planCfg.MonthlyPrice*3)) * 100),
-		},
-		{
-			"interval":       "yearly",
-			"amount":         planCfg.YearlyPrice,
-			"currency":       planCfg.Currency,
-			"savingsPercent": models.RoundAmount((1 - planCfg.YearlyPrice/(planCfg.MonthlyPrice*12)) * 100),
-		},
+	// intervalPlans builds the monthly/quarterly/yearly options for a tier, with
+	// the savings % computed against that tier's own monthly price.
+	intervalPlans := func(monthly, quarterly, yearly float64) []gin.H {
+		out := []gin.H{{"interval": "monthly", "amount": monthly, "currency": planCfg.Currency}}
+		if monthly > 0 {
+			out = append(out,
+				gin.H{"interval": "quarterly", "amount": quarterly, "currency": planCfg.Currency,
+					"savingsPercent": models.RoundAmount((1 - quarterly/(monthly*3)) * 100)},
+				gin.H{"interval": "yearly", "amount": yearly, "currency": planCfg.Currency,
+					"savingsPercent": models.RoundAmount((1 - yearly/(monthly*12)) * 100)},
+			)
+		}
+		return out
 	}
+
+	plans := intervalPlans(planCfg.MonthlyPrice, planCfg.QuarterlyPrice, planCfg.YearlyPrice)
+	premiumPlans := intervalPlans(planCfg.PremiumMonthlyPrice, planCfg.PremiumQuarterlyPrice, planCfg.PremiumYearlyPrice)
+
+	premiumCommissionPct := strconv.FormatFloat(models.RoundAmount(planCfg.PremiumCommissionRate*100), 'f', -1, 64)
+	standardCommissionPct := strconv.FormatFloat(models.RoundAmount(services.RateCommission*100), 'f', -1, 64)
 
 	c.JSON(http.StatusOK, gin.H{
 		"plans":                plans,
@@ -100,6 +101,16 @@ func (h *SubscriptionHandler) GetAvailablePlans(c *gin.Context) {
 		"currency":             planCfg.Currency,
 		"paymentGateway":       planCfg.PaymentGateway,
 		"minEarningsThreshold": planCfg.MinEarningsThreshold,
+		// Premium tier (#44) — additive so existing consumers are unaffected.
+		"premiumPlans":           premiumPlans,
+		"premiumCommissionRate":  planCfg.PremiumCommissionRate,
+		"standardCommissionRate": services.RateCommission,
+		"premiumPerks": []string{
+			"Verified-Pro badge on your profile",
+			"Priority placement in search & discovery",
+			"Lower commission — " + premiumCommissionPct + "% instead of " + standardCommissionPct + "%",
+			"Advanced analytics & demand insights",
+		},
 	})
 }
 
@@ -299,6 +310,71 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"subscription": sub.ToResponse(),
 		"effectiveNow": sub.Status == models.SubStatusTrial,
+	})
+}
+
+// ChangeTier upgrades or downgrades the chef's subscription between the standard
+// and premium tiers (#44). The tier change is immediate so perks (badge, ranking,
+// commission, analytics) flip right away; the plan amount is re-derived from the
+// configured price for the new tier at the current interval. Billing continues to
+// flow through the existing earnings-threshold invoice cycle — premium is just a
+// higher plan amount + a tier flag, so no new payment surface is introduced.
+func (h *SubscriptionHandler) ChangeTier(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	subType := resolveSubscriberType(c)
+
+	var req struct {
+		Tier string `json:"tier" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	newTier := models.SubscriptionTier(req.Tier)
+	if newTier != models.TierStandard && newTier != models.TierPremium {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tier"})
+		return
+	}
+	// Premium is a chef-only upgrade.
+	if newTier == models.TierPremium && subType != models.SubscriberChef {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Premium tier is available to chefs only"})
+		return
+	}
+
+	var sub models.Subscription
+	if err := database.DB.Where("user_id = ? AND subscriber_type = ? AND status IN ?",
+		userID, subType, []models.SubscriptionStatus{models.SubStatusTrial, models.SubStatusActive}).
+		First(&sub).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Active subscription not found"})
+		return
+	}
+
+	if sub.Tier == newTier {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Already on this tier"})
+		return
+	}
+
+	planCfg, err := services.GetPlanSettings(sub.CountryCode, sub.SubscriberType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load plan settings"})
+		return
+	}
+
+	newAmount := planCfg.PriceFor(newTier, sub.BillingInterval)
+	if err := database.DB.Model(&sub).Updates(map[string]interface{}{
+		"tier":        newTier,
+		"plan_amount": newAmount,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to change tier"})
+		return
+	}
+	sub.Tier = newTier
+	sub.PlanAmount = newAmount
+
+	c.JSON(http.StatusOK, gin.H{
+		"subscription": sub.ToResponse(),
+		"effectiveNow": true,
 	})
 }
 

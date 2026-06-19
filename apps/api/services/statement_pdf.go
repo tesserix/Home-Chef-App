@@ -44,19 +44,22 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("load statement orders: %w", err)
 	}
+	// Premium commission (#44) so the PDF matches the chef's stored statement.
+	commissionRate := PremiumCommissionRateForChef(stmt.ChefID)
 	lines := make([]OrderEarnings, 0, len(rows))
 	for _, r := range rows {
 		if r.ChefID != stmt.ChefID {
 			continue
 		}
 		lines = append(lines, ComputeOrderEarnings(EarningsInput{
-			OrderID:       r.OrderID,
-			OrderNumber:   r.OrderNumber,
-			CompletedAt:   r.CompletedAt,
-			ItemRevenue:   r.ItemRevenue,
-			DeliveryFee:   r.DeliveryFee,
-			ChefTip:       r.ChefTip,
-			DeliveryState: r.DeliveryState,
+			OrderID:        r.OrderID,
+			OrderNumber:    r.OrderNumber,
+			CompletedAt:    r.CompletedAt,
+			ItemRevenue:    r.ItemRevenue,
+			DeliveryFee:    r.DeliveryFee,
+			ChefTip:        r.ChefTip,
+			DeliveryState:  r.DeliveryState,
+			CommissionRate: commissionRate,
 		}, chef.State))
 	}
 
