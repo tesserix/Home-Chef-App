@@ -14,7 +14,12 @@ export function trackingRefetchInterval(
 export function useOrderTracking(orderId: string, enabled: boolean = true) {
   return useQuery<{ data: TrackingResponse }>({
     queryKey: ['order-tracking', orderId],
-    queryFn: () => api.get(`/v1/orders/${orderId}/track`).then((r) => r.data),
+    // TrackOrder returns a FLAT body ({ status, chef, delivery, ... }) — no
+    // envelope. Wrap it in { data } so downstream reads (trackingData.data,
+    // query.state.data.data.status) resolve, mirroring useOrder's wrapping.
+    // Without this wrap `tracking` was always undefined → the map never got
+    // coords and stayed on the country-wide fallback.
+    queryFn: () => api.get(`/v1/orders/${orderId}/track`).then((r) => ({ data: r.data })),
     enabled: enabled && !!orderId,
     refetchInterval: (query) =>
       trackingRefetchInterval(query.state.data?.data?.status),
