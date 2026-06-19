@@ -559,7 +559,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		usage := models.PromoCodeUsage{
 			PromoCodeID: appliedPromo.ID,
 			UserID:      userID,
-			OrderID:     order.ID,
+			OrderID:     &order.ID,
 			Discount:    discount,
 		}
 		if err := tx.Create(&usage).Error; err != nil {
