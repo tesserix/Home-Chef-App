@@ -1016,6 +1016,15 @@ func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) {
 		return
 	}
 
+	// Customer meal subscription (#281): activate the cycle + generate the paid
+	// invoice. If it matched a meal sub, we're done; else fall through to the
+	// chef/driver SaaS subscription path below.
+	if inv, mErr := services.ActivateMealSubscriptionOnCharge(database.DB, data.Subscription.Entity.ID, data.Payment.Entity.ID); mErr != nil {
+		log.Printf("meal-subscription charge activation failed: %v", mErr)
+	} else if inv != nil {
+		return
+	}
+
 	// Mark latest pending invoice as paid
 	now := time.Now()
 	database.DB.Model(&models.SubscriptionInvoice{}).
@@ -1039,6 +1048,12 @@ func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse subscription.halted: %v", err)
+		return
+	}
+
+	// Customer meal subscription (#281): a failed recurring charge halts order
+	// generation (past_due). If it matched a meal sub, we're done.
+	if services.HaltMealSubscriptionOnFailure(database.DB, data.Subscription.Entity.ID) {
 		return
 	}
 
