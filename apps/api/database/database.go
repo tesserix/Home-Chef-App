@@ -333,6 +333,10 @@ func Migrate() error {
 		// NOT NULL constraint — do it here so provider-fulfilled deliveries can
 		// be inserted with a null partner. No-op once already nullable.
 		`ALTER TABLE deliveries ALTER COLUMN delivery_partner_id DROP NOT NULL`,
+		// A promo redemption is tied to EITHER an order OR a subscription invoice
+		// (#269), so order_id is now nullable. AutoMigrate won't drop the legacy
+		// NOT NULL — do it here or subscription redemptions (order_id NULL) fail.
+		`ALTER TABLE promo_code_usages ALTER COLUMN order_id DROP NOT NULL`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

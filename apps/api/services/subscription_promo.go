@@ -85,15 +85,23 @@ func ApplySubscriptionPromoToInvoice(tx *gorm.DB, sub *models.Subscription, plan
 	if sub.PromoCodeID == nil {
 		return 0
 	}
-	// One-time: drop the stored code whatever the outcome (if the tx rolls back,
-	// this is undone too, keeping the invoice + claim + clear consistent).
-	defer func() {
-		tx.Model(&models.Subscription{}).Where("id = ?", sub.ID).Update("promo_code_id", nil)
-		sub.PromoCodeID = nil
-	}()
+	promoID := *sub.PromoCodeID
+
+	// One-time, race-safe: atomically flip the stored code to NULL and only the
+	// tx that wins that conditional UPDATE proceeds to apply the discount. Invoice
+	// generation runs in fire-and-forget goroutines per delivery, so two could race
+	// for the same first invoice; this guarantees the promo is applied (and its
+	// budget consumed) exactly once. A rolled-back tx undoes the clear too.
+	claim := tx.Model(&models.Subscription{}).
+		Where("id = ? AND promo_code_id = ?", sub.ID, promoID).
+		Update("promo_code_id", nil)
+	if claim.Error != nil || claim.RowsAffected != 1 {
+		return 0
+	}
+	sub.PromoCodeID = nil
 
 	var promo models.PromoCode
-	if err := tx.First(&promo, "id = ?", *sub.PromoCodeID).Error; err != nil {
+	if err := tx.First(&promo, "id = ?", promoID).Error; err != nil {
 		return 0
 	}
 	if promo.FundingSource == models.PromoFundingChef {

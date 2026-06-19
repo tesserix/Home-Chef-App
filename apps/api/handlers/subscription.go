@@ -202,6 +202,12 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 		"plan_amount":      planAmount,
 	}
 	if promoID != nil {
+		// One signup promo per subscription — don't let a customer swap a stored
+		// code for a better one before the first invoice bills (#269).
+		if sub.PromoCodeID != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "A promo code is already applied to this subscription"})
+			return
+		}
 		updateFields["promo_code_id"] = promoID
 		sub.PromoCodeID = promoID
 	}

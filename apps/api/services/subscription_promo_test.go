@@ -141,6 +141,29 @@ func TestApplySubscriptionPromoToInvoice(t *testing.T) {
 		assert.Nil(t, sub.PromoCodeID)
 	})
 
+	t.Run("one-time: a second application is a no-op (no double discount/budget)", func(t *testing.T) {
+		db := setupSubPromoDB(t)
+		promoID := seedSubPromo(t, db, models.PromoFundingPlatform, 0, 0)
+		user, subID := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO subscriptions (id, user_id, promo_code_id) VALUES (?, ?, ?)`,
+			subID.String(), user.String(), promoID.String()).Error)
+		sub := &models.Subscription{ID: subID, UserID: user, PromoCodeID: &promoID}
+
+		// First application wins the atomic clear.
+		assert.Equal(t, 200.0, apply(db, sub, 1000))
+		// A second pass (e.g. a racing invoice generation) re-reads the stored code
+		// but the row is already cleared → no discount, no extra claim.
+		sub2 := &models.Subscription{ID: subID, UserID: user, PromoCodeID: &promoID}
+		assert.Equal(t, 0.0, apply(db, sub2, 1000))
+
+		var usageCount int64
+		var spent float64
+		db.Raw(`SELECT count(*) FROM promo_code_usages WHERE promo_code_id = ?`, promoID.String()).Scan(&usageCount)
+		db.Raw(`SELECT budget_spent FROM promo_codes WHERE id = ?`, promoID.String()).Scan(&spent)
+		assert.Equal(t, int64(1), usageCount, "claimed exactly once")
+		assert.Equal(t, 200.0, spent, "budget spent exactly once")
+	})
+
 	t.Run("chef-funded stored code is not applied", func(t *testing.T) {
 		db := setupSubPromoDB(t)
 		promoID := seedSubPromo(t, db, models.PromoFundingChef, 0, 0)
