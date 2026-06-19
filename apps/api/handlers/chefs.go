@@ -1621,11 +1621,63 @@ func (h *ChefHandler) GetChefAnalytics(c *gin.Context) {
 		}
 	}
 
+	// ── Summary headline metrics (#228): orders, revenue, AOV, repeat-rate ──
+	totalOrders := 0
+	var totalRevenue float64
+	for i := range orderData {
+		totalOrders += orderData[i]
+		totalRevenue += revenueData[i]
+	}
+	aov := 0.0
+	if totalOrders > 0 {
+		aov = totalRevenue / float64(totalOrders)
+	}
+
+	// Prior period of equal length, for a trend delta.
+	prevSince := time.Now().AddDate(0, 0, -2*days)
+	var prevRevenue float64
+	database.DB.Raw(`
+		SELECT COALESCE(SUM(total), 0) FROM orders
+		WHERE chef_id = ? AND created_at >= ? AND created_at < ? AND deleted_at IS NULL
+	`, chef.ID, prevSince, since).Scan(&prevRevenue)
+
 	c.JSON(http.StatusOK, gin.H{
+		"summary": gin.H{
+			"orders":      totalOrders,
+			"revenue":     math.Round(totalRevenue*100) / 100,
+			"aov":         math.Round(aov*100) / 100,
+			"repeatRate":  chefRepeatRate(chef.ID),
+			"prevRevenue": math.Round(prevRevenue*100) / 100,
+		},
 		"orderTrends":       gin.H{"labels": orderLabels, "data": orderData},
 		"revenueTrends":     gin.H{"labels": revenueLabels, "data": revenueData},
 		"popularItems":      popularItemsResp,
 		"peakHours":         peakHours,
 		"revenueByCategory": revByCat,
 	})
+}
+
+// chefRepeatRate returns the lifetime repeat-customer percentage for a chef:
+// distinct customers with ≥2 orders ÷ distinct customers, ×100 (#228). Reused
+// across the analytics surfaces.
+func chefRepeatRate(chefID uuid.UUID) float64 {
+	var row struct {
+		Repeat int
+		Total  int
+	}
+	database.DB.Raw(`
+		SELECT
+			COUNT(*) FILTER (WHERE cnt >= 2) AS repeat,
+			COUNT(*) AS total
+		FROM (
+			SELECT customer_id, COUNT(*) AS cnt
+			FROM orders
+			WHERE chef_id = ? AND deleted_at IS NULL
+			GROUP BY customer_id
+		) t
+	`, chefID).Scan(&row)
+	if row.Total == 0 {
+		return 0
+	}
+	return math.Round(float64(row.Repeat)/float64(row.Total)*1000) / 10
 }
