@@ -130,6 +130,15 @@ func (s *mongoMessageStore) ListPendingRelay(ctx context.Context) ([]MediatedMes
 	return out, nil
 }
 
+func (s *mongoMessageStore) GetMessageByAttachment(ctx context.Context, attachmentID string) (*MediatedMessage, error) {
+	var m MediatedMessage
+	err := s.msgs.FindOne(ctx, bson.M{"attachmentId": attachmentID}).Decode(&m)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrMessageNotFound
+	}
+	return &m, err
+}
+
 func (s *mongoMessageStore) TouchConversation(ctx context.Context, conversationID string, at time.Time) error {
 	_, err := s.convs.UpdateOne(ctx, bson.M{"_id": conversationID}, bson.M{"$set": bson.M{"lastMessageAt": at}})
 	return err
