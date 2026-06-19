@@ -162,6 +162,7 @@ func SetupRouter() *gin.Engine {
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
 	referralHandler := handlers.NewReferralHandler()
+	winbackHandler := handlers.NewWinbackHandler()
 	orderIssueHandler := handlers.NewOrderIssueHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
@@ -856,6 +857,10 @@ func SetupRouter() *gin.Engine {
 
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
+			// Win-back program (#42) — config + reactivation analytics.
+			admin.GET("/winback/config", adminHandler.GetWinbackConfig)
+			admin.PUT("/winback/config", adminHandler.UpdateWinbackConfig)
+			admin.GET("/winback/analytics", adminHandler.GetWinbackAnalytics)
 
 			// Approval/Review workflow
 			admin.GET("/approvals", approvalHandler.GetApprovalRequests)
@@ -930,6 +935,9 @@ func SetupRouter() *gin.Engine {
 			customer.GET("/referral", referralHandler.GetMyReferral)
 			customer.GET("/referral/history", referralHandler.GetReferralHistory)
 			customer.POST("/referral/accept", referralHandler.AcceptReferral)
+
+			// Win-back offer (#42) — active offer for the in-app banner.
+			customer.GET("/winback/active", winbackHandler.GetActiveWinback)
 		}
 
 		// Reviews (authenticated customers)

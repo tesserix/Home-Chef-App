@@ -262,6 +262,12 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 		log.Printf("failed to enqueue subscription.cancelled event: %v", err)
 	}
 
+	// Win-back (#42): auto-offer a discounted re-subscription to the cancelling
+	// chef/driver. Best-effort — a failure must never block the cancellation.
+	if _, werr := services.OfferWinback(database.DB, userID, string(subType), models.WinbackTriggerSubCancelled, &sub.ID); werr != nil {
+		log.Printf("winback: offer on cancel failed for user=%s: %v", userID, werr)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"subscription": sub.ToResponse(),
 		"refundAmount": refundAmount,

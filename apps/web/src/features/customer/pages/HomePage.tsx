@@ -22,6 +22,7 @@ import { useFavoritesStore } from '@/app/store/favorites-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import type { Chef, PaginatedResponse } from '@/shared/types';
 import { Button, Card, Input, Badge, Avatar, RatingBadge } from '@/shared/components/ui';
+import { WinbackBanner } from '@/features/customer/components/WinbackBanner';
 
 // Animation variants
 const fadeInUp = {
@@ -68,6 +69,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-paper">
+      {/* Win-back offer (#42) — shows when the customer has an active offer. */}
+      <WinbackBanner />
+
       {/* Hero Section — photo-forward, the food carries the brand.
           Per the design system: "Food and faces carry the brand. UI chrome
           shrinks." The hero uses an Indian home-cooked spread as the

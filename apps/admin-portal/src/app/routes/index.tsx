@@ -31,6 +31,7 @@ const FssaiLockedChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/
 const WalletAdminPage = lazyWithRetry(() => import('@/features/wallet/pages/WalletAdminPage'));
 const OrderIssuesPage = lazyWithRetry(() => import('@/features/order-issues/pages/OrderIssuesPage'));
 const PromosPage = lazyWithRetry(() => import('@/features/promos/pages/PromosPage'));
+const WinbackPage = lazyWithRetry(() => import('@/features/winback/pages/WinbackPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/orders/pages/OrdersPage'));
 const MealPlansPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlansPage'));
 const MealPlanDetailPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlanDetailPage'));
@@ -103,6 +104,7 @@ export function AppRoutes() {
           <Route path="wallets" element={<WalletAdminPage />} />
           <Route path="order-issues" element={<OrderIssuesPage />} />
           <Route path="promos" element={<PromosPage />} />
+          <Route path="winback" element={<WinbackPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="meal-plans" element={<MealPlansPage />} />
           <Route path="meal-plans/:id" element={<MealPlanDetailPage />} />

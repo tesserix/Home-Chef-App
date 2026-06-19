@@ -26,6 +26,7 @@ import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
+import { useWinback } from '../hooks/useWinback';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
 import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
@@ -85,6 +86,15 @@ export default function CheckoutScreen() {
   // pass the code to CreateOrder, which re-validates and computes the real discount.
   const [promoInput, setPromoInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoValidationResult | null>(null);
+
+  // Auto-prefill the promo field with the customer's active win-back code (#42)
+  // so the offer is one tap from applied. Only fills an empty field.
+  const { data: winback } = useWinback();
+  useEffect(() => {
+    if (winback?.code) {
+      setPromoInput((cur) => (cur ? cur : winback.code));
+    }
+  }, [winback?.code]);
   const [promoError, setPromoError] = useState<string | null>(null);
 
   const addresses = addressData?.data ?? [];

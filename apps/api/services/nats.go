@@ -67,6 +67,7 @@ const (
 	SubjectSubscriptionPastDue        = "subscription.past_due"
 	SubjectSubscriptionSuspended      = "subscription.suspended"
 	SubjectSubscriptionCancelled      = "subscription.cancelled"
+	SubjectSubscriptionWinbackOffered = "subscription.winback_offered"
 	SubjectSubscriptionInvoiceCreated = "subscription.invoice.created"
 	SubjectEarningsThresholdMet       = "subscription.earnings.threshold_met"
 
