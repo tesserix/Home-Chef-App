@@ -524,6 +524,7 @@ func SetupRouter() *gin.Engine {
 			mealSubs.POST("/preview", mealSubHandler.PreviewPrice)
 			mealSubs.POST("", mealSubHandler.Subscribe)
 			mealSubs.GET("", mealSubHandler.GetMySubscriptions)
+			mealSubs.GET("/:id/fulfillments", mealSubHandler.GetFulfillments)
 			mealSubs.POST("/:id/pause", mealSubHandler.Pause)
 			mealSubs.POST("/:id/resume", mealSubHandler.Resume)
 			mealSubs.POST("/:id/skip", mealSubHandler.Skip)
