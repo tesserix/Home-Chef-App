@@ -154,6 +154,16 @@ func main() {
 		defer redisClient.Close()
 	}
 
+	// Connect to MongoDB (in-app chat + document uploads, #53). Optional: a
+	// failure leaves the Mongo-backed features disabled without affecting the
+	// rest of the API.
+	mongoClient := services.GetMongoClient()
+	if err := mongoClient.Connect(); err != nil {
+		log.Printf("Warning: Failed to connect to MongoDB: %v — chat/upload-on-Mongo unavailable", err)
+	} else {
+		defer mongoClient.Close(context.Background())
+	}
+
 	// Connect to NATS
 	natsClient := services.GetNATSClient()
 	if err := natsClient.Connect(); err != nil {
