@@ -255,6 +255,22 @@ func (h *MealSubscriptionHandler) GetMySubscriptions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": subs, "count": len(subs)})
 }
 
+// GetFulfillments returns a subscription's per-day fulfillment history + adherence.
+// GET /meal-subscriptions/:id/fulfillments
+func (h *MealSubscriptionHandler) GetFulfillments(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	sub, ok := h.ownedSub(c, userID)
+	if !ok {
+		return
+	}
+	var fulfillments []models.MealSubscriptionFulfillment
+	database.DB.Where("meal_subscription_id = ?", sub.ID).Order("date DESC, slot ASC").Limit(200).Find(&fulfillments)
+	c.JSON(http.StatusOK, gin.H{
+		"data":      fulfillments,
+		"adherence": services.GetMealAdherence(database.DB, sub.ID),
+	})
+}
+
 // Pause halts order generation. POST /meal-subscriptions/:id/pause
 func (h *MealSubscriptionHandler) Pause(c *gin.Context) {
 	h.transition(c, services.CanPauseMealSub, models.MealSubStatusPaused, services.SubjectMealSubscriptionPaused, "subscription.meal.paused")

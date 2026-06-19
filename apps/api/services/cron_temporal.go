@@ -33,6 +33,7 @@ func cronJobs() []cronJob {
 		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
 		{"group-order-sweep", groupOrderSweepInterval, runGroupOrderSweep, StartGroupOrderCron},
 		{"winback-scan", winbackScanInterval, runWinbackScan, StartWinbackCron},
+		{"meal-sub-orders", mealSubOrderScanInterval, runMealSubscriptionDailyOrders, StartMealSubscriptionOrderCron},
 	}
 }
 
