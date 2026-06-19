@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   Sparkles,
+  Gift,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 
@@ -70,6 +71,7 @@ export default function PlatformSettingsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <CommissionSection />
         <SubscriptionPricingSection />
+        <ReferralProgramSection />
         <DeliveryFeesSection />
         <OperatingHoursSection />
         <ServiceAreasSection />
@@ -297,6 +299,91 @@ function SubscriptionPricingSection() {
                 premiumCommissionRate: cur.premiumCommissionPct / 100,
               })
             }
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ============================================================
+// Referral program (#38)
+// ============================================================
+
+interface ReferralConfig {
+  enabled: boolean;
+  referrerReward: number;
+  refereeReward: number;
+  monthlySpendCap: number;
+}
+
+function ReferralProgramSection() {
+  const qc = useQueryClient();
+  const feedback = useFeedback();
+  const { data } = useQuery({
+    queryKey: ['referral-config'],
+    queryFn: () => apiClient.get<ReferralConfig>('/admin/referral/config'),
+  });
+
+  const [draft, setDraft] = useState<Partial<ReferralConfig>>({});
+  const current = { ...data, ...draft } as ReferralConfig;
+
+  const save = useMutation({
+    mutationFn: (body: Partial<ReferralConfig>) =>
+      apiClient.put<ReferralConfig>('/admin/referral/config', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['referral-config'] });
+      setDraft({});
+      feedback.setState({ kind: 'success', message: 'Referral program updated' });
+    },
+    onError: (err) => {
+      const e = err as Partial<ApiError>;
+      feedback.setState({ kind: 'error', message: e?.error?.message ?? 'Failed to save' });
+    },
+  });
+
+  return (
+    <Card
+      icon={<Gift className="h-5 w-5 text-primary" />}
+      title="Referral program"
+      description="Reward amounts (₹) and the monthly spend cap"
+    >
+      <FeedbackBanner value={feedback.state} onDismiss={() => feedback.setState(null)} />
+      {!data ? (
+        <p className="py-4 text-sm text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <Toggle
+            label="Enable referral program"
+            value={current.enabled}
+            onChange={(v) => setDraft((d) => ({ ...d, enabled: v }))}
+          />
+          <NumberField
+            label="Referrer reward (₹)"
+            value={current.referrerReward}
+            onChange={(v) => setDraft((d) => ({ ...d, referrerReward: v }))}
+            min={0}
+            step={10}
+          />
+          <NumberField
+            label="Referee reward (₹)"
+            value={current.refereeReward}
+            onChange={(v) => setDraft((d) => ({ ...d, refereeReward: v }))}
+            min={0}
+            step={10}
+          />
+          <NumberField
+            label="Monthly spend cap (₹)"
+            value={current.monthlySpendCap}
+            onChange={(v) => setDraft((d) => ({ ...d, monthlySpendCap: v }))}
+            min={0}
+            step={1000}
+          />
+          <SaveRow
+            dirty={Object.keys(draft).length > 0}
+            saving={save.isPending}
+            onCancel={() => setDraft({})}
+            onSave={() => save.mutate(draft)}
           />
         </div>
       )}
@@ -717,6 +804,26 @@ function NumberField({
         }}
         className="w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm focus:border-herb focus:outline-none focus:ring-2 focus:ring-herb/40"
       />
+    </div>
+  );
+}
+
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
+        onClick={() => onChange(!value)}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+          value ? 'bg-herb' : 'bg-muted-foreground/30'
+        }`}
+      >
+        <span className={`inline-block h-5 w-5 transform rounded-full bg-paper shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </button>
     </div>
   );
 }

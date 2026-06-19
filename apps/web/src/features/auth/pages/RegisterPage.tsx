@@ -1,10 +1,23 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChefHat, Check, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { apiClient } from '@/shared/services/api-client';
 import { Button } from '@/shared/components/ui';
 import { fadeInLeft, fadeInRight } from '@/shared/utils/animations';
+
+// Apply a referral code captured from ?ref=CODE after signup (#38). Best-effort:
+// an invalid/ineligible code must never block account creation.
+async function applyPendingReferral(code: string | null) {
+  const c = code?.trim();
+  if (!c) return;
+  try {
+    await apiClient.post('/customer/referral/accept', { code: c });
+  } catch {
+    /* ignore */
+  }
+}
 
 const BENEFITS = [
   'Access to 500+ home chefs',
@@ -16,6 +29,8 @@ const BENEFITS = [
 export default function RegisterPage() {
   const { login, registerWithEmail } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get('ref');
 
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -62,6 +77,7 @@ export default function RegisterPage() {
         lastName,
         marketingConsent: optInMarketing,
       });
+      await applyPendingReferral(refCode);
       navigate('/user-info');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -75,6 +91,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await login(provider);
+      await applyPendingReferral(refCode);
       navigate('/user-info');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-up failed');

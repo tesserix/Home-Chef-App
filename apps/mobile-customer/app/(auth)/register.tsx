@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { RegisterScreen } from '@homechef/mobile-shared/screens';
@@ -47,6 +47,18 @@ function bffToAuthResponse(
 export default function RegisterPage() {
   const { setAuthResponse } = useAuthStore();
   const { completeSignIn } = useAuth();
+  // A referral code may arrive via a deep link (fe3dr.com/refer/CODE → ?ref=CODE)
+  // (#38). Applied once, right after the account is authenticated; best-effort.
+  const { ref } = useLocalSearchParams<{ ref?: string }>();
+  const applyReferral = async () => {
+    const code = typeof ref === 'string' ? ref.trim() : '';
+    if (!code) return;
+    try {
+      await api.post('/v1/customer/referral/accept', { code });
+    } catch {
+      // Invalid/ineligible code shouldn't block sign-up — silently ignore.
+    }
+  };
 
   // After auth, send the user to onboarding unless they've already completed it
   // (matches the root layout's gate). A brand-new sign-up has onboardingComplete
@@ -82,6 +94,7 @@ export default function RegisterPage() {
     } catch {
       // Non-fatal: push registration failure should not block sign-up
     }
+    await applyReferral();
     routeAfterAuth();
   };
 
@@ -125,6 +138,7 @@ export default function RegisterPage() {
         } catch {
           // Non-fatal: push registration failure should not block registration
         }
+        await applyReferral();
         routeAfterAuth();
       }}
       onGoogleSignIn={handleGoogleSignIn}

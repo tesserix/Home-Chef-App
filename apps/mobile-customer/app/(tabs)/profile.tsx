@@ -24,6 +24,7 @@ import {
   Receipt,
   ScrollText,
   Wallet,
+  Gift,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -547,6 +548,12 @@ export default function ProfileScreen() {
               icon={<Wallet size={18} color={customerColors.charcoal.soft} />}
               label="Wallet"
               onPress={() => router.push('/wallet')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<Gift size={18} color={customerColors.charcoal.soft} />}
+              label="Refer & Earn"
+              onPress={() => router.push('/referral' as never)}
             />
             <NavRowDivider />
             <NavRow

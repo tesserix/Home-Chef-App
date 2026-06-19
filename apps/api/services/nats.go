@@ -36,6 +36,7 @@ const (
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
 	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
+	SubjectReferralRewarded    = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
 	SubjectReviewPosted        = "reviews.posted"
 	SubjectCateringRequest     = "catering.request"
 	SubjectCateringQuote       = "catering.quote"
@@ -216,6 +217,7 @@ func (n *NATSClient) setupStreams() error {
 		{"CATERING", "Catering events", []string{"catering.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"APPROVALS", "Approval lifecycle events", []string{"approvals.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"SUBSCRIPTIONS", "Subscription billing events", []string{"subscription.>"}, 30 * 24 * time.Hour, gib / 2},
+		{"REFERRAL", "Referral program events", []string{"referral.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
