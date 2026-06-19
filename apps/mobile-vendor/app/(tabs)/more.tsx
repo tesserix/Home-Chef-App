@@ -18,6 +18,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  Sparkles,
   Star,
   User,
 } from 'lucide-react-native';
@@ -34,6 +35,7 @@ interface NavRow {
 }
 
 const NAV_ROWS: NavRow[] = [
+  { labelKey: 'premium', caption: 'Verified-Pro badge, priority ranking, lower commission', route: '/premium', Icon: Sparkles },
   { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
   { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
   { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },

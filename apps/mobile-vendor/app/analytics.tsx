@@ -21,6 +21,8 @@ import {
   type PopularItem,
   type Trend,
 } from '../hooks/useChefAnalytics';
+import { useAdvancedAnalytics } from '../hooks/useSubscription';
+import { Sparkles, Lock } from 'lucide-react-native';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -123,6 +125,7 @@ export default function AnalyticsScreen() {
     useChefAnalytics(period);
   const { data: subs } = useSubscriptionMetrics();
   const { data: forecast } = useDemandForecast();
+  const { data: advanced } = useAdvancedAnalytics();
 
   const summary = data?.summary;
   const hasData =
@@ -307,6 +310,39 @@ export default function AnalyticsScreen() {
             </View>
           )}
 
+          {/* Advanced insights — premium perk (#44). Locked card nudges to
+              upgrade; unlocked shows the deeper customer metrics. */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>ADVANCED INSIGHTS</Text>
+            {advanced?.locked ? (
+              <Pressable onPress={() => router.push('/premium' as never)} accessibilityRole="button" accessibilityLabel="Upgrade to unlock advanced analytics">
+                <View style={styles.lockedCard}>
+                  <View style={styles.lockedIcon}>
+                    <Lock size={18} color={theme.colors.herb.DEFAULT} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.lockedTitle}>Unlock with Premium</Text>
+                    <Text style={styles.lockedSub}>
+                      Repeat-customer rate, revenue per customer, and your best ordering day.
+                    </Text>
+                  </View>
+                  <Sparkles size={18} color={theme.colors.herb.DEFAULT} />
+                </View>
+              </Pressable>
+            ) : advanced?.data ? (
+              <View style={styles.statGrid}>
+                <View style={styles.statRow}>
+                  <DashboardStatsCard title="Repeat rate" value={`${advanced.data.repeatRate}%`} />
+                  <DashboardStatsCard title="Revenue / customer" value={inr(advanced.data.avgRevenuePerCustomer)} />
+                </View>
+                <View style={styles.statRow}>
+                  <DashboardStatsCard title="Orders / customer" value={advanced.data.avgOrdersPerCustomer} />
+                  <DashboardStatsCard title="Best day" value={advanced.data.bestDay.day || '—'} />
+                </View>
+              </View>
+            ) : null}
+          </View>
+
           {/* Chart placeholder — intentionally empty.
               Render a hairline sparkline here once:
               1. API returns `previousPeriodRevenue` for a delta baseline.
@@ -412,6 +448,26 @@ const styles = StyleSheet.create({
   // Summary 2×2 stat grid (#228)
   statGrid: { gap: theme.spacing[3] },
   statRow: { flexDirection: 'row', gap: theme.spacing[3] },
+
+  // Advanced-insights locked card (#44 premium upsell)
+  lockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    backgroundColor: theme.colors.herb.tint,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[4],
+  },
+  lockedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.paper,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.ink.DEFAULT },
+  lockedSub: { fontFamily: 'Inter', fontSize: 12, lineHeight: 16, color: theme.colors.ink.soft, marginTop: 2 },
 
   // Revenue trend bars (#228)
   chartCard: {
