@@ -65,7 +65,8 @@ export default function PremiumPage() {
     },
     onError: (err: unknown) => {
       setPending(null);
-      const status = (err as { status?: number })?.status;
+      // The vendor-portal apiClient attaches the HTTP status as `httpStatus`.
+      const status = (err as { httpStatus?: number })?.httpStatus;
       toast.error(status === 404 ? 'Start your subscription first, then upgrade.' : 'Could not change tier. Please try again.');
     },
   });
