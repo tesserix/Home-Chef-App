@@ -67,10 +67,17 @@ type MenuItem struct {
 	UpdatedAt    time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
+	// IsCombo marks this item as a combo/bundle (#233): its Price is the bundle
+	// price and ComboItems lists the included dishes (informational).
+	IsCombo bool `gorm:"default:false" json:"isCombo"`
+
 	// Relationships
 	Chef     ChefProfile     `gorm:"foreignKey:ChefID" json:"-"`
 	Category *MenuCategory   `gorm:"foreignKey:CategoryID" json:"-"`
 	Images   []MenuItemImage `gorm:"foreignKey:MenuItemID" json:"images,omitempty"`
+	// Add-on / combo composition (#52). Preloaded by the menu read handlers.
+	ModifierGroups []ModifierGroup `gorm:"foreignKey:MenuItemID" json:"modifierGroups,omitempty"`
+	ComboItems     []ComboItem     `gorm:"foreignKey:ComboID" json:"comboItems,omitempty"`
 }
 
 type MenuItemImage struct {
@@ -122,6 +129,10 @@ type MenuItemResponse struct {
 	DailyCapacity  *int `json:"dailyCapacity,omitempty"`
 	RemainingToday *int `json:"remainingToday,omitempty"`
 	SoldOut        bool `json:"soldOut"`
+	// Add-ons / combos (#52). Empty unless the read handler preloaded them.
+	IsCombo        bool            `json:"isCombo"`
+	ModifierGroups []ModifierGroup `json:"modifierGroups"`
+	ComboItems     []ComboItem     `json:"comboItems"`
 }
 
 func (m *MenuItem) ToResponse() MenuItemResponse {
@@ -170,5 +181,29 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 		DailyCapacity:  m.DailyCapacity,
 		RemainingToday: m.RemainingToday,
 		SoldOut:        m.SoldOut,
+		IsCombo:        m.IsCombo,
+		ModifierGroups: ensureGroups(m.ModifierGroups),
+		ComboItems:     ensureCombo(m.ComboItems),
 	}
+}
+
+// ensureGroups / ensureCombo render nil slices as empty arrays so the JSON is
+// always [] (clients can map without null-guards).
+func ensureGroups(g []ModifierGroup) []ModifierGroup {
+	if g == nil {
+		return []ModifierGroup{}
+	}
+	for i := range g {
+		if g[i].Options == nil {
+			g[i].Options = []ModifierOption{}
+		}
+	}
+	return g
+}
+
+func ensureCombo(c []ComboItem) []ComboItem {
+	if c == nil {
+		return []ComboItem{}
+	}
+	return c
 }

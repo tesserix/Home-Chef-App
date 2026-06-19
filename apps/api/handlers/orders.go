@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -94,6 +95,61 @@ type CreateOrderItem struct {
 	MenuItemID uuid.UUID `json:"menuItemId" binding:"required"`
 	Quantity   int       `json:"quantity" binding:"required,min=1"`
 	Notes      string    `json:"notes"`
+	// ModifierOptionIDs are the selected add-on options for this line (#232).
+	// The server validates them against the item's groups, prices them, and
+	// snapshots the selection onto the order line.
+	ModifierOptionIDs []uuid.UUID `json:"modifierOptionIds"`
+}
+
+// validateAndPriceModifiers checks the selected option ids against a menu item's
+// modifier groups — enforcing required/min/max per group and option availability —
+// and returns the per-unit price delta + the snapshot to persist (#232). Pure
+// (no DB) so it's unit-tested. Returns a customer-facing error for a bad selection.
+func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UUID) (float64, []models.OrderItemModifier, error) {
+	sel := make(map[uuid.UUID]bool, len(selected))
+	for _, id := range selected {
+		sel[id] = true
+	}
+
+	var delta float64
+	snapshot := []models.OrderItemModifier{}
+	matched := map[uuid.UUID]bool{}
+
+	for _, g := range groups {
+		count := 0
+		for _, o := range g.Options {
+			if !sel[o.ID] {
+				continue
+			}
+			if !o.IsAvailable {
+				return 0, nil, fmt.Errorf("%s is no longer available", o.Name)
+			}
+			count++
+			delta += o.PriceDelta
+			snapshot = append(snapshot, models.OrderItemModifier{
+				GroupName: g.Name, OptionName: o.Name, PriceDelta: o.PriceDelta,
+			})
+			matched[o.ID] = true
+		}
+		minSel := g.MinSelect
+		if g.Required && minSel < 1 {
+			minSel = 1
+		}
+		if count < minSel {
+			return 0, nil, fmt.Errorf("please choose an option for %q", g.Name)
+		}
+		if g.MaxSelect > 0 && count > g.MaxSelect {
+			return 0, nil, fmt.Errorf("too many options chosen for %q", g.Name)
+		}
+	}
+
+	// Every selected id must belong to one of this item's groups.
+	for _, id := range selected {
+		if !matched[id] {
+			return 0, nil, fmt.Errorf("invalid add-on selection")
+		}
+	}
+	return delta, snapshot, nil
 }
 
 type CreateAddressRequest struct {
@@ -207,16 +263,30 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			return
 		}
 
-		itemSubtotal := menuItem.Price * float64(item.Quantity)
+		// Validate + price the selected add-on modifiers (#232). The per-unit
+		// price includes the modifier deltas so Price × Quantity == Subtotal.
+		var groups []models.ModifierGroup
+		database.DB.Preload("Options").Where("menu_item_id = ?", item.MenuItemID).
+			Order("sort_order").Find(&groups)
+		modDelta, modSnapshot, merr := validateAndPriceModifiers(groups, item.ModifierOptionIDs)
+		if merr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": merr.Error()})
+			return
+		}
+		modJSON, _ := json.Marshal(modSnapshot)
+
+		unitPrice := menuItem.Price + modDelta
+		itemSubtotal := unitPrice * float64(item.Quantity)
 		subtotal += itemSubtotal
 
 		orderItems[i] = models.OrderItem{
 			MenuItemID: item.MenuItemID,
 			Name:       menuItem.Name,
-			Price:      menuItem.Price,
+			Price:      unitPrice,
 			Quantity:   item.Quantity,
 			Subtotal:   itemSubtotal,
 			Notes:      item.Notes,
+			Modifiers:  string(modJSON),
 		}
 
 		if menuItem.DailyCapacity != nil && *menuItem.DailyCapacity > 0 {

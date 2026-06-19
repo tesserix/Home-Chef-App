@@ -1,11 +1,29 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// parseOrderItemModifiers decodes the JSON modifier snapshot on an order line,
+// returning an empty slice for blank/invalid data (#232).
+func parseOrderItemModifiers(s string) []OrderItemModifier {
+	out := []OrderItemModifier{}
+	if s == "" || s == "[]" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(s), &out)
+	return out
+}
+
+// ParsedModifiers returns this line's selected add-ons (#232), for surfaces
+// outside the models package (e.g. the invoice generator).
+func (i *OrderItem) ParsedModifiers() []OrderItemModifier {
+	return parseOrderItemModifiers(i.Modifiers)
+}
 
 type OrderStatus string
 
@@ -142,7 +160,11 @@ type OrderItem struct {
 	Quantity   int       `gorm:"not null" json:"quantity"`
 	Subtotal   float64   `gorm:"not null" json:"subtotal"`
 	Notes      string    `gorm:"" json:"notes,omitempty"`
-	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	// Modifiers is a JSON snapshot of the selected add-ons for this line (#232) —
+	// []OrderItemModifier{groupName, optionName, priceDelta}. Subtotal already
+	// includes their deltas; this is the immutable breakdown for the order + invoice.
+	Modifiers string    `gorm:"type:jsonb;default:'[]'" json:"-"`
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 
 	// Per-line cancellation — set when the chef marks a single line item
 	// as unfulfillable mid-prep. The order itself stays accepted /
@@ -242,6 +264,8 @@ type OrderItemResponse struct {
 	Quantity   int       `json:"quantity"`
 	Subtotal   float64   `json:"subtotal"`
 	Notes      string    `json:"notes,omitempty"`
+	// Modifiers (#232) — the selected add-ons for this line.
+	Modifiers []OrderItemModifier `json:"modifiers"`
 	// SpecialInstructions is an alias for Notes exposed in the vendor detail view.
 	SpecialInstructions string `json:"specialInstructions,omitempty"`
 	// IsVeg is resolved live from the MenuItem at response time. Omitted when nil
@@ -297,6 +321,7 @@ func (o *Order) ToResponse() OrderResponse {
 			Quantity:        item.Quantity,
 			Subtotal:        item.Subtotal,
 			Notes:           item.Notes,
+			Modifiers:       parseOrderItemModifiers(item.Modifiers),
 			IsCancelled:     item.IsCancelled,
 			CancelledReason: item.CancelledReason,
 			CancelledAt:     item.CancelledAt,
