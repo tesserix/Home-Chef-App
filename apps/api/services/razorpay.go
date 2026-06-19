@@ -267,6 +267,56 @@ func (c *RazorpayClient) CreateOrder(req *OrderRequest) (*OrderResponse, error) 
 	return &result, nil
 }
 
+// --- Recurring Subscriptions (UPI Autopay e-mandate) — customer meal subs (#281) ---
+
+// SubscriptionRequest creates a Razorpay recurring Subscription. PlanID references
+// a pre-created Razorpay Plan (owner-configured per cadence/amount); the customer
+// approves a UPI-Autopay e-mandate via the returned ShortURL.
+type SubscriptionRequest struct {
+	PlanID         string            `json:"plan_id"`
+	TotalCount     int               `json:"total_count"` // number of billing cycles
+	CustomerNotify int               `json:"customer_notify,omitempty"`
+	Notes          map[string]string `json:"notes,omitempty"`
+}
+
+// SubscriptionResponse is the created subscription. ShortURL is the mandate
+// approval link the customer is sent to.
+type SubscriptionResponse struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	ShortURL string `json:"short_url"`
+	PlanID   string `json:"plan_id"`
+}
+
+// CreateSubscription creates a recurring Razorpay Subscription. The live UPI-Autopay
+// mandate approval is owner-tested against the gateway.
+func (c *RazorpayClient) CreateSubscription(req *SubscriptionRequest) (*SubscriptionResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal subscription request: %w", err)
+	}
+	resp, err := c.doRequest("POST", "/subscriptions", body)
+	if err != nil {
+		return nil, err
+	}
+	var result SubscriptionResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse subscription response: %w", err)
+	}
+	return &result, nil
+}
+
+// CancelSubscription cancels a Razorpay Subscription (immediately or at cycle end).
+func (c *RazorpayClient) CancelSubscription(subID string, atCycleEnd bool) error {
+	cancelAt := 0
+	if atCycleEnd {
+		cancelAt = 1
+	}
+	body, _ := json.Marshal(map[string]any{"cancel_at_cycle_end": cancelAt})
+	_, err := c.doRequest("POST", fmt.Sprintf("/subscriptions/%s/cancel", subID), body)
+	return err
+}
+
 // --- Refunds ---
 
 // RefundRequest creates a refund on a payment

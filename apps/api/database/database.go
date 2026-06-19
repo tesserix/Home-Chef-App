@@ -295,6 +295,7 @@ func Migrate() error {
 		&models.MealTrial{},
 		&models.MealSubscription{},
 		&models.MealSubscriptionSkip{},
+		&models.MealSubscriptionInvoice{},
 
 		// Chat
 		&models.ChatRoom{},
