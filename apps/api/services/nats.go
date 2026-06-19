@@ -69,6 +69,11 @@ const (
 	SubjectSubscriptionCancelled      = "subscription.cancelled"
 	SubjectSubscriptionWinbackOffered = "subscription.winback_offered"
 	SubjectSubscriptionInvoiceCreated = "subscription.invoice.created"
+	// Customer meal subscription (tiffin, #2/#3) — on the SUBSCRIPTIONS stream.
+	SubjectMealSubscriptionCreated   = "subscription.meal.created"
+	SubjectMealSubscriptionPaused    = "subscription.meal.paused"
+	SubjectMealSubscriptionResumed   = "subscription.meal.resumed"
+	SubjectMealSubscriptionCancelled = "subscription.meal.cancelled"
 	SubjectEarningsThresholdMet       = "subscription.earnings.threshold_met"
 
 	SubjectProviderDeliveryCreated = "provider.delivery.created"

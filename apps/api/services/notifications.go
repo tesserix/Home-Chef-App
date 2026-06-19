@@ -95,6 +95,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// Win-back offer issued → nudge the lapsed/cancelled user (#42).
 		{Stream: "SUBSCRIPTIONS", Durable: "notify-winback", Handler: h,
 			Subjects: []string{SubjectSubscriptionWinbackOffered}},
+		// Customer meal-subscription lifecycle → confirmations (#2/#3).
+		{Stream: "SUBSCRIPTIONS", Durable: "notify-meal-subscription", Handler: h,
+			Subjects: []string{SubjectMealSubscriptionCreated, SubjectMealSubscriptionCancelled}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
@@ -137,6 +140,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleReferralRewarded)
 	case SubjectSubscriptionWinbackOffered:
 		return decodeThen(data, s.handleSubscriptionWinbackOffered)
+	case SubjectMealSubscriptionCreated:
+		return decodeThen(data, s.handleMealSubscriptionLifecycle("Your meal subscription is active", "Your daily tiffin from your chef starts now. Manage it anytime in the app."))
+	case SubjectMealSubscriptionCancelled:
+		return decodeThen(data, s.handleMealSubscriptionLifecycle("Subscription cancelled", "Your meal subscription has been cancelled. We hope to cook for you again soon."))
 	case SubjectOrderIssueReported:
 		return decodeThen(data, s.handleOrderIssueReported)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
@@ -582,6 +589,25 @@ func (s *NotificationService) handleSubscriptionWinbackOffered(event Event) erro
 	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "push", Title: title, Message: message, Data: dataMap})
 	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "email", Title: title, Message: message, Data: dataMap})
 	return nil
+}
+
+// handleMealSubscriptionLifecycle returns a notification handler that saves an
+// in-app confirmation + push for a meal-subscription lifecycle event (#2/#3).
+func (s *NotificationService) handleMealSubscriptionLifecycle(title, message string) func(Event) error {
+	return func(event Event) error {
+		data, _ := json.Marshal(map[string]any{"type": "meal_subscription"})
+		if err := s.saveNotification(&models.Notification{
+			UserID:  event.UserID,
+			Type:    "meal_subscription",
+			Title:   title,
+			Message: message,
+			Data:    string(data),
+		}); err != nil {
+			return fmt.Errorf("save meal_subscription notification: %w", err)
+		}
+		PublishNotification(NotificationEvent{UserID: event.UserID, Type: "push", Title: title, Message: message, Data: map[string]any{"type": "meal_subscription"}})
+		return nil
+	}
 }
 
 // handleOrderIssueReported notifies the chef that a customer reported an issue on

@@ -15,9 +15,10 @@ import (
 
 // Win-back triggers — what caused the offer.
 const (
-	WinbackTriggerLapsed       = "lapsed"                 // customer inactivity (no recent order)
-	WinbackTriggerSubCancelled = "subscription_cancelled" // subscriber cancelled
-	WinbackTriggerSubSuspended = "subscription_suspended" // payment failure → suspended
+	WinbackTriggerLapsed           = "lapsed"                      // customer inactivity (no recent order)
+	WinbackTriggerSubCancelled     = "subscription_cancelled"      // chef/driver subscriber cancelled
+	WinbackTriggerSubSuspended     = "subscription_suspended"      // payment failure → suspended
+	WinbackTriggerMealSubCancelled = "meal_subscription_cancelled" // customer cancelled their tiffin subscription (#278)
 )
 
 // Win-back offer lifecycle.

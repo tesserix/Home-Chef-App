@@ -290,6 +290,11 @@ func Migrate() error {
 		&models.PromoCodeUsage{},
 		// Win-back offers (#42)
 		&models.WinbackOffer{},
+		// Customer meal subscriptions (tiffin, #2/#3)
+		&models.ChefSubscriptionConfig{},
+		&models.MealTrial{},
+		&models.MealSubscription{},
+		&models.MealSubscriptionSkip{},
 
 		// Chat
 		&models.ChatRoom{},
