@@ -469,10 +469,19 @@ export default function OrderDetailScreen() {
             instant/assisted refund. */}
         {order.paymentStatus === 'completed' && order.status !== 'cancelled' && (
           <View style={styles.reportWrapper}>
+            {/* Message support about this order (#53) — admin-mediated chat. */}
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/messages` as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Message support about this order"
+            >
+              <Text style={styles.reportLink}>Message support about this order</Text>
+            </Pressable>
             <Pressable
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
               accessibilityRole="button"
               accessibilityLabel="Report an issue with this order"
+              style={{ marginTop: 10 }}
             >
               <Text style={styles.reportLink}>Report an issue with this order</Text>
             </Pressable>
