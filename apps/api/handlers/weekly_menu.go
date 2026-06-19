@@ -11,6 +11,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 // weekly_menu.go — chef CRUD + public read for the fixed weekly menu (#192). The
@@ -128,12 +129,29 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 		}
 		var menu models.WeeklyMenu
 		tx.Where("chef_id = ?", chef.ID).FirstOrInit(&menu)
+		wasPublished := menu.IsPublished
 		menu.ChefID = chef.ID
 		menu.IsPublished = req.IsPublished
 		if req.IsPublished {
 			menu.PublishedAt = &now
 		}
-		return tx.Save(&menu).Error
+		if err := tx.Save(&menu).Error; err != nil {
+			return err
+		}
+		// Notify followers on the publish transition — a "menu drop" (#239).
+		// Staged in the SAME tx via the transactional outbox so it's delivered
+		// exactly once and never fires on a rolled-back save. Transition-gated
+		// (was unpublished → now published) so editing an already-live menu
+		// doesn't re-spam followers on every save.
+		if req.IsPublished && !wasPublished {
+			if err := services.EnqueueEvent(tx, services.SubjectWeeklyMenuPublished, "weekly_menu_published", chef.UserID, map[string]any{
+				"chef_id":   chef.ID.String(),
+				"chef_name": chef.BusinessName,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save weekly menu"})
 		return

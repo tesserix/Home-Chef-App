@@ -35,6 +35,7 @@ const (
 	SubjectPaymentFailed       = "payments.failed"
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
+	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
 	SubjectReviewPosted        = "reviews.posted"
 	SubjectCateringRequest     = "catering.request"
 	SubjectCateringQuote       = "catering.quote"

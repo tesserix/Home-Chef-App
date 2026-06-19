@@ -10,10 +10,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Heart, ChefHat } from 'lucide-react-native';
-import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
-import type { FavoriteChefEntry } from '../../hooks/useFavorites';
+import { useFavorites, useToggleFavorite, useFavoriteDishes } from '../../hooks/useFavorites';
+import type { FavoriteChefEntry, FavoriteDishEntry } from '../../hooks/useFavorites';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { ChefCard } from '../../components/chef/ChefCard';
+import { MenuItemCard } from '../../components/chef/MenuItemCard';
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -107,10 +108,90 @@ function EmptyState() {
   );
 }
 
+// Saved-dishes empty state (#237) — distinct copy from the chefs empty state.
+function EmptyDishesState() {
+  const router = useRouter();
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4 pt-16">
+      <View className="w-20 h-20 rounded-full bg-surface-soft items-center justify-center">
+        <Heart size={34} color="#717171" />
+      </View>
+      <View className="items-center gap-2">
+        <Text className="text-xl font-bold text-charcoal text-center font-display">
+          No saved dishes yet
+        </Text>
+        <Text className="text-sm text-charcoal-soft text-center leading-5">
+          Tap the heart on any dish to save it here for one-tap ordering later.
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => router.push('/(tabs)')}
+        accessibilityRole="button"
+        accessibilityLabel="Browse chefs"
+      >
+        <View className="bg-coral rounded-lg px-8 py-3 min-h-[44px] items-center justify-center mt-2">
+          <Text className="text-canvas font-semibold text-base">Browse chefs</Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Segmented control (Chefs | Dishes) ──────────────────────────────────────
+
+type FavTab = 'chefs' | 'dishes';
+
+function FavoriteTabs({
+  tab,
+  onChange,
+  chefCount,
+  dishCount,
+}: {
+  tab: FavTab;
+  onChange: (t: FavTab) => void;
+  chefCount?: number;
+  dishCount?: number;
+}) {
+  const segments: { key: FavTab; label: string; count?: number }[] = [
+    { key: 'chefs', label: 'Chefs', count: chefCount },
+    { key: 'dishes', label: 'Dishes', count: dishCount },
+  ];
+  return (
+    <View className="flex-row gap-2 px-4 pb-2">
+      {segments.map((s) => {
+        const active = tab === s.key;
+        return (
+          <Pressable
+            key={s.key}
+            onPress={() => onChange(s.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${s.label}${s.count != null ? `, ${s.count}` : ''}`}
+          >
+            <View
+              className={`rounded-full px-4 py-1.5 ${active ? 'bg-coral' : 'bg-surface-soft'}`}
+            >
+              <Text
+                className={`text-sm font-semibold ${active ? 'text-canvas' : 'text-charcoal-soft'}`}
+              >
+                {s.label}
+                {s.count != null ? ` ${s.count}` : ''}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function FavoritesScreen() {
-  const { data, isLoading, isError, isRefetching, refetch } = useFavorites();
+  const [tab, setTab] = useState<FavTab>('chefs');
+
+  const chefs = useFavorites();
+  const dishes = useFavoriteDishes();
   const toggleFavorite = useToggleFavorite();
   // Optimistic local state — set of chef IDs currently being removed
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
@@ -144,68 +225,99 @@ export default function FavoritesScreen() {
   }
 
   const visibleEntries =
-    data?.data.filter((e) => !removingIds.has(e.chefId)) ?? [];
+    chefs.data?.data.filter((e) => !removingIds.has(e.chefId)) ?? [];
+  const dishEntries = dishes.data?.data ?? [];
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-  if (isLoading) {
+  // First-load skeleton only for the active tab's query.
+  const activeLoading = tab === 'chefs' ? chefs.isLoading : dishes.isLoading;
+  if (activeLoading) {
     return (
       <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+        <Header />
+        <FavoriteTabs tab={tab} onChange={setTab} chefCount={chefs.data?.count} dishCount={dishes.data?.count} />
         <LoadingGrid />
       </SafeAreaView>
     );
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────
-  if (isError) {
-    return (
-      <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-        <ErrorState onRetry={() => void refetch()} />
-      </SafeAreaView>
-    );
-  }
-
-  // ── List (including empty) ───────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-      {/* ── Header ── */}
-      <View className="px-4 pt-3 pb-2 flex-row items-baseline gap-2">
-        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-          Favorites
-        </Text>
-        {data != null && (
-          <Text className="text-sm text-charcoal-soft">
-            {visibleEntries.length}/{data.max}
-          </Text>
-        )}
-      </View>
-
-      {/* ── 2-col photo grid ── */}
-      <FlatList<FavoriteChefEntry>
-        data={visibleEntries}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
-        contentContainerStyle={
-          visibleEntries.length === 0
-            ? { flexGrow: 1 }
-            : { paddingTop: 8, paddingBottom: 24, gap: 12 }
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => void refetch()}
-            tintColor="#FF385C"
-          />
-        }
-        renderItem={({ item }) => (
-          // flex-1 wrapper so each column cell fills the available width.
-          // The Pressable inside ChefCard is already `flex-1`.
-          <View className="flex-1">
-            <ChefCard chef={item.chef} />
-          </View>
-        )}
-        ListEmptyComponent={<EmptyState />}
+      <Header />
+      <FavoriteTabs
+        tab={tab}
+        onChange={setTab}
+        chefCount={chefs.data?.count}
+        dishCount={dishes.data?.count}
       />
+
+      {tab === 'chefs' ? (
+        chefs.isError ? (
+          <ErrorState onRetry={() => void chefs.refetch()} />
+        ) : (
+          <FlatList<FavoriteChefEntry>
+            data={visibleEntries}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
+            contentContainerStyle={
+              visibleEntries.length === 0
+                ? { flexGrow: 1 }
+                : { paddingTop: 8, paddingBottom: 24, gap: 12 }
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={chefs.isRefetching}
+                onRefresh={() => void chefs.refetch()}
+                tintColor="#FF385C"
+              />
+            }
+            renderItem={({ item }) => (
+              <View className="flex-1">
+                <ChefCard chef={item.chef} />
+              </View>
+            )}
+            ListEmptyComponent={<EmptyState />}
+          />
+        )
+      ) : dishes.isError ? (
+        <ErrorState onRetry={() => void dishes.refetch()} />
+      ) : (
+        <FlatList<FavoriteDishEntry>
+          data={dishEntries}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={
+            dishEntries.length === 0
+              ? { flexGrow: 1 }
+              : { paddingHorizontal: 16, paddingBottom: 24 }
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={dishes.isRefetching}
+              onRefresh={() => void dishes.refetch()}
+              tintColor="#FF385C"
+            />
+          }
+          renderItem={({ item }) => (
+            <MenuItemCard
+              item={item.menuItem}
+              chefId={item.chef.id}
+              chefName={item.chef.businessName}
+            />
+          )}
+          ListEmptyComponent={<EmptyDishesState />}
+        />
+      )}
     </SafeAreaView>
+  );
+}
+
+// Shared header — the per-tab counts live on the segment chips below it.
+function Header() {
+  return (
+    <View className="px-4 pt-3 pb-2 flex-row items-baseline gap-2">
+      <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
+        Favorites
+      </Text>
+    </View>
   );
 }

@@ -33,6 +33,8 @@ func TestNotificationTypeCategory(t *testing.T) {
 		"delivery_picked_up": models.NotifCategoryDelivery,
 		"promo":              models.NotifCategoryMarketing,
 		"marketing":          models.NotifCategoryMarketing,
+		// Updates from chefs you follow (#239) — its own opt-out bucket.
+		"weekly_menu_published": models.NotifCategoryFavorites,
 		// Transactional/system types fall through to the account bucket.
 		"fssai_expiring":   models.NotifCategoryAccount,
 		"weekly_statement": models.NotifCategoryAccount,
@@ -51,10 +53,12 @@ func TestDefaultNotificationPreference(t *testing.T) {
 	if m.EmailEnabled || m.PushEnabled || m.SMSEnabled {
 		t.Fatalf("marketing must default all-off, got %+v", m)
 	}
-	// Transactional categories are opt-OUT: email+push on, sms off.
+	// Transactional + follow categories are opt-OUT: email+push on, sms off.
+	// Favorites (#239) defaults on because the user explicitly followed the chef.
 	for _, cat := range []models.NotificationCategory{
 		models.NotifCategoryOrder, models.NotifCategoryChef,
 		models.NotifCategoryDelivery, models.NotifCategoryAccount,
+		models.NotifCategoryFavorites,
 	} {
 		p := models.DefaultNotificationPreference(cat)
 		if !p.EmailEnabled || !p.PushEnabled || p.SMSEnabled {

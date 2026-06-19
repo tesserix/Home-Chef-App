@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
+import { useReorder } from '../../../hooks/useReorder';
+import { useCartStore, makeLineId } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
 import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import type { Order } from '../../../types/customer';
@@ -111,6 +114,7 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const { data, isLoading, isError } = useOrder(id ?? '');
   const [paying, setPaying] = React.useState(false);
+  const reorder = useReorder();
 
   if (isLoading) {
     return (
@@ -157,6 +161,77 @@ export default function OrderDetailScreen() {
 
   function handleTrackOrder() {
     router.push(`/order/${order.id}/track`);
+  }
+
+  // Reorder (#238) — fetch a re-validated preview, fill the cart with the
+  // available lines (resolving current add-on option IDs), and route the
+  // customer to checkout — or to the chef to review if anything changed.
+  function handleReorder() {
+    reorder.mutate(order.id, {
+      onSuccess: (res) => {
+        const available = res.items.filter((i) => i.available);
+        if (available.length === 0) {
+          Alert.alert('Unavailable', 'None of these items are available right now.');
+          return;
+        }
+
+        const fillAndGo = () => {
+          for (const it of available) {
+            const modifiers = it.modifiers ?? [];
+            useCartStore.getState().addItem(
+              {
+                lineId: makeLineId(it.menuItemId, modifiers),
+                menuItemId: it.menuItemId,
+                name: it.name,
+                price: it.unitPrice,
+                quantity: it.quantity,
+                imageUrl: it.imageUrl,
+                instructions: it.notes,
+                modifiers: modifiers.length ? modifiers : undefined,
+              },
+              { id: res.chefId, name: res.chefName },
+            );
+          }
+          const dropped = res.items.length - available.length;
+          const needsReview = available.some((i) => i.needsReview);
+          if (dropped > 0 || needsReview) {
+            const msgs: string[] = [];
+            if (dropped > 0) {
+              msgs.push(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available.`);
+            }
+            if (needsReview) msgs.push('Some add-ons changed — please review your cart.');
+            Alert.alert('Review your cart', msgs.join(' '), [
+              { text: 'OK', onPress: () => router.push(`/chef/${res.chefId}`) },
+            ]);
+          } else {
+            router.push('/checkout');
+          }
+        };
+
+        // Cross-chef conflict: confirm before replacing the current cart.
+        const cart = useCartStore.getState();
+        if (cart.chefId && cart.chefId !== res.chefId && cart.items.length > 0) {
+          Alert.alert(
+            'Replace cart?',
+            'Your cart has items from another chef. Replace them with this order?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Replace',
+                style: 'destructive',
+                onPress: () => {
+                  useCartStore.getState().clearCart();
+                  fillAndGo();
+                },
+              },
+            ],
+          );
+        } else {
+          fillAndGo();
+        }
+      },
+      onError: () => Alert.alert('Error', 'Could not reorder right now. Please try again.'),
+    });
   }
 
   // An order can be created but unpaid (verify failed, sheet dismissed, etc.).
@@ -289,6 +364,42 @@ export default function OrderDetailScreen() {
             >
               <View style={styles.tipButton}>
                 <Text style={styles.tipButtonText}>Tip your chef / rider</Text>
+              </View>
+            </Pressable>
+            {/* Reorder (#238) — re-add these items to the cart. */}
+            <Pressable
+              onPress={handleReorder}
+              disabled={reorder.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Reorder these items"
+              style={{ marginTop: 12 }}
+            >
+              <View style={styles.reorderButton}>
+                {reorder.isPending ? (
+                  <ActivityIndicator color={customerColors.coral.DEFAULT} />
+                ) : (
+                  <Text style={styles.reorderButtonText}>Reorder</Text>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Reorder — primary action for a cancelled order (#238). */}
+        {order.status === 'cancelled' && (
+          <View style={styles.ctaWrapper}>
+            <Pressable
+              onPress={handleReorder}
+              disabled={reorder.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Reorder these items"
+            >
+              <View style={styles.trackButton}>
+                {reorder.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} />
+                ) : (
+                  <Text style={styles.trackButtonText}>Reorder</Text>
+                )}
               </View>
             </Pressable>
           </View>
@@ -527,6 +638,22 @@ const styles = StyleSheet.create({
     borderColor: customerColors.coral.DEFAULT,
   },
   tipButtonText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: customerColors.coral.DEFAULT,
+  },
+  // Reorder (#238) — coral-outline secondary, same footprint as the tip button.
+  reorderButton: {
+    backgroundColor: customerColors.canvas,
+    borderRadius: 8,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: customerColors.coral.DEFAULT,
+  },
+  reorderButtonText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.coral.DEFAULT,

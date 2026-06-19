@@ -56,5 +56,7 @@ export async function registerDeviceToken(
   client: AxiosInstance,
   token: string
 ): Promise<void> {
-  await client.put('/profile/device-token', { token });
+  // Path is /v1/... because the client baseURL ends at /api (matches every
+  // other call, e.g. /v1/favorites/chefs) → /api/v1/profile/device-token.
+  await client.put('/v1/profile/device-token', { token });
 }

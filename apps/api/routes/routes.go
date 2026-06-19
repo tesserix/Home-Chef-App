@@ -495,6 +495,7 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
+			orders.POST("/:id/reorder", orderHandler.ReorderOrder) // #238
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
@@ -918,6 +919,12 @@ func SetupRouter() *gin.Engine {
 			favorites.GET("/chefs/ids", favoriteHandler.ListFavoriteChefIDs)
 			favorites.POST("/chefs", favoriteHandler.AddFavoriteChef)
 			favorites.DELETE("/chefs/:chefId", favoriteHandler.RemoveFavoriteChef)
+
+			// Favorite dishes / menu items (#237)
+			favorites.GET("/dishes", favoriteHandler.ListFavoriteDishes)
+			favorites.GET("/dishes/ids", favoriteHandler.ListFavoriteDishIDs)
+			favorites.POST("/dishes", favoriteHandler.AddFavoriteDish)
+			favorites.DELETE("/dishes/:menuItemId", favoriteHandler.RemoveFavoriteDish)
 		}
 
 		// Notifications

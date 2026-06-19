@@ -5,7 +5,9 @@ import * as Haptics from 'expo-haptics';
 import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
 import { useCartStore, makeLineId } from '../../store/cart-store';
 import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
+import { useFavoriteDishIds, useToggleFavoriteDish } from '../../hooks/useFavorites';
 import { ModifierSheet } from '../cart/ModifierSheet';
+import { FavoriteHeart } from '../shared/FavoriteHeart';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
 
@@ -29,6 +31,11 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   // Add-ons (#232): items with modifier groups open a picker before adding.
   const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Favorite dish (#237): heart on the photo, state from the saved-ids set.
+  const { data: favoriteDishIds } = useFavoriteDishIds();
+  const isFavorited = favoriteDishIds?.has(item.id) ?? false;
+  const toggleFavoriteDish = useToggleFavoriteDish();
 
   const addToCart = (cartItem: CartItem) => {
     const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
@@ -286,6 +293,16 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
             />
           </View>
         )}
+
+        {/* Save/favorite heart (#237) — top-right over the dish photo. */}
+        <FavoriteHeart
+          filled={isFavorited}
+          label={item.name}
+          size={16}
+          onToggle={() =>
+            toggleFavoriteDish.mutate({ menuItemId: item.id, isFavorited })
+          }
+        />
       </View>
 
       {/* Add-on picker (#232) — opens for items with modifier groups. */}
