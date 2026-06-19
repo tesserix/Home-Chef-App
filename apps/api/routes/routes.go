@@ -903,6 +903,15 @@ func SetupRouter() *gin.Engine {
 			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
 		}
 
+		// Profile (authenticated) — push device-token registration (#236). The
+		// mobile apps PUT their raw FCM token here on launch / token rotation;
+		// without it User.FCMToken stays empty and no push can be delivered.
+		profileGroup := v1.Group("/profile")
+		profileGroup.Use(bffAuth(bffKey, bffWindow))
+		{
+			profileGroup.PUT("/device-token", customerHandler.UpdateDeviceToken)
+		}
+
 		// Reviews (authenticated customers)
 		reviews := v1.Group("/reviews")
 		reviews.Use(bffAuth(bffKey, bffWindow))
@@ -918,6 +927,12 @@ func SetupRouter() *gin.Engine {
 			favorites.GET("/chefs/ids", favoriteHandler.ListFavoriteChefIDs)
 			favorites.POST("/chefs", favoriteHandler.AddFavoriteChef)
 			favorites.DELETE("/chefs/:chefId", favoriteHandler.RemoveFavoriteChef)
+
+			// Favorite dishes / menu items (#237)
+			favorites.GET("/dishes", favoriteHandler.ListFavoriteDishes)
+			favorites.GET("/dishes/ids", favoriteHandler.ListFavoriteDishIDs)
+			favorites.POST("/dishes", favoriteHandler.AddFavoriteDish)
+			favorites.DELETE("/dishes/:menuItemId", favoriteHandler.RemoveFavoriteDish)
 		}
 
 		// Notifications
