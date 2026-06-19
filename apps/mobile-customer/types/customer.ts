@@ -112,6 +112,7 @@ export interface Address {
 }
 
 export interface OrderItem {
+  id?: string;
   menuItemId: string;
   name: string;
   price: number;

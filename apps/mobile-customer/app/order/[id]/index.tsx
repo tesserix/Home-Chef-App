@@ -464,6 +464,20 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
+        {/* Report an issue (#37) — on a paid, non-cancelled order (active or
+            delivered). The server decides the instant/assisted refund. */}
+        {order.status !== 'cancelled' && (
+          <View style={styles.reportWrapper}>
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
+              accessibilityRole="button"
+              accessibilityLabel="Report an issue with this order"
+            >
+              <Text style={styles.reportLink}>Report an issue with this order</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Reorder — primary action for a cancelled order (#238). */}
         {order.status === 'cancelled' && (
           <View style={styles.ctaWrapper}>
@@ -813,6 +827,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.coral.DEFAULT,
+  },
+  // Report an issue (#37) — quiet text link below the primary actions.
+  reportWrapper: { paddingHorizontal: 20, marginTop: 16, alignItems: 'center' },
+  reportLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.soft,
+    textDecorationLine: 'underline',
   },
 
   // Content section — direct on white, no card bg

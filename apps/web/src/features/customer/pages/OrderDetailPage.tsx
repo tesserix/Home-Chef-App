@@ -47,6 +47,23 @@ interface ReorderResponse {
   items: ReorderResponseItem[];
 }
 
+// Report-an-issue (#37). Reasons mirror the API IssueReason enum
+// (models/order_issue.go); refund amount is decided server-side.
+type IssueReason = 'missing_item' | 'wrong_item' | 'damaged' | 'quality_issue' | 'other';
+const ISSUE_REASONS: { value: IssueReason; label: string }[] = [
+  { value: 'missing_item', label: 'Missing item' },
+  { value: 'wrong_item', label: 'Wrong item' },
+  { value: 'damaged', label: 'Damaged / spilled' },
+  { value: 'quality_issue', label: 'Quality issue' },
+  { value: 'other', label: 'Something else' },
+];
+interface ReportIssueResponse {
+  issueId: string;
+  status: 'pending' | 'auto_refunded' | 'resolved' | 'rejected';
+  refundAmount: number;
+  message: string;
+}
+
 // Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   pending: { label: 'Pending Confirmation', color: 'text-amber', bgColor: 'bg-amber-tint', icon: Clock },
@@ -68,6 +85,13 @@ export default function OrderDetailPage() {
   const queryClient = useQueryClient();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  // Report-an-issue flow (#37): reason + optional affected items / description /
+  // photo → instant or assisted partial refund to the wallet.
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState<IssueReason | ''>('');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportItems, setReportItems] = useState<Set<string>>(new Set());
+  const [reportPhoto, setReportPhoto] = useState<File | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Stripe redirects here after Checkout confirmation with ?stripe_pi=...
@@ -171,6 +195,47 @@ export default function OrderDetailPage() {
     onError: () => toast.error('Could not reorder right now. Please try again.'),
   });
 
+  // Report an issue (#37) → instant/assisted partial refund to the wallet. The
+  // server decides the amount; we just surface the outcome. Multipart so an
+  // optional photo rides along (mirrors the review upload).
+  const reportMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      fd.append('reason', reportReason);
+      if (reportDescription.trim()) fd.append('description', reportDescription.trim());
+      reportItems.forEach((itemId) => fd.append('affectedItemIds', itemId));
+      if (reportPhoto) fd.append('photo', reportPhoto);
+      return apiClient.upload<ReportIssueResponse>(`/orders/${id}/report-issue`, fd);
+    },
+    onSuccess: (res) => {
+      setShowReportModal(false);
+      setReportReason('');
+      setReportDescription('');
+      setReportItems(new Set());
+      setReportPhoto(null);
+      queryClient.invalidateQueries({ queryKey: ['order', id] });
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
+      if (res.status === 'auto_refunded' && res.refundAmount > 0) {
+        toast.success(`${fp(res.refundAmount)} refunded to your Fe3dr wallet`);
+      } else {
+        toast.success(res.message || 'Thanks — our team will review this shortly');
+      }
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : 'Could not submit your report');
+    },
+  });
+
+  const toggleReportItem = (itemId: string) => {
+    setReportItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
   const handleCopyOrderNumber = () => {
     if (order) {
       navigator.clipboard.writeText(order.orderNumber);
@@ -222,6 +287,8 @@ export default function OrderDetailPage() {
   const StatusIcon = status.icon;
   const isActive = !['delivered', 'cancelled', 'refunded'].includes(order.status);
   const canCancel = ['pending', 'accepted'].includes(order.status);
+  // Report-an-issue eligibility mirrors the API guard: paid order, not cancelled (#37).
+  const canReport = order.paymentStatus === 'completed' && order.status !== 'cancelled';
 
   return (
     <div className="min-h-screen bg-paper py-8">
@@ -472,6 +539,16 @@ export default function OrderDetailPage() {
           >
             Reorder
           </Button>
+
+          {canReport && (
+            <Button
+              variant="ghost"
+              leftIcon={<AlertCircle aria-hidden="true" className="h-4 w-4" />}
+              onClick={() => setShowReportModal(true)}
+            >
+              Report an issue
+            </Button>
+          )}
         </div>
 
         {/* Cancel Modal */}
@@ -508,6 +585,110 @@ export default function OrderDetailPage() {
                   onClick={() => cancelMutation.mutate()}
                 >
                   {cancelMutation.isPending ? 'Cancelling…' : 'Cancel Order'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Report-an-issue Modal (#37) */}
+        {showReportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-bone p-6">
+              <h3 className="text-lg font-semibold text-ink">Report an issue</h3>
+              <p className="mt-1 text-sm text-ink-soft">
+                Tell us what went wrong. Eligible issues are refunded to your Fe3dr wallet right away.
+              </p>
+
+              <fieldset className="mt-4">
+                <legend className="text-sm font-medium text-ink-soft">What went wrong?</legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ISSUE_REASONS.map((r) => {
+                    const active = reportReason === r.value;
+                    return (
+                      <button
+                        key={r.value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setReportReason(r.value)}
+                        className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                          active
+                            ? 'border-herb bg-herb-tint text-herb'
+                            : 'border-mist bg-paper text-ink-soft hover:border-ink-soft'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              {order.items.length > 0 && (
+                <fieldset className="mt-4">
+                  <legend className="text-sm font-medium text-ink-soft">Which items? (optional)</legend>
+                  <div className="mt-2 divide-y divide-mist rounded-lg border border-mist">
+                    {order.items.map((item) => {
+                      const checked = reportItems.has(item.id);
+                      return (
+                        <label
+                          key={item.id}
+                          className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleReportItem(item.id)}
+                            className="h-4 w-4 accent-herb"
+                          />
+                          <span className="text-ink">
+                            {item.quantity}× {item.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
+
+              <div className="mt-4">
+                <label htmlFor="order-issue-description" className="block text-sm font-medium text-ink-soft">
+                  Tell us more (optional)
+                </label>
+                <textarea
+                  id="order-issue-description"
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Describe the problem…"
+                  rows={3}
+                  maxLength={500}
+                  className="input-base mt-1"
+                />
+              </div>
+
+              <div className="mt-4">
+                <label htmlFor="order-issue-photo" className="block text-sm font-medium text-ink-soft">
+                  Add a photo (optional)
+                </label>
+                <input
+                  id="order-issue-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => setReportPhoto(e.target.files?.[0] ?? null)}
+                  className="mt-1 block w-full text-sm text-ink-soft file:mr-3 file:rounded-md file:border-0 file:bg-mist file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-mist/80"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setShowReportModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  isLoading={reportMutation.isPending}
+                  disabled={!reportReason || reportMutation.isPending}
+                  onClick={() => reportMutation.mutate()}
+                >
+                  {reportMutation.isPending ? 'Submitting…' : 'Submit report'}
                 </Button>
               </div>
             </div>
