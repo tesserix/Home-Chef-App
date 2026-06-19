@@ -41,6 +41,12 @@ export interface OrdersResponse {
 
 const UNDO_DELAY_MS = 3000;
 
+// Order IDs the chef has optimistically accepted/rejected but whose server
+// mutation may still be in its undo window. The pending query filters these out
+// so a 10s background poll can't resurrect a card the chef already swiped away
+// (the order is still `pending` on the server until the deferred PUT lands).
+const actionedOrderIds = new Set<string>();
+
 // Pending orders with 10s polling + new-order haptic detection
 export function useVendorPendingOrders() {
   const previousCountRef = useRef(0);
@@ -50,6 +56,11 @@ export function useVendorPendingOrders() {
     queryFn: () => api.get<OrdersResponse>('/chef/orders?status=pending&page=1').then((r) => r.data),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
+    // Hide orders that are mid-action so a background refetch can't re-add them.
+    select: (data) => ({
+      ...data,
+      orders: data.orders.filter((o) => !actionedOrderIds.has(o.id)),
+    }),
   });
 
   useEffect(() => {
@@ -98,19 +109,29 @@ export function useOrderAction() {
       });
       return { previous };
     },
-    onError: (_err, _vars, context) => {
+    onError: (_err, vars, context) => {
+      // Action failed — let the order resurface so the chef can retry.
+      actionedOrderIds.delete(vars.orderId);
       if (context?.previous) {
         queryClient.setQueryData(['chef', 'orders', 'pending'], context.previous);
       }
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] }),
+    onSettled: (_data, _err, vars) => {
+      actionedOrderIds.delete(vars.orderId);
+      // Refresh the order lists AND the dashboard stats (pending count, today's
+      // totals) — the dashboard was previously left stale after accept/reject.
+      queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
+      queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+    },
   });
 
   function triggerAction(orderId: string, action: 'accepted' | 'rejected', reason?: string) {
     // Haptic feedback on decisive order action (accept or reject)
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Optimistically remove card, set undo state, schedule API call after delay
+    // Mark actioned so background polls can't resurrect the card during the
+    // undo window, then optimistically remove it and schedule the API call.
+    actionedOrderIds.add(orderId);
     queryClient.setQueryData<OrdersResponse>(['chef', 'orders', 'pending'], (old) => {
       if (!old) return old;
       return {
@@ -128,6 +149,7 @@ export function useOrderAction() {
 
   function handleUndo() {
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (pendingUndo) actionedOrderIds.delete(pendingUndo.orderId);
     queryClient.invalidateQueries({ queryKey: ['chef', 'orders', 'pending'] });
     setPendingUndo(null);
   }
