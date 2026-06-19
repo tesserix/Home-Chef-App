@@ -180,6 +180,7 @@ func SetupRouter() *gin.Engine {
 	supportHandler := handlers.NewSupportHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
+	messagingHandler := handlers.NewMessagingHandler()
 	securityHandler := handlers.NewSecurityHandler()
 	platformHandler := handlers.NewPlatformHandler()
 	exportsHandler := handlers.NewExportsHandler()
@@ -432,6 +433,9 @@ func SetupRouter() *gin.Engine {
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
 			chefDashboard.PUT("/orders/:orderId/status", chefHandler.UpdateOrderStatus)
+			// In-app messaging (#53) — admin-mediated, order-scoped.
+			chefDashboard.POST("/orders/:orderId/messages", messagingHandler.ChefSendMessage)
+			chefDashboard.GET("/orders/:orderId/messages", messagingHandler.ChefListMessages)
 			// Chef-side cancellation (Wave 2). Whole-order issues a full
 			// Razorpay refund; per-line issues a partial and recomputes
 			// the order totals so the remaining items continue prep.
@@ -887,6 +891,11 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/loyalty/config", adminHandler.GetLoyaltyConfig)
 			admin.PUT("/loyalty/config", adminHandler.UpdateLoyaltyConfig)
 			admin.GET("/loyalty/analytics", adminHandler.GetLoyaltyAnalytics)
+			// In-app messaging mediation (#53) — the relay inbox.
+			admin.GET("/messages/inbox", messagingHandler.AdminInbox)
+			admin.POST("/messages/:id/relay", messagingHandler.AdminRelayMessage)
+			admin.POST("/messages/:id/block", messagingHandler.AdminBlockMessage)
+			admin.POST("/conversations/:id/send", messagingHandler.AdminSendMessage)
 			// Marketing campaigns (#56) — compose, segment, lifecycle.
 			admin.GET("/campaigns", adminHandler.ListCampaigns)
 			admin.POST("/campaigns", adminHandler.CreateCampaign)
@@ -977,6 +986,10 @@ func SetupRouter() *gin.Engine {
 			customer.GET("/loyalty", loyaltyHandler.GetLoyalty)
 			customer.GET("/loyalty/transactions", loyaltyHandler.GetLoyaltyTransactions)
 			customer.POST("/loyalty/redeem", loyaltyHandler.RedeemLoyalty)
+
+			// In-app messaging (#53) — admin-mediated, order-scoped.
+			customer.POST("/orders/:id/messages", messagingHandler.CustomerSendMessage)
+			customer.GET("/orders/:id/messages", messagingHandler.CustomerListMessages)
 
 			// Referral program (#38)
 			customer.GET("/referral", referralHandler.GetMyReferral)

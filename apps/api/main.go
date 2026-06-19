@@ -162,6 +162,10 @@ func main() {
 		log.Printf("Warning: Failed to connect to MongoDB: %v — chat/upload-on-Mongo unavailable", err)
 	} else {
 		defer mongoClient.Close(context.Background())
+		// Best-effort: messaging indexes (idempotent) for the mediated chat (#53).
+		if err := services.EnsureMessagingIndexes(context.Background()); err != nil {
+			log.Printf("Warning: messaging index setup failed: %v", err)
+		}
 	}
 
 	// Connect to NATS
