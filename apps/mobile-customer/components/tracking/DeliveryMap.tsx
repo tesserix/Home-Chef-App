@@ -1,4 +1,5 @@
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
@@ -48,6 +49,8 @@ export function DeliveryMap({
   if (hasChef) points.push({ lat: chefLat!, lng: chefLng! });
   if (hasDriverLocation) points.push({ lat: driverLat!, lng: driverLng! });
 
+  const mapRef = useRef<MapView>(null);
+
   let initialRegion;
   if (points.length > 0) {
     const lats = points.map((p) => p.lat);
@@ -74,8 +77,19 @@ export function DeliveryMap({
     };
   }
 
+  // Coords load async (and the driver moves), so re-center the map whenever the
+  // points change — initialRegion alone is mount-only and would stay on the
+  // country-wide fallback if it rendered before the coords arrived.
+  useEffect(() => {
+    if (points.length > 0) {
+      mapRef.current?.animateToRegion(initialRegion, 400);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destLat, destLng, chefLat, chefLng, driverLat, driverLng]);
+
   return (
     <MapView
+      ref={mapRef}
       style={StyleSheet.absoluteFill}
       provider={PROVIDER_DEFAULT}
       initialRegion={initialRegion}
