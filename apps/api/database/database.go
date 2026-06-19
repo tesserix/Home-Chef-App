@@ -348,6 +348,9 @@ func Migrate() error {
 		// against concurrent triggers (lapse cron + a cancel/suspend webhook, or a
 		// retried Razorpay delivery) double-minting offers + platform-funded promos.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_winback_one_open ON winback_offers (user_id) WHERE status = 'offered'`,
+		// One live meal subscription per (customer, chef) (#280) — backstops the
+		// handler check against concurrent submits so #282 can't double-generate.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_sub_one_live ON meal_subscriptions (customer_id, chef_id) WHERE status <> 'cancelled' AND deleted_at IS NULL`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

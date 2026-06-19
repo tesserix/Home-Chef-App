@@ -99,8 +99,8 @@ func (h *MealSubscriptionHandler) UpdateChefSubscriptionConfig(c *gin.Context) {
 	var existing models.ChefSubscriptionConfig
 	if err := database.DB.Where("chef_id = ?", chefID).First(&existing).Error; err == nil {
 		cfg.ID = existing.ID
+		// Select("*") so unchecking Enabled / clearing a fee (zero-values) persists.
 		database.DB.Model(&existing).Select("*").Omit("id", "chef_id", "created_at").Updates(cfg)
-		cfg = existing
 		database.DB.Where("chef_id = ?", chefID).First(&cfg)
 	} else if err := database.DB.Create(&cfg).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
@@ -195,22 +195,36 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 	if variant != models.MealVariantVeg && variant != models.MealVariantNonVeg {
 		variant = models.MealVariantVeg
 	}
+	// One live subscription per (customer, chef) — block duplicates so #282's
+	// order-generation can't produce double tiffins/charges. A DB partial unique
+	// index backstops this against concurrent submits.
+	var dup int64
+	database.DB.Model(&models.MealSubscription{}).
+		Where("customer_id = ? AND chef_id = ? AND status <> ?", userID, chefID, models.MealSubStatusCancelled).
+		Count(&dup)
+	if dup > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "You already have a subscription with this chef"})
+		return
+	}
+
 	amount := services.ComputeMealCycleAmount(cfg.PerMealPrice, len(req.Slots), len(req.Days), req.Cadence, cfg.DeliveryFee)
 
 	now := time.Now()
 	periodEnd := services.AddMealCadence(now, req.Cadence)
 	sub := models.MealSubscription{
-		CustomerID:         userID,
-		ChefID:             chefID,
-		Slots:              req.Slots,
-		Days:               req.Days,
-		Variant:            variant,
-		Cadence:            req.Cadence,
-		PerMealPrice:       cfg.PerMealPrice,
-		DeliveryFee:        cfg.DeliveryFee,
-		CycleAmount:        amount,
-		Currency:           "INR",
-		Status:             models.MealSubStatusActive,
+		CustomerID:   userID,
+		ChefID:       chefID,
+		Slots:        req.Slots,
+		Days:         req.Days,
+		Variant:      variant,
+		Cadence:      req.Cadence,
+		PerMealPrice: cfg.PerMealPrice,
+		DeliveryFee:  cfg.DeliveryFee,
+		CycleAmount:  amount,
+		Currency:     "INR",
+		// Start trialing — NOT active. The Razorpay UPI-Autopay mandate + first
+		// charge (#281) flip it to active; until then it generates no orders (#282).
+		Status:             models.MealSubStatusTrialing,
 		CurrentPeriodStart: &now,
 		CurrentPeriodEnd:   &periodEnd,
 	}
@@ -259,6 +273,10 @@ func (h *MealSubscriptionHandler) Skip(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if sub.Status != models.MealSubStatusActive && sub.Status != models.MealSubStatusTrialing {
+		c.JSON(http.StatusConflict, gin.H{"error": "You can only skip days on an active subscription"})
+		return
+	}
 	var req struct {
 		Date string `json:"date" binding:"required"`
 	}
@@ -266,12 +284,20 @@ func (h *MealSubscriptionHandler) Skip(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	d, err := time.Parse("2006-01-02", req.Date)
+	// Cutoffs are IST — compare the skip date against the current IST calendar day
+	// so a customer can only skip a future day (full cutoff-time enforcement is #282).
+	ist, lerr := time.LoadLocation("Asia/Kolkata")
+	if lerr != nil {
+		ist = time.UTC
+	}
+	d, err := time.ParseInLocation("2006-01-02", req.Date, ist)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date (use YYYY-MM-DD)"})
 		return
 	}
-	if !d.After(time.Now()) {
+	nowIST := time.Now().In(ist)
+	todayIST := time.Date(nowIST.Year(), nowIST.Month(), nowIST.Day(), 0, 0, 0, 0, ist)
+	if !d.After(todayIST) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You can only skip a future day before its cutoff"})
 		return
 	}
