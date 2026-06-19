@@ -294,6 +294,12 @@ func SetupRouter() *gin.Engine {
 		// Preference options (public)
 		v1.GET("/preferences", preferenceHandler.GetPreferenceOptions)
 
+		// Marketing campaign tracking (#56) — public: email open pixel + one-click
+		// unsubscribe, hit directly by the recipient's email client.
+		campaignHandler := handlers.NewCampaignHandler()
+		v1.GET("/campaigns/track/open/:id", campaignHandler.TrackOpen)
+		v1.GET("/campaigns/unsubscribe/:id", campaignHandler.Unsubscribe)
+
 		// Dietary & allergen taxonomy (public) + per-cart conflict check (#41).
 		v1.GET("/dietary/options", dietaryHandler.GetDietaryOptions)
 		dietary := v1.Group("/dietary")
@@ -881,6 +887,18 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/loyalty/config", adminHandler.GetLoyaltyConfig)
 			admin.PUT("/loyalty/config", adminHandler.UpdateLoyaltyConfig)
 			admin.GET("/loyalty/analytics", adminHandler.GetLoyaltyAnalytics)
+			// Marketing campaigns (#56) — compose, segment, lifecycle.
+			admin.GET("/campaigns", adminHandler.ListCampaigns)
+			admin.POST("/campaigns", adminHandler.CreateCampaign)
+			admin.POST("/campaigns/preview", adminHandler.PreviewCampaignSegment)
+			admin.GET("/campaigns/:id", adminHandler.GetCampaign)
+			admin.PUT("/campaigns/:id", adminHandler.UpdateCampaign)
+			admin.DELETE("/campaigns/:id", adminHandler.DeleteCampaign)
+			admin.POST("/campaigns/:id/cancel", adminHandler.CancelCampaign)
+			admin.POST("/campaigns/:id/schedule", adminHandler.ScheduleCampaign)
+			admin.POST("/campaigns/:id/send", adminHandler.SendCampaignNow)
+			admin.POST("/campaigns/:id/test", adminHandler.TestSendCampaign)
+			admin.GET("/campaigns/:id/metrics", adminHandler.GetCampaignMetrics)
 			// Win-back program (#42) — config + reactivation analytics.
 			admin.GET("/winback/config", adminHandler.GetWinbackConfig)
 			admin.PUT("/winback/config", adminHandler.UpdateWinbackConfig)

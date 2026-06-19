@@ -40,6 +40,7 @@ const (
 	SubjectReferralRewarded    = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
 	SubjectLoyaltyEarned       = "loyalty.points_earned"      // → customer: earned points on a delivered order / streak (#40)
 	SubjectLoyaltyRedeemed     = "loyalty.redeemed"           // → customer: points converted to wallet credit (#40)
+	SubjectCampaignDispatch    = "campaigns.dispatch"         // → fan out a marketing campaign to its segment (#56)
 	SubjectReviewPosted        = "reviews.posted"
 	SubjectCateringRequest     = "catering.request"
 	SubjectCateringQuote       = "catering.quote"
@@ -228,6 +229,7 @@ func (n *NATSClient) setupStreams() error {
 		{"SUBSCRIPTIONS", "Subscription billing events", []string{"subscription.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"REFERRAL", "Referral program events", []string{"referral.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"LOYALTY", "Loyalty points & streak events", []string{"loyalty.>"}, 30 * 24 * time.Hour, gib / 4},
+		{"CAMPAIGNS", "Marketing campaign dispatch events", []string{"campaigns.>"}, 30 * 24 * time.Hour, gib / 4},
 		{"MEAL_PLANS", "Tiffin meal-plan lifecycle events", []string{"meal_plans.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"GROUP_ORDERS", "Group / office order lifecycle events", []string{"group_orders.>"}, 30 * 24 * time.Hour, gib / 2},
 		{"PROVIDER", "Third-party delivery provider events", []string{"provider.>"}, 30 * 24 * time.Hour, gib / 2},
