@@ -121,7 +121,18 @@ export interface OrderItem {
 export interface Order {
   id: string;
   orderNumber: string;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  // Matches the backend OrderStatus enum exactly (models/order.go). The chef
+  // "accept" sets status='accepted' (the customer-facing label is "Confirmed").
+  status:
+    | 'pending'
+    | 'accepted'
+    | 'preparing'
+    | 'ready'
+    | 'picked_up'
+    | 'delivering'
+    | 'delivered'
+    | 'cancelled'
+    | 'refunded';
   // Payment lifecycle — distinct from `status` (order lifecycle). A paid order
   // can still sit at status='pending' until the chef accepts, so this is the
   // only reliable signal of whether money has been captured.

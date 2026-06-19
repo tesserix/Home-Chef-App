@@ -17,10 +17,11 @@ import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
-  'confirmed',
+  'accepted',
   'preparing',
   'ready',
   'picked_up',
+  'delivering',
 ];
 
 // Spec §2.7: status chip — tint bg + dark text of same family.
@@ -37,7 +38,7 @@ function getStatusChipStyle(status: Order['status']): StatusChipStyle {
         text: customerColors.coral.pressed,
         label: 'Pending',
       };
-    case 'confirmed':
+    case 'accepted':
       return {
         bg: customerColors.coral.tint,
         text: customerColors.coral.pressed,
@@ -60,6 +61,18 @@ function getStatusChipStyle(status: Order['status']): StatusChipStyle {
         bg: customerColors.coral.tint,
         text: customerColors.coral.pressed,
         label: 'On the Way',
+      };
+    case 'delivering':
+      return {
+        bg: customerColors.coral.tint,
+        text: customerColors.coral.pressed,
+        label: 'Out for Delivery',
+      };
+    case 'refunded':
+      return {
+        bg: customerColors.surface.soft,
+        text: customerColors.charcoal.soft,
+        label: 'Refunded',
       };
     case 'delivered':
       return {
