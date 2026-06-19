@@ -116,8 +116,12 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	orderItems := make([]earningsOrderResponse, 0, len(rows))
 	var totals earningsTotals
 
+	// Premium commission override (#44) — resolved once for this chef so the
+	// breakdown they see matches the lower rate they're charged.
+	commissionRate := services.PremiumCommissionRateForChef(chef.ID)
+
 	for _, row := range rows {
-		breakdown := computeOrderBreakdown(row, chef.State)
+		breakdown := computeOrderBreakdown(row, chef.State, commissionRate)
 
 		orderItems = append(orderItems, breakdown)
 
@@ -140,12 +144,19 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	totals.TDS = round2(totals.TDS)
 	totals.NetPayout = round2(totals.NetPayout)
 
+	// Surface the effective commission rate so a premium chef sees their lower
+	// rate, not the standard one (#44).
+	effectiveCommission := services.RateCommission
+	if commissionRate > 0 {
+		effectiveCommission = commissionRate
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"cycleStart": cycleStart,
 		"cycleEnd":   cycleEnd,
 		"currency":   services.EarningsCurrency,
 		"rates": breakdownRates{
-			PlatformCommission: services.RateCommission,
+			PlatformCommission: effectiveCommission,
 			GST:                services.RateGST,
 			TDS:                services.RateTDS,
 		},
@@ -158,15 +169,16 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 // shapes the result into the wire response. The math itself lives in
 // services.ComputeOrderEarnings so the live endpoint, the weekly statement
 // generator, and the TDS certificate all settle identically.
-func computeOrderBreakdown(row earningsOrderRow, chefState string) earningsOrderResponse {
+func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRate float64) earningsOrderResponse {
 	e := services.ComputeOrderEarnings(services.EarningsInput{
-		OrderID:       row.OrderID,
-		OrderNumber:   row.OrderNumber,
-		CompletedAt:   row.CompletedAt,
-		ItemRevenue:   row.ItemRevenue,
-		DeliveryFee:   row.DeliveryFee,
-		ChefTip:       row.ChefTip,
-		DeliveryState: row.DeliveryState,
+		OrderID:        row.OrderID,
+		OrderNumber:    row.OrderNumber,
+		CompletedAt:    row.CompletedAt,
+		ItemRevenue:    row.ItemRevenue,
+		DeliveryFee:    row.DeliveryFee,
+		ChefTip:        row.ChefTip,
+		DeliveryState:  row.DeliveryState,
+		CommissionRate: commissionRate,
 	}, chefState)
 
 	return earningsOrderResponse{

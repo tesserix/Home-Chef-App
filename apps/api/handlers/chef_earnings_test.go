@@ -21,7 +21,7 @@ func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 	}
 	chefState := "Maharashtra"
 
-	got := computeOrderBreakdown(row, chefState)
+	got := computeOrderBreakdown(row, chefState, 0)
 
 	// commission = 0.15 × 1000 = 150
 	wantCommission := 150.00
@@ -79,7 +79,7 @@ func TestComputeOrderBreakdown_InterState(t *testing.T) {
 	}
 	chefState := "Maharashtra"
 
-	got := computeOrderBreakdown(row, chefState)
+	got := computeOrderBreakdown(row, chefState, 0)
 
 	// CGST and SGST must both be 0 for inter-state
 	if got.CGST != 0 {
@@ -108,7 +108,7 @@ func TestComputeOrderBreakdown_ZeroTip(t *testing.T) {
 		DeliveryState: "Delhi",
 	}
 
-	got := computeOrderBreakdown(row, "Delhi")
+	got := computeOrderBreakdown(row, "Delhi", 0)
 
 	wantGross := 200.00
 	if got.Gross != wantGross {
