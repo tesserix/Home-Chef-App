@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -112,9 +113,13 @@ func (h *ChefHandler) PutWeeklyMenu(c *gin.Context) {
 		})
 	}
 
-	if req.IsPublished && len(cells) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot publish an empty weekly menu"})
-		return
+	// A publishable week must have every offered (day × slot) filled — no holes
+	// (#1). Drafts can be saved incomplete; only publishing enforces this.
+	if req.IsPublished {
+		if err := validatePublishableGrid(cells); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	now := time.Now()
@@ -176,4 +181,46 @@ func (h *ChefHandler) GetPublicWeeklyMenu(c *gin.Context) {
 	var items []models.WeeklyMenuItem
 	database.DB.Where("chef_id = ?", chefID).Order("day_of_week, slot, variant").Find(&items)
 	c.JSON(http.StatusOK, gin.H{"isPublished": true, "publishedAt": menu.PublishedAt, "items": items})
+}
+
+var weekdayShort = [7]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+
+// validatePublishableGrid enforces the #1 rule: a publishable weekly menu must
+// have "every offered (day × slot) filled" — no holes. It treats the days the
+// chef actually used and the slots they actually used as the offered grid, then
+// requires every (day × slot) in that rectangle to have at least one cell (any
+// variant). So a lunch-only or a Mon–Wed menu is fine, but filling Tue lunch
+// while leaving Tue dinner blank (when other days have dinner) is rejected. The
+// returned error names the first missing cell. Pure + reusable so the vendor
+// editors can mirror the same check client-side.
+func validatePublishableGrid(cells []models.WeeklyMenuItem) error {
+	if len(cells) == 0 {
+		return fmt.Errorf("add at least one dish before publishing")
+	}
+
+	daySet := map[int]bool{}
+	slotSet := map[models.MealSlot]bool{}
+	present := map[string]bool{}
+	for _, c := range cells {
+		daySet[c.DayOfWeek] = true
+		slotSet[c.Slot] = true
+		present[fmt.Sprintf("%d|%s", c.DayOfWeek, c.Slot)] = true
+	}
+
+	// Deterministic ordering for a stable error message: day 0..6, lunch before dinner.
+	slotsInOrder := []models.MealSlot{models.MealSlotLunch, models.MealSlotDinner}
+	for day := 0; day < 7; day++ {
+		if !daySet[day] {
+			continue
+		}
+		for _, slot := range slotsInOrder {
+			if !slotSet[slot] {
+				continue
+			}
+			if !present[fmt.Sprintf("%d|%s", day, slot)] {
+				return fmt.Errorf("every offered day needs a %s dish — %s is missing its %s dish", slot, weekdayShort[day], slot)
+			}
+		}
+	}
+	return nil
 }
