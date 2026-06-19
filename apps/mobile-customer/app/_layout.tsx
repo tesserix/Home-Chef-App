@@ -1,6 +1,6 @@
 import '../global.css';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, router } from 'expo-router';
@@ -35,6 +35,14 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
     useAuthStore();
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+
+  // The device-local `onboardingComplete` flag is only a cache — it's cleared on
+  // logout, so a returning (already-onboarded) user would otherwise be sent back
+  // through the wizard. The server's customer_profiles.onboarding_completed is the
+  // source of truth; gate on it once fetched. `onboardingChecked` keeps the gate
+  // from deciding onboarding-vs-tabs before that fetch resolves (avoids a flash).
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   // Cleanup ref for push subscription teardown.
   const pushCleanupRef = useRef<(() => void) | null>(null);
@@ -139,10 +147,41 @@ export default function RootLayout() {
     };
   }, [isAuthenticated, isLoading]);
 
+  // Reconcile the onboarding flag with the server once authenticated. The
+  // status endpoint is flat ({ onboardingCompleted, onboardingStep }). On any
+  // failure we fall back to the cached local flag rather than blocking the app.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      setOnboardingChecked(true); // unauth → login gate handles it; nothing to fetch
+      return;
+    }
+    let cancelled = false;
+    setOnboardingChecked(false);
+    (async () => {
+      try {
+        const r = await api.get('/v1/customer/onboarding/status');
+        const done = !!r.data?.onboardingCompleted;
+        if (!cancelled) await setOnboardingComplete(done);
+      } catch {
+        // Offline / transient — keep the cached flag; don't trap the user.
+      } finally {
+        if (!cancelled) setOnboardingChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isLoading, setOnboardingComplete]);
+
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
         router.replace('/(auth)/login');
+      } else if (!onboardingChecked) {
+        // Wait for the server onboarding status before choosing onboarding vs
+        // tabs — prevents a returning user flashing into the wizard.
+        return;
       } else if (!onboardingComplete) {
         // Gate: authenticated but hasn't completed onboarding wizard
         router.replace('/(onboarding)/user-info');
@@ -150,7 +189,7 @@ export default function RootLayout() {
         router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, isLoading, onboardingComplete]);
+  }, [isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
 
   return (
     // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
