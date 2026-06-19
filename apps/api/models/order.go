@@ -72,7 +72,12 @@ type Order struct {
 	ChefTip   float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
 	DriverTip float64 `gorm:"default:0" json:"driverTip"` // Tip for the delivery driver
 	Discount  float64 `gorm:"default:0" json:"discount"`
-	Total     float64 `gorm:"not null" json:"total"`
+	// ChefFundedDiscount is the portion of Discount funded by the chef via a
+	// chef-funded promo (#39). It is billed to the chef at settlement (subtracted
+	// from their Route payout + earnings); platform-funded promos leave it 0 and
+	// the platform absorbs the discount. Always 0 ≤ ChefFundedDiscount ≤ Discount.
+	ChefFundedDiscount float64 `gorm:"default:0" json:"chefFundedDiscount"`
+	Total              float64 `gorm:"not null" json:"total"`
 	// WalletApplied is the store credit applied at checkout (#141). The customer
 	// is charged (Total − WalletApplied) at the gateway; the chef/driver splits are
 	// still settled in full (the wallet-covered slice is topped up from the platform

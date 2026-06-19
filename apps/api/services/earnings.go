@@ -50,6 +50,10 @@ type EarningsInput struct {
 	// tier). Zero/unset uses the standard RateCommission, so existing callers are
 	// unaffected.
 	CommissionRate float64
+	// ChefFundedDiscount is the chef-funded promo discount the chef bears (#39).
+	// It reduces the chef's food revenue before commission/gross/TDS. Zero for
+	// platform-funded promos and ordinary orders, so existing callers are unaffected.
+	ChefFundedDiscount float64
 }
 
 // OrderEarnings is the computed per-order breakdown.
@@ -95,8 +99,14 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	if rate <= 0 || rate >= 1 {
 		rate = RateCommission
 	}
-	commission := Round2(rate * in.ItemRevenue)
-	gross := Round2(in.ItemRevenue + in.DeliveryFee + in.ChefTip)
+	// A chef-funded promo (#39) comes out of the chef's food revenue before
+	// commission/gross/TDS — the chef bears the discount they funded. Floored at 0.
+	itemRevenue := in.ItemRevenue - in.ChefFundedDiscount
+	if itemRevenue < 0 {
+		itemRevenue = 0
+	}
+	commission := Round2(rate * itemRevenue)
+	gross := Round2(itemRevenue + in.DeliveryFee + in.ChefTip)
 
 	var cgst, sgst, igst float64
 	halfGST := Round2(RateGST / 2 * commission)
@@ -116,7 +126,7 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 		OrderID:            in.OrderID,
 		OrderNumber:        in.OrderNumber,
 		CompletedAt:        in.CompletedAt,
-		ItemRevenue:        Round2(in.ItemRevenue),
+		ItemRevenue:        Round2(itemRevenue),
 		DeliveryFee:        Round2(in.DeliveryFee),
 		Tip:                Round2(in.ChefTip),
 		Gross:              gross,

@@ -323,14 +323,17 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// Apply promo code discount
 	var appliedPromo *models.PromoCode
+	chefFundedDiscount := 0.0
 	if req.PromoCode != "" {
-		promoDiscount, promo, promoErr := validateAndCalculateDiscount(req.PromoCode, userID, subtotal)
+		promoDiscount, promo, promoErr := validateAndCalculateDiscount(req.PromoCode, userID, chef.ID, subtotal)
 		if promoErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": promoErr})
 			return
 		}
 		discount = promoDiscount
 		appliedPromo = promo
+		// Chef-funded promos are billed to the chef at settlement (#39).
+		chefFundedDiscount = services.ChefFundedPortion(promo, promoDiscount)
 	}
 
 	// Total is computed below, after tax is resolved from the delivery
@@ -455,6 +458,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		TaxName:                   taxRule.TaxName,
 		Tip:                       tip,
 		Discount:                  discount,
+		ChefFundedDiscount:        chefFundedDiscount,
 		Total:                     total,
 		PromoCode:                 req.PromoCode,
 		DeliveryAddressLine1:      deliveryAddr.Line1,
@@ -524,8 +528,34 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// Record promo code usage
+	// Record promo code usage. Claim a redemption slot ATOMICALLY first: the
+	// conditional WHERE re-checks the global usage limit and the budget cap inside
+	// the UPDATE, so concurrent checkouts can't push usage_count past usage_limit
+	// or budget_spent past budget_cap (#39). If the slot is gone (claimed by a
+	// racing order between validation and now), roll back so we never charge full
+	// price silently — the customer re-validates.
 	if appliedPromo != nil {
+		claimed, claimErr := services.ClaimPromoRedemption(tx, appliedPromo.ID, discount)
+		if claimErr != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply promo code"})
+			return
+		}
+		if !claimed {
+			tx.Rollback()
+			c.JSON(http.StatusConflict, gin.H{"error": "This promo code is no longer available"})
+			return
+		}
+		// Per-user cap, race-safe: the claim above locked the promo row, so this
+		// count sees all committed prior redemptions and two concurrent same-user
+		// orders can't both slip past a "N per user" limit (#39). Roll back the
+		// claim's increments if the user is already at their limit.
+		if appliedPromo.PerUserLimit > 0 &&
+			services.UserPromoRedemptions(tx, appliedPromo.ID, userID) >= int64(appliedPromo.PerUserLimit) {
+			tx.Rollback()
+			c.JSON(http.StatusConflict, gin.H{"error": "You have already used this promo code the maximum number of times"})
+			return
+		}
 		usage := models.PromoCodeUsage{
 			PromoCodeID: appliedPromo.ID,
 			UserID:      userID,
@@ -537,9 +567,6 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record promo usage"})
 			return
 		}
-		// Increment usage count
-		tx.Model(&models.PromoCode{}).Where("id = ?", appliedPromo.ID).
-			Update("usage_count", appliedPromo.UsageCount+1)
 	}
 
 	// Clear user's cart for this chef

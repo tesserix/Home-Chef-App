@@ -881,6 +881,7 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/promos/:id", promoHandler.AdminUpdatePromo)
 			admin.DELETE("/promos/:id", promoHandler.AdminDeletePromo)
 			admin.GET("/promos/:id/usage", promoHandler.AdminGetPromoUsage)
+			admin.GET("/promos/:id/analytics", promoHandler.AdminGetPromoAnalytics)
 
 			// Subscription management
 			admin.GET("/subscriptions", subscriptionHandler.AdminGetSubscriptions)

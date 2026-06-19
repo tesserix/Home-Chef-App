@@ -64,8 +64,8 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.delivery_fee,
-		       o.chef_tip, o.delivery_address_state,
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.chef_funded_discount,
+		       o.delivery_fee, o.chef_tip, o.delivery_address_state,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id
@@ -90,10 +90,11 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 	var totalGross, totalTDS float64
 	for _, r := range rows {
 		e := ComputeOrderEarnings(EarningsInput{
-			ItemRevenue:   r.ItemRevenue,
-			DeliveryFee:   r.DeliveryFee,
-			ChefTip:       r.ChefTip,
-			DeliveryState: r.DeliveryState,
+			ItemRevenue:        r.ItemRevenue,
+			ChefFundedDiscount: r.ChefFundedDiscount,
+			DeliveryFee:        r.DeliveryFee,
+			ChefTip:            r.ChefTip,
+			DeliveryState:      r.DeliveryState,
 		}, chef.State)
 		qi := financialQuarterIndex(r.CompletedAt)
 		quarters[qi].gross += e.Gross

@@ -104,7 +104,7 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	// food-safety licence has lapsed. orderSettlements() clears the chef account so
 	// no transfer is built; here we record the freeze for the regulatory trail.
 	if services.IsChefFSSAIExpired(&order.Chef) {
-		chefAmount := order.Subtotal + order.Tax + order.ChefTip
+		chefAmount := chefGrossPayout(order)
 		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
 			order.OrderNumber, order.Chef.ID, chefAmount)
@@ -182,6 +182,19 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 // that slice is withheld and never transferred. Requires Chef and
 // Delivery.DeliveryPartner preloaded. Deterministic, so create and verify produce
 // the same split for a given order.
+// chefGrossPayout is the chef's pre-Route payout for an order: food revenue +
+// tax + chef tip, less any chef-funded promo discount the chef bears (#39).
+// Platform-funded promos leave ChefFundedDiscount at 0, so the chef stays whole.
+// Single source of truth shared by the Route split, the Stripe transfer, and the
+// FSSAI-withhold audit so the three can't drift.
+func chefGrossPayout(order *models.Order) float64 {
+	amount := order.Subtotal + order.Tax + order.ChefTip - order.ChefFundedDiscount
+	if amount < 0 {
+		amount = 0
+	}
+	return amount
+}
+
 func orderSettlements(order *models.Order) []services.Settlement {
 	chefAccount := order.Chef.RazorpayAccountID
 	if services.IsChefFSSAIExpired(&order.Chef) {
@@ -192,7 +205,7 @@ func orderSettlements(order *models.Order) []services.Settlement {
 		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
 	}
 	return []services.Settlement{
-		{Account: chefAccount, Amount: services.ToPaise(order.Subtotal + order.Tax + order.ChefTip), Hold: true,
+		{Account: chefAccount, Amount: services.ToPaise(chefGrossPayout(order)), Hold: true,
 			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
 		{Account: driverAccount, Amount: services.ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
 			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
@@ -307,10 +320,10 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 	}
 	totalMinor := services.ToMinor(order.Total, currency)
 
-	// Chef receives: subtotal + tax + chefTip. Platform keeps the rest
-	// (deliveryFee + driverTip) as application_fee; driver gets paid out of
-	// platform balance via a follow-up Transfer on delivery confirmation.
-	chefAmount := order.Subtotal + order.Tax + order.ChefTip
+	// Chef receives: subtotal + tax + chefTip (less any chef-funded promo). Platform
+	// keeps the rest (deliveryFee + driverTip) as application_fee; driver gets paid
+	// out of platform balance via a follow-up Transfer on delivery confirmation.
+	chefAmount := chefGrossPayout(order)
 	chefMinor := services.ToMinor(chefAmount, currency)
 	applicationFee := totalMinor - chefMinor
 	if applicationFee < 0 {

@@ -52,14 +52,15 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 			continue
 		}
 		lines = append(lines, ComputeOrderEarnings(EarningsInput{
-			OrderID:        r.OrderID,
-			OrderNumber:    r.OrderNumber,
-			CompletedAt:    r.CompletedAt,
-			ItemRevenue:    r.ItemRevenue,
-			DeliveryFee:    r.DeliveryFee,
-			ChefTip:        r.ChefTip,
-			DeliveryState:  r.DeliveryState,
-			CommissionRate: commissionRate,
+			OrderID:            r.OrderID,
+			OrderNumber:        r.OrderNumber,
+			CompletedAt:        r.CompletedAt,
+			ItemRevenue:        r.ItemRevenue,
+			ChefFundedDiscount: r.ChefFundedDiscount,
+			DeliveryFee:        r.DeliveryFee,
+			ChefTip:            r.ChefTip,
+			DeliveryState:      r.DeliveryState,
+			CommissionRate:     commissionRate,
 		}, chef.State))
 	}
 

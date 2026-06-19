@@ -15,27 +15,61 @@ import { useCartStore } from '@/app/store/cart-store';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { Button } from '@/shared/components/ui';
+import { apiClient } from '@/shared/services/api-client';
+
+// Pull the API's promo error out of either the string or {message,...} form (#39).
+function promoErrorMessage(e: unknown): string {
+  const err = (e as { error?: unknown })?.error;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? 'Invalid promo code');
+  }
+  return e instanceof Error ? e.message : 'Invalid promo code';
+}
 
 export default function CartPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const cart = useCartStore();
   const fp = useFormatPrice();
-  const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [applyingPromo, setApplyingPromo] = useState(false);
 
   const subtotal = cart.getSubtotal();
   const deliveryFee = cart.chef?.deliveryFee || 0;
   const serviceFee = subtotal * 0.05; // 5% service fee
-  const discount = promoApplied ? subtotal * 0.1 : 0; // 10% discount
-  const total = subtotal + deliveryFee + serviceFee - discount;
+  // Server-validated promo discount (#39), clamped to the subtotal. The server
+  // re-validates + recomputes at order time, so this is a preview for display.
+  const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
+  const total = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
   const minimumOrder = cart.chef?.minimumOrder || 0;
   const belowMinimum = subtotal < minimumOrder;
 
-  const handleApplyPromo = () => {
-    if (promoCode.toLowerCase() === 'fe3dr10') {
-      setPromoApplied(true);
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code || !cart.chefId) return;
+    setApplyingPromo(true);
+    setPromoError(null);
+    try {
+      const res = await apiClient.post<{ code: string; discount: number }>('/promo/validate', {
+        code,
+        orderTotal: subtotal,
+        chefId: cart.chefId,
+      });
+      cart.setPromo(res.code, res.discount);
+      setPromoInput('');
+    } catch (e: unknown) {
+      cart.clearPromo();
+      setPromoError(promoErrorMessage(e));
+    } finally {
+      setApplyingPromo(false);
     }
+  };
+
+  const handleRemovePromo = () => {
+    cart.clearPromo();
+    setPromoError(null);
   };
 
   const handleCheckout = () => {
@@ -184,33 +218,47 @@ export default function CartPage() {
             <div className="rounded-xl bg-bone p-6 shadow-1 lg:sticky lg:top-24">
               <h3 className="text-lg font-semibold text-ink">Order Summary</h3>
 
-              {/* Promo Code */}
+              {/* Promo Code (#39) */}
               <div className="mt-6">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="Promo code"
-                    className="input-base flex-1"
-                    disabled={promoApplied}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handleApplyPromo}
-                    disabled={promoApplied || !promoCode}
-                  >
-                    {promoApplied ? 'Applied' : 'Apply'}
-                  </Button>
-                </div>
-                {promoApplied && (
-                  <p className="mt-2 text-sm text-herb">
-                    Promo code applied! 10% off
-                  </p>
+                {cart.promoCode ? (
+                  <div className="flex items-center justify-between rounded-lg border border-herb/30 bg-herb-tint px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-herb/15 px-2 py-0.5 text-xs font-semibold text-herb">
+                        {cart.promoCode}
+                      </span>
+                      <span className="text-sm text-herb">−{fp(discount)} applied</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePromo}
+                      className="text-xs text-ink-soft underline hover:text-ink"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                        placeholder="Promo code"
+                        className="input-base flex-1 uppercase"
+                        autoCapitalize="characters"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={handleApplyPromo}
+                        isLoading={applyingPromo}
+                        disabled={applyingPromo || !promoInput.trim()}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                    {promoError && <p className="mt-2 text-sm text-paprika">{promoError}</p>}
+                  </>
                 )}
-                <p className="mt-2 text-xs text-ink-muted">
-                  Try: FE3DR10 for 10% off
-                </p>
               </div>
 
               {/* Breakdown */}

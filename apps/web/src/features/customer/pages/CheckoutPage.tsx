@@ -160,15 +160,18 @@ export default function CheckoutPage() {
   const subtotal = cart.getSubtotal();
   const deliveryFee = cart.chef?.deliveryFee || 0;
   const serviceFee = subtotal * 0.05;
+  // Applied promo discount (#39), clamped to the subtotal. Mirrors the server,
+  // which taxes the post-discount base; server is authoritative at order time.
+  const discount = cart.promoCode ? Math.min(cart.promoDiscount, subtotal) : 0;
   const rate = taxRule?.rate ?? 0;
   const isInclusive = taxRule?.inclusive ?? false;
-  const taxBase = subtotal + deliveryFee + serviceFee;
+  const taxBase = subtotal + deliveryFee + serviceFee - discount;
   const tax = isInclusive
     ? taxBase - taxBase / (1 + rate / 100)
     : taxBase * (rate / 100);
   const total = isInclusive
-    ? subtotal + deliveryFee + serviceFee + tip
-    : subtotal + deliveryFee + serviceFee + tax + tip;
+    ? subtotal + deliveryFee + serviceFee - discount + tip
+    : subtotal + deliveryFee + serviceFee - discount + tax + tip;
 
   const {
     register,
@@ -208,6 +211,8 @@ export default function CheckoutPage() {
         specialInstructions: specialInstructions || undefined,
         deliverySlot: selectedSlot?.slot,
         deliveryDate: selectedSlot?.date,
+        // Applied promo (#39) — server re-validates + recomputes the discount.
+        promoCode: cart.promoCode || undefined,
       });
 
       // Step 2: Ask the backend to prepare a payment. The response shape
@@ -239,8 +244,24 @@ export default function CheckoutPage() {
       } else {
         await confirmRazorpayPayment(order, paymentData);
       }
-    } catch {
-      toast.error('Failed to initiate payment. Please try again.');
+    } catch (e: unknown) {
+      // Surface a promo failure specifically (e.g. the code was exhausted between
+      // applying it and checkout) and drop it so the retry isn't blocked (#39).
+      const raw = (e as { error?: unknown })?.error;
+      const msg =
+        typeof raw === 'string'
+          ? raw
+          : raw && typeof raw === 'object' && 'message' in raw
+            ? String((raw as { message?: unknown }).message ?? '')
+            : e instanceof Error
+              ? e.message
+              : '';
+      if (/promo/i.test(msg)) {
+        cart.clearPromo();
+        toast.error(msg || 'That promo code is no longer available. Please try again.');
+      } else {
+        toast.error('Failed to initiate payment. Please try again.');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -787,6 +808,12 @@ export default function CheckoutPage() {
                   <span>Service fee</span>
                   <span>{fp(serviceFee, { currency: orderCurrency })}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-herb">
+                    <span>Promo{cart.promoCode ? ` (${cart.promoCode})` : ''}</span>
+                    <span>−{fp(discount, { currency: orderCurrency })}</span>
+                  </div>
+                )}
                 {/* CW-01d / LEG-COREUX-031: Clarify GST line for IN orders.
                     TODO(CW-01e): backend to split out GST line with HSN/SAC
                     code per CGST Act 2017 §31 — currently we render whatever

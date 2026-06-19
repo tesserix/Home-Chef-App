@@ -25,6 +25,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
+import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
 import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
@@ -78,6 +79,13 @@ export default function CheckoutScreen() {
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
+  const validatePromo = useValidatePromo();
+
+  // Promo code (#39) — validated server-side; we keep the previewed result and
+  // pass the code to CreateOrder, which re-validates and computes the real discount.
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<PromoValidationResult | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const addresses = addressData?.data ?? [];
 
@@ -197,6 +205,7 @@ export default function CheckoutScreen() {
         specialInstructions: note.trim() || undefined,
         deliverySlot: selectedSlot?.slot,
         deliveryDate: selectedSlot?.date,
+        promoCode: appliedPromo?.code,
       });
 
       const orderId = orderResult.data.id;
@@ -213,6 +222,11 @@ export default function CheckoutScreen() {
       // scroll body, far from the sticky button, so a failed tap otherwise
       // reads as "nothing happened" (e.g. the delivery-zone coordinate gate).
       const message = friendlyErrorMessage(err, 'Order creation failed. Please try again.');
+      // If the promo was rejected at order time (e.g. exhausted since applying),
+      // drop it so the retry isn't blocked by a dead code (#39).
+      if (/promo/i.test(message)) {
+        removePromo();
+      }
       setError(message);
       Alert.alert('Could not place order', message);
       setIsLoading(false);
@@ -237,7 +251,9 @@ export default function CheckoutScreen() {
 
   const subtotal = cartStore.total();
   const deliveryFee = 0; // free for v1
-  const total = subtotal + deliveryFee;
+  // Promo discount (#39) — server-validated preview, clamped to the subtotal.
+  const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
+  const total = Math.max(0, subtotal + deliveryFee - discount);
 
   // Wallet store-credit applied at checkout (#141). Apply as much as the balance
   // and total allow; the remaining payable is what the gateway charges.
@@ -245,6 +261,25 @@ export default function CheckoutScreen() {
   const walletAvailable = WALLET_CHECKOUT_ENABLED && walletBalance > 0;
   const walletApplied = applyWallet ? Math.min(walletBalance, total) : 0;
   const payable = Math.max(0, total - walletApplied);
+
+  async function applyPromo() {
+    const code = promoInput.trim();
+    if (!code || !cartStore.chefId) return;
+    setPromoError(null);
+    try {
+      const result = await validatePromo.mutateAsync({ code, orderTotal: subtotal, chefId: cartStore.chefId });
+      setAppliedPromo(result);
+    } catch (err) {
+      setAppliedPromo(null);
+      setPromoError(promoErrorMessage(err));
+    }
+  }
+
+  function removePromo() {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError(null);
+  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -570,6 +605,51 @@ export default function CheckoutScreen() {
               {/* "Free" in success green per spec */}
               <Text className="text-sm text-success font-medium">Free</Text>
             </View>
+
+            {/* Promo code (#39) */}
+            {appliedPromo ? (
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <View className="rounded bg-coral/10 px-2 py-0.5">
+                    <Text className="text-xs font-semibold text-coral">{appliedPromo.code}</Text>
+                  </View>
+                  <Pressable onPress={removePromo} accessibilityRole="button" accessibilityLabel="Remove promo code">
+                    <Text className="text-xs text-charcoal-soft underline">Remove</Text>
+                  </Pressable>
+                </View>
+                <Text className="text-sm text-success font-medium" style={{ fontVariant: ['tabular-nums'] }}>
+                  −₹{discount.toFixed(2)}
+                </Text>
+              </View>
+            ) : (
+              <View className="gap-1">
+                <View className="flex-row items-center gap-2">
+                  <TextInput
+                    value={promoInput}
+                    onChangeText={(t) => setPromoInput(t.toUpperCase())}
+                    placeholder="Promo code"
+                    placeholderTextColor="#9CA3AF"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    className="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-2 text-sm text-charcoal"
+                  />
+                  <Pressable
+                    onPress={applyPromo}
+                    disabled={!promoInput.trim() || validatePromo.isPending}
+                    accessibilityRole="button"
+                    accessibilityLabel="Apply promo code"
+                    className={`rounded-lg px-4 py-2 ${
+                      !promoInput.trim() || validatePromo.isPending ? 'bg-hairline' : 'bg-coral'
+                    }`}
+                  >
+                    <Text className={`text-sm font-semibold ${!promoInput.trim() || validatePromo.isPending ? 'text-charcoal-soft' : 'text-canvas'}`}>
+                      {validatePromo.isPending ? '…' : 'Apply'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {promoError ? <Text className="text-xs text-paprika">{promoError}</Text> : null}
+              </View>
+            )}
 
             {/* Wallet store-credit toggle (#141) — only when the feature is live
                 and the customer has a balance. */}

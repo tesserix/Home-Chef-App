@@ -20,6 +20,9 @@ interface CreateOrderPayload {
   // reserves the chef's per-slot daily capacity. Absent = ASAP.
   deliverySlot?: string;
   deliveryDate?: string;
+  // Applied promo code (#39). The server re-validates and computes the discount;
+  // an invalid/exhausted code is rejected so the client can't fake a discount.
+  promoCode?: string;
 }
 
 export function useCreateOrder() {
