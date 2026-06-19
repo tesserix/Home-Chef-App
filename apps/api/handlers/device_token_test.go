@@ -16,17 +16,18 @@ import (
 	"github.com/homechef/api/database"
 )
 
-// device_token_test.go — #236. The mobile apps register their raw FCM token via
-// PUT /api/v1/profile/device-token. Without this, User.FCMToken is always empty
-// and services/push.go can never deliver a push. These tests pin the contract:
-// a valid raw token is persisted, junk is rejected, and re-registration is a
-// no-op success (idempotent on app restart / token rotation).
+// device_token_test.go — coverage for the push-token registration endpoint
+// (handlers/device_token.go) that the mobile apps call after login. Without a
+// persisted token, services/push.go can never deliver a notification — so this
+// pins the contract: a token is stored, an explicit empty string clears it (used
+// on logout / permission revoke), and an omitted field is a 400. This backstops
+// the #239 follower-push path, which depends on tokens actually being saved.
 
 func callDeviceToken(t *testing.T, userID uuid.UUID, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := NewCustomerHandler()
+	h := NewDeviceTokenHandler()
 	r.PUT("/profile/device-token", func(c *gin.Context) {
 		c.Set("userID", userID)
 		h.UpdateDeviceToken(c)
@@ -54,19 +55,20 @@ func TestUpdateDeviceToken(t *testing.T) {
 		return tok
 	}
 
-	t.Run("persists a raw token", func(t *testing.T) {
+	t.Run("persists a token", func(t *testing.T) {
 		w := callDeviceToken(t, uid, map[string]string{"token": "fcm-abc-123"})
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "fcm-abc-123", read())
 	})
 
-	t.Run("rejects an empty token", func(t *testing.T) {
-		w := callDeviceToken(t, uid, map[string]string{"token": "  "})
-		assert.Equal(t, http.StatusBadRequest, w.Code)
+	t.Run("empty token clears it", func(t *testing.T) {
+		w := callDeviceToken(t, uid, map[string]string{"token": ""})
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "", read())
 	})
 
-	t.Run("rejects an Expo push token", func(t *testing.T) {
-		w := callDeviceToken(t, uid, map[string]string{"token": "ExponentPushToken[abc]"})
+	t.Run("omitted token is a 400", func(t *testing.T) {
+		w := callDeviceToken(t, uid, map[string]string{})
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -374,47 +373,4 @@ func (h *CustomerHandler) UploadAvatar(c *gin.Context) {
 	database.DB.Model(&models.User{}).Where("id = ?", userID).Update("avatar", fileURL)
 
 	c.JSON(http.StatusOK, gin.H{"url": fileURL})
-}
-
-// UpdateDeviceToken registers the caller's raw FCM device token for push
-// notifications (#236). The mobile apps call this on launch and on token
-// rotation. Without it, User.FCMToken stays empty and services/push.go can
-// never deliver a push — so this is foundational for every push feature,
-// including #239 (notify followers when a chef publishes a weekly menu).
-func (h *CustomerHandler) UpdateDeviceToken(c *gin.Context) {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
-	token := strings.TrimSpace(req.Token)
-	if token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
-		return
-	}
-	// Guard (D-09): services/push.go talks to the FCM HTTP v1 API with RAW
-	// device tokens. Expo push tokens (ExponentPushToken[...]) are incompatible
-	// and fail silently with FCM 404s, so reject them at the door.
-	if strings.HasPrefix(token, "ExponentPushToken") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "expected a raw FCM device token, not an Expo push token"})
-		return
-	}
-
-	if err := database.DB.Model(&models.User{}).
-		Where("id = ?", userID).
-		Update("fcm_token", token).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register device token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Device token registered"})
 }
