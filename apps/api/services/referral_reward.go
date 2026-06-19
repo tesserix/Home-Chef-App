@@ -93,9 +93,12 @@ func MaybeGrantReward(db *gorm.DB, orderID uuid.UUID) {
 	if cfg.RefereeReward > 0 {
 		if _, err := CreditWallet(db, ref.RefereeUserID, cfg.RefereeReward, models.WalletSourceReferral, &order.ID,
 			"Welcome credit for joining via a referral", "referral-referee:"+ref.ID.String(), nil); err != nil {
-			log.Printf("referral reward: credit referee %s failed: %v", ref.RefereeUserID, err)
-			// Referrer is already credited (idempotent); fall through to mark
-			// rewarded so we don't re-credit the referrer on a retry.
+			// Leave the referral PENDING so a retry completes the "get" half. The
+			// referrer credit above is idempotent on its key, so a retry won't
+			// double-pay it. Marking rewarded here would silently drop the
+			// referee's credit forever.
+			log.Printf("referral reward: credit referee %s failed (will retry): %v", ref.RefereeUserID, err)
+			return
 		}
 	}
 
