@@ -288,6 +288,8 @@ func Migrate() error {
 		// Promo Codes
 		&models.PromoCode{},
 		&models.PromoCodeUsage{},
+		// Win-back offers (#42)
+		&models.WinbackOffer{},
 
 		// Chat
 		&models.ChatRoom{},

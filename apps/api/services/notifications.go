@@ -92,6 +92,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// Referral reward granted → notify the referrer (#38).
 		{Stream: "REFERRAL", Durable: "notify-referral", Handler: h,
 			Subjects: []string{SubjectReferralRewarded}},
+		// Win-back offer issued → nudge the lapsed/cancelled user (#42).
+		{Stream: "SUBSCRIPTIONS", Durable: "notify-winback", Handler: h,
+			Subjects: []string{SubjectSubscriptionWinbackOffered}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
@@ -132,6 +135,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
+	case SubjectSubscriptionWinbackOffered:
+		return decodeThen(data, s.handleSubscriptionWinbackOffered)
 	case SubjectOrderIssueReported:
 		return decodeThen(data, s.handleOrderIssueReported)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
@@ -544,6 +549,38 @@ func (s *NotificationService) handleReferralRewarded(event Event) error {
 		Message: message,
 		Data:    map[string]any{"type": "referral_rewarded"},
 	})
+	return nil
+}
+
+// handleSubscriptionWinbackOffered nudges a lapsed/cancelled user about their
+// targeted win-back offer (#42) — in-app + push + email carrying the code,
+// discount and expiry so they can come back in one tap. Mirrors the referral
+// reward fan-out; the actual promo/offer was already minted by OfferWinback.
+func (s *NotificationService) handleSubscriptionWinbackOffered(event Event) error {
+	code, _ := event.Data["code"].(string)
+	discount, _ := event.Data["discount_percent"].(float64)
+	if code == "" || discount <= 0 {
+		return nil
+	}
+	title := "We miss you — here's a treat"
+	message := fmt.Sprintf("Come back and save %.0f%%. Use code %s before it expires.", discount, code)
+	dataMap := map[string]any{"type": "winback_offer", "code": code, "discount_percent": discount}
+	if exp, ok := event.Data["expires_at"].(string); ok {
+		dataMap["expires_at"] = exp
+	}
+	data, _ := json.Marshal(dataMap)
+
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "winback_offer",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save winback_offer notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "push", Title: title, Message: message, Data: dataMap})
+	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "email", Title: title, Message: message, Data: dataMap})
 	return nil
 }
 
