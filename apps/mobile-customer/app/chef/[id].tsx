@@ -18,10 +18,12 @@ import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
+import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
+import { WeeklyMenuPreview } from '../../components/chef/WeeklyMenuPreview';
 import { CartSheet } from '../../components/cart/CartSheet';
 
 // Compact photo header — ~28% of viewport (capped at 260) so the menu shows
@@ -46,6 +48,8 @@ export default function ChefDetailScreen() {
   const { data: favData } = useFavorites();
   const toggleFavorite = useToggleFavorite();
   const createGroup = useCreateGroupOrder();
+  // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
+  const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
 
   // Start a group / office order (#46): pick the context, then open the hub.
   function startGroupOrder(chefId: string) {
@@ -396,6 +400,14 @@ export default function ChefDetailScreen() {
 
           {/* Hairline divider */}
           <View style={styles.hairline} />
+
+          {/* Fixed weekly menu (#1) — read-only, only when the chef has published. */}
+          {weeklyMenu?.isPublished && (weeklyMenu.items?.length ?? 0) > 0 ? (
+            <>
+              <WeeklyMenuPreview items={weeklyMenu.items} />
+              <View style={styles.hairline} />
+            </>
+          ) : null}
 
           {/* ── CATEGORY CHIP ROW (Airbnb underline style, spec §2 item 2) ── */}
           {categories.length > 1 ? (
