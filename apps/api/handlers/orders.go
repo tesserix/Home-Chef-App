@@ -731,6 +731,10 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 		"status":      order.Status,
 		"chef": gin.H{
 			"name": order.Chef.BusinessName,
+			// Pickup point — lets the customer map frame chef + destination
+			// before a driver is assigned.
+			"latitude":  order.Chef.Latitude,
+			"longitude": order.Chef.Longitude,
 		},
 		"estimatedPrepTime":     order.EstimatedPrepTime,
 		"estimatedDeliveryTime": order.EstimatedDeliveryTime,
@@ -743,6 +747,14 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 
 	if order.Delivery != nil {
 		response["delivery"] = order.Delivery.ToResponse()
+	} else {
+		// No 3PL delivery record yet (pre-dispatch). Still surface the dropoff
+		// coords from the order so the map can show chef + destination before a
+		// driver is assigned (otherwise the client falls back to a country-wide view).
+		response["delivery"] = gin.H{
+			"dropoffLatitude":  order.DeliveryLatitude,
+			"dropoffLongitude": order.DeliveryLongitude,
+		}
 	}
 
 	c.JSON(http.StatusOK, response)

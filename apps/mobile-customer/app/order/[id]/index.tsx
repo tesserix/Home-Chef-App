@@ -9,14 +9,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
 import { useCartStore, makeLineId } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
 import { CookingIndicator } from '../../../components/status/CookingIndicator';
+import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
+import { useOrderTracking } from '../../../hooks/useOrderTracking';
+import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -109,12 +112,41 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
+// Human-readable inline status line for the map badge overlay
+function getInlineStatusLabel(status: Order['status']): string {
+  switch (status) {
+    case 'accepted':
+      return 'Order confirmed';
+    case 'preparing':
+      return 'Chef is preparing your order';
+    case 'ready':
+      return 'Ready for pickup';
+    case 'picked_up':
+      return 'Your order is on the way';
+    case 'delivering':
+      return 'Out for delivery';
+    default:
+      return 'Tracking your order';
+  }
+}
+
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { data, isLoading, isError } = useOrder(id ?? '');
   const [paying, setPaying] = React.useState(false);
   const reorder = useReorder();
+
+  // Tracking hooks — mirror exact wiring from track.tsx.
+  // Both hooks are always called (React hook rules); they short-circuit
+  // internally when enabled=false so no network work happens for terminal orders.
+  const orderId = id ?? '';
+  const { driverLocation, isPollingFallback } = useOrderTrackingWS(
+    orderId,
+    isFocused,
+  );
+  const { data: trackingData } = useOrderTracking(orderId, isFocused);
 
   if (isLoading) {
     return (
@@ -153,15 +185,23 @@ export default function OrderDetailScreen() {
   const chipStyle = getStatusChipStyle(order.status);
   const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
 
+  // Derive effective driver coords — same logic as track.tsx.
+  // Prefer real-time WS position; fall back to polling coords when WS failed.
+  const tracking = trackingData?.data;
+  const effectiveDriverLat =
+    driverLocation != null && !isPollingFallback
+      ? driverLocation.latitude
+      : tracking?.delivery?.currentLatitude;
+  const effectiveDriverLng =
+    driverLocation != null && !isPollingFallback
+      ? driverLocation.longitude
+      : tracking?.delivery?.currentLongitude;
+
   const subtotal = order.items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
   const deliveryFee = order.totalAmount - subtotal;
-
-  function handleTrackOrder() {
-    router.push(`/order/${order.id}/track`);
-  }
 
   // Reorder (#238) — fetch a re-validated preview, fill the cart with the
   // available lines (resolving current add-on option IDs), and route the
@@ -326,18 +366,57 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Track Order CTA — coral filled, only for active/in-flight orders.
-            Spec §2.6: coral when the order is in-flight.
-            iOS Pressable bug: visual styles on inner View. */}
+        {/* Inline map card — replaces the "Track Order" button for active orders.
+            Tapping the card navigates to the full-screen tracking experience.
+            Hidden entirely for terminal statuses (delivered / cancelled / refunded). */}
         {isActiveOrder && (
-          <View style={styles.ctaWrapper}>
+          <View style={styles.mapCardWrapper}>
+            {/* Pressable wraps the whole card — iOS Pressable inner-View pattern */}
             <Pressable
-              onPress={handleTrackOrder}
+              onPress={() => router.push(`/order/${order.id}/track`)}
               accessibilityRole="button"
-              accessibilityLabel="Track this order"
+              accessibilityLabel="View live order tracking"
             >
-              <View style={styles.trackButton}>
-                <Text style={styles.trackButtonText}>Track Order</Text>
+              <View style={styles.mapCard}>
+                {/* Map area — fixed height container so DeliveryMap's absoluteFill is bounded */}
+                <View style={styles.mapContainer}>
+                  <DeliveryMap
+                    driverLat={effectiveDriverLat}
+                    driverLng={effectiveDriverLng}
+                    dropoffLat={tracking?.delivery?.dropoffLatitude}
+                    dropoffLng={tracking?.delivery?.dropoffLongitude}
+                    chefLat={tracking?.chef?.latitude}
+                    chefLng={tracking?.chef?.longitude}
+                  />
+                  {/* Expand chevron badge — top-right corner so it doesn't obscure the map */}
+                  <View style={styles.expandBadge}>
+                    <ChevronRight
+                      size={14}
+                      color={customerColors.charcoal.DEFAULT}
+                      accessibilityElementsHidden
+                    />
+                  </View>
+                </View>
+
+                {/* Status / ETA row — below the map, inside the card */}
+                <View style={styles.mapStatusRow}>
+                  <View style={styles.mapStatusLeft}>
+                    {order.status === 'preparing' ? (
+                      <CookingIndicator
+                        size={14}
+                        color={customerColors.coral.DEFAULT}
+                      />
+                    ) : null}
+                    <Text style={styles.mapStatusText}>
+                      {getInlineStatusLabel(order.status)}
+                    </Text>
+                  </View>
+                  {order.estimatedDeliveryTime ? (
+                    <Text style={styles.mapEtaText}>
+                      ~{order.estimatedDeliveryTime}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             </Pressable>
           </View>
@@ -607,7 +686,84 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Track Order CTA container — horizontal padding
+  // ---- Inline map card (replaces Track Order button) -------------------------
+  // Outer wrapper — horizontal padding + bottom gap before the items section
+  mapCardWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  // Card shell — radius 16, hairline border, white bg, overflow hidden so the
+  // map clips to rounded corners. Shadow[2] lifts it off the canvas.
+  mapCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  // Fixed-height map container — DeliveryMap uses StyleSheet.absoluteFill
+  // so it must be bounded by an explicit height parent.
+  mapContainer: {
+    height: 210,
+    position: 'relative',
+  },
+  // Expand chevron — white pill badge, top-right corner of the map
+  expandBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: customerColors.surface.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+  },
+  // Status / ETA footer row — inside the card, below the map
+  mapStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: customerColors.hairline,
+  },
+  mapStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  // Status label — Inter body, charcoal-soft
+  mapStatusText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    flexShrink: 1,
+  },
+  // ETA — tabular-nums, coral-pressed for emphasis
+  mapEtaText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: customerColors.coral.pressed,
+    fontVariant: ['tabular-nums'],
+    marginLeft: 8,
+  },
+
+  // CTA container — horizontal padding
   ctaWrapper: {
     paddingHorizontal: 16,
     paddingBottom: 8,
