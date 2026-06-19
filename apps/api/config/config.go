@@ -120,6 +120,13 @@ type Config struct {
 	// saga end-to-end on the cluster; the saga's activities are idempotent so
 	// enabling it never double-acts alongside residual handler logic.
 	OrderSagaEnabled bool
+	// OnboardingWorkflowEnabled gates running chef-onboarding activation as a
+	// durable Temporal workflow (#126) instead of the inline approval side
+	// effects. Default OFF — the inline activation stays authoritative until ops
+	// validates the workflow; the activation op is idempotent so the durable path
+	// re-runs safely. Closes the gap where a crash mid-approval left a chef
+	// "approved" but never actually verified/activated.
+	OnboardingWorkflowEnabled bool
 }
 
 var AppConfig *Config
@@ -137,6 +144,7 @@ func Load() {
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
+	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -245,6 +253,7 @@ func Load() {
 		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
 		CateringDepositEnabled:        cateringDeposit,
 		OrderSagaEnabled:              orderSaga,
+		OnboardingWorkflowEnabled:     onboardingWorkflow,
 	}
 }
 
