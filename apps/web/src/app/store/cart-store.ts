@@ -1,17 +1,26 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { MenuItem, Chef } from '@/shared/types';
+import type { MenuItem, Chef, SelectedModifier } from '@/shared/types';
 
 export interface CartItem {
   id: string;
   menuItemId: string;
   name: string;
   description: string;
+  /** UNIT price including any modifier deltas (#232). */
   price: number;
   quantity: number;
   imageUrl?: string;
   notes?: string;
   customizations?: Record<string, string | boolean>;
+  /** Selected add-on modifiers for this line (#232). */
+  modifiers?: SelectedModifier[];
+}
+
+/** Stable key for a menu item + its modifier selection (#232). */
+function lineKey(menuItemId: string, modifiers?: SelectedModifier[]): string {
+  if (!modifiers || modifiers.length === 0) return menuItemId;
+  return `${menuItemId}::${modifiers.map((m) => m.optionId).sort().join(',')}`;
 }
 
 interface CartState {
@@ -21,7 +30,7 @@ interface CartState {
 }
 
 interface CartActions {
-  addItem: (item: MenuItem, quantity: number, notes?: string) => void;
+  addItem: (item: MenuItem, quantity: number, notes?: string, modifiers?: SelectedModifier[]) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   updateNotes: (itemId: string, notes: string) => void;
@@ -44,7 +53,7 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       ...initialState,
 
-      addItem: (item, quantity, notes) => {
+      addItem: (item, quantity, notes, modifiers) => {
         const { items, chefId } = get();
 
         // If cart has items from different chef, show confirmation
@@ -53,10 +62,13 @@ export const useCartStore = create<CartStore>()(
           throw new Error('DIFFERENT_CHEF');
         }
 
-        const existingIndex = items.findIndex((i) => i.menuItemId === item.id);
+        // Merge by line key so the same dish with different add-ons is a
+        // distinct line (#232).
+        const key = lineKey(item.id, modifiers);
+        const existingIndex = items.findIndex((i) => lineKey(i.menuItemId, i.modifiers) === key);
 
         if (existingIndex > -1) {
-          // Update existing item
+          // Update existing line
           const updated = [...items];
           const existing = updated[existingIndex];
           if (existing) {
@@ -65,16 +77,18 @@ export const useCartStore = create<CartStore>()(
           }
           set({ items: updated });
         } else {
-          // Add new item
+          // Unit price includes any modifier deltas.
+          const unitPrice = item.price + (modifiers ?? []).reduce((s, m) => s + m.priceDelta, 0);
           const newItem: CartItem = {
-            id: `cart-${Date.now()}`,
+            id: `cart-${Date.now()}-${Math.round(item.price)}`,
             menuItemId: item.id,
             name: item.name,
             description: item.description || '',
-            price: item.price,
+            price: unitPrice,
             quantity,
             imageUrl: item.imageUrl,
             notes,
+            modifiers,
           };
           set({
             items: [...items, newItem],

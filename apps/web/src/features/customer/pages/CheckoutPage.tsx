@@ -195,7 +195,13 @@ export default function CheckoutPage() {
       // Step 1: Create order. The backend decides which gateway to use
       // based on the chef's PaymentProvider setting.
       const order = await apiClient.post<Order>('/orders', {
-        items: cart.items,
+        // Map cart lines to the API item shape, including selected add-ons (#232).
+        items: cart.items.map((i) => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          notes: i.notes || undefined,
+          modifierOptionIds: i.modifiers?.map((m) => m.optionId),
+        })),
         chefId: cart.chefId,
         deliveryAddressId: selectedAddress,
         tip,
