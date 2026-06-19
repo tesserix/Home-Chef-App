@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -15,13 +16,16 @@ import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
   useVendorPendingOrders,
   useVendorOrderHistory,
+  useVendorActiveOrders,
   useOrderAction,
+  useUpdateOrderStatus,
   type Order,
 } from '../../hooks/useVendorOrders';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+import { ActiveOrderCard } from '../../components/vendor/ActiveOrderCard';
 import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
 
-type ActiveTab = 'queue' | 'history';
+type ActiveTab = 'new' | 'active' | 'history';
 
 // Maps order status to its key under the `orders.status` i18n namespace.
 const HISTORY_STATUS_KEY: Record<string, string> = {
@@ -63,6 +67,14 @@ const STATUS_CHIP_FALLBACK: StatusChipColors = {
   text: theme.colors.ink.soft,
 };
 
+// Statuses that appear in History (not in Active/Cooking or New).
+const HISTORY_STATUSES = new Set([
+  'delivered',
+  'picked_up',
+  'cancelled',
+  'rejected',
+]);
+
 function formatMinutesAgo(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return '';
@@ -75,13 +87,6 @@ function formatMinutesAgo(iso: string): string {
 }
 
 // Bucket history orders into Today / Yesterday / weekday-date headers.
-// Server-side `dateLabel` is a follow-up backend ask — until then we do
-// it client-side, accepting that page boundaries can produce duplicate
-// headers on infinite scroll. Acceptable for now; documented in the
-// backend asks list.
-// Returns either an i18n key ('orders.today' / 'orders.yesterday') for the
-// relative buckets, or a pre-formatted locale date string for older buckets.
-// Render-side decides whether to translate or display verbatim.
 function dateBucketFor(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'Unknown';
@@ -100,9 +105,9 @@ function dateBucketFor(iso: string): string {
   });
 }
 
-// ----- Queue tab (live pending orders) -----------------------------------
+// ----- New tab (live pending orders, accept/reject) --------------------------
 
-function QueueTab() {
+function NewTab() {
   const { t } = useTranslation();
   const { data, isLoading, refetch } = useVendorPendingOrders();
   const { triggerAction, handleUndo, pendingUndo, isLoading: actionLoading } =
@@ -110,9 +115,7 @@ function QueueTab() {
   const orders = data?.orders ?? [];
   const isSurge = orders.length > 3;
 
-  // Pull-to-refresh spinner gated to USER action only. React Query's
-  // `isRefetching` also fires for background refetches (10s polling on
-  // this hook) and would leave the spinner permanently visible.
+  // Pull-to-refresh gated to user action only. See QueueTab rationale.
   const [isPulling, setIsPulling] = useState(false);
   async function onPullRefresh(): Promise<void> {
     setIsPulling(true);
@@ -126,10 +129,7 @@ function QueueTab() {
   if (isLoading) {
     return (
       <View style={styles.skeletonStack}>
-        <Skeleton
-          height={140}
-          style={{ borderRadius: theme.radius.lg }}
-        />
+        <Skeleton height={140} style={{ borderRadius: theme.radius.lg }} />
         <Skeleton
           height={140}
           style={{
@@ -146,7 +146,7 @@ function QueueTab() {
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.queueList}
+        contentContainerStyle={styles.tabList}
         ListHeaderComponent={
           isSurge ? (
             <View style={styles.surgeBanner}>
@@ -170,59 +170,41 @@ function QueueTab() {
           />
         }
         renderItem={({ item }) => (
-          <View style={styles.queueCardWrap}>
-            <PendingOrderCard
-              order={item}
-              showInstructions
-              disabled={actionLoading}
-              onOpenDetail={() => router.push(`/orders/${item.id}`)}
-              onAccept={() => triggerAction(item.id, 'accepted')}
-              onReject={() => triggerAction(item.id, 'rejected')}
-            />
-          </View>
+          <PendingOrderCard
+            order={item}
+            showInstructions
+            disabled={actionLoading}
+            onOpenDetail={() => router.push(`/orders/${item.id}`)}
+            onAccept={() => triggerAction(item.id, 'accepted')}
+            onReject={() => triggerAction(item.id, 'rejected')}
+          />
         )}
-        ListEmptyComponent={<QueueEmpty />}
+        ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
+        ListEmptyComponent={<NewEmpty />}
       />
       <UndoSnackbar pendingUndo={pendingUndo} onUndo={handleUndo} />
     </View>
   );
 }
 
-function QueueEmpty() {
-  // Reuse `lastOrderIso` style messaging from the dashboard's quiet block.
-  // The hook doesn't return last-known data here, so the copy is generic.
+function NewEmpty() {
   const { t } = useTranslation();
   return (
     <View style={styles.emptyBlock}>
       <Text style={styles.emptyHeadline}>{t('orders.queueClear')}</Text>
-      <Text style={styles.emptyBody}>
-        {t('orders.queueClearBody')}
-      </Text>
+      <Text style={styles.emptyBody}>{t('orders.queueClearBody')}</Text>
     </View>
   );
 }
 
-// ----- History tab (paginated, grouped by date) --------------------------
+// ----- Active/Cooking tab (accepted + preparing + ready, inline advance) ----
 
-interface HistoryListItem {
-  type: 'header' | 'order';
-  key: string;
-  bucket?: string;
-  order?: Order;
-  // Position within the date bucket — drives group-card corner radii and
-  // inset separators (style-based grouping keeps the flat-list virtualization).
-  first?: boolean;
-  last?: boolean;
-}
-
-function HistoryTab() {
+function ActiveTab() {
   const { t } = useTranslation();
-  const [page, setPage] = useState(1);
-  const { data, isLoading, refetch } = useVendorOrderHistory(page);
+  const { data, isLoading, refetch } = useVendorActiveOrders();
+  const updateStatus = useUpdateOrderStatus();
   const orders = data?.orders ?? [];
-  const hasMore = data ? page * (data.limit ?? 20) < data.total : false;
 
-  // User-initiated pull-to-refresh only (see QueueTab for the rationale).
   const [isPulling, setIsPulling] = useState(false);
   async function onPullRefresh(): Promise<void> {
     setIsPulling(true);
@@ -233,9 +215,96 @@ function HistoryTab() {
     }
   }
 
-  // Group orders into a flat list of [header, order, order, header, ...]
-  // entries. Sorted by createdAt desc within each bucket; buckets ordered
-  // by recency. Pure derivation — no mutation.
+  if (isLoading) {
+    return (
+      <View style={styles.skeletonStack}>
+        <Skeleton height={120} style={{ borderRadius: theme.radius.lg }} />
+        <Skeleton
+          height={120}
+          style={{
+            borderRadius: theme.radius.lg,
+            marginTop: theme.spacing[2],
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={orders}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={styles.tabList}
+      refreshControl={
+        <RefreshControl
+          refreshing={isPulling}
+          onRefresh={onPullRefresh}
+          tintColor={theme.colors.ink.DEFAULT}
+        />
+      }
+      renderItem={({ item }) => (
+        <ActiveOrderCard
+          order={item}
+          isPending={
+            updateStatus.isPending &&
+            updateStatus.variables?.orderId === item.id
+          }
+          onAdvance={(orderId, nextStatus) =>
+            updateStatus.mutate({ orderId, status: nextStatus })
+          }
+          onOpenDetail={(orderId) => router.push(`/orders/${orderId}`)}
+        />
+      )}
+      ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
+      ListEmptyComponent={<ActiveEmpty />}
+    />
+  );
+}
+
+function ActiveEmpty() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.emptyBlock}>
+      <Text style={styles.emptyHeadline}>{t('orders.noCookingOrders')}</Text>
+      <Text style={styles.emptyBody}>{t('orders.noCookingOrdersBody')}</Text>
+    </View>
+  );
+}
+
+// ----- History tab (delivered/cancelled/rejected, paginated, date-grouped) ---
+
+interface HistoryListItem {
+  type: 'header' | 'order';
+  key: string;
+  bucket?: string;
+  order?: Order;
+  first?: boolean;
+  last?: boolean;
+}
+
+function HistoryTab() {
+  const { t } = useTranslation();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, refetch } = useVendorOrderHistory(page);
+
+  // Filter to past/terminal statuses only — active orders appear in the
+  // Active tab instead. Client-side filter avoids an extra API parameter.
+  const orders = useMemo(
+    () => (data?.orders ?? []).filter((o) => HISTORY_STATUSES.has(o.status)),
+    [data?.orders],
+  );
+  const hasMore = data ? page * (data.limit ?? 20) < data.total : false;
+
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
   const listItems = useMemo<HistoryListItem[]>(() => {
     const groups = new Map<string, Order[]>();
     for (const o of orders) {
@@ -281,7 +350,7 @@ function HistoryTab() {
           refreshing={isPulling}
           onRefresh={() => {
             setPage(1);
-            onPullRefresh();
+            void onPullRefresh();
           }}
           tintColor={theme.colors.ink.DEFAULT}
         />
@@ -306,12 +375,17 @@ function HistoryTab() {
           />
         ) : null
       }
+      ListFooterComponent={
+        hasMore ? (
+          <View style={styles.loadMoreRow}>
+            <ActivityIndicator size="small" color={theme.colors.ink.muted} />
+          </View>
+        ) : null
+      }
       ListEmptyComponent={
         <View style={styles.emptyBlock}>
           <Text style={styles.emptyHeadline}>{t('orders.noOrdersYet')}</Text>
-          <Text style={styles.emptyBody}>
-            {t('orders.noOrdersBody')}
-          </Text>
+          <Text style={styles.emptyBody}>{t('orders.noOrdersBody')}</Text>
         </View>
       }
     />
@@ -325,9 +399,6 @@ interface HistoryRowProps {
 }
 
 // Each row is one segment of a white "group card" (UI-V2-SPEC §1/§9).
-// First-in-bucket gets top radii, last-in-bucket gets bottom radii; the
-// shadow lives on an outer wrapper so the inner overflow-hidden clip (needed
-// for the pressed-state bone fill to respect the radius) doesn't cut it off.
 function HistoryRow({ order, first, last }: HistoryRowProps) {
   const { t } = useTranslation();
   const chip = HISTORY_STATUS_CHIP[order.status] ?? STATUS_CHIP_FALLBACK;
@@ -363,7 +434,9 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
               <View
                 style={[historyRowStyles.chip, { backgroundColor: chip.bg }]}
               >
-                <Text style={[historyRowStyles.chipLabel, { color: chip.text }]}>
+                <Text
+                  style={[historyRowStyles.chipLabel, { color: chip.text }]}
+                >
                   {statusKey ? t(`orders.status.${statusKey}`) : order.status}
                 </Text>
               </View>
@@ -387,11 +460,55 @@ function HistoryRow({ order, first, last }: HistoryRowProps) {
   );
 }
 
-// ----- Screen shell -------------------------------------------------------
+// ----- Segmented control ------------------------------------------------------
+
+interface TabLabelProps {
+  label: string;
+  badge?: number;
+  active: boolean;
+  onPress: () => void;
+}
+
+function TabLabel({ label, badge, active, onPress }: TabLabelProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={tabStyles.root}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+    >
+      {/* Inner-View pattern — visual styles live on View to dodge iOS
+          function-style style drop. */}
+      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
+        <View style={tabStyles.labelRow}>
+          <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+            {label}
+          </Text>
+          {badge != null && badge > 0 ? (
+            <View style={tabStyles.badge}>
+              <Text style={tabStyles.badgeLabel}>
+                {badge > 9 ? '9+' : String(badge)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// ----- Screen shell -----------------------------------------------------------
 
 export default function OrdersScreen() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('queue');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('new');
+
+  // Badge counts for the segment labels so the chef knows there's something
+  // to act on without having to switch tabs.
+  const { data: pendingData } = useVendorPendingOrders();
+  const { data: activeData } = useVendorActiveOrders();
+  const newCount = pendingData?.orders.length ?? 0;
+  const activeCount = activeData?.orders.length ?? 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -400,13 +517,22 @@ export default function OrdersScreen() {
         <Text style={styles.commandTitle}>{t('orders.title')}</Text>
       </View>
 
-      {/* iOS-style segmented control (UI-V2-SPEC §5) — mist track with a
-          raised paper segment for the active tab. */}
+      {/* Three-segment control: New / Active / History.
+          iOS-style mist track with a raised paper segment for the active tab
+          (UI-V2-SPEC §5). Badge dots on New and Active tell the chef at a
+          glance which segments need attention. */}
       <View style={styles.segmentTrack}>
         <TabLabel
-          label={t('orders.queue')}
-          active={activeTab === 'queue'}
-          onPress={() => setActiveTab('queue')}
+          label={t('orders.new')}
+          badge={newCount}
+          active={activeTab === 'new'}
+          onPress={() => setActiveTab('new')}
+        />
+        <TabLabel
+          label={t('orders.active')}
+          badge={activeCount}
+          active={activeTab === 'active'}
+          onPress={() => setActiveTab('active')}
         />
         <TabLabel
           label={t('orders.history')}
@@ -415,35 +541,18 @@ export default function OrdersScreen() {
         />
       </View>
 
-      {activeTab === 'queue' ? <QueueTab /> : <HistoryTab />}
+      {activeTab === 'new' ? (
+        <NewTab />
+      ) : activeTab === 'active' ? (
+        <ActiveTab />
+      ) : (
+        <HistoryTab />
+      )}
     </SafeAreaView>
   );
 }
 
-interface TabLabelProps {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}
-
-function TabLabel({ label, active, onPress }: TabLabelProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={tabStyles.root}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-    >
-      {/* Inner-View pattern — visual styles live on the View, not the
-          Pressable, to dodge the iOS function-style style drop. */}
-      <View style={[tabStyles.segment, active && tabStyles.segmentActive]}>
-        <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
+// ----- Styles -----------------------------------------------------------------
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bone },
@@ -462,7 +571,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Segmented control track (UI-V2-SPEC §5)
+  // Three-segment control track (UI-V2-SPEC §5)
   segmentTrack: {
     flexDirection: 'row',
     marginHorizontal: theme.spacing[4],
@@ -473,14 +582,10 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
 
-  // Queue list
-  queueList: {
+  // Tab list (New + Active use this)
+  tabList: {
     padding: theme.spacing[4],
     paddingBottom: theme.spacing[10],
-    gap: theme.spacing[2],
-  },
-  queueCardWrap: {
-    marginBottom: 0, // FlatList gap handles spacing
   },
 
   // Surge banner (reused from dashboard pattern)
@@ -515,8 +620,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     letterSpacing: 1.4,
     color: theme.colors.ink.muted,
-    marginTop: theme.spacing[6], // spacing between section groups (spec §1)
-    marginBottom: theme.spacing[2], // gap above the group card
+    marginTop: theme.spacing[6],
+    marginBottom: theme.spacing[2],
+  },
+
+  // Infinite-scroll load-more indicator
+  loadMoreRow: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing[4],
   },
 
   // Empty states
@@ -546,7 +657,7 @@ const tabStyles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    minHeight: 34, // 40 track minus 3pt padding top/bottom
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 9,
@@ -554,6 +665,11 @@ const tabStyles = StyleSheet.create({
   segmentActive: {
     backgroundColor: theme.colors.paper,
     ...theme.shadow[1],
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   label: {
     fontFamily: 'Inter-SemiBold',
@@ -564,11 +680,26 @@ const tabStyles = StyleSheet.create({
   labelActive: {
     color: theme.colors.ink.DEFAULT,
   },
+  // Small count badge — ink pill with paper numerals.
+  badge: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.full,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    color: theme.colors.paper,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 14,
+  },
 });
 
 const historyRowStyles = StyleSheet.create({
-  // Group-card segment shell (UI-V2-SPEC §1) — shadow on the outer layer,
-  // overflow clip on the inner layer so the radius survives pressed-state bg.
   cardSegment: {
     backgroundColor: theme.colors.paper,
     ...theme.shadow[1],
@@ -596,7 +727,7 @@ const historyRowStyles = StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: theme.colors.mist.DEFAULT,
-    marginLeft: theme.spacing[4], // inset — aligned to row content
+    marginLeft: theme.spacing[4],
   },
   chip: {
     paddingHorizontal: theme.spacing[2],
