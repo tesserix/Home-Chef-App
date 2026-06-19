@@ -35,6 +35,7 @@ import {
 import {
   useVendorPendingOrders,
   useOrderAction,
+  useUpdateOrderStatus,
   type Order,
 } from '../../hooks/useVendorOrders';
 import {
@@ -44,6 +45,10 @@ import {
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+import {
+  ActiveOrderCard,
+  type ActiveOrderCardOrder,
+} from '../../components/vendor/ActiveOrderCard';
 
 // Pull a human-readable display name out of the user object. Falls back
 // from `name` → Gmail handle → "Chef". Used by the Zone A command bar.
@@ -93,30 +98,6 @@ const IN_FLIGHT_STATUSES = new Set<Order['status']>([
   'ready',
 ]);
 
-const STATUS_LABEL: Record<string, string> = {
-  accepted: 'Accepted',
-  preparing: 'Preparing',
-  ready: 'Ready',
-};
-
-// Status chip palette (UI-V2 spec §2): tint background + darker text of
-// the same hue. Persimmon stays reserved for `ready` — the one in-flight
-// state that needs the chef's eye.
-const STATUS_CHIP: Record<string, { bg: string; text: string }> = {
-  accepted: {
-    bg: theme.colors.info.tint,
-    text: theme.colors.info.DEFAULT,
-  },
-  preparing: {
-    bg: theme.colors.mist.DEFAULT,
-    text: theme.colors.ink.DEFAULT,
-  },
-  ready: {
-    bg: theme.colors.success.tint,
-    text: theme.colors.success.soft,
-  },
-};
-
 // A chef glancing for 2s with wet hands needs to register pending count,
 // kitchen status, and any "ready" order. Past-tense numbers (earnings,
 // rating) come last. See agent design notes — pending wins the top.
@@ -132,6 +113,7 @@ export default function DashboardScreen() {
   } = useVendorDashboard();
   const { data: pendingResp, refetch: refetchPending } =
     useVendorPendingOrders();
+  const updateStatus = useUpdateOrderStatus();
   const toggleMutation = useToggleAcceptingOrders();
   const pauseMutation = usePauseReceiving();
   const resumeMutation = useResumeReceiving();
@@ -645,10 +627,11 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
-        {/* Zone C — In progress. One white group card of rows with inset
-            hairlines (UI-V2 spec §1/§7). The visual demotion vs pending is
-            intentional: pending = hero cards (act), in-progress = rows in
-            a group card (just be aware). */}
+        {/* Zone C — In progress. Full-detail stepper cards so the chef sees
+            each order's lifecycle at a glance and can advance with one tap.
+            Visual demotion vs pending is intentional: pending = hero cards
+            (act now), in-progress = informational stepper cards (just be
+            aware + optionally advance). */}
         {!isLoading && inFlightOrders.length > 0 && (
           <Animated.View
             style={styles.section}
@@ -659,17 +642,23 @@ export default function DashboardScreen() {
             }
           >
             <Text style={styles.sectionLabel}>{t('dashboard.inProgress')}</Text>
-            <View style={styles.groupCard}>
-              <View style={styles.groupCardInner}>
-                {inFlightOrders.slice(0, 5).map((order, idx, arr) => (
-                  <InFlightRow
-                    key={order.id}
-                    order={order}
-                    isLast={idx === arr.length - 1}
-                    onPress={() => router.push(`/orders/${order.id}`)}
-                  />
-                ))}
-              </View>
+            <View style={styles.inProgressList}>
+              {inFlightOrders.slice(0, 5).map((order) => (
+                <ActiveOrderCard
+                  key={order.id}
+                  order={order as ActiveOrderCardOrder}
+                  isPending={
+                    updateStatus.isPending &&
+                    updateStatus.variables?.orderId === order.id
+                  }
+                  onAdvance={(orderId, nextStatus) =>
+                    updateStatus.mutate({ orderId, status: nextStatus })
+                  }
+                  onOpenDetail={(orderId) =>
+                    router.push(`/orders/${orderId}`)
+                  }
+                />
+              ))}
             </View>
           </Animated.View>
         )}
@@ -701,61 +690,6 @@ export default function DashboardScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-interface InFlightRowProps {
-  // Narrow shape — works for both `Order` (pending) and `RecentOrder`
-  // (dashboard summary), which omits items/deliveryAddress.
-  order: {
-    id: string;
-    customerName: string;
-    total: number;
-    status: string;
-    createdAt: string;
-  };
-  isLast: boolean;
-  onPress: () => void;
-}
-
-function InFlightRow({ order, isLast, onPress }: InFlightRowProps) {
-  const chip = STATUS_CHIP[order.status] ?? {
-    bg: theme.colors.mist.DEFAULT,
-    text: theme.colors.ink.soft,
-  };
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-    >
-      {({ pressed }) => (
-        // Inner-View carries layout. iOS strips flex/bg from Pressable
-        // when style prop returns an array — inner-View pattern is safe.
-        <View
-          style={[
-            rowStyles.root,
-            pressed && { backgroundColor: theme.colors.bone },
-          ]}
-        >
-          <View style={[rowStyles.inner, !isLast && rowStyles.innerBorder]}>
-            <View style={[rowStyles.chip, { backgroundColor: chip.bg }]}>
-              <Text style={[rowStyles.chipLabel, { color: chip.text }]}>
-                {STATUS_LABEL[order.status] ?? order.status}
-              </Text>
-            </View>
-            <View style={rowStyles.nameBlock}>
-              <Text style={rowStyles.name} numberOfLines={1}>
-                {order.customerName}
-              </Text>
-              <Text style={rowStyles.meta}>
-                {formatMinutesAgo(order.createdAt)}
-              </Text>
-            </View>
-            <Text style={rowStyles.total}>₹{order.total.toFixed(0)}</Text>
-          </View>
-        </View>
-      )}
-    </Pressable>
   );
 }
 
@@ -954,21 +888,12 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Zone C — In progress group card
+  // Zone C — In progress stepper cards
   section: {
     marginTop: theme.spacing[6],
   },
-  // Shadow lives on the outer card; the inner wrapper clips pressed-row
-  // backgrounds to the rounded corners (iOS overflow:hidden would clip
-  // the shadow if both lived on one View).
-  groupCard: {
-    backgroundColor: theme.colors.paper,
-    borderRadius: theme.radius.lg,
-    ...theme.shadow[1],
-  },
-  groupCardInner: {
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
+  inProgressList: {
+    gap: theme.spacing[2],
   },
 
   // Dead-screen reassurance — bottom-anchored via parent bottomZone
@@ -1036,48 +961,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const rowStyles = StyleSheet.create({
-  root: {
-    paddingLeft: theme.spacing[4],
-  },
-  inner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[3],
-    minHeight: 56,
-    paddingVertical: theme.spacing[2],
-    paddingRight: theme.spacing[4],
-  },
-  innerBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.mist.DEFAULT,
-  },
-  chip: {
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 3,
-    borderRadius: theme.radius.full,
-  },
-  chipLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.caption.size,
-    letterSpacing: 0.2,
-  },
-  nameBlock: { flex: 1 },
-  name: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-  },
-  meta: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
-    marginTop: 1,
-  },
-  total: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    fontVariant: ['tabular-nums'],
-  },
-});

@@ -157,37 +157,8 @@ export function useOrderAction() {
   return { triggerAction, handleUndo, pendingUndo, isLoading: mutation.isPending };
 }
 
-// In-flight orders for the Active/Cooking tab: accepted + preparing + ready.
-// Fetches the first page of all orders and filters client-side — the API
-// supports ?status= but not multi-value status, so a single fetch with a
-// filter is simpler than three parallel requests. 30s poll keeps the list
-// fresh while the chef has the tab open.
-const ACTIVE_STATUSES: ReadonlySet<Order['status']> = new Set([
-  'accepted',
-  'preparing',
-  'ready',
-]);
-
-export function useVendorActiveOrders() {
-  return useQuery<OrdersResponse>({
-    queryKey: ['chef', 'orders', 'active'],
-    queryFn: () =>
-      api
-        .get<OrdersResponse>('/chef/orders?page=1')
-        .then((r) => r.data),
-    select: (data) => ({
-      ...data,
-      orders: data.orders.filter((o) =>
-        ACTIVE_STATUSES.has(o.status as Order['status']),
-      ),
-    }),
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
-    staleTime: 15_000,
-  });
-}
-
-// Generic status mutation used by the order detail screen for the in-flight
+// Generic status mutation used by the order detail screen and Dashboard "In
+// Progress" section for the in-flight
 // transitions (accepted → preparing → ready). Unlike useOrderAction these
 // transitions don't get an undo timer — the chef wouldn't expect to "undo
 // marking ready" after the fact. Optimistic update on the detail cache so

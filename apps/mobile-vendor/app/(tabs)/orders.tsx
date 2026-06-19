@@ -16,16 +16,13 @@ import { Skeleton } from '@homechef/mobile-shared/ui';
 import {
   useVendorPendingOrders,
   useVendorOrderHistory,
-  useVendorActiveOrders,
   useOrderAction,
-  useUpdateOrderStatus,
   type Order,
 } from '../../hooks/useVendorOrders';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
-import { ActiveOrderCard } from '../../components/vendor/ActiveOrderCard';
 import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
 
-type ActiveTab = 'new' | 'active' | 'history';
+type ActiveTab = 'new' | 'history';
 
 // Maps order status to its key under the `orders.status` i18n namespace.
 const HISTORY_STATUS_KEY: Record<string, string> = {
@@ -193,80 +190,6 @@ function NewEmpty() {
     <View style={styles.emptyBlock}>
       <Text style={styles.emptyHeadline}>{t('orders.queueClear')}</Text>
       <Text style={styles.emptyBody}>{t('orders.queueClearBody')}</Text>
-    </View>
-  );
-}
-
-// ----- Active/Cooking tab (accepted + preparing + ready, inline advance) ----
-
-function ActiveTab() {
-  const { t } = useTranslation();
-  const { data, isLoading, refetch } = useVendorActiveOrders();
-  const updateStatus = useUpdateOrderStatus();
-  const orders = data?.orders ?? [];
-
-  const [isPulling, setIsPulling] = useState(false);
-  async function onPullRefresh(): Promise<void> {
-    setIsPulling(true);
-    try {
-      await refetch();
-    } finally {
-      setIsPulling(false);
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <View style={styles.skeletonStack}>
-        <Skeleton height={120} style={{ borderRadius: theme.radius.lg }} />
-        <Skeleton
-          height={120}
-          style={{
-            borderRadius: theme.radius.lg,
-            marginTop: theme.spacing[2],
-          }}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <FlatList
-      data={orders}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.tabList}
-      refreshControl={
-        <RefreshControl
-          refreshing={isPulling}
-          onRefresh={onPullRefresh}
-          tintColor={theme.colors.ink.DEFAULT}
-        />
-      }
-      renderItem={({ item }) => (
-        <ActiveOrderCard
-          order={item}
-          isPending={
-            updateStatus.isPending &&
-            updateStatus.variables?.orderId === item.id
-          }
-          onAdvance={(orderId, nextStatus) =>
-            updateStatus.mutate({ orderId, status: nextStatus })
-          }
-          onOpenDetail={(orderId) => router.push(`/orders/${orderId}`)}
-        />
-      )}
-      ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
-      ListEmptyComponent={<ActiveEmpty />}
-    />
-  );
-}
-
-function ActiveEmpty() {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.emptyBlock}>
-      <Text style={styles.emptyHeadline}>{t('orders.noCookingOrders')}</Text>
-      <Text style={styles.emptyBody}>{t('orders.noCookingOrdersBody')}</Text>
     </View>
   );
 }
@@ -503,12 +426,10 @@ export default function OrdersScreen() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ActiveTab>('new');
 
-  // Badge counts for the segment labels so the chef knows there's something
-  // to act on without having to switch tabs.
+  // Badge count for the New segment so the chef knows there are orders waiting
+  // without having to switch tabs.
   const { data: pendingData } = useVendorPendingOrders();
-  const { data: activeData } = useVendorActiveOrders();
   const newCount = pendingData?.orders.length ?? 0;
-  const activeCount = activeData?.orders.length ?? 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -517,10 +438,9 @@ export default function OrdersScreen() {
         <Text style={styles.commandTitle}>{t('orders.title')}</Text>
       </View>
 
-      {/* Three-segment control: New / Active / History.
-          iOS-style mist track with a raised paper segment for the active tab
-          (UI-V2-SPEC §5). Badge dots on New and Active tell the chef at a
-          glance which segments need attention. */}
+      {/* Two-segment control: New / History.
+          Active/in-progress orders are managed from the Dashboard "In Progress"
+          section, which shows the full lifecycle stepper. */}
       <View style={styles.segmentTrack}>
         <TabLabel
           label={t('orders.new')}
@@ -529,25 +449,13 @@ export default function OrdersScreen() {
           onPress={() => setActiveTab('new')}
         />
         <TabLabel
-          label={t('orders.active')}
-          badge={activeCount}
-          active={activeTab === 'active'}
-          onPress={() => setActiveTab('active')}
-        />
-        <TabLabel
           label={t('orders.history')}
           active={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
         />
       </View>
 
-      {activeTab === 'new' ? (
-        <NewTab />
-      ) : activeTab === 'active' ? (
-        <ActiveTab />
-      ) : (
-        <HistoryTab />
-      )}
+      {activeTab === 'new' ? <NewTab /> : <HistoryTab />}
     </SafeAreaView>
   );
 }
@@ -571,7 +479,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Three-segment control track (UI-V2-SPEC §5)
+  // Two-segment control track (UI-V2-SPEC §5)
   segmentTrack: {
     flexDirection: 'row',
     marginHorizontal: theme.spacing[4],

@@ -13,46 +13,50 @@ import type { Order } from '../../hooks/useVendorOrders';
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
-// Status chip palette for active orders — mirrors index.tsx STATUS_CHIP.
-// accepted = info tint (blue-ish), preparing = mist (neutral working),
-// ready = success tint (green, no chef action needed).
-const STATUS_CHIP: Record<string, { bg: string; text: string }> = {
-  accepted: {
-    bg: theme.colors.info.tint,
-    text: theme.colors.info.DEFAULT,
-  },
-  preparing: {
-    bg: theme.colors.mist.DEFAULT,
-    text: theme.colors.ink.DEFAULT,
-  },
-  ready: {
-    bg: theme.colors.success.tint,
-    text: theme.colors.success.soft,
-  },
+// Lifecycle step definitions — the full order journey the chef sees.
+// Each step maps to one or more order statuses that place the order at
+// that step. Steps 4 and 5 are driver-controlled; the chef cannot advance
+// them, only observe.
+interface LifecycleStep {
+  label: string;
+  // Short label for the compact stepper pills.
+  shortLabel: string;
+}
+
+const LIFECYCLE_STEPS: readonly LifecycleStep[] = [
+  { label: 'Accepted', shortLabel: 'Accepted' },
+  { label: 'Preparing', shortLabel: 'Preparing' },
+  { label: 'Ready', shortLabel: 'Ready' },
+  { label: 'Out for delivery', shortLabel: 'Delivering' },
+  { label: 'Delivered', shortLabel: 'Delivered' },
+] as const;
+
+// Map an order status to the 1-based step index it corresponds to.
+const STATUS_TO_STEP: Record<string, number> = {
+  accepted: 1,
+  preparing: 2,
+  ready: 3,
+  picked_up: 4,
+  delivering: 4,
+  delivered: 5,
 };
 
-const STATUS_CHIP_FALLBACK = {
-  bg: theme.colors.mist.DEFAULT,
-  text: theme.colors.ink.soft,
-};
-
-// Label for each active status shown on the chip.
-const STATUS_LABEL: Record<string, string> = {
-  accepted: 'Accepted',
-  preparing: 'Preparing',
-  ready: 'Ready',
-};
-
-// The one-tap label on the advance button.
+// The one-tap advance label and next status for chef-controllable transitions.
 const ADVANCE_LABEL: Record<string, string> = {
   accepted: 'Start Preparing',
   preparing: 'Mark Ready',
 };
 
-// The next status to transition to.
 const NEXT_STATUS: Record<string, Order['status']> = {
   accepted: 'preparing',
   preparing: 'ready',
+};
+
+// Captions shown on driver-controlled states where the chef has no action.
+const AWAITING_CAPTION: Record<string, string> = {
+  ready: 'Ready · awaiting pickup',
+  picked_up: 'Out for delivery',
+  delivering: 'Out for delivery',
 };
 
 function formatMinutesAgo(iso: string): string {
@@ -73,8 +77,113 @@ function formatItemsSummary(items: Order['items']): string {
   return `${count} item${count === 1 ? '' : 's'}`;
 }
 
+// ----- LifecycleStepper -------------------------------------------------------
+
+interface LifecycleStepperProps {
+  /** The 1-based index of the current step (1 = Accepted, 5 = Delivered). */
+  currentStep: number;
+}
+
+/**
+ * Compact horizontal stepper showing the five lifecycle stages.
+ *
+ * Visual language (vendor monochrome + per-role density rule):
+ *  - Completed steps (< currentStep): filled ink connector + ink dot.
+ *  - Current step: emphasized label + ink dot.
+ *  - Future steps: muted dot + muted connector.
+ *  - Ready step (step 3) uses success green when it is the CURRENT step —
+ *    this is the one chef-completed milestone that deserves a positive signal.
+ *  - Persimmon reserved for ready as the single accent per .impeccable.md.
+ *    We use success green here (vendor palette uses green for positive status,
+ *    persimmon retired for vendor). The step connector fills ink for completed.
+ */
+function LifecycleStepper({ currentStep }: LifecycleStepperProps) {
+  return (
+    <View style={stepperStyles.root} accessibilityRole="none">
+      {LIFECYCLE_STEPS.map((step, idx) => {
+        const stepNum = idx + 1;
+        const isCompleted = stepNum < currentStep;
+        const isCurrent = stepNum === currentStep;
+        const isLast = idx === LIFECYCLE_STEPS.length - 1;
+
+        // Color logic for the dot:
+        // - Completed: ink (filled, done)
+        // - Current at step 3 (ready): success green (positive milestone)
+        // - Current at other steps: ink (the active step)
+        // - Future: mist (not yet reached)
+        const dotColor = isCompleted
+          ? theme.colors.ink.DEFAULT
+          : isCurrent && stepNum === 3
+            ? theme.colors.success.DEFAULT
+            : isCurrent
+              ? theme.colors.ink.DEFAULT
+              : theme.colors.mist.DEFAULT;
+
+        const labelColor = isCompleted
+          ? theme.colors.ink.muted
+          : isCurrent && stepNum === 3
+            ? theme.colors.success.soft
+            : isCurrent
+              ? theme.colors.ink.DEFAULT
+              : theme.colors.ink.muted;
+
+        return (
+          <View key={step.shortLabel} style={stepperStyles.stepGroup}>
+            <View style={stepperStyles.stepColumn}>
+              <View
+                style={[stepperStyles.dot, { backgroundColor: dotColor }]}
+              />
+              <Text
+                style={[
+                  stepperStyles.stepLabel,
+                  { color: labelColor },
+                  isCurrent && stepperStyles.stepLabelCurrent,
+                ]}
+                numberOfLines={1}
+              >
+                {step.shortLabel}
+              </Text>
+            </View>
+            {/* Connector between steps */}
+            {!isLast && (
+              <View
+                style={[
+                  stepperStyles.connector,
+                  {
+                    backgroundColor: isCompleted
+                      ? theme.colors.ink.muted
+                      : theme.colors.mist.DEFAULT,
+                  },
+                ]}
+              />
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ----- ActiveOrderCard -------------------------------------------------------
+
+/**
+ * Minimal order shape required by the card. Intentionally narrower than the
+ * full `Order` type so the Dashboard can pass `RecentOrder` (which omits
+ * `items` and `deliveryAddress`) without a cast. When `items` is provided,
+ * the card shows the items summary; otherwise it falls back to a count-only
+ * placeholder derived from the total.
+ */
+export interface ActiveOrderCardOrder {
+  id: string;
+  customerName: string;
+  total: number;
+  status: Order['status'];
+  createdAt: string;
+  items?: Order['items'];
+}
+
 interface ActiveOrderCardProps {
-  order: Order;
+  order: ActiveOrderCardOrder;
   /** True while the status-advance mutation is in flight for this order. */
   isPending?: boolean;
   /** Called when the chef taps the advance-status action button. */
@@ -84,18 +193,23 @@ interface ActiveOrderCardProps {
 }
 
 /**
- * One-tap active-order card for the Active/Cooking tab.
+ * Active-order card for the Dashboard "In Progress" section.
+ *
+ * Shows:
+ *  - Order summary: customer name, item count, total (tabular figures).
+ *  - Lifecycle stepper: Accepted → Preparing → Ready → Out for delivery →
+ *    Delivered. Completed steps filled, current highlighted, future muted.
+ *  - One-tap advance button for chef-controllable transitions (accepted →
+ *    Start Preparing, preparing → Mark Ready). When the driver controls the
+ *    transition (ready, picked_up/delivering), shows a calm caption instead.
  *
  * Design intent (vendor monochrome, .impeccable.md §Per-role density):
- *  - Card body tappable → opens detail (full info).
- *  - Action button: ink-filled "Start Preparing" or "Mark Ready" depending
- *    on current status. Rendered with the inner-View pattern to avoid the
- *    iOS Pressable function-style style-drop bug.
- *  - `ready` state: no action button; calm success-chip + "Ready · awaiting
- *    pickup" copy instead. Green success chip is consistent with the detail
- *    screen's status chip and communicates "all done from chef's side".
- *  - Mutation pending: button opacity 0.5 + disabled — prevents double-tap.
- *  - Touch target: `minHeight: 44` on the action button satisfies Apple HIG.
+ *  - Ink-filled advance button with paper text — matches PendingOrderCard's
+ *    Accept button. NOT the customer coral.
+ *  - Inner-View pattern on the Pressable to avoid the iOS function-style
+ *    style-drop bug (flex/bg/padding silently lost without it).
+ *  - Touch target: minHeight 44 on the advance button (Apple HIG).
+ *  - No bounce; 150 ms scale on button press only.
  */
 export function ActiveOrderCard({
   order,
@@ -129,9 +243,10 @@ export function ActiveOrderCard({
     onAdvance(order.id, next);
   }
 
-  const chip = STATUS_CHIP[order.status] ?? STATUS_CHIP_FALLBACK;
   const advanceLabel = ADVANCE_LABEL[order.status];
   const hasAction = !!advanceLabel;
+  const awaitingCaption = AWAITING_CAPTION[order.status];
+  const currentStep = STATUS_TO_STEP[order.status] ?? 1;
 
   return (
     <Animated.View
@@ -159,31 +274,26 @@ export function ActiveOrderCard({
               </Text>
               <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
             </View>
-            {/* Meta row: items summary + age + status chip */}
-            <View style={styles.metaRow}>
-              <Text style={styles.meta} numberOfLines={1}>
-                {formatItemsSummary(order.items)}
-              </Text>
-              <Text style={styles.age}>{formatMinutesAgo(order.createdAt)}</Text>
-              <View style={[styles.chip, { backgroundColor: chip.bg }]}>
-                <Text style={[styles.chipLabel, { color: chip.text }]}>
-                  {STATUS_LABEL[order.status] ?? order.status}
-                </Text>
-              </View>
-            </View>
+            {/* Items summary + age — items may be absent on dashboard RecentOrder */}
+            <Text style={styles.meta} numberOfLines={1}>
+              {order.items && order.items.length > 0
+                ? `${formatItemsSummary(order.items)} · `
+                : ''}
+              {formatMinutesAgo(order.createdAt)}
+            </Text>
+            {/* Lifecycle stepper */}
+            <LifecycleStepper currentStep={currentStep} />
           </View>
         )}
       </Pressable>
 
-      {/* Separator between body and action area */}
+      {/* Hairline between card body and action area */}
       <View style={styles.divider} />
 
-      {/* Action zone: advance button OR ready-state caption */}
+      {/* Action zone: advance button OR driver-controlled caption */}
       {hasAction ? (
-        // Outer wrapper supplies full width; Pressable wraps only the button
-        // visual. This is the three-layer pattern from PendingOrderCard's
-        // acceptWrap: wrapper View → Pressable (interaction) → inner View
-        // (visual).
+        // Three-layer pattern: wrapper View → Pressable (interaction) →
+        // inner Animated.View (visual). Matches PendingOrderCard's acceptWrap.
         <View style={styles.actionRow}>
           <Pressable
             onPress={handleAdvance}
@@ -205,16 +315,85 @@ export function ActiveOrderCard({
             </Animated.View>
           </Pressable>
         </View>
-      ) : (
-        // `ready` state — no action. Success-tinted caption row.
-        <View style={styles.readyCaptionRow}>
-          <View style={styles.readyDot} />
-          <Text style={styles.readyCaption}>Ready · awaiting pickup</Text>
+      ) : awaitingCaption ? (
+        // Driver-controlled / delivered — calm caption row, no action.
+        <View style={styles.awaitingCaptionRow}>
+          <View
+            style={[
+              styles.awaitingDot,
+              {
+                backgroundColor:
+                  order.status === 'ready'
+                    ? theme.colors.success.DEFAULT
+                    : theme.colors.ink.muted,
+              },
+            ]}
+          />
+          <Text
+            style={[
+              styles.awaitingCaption,
+              {
+                color:
+                  order.status === 'ready'
+                    ? theme.colors.success.soft
+                    : theme.colors.ink.soft,
+              },
+            ]}
+          >
+            {awaitingCaption}
+          </Text>
         </View>
-      )}
+      ) : null}
     </Animated.View>
   );
 }
+
+// ----- Styles -----------------------------------------------------------------
+
+const stepperStyles = StyleSheet.create({
+  root: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: theme.spacing[3],
+    // Prevent stepper from consuming a hit target above the divider when
+    // the card body Pressable is active.
+    pointerEvents: 'none',
+  },
+  // Each step + its trailing connector
+  stepGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Dot + label stacked
+  stepColumn: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  stepLabel: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    // Tighten so 5 labels fit without ellipsis on 375px.
+    maxWidth: 52,
+  },
+  stepLabelCurrent: {
+    fontFamily: 'Inter-SemiBold',
+  },
+  // Hairline connector between steps
+  connector: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    marginBottom: 10, // align with dot center (dot 7px + label ~12px)
+    marginHorizontal: 2,
+  },
+});
 
 const styles = StyleSheet.create({
   root: {
@@ -229,12 +408,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[3],
-    gap: theme.spacing[1],
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing[3],
+    marginBottom: theme.spacing[1],
   },
   customerName: {
     flex: 1,
@@ -249,31 +428,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-  },
   meta: {
-    flex: 1,
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
-  },
-  age: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.caption.size,
-    color: theme.colors.ink.muted,
-  },
-  chip: {
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 3,
-    borderRadius: theme.radius.full,
-  },
-  chipLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.caption.size,
-    letterSpacing: 0.2,
   },
 
   // Hairline between card body and action area.
@@ -310,23 +468,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Ready-state caption row — no action; just status feedback.
-  readyCaptionRow: {
+  // Driver-controlled / awaiting caption row — no action; just status feedback.
+  awaitingCaptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
   },
-  readyDot: {
+  awaitingDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: theme.colors.success.DEFAULT,
   },
-  readyCaption: {
+  awaitingCaption: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.success.soft,
   },
 });
