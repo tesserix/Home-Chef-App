@@ -113,6 +113,9 @@ export default function RootLayout() {
           >;
           if (data?.type === 'order_update' && data?.orderId) {
             router.push(`/order/${data.orderId}`);
+          } else if (data?.type === 'weekly_menu_published' && data?.chefId) {
+            // A favorited chef dropped a new weekly menu (#239) → open the chef.
+            router.push(`/chef/${data.chefId}`);
           }
         }
       );
