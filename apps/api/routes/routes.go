@@ -453,6 +453,7 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.GET("/analytics", chefHandler.GetChefAnalytics)
 			chefDashboard.GET("/analytics/subscriptions", chefHandler.GetSubscriptionMetrics) // #229
 			chefDashboard.GET("/analytics/forecast", chefHandler.GetDemandForecast)           // #230
+			chefDashboard.GET("/analytics/advanced", chefHandler.GetAdvancedAnalytics)        // #44 premium-gated
 			chefDashboard.GET("/payout", chefHandler.GetPayoutDetails)
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
@@ -696,6 +697,7 @@ func SetupRouter() *gin.Engine {
 			chefSubscription.POST("/plan", subscriptionHandler.ChoosePlan) // Alias
 			chefSubscription.POST("/cancel", subscriptionHandler.CancelSubscription)
 			chefSubscription.PUT("/change-plan", subscriptionHandler.ChangePlan)
+			chefSubscription.PUT("/tier", subscriptionHandler.ChangeTier) // #44 premium upgrade/downgrade
 			chefSubscription.GET("/invoices", subscriptionHandler.GetInvoices)
 			chefSubscription.GET("/earnings", subscriptionHandler.GetEarningsSummary)
 		}
@@ -834,6 +836,11 @@ func SetupRouter() *gin.Engine {
 			// Settings
 			admin.GET("/settings", adminHandler.GetSettings)
 			admin.PUT("/settings", adminHandler.UpdateSettings)
+
+			// Subscription pricing (#44) — structured editor over the
+			// subscription.{CC}.chef.* settings keys (standard + premium).
+			admin.GET("/subscription-pricing", adminHandler.GetSubscriptionPricing)
+			admin.PUT("/subscription-pricing", adminHandler.UpdateSubscriptionPricing)
 
 			// Approval/Review workflow
 			admin.GET("/approvals", approvalHandler.GetApprovalRequests)

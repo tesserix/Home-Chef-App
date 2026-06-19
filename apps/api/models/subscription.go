@@ -37,6 +37,23 @@ const (
 	SubStatusExpired   SubscriptionStatus = "expired"
 )
 
+// SubscriptionTier is the chef's plan tier (#44). Standard is the baseline
+// platform subscription; Premium is the paid upgrade that unlocks the Verified-Pro
+// badge, priority ranking, a lower commission rate, and advanced analytics.
+type SubscriptionTier string
+
+const (
+	TierStandard SubscriptionTier = "standard"
+	TierPremium  SubscriptionTier = "premium"
+)
+
+// GrantsPerks reports whether a subscription in this status should currently
+// receive its tier perks. Trial and active premium chefs get the perks; once a
+// subscription lapses (past_due / suspended / cancelled / expired) the perks stop.
+func StatusGrantsPerks(s SubscriptionStatus) bool {
+	return s == SubStatusTrial || s == SubStatusActive
+}
+
 // InvoiceStatus tracks invoice lifecycle
 type InvoiceStatus string
 
@@ -67,7 +84,9 @@ type Subscription struct {
 	Currency       string             `gorm:"type:varchar(3);not null" json:"currency"`
 	BillingInterval BillingInterval   `gorm:"type:varchar(10);not null" json:"billingInterval"`
 	Status         SubscriptionStatus `gorm:"type:varchar(20);default:'trial'" json:"status"`
-	PlanAmount     float64            `gorm:"not null" json:"planAmount"`
+	// Tier is the plan tier (#44): standard (baseline) or premium (paid upgrade).
+	Tier       SubscriptionTier `gorm:"type:varchar(10);not null;default:'standard'" json:"tier"`
+	PlanAmount float64          `gorm:"not null" json:"planAmount"`
 
 	// Trial period
 	TrialStartsAt time.Time `gorm:"not null" json:"trialStartsAt"`
@@ -181,6 +200,7 @@ type SubscriptionResponse struct {
 	Currency        string             `json:"currency"`
 	BillingInterval BillingInterval    `json:"billingInterval"`
 	Status          SubscriptionStatus `json:"status"`
+	Tier            SubscriptionTier   `json:"tier"`
 	PlanAmount      float64            `json:"planAmount"`
 	TrialStartsAt   time.Time          `json:"trialStartsAt"`
 	TrialEndsAt     time.Time          `json:"trialEndsAt"`
@@ -237,6 +257,7 @@ func (s *Subscription) ToResponse() SubscriptionResponse {
 		Currency:           s.Currency,
 		BillingInterval:    s.BillingInterval,
 		Status:             s.Status,
+		Tier:               s.Tier,
 		PlanAmount:         s.PlanAmount,
 		TrialStartsAt:      s.TrialStartsAt,
 		TrialEndsAt:        s.TrialEndsAt,

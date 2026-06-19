@@ -24,6 +24,39 @@ type PlanConfig struct {
 	MinEarningsThreshold float64
 	PaymentGateway       string
 	GracePeriodDays      int
+
+	// Premium tier (#44) — fully admin-configurable via PlatformSettings keys
+	// `subscription.{CC}.{role}.premium_{monthly|quarterly|yearly}_price` and
+	// `…premium_commission_rate`. Defaults below keep the feature working before
+	// an admin sets anything.
+	PremiumMonthlyPrice   float64
+	PremiumQuarterlyPrice float64
+	PremiumYearlyPrice    float64
+	// PremiumCommissionRate is the platform take-rate for premium chefs (e.g.
+	// 0.12 vs the standard 0.15). Applied in services/earnings.go.
+	PremiumCommissionRate float64
+}
+
+// PriceFor returns the configured price for a tier + billing interval (#44).
+func (c *PlanConfig) PriceFor(tier models.SubscriptionTier, interval models.BillingInterval) float64 {
+	premium := tier == models.TierPremium
+	switch interval {
+	case models.BillingQuarterly:
+		if premium {
+			return c.PremiumQuarterlyPrice
+		}
+		return c.QuarterlyPrice
+	case models.BillingYearly:
+		if premium {
+			return c.PremiumYearlyPrice
+		}
+		return c.YearlyPrice
+	default: // monthly
+		if premium {
+			return c.PremiumMonthlyPrice
+		}
+		return c.MonthlyPrice
+	}
 }
 
 // GetPlanSettings queries PlatformSettings for subscription configuration
@@ -41,6 +74,11 @@ func GetPlanSettings(countryCode string, subType models.SubscriberType) (*PlanCo
 		MinEarningsThreshold: 5000,
 		PaymentGateway:       "razorpay",
 		GracePeriodDays:      7,
+		// Premium tier defaults (#44) — admin-overridable per the keys below.
+		PremiumMonthlyPrice:   999,
+		PremiumQuarterlyPrice: 2599,
+		PremiumYearlyPrice:    8999,
+		PremiumCommissionRate: 0.12,
 	}
 
 	if subType == models.SubscriberDriver {
@@ -49,6 +87,12 @@ func GetPlanSettings(countryCode string, subType models.SubscriberType) (*PlanCo
 		cfg.QuarterlyPrice = 799
 		cfg.YearlyPrice = 2999
 		cfg.MinEarningsThreshold = 3000
+		// Drivers have no premium tier today; keep premium == standard so a
+		// stray lookup never under/over-charges.
+		cfg.PremiumMonthlyPrice = cfg.MonthlyPrice
+		cfg.PremiumQuarterlyPrice = cfg.QuarterlyPrice
+		cfg.PremiumYearlyPrice = cfg.YearlyPrice
+		cfg.PremiumCommissionRate = 0
 	}
 
 	// Try to load from PlatformSettings
@@ -79,6 +123,22 @@ func GetPlanSettings(countryCode string, subType models.SubscriberType) (*PlanCo
 
 		if strings.HasSuffix(key, ".currency") {
 			cfg.Currency = val
+		} else if strings.HasSuffix(key, ".premium_monthly_price") {
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				cfg.PremiumMonthlyPrice = v
+			}
+		} else if strings.HasSuffix(key, ".premium_quarterly_price") {
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				cfg.PremiumQuarterlyPrice = v
+			}
+		} else if strings.HasSuffix(key, ".premium_yearly_price") {
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				cfg.PremiumYearlyPrice = v
+			}
+		} else if strings.HasSuffix(key, ".premium_commission_rate") {
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				cfg.PremiumCommissionRate = v
+			}
 		} else if strings.HasSuffix(key, ".monthly_price") {
 			if v, err := strconv.ParseFloat(val, 64); err == nil {
 				cfg.MonthlyPrice = v
