@@ -92,9 +92,12 @@ export default function OrderIssuesPage() {
 
   const resolveMutation = useMutation({
     mutationFn: ({ id, amount }: { id: string; amount: number }) =>
-      apiClient.post(`/admin/order-issues/${id}/resolve`, { amount }),
-    onSuccess: (_res, vars) => {
-      toast.success(`Refunded ${money(vars.amount)} to the customer's wallet`);
+      apiClient.post<{ status: string; refundAmount: number }>(`/admin/order-issues/${id}/resolve`, { amount }),
+    onSuccess: (res, vars) => {
+      // The server caps the refund at the order's remaining refundable, so trust
+      // its returned amount over what was requested.
+      const actual = (res as unknown as { refundAmount?: number })?.refundAmount ?? vars.amount;
+      toast.success(`Refunded ${money(actual)} to the customer's wallet`);
       invalidate();
     },
     onError: (e: unknown) => toast.error(errMsg(e) || 'Could not issue the refund'),

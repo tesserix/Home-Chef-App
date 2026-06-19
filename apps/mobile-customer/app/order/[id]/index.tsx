@@ -465,8 +465,9 @@ export default function OrderDetailScreen() {
         )}
 
         {/* Report an issue (#37) — on a paid, non-cancelled order (active or
-            delivered). The server decides the instant/assisted refund. */}
-        {order.status !== 'cancelled' && (
+            delivered). Mirrors the API guard. The server decides the
+            instant/assisted refund. */}
+        {order.paymentStatus === 'completed' && order.status !== 'cancelled' && (
           <View style={styles.reportWrapper}>
             <Pressable
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}

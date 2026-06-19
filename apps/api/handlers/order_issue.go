@@ -51,8 +51,13 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You can only report an issue on a paid order"})
 		return
 	}
-	if order.Status == models.OrderStatusCancelled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "This order was cancelled"})
+	if order.Status == models.OrderStatusCancelled || order.Status == models.OrderStatusRefunded {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This order is no longer eligible for a refund"})
+		return
+	}
+	// Already fully refunded (status may still read 'completed') — nothing left.
+	if order.RefundAmount >= order.Total {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This order has already been fully refunded"})
 		return
 	}
 
@@ -135,12 +140,16 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 	var chefUserID uuid.UUID
 	database.DB.Model(&models.ChefProfile{}).Select("user_id").Where("id = ?", order.ChefID).Scan(&chefUserID)
 	if chefUserID != uuid.Nil {
-		_ = services.EnqueueEvent(database.DB, services.SubjectOrderIssueReported, "order.issue.reported", chefUserID, map[string]any{
+		// Best-effort notification (matches the other notify-only enqueues); the
+		// refund has already committed, so a notify failure must not fail the report.
+		if err := services.EnqueueEvent(database.DB, services.SubjectOrderIssueReported, "order.issue.reported", chefUserID, map[string]any{
 			"issue_id":     issue.ID.String(),
 			"order_id":     order.ID.String(),
 			"order_number": order.OrderNumber,
 			"reason":       string(reason),
-		})
+		}); err != nil {
+			log.Printf("order issue %s: failed to enqueue chef notification: %v", issue.ID, err)
+		}
 	}
 
 	message := "Thanks for letting us know — our team will review this."

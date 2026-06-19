@@ -140,6 +140,43 @@ func TestRefundIssueToWallet(t *testing.T) {
 		require.NoError(t, RefundIssueToWallet(db, iss, 90, "admin", &admin))
 		assert.Equal(t, models.IssueResolved, iss.Status)
 	})
+
+	t.Run("two issues on one order never over-refund past the total", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		// Order total 300. Two separate reports each ask for 200 (e.g. a double
+		// submit racing on a stale RefundAmount of 0). The second must be capped.
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 300, 0)`, orderID.String()).Error)
+		iss1 := seedIssue(t, db, customer, orderID)
+		iss2 := seedIssue(t, db, customer, orderID)
+
+		require.NoError(t, RefundIssueToWallet(db, iss1, 200, "system", nil))
+		require.NoError(t, RefundIssueToWallet(db, iss2, 200, "system", nil))
+
+		// First refunds 200; second is capped at the remaining 100.
+		assert.Equal(t, 200.0, iss1.RefundAmount)
+		assert.Equal(t, 100.0, iss2.RefundAmount)
+		assert.Equal(t, 300.0, balanceOfUser(t, db, customer), "wallet credited at most the order total")
+		var orderRefund float64
+		db.Raw(`SELECT refund_amount FROM orders WHERE id = ?`, orderID.String()).Scan(&orderRefund)
+		assert.Equal(t, 300.0, orderRefund, "order refund never exceeds the total")
+	})
+
+	t.Run("fully-refunded order → ErrNothingToRefund, no money moves", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 300, 300)`, orderID.String()).Error)
+		iss := seedIssue(t, db, customer, orderID)
+
+		err := RefundIssueToWallet(db, iss, 50, "admin", nil)
+		require.ErrorIs(t, err, ErrNothingToRefund)
+		assert.Equal(t, 0.0, balanceOfUser(t, db, customer))
+
+		// Issue stays pending (an admin can reject it); nothing was resolved.
+		var status string
+		db.Raw(`SELECT status FROM order_issues WHERE id = ?`, iss.ID.String()).Scan(&status)
+		assert.Equal(t, "pending", status)
+	})
 }
 
 func TestGetIssueConfig(t *testing.T) {
