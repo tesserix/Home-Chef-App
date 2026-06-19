@@ -57,6 +57,11 @@ export default function ChefDetailPage() {
   const { data: weeklyMenu } = useQuery({
     queryKey: ['chef', id, 'weekly-menu'],
     queryFn: () => apiClient.get<WeeklyMenu>(`/chefs/${id}/weekly-menu`),
+  });
+  // Daily tiffin subscription offer (#283) — entry shown only when offered.
+  const { data: mealOffer } = useQuery({
+    queryKey: ['chef', id, 'meal-offer'],
+    queryFn: () => apiClient.get<{ available: boolean }>(`/chefs/${id}/subscription`),
     enabled: !!id,
   });
 
@@ -295,6 +300,15 @@ export default function ChefDetailPage() {
       {weeklyMenu?.isPublished && (weeklyMenu.items?.length ?? 0) > 0 && (
         <div className="container-app mt-8">
           <WeeklyMenuSection items={weeklyMenu.items} fp={fp} />
+          {(mealOffer as unknown as { available?: boolean } | undefined)?.available && (
+            <Link
+              to={`/chefs/${id}/subscribe`}
+              className="mt-4 flex items-center justify-between rounded-xl border border-herb/30 bg-herb-tint px-4 py-3 text-sm font-medium text-herb hover:bg-herb-tint/80"
+            >
+              Subscribe to a daily tiffin — recurring, delivered automatically
+              <span aria-hidden="true">›</span>
+            </Link>
+          )}
         </div>
       )}
 

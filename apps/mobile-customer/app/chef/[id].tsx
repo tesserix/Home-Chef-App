@@ -19,6 +19,7 @@ import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
+import { useMealChefOffer } from '../../hooks/useMealSubscription';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
@@ -50,6 +51,8 @@ export default function ChefDetailScreen() {
   const createGroup = useCreateGroupOrder();
   // Chef's published fixed weekly menu (#1) — read-only preview below the CTAs.
   const { data: weeklyMenu } = useChefWeeklyMenu(chefData?.data?.id ?? id ?? '');
+  // Daily tiffin subscription offer (#283) — shown only when the chef offers one.
+  const { data: mealOffer } = useMealChefOffer(chefData?.data?.id ?? id ?? '');
 
   // Start a group / office order (#46): pick the context, then open the hub.
   function startGroupOrder(chefId: string) {
@@ -379,6 +382,26 @@ export default function ChefDetailScreen() {
               </View>
               <Text style={mealPlanCtaStyles.chevron}>›</Text>
             </Pressable>
+
+            {/* Daily tiffin SUBSCRIPTION entry (#283) — recurring, auto-placed.
+                Only shown when the chef has an active subscription offer. */}
+            {mealOffer?.available ? (
+              <Pressable
+                onPress={() => router.push(`/meal-subscription/${chef.id}` as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Subscribe to a daily tiffin"
+                style={mealPlanCtaStyles.cta}
+              >
+                <CalendarDays size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={mealPlanCtaStyles.title}>Subscribe to daily tiffin</Text>
+                  <Text style={mealPlanCtaStyles.caption}>
+                    Recurring meals, delivered automatically
+                  </Text>
+                </View>
+                <Text style={mealPlanCtaStyles.chevron}>›</Text>
+              </Pressable>
+            ) : null}
 
             {/* Group / office order entry (#46) — shared cart, split pay. */}
             <Pressable

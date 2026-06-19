@@ -34,6 +34,8 @@ function lazyWithRetry(factory: () => Promise<{ default: React.ComponentType }>)
 const HomePage = lazyWithRetry(() => import('@/features/customer/pages/HomePage'));
 const BrowseChefsPage = lazyWithRetry(() => import('@/features/customer/pages/BrowseChefsPage'));
 const ChefDetailPage = lazyWithRetry(() => import('@/features/customer/pages/ChefDetailPage'));
+const MealSubscribePage = lazyWithRetry(() => import('@/features/customer/pages/MealSubscribePage'));
+const SubscriptionsPage = lazyWithRetry(() => import('@/features/customer/pages/SubscriptionsPage'));
 const CartPage = lazyWithRetry(() => import('@/features/customer/pages/CartPage'));
 const CheckoutPage = lazyWithRetry(() => import('@/features/customer/pages/CheckoutPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/customer/pages/OrdersPage'));
@@ -133,6 +135,8 @@ export function AppRoutes() {
           <Route index element={<HomePage />} />
           <Route path="chefs" element={<BrowseChefsPage />} />
           <Route path="chefs/:id" element={<ChefDetailPage />} />
+          <Route path="chefs/:id/subscribe" element={<MealSubscribePage />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
           <Route path="feed" element={<SocialFeedPage />} />
           <Route path="favorites" element={<FavoritesPage />} />
 
