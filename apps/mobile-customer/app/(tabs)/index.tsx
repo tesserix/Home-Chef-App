@@ -19,6 +19,8 @@ import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
+import { ActiveOrderCard } from '../../components/orders/ActiveOrderCard';
+import { useActiveOrder } from '../../hooks/useActiveOrder';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -81,6 +83,8 @@ export default function HomeScreen() {
   const [isOpenOnly, setIsOpenOnly] = useState(false);
   const [sort, setSort] = useState<ChefFilters['sort']>('rating');
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+
+  const { order: activeOrder } = useActiveOrder();
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -375,51 +379,69 @@ export default function HomeScreen() {
   // jump. Skeletons and the empty message render inside the list body instead.
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <FlatList
-        data={isLoading ? [] : chefs}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderHeader}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item, index }) => (
-          <Animated.View
-            style={{ flex: 1 }}
-            entering={
-              reduceMotion
-                ? undefined
-                : FadeInDown.delay(Math.min(index, 8) * 60)
-                    .duration(250)
-                    .easing(ENTRANCE_EASING)
-            }
-          >
-            <ChefCard chef={item} />
-          </Animated.View>
+      {/* Outer View is flex:1 so the floating card can be positioned absolutely
+          above the tab bar without affecting FlatList scroll behaviour. */}
+      <View style={styles.screenWrapper}>
+        <FlatList
+          data={isLoading ? [] : chefs}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={[
+            styles.listContent,
+            // When the card is visible, add bottom padding so list content
+            // isn't hidden behind it.
+            activeOrder != null && styles.listContentWithCard,
+          ]}
+          ListHeaderComponent={renderHeader}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item, index }) => (
+            <Animated.View
+              style={{ flex: 1 }}
+              entering={
+                reduceMotion
+                  ? undefined
+                  : FadeInDown.delay(Math.min(index, 8) * 60)
+                      .duration(250)
+                      .easing(ENTRANCE_EASING)
+              }
+            >
+              <ChefCard chef={item} />
+            </Animated.View>
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={isFetching && !isLoading}
+              onRefresh={refetch}
+              tintColor={customerColors.coral.DEFAULT}
+            />
+          }
+          ListEmptyComponent={
+            isLoading ? (
+              <View style={styles.skeletonGrid}>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No chefs found</Text>
+                <Text style={styles.emptyBody}>Try adjusting your filters</Text>
+              </View>
+            )
+          }
+        />
+
+        {/* Floating active-order card — pinned to the bottom of the screen,
+            just above the tab bar. Only rendered when there is an active order.
+            Absolute positioning keeps it out of the scroll flow. */}
+        {activeOrder != null && (
+          <View style={styles.activeOrderAnchor} pointerEvents="box-none">
+            <ActiveOrderCard order={activeOrder} />
+          </View>
         )}
-        refreshControl={
-          <RefreshControl
-            refreshing={isFetching && !isLoading}
-            onRefresh={refetch}
-            tintColor={customerColors.coral.DEFAULT}
-          />
-        }
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.skeletonGrid}>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No chefs found</Text>
-              <Text style={styles.emptyBody}>Try adjusting your filters</Text>
-            </View>
-          )
-        }
-      />
+      </View>
     </SafeAreaView>
   );
 }
@@ -428,6 +450,27 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: customerColors.canvas,
+  },
+
+  // Wrapper that lets us layer the floating card above the FlatList
+  screenWrapper: {
+    flex: 1,
+  },
+
+  // Extra bottom padding when the active-order card is showing so the last
+  // chef card isn't obscured behind it (card ~90pt + 16pt gap = ~106pt).
+  listContentWithCard: {
+    paddingBottom: 106,
+  },
+
+  // Absolute anchor for the floating card — sits just above the tab bar.
+  // bottom:8 gives an 8pt gap from the safe-area bottom edge (the tab bar
+  // itself is handled by the Expo Router tabs layout, so this lands above it).
+  activeOrderAnchor: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
   },
 
   // --- Floating search pill ---

@@ -1,0 +1,122 @@
+// Horizontal 4-step progress bar for the order detail screen.
+// More compact than the vertical OrderTimeline — better for the detail
+// screen's hero section where we want a quick visual status, not a full
+// vertical list of steps.
+
+import { StyleSheet, Text, View } from 'react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
+import type { Order } from '../../types/customer';
+
+interface OrderProgressBarProps {
+  status: Order['status'];
+}
+
+const STEPS = ['Confirmed', 'Preparing', 'On the way', 'Delivered'] as const;
+
+/** Maps an order status → the active step index (0-based). */
+function getStepIndex(status: Order['status']): number {
+  switch (status) {
+    case 'pending':
+      return 0;
+    case 'accepted':
+      return 0;
+    case 'preparing':
+      return 1;
+    case 'ready':
+      return 1;
+    case 'picked_up':
+      return 2;
+    case 'delivering':
+      return 2;
+    case 'delivered':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+export function OrderProgressBar({ status }: OrderProgressBarProps) {
+  const activeIndex = getStepIndex(status);
+
+  return (
+    <View style={styles.container}>
+      {/* Segment track */}
+      <View style={styles.track}>
+        {STEPS.map((_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.segment,
+              i <= activeIndex ? styles.segmentFilled : styles.segmentEmpty,
+              i < STEPS.length - 1 && styles.segmentGap,
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Step labels */}
+      <View style={styles.labelRow}>
+        {STEPS.map((label, i) => (
+          <Text
+            key={label}
+            style={[
+              styles.label,
+              i === activeIndex && styles.labelActive,
+              i < activeIndex && styles.labelDone,
+              i > activeIndex && styles.labelFuture,
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  track: {
+    flexDirection: 'row',
+    gap: 4,
+    height: 4,
+  },
+  segment: {
+    flex: 1,
+    borderRadius: 2,
+  },
+  segmentFilled: {
+    backgroundColor: customerColors.coral.DEFAULT,
+  },
+  segmentEmpty: {
+    backgroundColor: customerColors.hairline,
+  },
+  segmentGap: {
+    // gap handles spacing — kept as a descriptor-only style key
+  },
+  labelRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  label: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  labelActive: {
+    color: customerColors.coral.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
+  },
+  labelDone: {
+    color: customerColors.charcoal.DEFAULT,
+    fontFamily: 'Inter-SemiBold',
+  },
+  labelFuture: {
+    color: customerColors.charcoal.soft,
+  },
+});
