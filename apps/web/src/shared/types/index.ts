@@ -156,6 +156,25 @@ export interface SelectedModifier {
   priceDelta: number;
 }
 
+// Weekly fixed menu (#1) — a chef's published Mon–Sun × lunch/dinner menu.
+export type MealSlot = 'lunch' | 'dinner';
+export type MealVariant = 'veg' | 'nonveg';
+export interface WeeklyMenuItem {
+  id?: string;
+  dayOfWeek: number; // 0=Sun .. 6=Sat
+  slot: MealSlot;
+  variant: MealVariant;
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl?: string;
+}
+export interface WeeklyMenu {
+  isPublished: boolean;
+  publishedAt?: string | null;
+  items: WeeklyMenuItem[];
+}
+
 // Order types
 export type OrderStatus =
   | 'pending'
