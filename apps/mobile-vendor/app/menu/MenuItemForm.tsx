@@ -27,7 +27,13 @@ import { theme } from '@homechef/mobile-shared/theme';
 import { useToast } from '@homechef/mobile-shared/ui';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { DietIcon } from '../../components/vendor/DietIcon';
-import type { MenuItemImage, Category } from '../../hooks/useVendorMenu';
+import { ModifierComboEditor } from '../../components/vendor/ModifierComboEditor';
+import type {
+  MenuItemImage,
+  Category,
+  ModifierGroupInput,
+  ComboItemInput,
+} from '../../hooks/useVendorMenu';
 
 // ---- Constants ---------------------------------------------------------------
 
@@ -49,6 +55,10 @@ export interface MenuItemFormValues {
   // Extra diet tags + declared allergens (#41).
   dietaryTags: string[];
   allergens: string[];
+  // Add-ons / combos (#52).
+  isCombo: boolean;
+  modifierGroups: ModifierGroupInput[];
+  comboItems: ComboItemInput[];
   preparationTime: number;
   // HSN/SAC — optional. Backend defaults to 996331 (restaurant
   // services) when empty. Most chefs leave this alone; surfaces as
@@ -66,6 +76,8 @@ export interface MenuItemFormProps {
   existingPhotos?: MenuItemImage[];
   /** All available categories from the menu cache. */
   categories: Category[];
+  /** The chef's other menu items, for the combo builder's item picker (#52). */
+  menuItems?: { id: string; name: string }[];
   /** Called when the chef confirms deletion (edit mode only). */
   onDelete?: () => void;
   /** True while the delete mutation is in-flight. */
@@ -402,6 +414,7 @@ export function MenuItemForm({
   initialValues,
   existingPhotos = [],
   categories,
+  menuItems,
   onDelete,
   isDeleting = false,
   onSave,
@@ -422,6 +435,10 @@ export function MenuItemForm({
   const [isVeg, setIsVeg] = useState(initialValues.isVeg);
   const [dietTags, setDietTags] = useState<string[]>(initialValues.dietaryTags ?? []);
   const [allergens, setAllergens] = useState<string[]>(initialValues.allergens ?? []);
+  // Add-ons / combos (#52).
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroupInput[]>(initialValues.modifierGroups ?? []);
+  const [comboItems, setComboItems] = useState<ComboItemInput[]>(initialValues.comboItems ?? []);
+  const [isCombo, setIsCombo] = useState(initialValues.isCombo ?? false);
   const [preparationTime, setPreparationTime] = useState(initialValues.preparationTime);
   const [hsn, setHsn] = useState(initialValues.hsn);
 
@@ -448,6 +465,9 @@ export function MenuItemForm({
     isVeg !== initialValues.isVeg ||
     dietTags.join('|') !== (initialValues.dietaryTags ?? []).join('|') ||
     allergens.join('|') !== (initialValues.allergens ?? []).join('|') ||
+    isCombo !== (initialValues.isCombo ?? false) ||
+    JSON.stringify(modifierGroups) !== JSON.stringify(initialValues.modifierGroups ?? []) ||
+    JSON.stringify(comboItems) !== JSON.stringify(initialValues.comboItems ?? []) ||
     preparationTime !== initialValues.preparationTime ||
     hsn !== initialValues.hsn ||
     localPhotoUris.length > 0 ||
@@ -495,6 +515,13 @@ export function MenuItemForm({
         isVeg,
         dietaryTags: dietTags,
         allergens,
+        isCombo,
+        // Drop blank groups/options so a half-filled row doesn't persist (#52).
+        modifierGroups: modifierGroups
+          .filter((g) => g.name.trim() !== '')
+          .map((g) => ({ ...g, options: g.options.filter((o) => o.name.trim() !== '') }))
+          .filter((g) => g.options.length > 0),
+        comboItems: isCombo ? comboItems : [],
         preparationTime,
         hsn: hsn.trim(),
       },
@@ -874,6 +901,17 @@ export function MenuItemForm({
               ))}
             </View>
           </View>
+
+          {/* ADD-ONS + COMBO sections (#52) */}
+          <ModifierComboEditor
+            groups={modifierGroups}
+            setGroups={setModifierGroups}
+            isCombo={isCombo}
+            setIsCombo={setIsCombo}
+            comboItems={comboItems}
+            setComboItems={setComboItems}
+            menuItems={menuItems ?? []}
+          />
 
           {/* PREP TIME section — own header so it sits in the same
               rhythm as CATEGORY (caps label + hairline group + scrollable

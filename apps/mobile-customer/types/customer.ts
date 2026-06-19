@@ -41,16 +41,59 @@ export interface MenuItem {
   dailyCapacity?: number;
   remainingToday?: number;
   soldOut?: boolean;
+  // Add-ons / combos (#52). modifierGroups drives the add-on picker; comboItems
+  // are the included dishes shown on a combo.
+  isCombo?: boolean;
+  modifierGroups?: ModifierGroup[];
+  comboItems?: ComboItemRef[];
+}
+
+/** A per-item modifier group with options (#232). */
+export interface ModifierOption {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+}
+export interface ModifierGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number; // 1 = single choice; >1 or 0 = multi
+  options: ModifierOption[];
+}
+/** One included dish in a combo (#233). */
+export interface ComboItemRef {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+}
+
+/** A selected add-on modifier on a cart line (#232). */
+export interface SelectedModifier {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  priceDelta: number;
 }
 
 export interface CartItem {
+  /** Unique per (menuItemId + modifier selection). Equals menuItemId when no
+   *  modifiers are chosen, so the same dish with different add-ons is a separate
+   *  line. Cart operations key by this (#232). */
+  lineId: string;
   menuItemId: string;
   name: string;
+  /** UNIT price including any modifier deltas. */
   price: number;
   quantity: number;
   imageUrl?: string;
   /** Per-item special instructions, e.g. "no onions". Sent as `notes` per item on CreateOrder. */
   instructions?: string;
+  /** Selected add-on modifiers for this line (#232). */
+  modifiers?: SelectedModifier[];
 }
 
 export interface Address {

@@ -28,7 +28,7 @@ import { useFormatPrice } from '@/shared/utils/format-price';
 import { findItemConflicts, type DietaryProfile } from '@/shared/utils/dietary';
 import { formatDate } from '@/shared/utils/format-date';
 import { Button, SimpleDialog } from '@/shared/components/ui';
-import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse } from '@/shared/types';
+import type { Chef, MenuItem, MenuCategory, Review, PaginatedResponse, SelectedModifier } from '@/shared/types';
 
 export default function ChefDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -446,13 +446,15 @@ function MenuItemCard({
 
   const cartItem = cart.items.find((i) => i.menuItemId === item.id);
 
-  const handleAddToCart = () => {
+  // Add-ons (#232): items with modifier groups open a picker before adding.
+  const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
+  const [modOpen, setModOpen] = useState(false);
+  const [picks, setPicks] = useState<Record<string, string[]>>({});
+
+  const addLine = (modifiers?: SelectedModifier[]) => {
     try {
-      // Set chef if this is first item
-      if (cart.items.length === 0) {
-        cart.setChef(chefInfo);
-      }
-      cart.addItem(item, quantity);
+      if (cart.items.length === 0) cart.setChef(chefInfo);
+      cart.addItem(item, quantity, undefined, modifiers);
       toast.success(`Added ${item.name} to cart`);
       setQuantity(1);
     } catch (error) {
@@ -461,6 +463,35 @@ function MenuItemCard({
       }
     }
   };
+
+  const handleAddToCart = () => {
+    if (hasModifiers) {
+      setModOpen(true);
+      return;
+    }
+    addLine();
+  };
+
+  // Build the selection, delta + whether required groups are satisfied.
+  const groups = item.modifierGroups ?? [];
+  const selectedModifiers: SelectedModifier[] = [];
+  let modValid = true;
+  for (const g of groups) {
+    const chosen = picks[g.id] ?? [];
+    const minSel = g.required ? Math.max(1, g.minSelect) : g.minSelect;
+    if (chosen.length < minSel) modValid = false;
+    if (g.maxSelect > 0 && chosen.length > g.maxSelect) modValid = false;
+    for (const oid of chosen) {
+      const o = g.options.find((x) => x.id === oid);
+      if (o) selectedModifiers.push({ groupId: g.id, groupName: g.name, optionId: o.id, optionName: o.name, priceDelta: o.priceDelta });
+    }
+  }
+  const toggleOption = (groupId: string, optionId: string, single: boolean) =>
+    setPicks((prev) => {
+      const cur = prev[groupId] ?? [];
+      if (single) return { ...prev, [groupId]: cur.includes(optionId) ? [] : [optionId] };
+      return { ...prev, [groupId]: cur.includes(optionId) ? cur.filter((id) => id !== optionId) : [...cur, optionId] };
+    });
 
   return (
     <div className="card overflow-hidden">
@@ -504,6 +535,12 @@ function MenuItemCard({
               <p className="mt-1 text-sm text-ink-muted line-clamp-2">
                 {item.description}
               </p>
+              {/* Combo includes (#233) */}
+              {item.isCombo && item.comboItems && item.comboItems.length > 0 && (
+                <p className="mt-1 text-xs font-medium text-herb">
+                  Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
+                </p>
+              )}
             </div>
           </div>
 
@@ -592,6 +629,63 @@ function MenuItemCard({
           </div>
         </div>
       </div>
+
+      {/* Add-on picker (#232) */}
+      {hasModifiers && (
+        <SimpleDialog open={modOpen} onOpenChange={setModOpen} size="md" title={item.name}>
+          <div className="space-y-4">
+            {groups.map((g) => {
+              const single = g.maxSelect === 1;
+              const chosen = picks[g.id] ?? [];
+              return (
+                <div key={g.id}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-medium text-ink">{g.name}</span>
+                    <span className="text-xs text-ink-muted">
+                      {g.required ? 'Required' : 'Optional'}
+                      {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {g.options.map((o) => {
+                      const on = chosen.includes(o.id);
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          disabled={!o.isAvailable}
+                          onClick={() => toggleOption(g.id, o.id, single)}
+                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
+                            on ? 'border-herb bg-herb-tint' : 'border-mist'
+                          } ${!o.isAvailable ? 'opacity-40' : ''}`}
+                        >
+                          <span className="text-ink">{o.name}</span>
+                          <span className="text-ink-muted tabular-nums">
+                            {o.priceDelta !== 0 ? `${o.priceDelta > 0 ? '+' : ''}${fp(o.priceDelta)}` : 'Free'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              variant="primary"
+              fullWidth
+              disabled={!modValid}
+              onClick={() => {
+                setModOpen(false);
+                addLine(selectedModifiers);
+                setPicks({});
+              }}
+            >
+              Add · {fp(item.price + selectedModifiers.reduce((s, m) => s + m.priceDelta, 0))}
+            </Button>
+            {!modValid && <p className="text-center text-xs text-ink-muted">Choose the required options to continue</p>}
+          </div>
+        </SimpleDialog>
+      )}
     </div>
   );
 }

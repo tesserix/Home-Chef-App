@@ -328,7 +328,13 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	category := c.Query("category")
 
-	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).Preload("Images")
+	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).
+		Preload("Images").
+		// Add-ons + combo composition (#52) so the customer can pick modifiers
+		// and see what a combo includes.
+		Preload("ModifierGroups", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ModifierGroups.Options", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") }).
+		Preload("ComboItems", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order") })
 
 	if category != "" {
 		query = query.Where("category_id = ?", category)

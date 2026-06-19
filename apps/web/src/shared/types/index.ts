@@ -120,6 +120,40 @@ export interface MenuItem {
   dailyCapacity?: number | null;
   remainingToday?: number | null;
   soldOut?: boolean;
+  // Add-ons / combos (#52).
+  isCombo?: boolean;
+  modifierGroups?: ModifierGroup[];
+  comboItems?: ComboItemRef[];
+}
+
+/** Per-item add-on modifier group (#232). */
+export interface ModifierOption {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+}
+export interface ModifierGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: ModifierOption[];
+}
+/** Included dish in a combo (#233). */
+export interface ComboItemRef {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+}
+/** A selected modifier on a cart line (#232). */
+export interface SelectedModifier {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  priceDelta: number;
 }
 
 // Order types

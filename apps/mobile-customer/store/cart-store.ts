@@ -2,9 +2,13 @@
 // Cart is pure client state — no API calls until checkout.
 // All mutations use immutable spread (never push/splice in place).
 // Reference: RESEARCH.md Pattern 3 + CLAUDE.md immutability rule.
+//
+// Lines are keyed by `lineId` (#232): the same dish with different add-on
+// selections is a distinct line. For an item with no modifiers, lineId equals
+// menuItemId, so the no-modifier flow is unchanged.
 
 import { create } from 'zustand';
-import type { CartItem } from '../types/customer';
+import type { CartItem, SelectedModifier } from '../types/customer';
 
 interface ChefSummary {
   id: string;
@@ -13,35 +17,42 @@ interface ChefSummary {
 
 type AddItemResult = 'ok' | 'cross_chef_conflict';
 
+/** Stable line id for a menu item + its modifier selection. */
+export function makeLineId(menuItemId: string, modifiers?: SelectedModifier[]): string {
+  if (!modifiers || modifiers.length === 0) return menuItemId;
+  const ids = modifiers.map((m) => m.optionId).sort().join(',');
+  return `${menuItemId}::${ids}`;
+}
+
 interface CartState {
   chefId: string | null;
   chefName: string | null;
   items: CartItem[];
 
   /**
-   * Add an item to the cart.
+   * Add a line to the cart. The item's lineId is honored (or derived from its
+   * menuItemId + modifiers). An identical line increments its quantity.
    * Returns 'cross_chef_conflict' if the item belongs to a different chef than
-   * the current cart — caller must prompt user and call clearCart() before retrying.
-   * Returns 'ok' on success.
+   * the current cart — caller must prompt + clearCart() before retrying.
    */
   addItem: (item: CartItem, chef: ChefSummary) => AddItemResult;
 
-  /** Remove an item completely from the cart. */
-  removeItem: (menuItemId: string) => void;
+  /** Remove a line completely from the cart. */
+  removeItem: (lineId: string) => void;
 
-  /** Set absolute quantity for an item. If qty <= 0 the item is removed. */
-  updateQty: (menuItemId: string, quantity: number) => void;
+  /** Set absolute quantity for a line. If qty <= 0 the line is removed. */
+  updateQty: (lineId: string, quantity: number) => void;
 
-  /** Set per-item special instructions (e.g. "no onions"). Empty string clears it. */
-  setInstructions: (menuItemId: string, instructions: string) => void;
+  /** Set per-line special instructions. Empty string clears it. */
+  setInstructions: (lineId: string, instructions: string) => void;
 
   /** Clear all cart items and reset chef context. */
   clearCart: () => void;
 
-  /** Derived: sum of price * quantity for all items. */
+  /** Derived: sum of price * quantity for all lines. */
   total: () => number;
 
-  /** Derived: total item count across all entries. */
+  /** Derived: total item count across all lines. */
   totalCount: () => number;
 }
 
@@ -58,52 +69,45 @@ export const useCartStore = create<CartState>((set, get) => ({
       return 'cross_chef_conflict';
     }
 
-    const existing = items.find((i) => i.menuItemId === item.menuItemId);
+    const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers);
+    const existing = items.find((i) => i.lineId === lineId);
 
     if (existing) {
-      // Increment quantity immutably
       set({
         items: items.map((i) =>
-          i.menuItemId === item.menuItemId
-            ? { ...i, quantity: i.quantity + item.quantity }
-            : i
+          i.lineId === lineId ? { ...i, quantity: i.quantity + item.quantity } : i
         ),
       });
     } else {
-      // Append immutably
       set({
         chefId: chef.id,
         chefName: chef.name,
-        items: [...items, { ...item }],
+        items: [...items, { ...item, lineId }],
       });
     }
 
     return 'ok';
   },
 
-  removeItem: (menuItemId: string) => {
-    set({ items: get().items.filter((i) => i.menuItemId !== menuItemId) });
+  removeItem: (lineId: string) => {
+    set({ items: get().items.filter((i) => i.lineId !== lineId) });
   },
 
-  updateQty: (menuItemId: string, quantity: number) => {
+  updateQty: (lineId: string, quantity: number) => {
     if (quantity <= 0) {
-      get().removeItem(menuItemId);
+      get().removeItem(lineId);
       return;
     }
     set({
-      items: get().items.map((i) =>
-        i.menuItemId === menuItemId ? { ...i, quantity } : i
-      ),
+      items: get().items.map((i) => (i.lineId === lineId ? { ...i, quantity } : i)),
     });
   },
 
-  setInstructions: (menuItemId: string, instructions: string) => {
+  setInstructions: (lineId: string, instructions: string) => {
     const trimmed = instructions.trim();
     set({
       items: get().items.map((i) =>
-        i.menuItemId === menuItemId
-          ? { ...i, instructions: trimmed || undefined }
-          : i
+        i.lineId === lineId ? { ...i, instructions: trimmed || undefined } : i
       ),
     });
   },

@@ -34,6 +34,44 @@ export interface MenuItem {
   dailyCapacity?: number | null;
   remainingToday?: number | null;
   soldOut?: boolean;
+  // Add-ons / combos (#52).
+  isCombo?: boolean;
+  modifierGroups?: MenuItemModifierGroup[];
+  comboItems?: MenuItemComboItem[];
+}
+
+// Read shapes for an item's modifier groups + combo components (#52).
+export interface MenuItemModifierOption {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+}
+export interface MenuItemModifierGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: MenuItemModifierOption[];
+}
+export interface MenuItemComboItem {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+}
+
+// Write (replace-all) input shapes sent with a save (#52).
+export interface ModifierGroupInput {
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: { name: string; priceDelta: number; isAvailable?: boolean }[];
+}
+export interface ComboItemInput {
+  menuItemId: string;
+  quantity: number;
 }
 
 // Treat any of these tag strings as "vegetarian". Lowercased + trimmed
@@ -71,6 +109,10 @@ export interface CreateMenuItemPayload {
   preparationTime: number;
   // Optional HSN — empty string lets the DB default (996331) apply.
   hsn?: string;
+  // Add-ons / combos (#52) — replace-all on save, passed straight to the API.
+  isCombo?: boolean;
+  modifierGroups?: ModifierGroupInput[];
+  comboItems?: ComboItemInput[];
 }
 
 // Translate the frontend `isVeg` boolean to the backend's tag array.

@@ -42,12 +42,18 @@ function CartItemRow({ item }: CartItemRowProps) {
         <Text className="text-xs text-charcoal-soft" style={{ fontVariant: ['tabular-nums'] }}>
           ₹{item.price.toFixed(2)} each
         </Text>
+        {/* Selected add-ons (#232) */}
+        {item.modifiers && item.modifiers.length > 0 ? (
+          <Text className="text-xs text-charcoal-soft" numberOfLines={2}>
+            {item.modifiers.map((m) => m.optionName).join(', ')}
+          </Text>
+        ) : null}
       </View>
 
       {/* Qty stepper — coral accent, iOS Pressable inner-View pattern */}
       <View className="flex-row items-center gap-2">
         <Pressable
-          onPress={() => updateQty(item.menuItemId, item.quantity - 1)}
+          onPress={() => updateQty(item.lineId, item.quantity - 1)}
           accessibilityLabel="Decrease quantity"
         >
           <View className="w-7 h-7 rounded-full border border-hairline items-center justify-center bg-canvas">
@@ -61,7 +67,7 @@ function CartItemRow({ item }: CartItemRowProps) {
         </View>
 
         <Pressable
-          onPress={() => updateQty(item.menuItemId, item.quantity + 1)}
+          onPress={() => updateQty(item.lineId, item.quantity + 1)}
           accessibilityLabel="Increase quantity"
         >
           <View className="w-7 h-7 rounded-full border border-coral items-center justify-center bg-canvas">
@@ -70,7 +76,7 @@ function CartItemRow({ item }: CartItemRowProps) {
         </Pressable>
 
         <Pressable
-          onPress={() => removeItem(item.menuItemId)}
+          onPress={() => removeItem(item.lineId)}
           accessibilityLabel={`Remove ${item.name}`}
         >
           <View className="w-7 h-7 rounded-full bg-surface-soft items-center justify-center ml-1">
@@ -85,7 +91,7 @@ function CartItemRow({ item }: CartItemRowProps) {
         value={note}
         onChangeText={(t) => {
           setNote(t);
-          setInstructions(item.menuItemId, t);
+          setInstructions(item.lineId, t);
         }}
         placeholder="Add a note (e.g. no onions)"
         placeholderTextColor="#717171"
@@ -129,7 +135,7 @@ export const CartSheet = forwardRef<BottomSheetMethods>((_: unknown, ref: React.
 
         <FlatList
           data={items}
-          keyExtractor={(item) => item.menuItemId}
+          keyExtractor={(item) => item.lineId}
           renderItem={({ item }) => <CartItemRow item={item} />}
           contentContainerStyle={{ paddingBottom: 120 }}
         />

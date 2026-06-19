@@ -161,6 +161,11 @@ func Migrate() error {
 		&models.MenuItem{},
 		&models.MenuItemImage{},
 
+		// Add-ons / combos (#52)
+		&models.ModifierGroup{},
+		&models.ModifierOption{},
+		&models.ComboItem{},
+
 		// Orders
 		&models.Order{},
 		&models.OrderItem{},

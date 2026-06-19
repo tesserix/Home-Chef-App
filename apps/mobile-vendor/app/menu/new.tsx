@@ -28,6 +28,9 @@ const BLANK: MenuItemFormValues = {
   isVeg: true,
   dietaryTags: [],
   allergens: [],
+  isCombo: false,
+  modifierGroups: [],
+  comboItems: [],
   preparationTime: 15,
   hsn: '',
 };
@@ -57,6 +60,9 @@ export default function NewMenuItemScreen() {
         isVeg: values.isVeg,
         dietaryTags: values.dietaryTags,
         allergens: values.allergens,
+        isCombo: values.isCombo,
+        modifierGroups: values.modifierGroups,
+        comboItems: values.comboItems,
         preparationTime: values.preparationTime,
         hsn: values.hsn || undefined,
       });
@@ -93,6 +99,7 @@ export default function NewMenuItemScreen() {
       mode="new"
       initialValues={BLANK}
       categories={categories}
+      menuItems={(menuData?.items ?? []).map((m) => ({ id: m.id, name: m.name }))}
       onSave={handleSave}
       isSaving={isSaving}
       onCreateCategory={handleCreateCategory}

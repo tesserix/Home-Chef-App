@@ -48,6 +48,9 @@ export default function EditMenuItemScreen() {
     isVeg: true,
     dietaryTags: [],
     allergens: [],
+    isCombo: false,
+    modifierGroups: [],
+    comboItems: [],
     preparationTime: 15,
     hsn: '',
   });
@@ -66,6 +69,16 @@ export default function EditMenuItemScreen() {
         // extra tags; the veg toggle owns vegetarian/non-vegetarian (#41).
         dietaryTags: extraDietTags(item.dietaryTags),
         allergens: item.allergens ?? [],
+        // Add-ons / combos (#52) — map read shapes to the editor's input shapes.
+        isCombo: item.isCombo ?? false,
+        modifierGroups: (item.modifierGroups ?? []).map((g) => ({
+          name: g.name,
+          required: g.required,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: g.options.map((o) => ({ name: o.name, priceDelta: o.priceDelta, isAvailable: o.isAvailable })),
+        })),
+        comboItems: (item.comboItems ?? []).map((c) => ({ menuItemId: c.menuItemId, quantity: c.quantity })),
         preparationTime: item.preparationTime ?? 15,
         hsn: item.hsn ?? '',
       });
@@ -99,6 +112,9 @@ export default function EditMenuItemScreen() {
           isVeg: values.isVeg,
           dietaryTags: values.dietaryTags,
           allergens: values.allergens,
+          isCombo: values.isCombo,
+          modifierGroups: values.modifierGroups,
+          comboItems: values.comboItems,
           preparationTime: values.preparationTime,
           hsn: values.hsn,
         },
@@ -150,6 +166,9 @@ export default function EditMenuItemScreen() {
       initialValues={initialValues}
       existingPhotos={item.images ?? []}
       categories={categories}
+      menuItems={(menuData?.items ?? [])
+        .filter((m) => m.id !== itemId)
+        .map((m) => ({ id: m.id, name: m.name }))}
       onSave={handleSave}
       isSaving={isSaving}
       onDelete={handleDelete}

@@ -6,8 +6,10 @@ const chefA = { id: 'chef-a', name: 'Anita Kitchen' };
 const chefB = { id: 'chef-b', name: 'Bhim Bites' };
 
 function item(overrides: Partial<CartItem> = {}): CartItem {
+  const menuItemId = overrides.menuItemId ?? 'm1';
   return {
-    menuItemId: 'm1',
+    lineId: overrides.lineId ?? menuItemId,
+    menuItemId,
     name: 'Paneer Tikka',
     price: 200,
     quantity: 1,

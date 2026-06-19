@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { AlertTriangle, Minus, Plus, UtensilsCrossed } from 'lucide-react-native';
-import { useCartStore } from '../../store/cart-store';
+import { useCartStore, makeLineId } from '../../store/cart-store';
 import { useDietaryConflicts } from '../../hooks/useDietaryConflicts';
+import { ModifierSheet } from '../cart/ModifierSheet';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import type { MenuItem } from '../../types/customer';
+import type { CartItem, MenuItem, SelectedModifier } from '../../types/customer';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -24,37 +26,60 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
   // saved diet / allergens.
   const conflicts = useDietaryConflicts(item);
 
+  // Add-ons (#232): items with modifier groups open a picker before adding.
+  const hasModifiers = (item.modifierGroups?.length ?? 0) > 0;
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const addToCart = (cartItem: CartItem) => {
+    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
+    if (result === 'cross_chef_conflict') {
+      Alert.alert('Replace Cart?', 'You have items from another chef. Replace cart?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Replace',
+          style: 'destructive',
+          onPress: () => {
+            useCartStore.getState().clearCart();
+            useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          },
+        },
+      ]);
+    } else {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   const handleAdd = () => {
-    const cartItem = {
+    if (hasModifiers) {
+      setSheetOpen(true);
+      return;
+    }
+    addToCart({
+      lineId: item.id,
       menuItemId: item.id,
       name: item.name,
       price: item.price,
       quantity: 1,
       imageUrl: item.imageUrl,
-    };
+    });
+  };
 
-    const result = useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-
-    if (result === 'cross_chef_conflict') {
-      Alert.alert(
-        'Replace Cart?',
-        'You have items from another chef. Replace cart?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Replace',
-            style: 'destructive',
-            onPress: () => {
-              useCartStore.getState().clearCart();
-              useCartStore.getState().addItem(cartItem, { id: chefId, name: chefName });
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            },
-          },
-        ]
-      );
-    } else {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+  const handleModifierConfirm = (
+    modifiers: SelectedModifier[],
+    unitPrice: number,
+    quantity: number,
+  ) => {
+    setSheetOpen(false);
+    addToCart({
+      lineId: makeLineId(item.id, modifiers),
+      menuItemId: item.id,
+      name: item.name,
+      price: unitPrice,
+      quantity,
+      imageUrl: item.imageUrl,
+      modifiers,
+    });
   };
 
   const handleDecrement = () => {
@@ -123,6 +148,13 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </Text>
         ) : null}
 
+        {/* Combo includes (#233) */}
+        {item.isCombo && item.comboItems && item.comboItems.length > 0 ? (
+          <Text style={styles.comboIncludes} numberOfLines={2}>
+            Includes: {item.comboItems.map((c) => (c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join(', ')}
+          </Text>
+        ) : null}
+
         {/* Per-dish rating rolled up from reviews (#145) — charcoal star per spec */}
         {item.rating != null && item.rating > 0 ? (
           <View style={styles.ratingRow}>
@@ -146,7 +178,9 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
         {item.soldOut ? (
           <Text style={styles.soldOut}>Sold out today</Text>
         ) : item.isAvailable ? (
-          quantity === 0 ? (
+          // Modifier items always show "Add" (it opens the picker); a no-modifier
+          // item shows the inline stepper once it's in the cart (#232).
+          hasModifiers || quantity === 0 ? (
             // Initial add button — plain wrapper to dodge iOS Pressable array bug.
             <View style={styles.addWrapper}>
               <Pressable
@@ -253,6 +287,16 @@ export function MenuItemCard({ item, chefId, chefName }: MenuItemCardProps) {
           </View>
         )}
       </View>
+
+      {/* Add-on picker (#232) — opens for items with modifier groups. */}
+      {hasModifiers ? (
+        <ModifierSheet
+          item={item}
+          visible={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          onConfirm={handleModifierConfirm}
+        />
+      ) : null}
     </View>
   );
 }
@@ -338,6 +382,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: customerColors.charcoal.soft,
+  },
+  // Combo "includes" line (#233).
+  comboIncludes: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: customerColors.coral.pressed,
+    marginTop: 2,
   },
 
   // Per-dish rating — charcoal star + value (spec: charcoal star, NOT gold).
