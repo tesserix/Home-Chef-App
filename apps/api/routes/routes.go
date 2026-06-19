@@ -857,6 +857,10 @@ func SetupRouter() *gin.Engine {
 
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
+			// Win-back program (#42) — config + reactivation analytics.
+			admin.GET("/winback/config", adminHandler.GetWinbackConfig)
+			admin.PUT("/winback/config", adminHandler.UpdateWinbackConfig)
+			admin.GET("/winback/analytics", adminHandler.GetWinbackAnalytics)
 
 			// Approval/Review workflow
 			admin.GET("/approvals", approvalHandler.GetApprovalRequests)
