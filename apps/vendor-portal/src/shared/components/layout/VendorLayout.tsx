@@ -15,6 +15,7 @@ import {
   Bell,
   ChevronDown,
   ChefHat,
+  Sparkles,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
   { name: 'Reviews', href: '/reviews', icon: Star },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Premium', href: '/premium', icon: Sparkles },
   { name: 'Profile', href: '/profile', icon: User },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
