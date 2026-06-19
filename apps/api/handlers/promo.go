@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 type PromoHandler struct{}
@@ -29,13 +31,24 @@ func (h *PromoHandler) ValidatePromoCode(c *gin.Context) {
 	var req struct {
 		Code       string  `json:"code" binding:"required"`
 		OrderTotal float64 `json:"orderTotal" binding:"required"`
+		// ChefID scopes the preview to the cart's chef so chef-funded codes are
+		// validated accurately. Optional — omitted (e.g. an empty cart) skips the
+		// chef check; CreateOrder always enforces it with the real chef.
+		ChefID string `json:"chefId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	discount, promo, err := validateAndCalculateDiscount(req.Code, userID, req.OrderTotal)
+	chefID := uuid.Nil
+	if req.ChefID != "" {
+		if parsed, perr := uuid.Parse(req.ChefID); perr == nil {
+			chefID = parsed
+		}
+	}
+
+	discount, promo, err := validateAndCalculateDiscount(req.Code, userID, chefID, req.OrderTotal)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err})
 		return
@@ -48,6 +61,7 @@ func (h *PromoHandler) ValidatePromoCode(c *gin.Context) {
 		"discountValue": promo.DiscountValue,
 		"discount":      discount,
 		"description":   promo.Description,
+		"fundingSource": promo.FundingSource,
 	})
 }
 
@@ -113,6 +127,9 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 		ValidFrom      time.Time  `json:"validFrom" binding:"required"`
 		ValidUntil     *time.Time `json:"validUntil"`
 		ApplicableTo   string     `json:"applicableTo"`
+		FundingSource  string     `json:"fundingSource"`
+		ChefID         string     `json:"chefId"`
+		BudgetCap      float64    `json:"budgetCap"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -127,6 +144,31 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 	if req.DiscountType == "percentage" && (req.DiscountValue <= 0 || req.DiscountValue > 100) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Percentage discount must be between 0 and 100"})
 		return
+	}
+
+	// Funding source (#39): platform (default) or chef. Chef-funded requires a
+	// valid chef so the discount can be billed to that kitchen at settlement.
+	fundingSource := models.PromoFundingPlatform
+	var chefID *uuid.UUID
+	if req.FundingSource != "" {
+		if req.FundingSource != models.PromoFundingPlatform && req.FundingSource != models.PromoFundingChef {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "fundingSource must be 'platform' or 'chef'"})
+			return
+		}
+		fundingSource = req.FundingSource
+	}
+	if fundingSource == models.PromoFundingChef {
+		parsed, perr := uuid.Parse(req.ChefID)
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "A valid chefId is required for chef-funded promos"})
+			return
+		}
+		var chef models.ChefProfile
+		if err := database.DB.Select("id").First(&chef, "id = ?", parsed).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chef not found"})
+			return
+		}
+		chefID = &parsed
 	}
 
 	code := strings.ToUpper(strings.TrimSpace(req.Code))
@@ -161,6 +203,9 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 		ValidUntil:     req.ValidUntil,
 		IsActive:       true,
 		ApplicableTo:   applicableTo,
+		FundingSource:  fundingSource,
+		ChefID:         chefID,
+		BudgetCap:      req.BudgetCap,
 		CreatedByID:    userID,
 	}
 
@@ -199,6 +244,7 @@ func (h *PromoHandler) AdminUpdatePromo(c *gin.Context) {
 		ValidUntil     *time.Time `json:"validUntil"`
 		IsActive       *bool      `json:"isActive"`
 		ApplicableTo   *string    `json:"applicableTo"`
+		BudgetCap      *float64   `json:"budgetCap"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -242,6 +288,9 @@ func (h *PromoHandler) AdminUpdatePromo(c *gin.Context) {
 	}
 	if req.ApplicableTo != nil {
 		updates["applicable_to"] = *req.ApplicableTo
+	}
+	if req.BudgetCap != nil {
+		updates["budget_cap"] = *req.BudgetCap
 	}
 
 	if len(updates) > 0 {
@@ -318,11 +367,67 @@ func (h *PromoHandler) AdminGetPromoUsage(c *gin.Context) {
 	})
 }
 
+// AdminGetPromoAnalytics returns redemption analytics for a promo code (#39):
+// total redemptions, total discount given, unique redeemers, and budget/usage
+// utilisation. Powers the admin redemption-analytics view.
+// GET /admin/promos/:id/analytics
+func (h *PromoHandler) AdminGetPromoAnalytics(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid promo ID"})
+		return
+	}
+
+	var promo models.PromoCode
+	if err := database.DB.First(&promo, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Promo code not found"})
+		return
+	}
+
+	var stats struct {
+		Redemptions   int64
+		TotalDiscount float64
+		UniqueUsers   int64
+	}
+	database.DB.Model(&models.PromoCodeUsage{}).Where("promo_code_id = ?", id).
+		Select("COUNT(*) AS redemptions, COALESCE(SUM(discount),0) AS total_discount, COUNT(DISTINCT user_id) AS unique_users").
+		Scan(&stats)
+
+	budgetRemaining := 0.0
+	budgetUtilisation := 0.0
+	if promo.BudgetCap > 0 {
+		budgetRemaining = models.RoundAmount(promo.BudgetCap - promo.BudgetSpent)
+		if budgetRemaining < 0 {
+			budgetRemaining = 0
+		}
+		budgetUtilisation = models.RoundAmount(promo.BudgetSpent / promo.BudgetCap * 100)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":              promo.Code,
+		"fundingSource":     promo.FundingSource,
+		"redemptions":       stats.Redemptions,
+		"totalDiscount":     models.RoundAmount(stats.TotalDiscount),
+		"uniqueUsers":       stats.UniqueUsers,
+		"usageLimit":        promo.UsageLimit,
+		"usageCount":        promo.UsageCount,
+		"budgetCap":         promo.BudgetCap,
+		"budgetSpent":       models.RoundAmount(promo.BudgetSpent),
+		"budgetRemaining":   budgetRemaining,
+		"budgetUtilisation": budgetUtilisation,
+	})
+}
+
 // ---------- Shared validation logic ----------
 
-// validateAndCalculateDiscount validates a promo code and returns the calculated discount.
-// Returns (discount, promoCode, errorMessage).
-func validateAndCalculateDiscount(code string, userID uuid.UUID, orderTotal float64) (float64, *models.PromoCode, interface{}) {
+// validateAndCalculateDiscount validates a promo code and returns the calculated
+// discount. The math + eligibility rules live in services.ComputePromoDiscount /
+// CheckPromoEligibility (shared with any other surface, unit-tested); this
+// wrapper only resolves the per-customer/order state from the DB. chefID is the
+// order's chef (uuid.Nil in preview without a cart chef). Returns
+// (discount, promoCode, errorBody) — errorBody is nil, a message string, or a
+// {message, minOrderAmount} map for the min-order case.
+func validateAndCalculateDiscount(code string, userID, chefID uuid.UUID, orderSubtotal float64) (float64, *models.PromoCode, interface{}) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return 0, nil, "Promo code is required"
@@ -333,66 +438,35 @@ func validateAndCalculateDiscount(code string, userID uuid.UUID, orderTotal floa
 		return 0, nil, "Invalid promo code"
 	}
 
-	now := time.Now()
-
-	// Check validity period
-	if now.Before(promo.ValidFrom) {
-		return 0, nil, "Promo code is not yet active"
-	}
-	if promo.ValidUntil != nil && now.After(*promo.ValidUntil) {
-		return 0, nil, "Promo code has expired"
-	}
-
-	// Check global usage limit
-	if promo.UsageLimit > 0 && promo.UsageCount >= promo.UsageLimit {
-		return 0, nil, "Promo code usage limit reached"
-	}
-
-	// Check per-user limit
+	// Resolve per-customer state the rules need.
+	var userUsageCount int64
 	if promo.PerUserLimit > 0 {
-		var userUsageCount int64
 		database.DB.Model(&models.PromoCodeUsage{}).
 			Where("promo_code_id = ? AND user_id = ?", promo.ID, userID).
 			Count(&userUsageCount)
-		if int(userUsageCount) >= promo.PerUserLimit {
-			return 0, nil, "You have already used this promo code the maximum number of times"
-		}
 	}
-
-	// Check minimum order amount
-	if promo.MinOrderAmount > 0 && orderTotal < promo.MinOrderAmount {
-		return 0, nil, map[string]interface{}{
-			"message":        "Minimum order amount not met",
-			"minOrderAmount": promo.MinOrderAmount,
-		}
-	}
-
-	// Check applicableTo
+	var userOrderCount int64
 	if promo.ApplicableTo != "all" {
-		var orderCount int64
-		database.DB.Model(&models.Order{}).Where("customer_id = ?", userID).Count(&orderCount)
-		if promo.ApplicableTo == "new_users" && orderCount > 0 {
-			return 0, nil, "This promo code is only for new users"
-		}
-		if promo.ApplicableTo == "returning_users" && orderCount == 0 {
-			return 0, nil, "This promo code is only for returning users"
-		}
+		database.DB.Model(&models.Order{}).Where("customer_id = ?", userID).Count(&userOrderCount)
 	}
 
-	// Calculate discount
-	var discount float64
-	if promo.DiscountType == "percentage" {
-		discount = orderTotal * promo.DiscountValue / 100
-		if promo.MaxDiscount > 0 && discount > promo.MaxDiscount {
-			discount = promo.MaxDiscount
-		}
-	} else {
-		discount = promo.DiscountValue
+	discount := services.ComputePromoDiscount(&promo, orderSubtotal)
+	ctx := services.PromoContext{
+		Now:            time.Now(),
+		UserOrderCount: userOrderCount,
+		UserUsageCount: userUsageCount,
+		OrderSubtotal:  orderSubtotal,
+		ChefID:         chefID,
 	}
-
-	// Discount should not exceed order total
-	if discount > orderTotal {
-		discount = orderTotal
+	if err := services.CheckPromoEligibility(&promo, ctx, discount); err != nil {
+		var minErr services.ErrPromoMinOrder
+		if errors.As(err, &minErr) {
+			return 0, nil, map[string]interface{}{
+				"message":        minErr.Error(),
+				"minOrderAmount": minErr.MinOrderAmount,
+			}
+		}
+		return 0, nil, err.Error()
 	}
 
 	return discount, &promo, nil
