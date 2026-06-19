@@ -157,7 +157,8 @@ export function useOrderAction() {
   return { triggerAction, handleUndo, pendingUndo, isLoading: mutation.isPending };
 }
 
-// Generic status mutation used by the order detail screen for the in-flight
+// Generic status mutation used by the order detail screen and Dashboard "In
+// Progress" section for the in-flight
 // transitions (accepted → preparing → ready). Unlike useOrderAction these
 // transitions don't get an undo timer — the chef wouldn't expect to "undo
 // marking ready" after the fact. Optimistic update on the detail cache so
