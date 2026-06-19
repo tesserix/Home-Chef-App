@@ -209,6 +209,8 @@ export default function CheckoutScreen() {
           menuItemId: i.menuItemId,
           quantity: i.quantity,
           notes: i.instructions?.trim() || undefined,
+          // Selected add-on option ids for this line (#232).
+          modifierOptionIds: i.modifiers?.map((m) => m.optionId),
         })),
         deliveryAddressId: selectedAddressId,
         specialInstructions: note.trim() || undefined,
@@ -575,15 +577,23 @@ export default function CheckoutScreen() {
           <Text className="text-base font-semibold text-charcoal px-4 pt-4 pb-2">Order Summary</Text>
           <FlatList
             data={cartStore.items}
-            keyExtractor={(item) => item.menuItemId}
+            keyExtractor={(item) => item.lineId}
             scrollEnabled={false}
             renderItem={({ item }) => (
-              <View className="flex-row items-center px-4 py-2 gap-2">
+              <View className="flex-row items-start px-4 py-2 gap-2">
                 {/* Quantity chip — coral-tint bg, coral text */}
-                <View className="w-6 h-6 rounded-full bg-coral-tint items-center justify-center">
+                <View className="w-6 h-6 rounded-full bg-coral-tint items-center justify-center mt-0.5">
                   <Text className="text-xs font-medium text-coral">{item.quantity}</Text>
                 </View>
-                <Text className="flex-1 text-sm text-charcoal">{item.name}</Text>
+                <View className="flex-1">
+                  <Text className="text-sm text-charcoal">{item.name}</Text>
+                  {/* Selected add-ons (#232) */}
+                  {item.modifiers && item.modifiers.length > 0 ? (
+                    <Text className="text-xs text-charcoal-soft">
+                      {item.modifiers.map((m) => m.optionName).join(', ')}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text className="text-sm font-medium text-charcoal" style={{ fontVariant: ['tabular-nums'] }}>
                   ₹{(item.price * item.quantity).toFixed(2)}
                 </Text>

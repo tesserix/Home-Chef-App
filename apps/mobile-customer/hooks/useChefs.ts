@@ -63,6 +63,10 @@ interface ApiMenuItem {
   dailyCapacity?: number;
   remainingToday?: number;
   soldOut?: boolean;
+  // Add-ons / combos (#52)
+  isCombo?: boolean;
+  modifierGroups?: import('../types/customer').ModifierGroup[];
+  comboItems?: import('../types/customer').ComboItemRef[];
 }
 
 function firstNonEmpty(...vals: (string | undefined)[]): string | undefined {
@@ -108,6 +112,9 @@ export function mapMenuItem(
     dietaryTags: m.dietaryTags,
     allergens: m.allergens,
     isVeg: m.isVeg,
+    isCombo: m.isCombo,
+    modifierGroups: m.modifierGroups,
+    comboItems: m.comboItems,
     rating: m.rating,
     reviewCount: m.totalReviews,
     dailyCapacity: m.dailyCapacity,
