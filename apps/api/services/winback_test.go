@@ -42,6 +42,7 @@ func setupWinbackDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
 			aggregate_id TEXT, payload TEXT, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0,
 			last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
+		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, status TEXT, created_at DATETIME, deleted_at DATETIME)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
@@ -171,6 +172,32 @@ func TestReconcileWinbackOffers(t *testing.T) {
 		assert.Equal(t, 0, reactivated)
 		assert.Equal(t, 1, expired)
 	})
+}
+
+func TestFindLapsedCustomers(t *testing.T) {
+	db := setupWinbackDB(t)
+	order := func(customer uuid.UUID, daysAgo int) {
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, created_at) VALUES (?, ?, 'delivered', ?)`,
+			uuid.New().String(), customer.String(), time.Now().AddDate(0, 0, -daysAgo)).Error)
+	}
+	recent := uuid.New()   // ordered 5 days ago → active, not lapsed
+	lapsed := uuid.New()   // last order 40 days ago → lapsed
+	offered := uuid.New()  // lapsed but already offered → excluded
+	order(recent, 5)
+	order(lapsed, 40)
+	order(lapsed, 90) // older order too; MAX(created_at) is the 40-day one
+	order(offered, 50)
+	// `offered` already has a recent win-back offer.
+	require.NoError(t, db.Create(&models.WinbackOffer{
+		UserID: offered, AudienceType: models.WinbackAudienceCustomer, Trigger: models.WinbackTriggerLapsed,
+		PromoCodeID: uuid.New(), Code: "WB-XXXXXX", Status: models.WinbackStatusOffered,
+		OfferedAt: time.Now().AddDate(0, 0, -2), ExpiresAt: time.Now().AddDate(0, 0, 12),
+	}).Error)
+
+	ids := FindLapsedCustomers(db, 30, 30, 100) // threshold 30d, cooldown 30d
+	assert.Contains(t, ids, lapsed)
+	assert.NotContains(t, ids, recent, "recent orderer is not lapsed")
+	assert.NotContains(t, ids, offered, "already-offered is excluded by cooldown")
 }
 
 func TestGetActiveWinbackOffer(t *testing.T) {

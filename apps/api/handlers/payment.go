@@ -1042,10 +1042,16 @@ func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) {
 		return
 	}
 
-	// Mark subscription as suspended
-	database.DB.Model(&models.Subscription{}).
-		Where("gateway_sub_id = ?", data.Subscription.Entity.ID).
-		Update("status", models.SubStatusSuspended)
+	// Mark subscription as suspended, then win-back (#42): offer a discounted
+	// re-subscription to the suspended (payment-failed) chef/driver. Best-effort.
+	var sub models.Subscription
+	if err := database.DB.Where("gateway_sub_id = ?", data.Subscription.Entity.ID).First(&sub).Error; err != nil {
+		return
+	}
+	database.DB.Model(&models.Subscription{}).Where("id = ?", sub.ID).Update("status", models.SubStatusSuspended)
+	if _, werr := services.OfferWinback(database.DB, sub.UserID, string(sub.SubscriberType), models.WinbackTriggerSubSuspended, &sub.ID); werr != nil {
+		log.Printf("winback: offer on suspend failed for user=%s: %v", sub.UserID, werr)
+	}
 }
 
 // StripeWebhook handles Stripe webhook events.

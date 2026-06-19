@@ -196,6 +196,27 @@ func ReconcileWinbackOffers(db *gorm.DB) (int, int) {
 	return reactivated, expired
 }
 
+// FindLapsedCustomers returns up to `limit` customer user IDs whose most recent
+// delivered order is older than lapseThresholdDays AND who have NOT been offered a
+// win-back within cooldownDays — the lapse-trigger candidates for the daily cron.
+// Excluding the recently-offered keeps the LIMIT walking through fresh lapsers
+// instead of re-hitting the same oldest cohort every run.
+func FindLapsedCustomers(db *gorm.DB, lapseThresholdDays, cooldownDays, limit int) []uuid.UUID {
+	threshold := time.Now().AddDate(0, 0, -lapseThresholdDays)
+	cooldownSince := time.Now().AddDate(0, 0, -cooldownDays)
+	var ids []uuid.UUID
+	db.Raw(`
+		SELECT o.customer_id
+		FROM orders o
+		WHERE o.status = 'delivered' AND o.deleted_at IS NULL
+		  AND o.customer_id NOT IN (SELECT user_id FROM winback_offers WHERE offered_at >= ?)
+		GROUP BY o.customer_id
+		HAVING MAX(o.created_at) < ?
+		LIMIT ?
+	`, cooldownSince, threshold, limit).Scan(&ids)
+	return ids
+}
+
 // GetActiveWinbackOffer returns the user's current open, non-expired win-back offer
 // (most recent first), or nil. Powers the in-app banner (#276).
 func GetActiveWinbackOffer(db *gorm.DB, userID uuid.UUID) *models.WinbackOffer {
