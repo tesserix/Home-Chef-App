@@ -61,12 +61,29 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		return
 	}
 
+	// One open report per order. The UIs disable the submit button while a
+	// request is in flight, but enforce it server-side too: this blocks duplicate
+	// refunds from a retried/replayed request and stops a single order inflating
+	// the chef's issue rate. A previously *rejected* report doesn't lock the order
+	// (the customer may legitimately re-report with better evidence).
+	var priorIssues int64
+	database.DB.Model(&models.OrderIssue{}).
+		Where("order_id = ? AND status <> ?", order.ID, models.IssueRejected).
+		Count(&priorIssues)
+	if priorIssues > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "You've already reported an issue on this order — our team is reviewing it."})
+		return
+	}
+
 	reason := models.IssueReason(strings.TrimSpace(c.PostForm("reason")))
 	if !models.ValidIssueReason(reason) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reason"})
 		return
 	}
 	description := strings.TrimSpace(c.PostForm("description"))
+	if len(description) > 1000 { // guard against oversized input from non-UI clients
+		description = description[:1000]
+	}
 
 	// Affected items: repeated `affectedItemIds` fields and/or one comma-joined
 	// value. Validate they belong to this order; collect their subtotals.
