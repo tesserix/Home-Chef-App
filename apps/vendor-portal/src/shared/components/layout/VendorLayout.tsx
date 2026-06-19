@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChefHat,
   Sparkles,
+  CalendarDays,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -29,6 +30,7 @@ import { ThemeToggle } from '@/shared/theme';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Menu', href: '/menu', icon: UtensilsCrossed },
+  { name: 'Weekly Menu', href: '/weekly-menu', icon: CalendarDays },
   { name: 'Capacity', href: '/capacity', icon: Gauge },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },

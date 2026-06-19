@@ -53,6 +53,7 @@ const KitchenSetupPage = lazyWithRetry(() => import('@/features/profile/pages/Ki
 const ReviewsPage = lazyWithRetry(() => import('@/features/reviews/pages/ReviewsPage'));
 const AnalyticsPage = lazyWithRetry(() => import('@/features/analytics/pages/AnalyticsPage'));
 const PremiumPage = lazyWithRetry(() => import('@/features/billing/pages/PremiumPage'));
+const WeeklyMenuPage = lazyWithRetry(() => import('@/features/meal-plans/pages/WeeklyMenuPage'));
 const SettingsPage = lazyWithRetry(() => import('@/features/settings/pages/SettingsPage'));
 const AdminRequestsPage = lazyWithRetry(() => import('@/features/notifications/pages/NotificationsPage'));
 
@@ -114,6 +115,7 @@ export function AppRoutes() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="menu" element={<MenuPage />} />
+          <Route path="weekly-menu" element={<WeeklyMenuPage />} />
           <Route path="capacity" element={<CapacityPage />} />
           <Route path="prep" element={<PrepPage />} />
           <Route path="menu/new" element={<MenuItemFormPage />} />
