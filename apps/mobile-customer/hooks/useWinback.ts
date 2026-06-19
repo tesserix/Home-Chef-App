@@ -16,7 +16,7 @@ export function useWinback() {
   return useQuery<WinbackOffer | null>({
     queryKey: ['winback', 'active'],
     queryFn: async () => {
-      const r = await api.get<{ offer: WinbackOffer | null }>('/v1/winback/active');
+      const r = await api.get<{ offer: WinbackOffer | null }>('/v1/customer/winback/active');
       return r.data?.offer ?? null;
     },
     staleTime: 5 * 60 * 1000,

@@ -23,7 +23,7 @@ export function WinbackBanner() {
   const [dismissed, setDismissed] = useState(false);
   const { data } = useQuery({
     queryKey: ['winback', 'active'],
-    queryFn: () => apiClient.get<{ offer: WinbackOffer | null }>('/winback/active'),
+    queryFn: () => apiClient.get<{ offer: WinbackOffer | null }>('/customer/winback/active'),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });

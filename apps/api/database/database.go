@@ -339,6 +339,10 @@ func Migrate() error {
 		// (#269), so order_id is now nullable. AutoMigrate won't drop the legacy
 		// NOT NULL — do it here or subscription redemptions (order_id NULL) fail.
 		`ALTER TABLE promo_code_usages ALTER COLUMN order_id DROP NOT NULL`,
+		// At most ONE open win-back offer per user (#42) — the DB-level backstop
+		// against concurrent triggers (lapse cron + a cancel/suspend webhook, or a
+		// retried Razorpay delivery) double-minting offers + platform-funded promos.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_winback_one_open ON winback_offers (user_id) WHERE status = 'offered'`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

@@ -155,6 +155,12 @@ func OfferWinback(db *gorm.DB, userID uuid.UUID, audience, trigger string, subsc
 		})
 	})
 	if err != nil {
+		// A concurrent trigger may have won the race — the partial unique index
+		// (one open offer per user) rejects the second insert. If the user now has
+		// an open offer, that's the intended outcome: no-op, not an error.
+		if HasRecentWinbackOffer(db, userID, cfg.CooldownDays) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &offer, nil
