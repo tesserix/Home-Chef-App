@@ -84,6 +84,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// independently of the chef-facing notifications above.
 		{Stream: "CHEF", Durable: "notify-weekly-menu", Handler: h,
 			Subjects: []string{SubjectWeeklyMenuPublished}},
+		// Referral reward granted → notify the referrer (#38).
+		{Stream: "REFERRAL", Durable: "notify-referral", Handler: h,
+			Subjects: []string{SubjectReferralRewarded}},
 		{Stream: "DELIVERY", Durable: "notify-delivery", Handler: h,
 			Subjects: []string{SubjectDeliveryAssigned, SubjectDeliveryPickedUp, SubjectDriverOnboardingSubmitted, SubjectDriverTipReceived}},
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
@@ -122,6 +125,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleChefVerified)
 	case SubjectWeeklyMenuPublished:
 		return decodeThen(data, s.handleWeeklyMenuPublished)
+	case SubjectReferralRewarded:
+		return decodeThen(data, s.handleReferralRewarded)
 	case SubjectChefTipReceived, SubjectDriverTipReceived:
 		return decodeThen(data, s.handleTipReceived)
 	case SubjectGroupOrderLocked:
@@ -502,6 +507,36 @@ func (s *NotificationService) handleWeeklyMenuPublished(event Event) error {
 			Data:    map[string]any{"type": "weekly_menu_published", "chefId": chefIDStr},
 		})
 	}
+	return nil
+}
+
+// handleReferralRewarded notifies the referrer that their reward landed (#38):
+// in-app feed + push. event.UserID is the referrer; referrer_reward is the credit.
+func (s *NotificationService) handleReferralRewarded(event Event) error {
+	reward, _ := event.Data["referrer_reward"].(float64)
+	if reward <= 0 {
+		return nil
+	}
+	title := "You earned referral credit!"
+	message := fmt.Sprintf("A friend placed their first order — ₹%.0f is now in your wallet.", reward)
+	data, _ := json.Marshal(map[string]any{"type": "referral_rewarded"})
+
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "referral_rewarded",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save referral_rewarded notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID:  event.UserID,
+		Type:    "push",
+		Title:   title,
+		Message: message,
+		Data:    map[string]any{"type": "referral_rewarded"},
+	})
 	return nil
 }
 

@@ -258,6 +258,9 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 		})
 	}); err != nil {
 		log.Printf("full-wallet: mark-paid failed order=%s: %v", order.OrderNumber, err)
+	} else {
+		// Referral reward (#38) on the referee's first paid order — idempotent.
+		services.MaybeGrantReward(database.DB, order.ID)
 	}
 
 	// Pay the chef/driver from the platform balance (the whole split is a top-up).
@@ -457,6 +460,10 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 	}); err != nil {
 		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
 		services.CaptureBackgroundError(err)
+	} else {
+		// Referral reward (#38) on the referee's first paid order — idempotent,
+		// so a later webhook for the same order won't double-pay.
+		services.MaybeGrantReward(database.DB, order.ID)
 	}
 
 	// Wallet-at-checkout settlement (#141): now that the gateway capture is
@@ -912,6 +919,13 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	}
 	if res.RowsAffected == 0 {
 		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
+	} else {
+		// The order just became paid — try the referral reward (#38). Idempotent
+		// + best-effort: a referral failure must never affect the captured payment.
+		var ord models.Order
+		if err := database.DB.Select("id").Where("razorpay_order_id = ?", payment.OrderID).First(&ord).Error; err == nil {
+			services.MaybeGrantReward(database.DB, ord.ID)
+		}
 	}
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
 	// (idempotent). Harmless no-op when payment.OrderID isn't a tip charge.
