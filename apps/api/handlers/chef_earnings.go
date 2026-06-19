@@ -40,10 +40,11 @@ type earningsOrderRow struct {
 	OrderID       uuid.UUID `gorm:"column:id"`
 	OrderNumber   string    `gorm:"column:order_number"`
 	CompletedAt   time.Time `gorm:"column:delivered_at"`
-	ItemRevenue   float64   `gorm:"column:subtotal"`
-	DeliveryFee   float64   `gorm:"column:delivery_fee"`
-	ChefTip       float64   `gorm:"column:chef_tip"`
-	DeliveryState string    `gorm:"column:delivery_address_state"`
+	ItemRevenue        float64   `gorm:"column:subtotal"`
+	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
+	DeliveryFee        float64   `gorm:"column:delivery_fee"`
+	ChefTip            float64   `gorm:"column:chef_tip"`
+	DeliveryState      string    `gorm:"column:delivery_address_state"`
 }
 
 // earningsOrderResponse is the per-order breakdown shape on the wire.
@@ -99,8 +100,8 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	// Query delivered orders within the period
 	var rows []earningsOrderRow
 	if err := database.DB.Raw(`
-		SELECT id, order_number, delivered_at, subtotal, delivery_fee,
-		       chef_tip, delivery_address_state
+		SELECT id, order_number, delivered_at, subtotal, chef_funded_discount,
+		       delivery_fee, chef_tip, delivery_address_state
 		FROM   orders
 		WHERE  chef_id       = ?
 		AND    status        = 'delivered'
@@ -171,14 +172,15 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 // generator, and the TDS certificate all settle identically.
 func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRate float64) earningsOrderResponse {
 	e := services.ComputeOrderEarnings(services.EarningsInput{
-		OrderID:        row.OrderID,
-		OrderNumber:    row.OrderNumber,
-		CompletedAt:    row.CompletedAt,
-		ItemRevenue:    row.ItemRevenue,
-		DeliveryFee:    row.DeliveryFee,
-		ChefTip:        row.ChefTip,
-		DeliveryState:  row.DeliveryState,
-		CommissionRate: commissionRate,
+		OrderID:            row.OrderID,
+		OrderNumber:        row.OrderNumber,
+		CompletedAt:        row.CompletedAt,
+		ItemRevenue:        row.ItemRevenue,
+		ChefFundedDiscount: row.ChefFundedDiscount,
+		DeliveryFee:        row.DeliveryFee,
+		ChefTip:            row.ChefTip,
+		DeliveryState:      row.DeliveryState,
+		CommissionRate:     commissionRate,
 	}, chefState)
 
 	return earningsOrderResponse{

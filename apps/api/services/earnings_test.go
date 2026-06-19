@@ -29,6 +29,41 @@ func TestComputeOrderEarnings_PremiumCommissionOverride(t *testing.T) {
 	}
 }
 
+func TestComputeOrderEarnings_ChefFundedDiscount(t *testing.T) {
+	// A chef-funded promo (#39) of 100 comes out of the chef's food revenue
+	// before commission/gross/TDS. Effective itemRevenue = 1000 - 100 = 900.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:        1000,
+		DeliveryFee:        50,
+		ChefTip:            20,
+		DeliveryState:      "maharashtra",
+		ChefFundedDiscount: 100,
+	}, "Maharashtra")
+
+	if got.ItemRevenue != 900 {
+		t.Errorf("itemRevenue = %.2f, want 900 (net of chef-funded discount)", got.ItemRevenue)
+	}
+	// commission 15% of 900 = 135 (not 150)
+	if got.PlatformCommission != 135 {
+		t.Errorf("commission = %.2f, want 135", got.PlatformCommission)
+	}
+	// gross = 900 + 50 + 20 = 970; tds 1% = 9.7; net = 970 - 135 - 9.7 = 825.3
+	if got.Gross != 970 {
+		t.Errorf("gross = %.2f, want 970", got.Gross)
+	}
+	if got.NetPayout != 825.3 {
+		t.Errorf("netPayout = %.2f, want 825.3", got.NetPayout)
+	}
+}
+
+func TestComputeOrderEarnings_PlatformFundedLeavesChefWhole(t *testing.T) {
+	// Platform-funded promo → ChefFundedDiscount 0 → chef earnings unchanged.
+	got := ComputeOrderEarnings(EarningsInput{ItemRevenue: 1000, DeliveryState: "x"}, "y")
+	if got.ItemRevenue != 1000 || got.PlatformCommission != 150 {
+		t.Errorf("platform-funded should leave chef whole: itemRevenue=%.2f commission=%.2f", got.ItemRevenue, got.PlatformCommission)
+	}
+}
+
 func TestComputeOrderEarnings_ZeroRateFallsBackToDefault(t *testing.T) {
 	// A 0 / unset CommissionRate must use the standard 15% (back-compat).
 	got := ComputeOrderEarnings(EarningsInput{ItemRevenue: 1000, DeliveryState: "x"}, "y")

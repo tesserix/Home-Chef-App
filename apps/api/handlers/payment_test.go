@@ -28,6 +28,8 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
 )
 
 func setupPayDB(t *testing.T) *gorm.DB {
@@ -277,5 +279,45 @@ func TestInitiateRefund_AdminAllowed_NoRazorpayPayment_400(t *testing.T) {
 		map[string]any{"reason": "ops refund"})
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("want 400 no-razorpay-payment (admin authorized past 403), got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+// Chef-funded promo (#39): the chef bears the discount, so their Route payout +
+// the gross-payout helper drop by ChefFundedDiscount; platform-funded leaves it
+// whole. orderSettlements reflects the same reduced chef transfer.
+func TestChefGrossPayout_ChefFunded(t *testing.T) {
+	base := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20}
+	if got := chefGrossPayout(base); got != 1070 {
+		t.Fatalf("platform-funded chef payout = %.2f, want 1070", got)
+	}
+	chefFunded := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, ChefFundedDiscount: 100}
+	if got := chefGrossPayout(chefFunded); got != 970 {
+		t.Fatalf("chef-funded chef payout = %.2f, want 970 (less 100 discount)", got)
+	}
+	// Never negative even if a discount somehow exceeds the payout.
+	huge := &models.Order{Subtotal: 100, ChefFundedDiscount: 500}
+	if got := chefGrossPayout(huge); got != 0 {
+		t.Fatalf("over-discounted chef payout = %.2f, want 0 (floored)", got)
+	}
+}
+
+func TestOrderSettlements_ChefFundedReducesChefTransfer(t *testing.T) {
+	order := &models.Order{
+		OrderNumber:        "HC-1",
+		Subtotal:           1000,
+		Tax:                50,
+		ChefTip:            20,
+		DeliveryFee:        40,
+		ChefFundedDiscount: 100,
+	}
+	order.Chef.RazorpayAccountID = "acc_chef"
+	settlements := orderSettlements(order)
+	// Chef settlement = (1000 + 50 + 20 - 100) = 970 → 97000 paise.
+	if settlements[0].Amount != services.ToPaise(970) {
+		t.Fatalf("chef settlement = %d paise, want %d", settlements[0].Amount, services.ToPaise(970))
+	}
+	// Driver settlement (deliveryFee + driverTip) is unaffected by the chef's promo.
+	if settlements[1].Amount != services.ToPaise(40) {
+		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
 	}
 }
