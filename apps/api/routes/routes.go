@@ -505,6 +505,16 @@ func SetupRouter() *gin.Engine {
 			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
 		}
 
+		// Shared authenticated profile routes (any logged-in role). The mobile
+		// apps register their FCM push token here after login; without this the
+		// server has no token and every push is skipped.
+		profile := v1.Group("/profile")
+		profile.Use(bffAuth(bffKey, bffWindow))
+		{
+			deviceTokenHandler := handlers.NewDeviceTokenHandler()
+			profile.PUT("/device-token", deviceTokenHandler.UpdateDeviceToken)
+		}
+
 		// Chat routes (authenticated)
 		chat := v1.Group("/chat")
 		chat.Use(bffAuth(bffKey, bffWindow))

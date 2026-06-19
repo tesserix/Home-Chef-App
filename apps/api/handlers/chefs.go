@@ -775,6 +775,30 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 
 	priorStatus := order.Status
 	order.Status = models.OrderStatus(req.Status)
+
+	// Stamp the lifecycle timestamp for this transition (idempotent — only set
+	// once) so the chef/customer order timelines render real times instead of
+	// blanks. Repeated updates to the same status are safe.
+	now := time.Now()
+	switch order.Status {
+	case models.OrderStatusAccepted:
+		if order.AcceptedAt == nil {
+			order.AcceptedAt = &now
+		}
+	case models.OrderStatusReady:
+		if order.PreparedAt == nil {
+			order.PreparedAt = &now
+		}
+	case models.OrderStatusPickedUp:
+		if order.PickedUpAt == nil {
+			order.PickedUpAt = &now
+		}
+	case models.OrderStatusDelivered:
+		if order.DeliveredAt == nil {
+			order.DeliveredAt = &now
+		}
+	}
+
 	// A chef rejecting via status="cancelled" should release the reserved daily
 	// capacity (#48), but only on the first transition out of a live state.
 	releaseCap := order.Status == models.OrderStatusCancelled &&
