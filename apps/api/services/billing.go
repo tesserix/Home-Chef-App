@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
@@ -307,30 +309,39 @@ func CheckEarningsThreshold(subscriptionID uuid.UUID) (*models.SubscriptionInvoi
 	return nil, nil
 }
 
-// GenerateInvoice creates a new invoice for a subscription
+// GenerateInvoice creates a new invoice for a subscription. A one-time signup /
+// trial promo (#269) is applied to the FIRST invoice: the discount + atomic
+// redemption claim + invoice creation all commit together so the promo can never
+// be half-applied.
 func GenerateInvoice(sub *models.Subscription, cycleEarnings float64) (*models.SubscriptionInvoice, error) {
 	cycleStart, cycleEnd := getCycleBounds(sub)
 	taxRate := getTaxRate(sub.CountryCode)
-	taxAmount := models.RoundAmount(sub.PlanAmount * taxRate)
-	totalAmount := models.RoundAmount(sub.PlanAmount + taxAmount)
 
-	invoice := models.SubscriptionInvoice{
-		SubscriptionID:       sub.ID,
-		InvoiceNumber:        generateInvoiceNumber(),
-		Status:               models.InvoicePending,
-		Amount:               sub.PlanAmount,
-		Currency:             sub.Currency,
-		TaxAmount:            taxAmount,
-		TotalAmount:          totalAmount,
-		PeriodStart:          cycleStart,
-		PeriodEnd:            cycleEnd,
-		EarningsAtGeneration: cycleEarnings,
-		PaymentGateway:       sub.PaymentGateway,
-		AttemptCount:         0,
-		MaxAttempts:          3,
-	}
+	var invoice models.SubscriptionInvoice
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Apply the stored promo (no-op + 0 when none / ineligible / exhausted).
+		discount := ApplySubscriptionPromoToInvoice(tx, sub, sub.PlanAmount)
+		netAmount := models.RoundAmount(sub.PlanAmount - discount)
+		taxAmount := models.RoundAmount(netAmount * taxRate)
+		totalAmount := models.RoundAmount(netAmount + taxAmount)
 
-	if err := database.DB.Create(&invoice).Error; err != nil {
+		invoice = models.SubscriptionInvoice{
+			SubscriptionID:       sub.ID,
+			InvoiceNumber:        generateInvoiceNumber(),
+			Status:               models.InvoicePending,
+			Amount:               netAmount,
+			Currency:             sub.Currency,
+			TaxAmount:            taxAmount,
+			TotalAmount:          totalAmount,
+			PeriodStart:          cycleStart,
+			PeriodEnd:            cycleEnd,
+			EarningsAtGeneration: cycleEarnings,
+			PaymentGateway:       sub.PaymentGateway,
+			AttemptCount:         0,
+			MaxAttempts:          3,
+		}
+		return tx.Create(&invoice).Error
+	}); err != nil {
 		return nil, fmt.Errorf("failed to create invoice: %w", err)
 	}
 

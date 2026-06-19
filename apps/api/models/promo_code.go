@@ -49,9 +49,12 @@ type PromoCodeUsage struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	PromoCodeID uuid.UUID `gorm:"type:uuid;not null;index" json:"promoCodeId"`
 	UserID      uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
-	OrderID     uuid.UUID `gorm:"type:uuid;not null" json:"orderId"`
-	Discount    float64   `gorm:"not null" json:"discount"`
-	UsedAt      time.Time `gorm:"autoCreateTime" json:"usedAt"`
+	// A redemption is tied to EITHER an order (checkout) OR a subscription
+	// invoice (#269) — exactly one is set; both nullable so either surface can record.
+	OrderID        *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
+	SubscriptionID *uuid.UUID `gorm:"type:uuid;index" json:"subscriptionId,omitempty"`
+	Discount       float64    `gorm:"not null" json:"discount"`
+	UsedAt         time.Time  `gorm:"autoCreateTime" json:"usedAt"`
 
 	PromoCode PromoCode `gorm:"foreignKey:PromoCodeID" json:"promoCode,omitempty"`
 	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`

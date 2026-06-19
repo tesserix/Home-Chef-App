@@ -121,6 +121,9 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 
 	var req struct {
 		Interval string `json:"interval" binding:"required"`
+		// Optional signup / trial promo (#269). Validated + stored here; the real
+		// discount is recomputed and claimed when the first invoice is generated.
+		PromoCode string `json:"promoCode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -142,6 +145,20 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 
 	planAmount := services.GetPlanAmount(planCfg, interval)
 
+	// Validate an optional promo against the plan amount; store its id so the
+	// first invoice applies the discount. The discount is a preview only.
+	var promoID *uuid.UUID
+	var promoDiscount float64
+	if strings.TrimSpace(req.PromoCode) != "" {
+		discount, promo, perr := services.ValidateSubscriptionPromoDB(req.PromoCode, userID, planAmount)
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": perr.Error()})
+			return
+		}
+		promoID = &promo.ID
+		promoDiscount = discount
+	}
+
 	// Check if subscription exists
 	var sub models.Subscription
 	if err := database.DB.Where("user_id = ? AND subscriber_type = ?", userID, subType).
@@ -152,14 +169,20 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
 			return
 		}
-		// Update interval if not monthly
+		// Update interval (if not monthly) and the applied promo in one write.
+		newFields := map[string]interface{}{}
 		if interval != models.BillingMonthly {
-			database.DB.Model(newSub).Updates(map[string]interface{}{
-				"billing_interval": interval,
-				"plan_amount":      planAmount,
-			})
+			newFields["billing_interval"] = interval
+			newFields["plan_amount"] = planAmount
 			newSub.BillingInterval = interval
 			newSub.PlanAmount = planAmount
+		}
+		if promoID != nil {
+			newFields["promo_code_id"] = promoID
+			newSub.PromoCodeID = promoID
+		}
+		if len(newFields) > 0 {
+			database.DB.Model(newSub).Updates(newFields)
 		}
 
 		// Update onboarding step for driver subscribers
@@ -169,15 +192,20 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 				Update("onboarding_step", 4)
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"subscription": newSub.ToResponse()})
+		c.JSON(http.StatusCreated, gin.H{"subscription": newSub.ToResponse(), "promoDiscount": promoDiscount})
 		return
 	}
 
 	// Update existing subscription
-	database.DB.Model(&sub).Updates(map[string]interface{}{
+	updateFields := map[string]interface{}{
 		"billing_interval": interval,
 		"plan_amount":      planAmount,
-	})
+	}
+	if promoID != nil {
+		updateFields["promo_code_id"] = promoID
+		sub.PromoCodeID = promoID
+	}
+	database.DB.Model(&sub).Updates(updateFields)
 	sub.BillingInterval = interval
 	sub.PlanAmount = planAmount
 
@@ -188,7 +216,7 @@ func (h *SubscriptionHandler) ChoosePlan(c *gin.Context) {
 			Update("onboarding_step", 4)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"subscription": sub.ToResponse()})
+	c.JSON(http.StatusOK, gin.H{"subscription": sub.ToResponse(), "promoDiscount": promoDiscount})
 }
 
 // CancelSubscription cancels the user's subscription

@@ -107,6 +107,11 @@ type Subscription struct {
 	CancelReason string     `gorm:"" json:"cancelReason,omitempty"`
 	RefundAmount float64    `gorm:"default:0" json:"refundAmount"`
 
+	// Promo applied at signup (#39/#269). When set, the discount is applied to the
+	// subscription's FIRST generated invoice and then cleared (one-time signup
+	// incentive / trial discount). Always a platform-funded code.
+	PromoCodeID *uuid.UUID `gorm:"type:uuid;index" json:"promoCodeId,omitempty"`
+
 	// Payment gateway integration
 	PaymentGateway string `gorm:"type:varchar(20)" json:"paymentGateway"`
 	GatewaySubID   string `gorm:"" json:"-"`
