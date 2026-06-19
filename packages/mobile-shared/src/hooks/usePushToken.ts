@@ -5,7 +5,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { AxiosInstance } from 'axios';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 /**
  * Get the raw FCM device token for this device.
@@ -58,5 +58,12 @@ export async function registerDeviceToken(
 ): Promise<void> {
   // Path is /v1/... because the client baseURL ends at /api (matches every
   // other call, e.g. /v1/favorites/chefs) → /api/v1/profile/device-token.
-  await client.put('/v1/profile/device-token', { token });
+  //
+  // skipAuthFailure: a 401 here (e.g. registration racing a session refresh on
+  // cold start) must NOT clear the session and bounce the user to login — this
+  // is a best-effort call. The client's response interceptor honours this flag.
+  const config: AxiosRequestConfig & { skipAuthFailure: boolean } = {
+    skipAuthFailure: true,
+  };
+  await client.put('/v1/profile/device-token', { token }, config);
 }

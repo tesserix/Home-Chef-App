@@ -1,3 +1,18 @@
+// Home / discovery screen.
+//
+// Header collapses from five stacked filter rows to three visual rows:
+//   1. Search pill  + "Search dishes →" / "Map view →" quick links
+//   2. Cuisine category scroller (the primary browse axis — always visible)
+//   3. Slim filter bar — Open Now pill (most-used quick toggle) + "Filters"
+//      pill with an active-count badge + Social Feed & Catering nav entries
+//
+// Secondary filters (diet, price, sort) live in FilterSheet — a @gorhom/
+// bottom-sheet that opens on the "Filters" tap and drives the SAME state
+// variables/setters that previously powered three separate chip rows.
+//
+// ALL filter state (selectedDiet, maxPrice, sort, isOpenOnly) is defined
+// here and passed down — FilterSheet holds zero state of its own.
+
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
@@ -19,19 +34,15 @@ import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
+import { ActiveOrderCard } from '../../components/orders/ActiveOrderCard';
+import { FilterSheet } from '../../components/home/FilterSheet';
+import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { useActiveOrder } from '../../hooks/useActiveOrder';
+import { useChefs } from '../../hooks/useChefs';
+import type { ChefFilters } from '../../hooks/useChefs';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
-import { useChefs } from '../../hooks/useChefs';
-import type { ChefFilters } from '../../hooks/useChefs';
-import { DIET_OPTIONS } from '@homechef/mobile-shared/dietary';
-
-// Diet filter chips (#41) — "All" + the canonical diet vocabulary. The value is
-// matched case-insensitively against menu-item dietary tags server-side.
-const DIET_FILTERS: { label: string; value: string }[] = [
-  { label: 'All diets', value: '' },
-  ...DIET_OPTIONS.map((o) => ({ label: o.label, value: o.value })),
-];
 
 const CUISINES = [
   'All',
@@ -43,21 +54,21 @@ const CUISINES = [
   'Healthy',
 ];
 
-const SORT_OPTIONS: { label: string; value: ChefFilters['sort'] }[] = [
-  { label: 'Recommended', value: 'rating' },
-  { label: 'Top Rated', value: 'rating' },
-  { label: 'Newest', value: 'newest' },
-  { label: 'Price', value: 'price' },
-  { label: 'Nearest', value: 'distance' },
-];
-
-// Price filter (#36): caps the chef's minimum order. Mirrors the web filter.
-const PRICE_FILTERS: { label: string; value: number | undefined }[] = [
-  { label: 'Any price', value: undefined },
-  { label: '< ₹100', value: 100 },
-  { label: '< ₹250', value: 250 },
-  { label: '< ₹500', value: 500 },
-];
+// Counts how many secondary filters are active (non-default) so the badge
+// on the Filters pill reflects the applied state.
+function countActiveFilters(params: {
+  selectedDiet: string;
+  maxPrice: number | undefined;
+  sort: ChefFilters['sort'];
+  isOpenOnly: boolean;
+}): number {
+  let n = 0;
+  if (params.selectedDiet !== '') n += 1;
+  if (params.maxPrice !== undefined) n += 1;
+  if (params.sort !== 'rating') n += 1;
+  // isOpenOnly is surfaced separately in the quick bar; don't double-count.
+  return n;
+}
 
 // Skeleton card matching the photo-led 4:3 ChefCard shape.
 function SkeletonCard() {
@@ -74,6 +85,9 @@ function SkeletonCard() {
 }
 
 export default function HomeScreen() {
+  // ── Filter state ────────────────────────────────────────────────────────
+  // All five filter dimensions live here and flow into useChefs(filters).
+  // FilterSheet receives setters as props so it drives the same state.
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
@@ -82,6 +96,12 @@ export default function HomeScreen() {
   const [sort, setSort] = useState<ChefFilters['sort']>('rating');
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
 
+  const { order: activeOrder } = useActiveOrder();
+
+  // Ref for opening the FilterSheet imperatively on Filters pill tap.
+  const filterSheetRef = useRef<BottomSheetMethods>(null);
+
+  // ── Search debounce ─────────────────────────────────────────────────────
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -99,6 +119,7 @@ export default function HomeScreen() {
     };
   }, [searchText]);
 
+  // ── Data fetching ────────────────────────────────────────────────────────
   const filters: ChefFilters = {
     search: debouncedSearch || undefined,
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
@@ -110,16 +131,23 @@ export default function HomeScreen() {
   };
 
   const { data, isLoading, isFetching, refetch } = useChefs(filters);
-
   const chefs = data?.data ?? [];
 
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
 
+  // ── Derived values ───────────────────────────────────────────────────────
+  const activeFilterCount = countActiveFilters({ selectedDiet, maxPrice, sort, isOpenOnly });
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  function handleOpenFilters() {
+    filterSheetRef.current?.expand();
+  }
+
+  // ── Header component ─────────────────────────────────────────────────────
   const renderHeader = () => (
     <>
-      {/* Floating white search pill — the brand's first impression.
-          radius-full, shadow[2], charcoal-soft magnifier + placeholder. */}
+      {/* ── Row 1: Search pill + quick-navigation links ── */}
       <View style={styles.searchPillWrapper}>
         <View style={styles.searchPill}>
           <Search
@@ -137,10 +165,8 @@ export default function HomeScreen() {
             accessibilityLabel="Search chefs"
           />
         </View>
-        {/* Discovery entries (#143): the pill above filters chefs; these jump to
-            a dedicated dish-name search (carrying the current query) and a map of
-            nearby chefs. */}
-        <View style={{ flexDirection: 'row', paddingTop: 8, paddingHorizontal: 4, gap: 20 }}>
+        {/* Discovery entries (#143): dish-name search + map view */}
+        <View style={styles.searchQuickLinks}>
           <Pressable
             onPress={() =>
               router.push(
@@ -152,24 +178,21 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Search dishes by name"
           >
-            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: customerColors.coral.DEFAULT }}>
-              Search dishes →
-            </Text>
+            <Text style={styles.searchQuickLinkText}>Search dishes →</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/chefs-map')}
             accessibilityRole="button"
             accessibilityLabel="View chefs on a map"
           >
-            <Text style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: '600', color: customerColors.coral.DEFAULT }}>
-              Map view →
-            </Text>
+            <Text style={styles.searchQuickLinkText}>Map view →</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* Airbnb category chip row: selected = charcoal text + 2px charcoal
-          underline, unselected = charcoal-soft, NO fill / NO border. */}
+      {/* ── Row 2: Cuisine category scroller (primary browse axis) ── */}
+      {/* Airbnb-style: selected = charcoal text + 2px charcoal underline;
+          unselected = charcoal-soft, no fill, no border. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -180,7 +203,7 @@ export default function HomeScreen() {
         {CUISINES.map((cuisine) => {
           const isSelected = selectedCuisine === cuisine;
           return (
-            // className-based Pressable is safe on iOS (no function-style style prop).
+            // iOS Pressable inner-View pattern: no style array on Pressable
             <Pressable
               key={cuisine}
               onPress={() => setSelectedCuisine(cuisine)}
@@ -203,88 +226,19 @@ export default function HomeScreen() {
         })}
       </ScrollView>
 
-      {/* Diet filter chips (#41) — same chip styling as cuisines. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRowContent}
-        style={styles.chipRow}
-        accessibilityRole="tablist"
-      >
-        {DIET_FILTERS.map((d) => {
-          const isSelected = selectedDiet === d.value;
-          return (
-            <Pressable
-              key={d.value || 'all'}
-              onPress={() => setSelectedDiet(d.value)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`Filter by ${d.label}`}
-            >
-              <View style={[styles.chip, isSelected && styles.chipSelected]}>
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
-                  ]}
-                >
-                  {d.label}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Price filter chips (#36) — same chip styling as cuisines. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRowContent}
-        style={styles.chipRow}
-        accessibilityRole="tablist"
-      >
-        {PRICE_FILTERS.map((p) => {
-          const isSelected = maxPrice === p.value;
-          return (
-            <Pressable
-              key={p.label}
-              onPress={() => setMaxPrice(p.value)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`Filter by ${p.label}`}
-            >
-              <View style={[styles.chip, isSelected && styles.chipSelected]}>
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    isSelected ? styles.chipLabelSelected : styles.chipLabelDefault,
-                  ]}
-                >
-                  {p.label}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Open-Now toggle + Sort chips + filter icon row.
-          Coral only for selected state; unselected = charcoal-soft. */}
-      <View style={styles.filterRow}>
-        {/* Open Now toggle */}
+      {/* ── Row 3: Slim filter/sort bar ── */}
+      {/* Open Now quick-toggle (most frequently used, warrants top-level placement)
+          + Filters pill (opens FilterSheet) with an active-count badge
+          + Social Feed / Catering navigation entries (discovery, not filters) */}
+      <View style={styles.filterBar}>
+        {/* Open Now quick-toggle */}
         <Pressable
           onPress={() => setIsOpenOnly((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={isOpenOnly ? 'Showing open chefs only' : 'Show open chefs only'}
           accessibilityState={{ checked: isOpenOnly }}
         >
-          <View
-            style={[
-              styles.openNowPill,
-              isOpenOnly && styles.openNowPillActive,
-            ]}
-          >
+          <View style={[styles.openNowPill, isOpenOnly && styles.openNowPillActive]}>
             <View
               style={[
                 styles.openNowDot,
@@ -302,68 +256,64 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        {/* Sort chips — horizontal scroll in a flex-1 container */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortScrollContent}
-          style={styles.sortScroll}
-        >
-          {SORT_OPTIONS.map((opt, index) => {
-            const isActive =
-              sort === opt.value &&
-              SORT_OPTIONS.findIndex((o) => o.value === sort) === index;
-            return (
-              <Pressable
-                key={index}
-                onPress={() => setSort(opt.value)}
-                accessibilityRole="button"
-                accessibilityLabel={`Sort by ${opt.label}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <View style={[styles.sortChip, isActive && styles.sortChipActive]}>
-                  <Text
-                    style={[
-                      styles.sortChipLabel,
-                      isActive ? styles.sortChipLabelActive : styles.sortChipLabelDefault,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <SlidersHorizontal
-          size={18}
-          color={customerColors.charcoal.soft}
-          accessibilityElementsHidden
-        />
-      </View>
-
-      {/* Quick-access: Social Feed + Catering — clean charcoal pills on white.
-          Ghost outline style, no fill, no persimmon. */}
-      <View style={styles.quickLinks}>
+        {/* Filters pill — opens the sheet; badge shows count of active secondary filters */}
         <Pressable
-          onPress={() => router.push('/social')}
+          onPress={handleOpenFilters}
           accessibilityRole="button"
-          accessibilityLabel="Go to Social Feed"
+          accessibilityLabel={
+            activeFilterCount > 0
+              ? `Filters — ${activeFilterCount} active`
+              : 'Open filters'
+          }
         >
-          <View style={styles.quickLinkPill}>
-            <Text style={styles.quickLinkLabel}>Social Feed</Text>
+          <View style={[styles.filtersPill, activeFilterCount > 0 && styles.filtersPillActive]}>
+            <SlidersHorizontal
+              size={14}
+              color={
+                activeFilterCount > 0
+                  ? customerColors.canvas
+                  : customerColors.charcoal.soft
+              }
+              accessibilityElementsHidden
+            />
+            <Text
+              style={[
+                styles.filtersPillLabel,
+                activeFilterCount > 0 && styles.filtersPillLabelActive,
+              ]}
+            >
+              Filters
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </View>
         </Pressable>
-        <Pressable
-          onPress={() => router.push('/catering')}
-          accessibilityRole="button"
-          accessibilityLabel="Go to Catering"
-        >
-          <View style={styles.quickLinkPill}>
-            <Text style={styles.quickLinkLabel}>Catering</Text>
-          </View>
-        </Pressable>
+
+        {/* Right side: Social Feed + Catering — navigation, not filter controls.
+            Moved from their own row to the same slim bar, saving one full row. */}
+        <View style={styles.navLinks}>
+          <Pressable
+            onPress={() => router.push('/social')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Social Feed"
+          >
+            <View style={styles.navLinkPill}>
+              <Text style={styles.navLinkLabel}>Social Feed</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/catering')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Catering"
+          >
+            <View style={styles.navLinkPill}>
+              <Text style={styles.navLinkLabel}>Catering</Text>
+            </View>
+          </Pressable>
+        </View>
       </View>
     </>
   );
@@ -375,51 +325,83 @@ export default function HomeScreen() {
   // jump. Skeletons and the empty message render inside the list body instead.
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <FlatList
-        data={isLoading ? [] : chefs}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderHeader}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item, index }) => (
-          <Animated.View
-            style={{ flex: 1 }}
-            entering={
-              reduceMotion
-                ? undefined
-                : FadeInDown.delay(Math.min(index, 8) * 60)
-                    .duration(250)
-                    .easing(ENTRANCE_EASING)
-            }
-          >
-            <ChefCard chef={item} />
-          </Animated.View>
+      {/* Outer View is flex:1 so the floating card can be positioned absolutely
+          above the tab bar without affecting FlatList scroll behaviour. */}
+      <View style={styles.screenWrapper}>
+        <FlatList
+          data={isLoading ? [] : chefs}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={[
+            styles.listContent,
+            // When the card is visible, add bottom padding so list content
+            // isn't hidden behind it.
+            activeOrder != null && styles.listContentWithCard,
+          ]}
+          ListHeaderComponent={renderHeader}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item, index }) => (
+            <Animated.View
+              style={{ flex: 1 }}
+              entering={
+                reduceMotion
+                  ? undefined
+                  : FadeInDown.delay(Math.min(index, 8) * 60)
+                      .duration(250)
+                      .easing(ENTRANCE_EASING)
+              }
+            >
+              <ChefCard chef={item} />
+            </Animated.View>
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={isFetching && !isLoading}
+              onRefresh={refetch}
+              tintColor={customerColors.coral.DEFAULT}
+            />
+          }
+          ListEmptyComponent={
+            isLoading ? (
+              <View style={styles.skeletonGrid}>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+                <View style={styles.skeletonCol}><SkeletonCard /></View>
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No chefs found</Text>
+                <Text style={styles.emptyBody}>Try adjusting your filters</Text>
+              </View>
+            )
+          }
+        />
+
+        {/* Floating active-order card — pinned to the bottom of the screen,
+            just above the tab bar. Only rendered when there is an active order.
+            Absolute positioning keeps it out of the scroll flow. */}
+        {activeOrder != null && (
+          <View style={styles.activeOrderAnchor} pointerEvents="box-none">
+            <ActiveOrderCard order={activeOrder} />
+          </View>
         )}
-        refreshControl={
-          <RefreshControl
-            refreshing={isFetching && !isLoading}
-            onRefresh={refetch}
-            tintColor={customerColors.coral.DEFAULT}
-          />
-        }
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.skeletonGrid}>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-              <View style={styles.skeletonCol}><SkeletonCard /></View>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No chefs found</Text>
-              <Text style={styles.emptyBody}>Try adjusting your filters</Text>
-            </View>
-          )
-        }
-      />
+
+        {/* FilterSheet — mounts always so @gorhom can manage its own gesture
+            state; hidden at index -1 until the Filters pill is tapped. */}
+        <FilterSheet
+          ref={filterSheetRef}
+          selectedDiet={selectedDiet}
+          onDietChange={setSelectedDiet}
+          maxPrice={maxPrice}
+          onMaxPriceChange={setMaxPrice}
+          sort={sort}
+          onSortChange={setSort}
+          isOpenOnly={isOpenOnly}
+          onIsOpenOnlyChange={setIsOpenOnly}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -430,8 +412,26 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.canvas,
   },
 
-  // --- Floating search pill ---
-  // Outer wrapper provides horizontal margins and top spacing.
+  // Wrapper that lets us layer the floating card and FilterSheet above the FlatList
+  screenWrapper: {
+    flex: 1,
+  },
+
+  // Extra bottom padding when the active-order card is showing so the last
+  // chef card isn't obscured behind it (card ~90pt + 16pt gap = ~106pt).
+  listContentWithCard: {
+    paddingBottom: 106,
+  },
+
+  // Absolute anchor for the floating card — sits just above the tab bar.
+  activeOrderAnchor: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
+  },
+
+  // ── Row 1: Search pill ────────────────────────────────────────────────────
   searchPillWrapper: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: customerColors.surface.DEFAULT,
-    borderRadius: 9999, // radius-full
+    borderRadius: 9999,
     paddingHorizontal: 16,
     paddingVertical: 14,
     gap: 10,
@@ -457,23 +457,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 15,
     color: customerColors.charcoal.DEFAULT,
-    // Remove any default padding React Native adds on Android
     padding: 0,
   },
+  searchQuickLinks: {
+    flexDirection: 'row',
+    paddingTop: 8,
+    paddingHorizontal: 4,
+    gap: 20,
+  },
+  searchQuickLinkText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '600',
+    color: customerColors.coral.DEFAULT,
+  },
 
-  // --- Airbnb category chip row ---
+  // ── Row 2: Cuisine chip row ───────────────────────────────────────────────
   chipRow: {
     marginBottom: 4,
   },
   chipRowContent: {
-    gap: 0, // chips are spaced by their own padding
+    gap: 0,
     paddingHorizontal: 16,
     paddingBottom: 4,
   },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    // No fill, no border on default state
   },
   chipSelected: {
     borderBottomWidth: 2,
@@ -492,14 +502,16 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.soft,
   },
 
-  // --- Open Now toggle + Sort row ---
-  filterRow: {
+  // ── Row 3: Filter bar (Open Now + Filters + nav links) ───────────────────
+  filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingBottom: 10,
     gap: 8,
   },
+
+  // Open Now pill — Airbnb-style: charcoal fill when active
   openNowPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -538,14 +550,56 @@ const styles = StyleSheet.create({
   openNowLabelDefault: {
     color: customerColors.charcoal.soft,
   },
-  sortScroll: {
-    flex: 1,
+
+  // Filters pill — shows active-count badge when secondary filters are applied
+  filtersPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+    minHeight: 34,
   },
-  sortScrollContent: {
+  filtersPillActive: {
+    borderColor: customerColors.charcoal.DEFAULT,
+    backgroundColor: customerColors.charcoal.DEFAULT,
+  },
+  filtersPillLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+  },
+  filtersPillLabelActive: {
+    color: customerColors.canvas,
+  },
+  filterBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: customerColors.coral.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    color: customerColors.canvas,
+    fontVariant: ['tabular-nums'],
+  },
+
+  // Social Feed + Catering nav links — pushed to the right end of the filter bar
+  navLinks: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 6,
   },
-  sortChip: {
-    paddingHorizontal: 12,
+  navLinkPill: {
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 9999,
     borderWidth: 1,
@@ -554,46 +608,13 @@ const styles = StyleSheet.create({
     minHeight: 34,
     justifyContent: 'center',
   },
-  sortChipActive: {
-    borderColor: customerColors.charcoal.DEFAULT,
-    backgroundColor: customerColors.charcoal.DEFAULT,
-  },
-  sortChipLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 12,
-  },
-  sortChipLabelActive: {
-    color: customerColors.canvas,
-  },
-  sortChipLabelDefault: {
-    color: customerColors.charcoal.soft,
-  },
-
-  // --- Quick access links ---
-  quickLinks: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 4,
-  },
-  quickLinkPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: customerColors.hairline,
-    backgroundColor: customerColors.surface.DEFAULT,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  quickLinkLabel: {
+  navLinkLabel: {
     fontFamily: 'Inter',
-    fontSize: 13,
+    fontSize: 12,
     color: customerColors.charcoal.DEFAULT,
   },
 
-  // --- List layout ---
+  // ── List layout ───────────────────────────────────────────────────────────
   columnWrapper: {
     gap: 12,
     paddingHorizontal: 16,
@@ -604,7 +625,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
 
-  // --- Empty state ---
+  // ── Empty state ───────────────────────────────────────────────────────────
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -623,7 +644,7 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.soft,
   },
 
-  // --- Skeleton grid ---
+  // ── Skeleton grid ─────────────────────────────────────────────────────────
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
