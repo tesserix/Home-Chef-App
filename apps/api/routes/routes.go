@@ -161,6 +161,7 @@ func SetupRouter() *gin.Engine {
 	approvalHandler := handlers.NewApprovalHandler()
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
+	referralHandler := handlers.NewReferralHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
@@ -842,6 +843,10 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/subscription-pricing", adminHandler.GetSubscriptionPricing)
 			admin.PUT("/subscription-pricing", adminHandler.UpdateSubscriptionPricing)
 
+			// Referral program config (#38) — reward amounts + monthly spend cap.
+			admin.GET("/referral/config", adminHandler.GetReferralConfig)
+			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
+
 			// Approval/Review workflow
 			admin.GET("/approvals", approvalHandler.GetApprovalRequests)
 			admin.GET("/approvals/counts", approvalHandler.GetApprovalCounts)
@@ -909,6 +914,11 @@ func SetupRouter() *gin.Engine {
 			// Store-credit wallet (#33)
 			customer.GET("/wallet", walletHandler.GetWallet)
 			customer.GET("/wallet/transactions", walletHandler.GetWalletTransactions)
+
+			// Referral program (#38)
+			customer.GET("/referral", referralHandler.GetMyReferral)
+			customer.GET("/referral/history", referralHandler.GetReferralHistory)
+			customer.POST("/referral/accept", referralHandler.AcceptReferral)
 		}
 
 		// Reviews (authenticated customers)

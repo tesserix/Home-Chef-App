@@ -242,6 +242,8 @@ func Migrate() error {
 		// Favorites
 		&models.FavoriteChef{},
 		&models.FavoriteDish{},
+		&models.ReferralCode{},
+		&models.Referral{},
 
 		// Notifications
 		&models.Notification{},
