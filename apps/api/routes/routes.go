@@ -162,6 +162,7 @@ func SetupRouter() *gin.Engine {
 	notificationHandler := handlers.NewNotificationHandler()
 	walletHandler := handlers.NewWalletHandler()
 	referralHandler := handlers.NewReferralHandler()
+	orderIssueHandler := handlers.NewOrderIssueHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
@@ -498,6 +499,8 @@ func SetupRouter() *gin.Engine {
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
 			orders.POST("/:id/reorder", orderHandler.ReorderOrder) // #238
+			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue) // #37
+			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)    // #37
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
@@ -844,6 +847,13 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/subscription-pricing", adminHandler.UpdateSubscriptionPricing)
 
 			// Referral program config (#38) — reward amounts + monthly spend cap.
+			// Order issues (#37) — review queue + assisted refund approval + config.
+			admin.GET("/order-issues", orderIssueHandler.AdminListIssues)
+			admin.POST("/order-issues/:issueId/resolve", orderIssueHandler.AdminResolveIssue)
+			admin.POST("/order-issues/:issueId/reject", orderIssueHandler.AdminRejectIssue)
+			admin.GET("/order-issue/config", adminHandler.GetOrderIssueConfig)
+			admin.PUT("/order-issue/config", adminHandler.UpdateOrderIssueConfig)
+
 			admin.GET("/referral/config", adminHandler.GetReferralConfig)
 			admin.PUT("/referral/config", adminHandler.UpdateReferralConfig)
 

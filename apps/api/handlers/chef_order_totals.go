@@ -1,6 +1,9 @@
 package handlers
 
-import "github.com/homechef/api/models"
+import (
+	"github.com/homechef/api/models"
+	"github.com/homechef/api/services"
+)
 
 // chef_order_totals.go — pure money-math helpers for order cancellation and
 // partial refunds. Extracted from the cancel handlers so the recompute logic
@@ -14,11 +17,9 @@ import "github.com/homechef/api/models"
 // split the original tax consistently. A zero/negative order subtotal yields
 // just the line subtotal (no tax share).
 func lineRefundAmount(lineSubtotal, orderSubtotal, orderTax float64) float64 {
-	refund := lineSubtotal
-	if orderSubtotal > 0 {
-		refund += orderTax * (lineSubtotal / orderSubtotal)
-	}
-	return refund
+	// Canonical math lives in services so chef per-line cancels and order-issue
+	// refunds (#37) settle identically — no duplicated formula.
+	return services.LineRefundAmount(lineSubtotal, orderSubtotal, orderTax)
 }
 
 // recomputeOrderTotals returns the order subtotal, tax, and total after

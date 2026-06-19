@@ -21,6 +21,12 @@ interface SubscriptionMetrics {
   adherenceRate: number;
 }
 
+// Lifetime quality signal (#37): issue rate = reported issues / total orders.
+interface ChefQuality {
+  issueCount?: number;
+  totalOrders?: number;
+}
+
 interface DemandForecast {
   date: string;
   subscriptionMeals: number;
@@ -49,6 +55,10 @@ export default function AnalyticsPage() {
     queryKey: ['chef-analytics-forecast'],
     queryFn: () => apiClient.get<DemandForecast>('/chef/analytics/forecast'),
   });
+  const { data: quality } = useQuery({
+    queryKey: ['chef-profile-quality'],
+    queryFn: () => apiClient.get<ChefQuality>('/chef/profile'),
+  });
 
   if (isLoading || !analytics) {
     return (
@@ -63,6 +73,11 @@ export default function AnalyticsPage() {
   const peakHours = analytics.peakHours ?? [];
   const popularItems = analytics.popularItems ?? [];
   const revenueByCategory = analytics.revenueByCategory ?? [];
+
+  // Lifetime issue rate (#37). Guard against divide-by-zero on new kitchens.
+  const issueCount = quality?.issueCount ?? 0;
+  const totalOrders = quality?.totalOrders ?? 0;
+  const issueRate = totalOrders > 0 ? (issueCount / totalOrders) * 100 : 0;
 
   const maxOrders = orderData.length > 0 ? Math.max(...orderData, 1) : 1;
   const maxRevenue = revenueData.length > 0 ? Math.max(...revenueData, 1) : 1;
@@ -109,6 +124,11 @@ export default function AnalyticsPage() {
           <StatCard label="Orders" value={String(analytics.summary.orders)} />
           <StatCard label="Avg order" value={inr(analytics.summary.aov)} />
           <StatCard label="Repeat customers" value={`${analytics.summary.repeatRate}%`} sub="ordered 2+ times" />
+          <StatCard
+            label="Issue rate"
+            value={`${issueRate.toFixed(1)}%`}
+            sub={`${issueCount} reported of ${totalOrders} orders`}
+          />
         </motion.div>
       )}
 

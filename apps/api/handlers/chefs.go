@@ -485,6 +485,8 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"rating":          resp.Rating,
 		"totalReviews":    resp.TotalReviews,
 		"totalOrders":     resp.TotalOrders,
+		// issueCount feeds the chef's issue rate (#37) shown in vendor analytics.
+		"issueCount":      chef.IssueCount,
 		"verified":        resp.IsVerified,
 		"acceptingOrders": resp.AcceptingOrders,
 		"kitchenPhotos":   resp.KitchenPhotos,

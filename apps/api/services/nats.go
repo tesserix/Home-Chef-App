@@ -15,13 +15,14 @@ import (
 
 // NATS subjects for different event types
 const (
-	SubjectOrderCreated      = "orders.created"
-	SubjectOrderUpdated      = "orders.updated"
-	SubjectOrderCancelled    = "orders.cancelled"
-	SubjectOrderDelivered    = "orders.delivered"
-	SubjectChefNewOrder      = "chef.new_order"
-	SubjectChefTipReceived   = "chef.tip_received"   // → chef: post-delivery tip
-	SubjectDriverTipReceived = "driver.tip_received" // → rider: post-delivery tip
+	SubjectOrderCreated       = "orders.created"
+	SubjectOrderUpdated       = "orders.updated"
+	SubjectOrderCancelled     = "orders.cancelled"
+	SubjectOrderDelivered     = "orders.delivered"
+	SubjectOrderIssueReported = "orders.issue_reported" // → chef: a customer reported an order issue (#37)
+	SubjectChefNewOrder       = "chef.new_order"
+	SubjectChefTipReceived    = "chef.tip_received"   // → chef: post-delivery tip
+	SubjectDriverTipReceived  = "driver.tip_received" // → rider: post-delivery tip
 
 	// Group / office orders (#46)
 	SubjectGroupOrderInvited   = "group_orders.invited"   // → guest: invited/joined
