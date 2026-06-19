@@ -46,6 +46,7 @@ const GroupOrderPage = lazyWithRetry(() => import('@/features/customer/pages/Gro
 const GroupInvitePage = lazyWithRetry(() => import('@/features/customer/pages/GroupInvitePage'));
 const ProfilePage = lazyWithRetry(() => import('@/features/customer/pages/ProfilePage'));
 const WalletPage = lazyWithRetry(() => import('@/features/customer/pages/WalletPage'));
+const LoyaltyPage = lazyWithRetry(() => import('@/features/customer/pages/LoyaltyPage'));
 const ReferralPage = lazyWithRetry(() => import('@/features/customer/pages/ReferralPage'));
 const SocialFeedPage = lazyWithRetry(() => import('@/features/social/pages/SocialFeedPage'));
 const FavoritesPage = lazyWithRetry(() => import('@/features/customer/pages/FavoritesPage'));
@@ -224,6 +225,14 @@ export function AppRoutes() {
             element={
               <ProtectedRoute>
                 <WalletPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="loyalty"
+            element={
+              <ProtectedRoute>
+                <LoyaltyPage />
               </ProtectedRoute>
             }
           />

@@ -26,6 +26,7 @@ const (
 	WalletSourceCashback     WalletTxnSource = "cashback"
 	WalletSourceOrderPayment WalletTxnSource = "order_payment"
 	WalletSourceAdminAdjust  WalletTxnSource = "admin_adjustment"
+	WalletSourceLoyalty      WalletTxnSource = "loyalty" // redeemed loyalty points → store credit (#40)
 )
 
 // Wallet is a customer's store-credit balance — one per user. Balance is a

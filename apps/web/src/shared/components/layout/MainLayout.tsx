@@ -13,6 +13,7 @@ import {
   Package,
   Utensils,
   Wallet,
+  Award,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -248,6 +249,15 @@ export function MainLayout() {
                             >
                               <Wallet aria-hidden="true" className="h-4 w-4" />
                               Wallet
+                            </Link>
+                            <Link
+                              to="/loyalty"
+                              role="menuitem"
+                              onClick={() => setUserMenuOpen(false)}
+                              className="flex items-center gap-3 px-4 py-2 text-sm text-ink-soft hover:bg-paper focus-visible:outline-none focus-visible:bg-paper"
+                            >
+                              <Award aria-hidden="true" className="h-4 w-4" />
+                              Rewards
                             </Link>
                             <Link
                               to="/profile?tab=security"
