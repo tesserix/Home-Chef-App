@@ -70,6 +70,11 @@ type Config struct {
 	// Redis
 	RedisURL string
 
+	// MongoDB — backs in-app chat (admin-mediated messaging) + document uploads
+	// (#53). Optional: empty MongoURI disables the Mongo-backed features.
+	MongoURI    string
+	MongoDBName string
+
 	// NATS
 	NATSURL string
 	// NATSStreamReplicas is the JetStream stream replica factor. 1 for local /
@@ -232,7 +237,9 @@ func Load() {
 		TwilioPhoneNumber: getEnv("TWILIO_PHONE_NUMBER", ""),
 
 		// Redis
-		RedisURL: getEnv("REDIS_URL", "redis://localhost:6379"),
+		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
+		MongoURI:    getEnv("MONGODB_URI", ""),
+		MongoDBName: getEnv("MONGODB_DB", "homechef_chat"),
 
 		// NATS
 		NATSURL:             getEnv("NATS_URL", "nats://localhost:4222"),
