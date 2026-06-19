@@ -80,6 +80,15 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     (response) => response,
     async (error: AxiosError) => {
       if (error.response?.status === 401) {
+        // Some best-effort calls (e.g. device-token registration, which can
+        // race a session refresh on cold start) must NOT tear down the session
+        // on a 401 — that would bounce a logged-in user to the login screen.
+        const cfg = error.config as
+          | (InternalAxiosRequestConfig & { skipAuthFailure?: boolean })
+          | undefined;
+        if (cfg?.skipAuthFailure) {
+          return Promise.reject(error);
+        }
         try {
           await clearTokens();
           await clearStoredSession();
