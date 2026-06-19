@@ -104,6 +104,23 @@ export default function WeeklyMenuEditorScreen() {
     });
   }
 
+  // Copy convenience (#1): replicate the selected day's cells to every other day.
+  function copyDayToAll() {
+    setCells((prev) => {
+      const next = { ...prev };
+      for (const s of SLOTS) {
+        for (const v of VARIANTS) {
+          const src = prev[cellKey(selectedDow, s.slot, v.variant)];
+          for (const d of DAYS) {
+            if (d.dow === selectedDow) continue;
+            next[cellKey(d.dow, s.slot, v.variant)] = src ? { ...src } : { name: '', price: '' };
+          }
+        }
+      }
+      return next;
+    });
+  }
+
   function buildItems(): WeeklyMenuItem[] {
     const items: WeeklyMenuItem[] = [];
     for (const key of Object.keys(cells)) {
@@ -210,7 +227,12 @@ export default function WeeklyMenuEditorScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.dayHeading}>{day.long}</Text>
+        <View style={styles.dayHeadingRow}>
+          <Text style={styles.dayHeading}>{day.long}</Text>
+          <Pressable onPress={copyDayToAll} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy this day to all days">
+            <Text style={styles.copyLink}>Copy to all days</Text>
+          </Pressable>
+        </View>
         {SLOTS.map((s) => (
           <View key={s.slot} style={styles.slotBlock}>
             <Text style={styles.slotLabel}>{s.label}</Text>
@@ -319,11 +341,21 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 2.5 },
   dotPlaceholder: { width: 5, height: 5 },
   scroll: { paddingHorizontal: theme.spacing[4], paddingBottom: theme.spacing[10] },
+  dayHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing[3],
+  },
   dayHeading: {
     fontFamily: 'Geist-Bold',
     fontSize: 18,
     color: theme.colors.ink.DEFAULT,
-    marginBottom: theme.spacing[3],
+  },
+  copyLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: theme.colors.herb.DEFAULT,
   },
   slotBlock: {
     backgroundColor: theme.colors.paper,
