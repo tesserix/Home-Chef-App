@@ -34,6 +34,7 @@ const PromosPage = lazyWithRetry(() => import('@/features/promos/pages/PromosPag
 const WinbackPage = lazyWithRetry(() => import('@/features/winback/pages/WinbackPage'));
 const LoyaltyPage = lazyWithRetry(() => import('@/features/loyalty/pages/LoyaltyPage'));
 const CampaignsPage = lazyWithRetry(() => import('@/features/campaigns/pages/CampaignsPage'));
+const MessagingPage = lazyWithRetry(() => import('@/features/messaging/pages/MessagingPage'));
 const OrdersPage = lazyWithRetry(() => import('@/features/orders/pages/OrdersPage'));
 const MealPlansPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlansPage'));
 const MealPlanDetailPage = lazyWithRetry(() => import('@/features/meal-plans/pages/MealPlanDetailPage'));
@@ -109,6 +110,7 @@ export function AppRoutes() {
           <Route path="winback" element={<WinbackPage />} />
           <Route path="loyalty" element={<LoyaltyPage />} />
           <Route path="campaigns" element={<CampaignsPage />} />
+          <Route path="messaging" element={<MessagingPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="meal-plans" element={<MealPlansPage />} />
           <Route path="meal-plans/:id" element={<MealPlanDetailPage />} />

@@ -19,6 +19,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
+import { OrderMessageThread } from '@/features/orders/components/OrderMessageThread';
 import type { Order, OrderStatus } from '@/shared/types';
 
 type LiveTab = 'all' | 'pending' | 'accepted' | 'preparing' | 'ready';
@@ -313,6 +314,9 @@ export default function LiveOrdersPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Admin-mediated customer messaging (#53). */}
+                  <OrderMessageThread orderId={order.id} />
                 </Card>
               </motion.div>
             );
