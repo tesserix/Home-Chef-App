@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -24,7 +24,28 @@ import { apiClient } from '@/shared/services/api-client';
 import { useFormatPrice } from '@/shared/utils/format-price';
 import { formatDateTime, formatTime } from '@/shared/utils/format-date';
 import { Button } from '@/shared/components/ui';
-import type { Order, OrderStatus } from '@/shared/types';
+import { useCartStore } from '@/app/store/cart-store';
+import type { Order, OrderStatus, MenuItem, SelectedModifier } from '@/shared/types';
+
+// Reorder preview shape returned by POST /orders/:id/reorder (#238).
+interface ReorderResponseItem {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+  notes?: string;
+  imageUrl?: string;
+  modifiers: SelectedModifier[];
+  unitPrice: number;
+  available: boolean;
+  reason?: string;
+  needsReview?: boolean;
+}
+interface ReorderResponse {
+  chefId: string;
+  chefName: string;
+  chefAccepting: boolean;
+  items: ReorderResponseItem[];
+}
 
 // Status palette: amber = waiting, info = in transit, herb = success/active, paprika = failure.
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
@@ -42,6 +63,8 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bgColor
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const fp = useFormatPrice();
+  const navigate = useNavigate();
+  const cart = useCartStore();
   const queryClient = useQueryClient();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -101,6 +124,50 @@ export default function OrderDetailPage() {
     onError: () => {
       toast.error('Failed to cancel order');
     },
+  });
+
+  // Reorder (#238) — re-add a past order's still-available items to the cart,
+  // resolving current add-on option IDs, then send the customer to the chef to
+  // review and check out.
+  const reorderMutation = useMutation({
+    mutationFn: () => apiClient.post<ReorderResponse>(`/orders/${id}/reorder`),
+    onSuccess: (res) => {
+      const available = res.items.filter((i) => i.available);
+      if (available.length === 0) {
+        toast.error('None of these items are available right now');
+        return;
+      }
+      // Cross-chef: clear first so addItem won't reject with DIFFERENT_CHEF.
+      if (cart.chefId && cart.chefId !== res.chefId) {
+        cart.clearCart();
+      }
+      for (const it of available) {
+        const base = it.unitPrice - it.modifiers.reduce((s, m) => s + m.priceDelta, 0);
+        // Construct the minimal MenuItem the cart needs; addItem re-applies the
+        // modifier deltas, so we pass the base price.
+        const menuItem = {
+          id: it.menuItemId,
+          chefId: res.chefId,
+          name: it.name,
+          price: base,
+          imageUrl: it.imageUrl,
+          dietaryTags: [],
+          allergens: [],
+          prepTime: 0,
+          isAvailable: true,
+          isFeatured: false,
+          serves: 1,
+        } as MenuItem;
+        cart.addItem(menuItem, it.quantity, it.notes, it.modifiers.length ? it.modifiers : undefined);
+      }
+      const dropped = res.items.length - available.length;
+      if (dropped > 0) toast.warning(`${dropped} item${dropped > 1 ? 's are' : ' is'} no longer available`);
+      if (available.some((i) => i.needsReview)) {
+        toast.message('Some add-ons changed — please review your cart');
+      }
+      navigate(`/chefs/${res.chefId}`);
+    },
+    onError: () => toast.error('Could not reorder right now. Please try again.'),
   });
 
   const handleCopyOrderNumber = () => {
@@ -395,8 +462,14 @@ export default function OrderDetailPage() {
             </>
           )}
 
-          <Button asChild variant="outline" leftIcon={<RefreshCw aria-hidden="true" className="h-4 w-4" />}>
-            <Link to="/chefs">Reorder</Link>
+          <Button
+            variant="outline"
+            leftIcon={<RefreshCw aria-hidden="true" className="h-4 w-4" />}
+            isLoading={reorderMutation.isPending}
+            disabled={reorderMutation.isPending}
+            onClick={() => reorderMutation.mutate()}
+          >
+            Reorder
           </Button>
         </div>
 
