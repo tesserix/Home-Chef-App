@@ -6,7 +6,10 @@ package handlers
 // every endpoint 503s gracefully when Mongo is unavailable.
 
 import (
+	"encoding/csv"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -265,6 +268,105 @@ func (h *MessagingHandler) AdminSendMessage(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": m})
+}
+
+// ── Admin (audit read, #312) ────────────────────────────────────────────────
+
+// conversationFilterFromQuery reads orderId/customerId/chefId/status/from/to.
+func conversationFilterFromQuery(c *gin.Context) services.ConversationFilter {
+	f := services.ConversationFilter{
+		OrderID:    c.Query("orderId"),
+		CustomerID: c.Query("customerId"),
+		ChefID:     c.Query("chefId"),
+		Status:     c.Query("status"),
+	}
+	if t, ok := parseAuditTime(c.Query("from")); ok {
+		f.From = &t
+	}
+	if t, ok := parseAuditTime(c.Query("to")); ok {
+		f.To = &t
+	}
+	return f
+}
+
+// parseAuditTime accepts RFC3339 or a plain YYYY-MM-DD date.
+func parseAuditTime(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// AdminListConversations — GET /admin/conversations?orderId=&customerId=&chefId=&status=&from=&to=&limit=&offset=
+// Lists every conversation for audit, newest-activity first.
+func (h *MessagingHandler) AdminListConversations(c *gin.Context) {
+	svc := svcOr503(c)
+	if svc == nil {
+		return
+	}
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	convs, total, err := svc.AdminListConversations(c.Request.Context(), conversationFilterFromQuery(c), limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load conversations"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": convs, "total": total, "limit": limit, "offset": offset})
+}
+
+// AdminConversationTranscript — GET /admin/conversations/:id
+// Returns the conversation plus its complete message history (all statuses).
+func (h *MessagingHandler) AdminConversationTranscript(c *gin.Context) {
+	svc := svcOr503(c)
+	if svc == nil {
+		return
+	}
+	conv, msgs, err := svc.AdminTranscript(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		messagingActionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"conversation": conv, "messages": msgs})
+}
+
+// AdminExportConversation — GET /admin/conversations/:id/export?format=json|csv
+// Streams the full transcript as a downloadable audit record.
+func (h *MessagingHandler) AdminExportConversation(c *gin.Context) {
+	svc := svcOr503(c)
+	if svc == nil {
+		return
+	}
+	conv, msgs, err := svc.AdminTranscript(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		messagingActionError(c, err)
+		return
+	}
+	if c.DefaultQuery("format", "json") == "csv" {
+		c.Header("Content-Type", "text/csv")
+		c.Header("Content-Disposition", "attachment; filename=\"conversation-"+conv.ID+".csv\"")
+		w := csv.NewWriter(c.Writer)
+		_ = w.Write([]string{"createdAt", "senderRole", "recipientRole", "relayStatus", "piiDetected", "content", "attachment"})
+		for _, m := range msgs {
+			pii := "false"
+			if m.PIIDetected {
+				pii = "true"
+			}
+			_ = w.Write([]string{
+				m.CreatedAt.UTC().Format(time.RFC3339), m.SenderRole, m.RecipientRole,
+				m.RelayStatus, pii, m.Content, m.Filename,
+			})
+		}
+		w.Flush()
+		return
+	}
+	c.Header("Content-Disposition", "attachment; filename=\"conversation-"+conv.ID+".json\"")
+	c.JSON(http.StatusOK, gin.H{"conversation": conv, "messages": msgs})
 }
 
 // ── Attachments (#304) ──────────────────────────────────────────────────────
