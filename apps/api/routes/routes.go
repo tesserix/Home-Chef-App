@@ -906,6 +906,11 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/messages/:id/relay", messagingHandler.AdminRelayMessage)
 			admin.POST("/messages/:id/block", messagingHandler.AdminBlockMessage)
 			admin.POST("/conversations/:id/send", messagingHandler.AdminSendMessage)
+			// Communications audit read (#312) — list all conversations + full
+			// transcripts (every status) + compliance export. Admin-only.
+			admin.GET("/conversations", messagingHandler.AdminListConversations)
+			admin.GET("/conversations/:id", messagingHandler.AdminConversationTranscript)
+			admin.GET("/conversations/:id/export", messagingHandler.AdminExportConversation)
 			// Marketing campaigns (#56) — compose, segment, lifecycle.
 			admin.GET("/campaigns", adminHandler.ListCampaigns)
 			admin.POST("/campaigns", adminHandler.CreateCampaign)

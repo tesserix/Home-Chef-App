@@ -9,6 +9,7 @@ package services
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -92,6 +93,48 @@ func (f *fakeStore) TouchConversation(_ context.Context, conversationID string, 
 		c.LastMessageAt = &at
 	}
 	return nil
+}
+
+func convActivity(c Conversation) time.Time {
+	if c.LastMessageAt != nil {
+		return *c.LastMessageAt
+	}
+	return c.CreatedAt
+}
+
+func (f *fakeStore) ListConversations(_ context.Context, filter ConversationFilter, limit, offset int) ([]Conversation, int, error) {
+	var matched []Conversation
+	for _, c := range f.convs {
+		if filter.OrderID != "" && c.OrderID != filter.OrderID {
+			continue
+		}
+		if filter.CustomerID != "" && c.CustomerID != filter.CustomerID {
+			continue
+		}
+		if filter.ChefID != "" && c.ChefID != filter.ChefID {
+			continue
+		}
+		if filter.Status != "" && c.Status != filter.Status {
+			continue
+		}
+		if filter.From != nil && c.CreatedAt.Before(*filter.From) {
+			continue
+		}
+		if filter.To != nil && c.CreatedAt.After(*filter.To) {
+			continue
+		}
+		matched = append(matched, *c)
+	}
+	sort.Slice(matched, func(i, j int) bool { return convActivity(matched[i]).After(convActivity(matched[j])) })
+	total := len(matched)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return matched[offset:end], total, nil
 }
 
 // stubPush captures pushes for assertions.
@@ -242,4 +285,69 @@ func TestCustomerSend_EmptyRejected(t *testing.T) {
 	order, cust, chef, _ := ids()
 	_, err := svc.CustomerSend(context.Background(), order, cust, chef, "")
 	require.ErrorIs(t, err, ErrEmptyMessage)
+}
+
+// Audit read (#312): admins can list every conversation (filtered + paginated)
+// and read a COMPLETE transcript — including pending and blocked messages that
+// no participant can see.
+func TestAdminListConversations_FiltersAndPagination(t *testing.T) {
+	stubMessagingPush(t)
+	svc := NewMessagingService(newFakeStore())
+	ctx := context.Background()
+	chefA, chefB := uuid.NewString(), uuid.NewString()
+
+	// 3 conversations: two with chefA, one with chefB.
+	_, _ = svc.CustomerSend(ctx, "order-1", uuid.NewString(), chefA, "hi 1")
+	_, _ = svc.CustomerSend(ctx, "order-2", uuid.NewString(), chefA, "hi 2")
+	_, _ = svc.CustomerSend(ctx, "order-3", uuid.NewString(), chefB, "hi 3")
+
+	all, total, err := svc.AdminListConversations(ctx, ConversationFilter{}, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, 3, total)
+	require.Len(t, all, 3)
+
+	// Filter by chef.
+	byChef, total, err := svc.AdminListConversations(ctx, ConversationFilter{ChefID: chefA}, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, 2, total)
+	require.Len(t, byChef, 2)
+
+	// Filter by order.
+	byOrder, total, err := svc.AdminListConversations(ctx, ConversationFilter{OrderID: "order-3"}, 0, 0)
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Equal(t, "order-3", byOrder[0].OrderID)
+
+	// Pagination: total stays 3, page returns 1.
+	page, total, err := svc.AdminListConversations(ctx, ConversationFilter{}, 1, 1)
+	require.NoError(t, err)
+	require.Equal(t, 3, total)
+	require.Len(t, page, 1)
+}
+
+func TestAdminTranscript_ReturnsFullHistoryIncludingBlocked(t *testing.T) {
+	stubMessagingPush(t)
+	svc := NewMessagingService(newFakeStore())
+	ctx := context.Background()
+	order, cust, chef, admin := ids()
+
+	relayed, _ := svc.CustomerSend(ctx, order, cust, chef, "is this gluten free?")
+	_, _ = svc.AdminRelay(ctx, relayed.ID, admin)
+	blocked, _ := svc.CustomerSend(ctx, order, cust, chef, "whatsapp me 9998887776")
+	require.NoError(t, svc.AdminBlock(ctx, blocked.ID, admin))
+	pending, _ := svc.ChefSend(ctx, order, cust, chef, "sure, leaving now")
+
+	conv, msgs, err := svc.AdminTranscript(ctx, relayed.ConversationID)
+	require.NoError(t, err)
+	require.Equal(t, order, conv.OrderID)
+	require.Len(t, msgs, 3) // relayed + blocked + pending — the admin audit sees ALL
+
+	statuses := map[string]bool{}
+	for _, m := range msgs {
+		statuses[m.RelayStatus] = true
+	}
+	require.True(t, statuses[RelayRelayed])
+	require.True(t, statuses[RelayBlocked]) // invisible to participants, visible to audit
+	require.True(t, statuses[RelayPending])
+	_ = pending
 }

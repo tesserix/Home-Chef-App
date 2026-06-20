@@ -76,6 +76,17 @@ type MediatedMessage struct {
 	CreatedAt     time.Time `bson:"createdAt" json:"createdAt"`
 }
 
+// ConversationFilter narrows an admin audit listing. Zero-value fields are
+// ignored; From/To bound the conversation CreatedAt (when the thread opened).
+type ConversationFilter struct {
+	OrderID    string
+	CustomerID string
+	ChefID     string
+	Status     string // ConversationOpen / ConversationClosed
+	From       *time.Time
+	To         *time.Time
+}
+
 // MessageStore is the persistence boundary (Mongo in prod, a fake in tests).
 type MessageStore interface {
 	GetOrCreateConversation(ctx context.Context, orderID, customerID, chefID string) (*Conversation, error)
@@ -87,6 +98,9 @@ type MessageStore interface {
 	ListPendingRelay(ctx context.Context) ([]MediatedMessage, error)
 	TouchConversation(ctx context.Context, conversationID string, at time.Time) error
 	GetMessageByAttachment(ctx context.Context, attachmentID string) (*MediatedMessage, error)
+	// ListConversations returns conversations matching filter, newest-activity
+	// first, paginated; total is the unpaginated match count (for audit listing).
+	ListConversations(ctx context.Context, filter ConversationFilter, limit, offset int) ([]Conversation, int, error)
 }
 
 // pushSender is the push hook (so tests can stub it); defaults to the real push.
@@ -244,6 +258,36 @@ func (s *MessagingService) ThreadFor(ctx context.Context, conversationID, role s
 // AdminInbox returns all messages awaiting relay (the mediation queue).
 func (s *MessagingService) AdminInbox(ctx context.Context) ([]MediatedMessage, error) {
 	return s.store.ListPendingRelay(ctx)
+}
+
+// AdminListConversations lists conversations for audit, filtered + paginated.
+// A non-positive limit defaults to 50 (capped at 200); offset clamps to >= 0.
+func (s *MessagingService) AdminListConversations(ctx context.Context, filter ConversationFilter, limit, offset int) ([]Conversation, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.store.ListConversations(ctx, filter, limit, offset)
+}
+
+// AdminTranscript returns a conversation and its COMPLETE message history for
+// audit — every message regardless of relay status (pending, relayed, blocked).
+// This is the audit read; participants never get this view (see ThreadFor).
+func (s *MessagingService) AdminTranscript(ctx context.Context, conversationID string) (*Conversation, []MediatedMessage, error) {
+	conv, err := s.store.GetConversation(ctx, conversationID)
+	if err != nil {
+		return nil, nil, err
+	}
+	msgs, err := s.ThreadFor(ctx, conversationID, MsgRoleAdmin)
+	if err != nil {
+		return nil, nil, err
+	}
+	return conv, msgs, nil
 }
 
 // sendAttachment persists a pending attachment message (the file is already in

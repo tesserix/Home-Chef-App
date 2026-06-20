@@ -144,6 +144,48 @@ func (s *mongoMessageStore) TouchConversation(ctx context.Context, conversationI
 	return err
 }
 
+func (s *mongoMessageStore) ListConversations(ctx context.Context, filter ConversationFilter, limit, offset int) ([]Conversation, int, error) {
+	q := bson.M{}
+	if filter.OrderID != "" {
+		q["orderId"] = filter.OrderID
+	}
+	if filter.CustomerID != "" {
+		q["customerId"] = filter.CustomerID
+	}
+	if filter.ChefID != "" {
+		q["chefId"] = filter.ChefID
+	}
+	if filter.Status != "" {
+		q["status"] = filter.Status
+	}
+	if filter.From != nil || filter.To != nil {
+		rng := bson.M{}
+		if filter.From != nil {
+			rng["$gte"] = *filter.From
+		}
+		if filter.To != nil {
+			rng["$lte"] = *filter.To
+		}
+		q["createdAt"] = rng
+	}
+	total, err := s.convs.CountDocuments(ctx, q)
+	if err != nil {
+		return nil, 0, err
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "lastMessageAt", Value: -1}, {Key: "createdAt", Value: -1}}).
+		SetSkip(int64(offset)).SetLimit(int64(limit))
+	cur, err := s.convs.Find(ctx, q, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	var out []Conversation
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, 0, err
+	}
+	return out, int(total), nil
+}
+
 // EnsureMessagingIndexes creates the supporting indexes (called at startup when
 // Mongo is connected). Best-effort: index creation is idempotent.
 func EnsureMessagingIndexes(ctx context.Context) error {
@@ -151,8 +193,13 @@ func EnsureMessagingIndexes(ctx context.Context) error {
 	if !mc.IsConnected() {
 		return nil
 	}
-	if _, err := mc.Collection(collConversations).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "orderId", Value: 1}}, Options: options.Index().SetUnique(true),
+	if _, err := mc.Collection(collConversations).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "orderId", Value: 1}}, Options: options.Index().SetUnique(true)},
+		// Admin audit listing — sort by recency + filter by participant/status.
+		{Keys: bson.D{{Key: "lastMessageAt", Value: -1}}},
+		{Keys: bson.D{{Key: "customerId", Value: 1}}},
+		{Keys: bson.D{{Key: "chefId", Value: 1}}},
+		{Keys: bson.D{{Key: "status", Value: 1}}},
 	}); err != nil {
 		return err
 	}
