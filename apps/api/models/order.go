@@ -36,7 +36,12 @@ const (
 	OrderStatusDelivering OrderStatus = "delivering"
 	OrderStatusDelivered  OrderStatus = "delivered"
 	OrderStatusCancelled  OrderStatus = "cancelled"
-	OrderStatusRefunded   OrderStatus = "refunded"
+	// OrderStatusRejected is a chef declining a pending order — semantically a
+	// chef-initiated cancellation (releases reserved capacity + triggers the
+	// cancellation/refund path). The vendor app sends this status; without the
+	// enum it was stored as an invalid string and skipped the cancel side-effects.
+	OrderStatusRejected OrderStatus = "rejected"
+	OrderStatusRefunded OrderStatus = "refunded"
 )
 
 type PaymentStatus string
