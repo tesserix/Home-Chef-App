@@ -88,19 +88,11 @@ jobs:
           # cache write needs GHCR auth (skipped on PRs); read-only cache-from still works
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
 
-      # Image push only — the deploy bump happens in the `bump-k8s` job
-      # below, which writes the new main-<sha7> tag (and Knative
-      # updateTimestamp) into argocd/prod/apps/homechef/homechef-api.yaml
-      # in tesserix-k8s. Argo CD picks up the commit and rolls the
-      # Knative service.
-      #
-      # Note: homechef-auth-bff is a shared global-services image and is
-      # intentionally NOT bumped from this workflow.
-      #
-      # When kargo-homechef is wired (Project + Warehouse + Stage in
-      # tesserix/kargo-manifests), bump-k8s here can be retired in favour
-      # of Kargo discovering the GAR-mirrored tag and writing the same
-      # helm.parameters field via a PromotionTemplate.
+      # Image push only — deployment is handled by Kargo via the git commit
+      # graph: the `homechef-ensure-image-tags` workflow guarantees every
+      # service image carries a main-<sha> tag for the commit and then
+      # fast-forwards the `deploy` branch, which the kargo-homechef prod Stage
+      # promotes by writing image.tag = main-<sha7> into the ArgoCD apps.
 
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
@@ -135,7 +127,7 @@ jobs:
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             echo "**Docker Image:** Pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Deploy:** bump-k8s job updates argocd/prod/apps/homechef/homechef-api.yaml on push to main" >> $GITHUB_STEP_SUMMARY
+            echo "**Deploy:** Kargo promotes via the deploy branch (homechef-ensure-image-tags)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -144,103 +136,6 @@ jobs:
           else
             echo "**Docker Image:** Built successfully (not pushed)" >> $GITHUB_STEP_SUMMARY
           fi
-
-  # ─── Bump tesserix-k8s ArgoCD app to new image tag ──────────────────
-  # Uses the GitHub Contents API directly (PUT /contents/{path}) — see
-  # homechef-web-build.yml for full rationale.
-  #
-  # homechef-auth-bff is intentionally NOT bumped here — it pulls a
-  # shared global-services/auth-bff image that this repo does not build.
-  bump-k8s:
-    name: Bump tesserix-k8s image tag via API
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build]
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    env:
-      GH_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
-      REPO: tesserix/tesserix-k8s
-      FILE_PATH: argocd/prod/apps/homechef/homechef-api.yaml
-      SERVICE: homechef-api
-    steps:
-      - name: Compute short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
-
-      - name: Install yq
-        run: |
-          set -euo pipefail
-          if command -v yq >/dev/null; then
-            yq --version
-            exit 0
-          fi
-          sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-          yq --version
-
-      - name: Bump image tag and Knative updateTimestamp via API
-        env:
-          SHORT_SHA: ${{ steps.sha.outputs.short }}
-        run: |
-          set -euo pipefail
-          # Use plain curl + Bearer header. gh CLI ignores GH_TOKEN inside
-          # Actions; curl is deterministic.
-          BOT_TOKEN="${GH_TOKEN}"
-          NEW_TAG="main-${SHORT_SHA}"
-          TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          API="https://api.github.com/repos/${REPO}/contents/${FILE_PATH}"
-          AUTH_HDR=(-H "Authorization: Bearer ${BOT_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
-
-          for attempt in 1 2 3; do
-            echo "::group::Attempt ${attempt}: fetch → bump → PUT"
-            RESP="$(curl -sS "${AUTH_HDR[@]}" "${API}?ref=main")"
-            BLOB_SHA="$(echo "$RESP" | jq -r '.sha // empty')"
-            if [ -z "$BLOB_SHA" ]; then
-              echo "GET failed:"
-              echo "$RESP" | jq -r '.message // .' | head -5
-              echo "::endgroup::"
-              sleep 2
-              continue
-            fi
-            echo "$RESP" | jq -r .content | base64 -d > /tmp/current.yaml
-
-            yq -i "(.spec.source.helm.parameters[] | select(.name == \"image.tag\")).value = \"${NEW_TAG}\"" /tmp/current.yaml
-            NEW_TS="$TIMESTAMP" yq -i '(.spec.source.helm.parameters[] | select(.name | test("updateTimestamp$"))).value = strenv(NEW_TS)' /tmp/current.yaml
-            echo "New values:"
-            grep -A1 "image\.tag\|updateTimestamp" /tmp/current.yaml | head -8
-
-            NEW_CONTENT="$(base64 -w0 < /tmp/current.yaml)"
-            PAYLOAD="$(jq -nc \
-              --arg msg "chore(homechef): bump ${SERVICE} to ${NEW_TAG}" \
-              --arg content "${NEW_CONTENT}" \
-              --arg sha "${BLOB_SHA}" \
-              --arg branch main \
-              '{message:$msg, content:$content, sha:$sha, branch:$branch}')"
-
-            PUT_RESP="$(curl -sS -X PUT "${AUTH_HDR[@]}" -H "Content-Type: application/json" -d "$PAYLOAD" "$API")"
-            COMMIT_SHA="$(echo "$PUT_RESP" | jq -r '.commit.sha // empty')"
-            if [ -n "$COMMIT_SHA" ]; then
-              echo "Committed tesserix-k8s@${COMMIT_SHA}"
-              echo "::endgroup::"
-              exit 0
-            fi
-            echo "PUT failed:"
-            echo "$PUT_RESP" | jq -r '.message // .' | head -5
-            echo "::endgroup::"
-            sleep 2
-          done
-
-          echo "Failed to bump after 3 attempts." >&2
-          exit 1
-
-      - name: Bump Summary
-        if: always()
-        run: |
-          echo "## Bump Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Target:** tesserix-k8s argocd/prod/apps/homechef/homechef-api.yaml" >> $GITHUB_STEP_SUMMARY
-          echo "**New tag:** \`main-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Source commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   test:
     name: Run Tests

@@ -1,0 +1,200 @@
+name: HomeChef - Ensure Image Tags & Advance Deploy
+
+# Kargo's homechef Warehouse promotes via the GIT COMMIT GRAPH: it watches the
+# `deploy` branch of this repo and the prod Stage derives image.tag =
+# main-<sha7> for ALL six services (api, web, admin-portal, vendor-portal,
+# delivery-portal, auth-bff). This replaced image-tag discovery, which broke
+# because the homechef-* repos have >100 main-<sha> tags and Artifact Registry
+# paginates the tag list at 100 (NewestBuild then promoted a stale page and
+# flapped prod backwards). See tesserix/kargo-manifests homechef warehouse.
+#
+# Because CI is path-filtered, a commit only rebuilds the services whose
+# sources changed. This workflow therefore GUARANTEES every service image
+# carries a `main-<sha>` tag for the commit BEFORE advancing `deploy`:
+#   * changed + buildable (api, admin-portal, auth-bff, web<-web-landing):
+#     wait for the service's own build workflow to push main-<sha>.
+#   * unchanged / non-built (incl. vendor-portal, delivery-portal which have
+#     no build workflow): re-tag the image carried by the previous deploy
+#     commit (main-<prev sha7>) forward to main-<sha>. On first run (no deploy
+#     branch yet) bootstrap that source from each service's currently-deployed
+#     tag in tesserix-k8s.
+# Only once all six tags exist is `deploy` fast-forwarded, so Kargo never
+# promotes a commit whose images aren't all pullable — which also prevents the
+# GAR pull-through mirror from negative-caching a 404 for a not-yet-pushed tag.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - '.github/workflows/homechef-ensure-image-tags.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # fast-forward the deploy branch
+  packages: write   # re-tag images in GHCR
+
+concurrency:
+  group: homechef-ensure-image-tags
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: tesserix/home-chef-app
+  K8S_REPO: tesserix/tesserix-k8s
+  POLL_TIMEOUT_SECS: '2400'   # 40 min max wait for an in-flight build
+  POLL_INTERVAL_SECS: '30'
+
+jobs:
+  ensure-tags:
+    name: Ensure all six image tags, advance deploy
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # need history for the deploy fast-forward ancestry check
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Install crane
+        run: |
+          set -euo pipefail
+          VERSION=v0.20.2
+          curl -sSL "https://github.com/google/go-containerregistry/releases/download/${VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+          crane version
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
+
+      - name: Determine changed services
+        id: changed
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          # On manual dispatch or an unknown 'before' (e.g. first push), treat
+          # nothing as changed — every service carries forward. Safe: the
+          # workflow then never falsely waits for a build that isn't happening.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            FILES=""
+          else
+            FILES="$(git diff --name-only "${BEFORE}" "${{ github.sha }}")"
+          fi
+          echo "Changed files:"; echo "${FILES:-<none>}"
+          changed() { printf '%s\n' "${FILES}" | grep -q "^$1" && echo true || echo false; }
+          {
+            echo "api=$(changed 'apps/api/')"
+            echo "admin_portal=$(changed 'apps/admin-portal/')"
+            echo "auth_bff=$(changed 'apps/auth-bff/')"
+            echo "web=$(changed 'apps/web-landing/')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tags + advance deploy
+        env:
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+          K8S_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
+          API_CHANGED: ${{ steps.changed.outputs.api }}
+          ADMIN_CHANGED: ${{ steps.changed.outputs.admin_portal }}
+          AUTHBFF_CHANGED: ${{ steps.changed.outputs.auth_bff }}
+          WEB_CHANGED: ${{ steps.changed.outputs.web }}
+        run: |
+          set -euo pipefail
+          NEW_TAG="main-${SHORT_SHA}"
+          REG="${REGISTRY}/${IMAGE_PREFIX}"
+
+          # buildable&changed? vendor/delivery have no build workflow -> always
+          # carry forward.
+          declare -A POLL=(
+            [homechef-api]="${API_CHANGED}"
+            [homechef-admin-portal]="${ADMIN_CHANGED}"
+            [homechef-auth-bff]="${AUTHBFF_CHANGED}"
+            [homechef-web]="${WEB_CHANGED}"
+            [homechef-vendor-portal]="false"
+            [homechef-delivery-portal]="false"
+          )
+          # tesserix-k8s ArgoCD app file -> used ONLY to bootstrap the
+          # carry-forward source on the very first run (no deploy branch yet).
+          declare -A APPFILE=(
+            [homechef-api]="argocd/prod/apps/homechef/homechef-api.yaml"
+            [homechef-admin-portal]="argocd/prod/apps/homechef/homechef-admin-portal.yaml"
+            [homechef-auth-bff]="argocd/prod/apps/homechef/homechef-auth-bff.yaml"
+            [homechef-web]="argocd/prod/apps/homechef/homechef-web.yaml"
+            [homechef-vendor-portal]="argocd/prod/apps/homechef/homechef-vendor-portal.yaml"
+            [homechef-delivery-portal]="argocd/prod/apps/homechef/homechef-delivery-portal.yaml"
+          )
+
+          tag_exists() { crane manifest "${REG}/$1:${NEW_TAG}" >/dev/null 2>&1; }
+
+          # Carry-forward source: the previous deploy commit tagged ALL six
+          # services with the same main-<prev sha7>, so it is a uniform source.
+          git fetch origin deploy --quiet 2>/dev/null || true
+          PREV_TAG=""
+          if git rev-parse --verify -q origin/deploy >/dev/null; then
+            PREV_TAG="main-$(git rev-parse --short=7 origin/deploy)"
+            echo "Carry-forward source: ${PREV_TAG} (previous deploy commit)"
+          else
+            echo "No deploy branch yet — bootstrapping carry-forward from tesserix-k8s pins"
+          fi
+
+          bootstrap_tag() {
+            # read image.tag value from a service's ArgoCD app yaml on tesserix-k8s main
+            curl -sS -H "Authorization: Bearer ${K8S_TOKEN}" -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/${K8S_REPO}/contents/$1?ref=main" \
+              | grep -A1 'name: image.tag' | grep 'value:' | head -1 \
+              | sed -E 's/.*value:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d '[:space:]'
+          }
+
+          for SVC in homechef-api homechef-admin-portal homechef-auth-bff homechef-web homechef-vendor-portal homechef-delivery-portal; do
+            echo "::group::${SVC}"
+            if tag_exists "${SVC}"; then
+              echo "${SVC}:${NEW_TAG} already present ✓"; echo "::endgroup::"; continue
+            fi
+            if [ "${POLL[$SVC]}" = "true" ]; then
+              echo "changed+buildable — waiting up to ${POLL_TIMEOUT_SECS}s for the build to push ${NEW_TAG}…"
+              elapsed=0
+              until tag_exists "${SVC}"; do
+                if [ "${elapsed}" -ge "${POLL_TIMEOUT_SECS}" ]; then
+                  echo "TIMEOUT waiting for ${SVC}:${NEW_TAG}; NOT advancing deploy (prod stays on last good)." >&2
+                  echo "::endgroup::"; exit 1
+                fi
+                sleep "${POLL_INTERVAL_SECS}"; elapsed=$((elapsed + POLL_INTERVAL_SECS))
+              done
+              echo "${SVC}:${NEW_TAG} appeared ✓"
+            else
+              SRC="${PREV_TAG}"
+              if [ -z "${SRC}" ]; then
+                SRC="$(bootstrap_tag "${APPFILE[$SVC]}")"
+              fi
+              if [ -z "${SRC}" ]; then
+                echo "Could not resolve a carry-forward source for ${SVC}." >&2
+                echo "::endgroup::"; exit 1
+              fi
+              echo "carry forward ${SVC}:${SRC} -> ${NEW_TAG}"
+              crane tag "${REG}/${SVC}:${SRC}" "${NEW_TAG}"
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "All six images carry ${NEW_TAG}. Advancing deploy…"
+          if git rev-parse --verify -q origin/deploy >/dev/null; then
+            if ! git merge-base --is-ancestor origin/deploy "${{ github.sha }}"; then
+              echo "origin/deploy is not an ancestor of ${{ github.sha }} (out-of-order run); skipping fast-forward."
+              exit 0
+            fi
+          fi
+          git push origin "${{ github.sha }}:refs/heads/deploy"
+          echo "deploy -> ${{ github.sha }} (${NEW_TAG})"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Ensure Image Tags" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** main-${{ steps.sha.outputs.short }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Deploy branch:** fast-forwarded once all six images carry the tag" >> "$GITHUB_STEP_SUMMARY"
