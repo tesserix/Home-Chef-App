@@ -5,7 +5,6 @@ import { Card } from '@/shared/components/ui/Card';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 import { ChefHat, Plus, X, Check } from 'lucide-react';
-import type { KitchenType } from '@/shared/types';
 
 interface Props {
   errors: Record<string, string>;
@@ -16,12 +15,6 @@ const CUISINES = [
   'Punjabi', 'Mughlai', 'Kerala', 'Hyderabadi', 'Street Food',
   'Chinese', 'Continental', 'Maharashtrian', 'Bihari', 'Chettinad',
   'Awadhi', 'Konkani', 'Andhra',
-];
-
-const KITCHEN_TYPES: { value: KitchenType; label: string; desc: string }[] = [
-  { value: 'home_kitchen', label: 'Home Kitchen', desc: 'Cooking from your own home' },
-  { value: 'cloud_kitchen', label: 'Cloud Kitchen', desc: 'Dedicated kitchen space, delivery only' },
-  { value: 'shared_kitchen', label: 'Shared Kitchen', desc: 'Using a shared commercial kitchen' },
 ];
 
 const EXPERIENCE_OPTIONS = [
@@ -93,32 +86,8 @@ export function StepKitchenDetails({ errors }: Props) {
             hint="Min 20 characters. This is shown to customers on your profile."
           />
 
-          {/* Kitchen Type */}
-          <div role="radiogroup" aria-labelledby="onboarding-kitchen-type-label">
-            <span id="onboarding-kitchen-type-label" className="mb-2 block text-sm font-medium text-foreground">Kitchen Type</span>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {KITCHEN_TYPES.map((type) => {
-                const isSelected = data.kitchenType === type.value;
-                return (
-                  <button
-                    key={type.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    onClick={() => updateData({ kitchenType: type.value })}
-                    className={`rounded-xl border-2 p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border hover:border-primary/30'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold text-foreground">{type.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{type.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Kitchen type is implicit: Fe3dr is for individual home chefs only,
+              so there is no commercial-kitchen choice to make here. */}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>

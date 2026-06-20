@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Reset your password</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Enter the email associated with your vendor account and we'll send you a link to reset your password.
+            Enter the email associated with your chef account and we'll send you a link to reset your password.
           </p>
         </div>
 

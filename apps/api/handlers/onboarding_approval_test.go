@@ -42,6 +42,7 @@ func setupApprovalDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		is_verified INTEGER DEFAULT 0, verified_at DATETIME, is_active INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', fssai_override_until DATETIME,
+		kitchen_type TEXT DEFAULT 'home_kitchen',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE chef_documents (
@@ -170,6 +171,36 @@ func TestApproveRequest_KitchenOnboarding_GoesLive(t *testing.T) {
 	db.Raw(`SELECT COUNT(*) FROM approval_request_histories WHERE approval_id = ?`, appr.String()).Scan(&histCount)
 	if histCount != 1 {
 		t.Fatalf("expected 1 audit-history row, got %d", histCount)
+	}
+}
+
+// TestApproveRequest_NonHomeKitchen_Blocked is the home-chefs-only gate: a chef
+// whose kitchen_type is anything but home must never be approved, and the chef
+// must stay not-live with the request still pending. Defends the approval path
+// even though the onboarding form no longer offers commercial kitchen types.
+func TestApproveRequest_NonHomeKitchen_Blocked(t *testing.T) {
+	db := setupApprovalDB(t)
+	chefUser := apprUser(t, db, "customer")
+	chef := apprChef(t, db, chefUser, false)
+	require.NoError(t, db.Exec(`UPDATE chef_profiles SET kitchen_type = 'cloud_kitchen' WHERE id = ?`, chef.String()).Error)
+	appr := apprRequest(t, db, chef, chefUser, models.ApprovalKitchenOnboarding, models.ApprovalPending)
+
+	w := callApprove(apprUser(t, db, "admin"), appr)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("want 422 (non-home kitchen blocked), got %d (%s)", w.Code, w.Body.String())
+	}
+
+	// Nothing must have changed — request stays pending, chef stays not-live.
+	var status string
+	db.Raw(`SELECT status FROM approval_requests WHERE id = ?`, appr.String()).Scan(&status)
+	if status != string(models.ApprovalPending) {
+		t.Fatalf("approval must stay pending after a blocked approve, got %q", status)
+	}
+	var isActive, isVerified int
+	db.Raw(`SELECT is_active FROM chef_profiles WHERE id = ?`, chef.String()).Scan(&isActive)
+	db.Raw(`SELECT is_verified FROM chef_profiles WHERE id = ?`, chef.String()).Scan(&isVerified)
+	if isActive == 1 || isVerified == 1 {
+		t.Fatalf("non-home kitchen must not go live: is_active=%d is_verified=%d", isActive, isVerified)
 	}
 }
 

@@ -137,7 +137,7 @@ export default function RegisterPage() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-foreground font-display">Fe3dr</h1>
-                <p className="text-xs text-muted-foreground">Vendor Portal</p>
+                <p className="text-xs text-muted-foreground">Chef Portal</p>
               </div>
             </div>
           </motion.div>
@@ -147,7 +147,7 @@ export default function RegisterPage() {
               Register your kitchen
             </h2>
             <p className="mt-2 text-muted-foreground">
-              Create your vendor account to start selling home-cooked meals
+              Create your chef account to start selling home-cooked meals
             </p>
           </motion.div>
 
@@ -347,7 +347,7 @@ export default function RegisterPage() {
           {/* Footer */}
           <motion.div variants={fadeInUp} className="mt-12">
             <p className="text-center text-xs text-muted-foreground">
-              By registering, you agree to Fe3dr's Vendor Terms and Privacy Policy
+              By registering, you agree to Fe3dr's Chef Terms and Privacy Policy
             </p>
           </motion.div>
         </motion.div>

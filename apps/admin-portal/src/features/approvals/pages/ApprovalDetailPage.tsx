@@ -36,6 +36,12 @@ interface ApprovalRequest {
   reviewedAt?: string;
   createdAt: string;
   submittedData?: Record<string, unknown>;
+  // Home-chefs-only review aids (chef onboarding/document approvals only).
+  // kitchenTypeNonHome: the chef's kitchen is not marked as a home kitchen.
+  // fssaiLooksCommercial: the FSSAI number looks like a State/Central licence
+  // (a larger, likely-commercial operator) rather than a basic home registration.
+  fssaiLooksCommercial?: boolean;
+  kitchenTypeNonHome?: boolean;
   documents?: ApprovalDocument[];
   chef?: {
     businessName: string;
@@ -256,6 +262,28 @@ export default function ApprovalDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Home-chefs-only review warning. Fe3dr onboards individual home
+              chefs only — flag anything that looks like a commercial operation
+              so the admin scrutinises before approving. */}
+          {(approval.kitchenTypeNonHome || approval.fssaiLooksCommercial) && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 shadow-card">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 flex-shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-semibold text-foreground">Home-chef review needed</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                    {approval.kitchenTypeNonHome && (
+                      <li>This kitchen is not marked as a home kitchen. Fe3dr onboards individual home chefs only — do not approve a cloud, shared, or commercial kitchen.</li>
+                    )}
+                    {approval.fssaiLooksCommercial && (
+                      <li>The FSSAI number looks like a State/Central licence (a larger, likely-commercial operation) rather than a basic home registration. Confirm this is a home chef before approving.</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Chef Info Card */}
           {approval.chef && (
             <div className="rounded-xl border border-border bg-card p-6 shadow-card">

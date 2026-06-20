@@ -32,7 +32,7 @@ class MockService {
     if (endpoint === '/auth/login' && method === 'POST') {
       const user = mockUsers.find((u) => u.email === body?.email);
       if (!user) throw { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } };
-      if (user.role !== 'chef') throw { success: false, error: { code: 'ACCESS_DENIED', message: 'This portal is only for vendor accounts.' } };
+      if (user.role !== 'chef') throw { success: false, error: { code: 'ACCESS_DENIED', message: 'This portal is only for chef accounts.' } };
       this.currentUser = user;
       return {
         user,

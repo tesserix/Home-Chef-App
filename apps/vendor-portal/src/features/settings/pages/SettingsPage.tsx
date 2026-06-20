@@ -123,7 +123,7 @@ export default function SettingsPage() {
     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-6">
       <motion.div variants={fadeInUp} className="page-header">
         <h1 className="page-title">Settings</h1>
-        <p className="page-description">Manage your vendor preferences</p>
+        <p className="page-description">Manage your chef preferences</p>
       </motion.div>
 
       {/* Accepting Orders */}

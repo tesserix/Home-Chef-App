@@ -124,7 +124,6 @@ export function StepReview({ onEdit }: { onEdit: (step: number) => void }) {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Business Name" value={data.businessName} />
-            <Field label="Kitchen Type" value={data.kitchenType.replace(/_/g, ' ')} />
             <Field label="Experience" value={data.yearsOfExperience} />
             <Field label="Daily Capacity" value={data.mealsPerDay} />
           </div>
