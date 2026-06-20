@@ -146,6 +146,34 @@ func TestIsChefFSSAIExpired(t *testing.T) {
 	})
 }
 
+// TestFSSAILooksCommercial covers the soft admin-review heuristic: a 14-digit
+// FSSAI number starting with "2" is a State/Central LICENCE (larger operator),
+// "1" is a Basic REGISTRATION (home-chef scale). Anything that isn't a 14-digit
+// numeric id can't be judged and must return false (no false positives).
+func TestFSSAILooksCommercial(t *testing.T) {
+	cases := []struct {
+		name    string
+		license string
+		want    bool
+	}{
+		{"basic registration starts with 1", "11223344556677", false},
+		{"state/central licence starts with 2", "21223344556677", true},
+		{"licence with surrounding whitespace", "  21223344556677 ", true},
+		{"empty is unknown", "", false},
+		{"too short is unknown", "2122334455", false},
+		{"too long is unknown", "212233445566778899", false},
+		{"non-numeric is unknown", "2A223344556677", false},
+		{"14 digits starting with 1 is fine", "10000000000000", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FSSAILooksCommercial(tc.license); got != tc.want {
+				t.Fatalf("FSSAILooksCommercial(%q) = %v, want %v", tc.license, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestExcludeFSSAILocked asserts the set-based listing filter (#91) mirrors
 // IsChefFSSAIExpired — in particular that a chef who RENEWED (old expired doc +
 // verified future doc) stays visible, and non-IN / no-doc / null-expiry chefs

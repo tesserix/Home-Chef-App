@@ -139,7 +139,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-foreground font-display">Fe3dr</h1>
-                <p className="text-xs text-muted-foreground">Vendor Portal</p>
+                <p className="text-xs text-muted-foreground">Chef Portal</p>
               </div>
             </div>
           </motion.div>
@@ -160,7 +160,7 @@ export default function LoginPage() {
               variants={fadeInUp}
               className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
             >
-              This portal is only for vendor accounts. Please use the Fe3dr customer app.
+              This portal is only for chef accounts. Please use the Fe3dr customer app.
             </motion.div>
           )}
 
@@ -315,7 +315,7 @@ export default function LoginPage() {
                 onClick={handleRegisterClick}
                 className="rounded font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                Register as a vendor
+                Register as a chef
               </button>
             </p>
           </motion.div>

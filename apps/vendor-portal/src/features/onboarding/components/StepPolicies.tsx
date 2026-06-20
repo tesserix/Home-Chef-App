@@ -40,7 +40,7 @@ const POLICIES: PolicyItem[] = [
     key: 'acceptedTerms',
     title: 'Fe3dr Platform Terms of Service',
     description:
-      'I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Vendor Agreement. I understand that Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account.',
+      'I have read and agree to the Fe3dr Terms of Service, Privacy Policy, and Chef & Vendor Agreement. I understand that Fe3dr charges a platform commission on each order and that my payouts will be processed weekly to my registered bank account.',
     icon: <BookOpen className="h-5 w-5 text-info" />,
   },
 ];

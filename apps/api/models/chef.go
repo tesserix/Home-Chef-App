@@ -42,6 +42,15 @@ type ChefProfile struct {
 	PausedUntil   *time.Time     `gorm:"" json:"pausedUntil,omitempty"`
 	KitchenPhotos pq.StringArray `gorm:"type:text[]" json:"kitchenPhotos"`
 
+	// KitchenType is always home_kitchen. Fe3dr is exclusively for individual
+	// home chefs cooking from their own home — it does NOT onboard commercial
+	// vendors (cloud kitchens, shared/commercial kitchens, restaurants). The
+	// column is kept queryable so admin tooling can audit it and the
+	// onboarding-approval gate can hard-block anything that isn't a home kitchen
+	// (defense in depth). Defaults to home_kitchen so chefs created before the
+	// column existed read as home.
+	KitchenType string `gorm:"type:varchar(20);default:'home_kitchen'" json:"kitchenType"`
+
 	// Address
 	AddressLine1 string  `gorm:"" json:"addressLine1"`
 	AddressLine2 string  `gorm:"" json:"addressLine2"`
@@ -188,6 +197,18 @@ func (c *ChefProfile) BeforeSave(*gorm.DB) error {
 	return nil
 }
 
+// KitchenTypeHome is the only kitchen type the platform accepts — an individual
+// home kitchen. Commercial kitchen types (cloud/shared) are intentionally not
+// defined as constants: Fe3dr onboards home chefs only.
+const KitchenTypeHome = "home_kitchen"
+
+// IsHomeKitchen reports whether this profile is an individual home kitchen — the
+// only kind Fe3dr accepts. A blank value (rows created before the column existed)
+// is treated as a home kitchen for backward compatibility.
+func (c *ChefProfile) IsHomeKitchen() bool {
+	return c.KitchenType == "" || c.KitchenType == KitchenTypeHome
+}
+
 // DTOs
 type ChefProfileResponse struct {
 	ID            uuid.UUID `json:"id"`
@@ -219,6 +240,7 @@ type ChefProfileResponse struct {
 	AcceptingOrders bool                   `json:"acceptingOrders"`
 	PausedUntil     *time.Time             `json:"pausedUntil,omitempty"`
 	KitchenPhotos   []string               `json:"kitchenPhotos"`
+	KitchenType     string                 `json:"kitchenType"`
 	City            string                 `json:"city"`
 	State           string                 `json:"state"`
 	Country         string                 `json:"country"`  // chef's PayoutCountry (ISO alpha-2)
@@ -258,6 +280,12 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		kitchenPhotos = c.KitchenPhotos
 	}
 
+	// Always render a kitchen type; blank legacy rows are home kitchens.
+	kitchenType := c.KitchenType
+	if kitchenType == "" {
+		kitchenType = KitchenTypeHome
+	}
+
 	country := c.PayoutCountry
 	if country == "" {
 		country = "IN"
@@ -291,6 +319,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		AcceptingOrders: c.AcceptingOrders,
 		PausedUntil:     c.PausedUntil,
 		KitchenPhotos:   kitchenPhotos,
+		KitchenType:     kitchenType,
 		City:            c.City,
 		State:           c.State,
 		Country:         country,

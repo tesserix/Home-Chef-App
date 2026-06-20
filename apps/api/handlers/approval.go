@@ -216,6 +216,16 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		var docs []models.ChefDocument
 		database.DB.Where("chef_id = ?", approval.ChefID).Order("created_at DESC").Find(&docs)
 		response["documents"] = docs
+
+		// Home-chefs-only review aids. Surface (1) whether the FSSAI number looks
+		// like a State/Central licence — a larger, likely-commercial operator —
+		// and (2) whether the kitchen type is anything other than home, so the
+		// admin scrutinises before approving. Both are non-blocking hints; the
+		// hard gate lives in ApproveRequest.
+		if approval.ChefID != nil {
+			response["fssaiLooksCommercial"] = services.FSSAILooksCommercial(approval.Chef.FSSAILicenseNumber)
+			response["kitchenTypeNonHome"] = !approval.Chef.IsHomeKitchen()
+		}
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -246,6 +256,19 @@ func (h *ApprovalHandler) ApproveRequest(c *gin.Context) {
 	if approval.Status != models.ApprovalPending && approval.Status != models.ApprovalInfoRequested {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot approve request with status '%s'", approval.Status)})
 		return
+	}
+
+	// Home-chefs-only gate (defense in depth). Even though the onboarding form no
+	// longer offers commercial kitchen types, never let a non-home kitchen be
+	// activated. Checked before any mutation so a blocked request stays pending.
+	if approval.Type == models.ApprovalKitchenOnboarding && approval.ChefID != nil {
+		var k models.ChefProfile
+		if err := database.DB.First(&k, "id = ?", *approval.ChefID).Error; err == nil && !k.IsHomeKitchen() {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error": "This kitchen is not an individual home kitchen and cannot be approved. Fe3dr onboards home chefs only.",
+			})
+			return
+		}
 	}
 
 	previousStatus := string(approval.Status)

@@ -496,6 +496,19 @@ func (h *UploadHandler) GetOnboardingStatus(c *gin.Context) {
 
 // Onboarding handles the chef onboarding form submission (JSON only — files uploaded separately)
 // POST /chef/onboarding
+// normalizeKitchenType enforces the home-chefs-only rule at onboarding. Fe3dr
+// does not onboard commercial vendors, so any kitchen type other than home is
+// rejected outright; a blank value (older clients that don't send the field)
+// defaults to home. Returns (normalized, ok) — ok=false means "reject this".
+func normalizeKitchenType(kt string) (string, bool) {
+	if kt == "" || kt == models.KitchenTypeHome {
+		return models.KitchenTypeHome, true
+	}
+	return "", false
+}
+
+const notHomeKitchenMsg = "Fe3dr is for individual home chefs only — cloud kitchens, shared or commercial kitchens cannot be onboarded."
+
 func (h *UploadHandler) Onboarding(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	log.Printf("[onboarding] POST /chef/onboarding user=%s", userID)
@@ -539,6 +552,13 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		return
 	}
 
+	// Home chefs only — reject commercial kitchen types before doing any work.
+	kitchenType, okKT := normalizeKitchenType(req.KitchenType)
+	if !okKT {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": notHomeKitchenMsg, "field": "kitchenType"})
+		return
+	}
+
 	// Validate uniqueness before opening the transaction so clashes return 409 cleanly.
 	if req.BusinessName != "" {
 		var existingByName models.ChefProfile
@@ -577,6 +597,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		PanNumber:          req.PanNumber,
 		FSSAILicenseNumber: req.FSSAINumber,
 		GSTIN:              req.GSTIN,
+		KitchenType:        kitchenType,
 		IsActive:           true,
 		AcceptingOrders:    false,
 	}
@@ -620,6 +641,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 			"phone":        maskPhone(req.Phone),
 			"city":         req.KitchenAddress.City,
 			"cuisines":     req.Cuisines,
+			"kitchenType":  kitchenType,
 			"panNumber":    maskPAN(req.PanNumber),
 			"fssaiNumber":  maskID(req.FSSAINumber),
 		})
@@ -672,6 +694,13 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		return
 	}
 
+	// Home chefs only — reject commercial kitchen types before doing any work.
+	kitchenType, okKT := normalizeKitchenType(req.KitchenType)
+	if !okKT {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": notHomeKitchenMsg, "field": "kitchenType"})
+		return
+	}
+
 	if req.BusinessName != "" && req.BusinessName != chef.BusinessName {
 		var existingByName models.ChefProfile
 		if err := database.DB.Where("business_name = ? AND id != ?", req.BusinessName, chef.ID).First(&existingByName).Error; err == nil {
@@ -700,6 +729,7 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.City = req.KitchenAddress.City
 	chef.State = req.KitchenAddress.State
 	chef.PostalCode = req.KitchenAddress.PostalCode
+	chef.KitchenType = kitchenType
 	chef.IsActive = true
 
 	approvalReq := models.ApprovalRequest{
@@ -738,6 +768,7 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 			"phone":        maskPhone(req.Phone),
 			"city":         req.KitchenAddress.City,
 			"cuisines":     req.Cuisines,
+			"kitchenType":  kitchenType,
 			"panNumber":    maskPAN(req.PanNumber),
 			"fssaiNumber":  maskID(req.FSSAINumber),
 		})

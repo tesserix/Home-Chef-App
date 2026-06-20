@@ -133,3 +133,25 @@ func ChefsWithValidFSSAI(chefIDs []uuid.UUID) map[uuid.UUID]bool {
 func ChefHasValidFSSAI(chefID uuid.UUID) bool {
 	return ChefsWithValidFSSAI([]uuid.UUID{chefID})[chefID]
 }
+
+// FSSAILooksCommercial is a heuristic hint for admins reviewing chef onboarding.
+// A 14-digit FSSAI number beginning with "2" is a State/Central LICENCE — issued
+// to larger food businesses — whereas "1" is a Basic REGISTRATION used by the
+// petty/small operators a home chef typically is. Fe3dr onboards home chefs
+// only, so a licence (rather than a registration) is worth a closer look before
+// approval. This is a SOFT signal, not a hard rule: a legitimate home chef can
+// cross the registration turnover threshold. It only flags for admin attention;
+// it never blocks. Returns false when the number is absent or not a 14-digit
+// numeric id (in which case we can't tell).
+func FSSAILooksCommercial(license string) bool {
+	s := strings.TrimSpace(license)
+	if len(s) != 14 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s[0] == '2'
+}

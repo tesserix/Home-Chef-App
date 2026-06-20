@@ -67,8 +67,12 @@ export interface Chef {
   createdAt: string;
 }
 
-// Kitchen & Document types for onboarding
-export type KitchenType = 'home_kitchen' | 'cloud_kitchen' | 'shared_kitchen';
+// Kitchen & Document types for onboarding.
+// Fe3dr onboards individual home chefs ONLY — it does not accept commercial
+// vendors (cloud kitchens, shared/commercial kitchens, restaurants). The type is
+// a single literal so the rest of the app can't reintroduce a commercial option
+// without a deliberate type change; the backend enforces the same rule.
+export type KitchenType = 'home_kitchen';
 
 export interface KitchenAddress {
   line1: string;

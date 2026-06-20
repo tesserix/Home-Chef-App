@@ -66,7 +66,7 @@ export function VendorLayout() {
   const isActive = (href: string) =>
     location.pathname === href || location.pathname.startsWith(href + '/');
 
-  const displayName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Vendor';
+  const displayName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Chef';
 
   return (
     <div className="flex h-screen bg-background">
@@ -80,7 +80,7 @@ export function VendorLayout() {
             </div>
             <div>
               <span className="logo-text">Fe3dr</span>
-              <p className="logo-tagline">Vendor Portal</p>
+              <p className="logo-tagline">Chef Portal</p>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ export function VendorLayout() {
                 <p className="text-sm font-medium text-foreground truncate">
                   {displayName}
                 </p>
-                <p className="text-xs text-muted-foreground">Vendor</p>
+                <p className="text-xs text-muted-foreground">Chef</p>
               </div>
               <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
             </button>
