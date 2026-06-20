@@ -250,8 +250,14 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 		Scopes(services.ExcludeFSSAILocked).
 		Select("id")
 
+	// Gate on availability only — consistent with the chef-detail menu
+	// (GetChefMenu) and order creation (CreateOrder), which both use is_available
+	// as the single visibility gate. (Previously search also required is_approved,
+	// so an available dish was orderable from a chef's page but never appeared in
+	// search.) If admin moderation of dishes is desired, enforce is_approved in
+	// all three paths instead — a product decision.
 	base := database.DB.Model(&models.MenuItem{}).
-		Where("is_available = ? AND is_approved = ?", true, true).
+		Where("is_available = ?", true).
 		Where("(name ILIKE ? OR description ILIKE ?)", "%"+q+"%", "%"+q+"%").
 		Where("chef_id IN (?)", visibleChefs)
 
@@ -814,10 +820,14 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		}
 	}
 
-	// A chef rejecting via status="cancelled" should release the reserved daily
+	// A chef cancelling or rejecting an order should release the reserved daily
 	// capacity (#48), but only on the first transition out of a live state.
-	releaseCap := order.Status == models.OrderStatusCancelled &&
+	// "rejected" is a chef declining a pending order — handled identically to a
+	// cancellation (capacity release + cancel/refund saga signal below).
+	isCancel := order.Status == models.OrderStatusCancelled || order.Status == models.OrderStatusRejected
+	releaseCap := isCancel &&
 		priorStatus != models.OrderStatusCancelled &&
+		priorStatus != models.OrderStatusRejected &&
 		priorStatus != models.OrderStatusRefunded &&
 		priorStatus != models.OrderStatusDelivered
 
@@ -871,7 +881,7 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		services.SignalOrderReady(order.ID)
 	case models.OrderStatusDelivered:
 		services.SignalOrderDelivered(order.ID)
-	case models.OrderStatusCancelled:
+	case models.OrderStatusCancelled, models.OrderStatusRejected:
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}
 

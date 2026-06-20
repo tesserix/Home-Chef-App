@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -39,8 +40,8 @@ func (h *MealSubscriptionHandler) GetChefSubscriptionConfig(c *gin.Context) {
 		cfg = &models.ChefSubscriptionConfig{ChefID: chefID, CutoffTime: "21:00", TrialDurationDays: 3}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"config":             cfg,
-		"hasPublishedMenu":   services.ChefHasPublishedWeeklyMenu(database.DB, chefID),
+		"config":           cfg,
+		"hasPublishedMenu": services.ChefHasPublishedWeeklyMenu(database.DB, chefID),
 	})
 }
 
@@ -211,20 +212,28 @@ func (h *MealSubscriptionHandler) Subscribe(c *gin.Context) {
 
 	now := time.Now()
 	periodEnd := services.AddMealCadence(now, req.Cadence)
+	// Activation is gated (MEAL_SUBSCRIPTION_AUTO_ACTIVATE). ON → start ACTIVE so
+	// the whole flow works end-to-end immediately (the daily-order generator #282
+	// and pause/resume/skip all key off `active`). OFF (prod default) → TRIALING,
+	// so we never generate uncharged daily orders before real recurring billing
+	// (Razorpay UPI-Autopay mandate, #281) is live; the `subscription.charged`
+	// webhook (ActivateMealSubscriptionOnCharge) then flips it to active.
+	subStatus := models.MealSubStatusTrialing
+	if config.AppConfig != nil && config.AppConfig.MealSubscriptionAutoActivate {
+		subStatus = models.MealSubStatusActive
+	}
 	sub := models.MealSubscription{
-		CustomerID:   userID,
-		ChefID:       chefID,
-		Slots:        req.Slots,
-		Days:         req.Days,
-		Variant:      variant,
-		Cadence:      req.Cadence,
-		PerMealPrice: cfg.PerMealPrice,
-		DeliveryFee:  cfg.DeliveryFee,
-		CycleAmount:  amount,
-		Currency:     "INR",
-		// Start trialing — NOT active. The Razorpay UPI-Autopay mandate + first
-		// charge (#281) flip it to active; until then it generates no orders (#282).
-		Status:             models.MealSubStatusTrialing,
+		CustomerID:         userID,
+		ChefID:             chefID,
+		Slots:              req.Slots,
+		Days:               req.Days,
+		Variant:            variant,
+		Cadence:            req.Cadence,
+		PerMealPrice:       cfg.PerMealPrice,
+		DeliveryFee:        cfg.DeliveryFee,
+		CycleAmount:        amount,
+		Currency:           "INR",
+		Status:             subStatus,
 		CurrentPeriodStart: &now,
 		CurrentPeriodEnd:   &periodEnd,
 	}

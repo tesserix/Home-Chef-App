@@ -113,6 +113,13 @@ type Config struct {
 	// release on delivery. Default OFF — the negotiation handshake (#195/#196) works
 	// without it; flip on only after the Razorpay escrow paths are sandbox-verified.
 	MealPlanEscrowEnabled bool
+	// MealSubscriptionAutoActivate gates whether a new tiffin subscription starts
+	// ACTIVE (so the daily-order generator + pause/resume/skip work end-to-end) vs
+	// TRIALING. Default OFF: real recurring CHARGING (Razorpay UPI-Autopay mandate,
+	// #281) isn't wired yet, so an auto-activated sub would generate daily orders
+	// WITHOUT auto-charging the customer. Turn ON in test/staging to exercise the
+	// full flow; keep OFF in prod until #281 billing is live.
+	MealSubscriptionAutoActivate bool
 	// CateringDepositEnabled gates the catering deposit/advance money flow (#55):
 	// creating a Razorpay deposit order to confirm a catering booking. Default OFF —
 	// the request → quote → accept flow works without it; flip on only after the
@@ -145,6 +152,7 @@ func Load() {
 	enableMock, _ := strconv.ParseBool(getEnv("ENABLE_MOCK_MODE", "false"))
 	walletCheckout, _ := strconv.ParseBool(getEnv("WALLET_CHECKOUT_ENABLED", "false"))
 	mealPlanEscrow, _ := strconv.ParseBool(getEnv("MEAL_PLAN_ESCROW_ENABLED", "false"))
+	mealSubAutoActivate, _ := strconv.ParseBool(getEnv("MEAL_SUBSCRIPTION_AUTO_ACTIVATE", "false"))
 	groupOrders, _ := strconv.ParseBool(getEnv("GROUP_ORDERS_ENABLED", "false"))
 	orderPayoutAutoRelease, _ := strconv.ParseBool(getEnv("ORDER_PAYOUT_AUTO_RELEASE_ENABLED", "false"))
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
@@ -256,6 +264,7 @@ func Load() {
 		EnableMockMode:                enableMock,
 		WalletCheckoutEnabled:         walletCheckout,
 		MealPlanEscrowEnabled:         mealPlanEscrow,
+		MealSubscriptionAutoActivate:  mealSubAutoActivate,
 		GroupOrdersEnabled:            groupOrders,
 		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
 		CateringDepositEnabled:        cateringDeposit,
