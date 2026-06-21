@@ -612,6 +612,7 @@ type UpdateChefProfileRequest struct {
 	MinimumOrder    *float64                   `json:"minimumOrder"`
 	ServiceRadius   *float64                   `json:"serviceRadius"`
 	AcceptingOrders *bool                      `json:"acceptingOrders"`
+	OffersPickup    *bool                      `json:"offersPickup"`
 	OperatingHours  map[string]*DayHoursUpdate `json:"operatingHours"`
 
 	// Address fields — added so the chef can edit their kitchen address
@@ -678,6 +679,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.AcceptingOrders != nil {
 		chef.AcceptingOrders = *req.AcceptingOrders
+	}
+	if req.OffersPickup != nil {
+		chef.OffersPickup = *req.OffersPickup
 	}
 	if req.AddressLine1 != nil {
 		chef.AddressLine1 = *req.AddressLine1

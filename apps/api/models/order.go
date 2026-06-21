@@ -53,15 +53,25 @@ const (
 	PaymentRefunded  PaymentStatus = "refunded"
 )
 
+// FulfillmentType is how an order reaches the customer.
+type FulfillmentType string
+
+const (
+	FulfillmentDelivery     FulfillmentType = "delivery"      // 3PL rider (default)
+	FulfillmentChefDelivery FulfillmentType = "chef_delivery" // chef delivers (Phase 2)
+	FulfillmentPickup       FulfillmentType = "pickup"        // customer collects
+)
+
 type Order struct {
 	ID            uuid.UUID     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	OrderNumber   string        `gorm:"uniqueIndex;not null" json:"orderNumber"`
 	CustomerID    uuid.UUID     `gorm:"type:uuid;not null;index" json:"customerId"`
 	ChefID        uuid.UUID     `gorm:"type:uuid;not null;index" json:"chefId"`
 	DeliveryID    *uuid.UUID    `gorm:"type:uuid;index" json:"deliveryId,omitempty"`
-	Status        OrderStatus   `gorm:"type:varchar(20);default:'pending'" json:"status"`
-	PaymentStatus PaymentStatus `gorm:"type:varchar(20);default:'pending'" json:"paymentStatus"`
-	PaymentMethod string        `gorm:"" json:"paymentMethod"`
+	Status          OrderStatus     `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	PaymentStatus   PaymentStatus   `gorm:"type:varchar(20);default:'pending'" json:"paymentStatus"`
+	PaymentMethod   string          `gorm:"" json:"paymentMethod"`
+	FulfillmentType FulfillmentType `gorm:"type:varchar(16);default:'delivery'" json:"fulfillmentType"`
 
 	// Pricing
 	Subtotal    float64 `gorm:"not null" json:"subtotal"`
@@ -220,12 +230,13 @@ func (r CancelReason) IsValid() bool {
 
 // DTOs
 type OrderResponse struct {
-	ID              uuid.UUID     `json:"id"`
-	OrderNumber     string        `json:"orderNumber"`
-	Status          OrderStatus   `json:"status"`
-	PaymentStatus   PaymentStatus `json:"paymentStatus"`
-	PaymentProvider string        `json:"paymentProvider,omitempty"`
-	Currency        string        `json:"currency"`
+	ID              uuid.UUID       `json:"id"`
+	OrderNumber     string          `json:"orderNumber"`
+	Status          OrderStatus     `json:"status"`
+	FulfillmentType FulfillmentType `json:"fulfillmentType"`
+	PaymentStatus   PaymentStatus   `json:"paymentStatus"`
+	PaymentProvider string          `json:"paymentProvider,omitempty"`
+	Currency        string          `json:"currency"`
 	// CustomerName and CustomerPhone are populated by handlers that load the
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints
@@ -363,6 +374,12 @@ func (o *Order) ToResponse() OrderResponse {
 		ID:              o.ID,
 		OrderNumber:     o.OrderNumber,
 		Status:          o.Status,
+		FulfillmentType: func() FulfillmentType {
+			if o.FulfillmentType == "" {
+				return FulfillmentDelivery
+			}
+			return o.FulfillmentType
+		}(),
 		PaymentStatus:   o.PaymentStatus,
 		PaymentProvider: o.PaymentProvider,
 		Currency:        currency,
