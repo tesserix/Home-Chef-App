@@ -752,16 +752,21 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 		return
 	}
 
+	// Approximate the chef's pickup location for the customer map: a deterministic
+	// ~300m offset so the area frames correctly but the exact kitchen address is
+	// never exposed (the client draws a ~400m area circle around this). The 3PL
+	// rider gets the precise pickup address server-to-server, not the customer.
+	chefAreaLat, chefAreaLng := services.FuzzCoordinate(
+		order.Chef.Latitude, order.Chef.Longitude, order.Chef.ID.String())
+
 	response := gin.H{
 		"orderId":     order.ID,
 		"orderNumber": order.OrderNumber,
 		"status":      order.Status,
 		"chef": gin.H{
-			"name": order.Chef.BusinessName,
-			// Pickup point — lets the customer map frame chef + destination
-			// before a driver is assigned.
-			"latitude":  order.Chef.Latitude,
-			"longitude": order.Chef.Longitude,
+			"name":      order.Chef.BusinessName,
+			"latitude":  chefAreaLat,
+			"longitude": chefAreaLng,
 		},
 		"estimatedPrepTime":     order.EstimatedPrepTime,
 		"estimatedDeliveryTime": order.EstimatedDeliveryTime,

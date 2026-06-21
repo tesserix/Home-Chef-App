@@ -78,7 +78,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// Idempotency — same order cancelled already with a refund?
 	// Return the existing state instead of re-refunding.
 	if order.Status == models.OrderStatusCancelled && order.RefundID != "" {
-		c.JSON(http.StatusOK, order.ToResponse())
+		c.JSON(http.StatusOK, order.ToChefResponse())
 		return
 	}
 
@@ -169,7 +169,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		}
 	}()
 
-	c.JSON(http.StatusOK, order.ToResponse())
+	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
 // CancelOrderItem marks a single line as unfulfillable, refunds only
@@ -225,7 +225,7 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	}
 	if target.IsCancelled {
 		// Idempotent — return the current order state without re-refunding.
-		c.JSON(http.StatusOK, order.ToResponse())
+		c.JSON(http.StatusOK, order.ToChefResponse())
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 
 	publishOrderUpdated(order)
 
-	c.JSON(http.StatusOK, order.ToResponse())
+	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
 // RefundOrder handles post-delivery refunds. Unlike CancelOrder
@@ -388,7 +388,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	// the gateway call and returns the current state.
 	remaining := order.Total - order.RefundAmount
 	if remaining <= 0 {
-		c.JSON(http.StatusOK, order.ToResponse())
+		c.JSON(http.StatusOK, order.ToChefResponse())
 		return
 	}
 	if req.Amount > remaining {
@@ -446,7 +446,7 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 
 	publishOrderUpdated(order)
 
-	c.JSON(http.StatusOK, order.ToResponse())
+	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
 // GetOrderInvoicePDF streams the tax-compliant PDF invoice for the

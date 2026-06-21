@@ -1,17 +1,23 @@
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
+// Radius (m) of the chef "pickup area" circle. The backend sends an APPROXIMATE
+// chef location (deterministically offset ~300m from the real kitchen), and we
+// draw this soft circle around it — so the customer sees the rough area their
+// food comes from, never the exact address. Off-platform contact stays blocked.
+const CHEF_AREA_RADIUS_M = 400;
+
 interface DeliveryMapProps {
   driverLat?: number | null;
   driverLng?: number | null;
-  // Destination: use Delivery.DropoffLatitude / DropoffLongitude from backend Delivery model.
-  // NOTE: Backend gap — DeliveryResponse.ToResponse() omits these fields for now.
-  // Falls back to chef coordinates when dropoff coords are 0 or missing.
+  // Customer's own delivery destination (Delivery.DropoffLatitude/Longitude).
+  // Safe to show precisely — it's the customer's own address.
   dropoffLat?: number | null;
   dropoffLng?: number | null;
-  // Fallback: chef location (used when dropoff coords are 0 or missing)
+  // Chef pickup — APPROXIMATE coords from the backend. Rendered as a soft area
+  // circle (never a precise pin) so the exact kitchen address is never revealed.
   chefLat?: number | null;
   chefLng?: number | null;
 }
@@ -31,21 +37,20 @@ export function DeliveryMap({
     driverLat !== 0 &&
     driverLng !== 0;
 
-  // Destination: prefer dropoff coords from Delivery model; fall back to chef location
+  // Customer's own delivery destination — shown as a precise pin (their address).
   const hasDropoffCoords =
     dropoffLat != null &&
     dropoffLng != null &&
     dropoffLat !== 0 &&
     dropoffLng !== 0;
-  const destLat = hasDropoffCoords ? dropoffLat! : (chefLat ?? 0);
-  const destLng = hasDropoffCoords ? dropoffLng! : (chefLng ?? 0);
-  const hasDestination = destLat !== 0 && destLng !== 0;
-  const hasChef = chefLat != null && chefLng != null && chefLat !== 0 && chefLng !== 0;
+  // Chef pickup area — shown as a soft circle (approximate), never a pin.
+  const hasChef =
+    chefLat != null && chefLng != null && chefLat !== 0 && chefLng !== 0;
 
-  // Frame all real points (destination, chef pickup, live driver) with padding
-  // so the map zooms to the delivery area instead of a country-wide view.
+  // Frame all real points (dropoff, chef area, live driver) with padding so the
+  // map zooms to the delivery area instead of a country-wide view.
   const points: { lat: number; lng: number }[] = [];
-  if (hasDestination) points.push({ lat: destLat, lng: destLng });
+  if (hasDropoffCoords) points.push({ lat: dropoffLat!, lng: dropoffLng! });
   if (hasChef) points.push({ lat: chefLat!, lng: chefLng! });
   if (hasDriverLocation) points.push({ lat: driverLat!, lng: driverLng! });
 
@@ -85,7 +90,7 @@ export function DeliveryMap({
       mapRef.current?.animateToRegion(initialRegion, 400);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destLat, destLng, chefLat, chefLng, driverLat, driverLng]);
+  }, [dropoffLat, dropoffLng, chefLat, chefLng, driverLat, driverLng]);
 
   return (
     <MapView
@@ -96,21 +101,24 @@ export function DeliveryMap({
       showsUserLocation={false}
       showsMyLocationButton={false}
     >
-      {/* Destination marker — charcoal pin (customer dropoff / chef fallback) */}
-      {hasDestination && (
-        <Marker
-          coordinate={{ latitude: destLat, longitude: destLng }}
-          title={hasDropoffCoords ? 'Delivery Address' : 'Chef Location'}
-          // Charcoal destination marker — the "home base" / delivery target
-          pinColor={customerColors.charcoal.DEFAULT}
+      {/* Chef pickup AREA — a soft coral-tint circle (no center dot, no border)
+          drawn around the approximate chef location. Privacy: the customer sees
+          the rough area their food is cooked in, never the exact address. */}
+      {hasChef && (
+        <Circle
+          center={{ latitude: chefLat!, longitude: chefLng! }}
+          radius={CHEF_AREA_RADIUS_M}
+          fillColor={customerColors.coral.tint}
+          strokeWidth={0}
         />
       )}
-      {/* Chef pickup marker — shown alongside the dropoff when both are known */}
-      {hasChef && hasDropoffCoords && (
+      {/* Destination marker — charcoal pin at the customer's own delivery address */}
+      {hasDropoffCoords && (
         <Marker
-          coordinate={{ latitude: chefLat!, longitude: chefLng! }}
-          title="Chef"
-          pinColor={customerColors.charcoal.soft}
+          coordinate={{ latitude: dropoffLat!, longitude: dropoffLng! }}
+          title="Delivery Address"
+          // Charcoal destination marker — the "home base" / delivery target
+          pinColor={customerColors.charcoal.DEFAULT}
         />
       )}
       {/* Driver location marker — coral accent so the driver stands out on the map */}

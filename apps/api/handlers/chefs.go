@@ -193,6 +193,11 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	responses := make([]models.ChefProfileResponse, len(chefs))
 	for i, chef := range chefs {
 		responses[i] = chef.ToResponse()
+		// Customer-facing: never expose the chef's exact coordinates. Show an
+		// approximate area (deterministic per-chef offset) so the "chefs near
+		// you" map can place them without revealing the kitchen address.
+		responses[i].Latitude, responses[i].Longitude =
+			services.FuzzCoordinate(chef.Latitude, chef.Longitude, chef.ID.String())
 	}
 
 	// Hygiene/food-safety badge (#35): one batched lookup for the whole page,
@@ -320,6 +325,10 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 
 	resp := chef.ToPublicResponse(schedules)
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
+	// Customer-facing: approximate the kitchen location (deterministic per-chef
+	// offset) so the exact address is never exposed to customers.
+	resp.Latitude, resp.Longitude =
+		services.FuzzCoordinate(chef.Latitude, chef.Longitude, chef.ID.String())
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -558,8 +567,9 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	recentOrdersResp := make([]gin.H, len(recent))
 	for i, o := range recent {
 		recentOrdersResp[i] = gin.H{
-			"id":           o.ID,
-			"customerName": strings.TrimSpace(o.Customer.FirstName + " " + o.Customer.LastName),
+			"id": o.ID,
+			// First name only for the chef view (privacy; matches ToChefResponse).
+			"customerName": o.Customer.FirstName,
 			"total":        o.Total,
 			"status":       o.Status,
 			"createdAt":    o.CreatedAt,
@@ -752,10 +762,8 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
-		resp := order.ToResponse()
-		resp.CustomerName = order.Customer.FirstName + " " + order.Customer.LastName
-		resp.CustomerPhone = order.Customer.Phone
-		responses[i] = resp
+		// Chef view: area-only address, no phone, first name only (privacy).
+		responses[i] = order.ToChefResponse()
 	}
 
 	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the
@@ -895,7 +903,8 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		services.EnqueueDeliveryDispatch(order.ID)
 	}
 
-	c.JSON(http.StatusOK, order.ToResponse())
+	// Chef view: area-only address, no customer PII (privacy).
+	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
 // GetChefCapacitySettings — GET /chef/capacity-settings (#48). Cutoffs + auto-sold-out.
@@ -1074,9 +1083,8 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		return
 	}
 
-	resp := order.ToResponse()
-	resp.CustomerName = order.Customer.FirstName + " " + order.Customer.LastName
-	resp.CustomerPhone = order.Customer.Phone
+	// Chef view: area-only address, no phone, first name only (privacy).
+	resp := order.ToChefResponse()
 
 	// Enrich items with isVeg from the live MenuItem and surfacespecialInstructions
 	for i, item := range order.Items {
@@ -1100,8 +1108,10 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		EstimatedPrepTime:     order.EstimatedPrepTime,
 		EstimatedDeliveryTime: order.EstimatedDeliveryTime,
 		SpecialInstructions:   order.SpecialInstructions,
-		DeliveryInstructions:  order.DeliveryInstructions,
-		PaymentMethod:         order.PaymentMethod,
+		// DeliveryInstructions (navigation, e.g. "3rd floor, blue door") is
+		// intentionally omitted from the chef view — it can reveal building-level
+		// address detail. The 3PL rider receives it server-to-server instead.
+		PaymentMethod: order.PaymentMethod,
 	}
 
 	c.JSON(http.StatusOK, detail)
