@@ -1,0 +1,87 @@
+name: HomeChef Mobile - Typecheck
+
+# Lightweight CI smoke for the Expo apps: runs `tsc --noEmit` per app on PRs
+# that touch any mobile app or the shared package. No EAS minutes, no native
+# build — just type safety, so regressions are caught before a manual EAS build.
+#
+# Scope note: customer / vendor / admin are REQUIRED (must be clean). delivery
+# is ADVISORY (continue-on-error) — it carries pre-existing type errors tracked
+# for a separate cleanup; this surfaces them on every PR without blocking merges.
+# Flip delivery to required by removing the continue-on-error expression once it
+# is green.
+#
+# Typed routes: a fresh checkout has no generated `.expo/types`, so expo-router
+# Href types fall back to the permissive form. This check therefore validates
+# real type errors, not route-string strictness (which only the dev server /
+# prebuild generates).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/mobile-customer/**'
+      - 'apps/mobile-vendor/**'
+      - 'apps/mobile-delivery/**'
+      - 'apps/mobile-admin/**'
+      - 'packages/mobile-shared/**'
+      - '.github/workflows/homechef-mobile-typecheck.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: tsc (mobile-${{ matrix.app }})
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    # delivery has pre-existing type errors — keep it advisory until cleaned up.
+    continue-on-error: ${{ matrix.app == 'delivery' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [customer, vendor, delivery, admin]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Get pnpm store directory
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        # Focused install of just this app + its workspace deps (mobile-shared,
+        # @tesserix/native). @tesserix packages are public npm (no token).
+        run: pnpm install --filter @homechef/mobile-${{ matrix.app }}... --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: apps/mobile-${{ matrix.app }}
+        run: pnpm exec tsc --noEmit
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Typecheck — mobile-${{ matrix.app }}"
+            echo ""
+            echo "- **Result:** ${{ job.status }}"
+            echo "- \`tsc --noEmit\` over apps/mobile-${{ matrix.app }}"
+          } >> "$GITHUB_STEP_SUMMARY"
