@@ -324,13 +324,13 @@ export default function CheckoutScreen() {
       >
         {/* ── Fulfillment mode selector (only when chef offers pickup) ── */}
         {offersPickup ? (
-          <View className="mx-4 mt-4 flex-row gap-2">
+          <View className="mx-4 mt-4 flex-row gap-2" accessibilityRole="radiogroup">
             {(['delivery', 'pickup'] as const).map((mode) => (
               <Pressable
                 key={mode}
                 onPress={() => setFulfillment(mode)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: fulfillment === mode }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: fulfillment === mode }}
                 className={`flex-1 min-h-[44px] items-center justify-center rounded-lg border ${
                   fulfillment === mode
                     ? 'border-coral bg-coral-tint'
