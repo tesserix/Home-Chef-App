@@ -25,6 +25,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
+import { useChef } from '../hooks/useChefs';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
 import { useWinback } from '../hooks/useWinback';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
@@ -77,6 +78,8 @@ function slotDayLabel(dateStr: string): string {
 export default function CheckoutScreen() {
   const cartStore = useCartStore();
   const createOrder = useCreateOrder();
+  const { data: chefData } = useChef(cartStore.chefId ?? '');
+  const offersPickup = !!chefData?.data?.offersPickup;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -99,6 +102,7 @@ export default function CheckoutScreen() {
 
   const addresses = addressData?.data ?? [];
 
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
@@ -191,7 +195,8 @@ export default function CheckoutScreen() {
   // ─── Place Order flow ──────────────────────────────────────────────────────
 
   async function handlePlaceOrder() {
-    if (!selectedAddressId || cartStore.items.length === 0 || !cartStore.chefId) return;
+    const needsAddress = fulfillment !== 'pickup';
+    if ((needsAddress && !selectedAddressId) || cartStore.items.length === 0 || !cartStore.chefId) return;
     if (!acceptedTerms) {
       setError('Please accept the Terms of Service and Refund Policy to continue.');
       return;
@@ -211,7 +216,8 @@ export default function CheckoutScreen() {
           // Selected add-on option ids for this line (#232).
           modifierOptionIds: i.modifiers?.map((m) => m.optionId),
         })),
-        deliveryAddressId: selectedAddressId,
+        deliveryAddressId: fulfillment === 'pickup' ? undefined : selectedAddressId,
+        fulfillmentType: fulfillment,
         specialInstructions: note.trim() || undefined,
         deliverySlot: selectedSlot?.slot,
         deliveryDate: selectedSlot?.date,
@@ -247,7 +253,7 @@ export default function CheckoutScreen() {
 
   const canPlaceOrder =
     cartStore.items.length > 0 &&
-    !!selectedAddressId &&
+    (fulfillment === 'pickup' || !!selectedAddressId) &&
     !!cartStore.chefId &&
     !isLoading &&
     acceptedTerms;
@@ -316,7 +322,35 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Fulfillment mode selector (only when chef offers pickup) ── */}
+        {offersPickup ? (
+          <View className="mx-4 mt-4 flex-row gap-2" accessibilityRole="radiogroup">
+            {(['delivery', 'pickup'] as const).map((mode) => (
+              <Pressable
+                key={mode}
+                onPress={() => setFulfillment(mode)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: fulfillment === mode }}
+                className={`flex-1 min-h-[44px] items-center justify-center rounded-lg border ${
+                  fulfillment === mode
+                    ? 'border-coral bg-coral-tint'
+                    : 'border-hairline bg-canvas'
+                }`}
+              >
+                <Text
+                  className={`text-sm font-semibold ${
+                    fulfillment === mode ? 'text-coral-pressed' : 'text-charcoal-soft'
+                  }`}
+                >
+                  {mode === 'delivery' ? 'Delivery' : 'Pickup'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         {/* ── Delivery Address ── */}
+        {fulfillment !== 'pickup' ? (
         <View className="mx-4 mt-4 bg-canvas rounded-2xl overflow-hidden border border-hairline">
           <View className="flex-row items-center px-4 pt-4 pb-2 gap-2">
             <MapPin size={18} color="#FF385C" />
@@ -568,6 +602,7 @@ export default function CheckoutScreen() {
             </>
           )}
         </View>
+        ) : null}
 
         {/* ── Order Summary ── */}
         <View className="mx-4 mt-4 bg-canvas rounded-2xl overflow-hidden border border-hairline">

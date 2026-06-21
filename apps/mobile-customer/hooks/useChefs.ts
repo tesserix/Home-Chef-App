@@ -43,6 +43,7 @@ interface ApiChefProfile {
   latitude?: number;
   longitude?: number;
   foodSafetyBadge?: boolean;
+  offersPickup?: boolean;
 }
 
 interface ApiMenuItem {
@@ -93,6 +94,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     minimumOrder: c.minimumOrder,
     deliveryFee: c.deliveryFee,
     foodSafetyBadge: Boolean(c.foodSafetyBadge),
+    offersPickup: c.offersPickup,
   };
 }
 

@@ -26,6 +26,7 @@ type ChefProfile struct {
 	MinimumOrder   float64        `gorm:"default:0" json:"minimumOrder"`
 	DeliveryRadius float64        `gorm:"default:10" json:"deliveryRadius"` // in km
 	ServiceRadius  float64        `gorm:"default:10" json:"serviceRadius"`  // in km
+	OffersPickup   bool           `gorm:"default:false" json:"offersPickup"`
 	Rating         float64        `gorm:"default:0" json:"rating"`
 	TotalReviews   int            `gorm:"default:0" json:"totalReviews"`
 	TotalOrders    int            `gorm:"default:0" json:"totalOrders"`
@@ -225,6 +226,7 @@ type ChefProfileResponse struct {
 	DeliveryFee   float64   `json:"deliveryFee"`
 	PriceRange    string    `json:"priceRange"`
 	ServiceRadius float64   `json:"serviceRadius"`
+	OffersPickup  bool      `json:"offersPickup"`
 	Rating        float64   `json:"rating"`
 	TotalReviews  int       `json:"totalReviews"`
 	TotalOrders   int       `json:"totalOrders"`
@@ -310,6 +312,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		DeliveryFee:     0, // TODO: populate when delivery fee model is added
 		PriceRange:      priceRangeFromMinOrder(c.MinimumOrder),
 		ServiceRadius:   c.ServiceRadius,
+		OffersPickup:    c.OffersPickup,
 		Rating:          c.Rating,
 		TotalReviews:    c.TotalReviews,
 		TotalOrders:     c.TotalOrders,

@@ -612,6 +612,7 @@ type UpdateChefProfileRequest struct {
 	MinimumOrder    *float64                   `json:"minimumOrder"`
 	ServiceRadius   *float64                   `json:"serviceRadius"`
 	AcceptingOrders *bool                      `json:"acceptingOrders"`
+	OffersPickup    *bool                      `json:"offersPickup"`
 	OperatingHours  map[string]*DayHoursUpdate `json:"operatingHours"`
 
 	// Address fields — added so the chef can edit their kitchen address
@@ -679,6 +680,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	if req.AcceptingOrders != nil {
 		chef.AcceptingOrders = *req.AcceptingOrders
 	}
+	if req.OffersPickup != nil {
+		chef.OffersPickup = *req.OffersPickup
+	}
 	if req.AddressLine1 != nil {
 		chef.AddressLine1 = *req.AddressLine1
 	}
@@ -698,6 +702,23 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	if err := database.DB.Save(&chef).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return
+	}
+
+	// Resolve kitchen coordinates from the address (best-effort) so pickup +
+	// self-delivery distance work. Only when we have a street + city and the
+	// address actually changed enough to matter; failures are non-fatal.
+	if chef.AddressLine1 != "" && chef.City != "" {
+		parts := []string{}
+		for _, p := range []string{chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode} {
+			if strings.TrimSpace(p) != "" {
+				parts = append(parts, p)
+			}
+		}
+		full := strings.Join(parts, ", ")
+		if lat, lng, ok := services.GeocodeAddress(full); ok {
+			chef.Latitude, chef.Longitude = lat, lng
+			database.DB.Model(&chef).Updates(map[string]any{"latitude": lat, "longitude": lng})
+		}
 	}
 
 	// Update operating hours if provided
@@ -896,7 +917,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
 	// the request path; idempotent so repeated "ready" updates are safe. A
 	// dispatch failure must not fail the chef's status update.
-	if order.Status == models.OrderStatusReady {
+	// Pickup orders are collected by the customer; chef_delivery (Phase 2) is
+	// carried by the chef. Neither dispatches a provider.
+	if order.Status == models.OrderStatusReady && order.FulfillmentType == models.FulfillmentDelivery {
 		// Durable dispatch via Temporal when enabled (retries the flaky 3PL
 		// booking, survives crashes); falls back to the inline goroutine
 		// otherwise. Idempotent by order ID, so repeated "ready" updates are safe.

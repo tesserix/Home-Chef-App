@@ -89,6 +89,9 @@ type CreateOrderRequest struct {
 	// IST (empty = today, bounded by the booking horizon).
 	DeliverySlot string `json:"deliverySlot"`
 	DeliveryDate string `json:"deliveryDate"`
+	// FulfillmentType is "delivery" (default, 3PL), "pickup" (customer collects),
+	// or "chef_delivery" (reserved for Phase 2). Empty defaults to delivery.
+	FulfillmentType string `json:"fulfillmentType"`
 }
 
 type CreateOrderItem struct {
@@ -152,6 +155,22 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 	return delta, snapshot, nil
 }
 
+// resolveFulfillment validates the requested fulfillment mode against what the
+// chef offers, defaulting to 3PL delivery. chef_delivery is reserved for Phase 2.
+func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
+	switch models.FulfillmentType(req.FulfillmentType) {
+	case "", models.FulfillmentDelivery:
+		return models.FulfillmentDelivery, nil
+	case models.FulfillmentPickup:
+		if !chef.OffersPickup {
+			return "", fmt.Errorf("this kitchen does not offer pickup")
+		}
+		return models.FulfillmentPickup, nil
+	default:
+		return "", fmt.Errorf("unsupported fulfillment option")
+	}
+}
+
 type CreateAddressRequest struct {
 	Line1      string `json:"line1" binding:"required"`
 	Line2      string `json:"line2"`
@@ -213,6 +232,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	capSettings := services.GetChefCapacitySettings(req.ChefID)
 	if services.IsPastDailyClose(capSettings, time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
+		return
+	}
+
+	// Resolve and validate the fulfillment mode. Pickup is only allowed when
+	// the chef explicitly offers it; unknown modes are rejected early.
+	fulfillment, err := resolveFulfillment(req, chef)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -360,6 +387,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	} else if req.DeliveryAddress != nil {
 		deliveryAddr = *req.DeliveryAddress
+	} else if fulfillment == models.FulfillmentPickup {
+		// Pickup: no delivery address — the customer collects from the chef.
+		// Leave the address empty; country defaults to IN for tax resolution.
+		deliveryAddr = CreateAddressRequest{Country: "IN"}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery address required"})
 		return
@@ -374,10 +405,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Live 3PL delivery quote, computed now that the drop address is known.
-	// Falls back to the flat policy fee (already in deliveryFee) when the
-	// address has no coordinates yet or no provider can serve the leg, so
-	// checkout never blocks on the quote.
-	if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
+	// Pickup orders pay no delivery fee and skip the 3PL quote entirely.
+	// For delivery, falls back to the flat policy fee (already in deliveryFee)
+	// when the address has no coordinates yet or no provider can serve the leg,
+	// so checkout never blocks on the quote.
+	if fulfillment == models.FulfillmentPickup {
+		deliveryFee = 0
+	} else if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
 		deliveryFee = fee
 	}
 
@@ -409,8 +443,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// If the admin has configured delivery zones, enforce coverage. When no
 	// zones exist we skip — feature is opt-in so existing customers aren't
-	// suddenly unable to order.
-	if services.HasActiveZones() {
+	// suddenly unable to order. Pickup orders skip this gate entirely since
+	// there is no drop-off address to check.
+	if fulfillment != models.FulfillmentPickup && services.HasActiveZones() {
 		if deliveryAddr.Latitude == 0 && deliveryAddr.Longitude == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Delivery address needs location coordinates. Please select your address from the map.",
@@ -473,6 +508,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		SpecialInstructions:       req.SpecialInstructions,
 		ScheduledFor:              req.ScheduledFor,
 		DeliverySlot:              req.DeliverySlot,
+		FulfillmentType:           fulfillment,
 		EstimatedPrepTime:         30, // Default, could be calculated
 	}
 	// A resolved slot window is authoritative over any client-sent ScheduledFor.
@@ -739,6 +775,17 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, order.ToResponse())
 }
 
+// chefTrackCoords returns the chef coordinates to show the customer for an order.
+// Pickup reveals the EXACT kitchen (the customer is collecting); every other mode
+// returns an approximate (fuzzed) point so the address stays private.
+func chefTrackCoords(order models.Order) (lat, lng float64, exact bool) {
+	if order.FulfillmentType == models.FulfillmentPickup {
+		return order.Chef.Latitude, order.Chef.Longitude, true
+	}
+	flat, flng := services.FuzzCoordinate(order.Chef.Latitude, order.Chef.Longitude, order.Chef.ID.String())
+	return flat, flng, false
+}
+
 // TrackOrder returns real-time tracking info for an order
 func (h *OrderHandler) TrackOrder(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -752,22 +799,36 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 		return
 	}
 
-	// Approximate the chef's pickup location for the customer map: a deterministic
-	// ~300m offset so the area frames correctly but the exact kitchen address is
-	// never exposed (the client draws a ~400m area circle around this). The 3PL
-	// rider gets the precise pickup address server-to-server, not the customer.
-	chefAreaLat, chefAreaLng := services.FuzzCoordinate(
-		order.Chef.Latitude, order.Chef.Longitude, order.Chef.ID.String())
+	chefLat, chefLng, chefExact := chefTrackCoords(order)
 
 	response := gin.H{
 		"orderId":     order.ID,
 		"orderNumber": order.OrderNumber,
 		"status":      order.Status,
-		"chef": gin.H{
-			"name":      order.Chef.BusinessName,
-			"latitude":  chefAreaLat,
-			"longitude": chefAreaLng,
-		},
+		"chef": func() gin.H {
+			m := gin.H{
+				"name":      order.Chef.BusinessName,
+				"latitude":  chefLat,
+				"longitude": chefLng,
+			}
+			if chefExact {
+				// Pickup: the customer needs the real address to collect.
+				var parts []string
+				for _, p := range []string{
+					order.Chef.AddressLine1,
+					order.Chef.AddressLine2,
+					order.Chef.City,
+					order.Chef.State,
+					order.Chef.PostalCode,
+				} {
+					if p != "" {
+						parts = append(parts, p)
+					}
+				}
+				m["address"] = strings.Join(parts, ", ")
+			}
+			return m
+		}(),
 		"estimatedPrepTime":     order.EstimatedPrepTime,
 		"estimatedDeliveryTime": order.EstimatedDeliveryTime,
 		"createdAt":             order.CreatedAt,

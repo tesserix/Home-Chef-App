@@ -17,6 +17,9 @@ export interface Chef {
   // foodSafetyBadge (#35): chef holds a verified, non-expired FSSAI licence;
   // set from the chef-list API response via mapChef.
   foodSafetyBadge?: boolean;
+  // offersPickup: chef allows customers to pick up their order at the kitchen
+  // address instead of requesting delivery (backend Task 1 field).
+  offersPickup?: boolean;
 }
 
 export interface MenuItem {

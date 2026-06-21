@@ -222,6 +222,10 @@ func main() {
 	// (Prometheus gauge updater, not a Temporal-scheduled job.)
 	services.StartFSSAILockedGaugeUpdater(cronCtx)
 
+	// One-time-ish: geocode chefs missing coordinates. Background so boot isn't
+	// blocked by Photon latency.
+	go services.BackfillChefCoordinates(database.DB)
+
 	// Setup router
 	router := routes.SetupRouter()
 

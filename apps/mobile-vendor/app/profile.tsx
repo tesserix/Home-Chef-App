@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -40,6 +41,7 @@ interface ChefProfile {
   minimumOrder: number;
   serviceRadius: number;
   acceptingOrders: boolean;
+  offersPickup: boolean;
   kitchenPhotos: string[];
   addressLine1: string;
   addressLine2: string;
@@ -61,6 +63,7 @@ interface UpdateChefProfilePayload {
   city?: string;
   state?: string;
   postalCode?: string;
+  offersPickup?: boolean;
 }
 
 // Preset lists — chip selectors instead of free-text input wherever the
@@ -310,6 +313,7 @@ export default function ProfileScreen() {
   const [city, setCity] = useState('');
   const [stateName, setStateName] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [offersPickup, setOffersPickup] = useState(false);
 
   // Dirty against last-known server values — drives the disabled state of
   // the always-visible save button and the back-discard prompt.
@@ -327,7 +331,8 @@ export default function ProfileScreen() {
       addressLine2.trim() !== (data.addressLine2 ?? '') ||
       city.trim() !== (data.city ?? '') ||
       stateName.trim() !== (data.state ?? '') ||
-      postalCode.trim() !== (data.postalCode ?? ''));
+      postalCode.trim() !== (data.postalCode ?? '') ||
+      offersPickup !== (data.offersPickup ?? false));
 
   // Sync local form state when data loads (including after a successful save
   // which invalidates the query and re-fetches). Clear savedRef so that
@@ -349,6 +354,7 @@ export default function ProfileScreen() {
       setCity(data.city ?? '');
       setStateName(data.state ?? '');
       setPostalCode(data.postalCode ?? '');
+      setOffersPickup(data.offersPickup ?? false);
       savedRef.current = false;
     }
   }, [data]);
@@ -379,6 +385,7 @@ export default function ProfileScreen() {
       city: city.trim(),
       state: stateName.trim(),
       postalCode: postalCode.trim(),
+      offersPickup,
     };
     updateMutation.mutate(payload, {
       onSuccess: () => {
@@ -436,6 +443,7 @@ export default function ProfileScreen() {
               city: city.trim(),
               state: stateName.trim(),
               postalCode: postalCode.trim(),
+              offersPickup,
             };
             updateMutation.mutate(payload, {
               onSuccess: () => {
@@ -775,6 +783,24 @@ export default function ProfileScreen() {
               placeholder="6-digit PIN"
               hasBorderBottom={false}
             />
+          </View>
+
+          {/* FULFILLMENT — pickup opt-in toggle */}
+          <Text style={styles.sectionLabel}>FULFILLMENT</Text>
+          <View style={styles.hairlineGroup}>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleLabel}>Allow customer pickup</Text>
+                <Text style={styles.toggleHint}>
+                  Customers can collect their order from your kitchen.
+                </Text>
+              </View>
+              <Switch
+                value={offersPickup}
+                onValueChange={setOffersPickup}
+                accessibilityLabel="Allow customer pickup"
+              />
+            </View>
           </View>
 
           {/* KITCHEN PHOTOS — horizontal strip inside its own white card */}
@@ -1159,6 +1185,26 @@ const styles = StyleSheet.create({
   chipStateRow: {
     gap: theme.spacing[2],
     paddingRight: theme.spacing[4],
+  },
+
+  // Pickup toggle row — matches the hairlineGroup container
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    gap: theme.spacing[4],
+  },
+  toggleLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    marginBottom: theme.spacing[1],
+  },
+  toggleHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
   },
 
   // Error state
