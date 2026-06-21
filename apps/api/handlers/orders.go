@@ -775,6 +775,17 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, order.ToResponse())
 }
 
+// chefTrackCoords returns the chef coordinates to show the customer for an order.
+// Pickup reveals the EXACT kitchen (the customer is collecting); every other mode
+// returns an approximate (fuzzed) point so the address stays private.
+func chefTrackCoords(order models.Order) (lat, lng float64, exact bool) {
+	if order.FulfillmentType == models.FulfillmentPickup {
+		return order.Chef.Latitude, order.Chef.Longitude, true
+	}
+	flat, flng := services.FuzzCoordinate(order.Chef.Latitude, order.Chef.Longitude, order.Chef.ID.String())
+	return flat, flng, false
+}
+
 // TrackOrder returns real-time tracking info for an order
 func (h *OrderHandler) TrackOrder(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -788,22 +799,36 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 		return
 	}
 
-	// Approximate the chef's pickup location for the customer map: a deterministic
-	// ~300m offset so the area frames correctly but the exact kitchen address is
-	// never exposed (the client draws a ~400m area circle around this). The 3PL
-	// rider gets the precise pickup address server-to-server, not the customer.
-	chefAreaLat, chefAreaLng := services.FuzzCoordinate(
-		order.Chef.Latitude, order.Chef.Longitude, order.Chef.ID.String())
+	chefLat, chefLng, chefExact := chefTrackCoords(order)
 
 	response := gin.H{
 		"orderId":     order.ID,
 		"orderNumber": order.OrderNumber,
 		"status":      order.Status,
-		"chef": gin.H{
-			"name":      order.Chef.BusinessName,
-			"latitude":  chefAreaLat,
-			"longitude": chefAreaLng,
-		},
+		"chef": func() gin.H {
+			m := gin.H{
+				"name":      order.Chef.BusinessName,
+				"latitude":  chefLat,
+				"longitude": chefLng,
+			}
+			if chefExact {
+				// Pickup: the customer needs the real address to collect.
+				var parts []string
+				for _, p := range []string{
+					order.Chef.AddressLine1,
+					order.Chef.AddressLine2,
+					order.Chef.City,
+					order.Chef.State,
+					order.Chef.PostalCode,
+				} {
+					if p != "" {
+						parts = append(parts, p)
+					}
+				}
+				m["address"] = strings.Join(parts, ", ")
+			}
+			return m
+		}(),
 		"estimatedPrepTime":     order.EstimatedPrepTime,
 		"estimatedDeliveryTime": order.EstimatedDeliveryTime,
 		"createdAt":             order.CreatedAt,

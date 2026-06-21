@@ -3,6 +3,7 @@ package handlers
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/homechef/api/models"
 )
 
@@ -25,5 +26,28 @@ func TestResolveFulfillment(t *testing.T) {
 	// unknown value rejected
 	if _, err := resolveFulfillment(CreateOrderRequest{FulfillmentType: "teleport"}, chefPickup); err == nil {
 		t.Fatal("unknown fulfillment must be rejected")
+	}
+}
+
+func TestChefTrackCoords_PickupIsExact(t *testing.T) {
+	o := models.Order{FulfillmentType: models.FulfillmentPickup}
+	o.Chef.ID = uuid.New()
+	o.Chef.Latitude, o.Chef.Longitude = 19.1499, 72.7967
+	lat, lng, exact := chefTrackCoords(o)
+	if !exact || lat != 19.1499 || lng != 72.7967 {
+		t.Fatalf("pickup must return EXACT chef coords; got %v,%v exact=%v", lat, lng, exact)
+	}
+}
+
+func TestChefTrackCoords_DeliveryIsFuzzed(t *testing.T) {
+	o := models.Order{FulfillmentType: models.FulfillmentDelivery}
+	o.Chef.ID = uuid.New()
+	o.Chef.Latitude, o.Chef.Longitude = 19.1499, 72.7967
+	lat, lng, exact := chefTrackCoords(o)
+	if exact {
+		t.Fatal("delivery must be fuzzed, not exact")
+	}
+	if lat == 19.1499 && lng == 72.7967 {
+		t.Fatal("delivery coords must differ from the true location")
 	}
 }
