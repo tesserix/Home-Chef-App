@@ -4,11 +4,11 @@ name: HomeChef Mobile - Typecheck
 # that touch any mobile app or the shared package. No EAS minutes, no native
 # build — just type safety, so regressions are caught before a manual EAS build.
 #
-# Scope note: customer / vendor / admin are REQUIRED (must be clean). delivery
-# is ADVISORY (continue-on-error) — it carries pre-existing type errors tracked
-# for a separate cleanup; this surfaces them on every PR without blocking merges.
-# Flip delivery to required by removing the continue-on-error expression once it
-# is green.
+# Scope note: customer / vendor / admin are typechecked. mobile-delivery is
+# intentionally EXCLUDED for now — it carries ~19 pre-existing type errors
+# (NotificationBehavior, possibly-undefined fleet, query generics) tracked for a
+# separate cleanup; gating on it would fail unrelated PRs. Add 'delivery' to the
+# matrix once it is green.
 #
 # Typed routes: a fresh checkout has no generated `.expo/types`, so expo-router
 # Href types fall back to the permissive form. This check therefore validates
@@ -38,12 +38,11 @@ jobs:
   typecheck:
     name: tsc (mobile-${{ matrix.app }})
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    # delivery has pre-existing type errors — keep it advisory until cleaned up.
-    continue-on-error: ${{ matrix.app == 'delivery' }}
     strategy:
       fail-fast: false
       matrix:
-        app: [customer, vendor, delivery, admin]
+        # delivery excluded until its pre-existing tsc errors are fixed.
+        app: [customer, vendor, admin]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

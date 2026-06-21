@@ -38,5 +38,9 @@ func TestRegistry_MobileTenantAllowlist(t *testing.T) {
 	r, _ := Load("../../homechef-products.yaml")
 	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Customer-rqg8a"))
 	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Business-8s8ql"))
-	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Internal-gyofe"))
+	// Internal/admin pool is mobile-allowed too — it powers apps/mobile-admin
+	// (the internal pool resolves to role=admin in autologin).
+	assert.True(t, r.IsMobileTenantAllowed("HomeChef-Internal-gyofe"))
+	// A tenant not in the allowlist is still rejected.
+	assert.False(t, r.IsMobileTenantAllowed("HomeChef-Unknown-zzzzz"))
 }
