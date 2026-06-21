@@ -63,11 +63,11 @@ const (
 )
 
 type Order struct {
-	ID            uuid.UUID     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	OrderNumber   string        `gorm:"uniqueIndex;not null" json:"orderNumber"`
-	CustomerID    uuid.UUID     `gorm:"type:uuid;not null;index" json:"customerId"`
-	ChefID        uuid.UUID     `gorm:"type:uuid;not null;index" json:"chefId"`
-	DeliveryID    *uuid.UUID    `gorm:"type:uuid;index" json:"deliveryId,omitempty"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	OrderNumber     string          `gorm:"uniqueIndex;not null" json:"orderNumber"`
+	CustomerID      uuid.UUID       `gorm:"type:uuid;not null;index" json:"customerId"`
+	ChefID          uuid.UUID       `gorm:"type:uuid;not null;index" json:"chefId"`
+	DeliveryID      *uuid.UUID      `gorm:"type:uuid;index" json:"deliveryId,omitempty"`
 	Status          OrderStatus     `gorm:"type:varchar(20);default:'pending'" json:"status"`
 	PaymentStatus   PaymentStatus   `gorm:"type:varchar(20);default:'pending'" json:"paymentStatus"`
 	PaymentMethod   string          `gorm:"" json:"paymentMethod"`
@@ -371,9 +371,9 @@ func (o *Order) ToResponse() OrderResponse {
 	}
 
 	return OrderResponse{
-		ID:              o.ID,
-		OrderNumber:     o.OrderNumber,
-		Status:          o.Status,
+		ID:          o.ID,
+		OrderNumber: o.OrderNumber,
+		Status:      o.Status,
 		FulfillmentType: func() FulfillmentType {
 			if o.FulfillmentType == "" {
 				return FulfillmentDelivery

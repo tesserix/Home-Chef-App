@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	geocodePhotonAPI  = "https://photon.komoot.io/api/"
-	geocodeUserAgent  = "homechef-api (+https://fe3dr.com)"
+	geocodePhotonAPI = "https://photon.komoot.io/api/"
+	geocodeUserAgent = "homechef-api (+https://fe3dr.com)"
 )
 
 var geocodeClient = &http.Client{Timeout: 4 * time.Second}
