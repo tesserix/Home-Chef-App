@@ -11,7 +11,9 @@ interface CreateOrderPayload {
   // `notes` is the per-item wire field (apps/api CreateOrderItem.json:"notes").
   // modifierOptionIds are the selected add-ons for the line (#232).
   items: { menuItemId: string; quantity: number; notes?: string; modifierOptionIds?: string[] }[];
-  deliveryAddressId: string;
+  // Omit when fulfillmentType is 'pickup' — the server does not require an
+  // address for pickup orders (backend Task 4).
+  deliveryAddressId?: string;
   // Order-level note to the chef. Backend reads `specialInstructions`
   // (CreateOrderRequest) — a `note` field is silently dropped.
   specialInstructions?: string;
@@ -23,6 +25,8 @@ interface CreateOrderPayload {
   // Applied promo code (#39). The server re-validates and computes the discount;
   // an invalid/exhausted code is rejected so the client can't fake a discount.
   promoCode?: string;
+  // 'delivery' (default) | 'pickup'. Omit → server defaults to delivery.
+  fulfillmentType?: 'delivery' | 'pickup';
 }
 
 export function useCreateOrder() {
