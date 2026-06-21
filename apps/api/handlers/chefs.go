@@ -917,7 +917,9 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	// Auto-dispatch a 3PL delivery once the food is ready for pickup. Runs off
 	// the request path; idempotent so repeated "ready" updates are safe. A
 	// dispatch failure must not fail the chef's status update.
-	if order.Status == models.OrderStatusReady {
+	// Pickup orders are collected by the customer; chef_delivery (Phase 2) is
+	// carried by the chef. Neither dispatches a provider.
+	if order.Status == models.OrderStatusReady && order.FulfillmentType == models.FulfillmentDelivery {
 		// Durable dispatch via Temporal when enabled (retries the flaky 3PL
 		// booking, survives crashes); falls back to the inline goroutine
 		// otherwise. Idempotent by order ID, so repeated "ready" updates are safe.
