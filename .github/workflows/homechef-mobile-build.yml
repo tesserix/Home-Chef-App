@@ -18,6 +18,16 @@ name: HomeChef Mobile - EAS Build
 #
 # iOS/production profiles require Apple/Android signing credentials to already be
 # configured on the EAS projects; otherwise --non-interactive builds will fail.
+#
+# TestFlight / Play submission (submit=true) appends `--auto-submit`, which after
+# the build uploads it to the store using each app's `submit.production` config
+# in eas.json (appleTeamId + ascAppId). For this to run non-interactively in CI
+# the EAS project must already hold the credentials — set them up ONCE locally:
+#   cd apps/mobile-<app>
+#   eas credentials            # iOS → set up Distribution cert + provisioning profile
+#   eas credentials            # iOS → App Store Connect API Key (for submit)
+# After that one-time interactive setup (needs an Apple login), this workflow can
+# build + submit to TestFlight with no GitHub secrets beyond EXPO_TOKEN.
 
 on:
   workflow_dispatch:
@@ -37,12 +47,16 @@ on:
         type: choice
         options: [preview, production, development]
         default: preview
+      submit:
+        description: Submit to store (TestFlight / Play internal) after build
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: mobile-eas-${{ inputs.app }}-${{ inputs.platform }}-${{ inputs.profile }}
+  group: mobile-eas-${{ inputs.app }}-${{ inputs.platform }}-${{ inputs.profile }}-${{ inputs.submit }}
   cancel-in-progress: false
 
 jobs:
@@ -98,12 +112,15 @@ jobs:
 
       - name: Queue EAS build
         working-directory: apps/mobile-${{ matrix.app }}
+        # --auto-submit (when submit=true) chains a store submission after the
+        # build on EAS servers, using the submit.<profile> config in eas.json.
         run: |
           eas build \
             --platform "${{ inputs.platform }}" \
             --profile "${{ inputs.profile }}" \
             --non-interactive \
-            --no-wait
+            --no-wait \
+            ${{ inputs.submit && '--auto-submit' || '' }}
 
       - name: Summary
         if: always()
@@ -114,5 +131,6 @@ jobs:
             echo "- **App:** mobile-${{ matrix.app }}"
             echo "- **Platform:** ${{ inputs.platform }}"
             echo "- **Profile:** ${{ inputs.profile }}"
+            echo "- **Submit to store:** ${{ inputs.submit }}"
             echo "- Track builds: https://expo.dev/accounts/tesserix-org/projects"
           } >> "$GITHUB_STEP_SUMMARY"
