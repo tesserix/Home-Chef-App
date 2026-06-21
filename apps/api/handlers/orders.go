@@ -387,6 +387,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	} else if req.DeliveryAddress != nil {
 		deliveryAddr = *req.DeliveryAddress
+	} else if fulfillment == models.FulfillmentPickup {
+		// Pickup: no delivery address — the customer collects from the chef.
+		// Leave the address empty; country defaults to IN for tax resolution.
+		deliveryAddr = CreateAddressRequest{Country: "IN"}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery address required"})
 		return
@@ -439,8 +443,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	// If the admin has configured delivery zones, enforce coverage. When no
 	// zones exist we skip — feature is opt-in so existing customers aren't
-	// suddenly unable to order.
-	if services.HasActiveZones() {
+	// suddenly unable to order. Pickup orders skip this gate entirely since
+	// there is no drop-off address to check.
+	if fulfillment != models.FulfillmentPickup && services.HasActiveZones() {
 		if deliveryAddr.Latitude == 0 && deliveryAddr.Longitude == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Delivery address needs location coordinates. Please select your address from the map.",
