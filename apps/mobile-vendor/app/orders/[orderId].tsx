@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -129,14 +128,6 @@ function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
     ].filter((l): l is string => !!l && l.trim().length > 0);
   }
   return [];
-}
-
-function mapsUrl(query: string): string {
-  const encoded = encodeURIComponent(query);
-  if (Platform.OS === 'ios') {
-    return `http://maps.apple.com/?q=${encoded}`;
-  }
-  return `https://www.google.com/maps/search/?q=${encoded}`;
 }
 
 // ---- Sub-components -----------------------------------------------------------
@@ -573,11 +564,6 @@ export default function OrderDetailScreen() {
     [order],
   );
 
-  const mapsQuery = useMemo(
-    () => addressLines.join(', '),
-    [addressLines],
-  );
-
   function handleBack(): void {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/orders');
@@ -631,7 +617,9 @@ export default function OrderDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CUSTOMER section */}
+        {/* CUSTOMER section — first name only. Phone + direct call/message are
+            intentionally not shown: the rider handles pickup→delivery, and
+            withholding contact prevents off-platform arrangements. */}
         <SectionLabel>CUSTOMER</SectionLabel>
         <View style={styles.card}>
           <View style={styles.customerRow}>
@@ -639,48 +627,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.customerName} numberOfLines={1}>
                 {order.customerName || 'Customer'}
               </Text>
-              {order.customerPhone ? (
-                <Text style={styles.customerPhone} numberOfLines={1}>
-                  {order.customerPhone}
-                </Text>
-              ) : null}
             </View>
-            {order.customerPhone ? (
-              <View style={styles.contactButtons}>
-                <Pressable
-                  onPress={() => Linking.openURL(`tel:${order.customerPhone}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Call ${order.customerName}`}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.contactBtn,
-                        pressed && { backgroundColor: theme.colors.bone },
-                      ]}
-                    >
-                      <Text style={styles.contactBtnLabel}>Call</Text>
-                    </View>
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => Linking.openURL(`sms:${order.customerPhone}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Message ${order.customerName}`}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={[
-                        styles.contactBtn,
-                        pressed && { backgroundColor: theme.colors.bone },
-                      ]}
-                    >
-                      <Text style={styles.contactBtnLabel}>Message</Text>
-                    </View>
-                  )}
-                </Pressable>
-              </View>
-            ) : null}
           </View>
         </View>
 
@@ -776,48 +723,22 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* DELIVERY ADDRESS section */}
-        {addressLines.length > 0 ? (
-          <>
-            <SectionLabel>DELIVERY ADDRESS</SectionLabel>
-            <View style={styles.card}>
-              <Pressable
-                onPress={() =>
-                  mapsQuery ? Linking.openURL(mapsUrl(mapsQuery)) : undefined
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Open in Maps"
-                disabled={!mapsQuery}
-              >
-                {({ pressed }) => (
-                  <View
-                    style={[
-                      styles.cardClip,
-                      styles.addressGroup,
-                      pressed && { backgroundColor: theme.colors.bone },
-                    ]}
-                  >
-                    {addressLines.map((line) => (
-                      <Text key={line} style={styles.addressLine}>
-                        {line}
-                      </Text>
-                    ))}
-                    {mapsQuery ? (
-                      <Text style={styles.mapsLink}>Open in Maps →</Text>
-                    ) : null}
-                  </View>
-                )}
-              </Pressable>
-            </View>
-            {order.deliveryInstructions ? (
-              <View style={styles.deliveryInstructionsWrap}>
-                <Text style={styles.deliveryInstructionsText}>
-                  {order.deliveryInstructions}
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : null}
+        {/* DELIVERY AREA section — area only (city/state), never the full street
+            address. The exact address + navigation notes go to the rider, not
+            the chef, so customer and chef can't arrange off-platform delivery. */}
+        <SectionLabel>DELIVERY AREA</SectionLabel>
+        <View style={styles.card}>
+          <View style={[styles.cardClip, styles.addressGroup]}>
+            <Text style={styles.addressLine}>
+              {addressLines.length > 0
+                ? addressLines.join(' · ')
+                : 'Delivery area on file'}
+            </Text>
+            <Text style={styles.areaReassurance}>
+              Your rider will collect and deliver this order.
+            </Text>
+          </View>
+        </View>
 
         {/* SPECIAL INSTRUCTIONS */}
         {order.specialInstructions ? (
@@ -1072,36 +993,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
   },
-  customerPhone: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.soft,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
-  contactButtons: {
-    flexDirection: 'row',
-    gap: theme.spacing[2],
-  },
-  // Ghost contact buttons (UI-V2-SPEC §3 secondary style)
-  contactBtn: {
-    backgroundColor: theme.colors.paper,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    minHeight: 44,
-    minWidth: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactBtnLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.label.size,
-    color: theme.colors.ink.DEFAULT,
-    letterSpacing: 0.2,
-  },
 
   // ITEMS
   itemRow: {
@@ -1147,28 +1038,17 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
   },
   addressLine: {
-    fontFamily: 'Inter',
+    fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
   },
-  mapsLink: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.ink.DEFAULT,
-    marginTop: theme.spacing[2],
-    letterSpacing: 0.1,
-  },
-  deliveryInstructionsWrap: {
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[3],
-  },
-  deliveryInstructionsText: {
+  areaReassurance: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,
     lineHeight: 20,
+    marginTop: 4,
   },
 
   // SPECIAL INSTRUCTIONS

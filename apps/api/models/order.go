@@ -391,3 +391,28 @@ func (o *Order) ToResponse() OrderResponse {
 		CreatedAt:    o.CreatedAt,
 	}
 }
+
+// ToChefResponse builds the order response for the CHEF / vendor view. It starts
+// from the customer DTO but redacts customer PII so a chef can never see the
+// exact delivery address or contact the customer directly (an off-platform
+// bypass risk): the street address is reduced to the delivery AREA (city/state),
+// the phone is dropped, and only the customer's first name is kept (enough to
+// label the packed order). The 3PL rider still receives the precise address +
+// phone server-to-server — they, not the chef, perform the delivery.
+//
+// Food/special instructions are preserved (the chef needs them to cook
+// correctly); navigation/delivery instructions are handled by the caller for
+// the detail view, since they can leak building-level address detail.
+//
+// Requires the Customer relation to be preloaded for the first name; when it
+// isn't, CustomerName is simply empty (omitempty), never the full name.
+func (o *Order) ToChefResponse() OrderResponse {
+	resp := o.ToResponse()
+	resp.DeliveryAddress = AddressResponse{
+		City:  o.DeliveryAddressCity,
+		State: o.DeliveryAddressState,
+	}
+	resp.CustomerName = o.Customer.FirstName
+	resp.CustomerPhone = ""
+	return resp
+}

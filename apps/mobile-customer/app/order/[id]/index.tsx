@@ -116,11 +116,11 @@ function formatDateTime(dateStr: string): string {
 function getInlineStatusLabel(status: Order['status']): string {
   switch (status) {
     case 'accepted':
-      return 'Order confirmed';
+      return 'Order confirmed · chef is nearby';
     case 'preparing':
-      return 'Chef is preparing your order';
+      return 'Chef is cooking your order nearby';
     case 'ready':
-      return 'Ready for pickup';
+      return 'Ready for pickup · awaiting driver';
     case 'picked_up':
       return 'Your order is on the way';
     case 'delivering':
