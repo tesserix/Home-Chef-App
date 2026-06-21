@@ -89,6 +89,9 @@ type CreateOrderRequest struct {
 	// IST (empty = today, bounded by the booking horizon).
 	DeliverySlot string `json:"deliverySlot"`
 	DeliveryDate string `json:"deliveryDate"`
+	// FulfillmentType is "delivery" (default, 3PL), "pickup" (customer collects),
+	// or "chef_delivery" (reserved for Phase 2). Empty defaults to delivery.
+	FulfillmentType string `json:"fulfillmentType"`
 }
 
 type CreateOrderItem struct {
@@ -152,6 +155,22 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 	return delta, snapshot, nil
 }
 
+// resolveFulfillment validates the requested fulfillment mode against what the
+// chef offers, defaulting to 3PL delivery. chef_delivery is reserved for Phase 2.
+func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
+	switch models.FulfillmentType(req.FulfillmentType) {
+	case "", models.FulfillmentDelivery:
+		return models.FulfillmentDelivery, nil
+	case models.FulfillmentPickup:
+		if !chef.OffersPickup {
+			return "", fmt.Errorf("this kitchen does not offer pickup")
+		}
+		return models.FulfillmentPickup, nil
+	default:
+		return "", fmt.Errorf("unsupported fulfillment option")
+	}
+}
+
 type CreateAddressRequest struct {
 	Line1      string `json:"line1" binding:"required"`
 	Line2      string `json:"line2"`
@@ -213,6 +232,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	capSettings := services.GetChefCapacitySettings(req.ChefID)
 	if services.IsPastDailyClose(capSettings, time.Now()) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This kitchen has closed ordering for today."})
+		return
+	}
+
+	// Resolve and validate the fulfillment mode. Pickup is only allowed when
+	// the chef explicitly offers it; unknown modes are rejected early.
+	fulfillment, err := resolveFulfillment(req, chef)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -374,10 +401,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Live 3PL delivery quote, computed now that the drop address is known.
-	// Falls back to the flat policy fee (already in deliveryFee) when the
-	// address has no coordinates yet or no provider can serve the leg, so
-	// checkout never blocks on the quote.
-	if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
+	// Pickup orders pay no delivery fee and skip the 3PL quote entirely.
+	// For delivery, falls back to the flat policy fee (already in deliveryFee)
+	// when the address has no coordinates yet or no provider can serve the leg,
+	// so checkout never blocks on the quote.
+	if fulfillment == models.FulfillmentPickup {
+		deliveryFee = 0
+	} else if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
 		deliveryFee = fee
 	}
 
@@ -473,6 +503,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		SpecialInstructions:       req.SpecialInstructions,
 		ScheduledFor:              req.ScheduledFor,
 		DeliverySlot:              req.DeliverySlot,
+		FulfillmentType:           fulfillment,
 		EstimatedPrepTime:         30, // Default, could be calculated
 	}
 	// A resolved slot window is authoritative over any client-sent ScheduledFor.
