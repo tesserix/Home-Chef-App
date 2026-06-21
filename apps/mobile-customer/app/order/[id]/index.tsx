@@ -201,7 +201,16 @@ export default function OrderDetailScreen() {
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  const deliveryFee = order.totalAmount - subtotal;
+  // Pickup orders have no delivery address/fee — the customer collects from the
+  // chef. Use the REAL fee breakdown from the API rather than deriving a single
+  // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
+  const isPickup = order.fulfillmentType === 'pickup';
+  const deliveryFee = order.deliveryFee ?? 0;
+  const serviceFee = order.serviceFee ?? 0;
+  const tax = order.tax ?? 0;
+  const discount = order.discount ?? 0;
+  // Chef pickup address comes from TrackOrder (only populated for pickup orders).
+  const pickupAddress = tracking?.chef?.address?.trim();
 
   // Reorder (#238) — fetch a re-validated preview, fill the cart with the
   // available lines (resolving current add-on option IDs), and route the
@@ -535,22 +544,37 @@ export default function OrderDetailScreen() {
         {/* Hairline divider between sections */}
         <View style={styles.sectionDivider} />
 
-        {/* Delivery address */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery Address</Text>
-          <Text style={styles.addressText}>
-            {order.deliveryAddress.addressLine1}
-          </Text>
-          {order.deliveryAddress.addressLine2 ? (
+        {/* Address — pickup shows the chef's collection address; delivery shows
+            the customer's own delivery address. */}
+        {isPickup ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pickup Address</Text>
             <Text style={styles.addressText}>
-              {order.deliveryAddress.addressLine2}
+              {pickupAddress
+                ? pickupAddress
+                : `Collect from ${order.chef?.name ?? 'the chef'}`}
             </Text>
-          ) : null}
-          <Text style={styles.addressText}>
-            {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
-            {order.deliveryAddress.pincode}
-          </Text>
-        </View>
+            <Text style={styles.pickupHint}>
+              Collect your order from the chef’s kitchen.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
+            <Text style={styles.addressText}>
+              {order.deliveryAddress.addressLine1}
+            </Text>
+            {order.deliveryAddress.addressLine2 ? (
+              <Text style={styles.addressText}>
+                {order.deliveryAddress.addressLine2}
+              </Text>
+            ) : null}
+            <Text style={styles.addressText}>
+              {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
+              {order.deliveryAddress.pincode}
+            </Text>
+          </View>
+        )}
 
         {/* Hairline divider */}
         <View style={styles.sectionDivider} />
@@ -562,10 +586,33 @@ export default function OrderDetailScreen() {
             <Text style={styles.priceLabel}>Subtotal</Text>
             <Text style={styles.priceValue}>₹{subtotal.toFixed(2)}</Text>
           </View>
+          {/* Pickup → free, shown explicitly so it never reads as a charge. */}
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Delivery Fee</Text>
-            <Text style={styles.priceValue}>₹{deliveryFee.toFixed(2)}</Text>
+            <Text style={styles.priceLabel}>
+              {isPickup ? 'Pickup' : 'Delivery Fee'}
+            </Text>
+            <Text style={styles.priceValue}>
+              {isPickup ? 'Free' : `₹${deliveryFee.toFixed(2)}`}
+            </Text>
           </View>
+          {serviceFee > 0 ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Service Fee</Text>
+              <Text style={styles.priceValue}>₹{serviceFee.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          {tax > 0 ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Tax</Text>
+              <Text style={styles.priceValue}>₹{tax.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          {discount > 0 ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Discount</Text>
+              <Text style={styles.priceValue}>−₹{discount.toFixed(2)}</Text>
+            </View>
+          ) : null}
           {/* Total row — hairline rule above, heavier weight */}
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
@@ -910,6 +957,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: customerColors.charcoal.DEFAULT,
     lineHeight: 22,
+  },
+  pickupHint: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    lineHeight: 20,
+    marginTop: 4,
   },
 
   // Price breakdown rows — tabular-nums on all monetary values

@@ -20,6 +20,9 @@ export interface Chef {
   // offersPickup: chef allows customers to pick up their order at the kitchen
   // address instead of requesting delivery (backend Task 1 field).
   offersPickup?: boolean;
+  // Full street address — only surfaced by TrackOrder for a PICKUP order (the
+  // customer needs it to collect). Absent/fuzzed for delivery (privacy).
+  address?: string;
 }
 
 export interface MenuItem {
@@ -150,6 +153,15 @@ export interface Order {
   deliveryAddress: Address;
   createdAt: string;
   estimatedDeliveryTime?: string;
+  // How the order reaches the customer (backend OrderResponse.fulfillmentType).
+  // 'pickup' → no delivery address/fee; collect from the chef.
+  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  // Real fee breakdown from OrderResponse — render these instead of deriving
+  // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
+  deliveryFee?: number;
+  serviceFee?: number;
+  tax?: number;
+  discount?: number;
 }
 
 export interface TrackingResponse {
