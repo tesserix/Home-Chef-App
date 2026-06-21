@@ -26,3 +26,8 @@ products:
 mobileTenantAllowlist:
   - HomeChef-Customer-rqg8a
   - HomeChef-Business-8s8ql
+  # Internal/admin pool — powers the admin mobile app (apps/mobile-admin).
+  # The "internal" pool resolves to role=admin in autologin (defaultRoleForPool),
+  # so an admin GIP sign-in yields an admin BFF session the API's RequireAdmin
+  # gate accepts. Without this entry /auth/auto-login rejects admin logins.
+  - HomeChef-Internal-gyofe

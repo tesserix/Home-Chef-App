@@ -1,9 +1,9 @@
 name: HomeChef Mobile - EAS Build
 
-# Cloud-builds the three Expo apps (apps/mobile-customer | mobile-vendor |
-# mobile-delivery) on Expo's EAS Build service. The mobile apps are NOT Docker
-# images — they ship as native iOS/Android binaries built by EAS, so this is a
-# separate path from the GHCR/ArgoCD web+api workflows.
+# Cloud-builds the four Expo apps (apps/mobile-customer | mobile-vendor |
+# mobile-delivery | mobile-admin) on Expo's EAS Build service. The mobile apps
+# are NOT Docker images — they ship as native iOS/Android binaries built by EAS,
+# so this is a separate path from the GHCR/ArgoCD web+api workflows.
 #
 # Manual-only (workflow_dispatch) on purpose: native builds consume EAS minutes,
 # so we never auto-build on push. Pick the app(s), platform, and profile at run
@@ -11,8 +11,9 @@ name: HomeChef Mobile - EAS Build
 # progress at https://expo.dev/accounts/tesserix-org/projects).
 #
 # Requires the EXPO_TOKEN repo secret — an Expo access token for the tesserix-org
-# account that owns the homechef-customer / homechef-vendor / homechef-delivery
-# EAS projects. Create one at https://expo.dev/accounts/tesserix-org/settings/access-tokens
+# account that owns the homechef-customer / homechef-vendor / homechef-delivery /
+# homechef-admin EAS projects. Create one at
+# https://expo.dev/accounts/tesserix-org/settings/access-tokens
 # then add it via:  gh secret set EXPO_TOKEN --repo tesserix/Home-Chef-App
 #
 # iOS/production profiles require Apple/Android signing credentials to already be
@@ -24,7 +25,7 @@ on:
       app:
         description: Mobile app(s) to build
         type: choice
-        options: [all, customer, vendor, delivery]
+        options: [all, customer, vendor, delivery, admin]
         default: all
       platform:
         description: Target platform
@@ -51,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: ${{ (inputs.app == 'all') && fromJSON('["customer","vendor","delivery"]') || fromJSON(format('["{0}"]', inputs.app)) }}
+        app: ${{ (inputs.app == 'all') && fromJSON('["customer","vendor","delivery","admin"]') || fromJSON(format('["{0}"]', inputs.app)) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
