@@ -162,6 +162,9 @@ export interface Order {
   serviceFee?: number;
   tax?: number;
   discount?: number;
+  // Public URL of the chef's food-ready photo (the prepared dish), shown on the
+  // order detail once the chef marks the order ready.
+  readyPhotoUrl?: string;
 }
 
 export interface TrackingResponse {

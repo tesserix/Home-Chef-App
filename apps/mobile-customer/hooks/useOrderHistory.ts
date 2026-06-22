@@ -54,6 +54,7 @@ interface ApiOrder {
   serviceFee?: number;
   tax?: number;
   discount?: number;
+  readyPhotoUrl?: string;
   items?: ApiOrderItem[];
   deliveryAddress?: ApiAddress;
   chef?: ApiOrderChef;
@@ -101,6 +102,7 @@ function mapOrder(raw: ApiOrder): Order {
     serviceFee: raw.serviceFee,
     tax: raw.tax,
     discount: raw.discount,
+    readyPhotoUrl: raw.readyPhotoUrl,
     deliveryAddress: {
       addressLine1: raw.deliveryAddress?.line1 ?? '',
       addressLine2: raw.deliveryAddress?.line2 || undefined,
