@@ -433,6 +433,9 @@ func SetupRouter() *gin.Engine {
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
 			chefDashboard.PUT("/orders/:orderId/status", chefHandler.UpdateOrderStatus)
+			// Lifecycle photos (food-ready, proof-of-handover) — required by the
+			// vendor app before the matching status transition.
+			chefDashboard.POST("/orders/:orderId/photos", chefHandler.UploadOrderPhoto)
 			// In-app messaging (#53) — admin-mediated, order-scoped.
 			chefDashboard.POST("/orders/:orderId/messages", messagingHandler.ChefSendMessage)
 			chefDashboard.GET("/orders/:orderId/messages", messagingHandler.ChefListMessages)

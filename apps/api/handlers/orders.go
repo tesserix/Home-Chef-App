@@ -811,6 +811,8 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 		"orderNumber":     order.OrderNumber,
 		"status":          order.Status,
 		"fulfillmentType": fulfillment,
+		// Food-ready photo (the prepared dish) for the tracking screen.
+		"readyPhotoUrl": order.ReadyPhotoURL,
 		"chef": func() gin.H {
 			m := gin.H{
 				"name":      order.Chef.BusinessName,

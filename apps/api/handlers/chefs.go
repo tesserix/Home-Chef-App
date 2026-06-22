@@ -943,6 +943,75 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
+// UploadOrderPhoto attaches a lifecycle photo to an order (multipart field
+// `file`, plus `kind` = "ready" | "handover"). The vendor app requires the chef
+// to capture this photo before advancing the matching status: the food-ready
+// photo (shown to the customer) at "Mark ready", and the proof-of-handover
+// photo (pickup dispute evidence) at "Mark handed over". Stores the URL on the
+// order; the separate status update follows. Idempotent — re-uploading replaces
+// the URL for that kind.
+// POST /chef/orders/:orderId/photos
+func (h *ChefHandler) UploadOrderPhoto(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderID := c.Param("orderId")
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+
+	var order models.Order
+	if err := database.DB.Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	kind := c.PostForm("kind")
+	if kind != "ready" && kind != "handover" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kind must be 'ready' or 'handover'"})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+
+	if header.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if !services.IsImageContentType(contentType) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
+		return
+	}
+
+	folder := fmt.Sprintf("orders/%s/%s", order.ID.String(), kind)
+	fileURL, err := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, contentType)
+	if err != nil {
+		log.Printf("Failed to upload order photo (order=%s kind=%s): %v", order.ID, kind, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload photo"})
+		return
+	}
+
+	column := "ready_photo_url"
+	if kind == "handover" {
+		column = "handover_photo_url"
+	}
+	if err := database.DB.Model(&order).Update(column, fileURL).Error; err != nil {
+		log.Printf("Failed to persist order photo url (order=%s kind=%s): %v", order.ID, kind, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"kind": kind, "url": fileURL})
+}
+
 // GetChefCapacitySettings — GET /chef/capacity-settings (#48). Cutoffs + auto-sold-out.
 func (h *ChefHandler) GetChefCapacitySettings(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
