@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -440,6 +441,16 @@ func (o *Order) ToResponse() OrderResponse {
 // isn't, CustomerName is simply empty (omitempty), never the full name.
 func (o *Order) ToChefResponse() OrderResponse {
 	resp := o.ToResponse()
+	// chef_delivery: the chef delivers themselves, so they need the customer's
+	// FULL address + phone + name to reach the door. ToResponse already populated
+	// the full address; keep it and add contact. (Intentional contact exposure
+	// scoped to chef_delivery — masked calling, #321, can replace it later.)
+	if o.FulfillmentType == FulfillmentChefDelivery {
+		resp.CustomerName = strings.TrimSpace(o.Customer.FirstName + " " + o.Customer.LastName)
+		resp.CustomerPhone = o.Customer.Phone
+		return resp
+	}
+	// delivery + pickup: area only (city/state), first name, no phone (privacy).
 	resp.DeliveryAddress = AddressResponse{
 		City:  o.DeliveryAddressCity,
 		State: o.DeliveryAddressState,
