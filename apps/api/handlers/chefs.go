@@ -536,10 +536,12 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND DATE(created_at) = CURRENT_DATE AND payment_status = ?", chef.ID, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&todayRevenue)
 
-	// Get pending orders
+	// Get pending orders — only PAID ones. An order row is created before
+	// payment, so unpaid/abandoned orders (payment_status pending/failed) must
+	// not surface to the chef as new orders.
 	var pendingOrders int64
 	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND status = ?", chef.ID, models.OrderStatusPending).
+		Where("chef_id = ? AND status = ? AND payment_status = ?", chef.ID, models.OrderStatusPending, models.PaymentCompleted).
 		Count(&pendingOrders)
 
 	// Get this week's stats
@@ -558,7 +560,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// it on the InFlightRow and the dead-screen reassurance copy reads
 	// `lastOrderIso` from `createdAt`).
 	var recent []models.Order
-	database.DB.Where("chef_id = ?", chef.ID).
+	database.DB.Where("chef_id = ? AND payment_status IN ?", chef.ID, []models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded}).
 		Preload("Customer").
 		Order("created_at DESC").
 		Limit(10).
@@ -764,7 +766,11 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset := (page - 1) * limit
 
-	query := database.DB.Where("chef_id = ?", chef.ID)
+	// Only show PAID orders to the chef. Orders are created before payment, so
+	// exclude unpaid/abandoned ones (payment_status pending/failed); keep
+	// completed + refunded (the latter for history).
+	query := database.DB.Where("chef_id = ? AND payment_status IN ?", chef.ID,
+		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded})
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
