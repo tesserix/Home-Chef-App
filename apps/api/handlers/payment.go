@@ -253,6 +253,9 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 		return
 	}
 
+	// Only notify the chef on the first pending→completed transition.
+	wasUnpaid := order.PaymentStatus != models.PaymentCompleted
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(order).Updates(map[string]interface{}{
 			"payment_status":   models.PaymentCompleted,
@@ -261,6 +264,11 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 			"wallet_applied":   walletApplied,
 		}).Error; err != nil {
 			return err
+		}
+		if wasUnpaid {
+			if err := notifyChefNewOrderTx(tx, order); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
 			"order_id":     order.ID.String(),
@@ -373,6 +381,24 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 	})
 }
 
+// notifyChefNewOrderTx stages the actionable "new order" push to the chef
+// within a payment-completion transaction. Orders are created pre-payment, so
+// the chef is only notified once money is captured (previously this fired in
+// CreateOrder, pushing unpaid/abandoned orders to the kitchen — see
+// handlers/orders.go). Callers MUST guard the call on the pending→completed
+// transition so a webhook arriving after the client verify (or vice-versa)
+// doesn't double-notify; the OrderEvent mirrors the one CreateOrder used.
+func notifyChefNewOrderTx(tx *gorm.DB, order *models.Order) error {
+	return services.EnqueueOrderEvent(tx, services.SubjectChefNewOrder, services.OrderEvent{
+		OrderID:     order.ID,
+		OrderNumber: order.OrderNumber,
+		CustomerID:  order.CustomerID,
+		ChefID:      order.ChefID,
+		Status:      string(order.Status),
+		Total:       order.Total,
+	})
+}
+
 // VerifyPayment verifies a payment after checkout on the client. The request
 // body differs by provider — Razorpay sends razorpayPaymentId/OrderId/Signature,
 // Stripe sends stripePaymentIntentId — so we look at the already-stamped
@@ -453,6 +479,10 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
+	// Only notify the chef on the first pending→completed transition (a later
+	// webhook for the same order must not re-push).
+	wasUnpaid := order.PaymentStatus != models.PaymentCompleted
+
 	// Mark the order paid and stage the order.paid event atomically (transactional
 	// outbox). Payment already captured at the gateway, so a DB hiccup must not
 	// 500 the client — it's logged + sent to Sentry and the reconciliation cron
@@ -464,6 +494,11 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 			"razorpay_payment_id": paymentID,
 		}).Error; err != nil {
 			return err
+		}
+		if wasUnpaid {
+			if err := notifyChefNewOrderTx(tx, order); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
 			"order_id":     order.ID.String(),
@@ -533,6 +568,9 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 		eventCurrency = "inr"
 	}
 
+	// Only notify the chef on the first pending→completed transition.
+	wasUnpaid := order.PaymentStatus != models.PaymentCompleted
+
 	// Mark paid + stage the order.paid event atomically (transactional outbox).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(order).Updates(map[string]interface{}{
@@ -540,6 +578,11 @@ func (h *PaymentHandler) verifyStripePayment(c *gin.Context, order *models.Order
 			"payment_method": "card",
 		}).Error; err != nil {
 			return err
+		}
+		if wasUnpaid {
+			if err := notifyChefNewOrderTx(tx, order); err != nil {
+				return err
+			}
 		}
 		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
 			"order_id":     order.ID.String(),
@@ -943,10 +986,18 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 		// The order just became paid — try the referral reward (#38). Idempotent
 		// + best-effort: a referral failure must never affect the captured payment.
 		var ord models.Order
-		if err := database.DB.Select("id").Where("razorpay_order_id = ?", payment.OrderID).First(&ord).Error; err == nil {
+		if err := database.DB.Where("razorpay_order_id = ?", payment.OrderID).First(&ord).Error; err == nil {
 			services.MaybeGrantReward(database.DB, ord.ID)
 			// Start the durable order saga (#122) — gated, idempotent, no-op when off.
 			services.StartOrderSaga(ord.ID)
+			// Notify the chef now that the order is paid. The conditional update
+			// above (RowsAffected > 0) guarantees this is the single
+			// pending→completed transition, so the client verify path won't also
+			// fire it. Best-effort — a notify failure must not affect the payment.
+			if err := notifyChefNewOrderTx(database.DB, &ord); err != nil {
+				log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
+				services.CaptureBackgroundError(err)
+			}
 		}
 	}
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
