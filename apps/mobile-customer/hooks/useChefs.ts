@@ -172,3 +172,31 @@ export function useChefMenu(chefId: string) {
     staleTime: 1000 * 60 * 5, // 5 minutes — menu changes rarely
   });
 }
+
+// A single customer review of a chef (public GET /chefs/:id/reviews). Mirrors
+// the backend ReviewResponse fields the reviews list renders.
+export interface ChefReview {
+  id: string;
+  overallRating: number;
+  title?: string;
+  comment: string;
+  chefResponse?: string;
+  chefRespondedAt?: string;
+  customerName: string;
+  customerAvatar?: string;
+  createdAt: string;
+}
+
+// Public chef reviews, newest first. The :id endpoint resolves slug or UUID, so
+// pass whichever the caller has.
+export function useChefReviews(chefId: string) {
+  return useQuery<{ data: ChefReview[] }>({
+    queryKey: ['chef-reviews', chefId],
+    queryFn: () =>
+      api
+        .get<{ data: ChefReview[] }>(`/v1/chefs/${chefId}/reviews`)
+        .then((r) => ({ data: r.data?.data ?? [] })),
+    enabled: !!chefId,
+    staleTime: 1000 * 60, // 1 minute
+  });
+}
