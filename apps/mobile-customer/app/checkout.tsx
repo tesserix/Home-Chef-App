@@ -80,6 +80,7 @@ export default function CheckoutScreen() {
   const createOrder = useCreateOrder();
   const { data: chefData } = useChef(cartStore.chefId ?? '');
   const offersPickup = !!chefData?.data?.offersPickup;
+  const offersSelfDelivery = !!chefData?.data?.offersSelfDelivery;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -102,7 +103,20 @@ export default function CheckoutScreen() {
 
   const addresses = addressData?.data ?? [];
 
-  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
+  const [fulfillment, setFulfillment] = useState<
+    'delivery' | 'pickup' | 'chef_delivery'
+  >('delivery');
+  // Modes this chef offers — 3PL delivery is always available.
+  const fulfillmentModes: Array<'delivery' | 'pickup' | 'chef_delivery'> = [
+    'delivery',
+    ...(offersSelfDelivery ? (['chef_delivery'] as const) : []),
+    ...(offersPickup ? (['pickup'] as const) : []),
+  ];
+  const fulfillmentLabel: Record<typeof fulfillment, string> = {
+    delivery: 'Delivery',
+    chef_delivery: 'Chef delivery',
+    pickup: 'Pickup',
+  };
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
@@ -322,16 +336,17 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Fulfillment mode selector (only when chef offers pickup) ── */}
-        {offersPickup ? (
+        {/* ── Fulfillment mode selector (shown when the chef offers more than
+            just 3PL delivery — i.e. pickup and/or self-delivery) ── */}
+        {fulfillmentModes.length > 1 ? (
           <View className="mx-4 mt-4 flex-row gap-2" accessibilityRole="radiogroup">
-            {(['delivery', 'pickup'] as const).map((mode) => (
+            {fulfillmentModes.map((mode) => (
               <Pressable
                 key={mode}
                 onPress={() => setFulfillment(mode)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: fulfillment === mode }}
-                className={`flex-1 min-h-[44px] items-center justify-center rounded-lg border ${
+                className={`flex-1 min-h-[44px] items-center justify-center rounded-lg border px-2 ${
                   fulfillment === mode
                     ? 'border-coral bg-coral-tint'
                     : 'border-hairline bg-canvas'
@@ -341,8 +356,9 @@ export default function CheckoutScreen() {
                   className={`text-sm font-semibold ${
                     fulfillment === mode ? 'text-coral-pressed' : 'text-charcoal-soft'
                   }`}
+                  numberOfLines={1}
                 >
-                  {mode === 'delivery' ? 'Delivery' : 'Pickup'}
+                  {fulfillmentLabel[mode]}
                 </Text>
               </Pressable>
             ))}

@@ -20,6 +20,9 @@ export interface Chef {
   // offersPickup: chef allows customers to pick up their order at the kitchen
   // address instead of requesting delivery (backend Task 1 field).
   offersPickup?: boolean;
+  // offersSelfDelivery: chef delivers the order themselves (Phase 2) — surfaces
+  // the "Chef delivery" mode in checkout.
+  offersSelfDelivery?: boolean;
   // Full street address — only surfaced by TrackOrder for a PICKUP order (the
   // customer needs it to collect). Absent/fuzzed for delivery (privacy).
   address?: string;

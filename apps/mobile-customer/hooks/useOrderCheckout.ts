@@ -25,8 +25,9 @@ interface CreateOrderPayload {
   // Applied promo code (#39). The server re-validates and computes the discount;
   // an invalid/exhausted code is rejected so the client can't fake a discount.
   promoCode?: string;
-  // 'delivery' (default) | 'pickup'. Omit → server defaults to delivery.
-  fulfillmentType?: 'delivery' | 'pickup';
+  // 'delivery' (default) | 'chef_delivery' | 'pickup'. Omit → server defaults
+  // to delivery.
+  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
 }
 
 export function useCreateOrder() {
