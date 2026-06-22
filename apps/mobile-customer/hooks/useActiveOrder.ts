@@ -26,13 +26,19 @@ export interface UseActiveOrderResult {
 }
 
 /**
- * Returns the most recent active order (if any). The underlying query
- * refreshes every 30 s (useOrders staleTime) so the card stays current
- * without extra plumbing — the user can also pull-to-refresh the home
- * list and this query piggy-backs on the same cache entry.
+ * Returns the most recent active order (if any). Polls every 15 s so the
+ * home active-order card reflects chef-driven status changes (e.g. preparing
+ * → ready → handed over) live, instead of going stale until the app is
+ * relaunched. The 30 s staleTime alone never refetched while the customer sat
+ * on the home screen; this adds an explicit interval scoped to this card only.
  */
+const ACTIVE_ORDER_POLL_MS = 15_000;
+
 export function useActiveOrder(): UseActiveOrderResult {
-  const { data, isLoading } = useOrders({ limit: 20 });
+  const { data, isLoading } = useOrders(
+    { limit: 20 },
+    { refetchInterval: ACTIVE_ORDER_POLL_MS },
+  );
 
   const order = useMemo<Order | undefined>(() => {
     if (!data?.data?.length) return undefined;

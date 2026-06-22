@@ -624,11 +624,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record order event"})
 		return
 	}
-	if err := services.EnqueueOrderEvent(tx, services.SubjectChefNewOrder, orderEvent); err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record order event"})
-		return
-	}
+	// NOTE: the actionable chef "new order" push (SubjectChefNewOrder) is NOT
+	// enqueued here. Orders are created BEFORE payment, so notifying the chef at
+	// creation pushed unpaid/abandoned orders to the kitchen. It now fires at
+	// payment confirmation instead — see notifyChefNewOrderTx wired into each
+	// paid-transition path in handlers/payment.go.
 
 	tx.Commit()
 
