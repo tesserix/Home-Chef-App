@@ -42,9 +42,15 @@ export function useActiveOrder(): UseActiveOrderResult {
 
   const order = useMemo<Order | undefined>(() => {
     if (!data?.data?.length) return undefined;
-    // data.data comes back newest-first from the API. The first active
-    // order in that list is therefore the most recent one.
-    return data.data.find((o) => isActiveStatus(o.status));
+    // data.data comes back newest-first from the API. The first active order in
+    // that list is the most recent one — but only PAID orders are live to track.
+    // An unpaid/abandoned order (payment_status pending) isn't really in flight
+    // (the chef never sees it), so it must not linger as the "active" card; the
+    // customer can still complete it from their order history. (The backend
+    // stale-order cron eventually cancels these.)
+    return data.data.find(
+      (o) => isActiveStatus(o.status) && o.paymentStatus === 'completed',
+    );
   }, [data]);
 
   return { order, isLoading };

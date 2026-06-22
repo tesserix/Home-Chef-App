@@ -2,12 +2,23 @@ import '../global.css';
 import '../lib/i18n'; // side-effect: initialise i18next before first render
 
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  type AppStateStatus,
+  Platform,
+  Text,
+  View,
+} from 'react-native';
 import { Stack, router, usePathname } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+} from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -139,6 +150,17 @@ function AppNavigator() {
     hydrateFromStorage();
     // Apply the saved language choice (overrides the device default).
     hydratePersistedLocale();
+  }, []);
+
+  // Wire React Query's focusManager to AppState. RN has no web `visibilitychange`
+  // event, so refetchOnWindowFocus was dead — the dashboard/orders stayed on
+  // stale data when the chef returned to the app. Refetch stale queries on
+  // foreground so today's orders/earnings reflect reality without a manual pull.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      focusManager.setFocused(status === 'active');
+    });
+    return () => sub.remove();
   }, []);
 
   // Wipe the React Query cache whenever the signed-in identity changes (logout,

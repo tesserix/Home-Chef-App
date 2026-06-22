@@ -526,14 +526,21 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		return
 	}
 
+	// "Today"/"this week" are the chef's business day in IST. Containers run UTC,
+	// so a UTC CURRENT_DATE missed IST-evening orders that the History list
+	// (grouped client-side in IST) still shows under "Today" — the dashboard read
+	// 0 while History showed the order. Reuse the IST day helper so the two agree.
+	todayStart := services.CapacityDay(time.Now())
+	weekStart := todayStart.AddDate(0, 0, -7)
+
 	// Get today's stats
 	var todayOrders int64
 	var todayRevenue float64
 	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND DATE(created_at) = CURRENT_DATE", chef.ID).
+		Where("chef_id = ? AND created_at >= ?", chef.ID, todayStart).
 		Count(&todayOrders)
 	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND DATE(created_at) = CURRENT_DATE AND payment_status = ?", chef.ID, models.PaymentCompleted).
+		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, todayStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&todayRevenue)
 
 	// Get pending orders — only PAID ones. An order row is created before
@@ -544,14 +551,14 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND status = ? AND payment_status = ?", chef.ID, models.OrderStatusPending, models.PaymentCompleted).
 		Count(&pendingOrders)
 
-	// Get this week's stats
+	// Get this week's stats (IST week window)
 	var weekOrders int64
 	var weekRevenue float64
 	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= CURRENT_DATE - INTERVAL '7 days'", chef.ID).
+		Where("chef_id = ? AND created_at >= ?", chef.ID, weekStart).
 		Count(&weekOrders)
 	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= CURRENT_DATE - INTERVAL '7 days' AND payment_status = ?", chef.ID, models.PaymentCompleted).
+		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
 
 	// Recent orders for the dashboard's in-flight + history-glance section.
