@@ -1,7 +1,43 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
+import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
+
+/** Lifecycle photo kinds the chef attaches to an order. */
+export type OrderPhotoKind = 'ready' | 'handover';
+
+// Uploads a required lifecycle photo (food-ready or proof-of-handover) for an
+// order. Returns the public URL. The order-detail screen calls this BEFORE the
+// matching status mutation, so a failed upload leaves the order in its current
+// state (the chef just retries) rather than advancing without a photo.
+export function useUploadOrderPhoto() {
+  return useMutation({
+    mutationFn: async (vars: {
+      orderId: string;
+      kind: OrderPhotoKind;
+      uri: string;
+    }) => {
+      const formData = new FormData();
+      const filename = vars.uri.split('/').pop() ?? `${vars.kind}.jpg`;
+      const type = filename.toLowerCase().endsWith('.png')
+        ? 'image/png'
+        : 'image/jpeg';
+      formData.append('file', {
+        uri: vars.uri,
+        name: filename,
+        type,
+      } as unknown as Blob);
+      formData.append('kind', vars.kind);
+      const res = await api.post<{ kind: OrderPhotoKind; url: string }>(
+        `/chef/orders/${vars.orderId}/photos`,
+        formData,
+        multipartConfig(),
+      );
+      return res.data;
+    },
+  });
+}
 
 export interface OrderItem {
   name: string;

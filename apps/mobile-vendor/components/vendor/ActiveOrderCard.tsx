@@ -280,6 +280,13 @@ export function ActiveOrderCard({
     const next = nextStatusMap[order.status];
     if (!next || isPending) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // 'ready' (food-ready photo) and 'delivered' (proof-of-handover) require a
+    // photo the chef must capture — that flow lives on the detail screen, so
+    // route there instead of advancing directly and bypassing the requirement.
+    if (next === 'ready' || next === 'delivered') {
+      onOpenDetail(order.id);
+      return;
+    }
     onAdvance(order.id, next);
   }
 
