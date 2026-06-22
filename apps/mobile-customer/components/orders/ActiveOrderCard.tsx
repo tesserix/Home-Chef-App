@@ -12,67 +12,31 @@ import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
+import { getStepIndex, getStepLabels, getStatusLine } from '../../lib/orderSteps';
 import { CookingIndicator } from '../status/CookingIndicator';
 
 interface ActiveOrderCardProps {
   order: Order;
 }
 
-// ── Status labels & progress step ──────────────────────────────────────────
-
-const STEPS = ['confirmed', 'preparing', 'on_the_way', 'delivered'] as const;
-type Step = (typeof STEPS)[number];
-
-const STEP_LABELS: Record<Step, string> = {
-  confirmed: 'Confirmed',
-  preparing: 'Preparing',
-  on_the_way: 'On the way',
-  delivered: 'Delivered',
-};
-
-interface StatusMeta {
-  label: string;   // friendly sentence for the status line
-  step: number;    // 0-based index in STEPS
-}
-
-function getStatusMeta(status: Order['status']): StatusMeta {
-  switch (status) {
-    case 'pending':
-      return { label: 'Order received', step: 0 };
-    case 'accepted':
-      return { label: 'Order confirmed', step: 0 };
-    case 'preparing':
-      return { label: 'Chef is preparing your order', step: 1 };
-    case 'ready':
-      return { label: 'Order is ready for pickup', step: 1 };
-    case 'picked_up':
-      return { label: 'On the way to you', step: 2 };
-    case 'delivering':
-      return { label: 'Out for delivery', step: 2 };
-    case 'delivered':
-      return { label: 'Delivered', step: 3 };
-    default:
-      return { label: status, step: 0 };
-  }
-}
-
 // ── Sub-components ──────────────────────────────────────────────────────────
 
 interface ProgressBarProps {
   stepIndex: number; // 0–3
+  steps: readonly string[];
 }
 
 /** Four-segment slim progress bar. Filled segments = coral, pending = hairline. */
-function ProgressBar({ stepIndex }: ProgressBarProps) {
+function ProgressBar({ stepIndex, steps }: ProgressBarProps) {
   return (
     <View style={pbStyles.track}>
-      {STEPS.map((s, i) => (
+      {steps.map((s, i) => (
         <View
           key={s}
           style={[
             pbStyles.segment,
             i <= stepIndex ? pbStyles.segmentFilled : pbStyles.segmentEmpty,
-            i < STEPS.length - 1 && pbStyles.segmentGap,
+            i < steps.length - 1 && pbStyles.segmentGap,
           ]}
         />
       ))}
@@ -104,19 +68,19 @@ const pbStyles = StyleSheet.create({
 });
 
 // Step label row (aligned with the segments above).
-function StepLabels({ stepIndex }: ProgressBarProps) {
+function StepLabels({ stepIndex, steps }: ProgressBarProps) {
   return (
     <View style={slStyles.row}>
-      {STEPS.map((s, i) => (
+      {steps.map((label, i) => (
         <Text
-          key={s}
+          key={label}
           style={[
             slStyles.label,
             i === stepIndex ? slStyles.labelActive : slStyles.labelInactive,
           ]}
           numberOfLines={1}
         >
-          {STEP_LABELS[s]}
+          {label}
         </Text>
       ))}
     </View>
@@ -146,7 +110,10 @@ const slStyles = StyleSheet.create({
 // ── Main card ───────────────────────────────────────────────────────────────
 
 export function ActiveOrderCard({ order }: ActiveOrderCardProps) {
-  const { label, step } = getStatusMeta(order.status);
+  const steps = getStepLabels(order.fulfillmentType);
+  const label = getStatusLine(order.status, order.fulfillmentType);
+  // Clamp -1 (pending) to 0 so the first segment reads as active.
+  const step = Math.max(0, getStepIndex(order.status, order.fulfillmentType));
   const isPreparing = order.status === 'preparing';
 
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -202,8 +169,8 @@ export function ActiveOrderCard({ order }: ActiveOrderCardProps) {
             </View>
 
             {/* Progress bar + step labels */}
-            <ProgressBar stepIndex={step} />
-            <StepLabels stepIndex={step} />
+            <ProgressBar stepIndex={step} steps={steps} />
+            <StepLabels stepIndex={step} steps={steps} />
           </View>
         </View>
       )}

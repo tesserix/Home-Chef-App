@@ -6,37 +6,20 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
+import { getStepIndex, getStepLabels } from '../../lib/orderSteps';
 
 interface OrderProgressBarProps {
   status: Order['status'];
+  fulfillmentType?: Order['fulfillmentType'];
 }
 
-const STEPS = ['Confirmed', 'Preparing', 'On the way', 'Delivered'] as const;
-
-/** Maps an order status → the active step index (0-based). */
-function getStepIndex(status: Order['status']): number {
-  switch (status) {
-    case 'pending':
-      return 0;
-    case 'accepted':
-      return 0;
-    case 'preparing':
-      return 1;
-    case 'ready':
-      return 1;
-    case 'picked_up':
-      return 2;
-    case 'delivering':
-      return 2;
-    case 'delivered':
-      return 3;
-    default:
-      return 0;
-  }
-}
-
-export function OrderProgressBar({ status }: OrderProgressBarProps) {
-  const activeIndex = getStepIndex(status);
+export function OrderProgressBar({
+  status,
+  fulfillmentType,
+}: OrderProgressBarProps) {
+  const STEPS = getStepLabels(fulfillmentType);
+  // Clamp -1 (pending/cancelled) to 0 so the first segment reads as active.
+  const activeIndex = Math.max(0, getStepIndex(status, fulfillmentType));
 
   return (
     <View style={styles.container}>

@@ -568,6 +568,10 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 
 	recentOrdersResp := make([]gin.H, len(recent))
 	for i, o := range recent {
+		fulfillment := o.FulfillmentType
+		if fulfillment == "" {
+			fulfillment = models.FulfillmentDelivery
+		}
 		recentOrdersResp[i] = gin.H{
 			"id": o.ID,
 			// First name only for the chef view (privacy; matches ToChefResponse).
@@ -575,6 +579,9 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 			"total":        o.Total,
 			"status":       o.Status,
 			"createdAt":    o.CreatedAt,
+			// Drives the dashboard in-flight card's pickup-vs-delivery stepper
+			// + the chef's "Mark handed over" action on pickup orders.
+			"fulfillmentType": fulfillment,
 		}
 	}
 

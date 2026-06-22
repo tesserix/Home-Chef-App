@@ -57,10 +57,15 @@ export type OrderDetailStatus =
   | 'cancelled'
   | 'rejected';
 
+// How the order reaches the customer (backend OrderResponse.fulfillmentType).
+// 'pickup' → customer collects from the chef; the chef confirms handover.
+export type FulfillmentType = 'delivery' | 'chef_delivery' | 'pickup';
+
 export interface OrderDetail {
   id: string;
   orderNumber: string;
   status: OrderDetailStatus;
+  fulfillmentType: FulfillmentType;
   customerName: string;
   customerPhone?: string;
   items: OrderDetailItem[];
@@ -96,6 +101,7 @@ interface RawChefOrderDetailResponse {
   id: string;
   orderNumber: string;
   status: OrderDetailStatus;
+  fulfillmentType?: FulfillmentType;
   customerName?: string;
   customerPhone?: string;
   items?: RawOrderItemResponse[];
@@ -122,6 +128,8 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
     id: raw.id,
     orderNumber: raw.orderNumber,
     status: raw.status,
+    // Legacy orders predate the field — default to delivery (3PL).
+    fulfillmentType: raw.fulfillmentType ?? 'delivery',
     customerName: raw.customerName ?? '',
     customerPhone: raw.customerPhone,
     items: (raw.items ?? []).map((i) => ({

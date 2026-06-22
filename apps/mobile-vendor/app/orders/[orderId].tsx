@@ -22,6 +22,7 @@ import {
   useOrderDetail,
   type OrderDetail,
   type OrderDetailStatus,
+  type FulfillmentType,
 } from '../../hooks/useOrderDetail';
 import {
   useOrderAction,
@@ -65,6 +66,18 @@ const STATUS_LABEL: Record<OrderDetailStatus, string> = {
   cancelled: 'Cancelled',
   rejected: 'Rejected',
 };
+
+// Pickup orders have no driver leg, so the terminal `delivered` status reads
+// "Collected" and the "ready" state means "ready for the customer to collect".
+function statusLabelFor(
+  status: OrderDetailStatus,
+  fulfillment: FulfillmentType,
+): string {
+  if (fulfillment === 'pickup') {
+    if (status === 'delivered' || status === 'picked_up') return 'Collected';
+  }
+  return STATUS_LABEL[status] ?? status;
+}
 
 // Status chip palette per UI-V2-SPEC §2: tint bg + dark text of same hue.
 interface StatusChipColors {
@@ -135,10 +148,16 @@ function formatAddressLines(addr: OrderDetail['deliveryAddress']): string[] {
 interface CommandBarProps {
   orderNumber?: string;
   status?: OrderDetailStatus;
+  fulfillmentType?: FulfillmentType;
   onBack: () => void;
 }
 
-function CommandBar({ orderNumber, status, onBack }: CommandBarProps) {
+function CommandBar({
+  orderNumber,
+  status,
+  fulfillmentType = 'delivery',
+  onBack,
+}: CommandBarProps) {
   const chip = status ? (STATUS_CHIP[status] ?? STATUS_CHIP_FALLBACK) : null;
   return (
     <View style={styles.commandBar}>
@@ -162,7 +181,7 @@ function CommandBar({ orderNumber, status, onBack }: CommandBarProps) {
           <View style={styles.commandStatusRow}>
             <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
               <Text style={[styles.statusChipLabel, { color: chip.text }]}>
-                {STATUS_LABEL[status] ?? status}
+                {statusLabelFor(status, fulfillmentType)}
               </Text>
             </View>
           </View>
@@ -208,6 +227,7 @@ function TotalRow({
 
 interface FooterActionsProps {
   status: OrderDetailStatus;
+  fulfillmentType: FulfillmentType;
   orderId: string;
   customerName: string;
   total: number;
@@ -219,11 +239,13 @@ interface FooterActionsProps {
   onReject: () => void;
   onMarkPreparing: () => void;
   onMarkReady: () => void;
+  onMarkHandedOver: () => void;
   onCancel: () => void;
 }
 
 function FooterActions({
   status,
+  fulfillmentType,
   orderId,
   customerName,
   total,
@@ -233,8 +255,10 @@ function FooterActions({
   onReject,
   onMarkPreparing,
   onMarkReady,
+  onMarkHandedOver,
   onCancel,
 }: FooterActionsProps) {
+  const isPickup = fulfillmentType === 'pickup';
   // Ticks every 45 s so the "ready" caption's elapsed counter updates.
   // Only runs when status === 'ready'; clears on status change or unmount.
   const [now, setNow] = useState(Date.now);
@@ -364,10 +388,38 @@ function FooterActions({
     );
   }
 
-  // status === 'ready' — chef has prepped, no more transitions for them;
-  // we still let them cancel until the driver picks up. Show the elapsed
-  // wait time so the chef knows how long the driver is taking.
+  // status === 'ready'
+  //  • Pickup: the customer comes to collect, so the chef completes the order
+  //    by tapping "Mark handed over" (ready → delivered, relabeled "Collected").
+  //  • Delivery: no chef transition — a 3PL driver collects. Show the elapsed
+  //    wait time so the chef knows how long the driver is taking.
   if (status === 'ready') {
+    if (isPickup) {
+      return (
+        <View style={styles.footer}>
+          <Pressable
+            onPress={onMarkHandedOver}
+            disabled={disabled}
+            style={styles.flex1}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark order handed over to ${customerName}`}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.primaryBtnFull,
+                  pressed && { opacity: 0.85 },
+                  disabled && { opacity: 0.4 },
+                ]}
+              >
+                <Text style={styles.primaryLabel}>Mark handed over</Text>
+              </View>
+            )}
+          </Pressable>
+          {cancelLink}
+        </View>
+      );
+    }
     return (
       <View style={[styles.footer, styles.footerCaptionWrap]}>
         <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
@@ -383,7 +435,9 @@ function FooterActions({
   if (status === 'delivered') {
     return (
       <View style={[styles.footer, styles.footerCaptionWrap]}>
-        <Text style={styles.footerCaption}>Delivered to customer.</Text>
+        <Text style={styles.footerCaption}>
+          {isPickup ? 'Collected by the customer.' : 'Delivered to customer.'}
+        </Text>
         <Pressable
           onPress={() => downloadInvoice(orderId)}
           hitSlop={6}
@@ -603,12 +657,14 @@ export default function OrderDetailScreen() {
   }
 
   const { timing, pricing } = order;
+  const isPickup = order.fulfillmentType === 'pickup';
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <CommandBar
         orderNumber={order.orderNumber}
         status={order.status}
+        fulfillmentType={order.fulfillmentType}
         onBack={handleBack}
       />
 
@@ -723,22 +779,44 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* DELIVERY AREA section — area only (city/state), never the full street
-            address. The exact address + navigation notes go to the rider, not
-            the chef, so customer and chef can't arrange off-platform delivery. */}
-        <SectionLabel>DELIVERY AREA</SectionLabel>
-        <View style={styles.card}>
-          <View style={[styles.cardClip, styles.addressGroup]}>
-            <Text style={styles.addressLine}>
-              {addressLines.length > 0
-                ? addressLines.join(' · ')
-                : 'Delivery area on file'}
-            </Text>
-            <Text style={styles.areaReassurance}>
-              Your rider will collect and deliver this order.
-            </Text>
-          </View>
-        </View>
+        {/* FULFILLMENT section.
+            • Pickup: the customer collects from the chef's kitchen — no delivery
+              area to show; the chef just needs to know it's a pickup.
+            • Delivery: area only (city/state), never the full street address. The
+              exact address + navigation notes go to the rider, not the chef, so
+              customer and chef can't arrange off-platform delivery. */}
+        {isPickup ? (
+          <>
+            <SectionLabel>PICKUP</SectionLabel>
+            <View style={styles.card}>
+              <View style={[styles.cardClip, styles.addressGroup]}>
+                <Text style={styles.addressLine}>
+                  Customer collects from your kitchen
+                </Text>
+                <Text style={styles.areaReassurance}>
+                  The customer will come to you. Tap “Mark handed over” once
+                  they’ve collected the order.
+                </Text>
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            <SectionLabel>DELIVERY AREA</SectionLabel>
+            <View style={styles.card}>
+              <View style={[styles.cardClip, styles.addressGroup]}>
+                <Text style={styles.addressLine}>
+                  {addressLines.length > 0
+                    ? addressLines.join(' · ')
+                    : 'Delivery area on file'}
+                </Text>
+                <Text style={styles.areaReassurance}>
+                  Your rider will collect and deliver this order.
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* SPECIAL INSTRUCTIONS */}
         {order.specialInstructions ? (
@@ -760,7 +838,7 @@ export default function OrderDetailScreen() {
             ['Accepted', timing.acceptedAt],
             ['Prepared', timing.preparedAt],
             ['Picked up', timing.pickedUpAt],
-            ['Delivered', timing.deliveredAt],
+            [isPickup ? 'Collected' : 'Delivered', timing.deliveredAt],
           ] as [string, string | null | undefined][])
             .filter(([, ts]) => !!ts)
             .map(([label, ts], idx, arr) => (
@@ -809,6 +887,7 @@ export default function OrderDetailScreen() {
 
       <FooterActions
         status={order.status}
+        fulfillmentType={order.fulfillmentType}
         orderId={order.id}
         customerName={order.customerName || 'this customer'}
         total={pricing.total}
@@ -821,6 +900,9 @@ export default function OrderDetailScreen() {
         }
         onMarkReady={() =>
           updateStatus.mutate({ orderId: order.id, status: 'ready' })
+        }
+        onMarkHandedOver={() =>
+          updateStatus.mutate({ orderId: order.id, status: 'delivered' })
         }
         onCancel={openCancelSheet}
       />

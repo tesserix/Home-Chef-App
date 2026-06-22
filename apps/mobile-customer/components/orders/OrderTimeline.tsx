@@ -1,51 +1,21 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
+import { getStepIndex, getStepLabels } from '../../lib/orderSteps';
 
 interface OrderTimelineProps {
   status: Order['status'];
+  fulfillmentType?: Order['fulfillmentType'];
   estimatedDeliveryTime?: string;
-}
-
-const STEPS = ['confirmed', 'preparing', 'picked_up', 'delivered'] as const;
-type StepKey = (typeof STEPS)[number];
-
-const STEP_LABELS: Record<StepKey, string> = {
-  confirmed: 'Confirmed',
-  preparing: 'Preparing',
-  picked_up: 'On the Way',
-  delivered: 'Delivered',
-};
-
-// Map order statuses to the closest timeline step index
-function getStepIndex(status: Order['status']): number {
-  switch (status) {
-    case 'pending':
-      return -1;
-    case 'accepted':
-      return 0;
-    case 'preparing':
-      return 1;
-    case 'ready':
-      return 1; // "ready" sits between preparing and picked_up
-    case 'picked_up':
-      return 2;
-    case 'delivering':
-      return 2; // out for delivery — same step as picked_up
-    case 'delivered':
-      return 3;
-    case 'cancelled':
-      return -1;
-    default:
-      return -1;
-  }
 }
 
 export function OrderTimeline({
   status,
+  fulfillmentType,
   estimatedDeliveryTime,
 }: OrderTimelineProps) {
-  const currentIndex = getStepIndex(status);
+  const STEPS = getStepLabels(fulfillmentType);
+  const currentIndex = getStepIndex(status, fulfillmentType);
 
   return (
     <View style={styles.container}>
@@ -59,13 +29,13 @@ export function OrderTimeline({
         </Text>
       )}
       <View style={styles.steps}>
-        {STEPS.map((step, index) => {
+        {STEPS.map((label, index) => {
           const isCompleted = index < currentIndex;
           const isCurrent = index === currentIndex;
           const isFuture = index > currentIndex;
 
           return (
-            <View key={step} style={styles.stepRow}>
+            <View key={label} style={styles.stepRow}>
               {/* Vertical connector line above (except first step) */}
               {index > 0 && (
                 <View
@@ -105,7 +75,7 @@ export function OrderTimeline({
                     isFuture && styles.labelFuture,
                   ]}
                 >
-                  {STEP_LABELS[step]}
+                  {label}
                 </Text>
               </View>
             </View>
