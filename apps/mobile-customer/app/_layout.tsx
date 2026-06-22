@@ -1,12 +1,16 @@
 import '../global.css';
 
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, router } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+} from '@tanstack/react-query';
 import { AuthProvider } from '@homechef/mobile-shared/auth';
 import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
@@ -41,6 +45,20 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrateFromStorage();
+  }, []);
+
+  // Wire React Query's focusManager to React Native AppState. By default RQ
+  // listens for the web `visibilitychange` event, which never fires in RN — so
+  // refetchOnWindowFocus is dead and queries stay on stale data when the app
+  // returns from the background (e.g. after the Razorpay payment sheet, or when
+  // the customer switches away while the chef advances their order). Marking the
+  // app focused on foreground triggers a refetch of stale active queries, so
+  // order status refreshes live instead of only after a full app restart.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+      focusManager.setFocused(status === 'active');
+    });
+    return () => sub.remove();
   }, []);
 
   // Wipe the React Query cache whenever the signed-in identity changes (logout,

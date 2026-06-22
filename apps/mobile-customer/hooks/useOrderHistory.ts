@@ -112,7 +112,10 @@ function mapOrder(raw: ApiOrder): Order {
   };
 }
 
-export function useOrders(params: OrderListParams = {}) {
+export function useOrders(
+  params: OrderListParams = {},
+  opts: { refetchInterval?: number } = {},
+) {
   return useQuery<OrderListResponse>({
     queryKey: ['orders', params],
     queryFn: () =>
@@ -129,6 +132,10 @@ export function useOrders(params: OrderListParams = {}) {
         };
       }),
     staleTime: 1000 * 30, // 30 seconds — orders change frequently
+    // Opt-in live polling (the home active-order card) so a chef-driven status
+    // change shows up without the customer leaving the screen. Off by default
+    // for the paginated history list.
+    refetchInterval: opts.refetchInterval ?? false,
   });
 }
 
