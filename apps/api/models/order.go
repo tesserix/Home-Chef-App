@@ -135,6 +135,15 @@ type Order struct {
 	// Special Instructions
 	SpecialInstructions string `gorm:"type:text" json:"specialInstructions"`
 
+	// Lifecycle photos (public GCS URLs). The chef must attach these at the
+	// matching transition (enforced in the vendor app):
+	//   ReadyPhotoURL    — the prepared dish, captured when the chef marks the
+	//                      order ready. Shown to the customer for trust/appetite.
+	//   HandoverPhotoURL — proof-of-handover at pickup, captured when the chef
+	//                      marks a pickup order handed over (dispute evidence).
+	ReadyPhotoURL    string `gorm:"type:text" json:"readyPhotoUrl,omitempty"`
+	HandoverPhotoURL string `gorm:"type:text" json:"handoverPhotoUrl,omitempty"`
+
 	// Payment gateway. PaymentProvider records which gateway handled this
 	// order so refunds, reconciliation, and webhooks read the correct
 	// provider-specific ID below. Inherited from ChefProfile.PaymentProvider
@@ -265,7 +274,11 @@ type OrderResponse struct {
 	// when the order is unscheduled (ASAP).
 	ScheduledFor *time.Time `json:"scheduledFor,omitempty"`
 	DeliverySlot string     `json:"deliverySlot,omitempty"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	// Lifecycle photos (public URLs) — the food-ready photo is shown to the
+	// customer; the handover photo is dispute evidence for pickup orders.
+	ReadyPhotoURL    string    `json:"readyPhotoUrl,omitempty"`
+	HandoverPhotoURL string    `json:"handoverPhotoUrl,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -402,10 +415,12 @@ func (o *Order) ToResponse() OrderResponse {
 			State:      o.DeliveryAddressState,
 			PostalCode: o.DeliveryAddressPostalCode,
 		},
-		Chef:         chef,
-		ScheduledFor: o.ScheduledFor,
-		DeliverySlot: o.DeliverySlot,
-		CreatedAt:    o.CreatedAt,
+		Chef:             chef,
+		ScheduledFor:     o.ScheduledFor,
+		DeliverySlot:     o.DeliverySlot,
+		ReadyPhotoURL:    o.ReadyPhotoURL,
+		HandoverPhotoURL: o.HandoverPhotoURL,
+		CreatedAt:        o.CreatedAt,
 	}
 }
 

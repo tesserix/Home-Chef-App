@@ -101,25 +101,37 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		}
 	}
 
-	// Optional photo.
+	// Optional photos — up to maxIssuePhotos repeated `photo` fields. A single
+	// `photo` field (the legacy single-photo client) still works unchanged.
+	const maxIssuePhotos = 4
 	var photoURLs []string
-	if file, header, ferr := c.Request.FormFile("photo"); ferr == nil {
-		defer file.Close()
-		if header.Size > 5*1024*1024 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Photo too large. Maximum 5 MB."})
-			return
-		}
-		ct := header.Header.Get("Content-Type")
-		if !services.IsImageContentType(ct) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid photo type. Allowed: JPEG, PNG, WebP."})
-			return
-		}
-		folder := fmt.Sprintf("order_issues/%s", order.ID.String())
-		url, uerr := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, ct)
-		if uerr != nil {
-			log.Printf("order issue photo upload failed for order %s: %v", order.ID, uerr)
-		} else {
-			photoURLs = append(photoURLs, url)
+	if form, ferr := c.MultipartForm(); ferr == nil && form != nil {
+		for i, header := range form.File["photo"] {
+			if i >= maxIssuePhotos {
+				break
+			}
+			if header.Size > 5*1024*1024 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Each photo must be 5 MB or smaller."})
+				return
+			}
+			ct := header.Header.Get("Content-Type")
+			if !services.IsImageContentType(ct) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid photo type. Allowed: JPEG, PNG, WebP."})
+				return
+			}
+			file, oerr := header.Open()
+			if oerr != nil {
+				log.Printf("order issue photo open failed for order %s: %v", order.ID, oerr)
+				continue
+			}
+			folder := fmt.Sprintf("order_issues/%s", order.ID.String())
+			url, uerr := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, ct)
+			file.Close()
+			if uerr != nil {
+				log.Printf("order issue photo upload failed for order %s: %v", order.ID, uerr)
+			} else {
+				photoURLs = append(photoURLs, url)
+			}
 		}
 	}
 

@@ -42,10 +42,11 @@ export default function ReportIssueScreen() {
   const [reason, setReason] = useState<IssueReason | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [description, setDescription] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | undefined>();
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
 
   const order = data?.data;
   const items = order?.items ?? [];
+  const MAX_PHOTOS = 4;
 
   function toggleItem(itemId: string) {
     setSelectedItems((prev) => {
@@ -56,7 +57,30 @@ export default function ReportIssueScreen() {
     });
   }
 
-  async function pickPhoto() {
+  function addPhotoUri(uri: string) {
+    setPhotoUris((prev) =>
+      prev.length >= MAX_PHOTOS ? prev : [...prev, uri],
+    );
+  }
+
+  function removePhoto(uri: string) {
+    setPhotoUris((prev) => prev.filter((u) => u !== uri));
+  }
+
+  async function captureFromCamera() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow camera access to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) addPhotoUri(result.assets[0].uri);
+  }
+
+  async function chooseFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert('Permission needed', 'Allow photo access to attach a photo.');
@@ -66,9 +90,21 @@ export default function ReportIssueScreen() {
       mediaTypes: ['images'],
       quality: 0.7,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) addPhotoUri(result.assets[0].uri);
+  }
+
+  // Offer camera or library. Keeps the cross-platform Alert action-sheet
+  // pattern used elsewhere in the app rather than pulling in a sheet library.
+  function pickPhoto() {
+    if (photoUris.length >= MAX_PHOTOS) {
+      Alert.alert('Photo limit', `You can attach up to ${MAX_PHOTOS} photos.`);
+      return;
     }
+    Alert.alert('Add a photo', undefined, [
+      { text: 'Take photo', onPress: () => void captureFromCamera() },
+      { text: 'Choose from library', onPress: () => void chooseFromLibrary() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   function submit() {
@@ -79,7 +115,7 @@ export default function ReportIssueScreen() {
         reason,
         description,
         affectedItemIds: Array.from(selectedItems),
-        photoUri,
+        photoUris,
       },
       {
         onSuccess: (res) => {
@@ -169,19 +205,31 @@ export default function ReportIssueScreen() {
             maxLength={500}
           />
 
-          <Text style={styles.sectionLabel}>Add a photo (optional)</Text>
-          {photoUri ? (
-            <Pressable onPress={pickPhoto} accessibilityLabel="Change photo">
-              <Image source={{ uri: photoUri }} style={styles.photo} />
-            </Pressable>
-          ) : (
-            <Pressable onPress={pickPhoto} accessibilityRole="button" accessibilityLabel="Add a photo">
-              <View style={styles.photoAdd}>
-                <Camera size={22} color={customerColors.charcoal.soft} />
-                <Text style={styles.photoAddText}>Add a photo</Text>
-              </View>
-            </Pressable>
-          )}
+          <Text style={styles.sectionLabel}>Add photos (optional)</Text>
+          <View style={styles.photoRow}>
+            {photoUris.map((uri) => (
+              <Pressable
+                key={uri}
+                onPress={() => removePhoto(uri)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
+              >
+                <View>
+                  <Image source={{ uri }} style={styles.photoThumb} />
+                  <View style={styles.photoRemove}>
+                    <Text style={styles.photoRemoveText}>×</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+            {photoUris.length < MAX_PHOTOS ? (
+              <Pressable onPress={pickPhoto} accessibilityRole="button" accessibilityLabel="Add a photo">
+                <View style={styles.photoAddSquare}>
+                  <Camera size={22} color={customerColors.charcoal.soft} />
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
 
           <Pressable onPress={submit} disabled={!reason || report.isPending} accessibilityRole="button" accessibilityLabel="Submit report">
             <View style={[styles.submit, (!reason || report.isPending) && styles.submitDisabled]}>
@@ -264,20 +312,31 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 
-  photoAdd: {
-    flexDirection: 'row',
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  photoThumb: { width: 76, height: 76, borderRadius: 12, backgroundColor: customerColors.surface.soft },
+  photoRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: customerColors.charcoal.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+  },
+  photoRemoveText: { color: customerColors.canvas, fontSize: 15, lineHeight: 17, fontFamily: 'Inter-SemiBold' },
+  photoAddSquare: {
+    width: 76,
+    height: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: customerColors.hairline,
     borderRadius: 12,
-    paddingVertical: 18,
     backgroundColor: customerColors.canvas,
   },
-  photoAddText: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.soft },
-  photo: { width: '100%', height: 180, borderRadius: 12 },
 
   submit: {
     marginTop: 20,

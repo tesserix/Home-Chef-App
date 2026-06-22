@@ -12,6 +12,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -27,6 +28,8 @@ import {
 import {
   useOrderAction,
   useUpdateOrderStatus,
+  useUploadOrderPhoto,
+  type OrderPhotoKind,
 } from '../../hooks/useVendorOrders';
 import {
   useCancelOrder,
@@ -491,9 +494,52 @@ export default function OrderDetailScreen() {
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
   const { triggerAction, isLoading: actionLoading } = useOrderAction();
   const updateStatus = useUpdateOrderStatus();
+  const uploadPhoto = useUploadOrderPhoto();
   const cancelOrder = useCancelOrder(orderId);
   const cancelItem = useCancelOrderItem(orderId);
   const { show: showToast } = useToast();
+
+  // A lifecycle photo is REQUIRED before these transitions: the chef captures
+  // the prepared dish (ready) / the handoff (handover), it uploads, and only
+  // then does the status advance. A cancel or a failed upload leaves the order
+  // in its current state so the kitchen is never blocked — the chef just
+  // retries. Camera-first (it's proof), falling back to the library if the
+  // camera permission is denied or unavailable.
+  async function captureAndAdvance(
+    kind: OrderPhotoKind,
+    nextStatus: 'ready' | 'delivered',
+  ): Promise<void> {
+    if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
+
+    let asset: ImagePicker.ImagePickerAsset | undefined;
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (cam.granted) {
+      const shot = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+      });
+      if (shot.canceled) return;
+      asset = shot.assets[0];
+    } else {
+      const lib = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+      });
+      if (lib.canceled) return;
+      asset = lib.assets[0];
+    }
+    if (!asset?.uri) return;
+
+    try {
+      await uploadPhoto.mutateAsync({ orderId: order.id, kind, uri: asset.uri });
+      await updateStatus.mutateAsync({ orderId: order.id, status: nextStatus });
+    } catch {
+      showToast({
+        message: 'Could not upload the photo. Please try again.',
+        tone: 'error',
+      });
+    }
+  }
 
   // Two-step destructive flow: pick a reason, then confirm. iOS gets the
   // native action sheet (familiar + dismissable by swipe); Android gets
@@ -891,19 +937,20 @@ export default function OrderDetailScreen() {
         orderId={order.id}
         customerName={order.customerName || 'this customer'}
         total={pricing.total}
-        disabled={actionLoading || updateStatus.isPending || cancelOrder.isPending}
+        disabled={
+          actionLoading ||
+          updateStatus.isPending ||
+          uploadPhoto.isPending ||
+          cancelOrder.isPending
+        }
         updatedAt={order.timing.preparedAt ?? order.timing.orderedAt}
         onAccept={() => triggerAction(order.id, 'accepted')}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
           updateStatus.mutate({ orderId: order.id, status: 'preparing' })
         }
-        onMarkReady={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'ready' })
-        }
-        onMarkHandedOver={() =>
-          updateStatus.mutate({ orderId: order.id, status: 'delivered' })
-        }
+        onMarkReady={() => captureAndAdvance('ready', 'ready')}
+        onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
         onCancel={openCancelSheet}
       />
     </SafeAreaView>

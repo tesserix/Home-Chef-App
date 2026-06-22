@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -365,6 +366,20 @@ export default function OrderDetailScreen() {
             </Text>
           ) : null}
         </View>
+
+        {/* Food-ready photo — the chef captures the prepared dish when marking
+            the order ready, so the customer sees their actual food. */}
+        {order.readyPhotoUrl ? (
+          <View style={styles.readyPhotoWrapper}>
+            <Image
+              source={{ uri: order.readyPhotoUrl }}
+              style={styles.readyPhoto}
+              contentFit="cover"
+              transition={200}
+              accessibilityLabel="Photo of your prepared order from the chef"
+            />
+          </View>
+        ) : null}
 
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
         {needsPayment && (
@@ -773,6 +788,19 @@ const styles = StyleSheet.create({
   mapCardWrapper: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  // Food-ready photo — 4:3 card, rounded, hairline border to match the map card.
+  readyPhotoWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  readyPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.soft,
   },
   // Card shell — radius 16, hairline border, white bg, overflow hidden so the
   // map clips to rounded corners. Shadow[2] lifts it off the canvas.

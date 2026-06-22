@@ -11,7 +11,9 @@ export interface ReportIssueInput {
   reason: IssueReason;
   description?: string;
   affectedItemIds?: string[];
-  photoUri?: string;
+  // Up to a few evidence photos (camera or library). The backend accepts
+  // repeated `photo` fields.
+  photoUris?: string[];
 }
 
 export interface ReportIssueResult {
@@ -29,10 +31,13 @@ export function useReportIssue() {
       fd.append('reason', input.reason);
       if (input.description?.trim()) fd.append('description', input.description.trim());
       for (const id of input.affectedItemIds ?? []) fd.append('affectedItemIds', id);
-      if (input.photoUri) {
-        // React Native FormData file shape.
-        fd.append('photo', { uri: input.photoUri, name: 'issue.jpg', type: 'image/jpeg' } as unknown as Blob);
-      }
+      // Repeated `photo` fields — React Native FormData file shape. The backend
+      // caps the count and ignores extras.
+      (input.photoUris ?? []).forEach((uri, i) => {
+        const name = uri.split('/').pop() ?? `issue-${i}.jpg`;
+        const type = name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        fd.append('photo', { uri, name, type } as unknown as Blob);
+      });
       const r = await api.post(`/v1/orders/${input.orderId}/report-issue`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
