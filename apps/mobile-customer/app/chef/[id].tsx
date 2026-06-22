@@ -317,12 +317,21 @@ export default function ChefDetailScreen() {
 
             {/* Rating row — star + count (charcoal star, NOT gold, per spec §2 item 3) */}
             <View style={styles.ratingRow}>
-              {/* Unicode star glyph: charcoal colour to match spec */}
-              <Text style={styles.star}>★</Text>
-              <Text style={styles.ratingValue}>
-                {chef.rating.toFixed(1)}
-              </Text>
-              <Text style={styles.ratingCount}>({chef.reviewCount})</Text>
+              {/* Tap the rating to view this chef's reviews. */}
+              <Pressable
+                onPress={() => router.push(`/chef/reviews/${chef.id}`)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`See ${chef.reviewCount} reviews, rated ${chef.rating.toFixed(1)} out of 5`}
+                style={styles.ratingTap}
+              >
+                {/* Unicode star glyph: charcoal colour to match spec */}
+                <Text style={styles.star}>★</Text>
+                <Text style={styles.ratingValue}>
+                  {chef.rating.toFixed(1)}
+                </Text>
+                <Text style={styles.ratingCount}>({chef.reviewCount})</Text>
+              </Pressable>
 
               {chef.deliveryTime ? (
                 <>
@@ -682,6 +691,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
     marginBottom: 4,
+  },
+  ratingTap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   star: {
     // Charcoal star per spec §2 item 3: "star is charcoal, NOT gold".

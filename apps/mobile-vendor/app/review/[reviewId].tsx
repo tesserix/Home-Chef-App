@@ -29,8 +29,10 @@ const replySchema = z.string().min(10, 'Reply must be at least 10 characters');
 function useReplyToReview(reviewId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    // The backend binds `response` (binding:"required") — sending `reply`
+    // failed the bind with 400 every time ("Failed to send reply").
     mutationFn: (reply: string) =>
-      api.post(`/chef/reviews/${reviewId}/reply`, { reply }),
+      api.post(`/chef/reviews/${reviewId}/reply`, { response: reply }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chef', 'reviews'] });
     },
@@ -63,8 +65,6 @@ export default function ReviewDetailScreen() {
   const [replyText, setReplyText] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [validationError, setValidationError] = useState('');
-  // Input expands as content grows, but we cap it at 180 before scrolling
-  const [inputHeight, setInputHeight] = useState(120);
 
   const inputRef = useRef<TextInput>(null);
 
@@ -198,12 +198,12 @@ export default function ReviewDetailScreen() {
                   placeholder="Write a thoughtful reply…"
                   placeholderTextColor={theme.colors.ink.muted}
                   multiline
-                  scrollEnabled={inputHeight >= 180}
+                  scrollEnabled
                   textAlignVertical="top"
-                  style={[styles.input, { height: Math.min(Math.max(inputHeight, 120), 180) }]}
-                  onContentSizeChange={(e) =>
-                    setInputHeight(e.nativeEvent.contentSize.height + 24)
-                  }
+                  // Let multiline auto-grow between min/max via styles — driving
+                  // height from onContentSizeChange fed back into the measured
+                  // size and caused the height to flicker.
+                  style={styles.input}
                   accessibilityLabel="Reply text"
                   accessibilityHint="Write your response to this customer review"
                 />
@@ -385,6 +385,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     lineHeight: 22,
+    // Auto-grows with content between these bounds, then scrolls — no
+    // controlled height, so no measurement feedback / flicker.
+    minHeight: 120,
+    maxHeight: 180,
     // No border — container provides containment
   },
 
