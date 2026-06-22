@@ -15,29 +15,11 @@ import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
 import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { OrderTimeline } from '../../../components/orders/OrderTimeline';
+import { getStepIndex, getStatusLine } from '../../../lib/orderSteps';
 
 // Progress dot row — coral dots for active/passed, hairline for future.
 // Count of 4 mirrors the OrderTimeline step count so they stay in sync.
 const PROGRESS_STEP_COUNT = 4;
-
-function getProgressIndex(status: string): number {
-  switch (status) {
-    case 'accepted':
-      return 0;
-    case 'preparing':
-      return 1;
-    case 'ready':
-      return 1;
-    case 'picked_up':
-      return 2;
-    case 'delivering':
-      return 2;
-    case 'delivered':
-      return 3;
-    default:
-      return -1;
-  }
-}
 
 export default function TrackOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -91,7 +73,10 @@ export default function TrackOrderScreen() {
       ? driverLocation.longitude
       : tracking.delivery?.currentLongitude;
 
-  const progressIndex = getProgressIndex(tracking.status);
+  const progressIndex = getStepIndex(
+    tracking.status,
+    tracking.fulfillmentType,
+  );
 
   return (
     <View style={styles.container}>
@@ -194,19 +179,9 @@ export default function TrackOrderScreen() {
             ))}
           </View>
 
-          {/* Status label — current step text */}
+          {/* Status label — current step text (pickup vs delivery aware) */}
           <Text style={styles.statusText}>
-            {tracking.status === 'picked_up' || tracking.status === 'delivering'
-              ? 'Your order is on the way'
-              : tracking.status === 'preparing'
-                ? 'Chef is preparing your order'
-                : tracking.status === 'accepted'
-                  ? 'Order confirmed'
-                  : tracking.status === 'ready'
-                    ? 'Ready for pickup'
-                    : tracking.status === 'delivered'
-                      ? 'Delivered!'
-                      : 'Tracking your order'}
+            {getStatusLine(tracking.status, tracking.fulfillmentType)}
           </Text>
 
           {/* Hairline divider before timeline */}
@@ -215,6 +190,7 @@ export default function TrackOrderScreen() {
           {/* Full timeline — visible when sheet is dragged to expanded snap point */}
           <OrderTimeline
             status={tracking.status}
+            fulfillmentType={tracking.fulfillmentType}
             estimatedDeliveryTime={tracking.estimatedDeliveryTime}
           />
         </BottomSheetScrollView>

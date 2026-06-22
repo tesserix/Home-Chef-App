@@ -23,7 +23,10 @@ interface LifecycleStep {
   shortLabel: string;
 }
 
-const LIFECYCLE_STEPS: readonly LifecycleStep[] = [
+// Delivery journey: the last two steps are driver-controlled (the chef can
+// only observe them). Pickup journey is shorter — the customer collects, so
+// the chef completes the order at "Collected" (no driver leg).
+const DELIVERY_STEPS: readonly LifecycleStep[] = [
   { label: 'Accepted', shortLabel: 'Accepted' },
   { label: 'Preparing', shortLabel: 'Preparing' },
   { label: 'Ready', shortLabel: 'Ready' },
@@ -31,8 +34,15 @@ const LIFECYCLE_STEPS: readonly LifecycleStep[] = [
   { label: 'Delivered', shortLabel: 'Delivered' },
 ] as const;
 
+const PICKUP_STEPS: readonly LifecycleStep[] = [
+  { label: 'Accepted', shortLabel: 'Accepted' },
+  { label: 'Preparing', shortLabel: 'Preparing' },
+  { label: 'Ready for pickup', shortLabel: 'Ready' },
+  { label: 'Collected', shortLabel: 'Collected' },
+] as const;
+
 // Map an order status to the 1-based step index it corresponds to.
-const STATUS_TO_STEP: Record<string, number> = {
+const DELIVERY_STATUS_TO_STEP: Record<string, number> = {
   accepted: 1,
   preparing: 2,
   ready: 3,
@@ -41,18 +51,39 @@ const STATUS_TO_STEP: Record<string, number> = {
   delivered: 5,
 };
 
+const PICKUP_STATUS_TO_STEP: Record<string, number> = {
+  accepted: 1,
+  preparing: 2,
+  ready: 3,
+  delivered: 4,
+};
+
 // The one-tap advance label and next status for chef-controllable transitions.
-const ADVANCE_LABEL: Record<string, string> = {
+// Pickup adds a chef-driven terminal step: ready → delivered ("Mark handed over").
+const DELIVERY_ADVANCE_LABEL: Record<string, string> = {
   accepted: 'Start Preparing',
   preparing: 'Mark Ready',
 };
 
-const NEXT_STATUS: Record<string, Order['status']> = {
+const PICKUP_ADVANCE_LABEL: Record<string, string> = {
+  accepted: 'Start Preparing',
+  preparing: 'Mark Ready',
+  ready: 'Mark Handed Over',
+};
+
+const DELIVERY_NEXT_STATUS: Record<string, Order['status']> = {
   accepted: 'preparing',
   preparing: 'ready',
 };
 
+const PICKUP_NEXT_STATUS: Record<string, Order['status']> = {
+  accepted: 'preparing',
+  preparing: 'ready',
+  ready: 'delivered',
+};
+
 // Captions shown on driver-controlled states where the chef has no action.
+// Pickup has none — the chef always has an action until the order is collected.
 const AWAITING_CAPTION: Record<string, string> = {
   ready: 'Ready · awaiting pickup',
   picked_up: 'Out for delivery',
@@ -80,8 +111,10 @@ function formatItemsSummary(items: Order['items']): string {
 // ----- LifecycleStepper -------------------------------------------------------
 
 interface LifecycleStepperProps {
-  /** The 1-based index of the current step (1 = Accepted, 5 = Delivered). */
+  /** The 1-based index of the current step (1 = Accepted). */
   currentStep: number;
+  /** The lifecycle steps for this order's fulfillment type. */
+  steps: readonly LifecycleStep[];
 }
 
 /**
@@ -97,14 +130,14 @@ interface LifecycleStepperProps {
  *    We use success green here (vendor palette uses green for positive status,
  *    persimmon retired for vendor). The step connector fills ink for completed.
  */
-function LifecycleStepper({ currentStep }: LifecycleStepperProps) {
+function LifecycleStepper({ currentStep, steps }: LifecycleStepperProps) {
   return (
     <View style={stepperStyles.root} accessibilityRole="none">
-      {LIFECYCLE_STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const stepNum = idx + 1;
         const isCompleted = stepNum < currentStep;
         const isCurrent = stepNum === currentStep;
-        const isLast = idx === LIFECYCLE_STEPS.length - 1;
+        const isLast = idx === steps.length - 1;
 
         // Color logic for the dot:
         // - Completed: ink (filled, done)
@@ -180,6 +213,7 @@ export interface ActiveOrderCardOrder {
   status: Order['status'];
   createdAt: string;
   items?: Order['items'];
+  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
 }
 
 interface ActiveOrderCardProps {
@@ -236,17 +270,25 @@ export function ActiveOrderCard({
     }
   }
 
+  const isPickup = order.fulfillmentType === 'pickup';
+  const steps = isPickup ? PICKUP_STEPS : DELIVERY_STEPS;
+  const statusToStep = isPickup ? PICKUP_STATUS_TO_STEP : DELIVERY_STATUS_TO_STEP;
+  const advanceLabelMap = isPickup ? PICKUP_ADVANCE_LABEL : DELIVERY_ADVANCE_LABEL;
+  const nextStatusMap = isPickup ? PICKUP_NEXT_STATUS : DELIVERY_NEXT_STATUS;
+
   function handleAdvance(): void {
-    const next = NEXT_STATUS[order.status];
+    const next = nextStatusMap[order.status];
     if (!next || isPending) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onAdvance(order.id, next);
   }
 
-  const advanceLabel = ADVANCE_LABEL[order.status];
+  const advanceLabel = advanceLabelMap[order.status];
   const hasAction = !!advanceLabel;
-  const awaitingCaption = AWAITING_CAPTION[order.status];
-  const currentStep = STATUS_TO_STEP[order.status] ?? 1;
+  // Pickup has no driver-controlled waiting state — the chef always has an
+  // action (incl. "Mark Handed Over") until the order is collected.
+  const awaitingCaption = isPickup ? undefined : AWAITING_CAPTION[order.status];
+  const currentStep = statusToStep[order.status] ?? 1;
 
   return (
     <Animated.View
@@ -282,7 +324,7 @@ export function ActiveOrderCard({
               {formatMinutesAgo(order.createdAt)}
             </Text>
             {/* Lifecycle stepper */}
-            <LifecycleStepper currentStep={currentStep} />
+            <LifecycleStepper currentStep={currentStep} steps={steps} />
           </View>
         )}
       </Pressable>

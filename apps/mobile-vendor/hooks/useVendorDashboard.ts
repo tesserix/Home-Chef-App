@@ -23,6 +23,9 @@ export interface RecentOrder {
   total: number;
   status: string;
   createdAt: string;
+  // 'pickup' orders show a pickup stepper + chef handover action on the
+  // dashboard in-flight card. Legacy orders default to delivery.
+  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
 }
 
 export function useVendorDashboard() {

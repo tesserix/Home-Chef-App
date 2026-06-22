@@ -20,6 +20,7 @@ import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
+import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -112,8 +113,16 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-// Human-readable inline status line for the map badge overlay
-function getInlineStatusLabel(status: Order['status']): string {
+// Human-readable inline status line for the map badge overlay. Pickup orders
+// have no driver/route, so they use the shared pickup wording; delivery keeps
+// its location-flavored copy.
+function getInlineStatusLabel(
+  status: Order['status'],
+  fulfillment: Order['fulfillmentType'],
+): string {
+  if (fulfillment === 'pickup') {
+    return getStatusLine(status, fulfillment);
+  }
   switch (status) {
     case 'accepted':
       return 'Order confirmed · chef is nearby';
@@ -339,7 +348,9 @@ export default function OrderDetailScreen() {
             ) : null}
             <View style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}>
               <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
-                {order.status === 'preparing' ? 'Cooking now' : chipStyle.label}
+                {order.status === 'preparing'
+                  ? 'Cooking now'
+                  : getChipLabel(order.status, order.fulfillmentType)}
               </Text>
             </View>
           </View>
@@ -417,7 +428,7 @@ export default function OrderDetailScreen() {
                       />
                     ) : null}
                     <Text style={styles.mapStatusText}>
-                      {getInlineStatusLabel(order.status)}
+                      {getInlineStatusLabel(order.status, order.fulfillmentType)}
                     </Text>
                   </View>
                   {order.estimatedDeliveryTime ? (

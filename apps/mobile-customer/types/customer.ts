@@ -168,6 +168,9 @@ export interface TrackingResponse {
   orderId: string;
   orderNumber: string;
   status: Order['status'];
+  // How the order reaches the customer (TrackOrder response). Drives the
+  // pickup-vs-delivery wording on the tracking screen.
+  fulfillmentType?: Order['fulfillmentType'];
   chef: Chef;
   estimatedDeliveryTime?: string;
   delivery?: {

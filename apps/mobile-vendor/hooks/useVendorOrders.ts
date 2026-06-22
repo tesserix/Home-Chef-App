@@ -17,6 +17,9 @@ export interface Order {
   items: OrderItem[];
   total: number;
   status: 'pending' | 'accepted' | 'rejected' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  // How the order reaches the customer. 'pickup' → customer collects; the chef
+  // confirms handover (ready → delivered). Legacy orders default to delivery.
+  fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
   createdAt: string;
   deliveryAddress: string;
   specialInstructions?: string;

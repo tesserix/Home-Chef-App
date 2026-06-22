@@ -801,10 +801,16 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 
 	chefLat, chefLng, chefExact := chefTrackCoords(order)
 
+	fulfillment := order.FulfillmentType
+	if fulfillment == "" {
+		fulfillment = models.FulfillmentDelivery
+	}
+
 	response := gin.H{
-		"orderId":     order.ID,
-		"orderNumber": order.OrderNumber,
-		"status":      order.Status,
+		"orderId":         order.ID,
+		"orderNumber":     order.OrderNumber,
+		"status":          order.Status,
+		"fulfillmentType": fulfillment,
 		"chef": func() gin.H {
 			m := gin.H{
 				"name":      order.Chef.BusinessName,
