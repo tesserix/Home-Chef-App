@@ -1,0 +1,99 @@
+{
+  "cli": {
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "local-sim": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:8090/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-REPLACE_WITH_ADMIN_IOS_CLIENT_ID.apps.googleusercontent.com",
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    },
+    "prod-sim": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-REPLACE_WITH_ADMIN_IOS_CLIENT_ID.apps.googleusercontent.com",
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:8090/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "http://localhost:8090",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-REPLACE_WITH_ADMIN_IOS_CLIENT_ID.apps.googleusercontent.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://admin.fe3dr.com/api/v1",
+        "EXPO_PUBLIC_BFF_URL": "https://admin.fe3dr.com",
+        "EXPO_PUBLIC_GIP_TENANT_ID": "HomeChef-Internal-gyofe",
+        "EXPO_PUBLIC_GIP_API_KEY": "AIzaSyCX8e9IqDMSnwzUBZ-mSiFHsZuvm-wQy8A",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "849928263410-gri0fclh2pdbkgu3g3ppm6npa3kktib9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "849928263410-REPLACE_WITH_ADMIN_IOS_CLIENT_ID.apps.googleusercontent.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleTeamId": "2CRHRRYBPL",
+        "ascAppId": "REPLACE_WITH_ADMIN_ASC_APP_ID"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
+    }
+  }
+}

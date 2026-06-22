@@ -247,7 +247,7 @@ func TestEndToEnd_MobileAutoLogin_WrongTenant_Rejected(t *testing.T) {
 	assert.Equal(t, int32(0), api.calls.Load(), "apps/api should not have been called")
 }
 
-func TestEndToEnd_MobileAutoLogin_InternalTenantBlocked(t *testing.T) {
+func TestEndToEnd_MobileAutoLogin_DisallowedTenantBlocked(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	jwks := newJWKServer(t)
 	defer jwks.srv.Close()
@@ -266,7 +266,7 @@ func TestEndToEnd_MobileAutoLogin_InternalTenantBlocked(t *testing.T) {
 	r := gin.New()
 	autologin.NewHandler(&autologin.Deps{GIP: verifier, Sessions: mgr, Registry: reg, API: apiClient}).Register(r)
 
-	body := `{"id_token":"any","expected_tenant_id":"HomeChef-Internal-gyofe"}`
+	body := `{"id_token":"any","expected_tenant_id":"HomeChef-Unknown-zzzzz"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

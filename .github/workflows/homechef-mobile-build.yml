@@ -1,9 +1,9 @@
 name: HomeChef Mobile - EAS Build
 
-# Cloud-builds the three Expo apps (apps/mobile-customer | mobile-vendor |
-# mobile-delivery) on Expo's EAS Build service. The mobile apps are NOT Docker
-# images — they ship as native iOS/Android binaries built by EAS, so this is a
-# separate path from the GHCR/ArgoCD web+api workflows.
+# Cloud-builds the four Expo apps (apps/mobile-customer | mobile-vendor |
+# mobile-delivery | mobile-admin) on Expo's EAS Build service. The mobile apps
+# are NOT Docker images — they ship as native iOS/Android binaries built by EAS,
+# so this is a separate path from the GHCR/ArgoCD web+api workflows.
 #
 # Manual-only (workflow_dispatch) on purpose: native builds consume EAS minutes,
 # so we never auto-build on push. Pick the app(s), platform, and profile at run
@@ -11,12 +11,23 @@ name: HomeChef Mobile - EAS Build
 # progress at https://expo.dev/accounts/tesserix-org/projects).
 #
 # Requires the EXPO_TOKEN repo secret — an Expo access token for the tesserix-org
-# account that owns the homechef-customer / homechef-vendor / homechef-delivery
-# EAS projects. Create one at https://expo.dev/accounts/tesserix-org/settings/access-tokens
+# account that owns the homechef-customer / homechef-vendor / homechef-delivery /
+# homechef-admin EAS projects. Create one at
+# https://expo.dev/accounts/tesserix-org/settings/access-tokens
 # then add it via:  gh secret set EXPO_TOKEN --repo tesserix/Home-Chef-App
 #
 # iOS/production profiles require Apple/Android signing credentials to already be
 # configured on the EAS projects; otherwise --non-interactive builds will fail.
+#
+# TestFlight / Play submission (submit=true) appends `--auto-submit`, which after
+# the build uploads it to the store using each app's `submit.production` config
+# in eas.json (appleTeamId + ascAppId). For this to run non-interactively in CI
+# the EAS project must already hold the credentials — set them up ONCE locally:
+#   cd apps/mobile-<app>
+#   eas credentials            # iOS → set up Distribution cert + provisioning profile
+#   eas credentials            # iOS → App Store Connect API Key (for submit)
+# After that one-time interactive setup (needs an Apple login), this workflow can
+# build + submit to TestFlight with no GitHub secrets beyond EXPO_TOKEN.
 
 on:
   workflow_dispatch:
@@ -24,7 +35,7 @@ on:
       app:
         description: Mobile app(s) to build
         type: choice
-        options: [all, customer, vendor, delivery]
+        options: [all, customer, vendor, delivery, admin]
         default: all
       platform:
         description: Target platform
@@ -36,12 +47,16 @@ on:
         type: choice
         options: [preview, production, development]
         default: preview
+      submit:
+        description: Submit to store (TestFlight / Play internal) after build
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: mobile-eas-${{ inputs.app }}-${{ inputs.platform }}-${{ inputs.profile }}
+  group: mobile-eas-${{ inputs.app }}-${{ inputs.platform }}-${{ inputs.profile }}-${{ inputs.submit }}
   cancel-in-progress: false
 
 jobs:
@@ -51,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: ${{ (inputs.app == 'all') && fromJSON('["customer","vendor","delivery"]') || fromJSON(format('["{0}"]', inputs.app)) }}
+        app: ${{ (inputs.app == 'all') && fromJSON('["customer","vendor","delivery","admin"]') || fromJSON(format('["{0}"]', inputs.app)) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -97,12 +112,15 @@ jobs:
 
       - name: Queue EAS build
         working-directory: apps/mobile-${{ matrix.app }}
+        # --auto-submit (when submit=true) chains a store submission after the
+        # build on EAS servers, using the submit.<profile> config in eas.json.
         run: |
           eas build \
             --platform "${{ inputs.platform }}" \
             --profile "${{ inputs.profile }}" \
             --non-interactive \
-            --no-wait
+            --no-wait \
+            ${{ inputs.submit && '--auto-submit' || '' }}
 
       - name: Summary
         if: always()
@@ -113,5 +131,6 @@ jobs:
             echo "- **App:** mobile-${{ matrix.app }}"
             echo "- **Platform:** ${{ inputs.platform }}"
             echo "- **Profile:** ${{ inputs.profile }}"
+            echo "- **Submit to store:** ${{ inputs.submit }}"
             echo "- Track builds: https://expo.dev/accounts/tesserix-org/projects"
           } >> "$GITHUB_STEP_SUMMARY"

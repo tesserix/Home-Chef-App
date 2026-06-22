@@ -114,7 +114,7 @@ func TestAutoLogin_TenantNotAllowedForMobile_403(t *testing.T) {
 	)
 	r := gin.New()
 	NewHandler(deps).Register(r)
-	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Internal-gyofe"}`
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Unknown-zzzzz"}`
 	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
