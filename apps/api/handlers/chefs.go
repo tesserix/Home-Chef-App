@@ -618,18 +618,24 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 // while sending an empty string or zero genuinely clears the value.
 // This unblocks clearing the description / address fields from the app.
 type UpdateChefProfileRequest struct {
-	BusinessName    *string                    `json:"businessName"`
-	Description     *string                    `json:"description"`
-	ProfileImage    *string                    `json:"profileImage"`
-	BannerImage     *string                    `json:"bannerImage"`
-	Cuisines        []string                   `json:"cuisines"`
-	Specialties     []string                   `json:"specialties"`
-	PrepTime        *string                    `json:"prepTime"`
-	MinimumOrder    *float64                   `json:"minimumOrder"`
-	ServiceRadius   *float64                   `json:"serviceRadius"`
-	AcceptingOrders *bool                      `json:"acceptingOrders"`
-	OffersPickup    *bool                      `json:"offersPickup"`
-	OperatingHours  map[string]*DayHoursUpdate `json:"operatingHours"`
+	BusinessName    *string  `json:"businessName"`
+	Description     *string  `json:"description"`
+	ProfileImage    *string  `json:"profileImage"`
+	BannerImage     *string  `json:"bannerImage"`
+	Cuisines        []string `json:"cuisines"`
+	Specialties     []string `json:"specialties"`
+	PrepTime        *string  `json:"prepTime"`
+	MinimumOrder    *float64 `json:"minimumOrder"`
+	ServiceRadius   *float64 `json:"serviceRadius"`
+	AcceptingOrders *bool    `json:"acceptingOrders"`
+	OffersPickup    *bool    `json:"offersPickup"`
+	// Chef self-delivery offering + pricing (Phase 2).
+	OffersSelfDelivery       *bool                      `json:"offersSelfDelivery"`
+	SelfDeliveryBaseFee      *float64                   `json:"selfDeliveryBaseFee"`
+	SelfDeliveryFreeRadiusKm *float64                   `json:"selfDeliveryFreeRadiusKm"`
+	SelfDeliveryPerKm        *float64                   `json:"selfDeliveryPerKm"`
+	SelfDeliveryMaxFee       *float64                   `json:"selfDeliveryMaxFee"`
+	OperatingHours           map[string]*DayHoursUpdate `json:"operatingHours"`
 
 	// Address fields — added so the chef can edit their kitchen address
 	// post-onboarding. Backend previously only accepted these during the
@@ -698,6 +704,21 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.OffersPickup != nil {
 		chef.OffersPickup = *req.OffersPickup
+	}
+	if req.OffersSelfDelivery != nil {
+		chef.OffersSelfDelivery = *req.OffersSelfDelivery
+	}
+	if req.SelfDeliveryBaseFee != nil {
+		chef.SelfDeliveryBaseFee = *req.SelfDeliveryBaseFee
+	}
+	if req.SelfDeliveryFreeRadiusKm != nil {
+		chef.SelfDeliveryFreeRadiusKm = *req.SelfDeliveryFreeRadiusKm
+	}
+	if req.SelfDeliveryPerKm != nil {
+		chef.SelfDeliveryPerKm = *req.SelfDeliveryPerKm
+	}
+	if req.SelfDeliveryMaxFee != nil {
+		chef.SelfDeliveryMaxFee = *req.SelfDeliveryMaxFee
 	}
 	if req.AddressLine1 != nil {
 		chef.AddressLine1 = *req.AddressLine1

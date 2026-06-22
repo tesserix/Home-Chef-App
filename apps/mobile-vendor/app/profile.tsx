@@ -42,6 +42,7 @@ interface ChefProfile {
   serviceRadius: number;
   acceptingOrders: boolean;
   offersPickup: boolean;
+  offersSelfDelivery: boolean;
   kitchenPhotos: string[];
   addressLine1: string;
   addressLine2: string;
@@ -64,6 +65,7 @@ interface UpdateChefProfilePayload {
   state?: string;
   postalCode?: string;
   offersPickup?: boolean;
+  offersSelfDelivery?: boolean;
 }
 
 // Preset lists — chip selectors instead of free-text input wherever the
@@ -314,6 +316,7 @@ export default function ProfileScreen() {
   const [stateName, setStateName] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [offersPickup, setOffersPickup] = useState(false);
+  const [offersSelfDelivery, setOffersSelfDelivery] = useState(false);
 
   // Dirty against last-known server values — drives the disabled state of
   // the always-visible save button and the back-discard prompt.
@@ -332,7 +335,8 @@ export default function ProfileScreen() {
       city.trim() !== (data.city ?? '') ||
       stateName.trim() !== (data.state ?? '') ||
       postalCode.trim() !== (data.postalCode ?? '') ||
-      offersPickup !== (data.offersPickup ?? false));
+      offersPickup !== (data.offersPickup ?? false) ||
+      offersSelfDelivery !== (data.offersSelfDelivery ?? false));
 
   // Sync local form state when data loads (including after a successful save
   // which invalidates the query and re-fetches). Clear savedRef so that
@@ -355,6 +359,7 @@ export default function ProfileScreen() {
       setStateName(data.state ?? '');
       setPostalCode(data.postalCode ?? '');
       setOffersPickup(data.offersPickup ?? false);
+      setOffersSelfDelivery(data.offersSelfDelivery ?? false);
       savedRef.current = false;
     }
   }, [data]);
@@ -386,6 +391,7 @@ export default function ProfileScreen() {
       state: stateName.trim(),
       postalCode: postalCode.trim(),
       offersPickup,
+      offersSelfDelivery,
     };
     updateMutation.mutate(payload, {
       onSuccess: () => {
@@ -444,6 +450,7 @@ export default function ProfileScreen() {
               state: stateName.trim(),
               postalCode: postalCode.trim(),
               offersPickup,
+              offersSelfDelivery,
             };
             updateMutation.mutate(payload, {
               onSuccess: () => {
@@ -785,7 +792,7 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* FULFILLMENT — pickup opt-in toggle */}
+          {/* FULFILLMENT — pickup + self-delivery opt-in toggles */}
           <Text style={styles.sectionLabel}>FULFILLMENT</Text>
           <View style={styles.hairlineGroup}>
             <View style={styles.toggleRow}>
@@ -799,6 +806,21 @@ export default function ProfileScreen() {
                 value={offersPickup}
                 onValueChange={setOffersPickup}
                 accessibilityLabel="Allow customer pickup"
+              />
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleLabel}>I deliver myself</Text>
+                <Text style={styles.toggleHint}>
+                  You deliver orders to the customer (free for now). You'll see
+                  their full address + phone for these orders.
+                </Text>
+              </View>
+              <Switch
+                value={offersSelfDelivery}
+                onValueChange={setOffersSelfDelivery}
+                accessibilityLabel="I deliver orders myself"
               />
             </View>
           </View>

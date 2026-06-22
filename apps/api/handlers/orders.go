@@ -166,6 +166,11 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 			return "", fmt.Errorf("this kitchen does not offer pickup")
 		}
 		return models.FulfillmentPickup, nil
+	case models.FulfillmentChefDelivery:
+		if !chef.OffersSelfDelivery {
+			return "", fmt.Errorf("this kitchen does not offer chef delivery")
+		}
+		return models.FulfillmentChefDelivery, nil
 	default:
 		return "", fmt.Errorf("unsupported fulfillment option")
 	}
@@ -411,6 +416,9 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// so checkout never blocks on the quote.
 	if fulfillment == models.FulfillmentPickup {
 		deliveryFee = 0
+	} else if fulfillment == models.FulfillmentChefDelivery {
+		// Chef delivers themselves — distance-based self-delivery fee, no 3PL quote.
+		deliveryFee = services.ComputeSelfDeliveryFee(chef, deliveryAddr.Latitude, deliveryAddr.Longitude)
 	} else if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
 		deliveryFee = fee
 	}

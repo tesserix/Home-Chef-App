@@ -1,0 +1,28 @@
+package services
+
+import "github.com/homechef/api/models"
+
+// ComputeSelfDeliveryFee returns the chef self-delivery fee for an order going
+// to (dropLat, dropLng):
+//
+//	fee = BaseFee + max(0, distanceKm − FreeRadiusKm) × PerKm   (capped at MaxFee)
+//
+// MaxFee of 0 means uncapped. When either endpoint's coords are missing (0,0)
+// the distance is unknown, so only the flat BaseFee applies. Never negative.
+// Deterministic + pure so the checkout quote and any later re-quote agree.
+func ComputeSelfDeliveryFee(chef models.ChefProfile, dropLat, dropLng float64) float64 {
+	fee := chef.SelfDeliveryBaseFee
+	if chef.Latitude != 0 && chef.Longitude != 0 && dropLat != 0 && dropLng != 0 {
+		distKm := haversineDistance(chef.Latitude, chef.Longitude, dropLat, dropLng)
+		if extra := distKm - chef.SelfDeliveryFreeRadiusKm; extra > 0 {
+			fee += extra * chef.SelfDeliveryPerKm
+		}
+	}
+	if chef.SelfDeliveryMaxFee > 0 && fee > chef.SelfDeliveryMaxFee {
+		fee = chef.SelfDeliveryMaxFee
+	}
+	if fee < 0 {
+		fee = 0
+	}
+	return fee
+}

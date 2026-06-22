@@ -243,6 +243,8 @@ interface FooterActionsProps {
   onMarkPreparing: () => void;
   onMarkReady: () => void;
   onMarkHandedOver: () => void;
+  onMarkOutForDelivery: () => void;
+  onMarkDelivered: () => void;
   onCancel: () => void;
 }
 
@@ -259,9 +261,12 @@ function FooterActions({
   onMarkPreparing,
   onMarkReady,
   onMarkHandedOver,
+  onMarkOutForDelivery,
+  onMarkDelivered,
   onCancel,
 }: FooterActionsProps) {
   const isPickup = fulfillmentType === 'pickup';
+  const isChefDelivery = fulfillmentType === 'chef_delivery';
   // Ticks every 45 s so the "ready" caption's elapsed counter updates.
   // Only runs when status === 'ready'; clears on status change or unmount.
   const [now, setNow] = useState(Date.now);
@@ -423,10 +428,65 @@ function FooterActions({
         </View>
       );
     }
+    if (isChefDelivery) {
+      // The chef delivers themselves → they advance the order out for delivery.
+      return (
+        <View style={styles.footer}>
+          <Pressable
+            onPress={onMarkOutForDelivery}
+            disabled={disabled}
+            style={styles.flex1}
+            accessibilityRole="button"
+            accessibilityLabel="Mark order out for delivery"
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.primaryBtnFull,
+                  pressed && { opacity: 0.85 },
+                  disabled && { opacity: 0.4 },
+                ]}
+              >
+                <Text style={styles.primaryLabel}>Out for delivery</Text>
+              </View>
+            )}
+          </Pressable>
+          {cancelLink}
+        </View>
+      );
+    }
     return (
       <View style={[styles.footer, styles.footerCaptionWrap]}>
         <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
         {cancelLink}
+      </View>
+    );
+  }
+
+  // status === 'picked_up' — for chef_delivery the chef is en route and
+  // completes the order on arrival. (3PL orders are driver-controlled here.)
+  if (status === 'picked_up' && isChefDelivery) {
+    return (
+      <View style={styles.footer}>
+        <Pressable
+          onPress={onMarkDelivered}
+          disabled={disabled}
+          style={styles.flex1}
+          accessibilityRole="button"
+          accessibilityLabel={`Mark order delivered to ${customerName}`}
+        >
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.primaryBtnFull,
+                pressed && { opacity: 0.85 },
+                disabled && { opacity: 0.4 },
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Mark delivered</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
     );
   }
@@ -704,6 +764,7 @@ export default function OrderDetailScreen() {
 
   const { timing, pricing } = order;
   const isPickup = order.fulfillmentType === 'pickup';
+  const isChefDelivery = order.fulfillmentType === 'chef_delivery';
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -846,6 +907,30 @@ export default function OrderDetailScreen() {
               </View>
             </View>
           </>
+        ) : isChefDelivery ? (
+          // Chef self-delivery: the chef delivers, so they DO get the full
+          // address + phone to reach the customer's door (scoped exception to
+          // the area-only privacy rule).
+          <>
+            <SectionLabel>DELIVER TO</SectionLabel>
+            <View style={styles.card}>
+              <View style={[styles.cardClip, styles.addressGroup]}>
+                <Text style={styles.addressLine}>
+                  {addressLines.length > 0
+                    ? addressLines.join('\n')
+                    : 'Address on file'}
+                </Text>
+                {order.customerPhone ? (
+                  <Text style={styles.areaReassurance}>
+                    {order.customerName || 'Customer'} · {order.customerPhone}
+                  </Text>
+                ) : null}
+                <Text style={styles.areaReassurance}>
+                  You’re delivering this order yourself.
+                </Text>
+              </View>
+            </View>
+          </>
         ) : (
           <>
             <SectionLabel>DELIVERY AREA</SectionLabel>
@@ -951,6 +1036,12 @@ export default function OrderDetailScreen() {
         }
         onMarkReady={() => captureAndAdvance('ready', 'ready')}
         onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
+        onMarkOutForDelivery={() =>
+          updateStatus.mutate({ orderId: order.id, status: 'picked_up' })
+        }
+        onMarkDelivered={() =>
+          updateStatus.mutate({ orderId: order.id, status: 'delivered' })
+        }
         onCancel={openCancelSheet}
       />
     </SafeAreaView>

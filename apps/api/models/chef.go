@@ -27,9 +27,17 @@ type ChefProfile struct {
 	DeliveryRadius float64        `gorm:"default:10" json:"deliveryRadius"` // in km
 	ServiceRadius  float64        `gorm:"default:10" json:"serviceRadius"`  // in km
 	OffersPickup   bool           `gorm:"default:false" json:"offersPickup"`
-	Rating         float64        `gorm:"default:0" json:"rating"`
-	TotalReviews   int            `gorm:"default:0" json:"totalReviews"`
-	TotalOrders    int            `gorm:"default:0" json:"totalOrders"`
+	// Chef self-delivery (Phase 2): the chef delivers the order themselves, for
+	// free or a minimal distance-based fee. Fee = BaseFee + max(0, distanceKm −
+	// FreeRadiusKm) × PerKm, capped at MaxFee (0 = uncapped). All default 0.
+	OffersSelfDelivery       bool    `gorm:"default:false" json:"offersSelfDelivery"`
+	SelfDeliveryBaseFee      float64 `gorm:"default:0" json:"selfDeliveryBaseFee"`
+	SelfDeliveryFreeRadiusKm float64 `gorm:"default:0" json:"selfDeliveryFreeRadiusKm"`
+	SelfDeliveryPerKm        float64 `gorm:"default:0" json:"selfDeliveryPerKm"`
+	SelfDeliveryMaxFee       float64 `gorm:"default:0" json:"selfDeliveryMaxFee"`
+	Rating                   float64 `gorm:"default:0" json:"rating"`
+	TotalReviews             int     `gorm:"default:0" json:"totalReviews"`
+	TotalOrders              int     `gorm:"default:0" json:"totalOrders"`
 	// IssueCount is the number of customer-reported order issues (#37); the issue
 	// rate (issues/orders) feeds the chef's quality signal.
 	IssueCount      int        `gorm:"default:0" json:"issueCount"`
@@ -227,10 +235,17 @@ type ChefProfileResponse struct {
 	PriceRange    string    `json:"priceRange"`
 	ServiceRadius float64   `json:"serviceRadius"`
 	OffersPickup  bool      `json:"offersPickup"`
-	Rating        float64   `json:"rating"`
-	TotalReviews  int       `json:"totalReviews"`
-	TotalOrders   int       `json:"totalOrders"`
-	IsVerified    bool      `json:"verified"`
+	// Chef self-delivery offering + pricing (Phase 2). Surfaced so the customer
+	// checkout selector can show the mode and compute its fee.
+	OffersSelfDelivery       bool    `json:"offersSelfDelivery"`
+	SelfDeliveryBaseFee      float64 `json:"selfDeliveryBaseFee"`
+	SelfDeliveryFreeRadiusKm float64 `json:"selfDeliveryFreeRadiusKm"`
+	SelfDeliveryPerKm        float64 `json:"selfDeliveryPerKm"`
+	SelfDeliveryMaxFee       float64 `json:"selfDeliveryMaxFee"`
+	Rating                   float64 `json:"rating"`
+	TotalReviews             int     `json:"totalReviews"`
+	TotalOrders              int     `json:"totalOrders"`
+	IsVerified               bool    `json:"verified"`
 	// FoodSafetyBadge: chef holds a verified, non-expired FSSAI licence (#35).
 	// Set by the handler (needs a DB lookup), so it's false on the bare model.
 	FoodSafetyBadge bool `json:"foodSafetyBadge"`
@@ -298,38 +313,43 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 	currency := strings.ToUpper(currencyForCountryLocal(country))
 
 	return ChefProfileResponse{
-		ID:              c.ID,
-		UserID:          c.UserID,
-		BusinessName:    c.BusinessName,
-		Slug:            c.EffectiveSlug(),
-		Description:     c.Description,
-		ProfileImage:    c.ProfileImage,
-		BannerImage:     c.BannerImage,
-		Cuisines:        cuisines,
-		Specialties:     specialties,
-		PrepTime:        c.PrepTime,
-		MinimumOrder:    c.MinimumOrder,
-		DeliveryFee:     0, // TODO: populate when delivery fee model is added
-		PriceRange:      priceRangeFromMinOrder(c.MinimumOrder),
-		ServiceRadius:   c.ServiceRadius,
-		OffersPickup:    c.OffersPickup,
-		Rating:          c.Rating,
-		TotalReviews:    c.TotalReviews,
-		TotalOrders:     c.TotalOrders,
-		IsVerified:      c.IsVerified,
-		IsFeatured:      c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),
-		IsOnline:        c.AcceptingOrders,
-		AcceptingOrders: c.AcceptingOrders,
-		PausedUntil:     c.PausedUntil,
-		KitchenPhotos:   kitchenPhotos,
-		KitchenType:     kitchenType,
-		City:            c.City,
-		State:           c.State,
-		Country:         country,
-		Currency:        currency,
-		Latitude:        c.Latitude,
-		Longitude:       c.Longitude,
-		CreatedAt:       c.CreatedAt,
+		ID:                       c.ID,
+		UserID:                   c.UserID,
+		BusinessName:             c.BusinessName,
+		Slug:                     c.EffectiveSlug(),
+		Description:              c.Description,
+		ProfileImage:             c.ProfileImage,
+		BannerImage:              c.BannerImage,
+		Cuisines:                 cuisines,
+		Specialties:              specialties,
+		PrepTime:                 c.PrepTime,
+		MinimumOrder:             c.MinimumOrder,
+		DeliveryFee:              0, // TODO: populate when delivery fee model is added
+		PriceRange:               priceRangeFromMinOrder(c.MinimumOrder),
+		ServiceRadius:            c.ServiceRadius,
+		OffersPickup:             c.OffersPickup,
+		OffersSelfDelivery:       c.OffersSelfDelivery,
+		SelfDeliveryBaseFee:      c.SelfDeliveryBaseFee,
+		SelfDeliveryFreeRadiusKm: c.SelfDeliveryFreeRadiusKm,
+		SelfDeliveryPerKm:        c.SelfDeliveryPerKm,
+		SelfDeliveryMaxFee:       c.SelfDeliveryMaxFee,
+		Rating:                   c.Rating,
+		TotalReviews:             c.TotalReviews,
+		TotalOrders:              c.TotalOrders,
+		IsVerified:               c.IsVerified,
+		IsFeatured:               c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),
+		IsOnline:                 c.AcceptingOrders,
+		AcceptingOrders:          c.AcceptingOrders,
+		PausedUntil:              c.PausedUntil,
+		KitchenPhotos:            kitchenPhotos,
+		KitchenType:              kitchenType,
+		City:                     c.City,
+		State:                    c.State,
+		Country:                  country,
+		Currency:                 currency,
+		Latitude:                 c.Latitude,
+		Longitude:                c.Longitude,
+		CreatedAt:                c.CreatedAt,
 	}
 }
 
