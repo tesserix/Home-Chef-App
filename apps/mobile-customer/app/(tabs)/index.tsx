@@ -34,7 +34,7 @@ import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
-import { ActiveOrderCard } from '../../components/orders/ActiveOrderCard';
+import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
@@ -342,11 +342,10 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
             styles.listContent,
-            // When active-order cards are visible, pad the bottom so list
-            // content isn't hidden behind the floating stack (~106px per card).
-            visibleActiveOrders.length > 0 && {
-              paddingBottom: 8 + visibleActiveOrders.length * 106,
-            },
+            // Pad the bottom for the floating active-order card. The stack is
+            // COLLAPSED by default (~1 card + a peek), so reserve one card's
+            // worth; expanding it is a deliberate, temporary overlay.
+            visibleActiveOrders.length > 0 && { paddingBottom: 124 },
           ]}
           ListHeaderComponent={renderHeader}
           keyboardShouldPersistTaps="handled"
@@ -388,15 +387,13 @@ export default function HomeScreen() {
           }
         />
 
-        {/* Floating active-order cards — pinned to the bottom of the screen,
-            just above the tab bar. Stacks every in-flight order (newest on top)
-            so a customer with more than one order sees them all, not just the
-            latest. Absolute positioning keeps it out of the scroll flow. */}
+        {/* Floating active-order stack — pinned just above the tab bar. With
+            more than one in-flight order it collapses into a card stack (front
+            card + peeking layers); tap to expand the full list. Absolute
+            positioning keeps it out of the scroll flow. */}
         {visibleActiveOrders.length > 0 && (
           <View style={styles.activeOrderAnchor} pointerEvents="box-none">
-            {visibleActiveOrders.map((o) => (
-              <ActiveOrderCard key={o.id} order={o} />
-            ))}
+            <ActiveOrderStack orders={visibleActiveOrders} />
           </View>
         )}
 

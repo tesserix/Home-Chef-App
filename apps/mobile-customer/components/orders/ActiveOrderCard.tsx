@@ -17,6 +17,10 @@ import { CookingIndicator } from '../status/CookingIndicator';
 
 interface ActiveOrderCardProps {
   order: Order;
+  // Optional tap override. When the card is the front of a collapsed stack, the
+  // tap expands the stack instead of navigating to the order. Omitted → opens
+  // the order detail (default).
+  onPress?: () => void;
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
@@ -109,7 +113,7 @@ const slStyles = StyleSheet.create({
 
 // ── Main card ───────────────────────────────────────────────────────────────
 
-export function ActiveOrderCard({ order }: ActiveOrderCardProps) {
+export function ActiveOrderCard({ order, onPress }: ActiveOrderCardProps) {
   const steps = getStepLabels(order.fulfillmentType);
   const label = getStatusLine(order.status, order.fulfillmentType);
   // Clamp -1 (pending) to 0 so the first segment reads as active.
@@ -119,6 +123,10 @@ export function ActiveOrderCard({ order }: ActiveOrderCardProps) {
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
   function handlePress() {
+    if (onPress) {
+      onPress();
+      return;
+    }
     router.push(`/order/${order.id}`);
   }
 
