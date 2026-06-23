@@ -10,10 +10,20 @@ import (
 func TestResolveFulfillment(t *testing.T) {
 	chefPickup := models.ChefProfile{OffersPickup: true}
 	chefNoPickup := models.ChefProfile{OffersPickup: false}
+	chefSelfDelivers := models.ChefProfile{OffersSelfDelivery: true}
 
-	// default → delivery
+	// default → 3PL delivery when the chef does NOT self-deliver
 	if ft, err := resolveFulfillment(CreateOrderRequest{}, chefNoPickup); err != nil || ft != models.FulfillmentDelivery {
 		t.Fatalf("default should be delivery, got %q err=%v", ft, err)
+	}
+	// the chef controls who delivers: a "delivery" order to a self-delivering
+	// chef becomes chef_delivery automatically (customer never chose it)
+	if ft, err := resolveFulfillment(CreateOrderRequest{FulfillmentType: "delivery"}, chefSelfDelivers); err != nil || ft != models.FulfillmentChefDelivery {
+		t.Fatalf("self-delivering chef should yield chef_delivery, got %q err=%v", ft, err)
+	}
+	// empty mode + self-delivering chef → chef_delivery too
+	if ft, err := resolveFulfillment(CreateOrderRequest{}, chefSelfDelivers); err != nil || ft != models.FulfillmentChefDelivery {
+		t.Fatalf("empty mode + self-delivering chef should yield chef_delivery, got %q err=%v", ft, err)
 	}
 	// pickup allowed when chef offers it
 	if ft, err := resolveFulfillment(CreateOrderRequest{FulfillmentType: "pickup"}, chefPickup); err != nil || ft != models.FulfillmentPickup {

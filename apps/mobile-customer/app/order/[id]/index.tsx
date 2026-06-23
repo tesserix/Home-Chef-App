@@ -130,7 +130,9 @@ function getInlineStatusLabel(
     case 'preparing':
       return 'Chef is cooking your order nearby';
     case 'ready':
-      return 'Ready for pickup · awaiting driver';
+      // Neutral about WHO delivers (chef vs 3PL) — the customer doesn't choose
+      // that. Avoids the old "awaiting driver" wording on chef-delivered orders.
+      return 'Almost ready · heading your way soon';
     case 'picked_up':
       return 'Your order is on the way';
     case 'delivering':

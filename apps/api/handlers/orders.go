@@ -155,11 +155,18 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 	return delta, snapshot, nil
 }
 
-// resolveFulfillment validates the requested fulfillment mode against what the
-// chef offers, defaulting to 3PL delivery. chef_delivery is reserved for Phase 2.
+// resolveFulfillment maps the customer's requested mode (delivery vs pickup) to
+// the actual fulfillment type. The CHEF controls who delivers, not the customer:
+// a "delivery" order to a chef who self-delivers becomes a chef-delivered order
+// (the chef drives it), otherwise it routes to 3PL. The customer never chooses
+// chef_delivery directly.
 func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
+		// "I'll have it delivered" → the chef decides who carries it.
+		if chef.OffersSelfDelivery {
+			return models.FulfillmentChefDelivery, nil
+		}
 		return models.FulfillmentDelivery, nil
 	case models.FulfillmentPickup:
 		if !chef.OffersPickup {
@@ -167,6 +174,8 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 		}
 		return models.FulfillmentPickup, nil
 	case models.FulfillmentChefDelivery:
+		// Customers no longer request this directly, but accept it defensively
+		// from older clients when the chef does offer self-delivery.
 		if !chef.OffersSelfDelivery {
 			return "", fmt.Errorf("this kitchen does not offer chef delivery")
 		}
