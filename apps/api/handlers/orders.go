@@ -163,10 +163,8 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
-		// "I'll have it delivered" → the chef decides who carries it.
-		if chef.OffersSelfDelivery {
-			return models.FulfillmentChefDelivery, nil
-		}
+		// The carrier (chef vs 3PL) is chosen by the chef at Mark Ready, not at
+		// creation — so a delivery order is always created as plain delivery.
 		return models.FulfillmentDelivery, nil
 	case models.FulfillmentPickup:
 		if !chef.OffersPickup {
