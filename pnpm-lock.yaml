@@ -1174,8 +1174,8 @@ importers:
         specifier: ^5.62.8
         version: 5.101.0(@tanstack/react-query@5.101.0(react@19.2.7))(react@19.2.7)
       '@tesserix/otto-widget':
-        specifier: ^0.5.3
-        version: 0.5.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^0.5.1
+        version: 0.5.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tesserix/web':
         specifier: ^1.7.0
         version: 1.7.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
@@ -4127,8 +4127,8 @@ packages:
       react: ^18.0.0 || ^19.0.0
       react-native: '>=0.70.0'
 
-  '@tesserix/otto-widget@0.5.3':
-    resolution: {integrity: sha512-BHlGtvrpGgx7BOHAW8hQlPPneCf9uFDGfLFEBIbIzoX6QujopnI/61uLRMsU9Xmo5CF52pvTH1tYF+DSDmFi3g==, tarball: https://npm.pkg.github.com/download/@tesserix/otto-widget/0.5.3/49c278814b5e5f0f0578626e6b4d63733df54754}
+  '@tesserix/otto-widget@0.5.1':
+    resolution: {integrity: sha512-c1gN4egcOUoU73Jp/WbMeZKbxC4l6hr9EBcVCGRx7yFVWtEYrqx6n38pfx7siZyiK1WS3tsLfaY+fStVpNADvA==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -12207,7 +12207,7 @@ snapshots:
       react: 19.2.7
       react-native: 0.86.0(@babel/core@8.0.1)(@react-native/metro-config@0.85.3(@babel/core@8.0.1))(@types/react@19.2.17)(react@19.2.7)
 
-  '@tesserix/otto-widget@0.5.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tesserix/otto-widget@0.5.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
