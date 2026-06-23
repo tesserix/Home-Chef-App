@@ -13,6 +13,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import * as ImagePicker from 'expo-image-picker';
+import * as Device from 'expo-device';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
@@ -572,8 +573,14 @@ export default function OrderDetailScreen() {
     if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
 
     let asset: ImagePicker.ImagePickerAsset | undefined;
-    const cam = await ImagePicker.requestCameraPermissionsAsync();
-    if (cam.granted) {
+    // Real devices capture a live photo (proof the food is genuinely ready).
+    // Simulators/emulators have no camera — the camera UI opens with no way to
+    // capture — so fall back to the photo library there. Device.isDevice is
+    // false only on a simulator/emulator, so production behaviour is unchanged.
+    const canUseCamera =
+      Device.isDevice &&
+      (await ImagePicker.requestCameraPermissionsAsync()).granted;
+    if (canUseCamera) {
       const shot = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         quality: 0.6,
@@ -880,7 +887,7 @@ export default function OrderDetailScreen() {
                         style={styles.itemCancelLinkWrap}
                       >
                         <Text style={styles.itemCancelLinkLabel}>
-                          Can't fulfill this item
+                          Can't make this?
                         </Text>
                       </Pressable>
                     ) : null}
@@ -1511,9 +1518,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   itemCancelLinkLabel: {
+    // Muted, not red — this is an optional per-item action ("I can't make
+    // this one"), not an error/alarm. Red under every line read as "the whole
+    // order failed". SemiBold keeps it discoverable as a tappable link.
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.caption.size,
-    color: theme.colors.destructive.DEFAULT,
+    color: theme.colors.ink.muted,
     letterSpacing: 0.2,
   },
   invoiceLinkLabel: {
