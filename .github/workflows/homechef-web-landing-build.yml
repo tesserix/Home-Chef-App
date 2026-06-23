@@ -86,14 +86,16 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           # Build from repo root (the Dockerfile COPYs the pnpm workspace +
-          # root .npmrc). @tesserix packages resolve from public npm — no
-          # token needed. The landing is fully static; no build-args.
+          # root .npmrc). The hoisted install pulls @tesserix/otto-widget, which
+          # is published only to GitHub Packages, so the build needs the token.
           context: .
           file: apps/web-landing/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            npm_token=${{ secrets.NPM_TOKEN }}
           cache-from: type=registry,ref=${{ steps.cache.outputs.ref }}
           # cache write needs GHCR auth (skipped on PRs); read-only cache-from still works
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0},mode=max', steps.cache.outputs.ref) || '' }}
@@ -101,7 +103,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         id: trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
           format: sarif
