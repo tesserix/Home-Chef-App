@@ -155,11 +155,18 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 	return delta, snapshot, nil
 }
 
-// resolveFulfillment validates the requested fulfillment mode against what the
-// chef offers, defaulting to 3PL delivery. chef_delivery is reserved for Phase 2.
+// resolveFulfillment maps the customer's requested mode (delivery vs pickup) to
+// the actual fulfillment type. The CHEF controls who delivers, not the customer:
+// a "delivery" order to a chef who self-delivers becomes a chef-delivered order
+// (the chef drives it), otherwise it routes to 3PL. The customer never chooses
+// chef_delivery directly.
 func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
+		// "I'll have it delivered" → the chef decides who carries it.
+		if chef.OffersSelfDelivery {
+			return models.FulfillmentChefDelivery, nil
+		}
 		return models.FulfillmentDelivery, nil
 	case models.FulfillmentPickup:
 		if !chef.OffersPickup {
@@ -167,6 +174,8 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 		}
 		return models.FulfillmentPickup, nil
 	case models.FulfillmentChefDelivery:
+		// Customers no longer request this directly, but accept it defensively
+		// from older clients when the chef does offer self-delivery.
 		if !chef.OffersSelfDelivery {
 			return "", fmt.Errorf("this kitchen does not offer chef delivery")
 		}
@@ -659,7 +668,31 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := database.DB.Where("customer_id = ?", userID)
-	if status != "" {
+	// The order-list tabs send GROUP keys ("active"/"cancelled"), not literal
+	// statuses — there is no order row whose status == "active". Expand the
+	// groups here; an exact status still filters precisely (back-compat).
+	switch status {
+	case "", "all":
+		// no status filter — every order
+	case "active":
+		query = query.Where("status IN ?", []string{
+			string(models.OrderStatusPending),
+			string(models.OrderStatusAccepted),
+			string(models.OrderStatusPreparing),
+			string(models.OrderStatusReady),
+			string(models.OrderStatusPickedUp),
+			string(models.OrderStatusDelivering),
+		})
+	case "delivered":
+		query = query.Where("status = ?", string(models.OrderStatusDelivered))
+	case "cancelled":
+		// Cancelled, chef-rejected, and refunded all read as "didn't complete".
+		query = query.Where("status IN ?", []string{
+			string(models.OrderStatusCancelled),
+			string(models.OrderStatusRejected),
+			string(models.OrderStatusRefunded),
+		})
+	default:
 		query = query.Where("status = ?", status)
 	}
 

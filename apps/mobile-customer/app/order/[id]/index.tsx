@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
@@ -130,7 +131,9 @@ function getInlineStatusLabel(
     case 'preparing':
       return 'Chef is cooking your order nearby';
     case 'ready':
-      return 'Ready for pickup · awaiting driver';
+      // Neutral about WHO delivers (chef vs 3PL) — the customer doesn't choose
+      // that. Avoids the old "awaiting driver" wording on chef-delivered orders.
+      return 'Almost ready · heading your way soon';
     case 'picked_up':
       return 'Your order is on the way';
     case 'delivering':
@@ -146,6 +149,9 @@ export default function OrderDetailScreen() {
   const isFocused = useIsFocused();
   const { data, isLoading, isError } = useOrder(id ?? '');
   const [paying, setPaying] = React.useState(false);
+  // Food-ready photo lightbox — the inline photo is a compact thumbnail; the
+  // full image opens in a tap-to-dismiss overlay so it doesn't dominate the screen.
+  const [photoOpen, setPhotoOpen] = React.useState(false);
   const reorder = useReorder();
 
   // Tracking hooks — mirror exact wiring from track.tsx.
@@ -368,17 +374,34 @@ export default function OrderDetailScreen() {
         </View>
 
         {/* Food-ready photo — the chef captures the prepared dish when marking
-            the order ready, so the customer sees their actual food. */}
+            the order ready. Shown as a compact thumbnail row; tap to view the
+            full image in a lightbox so it doesn't dominate the screen. */}
         {order.readyPhotoUrl ? (
-          <View style={styles.readyPhotoWrapper}>
-            <Image
-              source={{ uri: order.readyPhotoUrl }}
-              style={styles.readyPhoto}
-              contentFit="cover"
-              transition={200}
-              accessibilityLabel="Photo of your prepared order from the chef"
-            />
-          </View>
+          <Pressable
+            onPress={() => setPhotoOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="View the photo of your prepared order"
+          >
+            {({ pressed }) => (
+              <View style={[styles.photoRow, pressed && { opacity: 0.7 }]}>
+                <Image
+                  source={{ uri: order.readyPhotoUrl }}
+                  style={styles.photoThumb}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={styles.photoRowText}>
+                  <Text style={styles.photoRowTitle}>Photo from your chef</Text>
+                  <Text style={styles.photoRowHint}>Tap to view full image</Text>
+                </View>
+                <ChevronRight
+                  size={18}
+                  color={customerColors.charcoal.soft}
+                  accessibilityElementsHidden
+                />
+              </View>
+            )}
+          </Pressable>
         ) : null}
 
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
@@ -655,6 +678,35 @@ export default function OrderDetailScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Food-ready photo lightbox — full image on a dark backdrop, tap anywhere
+          (or the close button) to dismiss. */}
+      {order.readyPhotoUrl ? (
+        <Modal
+          visible={photoOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPhotoOpen(false)}
+        >
+          <Pressable
+            style={styles.lightboxBackdrop}
+            onPress={() => setPhotoOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            <Image
+              source={{ uri: order.readyPhotoUrl }}
+              style={styles.lightboxImage}
+              contentFit="contain"
+              transition={150}
+              accessibilityLabel="Photo of your prepared order from the chef"
+            />
+            <View style={styles.lightboxClose}>
+              <X size={22} color="#FFFFFF" />
+            </View>
+          </Pressable>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -789,18 +841,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  // Food-ready photo — 4:3 card, rounded, hairline border to match the map card.
-  readyPhotoWrapper: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  readyPhoto: {
-    width: '100%',
-    aspectRatio: 4 / 3,
+  // Food-ready photo — compact tappable thumbnail row, opens a lightbox.
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 10,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: customerColors.hairline,
+    backgroundColor: customerColors.surface.DEFAULT,
+  },
+  photoThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
     backgroundColor: customerColors.surface.soft,
+  },
+  photoRowText: {
+    flex: 1,
+  },
+  photoRowTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  photoRowHint: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
+  },
+  // Lightbox overlay — full image on a near-black backdrop.
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxImage: {
+    width: '92%',
+    height: '80%',
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Card shell — radius 16, hairline border, white bg, overflow hidden so the
   // map clips to rounded corners. Shadow[2] lifts it off the canvas.

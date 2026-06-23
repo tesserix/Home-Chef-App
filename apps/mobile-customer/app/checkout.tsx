@@ -80,7 +80,6 @@ export default function CheckoutScreen() {
   const createOrder = useCreateOrder();
   const { data: chefData } = useChef(cartStore.chefId ?? '');
   const offersPickup = !!chefData?.data?.offersPickup;
-  const offersSelfDelivery = !!chefData?.data?.offersSelfDelivery;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -106,10 +105,11 @@ export default function CheckoutScreen() {
   const [fulfillment, setFulfillment] = useState<
     'delivery' | 'pickup' | 'chef_delivery'
   >('delivery');
-  // Modes this chef offers — 3PL delivery is always available.
+  // The customer only chooses delivery vs pickup. WHO delivers (the chef
+  // themselves vs a 3PL rider) is the chef's decision, resolved server-side
+  // from the chef's "I deliver myself" setting — never a customer choice.
   const fulfillmentModes: Array<'delivery' | 'pickup' | 'chef_delivery'> = [
     'delivery',
-    ...(offersSelfDelivery ? (['chef_delivery'] as const) : []),
     ...(offersPickup ? (['pickup'] as const) : []),
   ];
   const fulfillmentLabel: Record<typeof fulfillment, string> = {
