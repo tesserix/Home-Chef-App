@@ -213,6 +213,20 @@ export default function OrderDetailScreen() {
       ? driverLocation.longitude
       : tracking?.delivery?.currentLongitude;
 
+  // Only show the live map once the order is actually MOVING — picked up / out
+  // for delivery, or whenever a live driver position exists. Before that
+  // (confirmed / preparing / ready) there's nothing to track and the map would
+  // just show the chef's fuzzed pickup area, so we lead with the photo + status
+  // instead. Avoids the "fuzzed blob" looking like filler.
+  const driverIsLive =
+    effectiveDriverLat != null &&
+    effectiveDriverLng != null &&
+    effectiveDriverLat !== 0 &&
+    effectiveDriverLng !== 0;
+  const isEnRoute =
+    order.status === 'picked_up' || order.status === 'delivering';
+  const showMap = isActiveOrder && (isEnRoute || driverIsLive);
+
   const subtotal = order.items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
@@ -373,37 +387,6 @@ export default function OrderDetailScreen() {
           ) : null}
         </View>
 
-        {/* Food-ready photo — the chef captures the prepared dish when marking
-            the order ready. Shown as a compact thumbnail row; tap to view the
-            full image in a lightbox so it doesn't dominate the screen. */}
-        {order.readyPhotoUrl ? (
-          <Pressable
-            onPress={() => setPhotoOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="View the photo of your prepared order"
-          >
-            {({ pressed }) => (
-              <View style={[styles.photoRow, pressed && { opacity: 0.7 }]}>
-                <Image
-                  source={{ uri: order.readyPhotoUrl }}
-                  style={styles.photoThumb}
-                  contentFit="cover"
-                  transition={200}
-                />
-                <View style={styles.photoRowText}>
-                  <Text style={styles.photoRowTitle}>Photo from your chef</Text>
-                  <Text style={styles.photoRowHint}>Tap to view full image</Text>
-                </View>
-                <ChevronRight
-                  size={18}
-                  color={customerColors.charcoal.soft}
-                  accessibilityElementsHidden
-                />
-              </View>
-            )}
-          </Pressable>
-        ) : null}
-
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
         {needsPayment && (
           <View style={styles.ctaWrapper}>
@@ -424,10 +407,10 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Inline map card — replaces the "Track Order" button for active orders.
-            Tapping the card navigates to the full-screen tracking experience.
-            Hidden entirely for terminal statuses (delivered / cancelled / refunded). */}
-        {isActiveOrder && (
+        {/* Inline map card — only while the order is actually en route (a driver/
+            chef is moving). Tapping opens the full-screen tracking experience.
+            Earlier states show the photo + status instead of a static fuzzed map. */}
+        {showMap && (
           <View style={styles.mapCardWrapper}>
             {/* Pressable wraps the whole card — iOS Pressable inner-View pattern */}
             <Pressable
@@ -480,6 +463,37 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
+        {/* Food-ready photo — compact tappable thumbnail; tap opens a lightbox.
+            Sits below the map (when shown) so live tracking leads, then the
+            "here's your food" confirmation. */}
+        {order.readyPhotoUrl ? (
+          <Pressable
+            onPress={() => setPhotoOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="View the photo of your prepared order"
+          >
+            {({ pressed }) => (
+              <View style={[styles.photoRow, pressed && { opacity: 0.7 }]}>
+                <Image
+                  source={{ uri: order.readyPhotoUrl }}
+                  style={styles.photoThumb}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={styles.photoRowText}>
+                  <Text style={styles.photoRowTitle}>Photo from your chef</Text>
+                  <Text style={styles.photoRowHint}>Tap to view full image</Text>
+                </View>
+                <ChevronRight
+                  size={18}
+                  color={customerColors.charcoal.soft}
+                  accessibilityElementsHidden
+                />
+              </View>
+            )}
+          </Pressable>
+        ) : null}
+
         {/* Leave a review — primary action once the order is delivered (#145). */}
         {order.status === 'delivered' && (
           <View style={styles.ctaWrapper}>
@@ -518,6 +532,16 @@ export default function OrderDetailScreen() {
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 )}
               </View>
+            </Pressable>
+            {/* Back to Home — clear exit once the order is complete. Replaces the
+                stack so the back gesture doesn't return to the finished order. */}
+            <Pressable
+              onPress={() => router.replace('/(tabs)')}
+              accessibilityRole="button"
+              accessibilityLabel="Back to home"
+              style={{ marginTop: 12 }}
+            >
+              <Text style={styles.homeLink}>Back to Home</Text>
             </Pressable>
           </View>
         )}
@@ -1017,6 +1041,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: customerColors.coral.DEFAULT,
+  },
+  // Back-to-Home — quiet centred text link below the completed-order actions.
+  homeLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.charcoal.soft,
+    textAlign: 'center',
+    paddingVertical: 8,
   },
   // Report an issue (#37) — quiet text link below the primary actions.
   reportWrapper: { paddingHorizontal: 20, marginTop: 16, alignItems: 'center' },

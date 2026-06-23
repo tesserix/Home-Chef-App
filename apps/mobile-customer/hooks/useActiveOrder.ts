@@ -21,7 +21,11 @@ function isActiveStatus(status: Order['status']): boolean {
 }
 
 export interface UseActiveOrderResult {
+  // The single most-recent active order (back-compat for callers that show one).
   order: Order | undefined;
+  // All in-flight orders, newest-first — the home card stacks these so a
+  // customer with more than one order going sees every one, not just the latest.
+  orders: Order[];
   isLoading: boolean;
 }
 
@@ -40,18 +44,17 @@ export function useActiveOrder(): UseActiveOrderResult {
     { refetchInterval: ACTIVE_ORDER_POLL_MS },
   );
 
-  const order = useMemo<Order | undefined>(() => {
-    if (!data?.data?.length) return undefined;
-    // data.data comes back newest-first from the API. The first active order in
-    // that list is the most recent one — but only PAID orders are live to track.
-    // An unpaid/abandoned order (payment_status pending) isn't really in flight
-    // (the chef never sees it), so it must not linger as the "active" card; the
-    // customer can still complete it from their order history. (The backend
-    // stale-order cron eventually cancels these.)
-    return data.data.find(
+  const orders = useMemo<Order[]>(() => {
+    if (!data?.data?.length) return [];
+    // data.data comes back newest-first from the API. Only PAID orders are live
+    // to track — an unpaid/abandoned order (payment_status pending) isn't really
+    // in flight (the chef never sees it), so it must not linger as an active
+    // card; the customer can still complete it from their order history. (The
+    // backend stale-order cron eventually cancels these.)
+    return data.data.filter(
       (o) => isActiveStatus(o.status) && o.paymentStatus === 'completed',
     );
   }, [data]);
 
-  return { order, isLoading };
+  return { order: orders[0], orders, isLoading };
 }

@@ -97,7 +97,10 @@ export default function HomeScreen() {
   const [sort, setSort] = useState<ChefFilters['sort']>('rating');
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
 
-  const { order: activeOrder } = useActiveOrder();
+  const { orders: activeOrders } = useActiveOrder();
+  // Stack up to 3 active-order cards in the floating anchor; more than that is
+  // rare and would bury the feed. Each card is ~106px tall (incl. its margin).
+  const visibleActiveOrders = activeOrders.slice(0, 3);
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<BottomSheetMethods>(null);
@@ -339,9 +342,11 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
             styles.listContent,
-            // When the card is visible, add bottom padding so list content
-            // isn't hidden behind it.
-            activeOrder != null && styles.listContentWithCard,
+            // When active-order cards are visible, pad the bottom so list
+            // content isn't hidden behind the floating stack (~106px per card).
+            visibleActiveOrders.length > 0 && {
+              paddingBottom: 8 + visibleActiveOrders.length * 106,
+            },
           ]}
           ListHeaderComponent={renderHeader}
           keyboardShouldPersistTaps="handled"
@@ -383,12 +388,15 @@ export default function HomeScreen() {
           }
         />
 
-        {/* Floating active-order card — pinned to the bottom of the screen,
-            just above the tab bar. Only rendered when there is an active order.
-            Absolute positioning keeps it out of the scroll flow. */}
-        {activeOrder != null && (
+        {/* Floating active-order cards — pinned to the bottom of the screen,
+            just above the tab bar. Stacks every in-flight order (newest on top)
+            so a customer with more than one order sees them all, not just the
+            latest. Absolute positioning keeps it out of the scroll flow. */}
+        {visibleActiveOrders.length > 0 && (
           <View style={styles.activeOrderAnchor} pointerEvents="box-none">
-            <ActiveOrderCard order={activeOrder} />
+            {visibleActiveOrders.map((o) => (
+              <ActiveOrderCard key={o.id} order={o} />
+            ))}
           </View>
         )}
 

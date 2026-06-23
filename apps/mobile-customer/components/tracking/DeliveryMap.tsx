@@ -7,7 +7,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 // chef location (deterministically offset ~300m from the real kitchen), and we
 // draw this soft circle around it — so the customer sees the rough area their
 // food comes from, never the exact address. Off-platform contact stays blocked.
-const CHEF_AREA_RADIUS_M = 400;
+const CHEF_AREA_RADIUS_M = 300;
 
 interface DeliveryMapProps {
   driverLat?: number | null;
@@ -101,15 +101,18 @@ export function DeliveryMap({
       showsUserLocation={false}
       showsMyLocationButton={false}
     >
-      {/* Chef pickup AREA — a soft coral-tint circle (no center dot, no border)
-          drawn around the approximate chef location. Privacy: the customer sees
-          the rough area their food is cooked in, never the exact address. */}
+      {/* Chef pickup AREA — a soft translucent coral wash around the approximate
+          chef location: a gentle "rough area", never a solid disc or a hard
+          edge. The stroke is set explicitly (low-opacity coral) so iOS MapKit
+          can't fall back to a heavy default black ring. Privacy: the customer
+          sees the rough area their food comes from, never the exact address. */}
       {hasChef && (
         <Circle
           center={{ latitude: chefLat!, longitude: chefLng! }}
           radius={CHEF_AREA_RADIUS_M}
-          fillColor={customerColors.coral.tint}
-          strokeWidth={0}
+          fillColor="rgba(255, 56, 92, 0.10)"
+          strokeColor="rgba(255, 56, 92, 0.35)"
+          strokeWidth={1.5}
         />
       )}
       {/* Destination marker — charcoal pin at the customer's own delivery address */}

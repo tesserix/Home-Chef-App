@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { multipartConfig } from '@homechef/mobile-shared/api';
 import { api } from '../lib/api';
+import type { DashboardData, RecentOrder } from './useVendorDashboard';
 
 /** Lifecycle photo kinds the chef attaches to an order. */
 export type OrderPhotoKind = 'ready' | 'handover';
@@ -149,11 +150,17 @@ export function useOrderAction() {
       return { previous };
     },
     onError: (_err, vars, context) => {
-      // Action failed — let the order resurface so the chef can retry.
+      // Action failed — let the order resurface so the chef can retry, and drop
+      // the optimistic "In Progress" entry we may have added on accept.
       actionedOrderIds.delete(vars.orderId);
       if (context?.previous) {
         queryClient.setQueryData(['chef', 'orders', 'pending'], context.previous);
       }
+      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
+        old
+          ? { ...old, recentOrders: old.recentOrders.filter((o) => o.id !== vars.orderId) }
+          : old,
+      );
     },
     onSettled: (_data, _err, vars) => {
       actionedOrderIds.delete(vars.orderId);
@@ -171,6 +178,11 @@ export function useOrderAction() {
     // Mark actioned so background polls can't resurrect the card during the
     // undo window, then optimistically remove it and schedule the API call.
     actionedOrderIds.add(orderId);
+    // Grab the order before removing it — for an accept we move it straight
+    // into the dashboard "In Progress" list so it doesn't vanish during the
+    // undo window and then pop back a few seconds later (the flicker).
+    const pending = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
+    const accepted = pending?.orders.find((o) => o.id === orderId);
     queryClient.setQueryData<OrdersResponse>(['chef', 'orders', 'pending'], (old) => {
       if (!old) return old;
       return {
@@ -178,6 +190,20 @@ export function useOrderAction() {
         orders: old.orders.filter((o) => o.id !== orderId),
       };
     });
+    if (action === 'accepted' && accepted) {
+      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) => {
+        if (!old || old.recentOrders.some((o) => o.id === orderId)) return old;
+        const optimistic: RecentOrder = {
+          id: accepted.id,
+          customerName: accepted.customerName,
+          total: accepted.total,
+          status: 'accepted',
+          createdAt: accepted.createdAt,
+          fulfillmentType: accepted.fulfillmentType,
+        };
+        return { ...old, recentOrders: [optimistic, ...old.recentOrders] };
+      });
+    }
     setPendingUndo({ orderId, action });
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
@@ -188,8 +214,18 @@ export function useOrderAction() {
 
   function handleUndo() {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (pendingUndo) actionedOrderIds.delete(pendingUndo.orderId);
+    if (pendingUndo) {
+      const undoId = pendingUndo.orderId;
+      actionedOrderIds.delete(undoId);
+      // Pull the order back out of "In Progress" — the accept was undone.
+      queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
+        old
+          ? { ...old, recentOrders: old.recentOrders.filter((o) => o.id !== undoId) }
+          : old,
+      );
+    }
     queryClient.invalidateQueries({ queryKey: ['chef', 'orders', 'pending'] });
+    queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
     setPendingUndo(null);
   }
 
