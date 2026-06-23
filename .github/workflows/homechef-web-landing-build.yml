@@ -152,6 +152,10 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
+      - name: Configure GitHub Packages auth
+        # @tesserix/otto-widget is published only to GitHub Packages and pnpm's
+        # hoisted layout fetches it even here, so the install needs GH auth.
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
       - name: Install dependencies
         run: pnpm install --filter @homechef/web-landing... --frozen-lockfile
       - name: Lint
