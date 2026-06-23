@@ -56,7 +56,7 @@ describe('orderSteps', () => {
 
     it('uses delivery wording for delivery', () => {
       expect(getStatusLine('ready', 'delivery')).toBe(
-        'Almost ready — waiting for your driver',
+        'Almost ready — heading your way soon',
       );
       expect(getStatusLine('delivered', 'delivery')).toBe('Delivered');
     });

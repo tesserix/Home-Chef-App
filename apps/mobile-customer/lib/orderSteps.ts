@@ -97,9 +97,11 @@ export function getStatusLine(
     case 'preparing':
       return 'Chef is preparing your order';
     case 'ready':
+      // Delivery wording stays neutral about WHO carries it (chef vs 3PL) — the
+      // customer doesn't choose that, so never promise a "driver".
       return pickup
         ? 'Ready for pickup — collect from the chef'
-        : 'Almost ready — waiting for your driver';
+        : 'Almost ready — heading your way soon';
     case 'picked_up':
       return 'On the way to you';
     case 'delivering':

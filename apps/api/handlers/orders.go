@@ -668,7 +668,31 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	query := database.DB.Where("customer_id = ?", userID)
-	if status != "" {
+	// The order-list tabs send GROUP keys ("active"/"cancelled"), not literal
+	// statuses — there is no order row whose status == "active". Expand the
+	// groups here; an exact status still filters precisely (back-compat).
+	switch status {
+	case "", "all":
+		// no status filter — every order
+	case "active":
+		query = query.Where("status IN ?", []string{
+			string(models.OrderStatusPending),
+			string(models.OrderStatusAccepted),
+			string(models.OrderStatusPreparing),
+			string(models.OrderStatusReady),
+			string(models.OrderStatusPickedUp),
+			string(models.OrderStatusDelivering),
+		})
+	case "delivered":
+		query = query.Where("status = ?", string(models.OrderStatusDelivered))
+	case "cancelled":
+		// Cancelled, chef-rejected, and refunded all read as "didn't complete".
+		query = query.Where("status IN ?", []string{
+			string(models.OrderStatusCancelled),
+			string(models.OrderStatusRejected),
+			string(models.OrderStatusRefunded),
+		})
+	default:
 		query = query.Where("status = ?", status)
 	}
 
