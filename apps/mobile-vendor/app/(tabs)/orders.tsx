@@ -65,12 +65,16 @@ const STATUS_CHIP_FALLBACK: StatusChipColors = {
 };
 
 // Statuses that appear in History (not in Active/Cooking or New).
-const HISTORY_STATUSES = new Set([
-  'delivered',
-  'picked_up',
-  'cancelled',
-  'rejected',
-]);
+// A chef-delivery order at `picked_up` means the CHEF is out delivering — still
+// active, so it must NOT fall into History until `delivered`. Only 3PL/pickup
+// `picked_up` (rider has it, out of the chef's hands) is History.
+function isHistoryOrder(o: { status: string; fulfillmentType?: string }): boolean {
+  if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'rejected') {
+    return true;
+  }
+  if (o.status === 'picked_up') return o.fulfillmentType !== 'chef_delivery';
+  return false;
+}
 
 function formatMinutesAgo(iso: string): string {
   const t = new Date(iso).getTime();
@@ -213,7 +217,7 @@ function HistoryTab() {
   // Filter to past/terminal statuses only — active orders appear in the
   // Active tab instead. Client-side filter avoids an extra API parameter.
   const orders = useMemo(
-    () => (data?.orders ?? []).filter((o) => HISTORY_STATUSES.has(o.status)),
+    () => (data?.orders ?? []).filter(isHistoryOrder),
     [data?.orders],
   );
   const hasMore = data ? page * (data.limit ?? 20) < data.total : false;
