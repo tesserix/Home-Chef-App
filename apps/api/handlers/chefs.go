@@ -630,12 +630,13 @@ type UpdateChefProfileRequest struct {
 	AcceptingOrders *bool    `json:"acceptingOrders"`
 	OffersPickup    *bool    `json:"offersPickup"`
 	// Chef self-delivery offering + pricing (Phase 2).
-	OffersSelfDelivery       *bool                      `json:"offersSelfDelivery"`
-	SelfDeliveryBaseFee      *float64                   `json:"selfDeliveryBaseFee"`
-	SelfDeliveryFreeRadiusKm *float64                   `json:"selfDeliveryFreeRadiusKm"`
-	SelfDeliveryPerKm        *float64                   `json:"selfDeliveryPerKm"`
-	SelfDeliveryMaxFee       *float64                   `json:"selfDeliveryMaxFee"`
-	OperatingHours           map[string]*DayHoursUpdate `json:"operatingHours"`
+	OffersSelfDelivery        *bool                      `json:"offersSelfDelivery"`
+	SelfDeliveryBaseFee       *float64                   `json:"selfDeliveryBaseFee"`
+	SelfDeliveryFreeRadiusKm  *float64                   `json:"selfDeliveryFreeRadiusKm"`
+	SelfDeliveryPerKm         *float64                   `json:"selfDeliveryPerKm"`
+	SelfDeliveryMaxFee        *float64                   `json:"selfDeliveryMaxFee"`
+	SelfDeliveryMaxDistanceKm *float64                   `json:"selfDeliveryMaxDistanceKm"`
+	OperatingHours            map[string]*DayHoursUpdate `json:"operatingHours"`
 
 	// Address fields — added so the chef can edit their kitchen address
 	// post-onboarding. Backend previously only accepted these during the
@@ -719,6 +720,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.SelfDeliveryMaxFee != nil {
 		chef.SelfDeliveryMaxFee = *req.SelfDeliveryMaxFee
+	}
+	if req.SelfDeliveryMaxDistanceKm != nil {
+		chef.SelfDeliveryMaxDistanceKm = *req.SelfDeliveryMaxDistanceKm
 	}
 	if req.AddressLine1 != nil {
 		chef.AddressLine1 = *req.AddressLine1
@@ -1245,6 +1249,17 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		// intentionally omitted from the chef view — it can reveal building-level
 		// address detail. The 3PL rider receives it server-to-server instead.
 		PaymentMethod: order.PaymentMethod,
+	}
+
+	// Chef self-delivery: surface the chef→drop distance and the chef's
+	// configured comfort radius so the vendor app can show a soft "beyond your
+	// range" warning. Soft only — chef_delivery is still offered at checkout
+	// regardless of distance; the gate is the chef's per-order decision.
+	if order.FulfillmentType == models.FulfillmentChefDelivery {
+		detail.SelfDeliveryDistanceKm = services.ComputeSelfDeliveryDistanceKm(
+			chef, order.DeliveryLatitude, order.DeliveryLongitude,
+		)
+		detail.SelfDeliveryMaxDistanceKm = chef.SelfDeliveryMaxDistanceKm
 	}
 
 	c.JSON(http.StatusOK, detail)

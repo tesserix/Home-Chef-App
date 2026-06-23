@@ -26,3 +26,14 @@ func ComputeSelfDeliveryFee(chef models.ChefProfile, dropLat, dropLng float64) f
 	}
 	return fee
 }
+
+// ComputeSelfDeliveryDistanceKm returns the chef→drop straight-line distance in
+// km, or 0 when either endpoint's coords are missing (distance unknown). Uses
+// the same haversine + coords as ComputeSelfDeliveryFee so the fee quote and the
+// vendor's distance warning can never disagree.
+func ComputeSelfDeliveryDistanceKm(chef models.ChefProfile, dropLat, dropLng float64) float64 {
+	if chef.Latitude == 0 || chef.Longitude == 0 || dropLat == 0 || dropLng == 0 {
+		return 0
+	}
+	return haversineDistance(chef.Latitude, chef.Longitude, dropLat, dropLng)
+}

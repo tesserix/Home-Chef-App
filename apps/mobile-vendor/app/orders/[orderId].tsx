@@ -766,6 +766,20 @@ export default function OrderDetailScreen() {
   const isPickup = order.fulfillmentType === 'pickup';
   const isChefDelivery = order.fulfillmentType === 'chef_delivery';
 
+  // Soft self-delivery distance warning: the chef set a comfort radius and this
+  // drop is farther than it. Informational only — the chef can still deliver
+  // (proceed via the normal flow) or decline (cancel → refund). Hidden once the
+  // order is no longer actionable. maxDistanceKm of 0 = chef set no radius.
+  const isActiveStatus =
+    order.status !== 'delivered' &&
+    order.status !== 'cancelled' &&
+    order.status !== 'rejected';
+  const overSelfDeliveryRange =
+    isChefDelivery &&
+    isActiveStatus &&
+    order.selfDeliveryMaxDistanceKm > 0 &&
+    order.selfDeliveryDistanceKm > order.selfDeliveryMaxDistanceKm;
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <CommandBar
@@ -930,6 +944,20 @@ export default function OrderDetailScreen() {
                 </Text>
               </View>
             </View>
+            {overSelfDeliveryRange ? (
+              <View
+                style={styles.rangeWarning}
+                accessibilityRole="alert"
+              >
+                <Text style={styles.rangeWarningTitle}>
+                  {`This address is ${order.selfDeliveryDistanceKm.toFixed(1)} km away — beyond your ${order.selfDeliveryMaxDistanceKm} km range.`}
+                </Text>
+                <Text style={styles.rangeWarningBody}>
+                  Still happy to deliver? Carry on below. If it’s too far, tap
+                  Cancel to refund the customer.
+                </Text>
+              </View>
+            ) : null}
           </>
         ) : (
           <>
@@ -1264,6 +1292,30 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   areaReassurance: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+
+  // Soft self-delivery distance warning — amber (functional warning), sits
+  // just under the DELIVER TO card. Informational, not a blocking gate.
+  rangeWarning: {
+    marginHorizontal: theme.spacing[4],
+    marginTop: theme.spacing[2],
+    backgroundColor: theme.colors.amber.tint,
+    borderRadius: theme.radius.DEFAULT,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+  },
+  rangeWarningTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+    lineHeight: 20,
+  },
+  rangeWarningBody: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.soft,

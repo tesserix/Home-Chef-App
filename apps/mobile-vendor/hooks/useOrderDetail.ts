@@ -74,6 +74,12 @@ export interface OrderDetail {
   deliveryInstructions?: string;
   timing: OrderDetailTiming;
   pricing: OrderDetailPricing;
+  // Chef self-delivery distance gate (chef_delivery only). distanceKm is the
+  // chef→drop straight-line distance; maxDistanceKm is the chef's configured
+  // comfort radius. The screen shows a soft "beyond your range" warning when
+  // distanceKm > maxDistanceKm > 0. Both 0 for other modes / unknown coords.
+  selfDeliveryDistanceKm: number;
+  selfDeliveryMaxDistanceKm: number;
 }
 
 // ---- Hook --------------------------------------------------------------------
@@ -121,6 +127,9 @@ interface RawChefOrderDetailResponse {
   tax?: number;
   chefTip?: number;
   total?: number;
+  // Self-delivery distance gate (chef_delivery only)
+  selfDeliveryDistanceKm?: number;
+  selfDeliveryMaxDistanceKm?: number;
 }
 
 function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
@@ -163,6 +172,8 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       chefTip: raw.chefTip ?? 0,
       total: raw.total ?? 0,
     },
+    selfDeliveryDistanceKm: raw.selfDeliveryDistanceKm ?? 0,
+    selfDeliveryMaxDistanceKm: raw.selfDeliveryMaxDistanceKm ?? 0,
   };
 }
 
