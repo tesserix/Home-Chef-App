@@ -59,3 +59,44 @@ func TestComputeSelfDeliveryFee(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeSelfDeliveryDistanceKm(t *testing.T) {
+	const chefLat, chefLng = 12.9716, 77.5946
+	const dropLat, dropLng = 12.9352, 77.6245 // ~4.4 km from the chef
+
+	cases := []struct {
+		name             string
+		chef             models.ChefProfile
+		dropLat, dropLng float64
+		want             float64 // 0 means "unknown / exact zero"
+		tol              float64
+	}{
+		{
+			name:    "known coords → straight-line distance",
+			chef:    models.ChefProfile{Latitude: chefLat, Longitude: chefLng},
+			dropLat: dropLat, dropLng: dropLng,
+			want: 4.4, tol: 1.0,
+		},
+		{
+			name:    "missing chef coords → 0 (unknown)",
+			chef:    models.ChefProfile{},
+			dropLat: dropLat, dropLng: dropLng,
+			want: 0, tol: 0,
+		},
+		{
+			name:    "missing drop coords → 0 (unknown)",
+			chef:    models.ChefProfile{Latitude: chefLat, Longitude: chefLng},
+			dropLat: 0, dropLng: 0,
+			want: 0, tol: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComputeSelfDeliveryDistanceKm(tc.chef, tc.dropLat, tc.dropLng)
+			if diff := got - tc.want; diff < -tc.tol || diff > tc.tol {
+				t.Errorf("ComputeSelfDeliveryDistanceKm = %.2f, want %.2f (±%.2f)", got, tc.want, tc.tol)
+			}
+		})
+	}
+}

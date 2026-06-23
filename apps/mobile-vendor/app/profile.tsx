@@ -43,6 +43,14 @@ interface ChefProfile {
   acceptingOrders: boolean;
   offersPickup: boolean;
   offersSelfDelivery: boolean;
+  // Self-delivery pricing + comfort radius (Phase 2). Fee =
+  // baseFee + max(0, distanceKm − freeRadiusKm) × perKm, capped at maxFee
+  // (0 = uncapped). maxDistanceKm drives a soft per-order warning only.
+  selfDeliveryBaseFee: number;
+  selfDeliveryFreeRadiusKm: number;
+  selfDeliveryPerKm: number;
+  selfDeliveryMaxFee: number;
+  selfDeliveryMaxDistanceKm: number;
   kitchenPhotos: string[];
   addressLine1: string;
   addressLine2: string;
@@ -66,6 +74,11 @@ interface UpdateChefProfilePayload {
   postalCode?: string;
   offersPickup?: boolean;
   offersSelfDelivery?: boolean;
+  selfDeliveryBaseFee?: number;
+  selfDeliveryFreeRadiusKm?: number;
+  selfDeliveryPerKm?: number;
+  selfDeliveryMaxFee?: number;
+  selfDeliveryMaxDistanceKm?: number;
 }
 
 // Preset lists — chip selectors instead of free-text input wherever the
@@ -317,6 +330,13 @@ export default function ProfileScreen() {
   const [postalCode, setPostalCode] = useState('');
   const [offersPickup, setOffersPickup] = useState(false);
   const [offersSelfDelivery, setOffersSelfDelivery] = useState(false);
+  // Self-delivery pricing + comfort radius (strings while editing; parsed on
+  // save). Only meaningful when offersSelfDelivery is on.
+  const [selfDeliveryBaseFee, setSelfDeliveryBaseFee] = useState('');
+  const [selfDeliveryFreeRadius, setSelfDeliveryFreeRadius] = useState('');
+  const [selfDeliveryPerKm, setSelfDeliveryPerKm] = useState('');
+  const [selfDeliveryMaxFee, setSelfDeliveryMaxFee] = useState('');
+  const [selfDeliveryMaxDistance, setSelfDeliveryMaxDistance] = useState('');
 
   // Dirty against last-known server values — drives the disabled state of
   // the always-visible save button and the back-discard prompt.
@@ -336,7 +356,14 @@ export default function ProfileScreen() {
       stateName.trim() !== (data.state ?? '') ||
       postalCode.trim() !== (data.postalCode ?? '') ||
       offersPickup !== (data.offersPickup ?? false) ||
-      offersSelfDelivery !== (data.offersSelfDelivery ?? false));
+      offersSelfDelivery !== (data.offersSelfDelivery ?? false) ||
+      parseNumber(selfDeliveryBaseFee) !== (data.selfDeliveryBaseFee ?? 0) ||
+      parseNumber(selfDeliveryFreeRadius) !==
+        (data.selfDeliveryFreeRadiusKm ?? 0) ||
+      parseNumber(selfDeliveryPerKm) !== (data.selfDeliveryPerKm ?? 0) ||
+      parseNumber(selfDeliveryMaxFee) !== (data.selfDeliveryMaxFee ?? 0) ||
+      parseNumber(selfDeliveryMaxDistance) !==
+        (data.selfDeliveryMaxDistanceKm ?? 0));
 
   // Sync local form state when data loads (including after a successful save
   // which invalidates the query and re-fetches). Clear savedRef so that
@@ -360,6 +387,25 @@ export default function ProfileScreen() {
       setPostalCode(data.postalCode ?? '');
       setOffersPickup(data.offersPickup ?? false);
       setOffersSelfDelivery(data.offersSelfDelivery ?? false);
+      setSelfDeliveryBaseFee(
+        data.selfDeliveryBaseFee ? String(data.selfDeliveryBaseFee) : '',
+      );
+      setSelfDeliveryFreeRadius(
+        data.selfDeliveryFreeRadiusKm
+          ? String(data.selfDeliveryFreeRadiusKm)
+          : '',
+      );
+      setSelfDeliveryPerKm(
+        data.selfDeliveryPerKm ? String(data.selfDeliveryPerKm) : '',
+      );
+      setSelfDeliveryMaxFee(
+        data.selfDeliveryMaxFee ? String(data.selfDeliveryMaxFee) : '',
+      );
+      setSelfDeliveryMaxDistance(
+        data.selfDeliveryMaxDistanceKm
+          ? String(data.selfDeliveryMaxDistanceKm)
+          : '',
+      );
       savedRef.current = false;
     }
   }, [data]);
@@ -370,15 +416,10 @@ export default function ProfileScreen() {
     );
   }
 
-  function handleSave() {
-    if (!businessName.trim()) {
-      Alert.alert(
-        'Business name required',
-        'Enter the name customers will see on the storefront.',
-      );
-      return;
-    }
-    const payload: UpdateChefProfilePayload = {
+  // Single source of truth for the save payload — used by both the footer
+  // Save button and the back-press "Save" prompt so the two can't drift.
+  function buildPayload(): UpdateChefProfilePayload {
+    return {
       businessName: businessName.trim(),
       description: description.trim(),
       cuisines,
@@ -392,7 +433,23 @@ export default function ProfileScreen() {
       postalCode: postalCode.trim(),
       offersPickup,
       offersSelfDelivery,
+      selfDeliveryBaseFee: parseNumber(selfDeliveryBaseFee),
+      selfDeliveryFreeRadiusKm: parseNumber(selfDeliveryFreeRadius),
+      selfDeliveryPerKm: parseNumber(selfDeliveryPerKm),
+      selfDeliveryMaxFee: parseNumber(selfDeliveryMaxFee),
+      selfDeliveryMaxDistanceKm: parseNumber(selfDeliveryMaxDistance),
     };
+  }
+
+  function handleSave() {
+    if (!businessName.trim()) {
+      Alert.alert(
+        'Business name required',
+        'Enter the name customers will see on the storefront.',
+      );
+      return;
+    }
+    const payload = buildPayload();
     updateMutation.mutate(payload, {
       onSuccess: () => {
         // Mark clean immediately so isDirty evaluates false. The query
@@ -437,21 +494,7 @@ export default function ProfileScreen() {
               );
               return;
             }
-            const payload: UpdateChefProfilePayload = {
-              businessName: businessName.trim(),
-              description: description.trim(),
-              cuisines,
-              prepTime: prepTime.trim(),
-              minimumOrder: parseNumber(minimumOrder),
-              serviceRadius: parseNumber(serviceRadius),
-              addressLine1: addressLine1.trim(),
-              addressLine2: addressLine2.trim(),
-              city: city.trim(),
-              state: stateName.trim(),
-              postalCode: postalCode.trim(),
-              offersPickup,
-              offersSelfDelivery,
-            };
+            const payload = buildPayload();
             updateMutation.mutate(payload, {
               onSuccess: () => {
                 savedRef.current = true;
@@ -813,8 +856,9 @@ export default function ProfileScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.toggleLabel}>I deliver myself</Text>
                 <Text style={styles.toggleHint}>
-                  You deliver orders to the customer (free for now). You'll see
-                  their full address + phone for these orders.
+                  You deliver orders to the customer. You'll see their full
+                  address + phone for these orders. Set your pricing below
+                  (leave blank for free).
                 </Text>
               </View>
               <Switch
@@ -824,6 +868,67 @@ export default function ProfileScreen() {
               />
             </View>
           </View>
+
+          {/* Self-delivery pricing + comfort radius — only relevant when the
+              chef delivers themselves. Fee = base + max(0, distance −
+              freeRadius) × perKm, capped at maxFee. All blank/0 = free. */}
+          {offersSelfDelivery ? (
+            <>
+              <Text style={styles.sectionLabel}>SELF-DELIVERY PRICING</Text>
+              <View style={styles.hairlineGroup}>
+                <EditableField
+                  label="Base fee (₹)"
+                  value={selfDeliveryBaseFee}
+                  onChangeText={setSelfDeliveryBaseFee}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                />
+                <EditableField
+                  label="Free within (km)"
+                  value={selfDeliveryFreeRadius}
+                  onChangeText={setSelfDeliveryFreeRadius}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                />
+                <EditableField
+                  label="Per km beyond (₹)"
+                  value={selfDeliveryPerKm}
+                  onChangeText={setSelfDeliveryPerKm}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                />
+                <EditableField
+                  label="Max fee (₹)"
+                  value={selfDeliveryMaxFee}
+                  onChangeText={setSelfDeliveryMaxFee}
+                  keyboardType="decimal-pad"
+                  placeholder="0 = uncapped"
+                  hasBorderBottom={false}
+                />
+              </View>
+              <Text style={styles.fieldGroupHint}>
+                Customers see this fee at checkout. Leave everything blank to
+                deliver for free.
+              </Text>
+
+              <Text style={styles.sectionLabel}>SELF-DELIVERY RANGE</Text>
+              <View style={styles.hairlineGroup}>
+                <EditableField
+                  label="Comfortable range (km)"
+                  value={selfDeliveryMaxDistance}
+                  onChangeText={setSelfDeliveryMaxDistance}
+                  keyboardType="decimal-pad"
+                  placeholder="0 = no limit"
+                  hasBorderBottom={false}
+                />
+              </View>
+              <Text style={styles.fieldGroupHint}>
+                A soft heads-up only. If an order is farther than this you'll see
+                a warning and can choose to deliver or cancel — customers can
+                still pick chef delivery at any distance.
+              </Text>
+            </>
+          ) : null}
 
           {/* KITCHEN PHOTOS — horizontal strip inside its own white card */}
           <Text style={styles.sectionLabel}>KITCHEN PHOTOS</Text>
@@ -1227,6 +1332,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
+  },
+  // Caption under a field group — pulled up to sit close to the group it
+  // explains, since hairlineGroup carries a large bottom margin.
+  fieldGroupHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+    lineHeight: 18,
+    paddingHorizontal: theme.spacing[4],
+    marginTop: -theme.spacing[4],
+    marginBottom: theme.spacing[6],
   },
 
   // Error state

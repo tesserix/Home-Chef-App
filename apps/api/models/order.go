@@ -343,6 +343,13 @@ type ChefOrderDetailResponse struct {
 	DeliveryInstructions string `json:"deliveryInstructions,omitempty"`
 	// Payment method
 	PaymentMethod string `json:"paymentMethod,omitempty"`
+	// Chef self-delivery distance gate (chef_delivery only). DistanceKm is the
+	// chef→drop straight-line distance; MaxDistanceKm is the chef's configured
+	// comfort radius. The vendor app shows a soft "beyond your range" warning
+	// when DistanceKm > MaxDistanceKm > 0. Both 0/omitted for other fulfillment
+	// modes (or when coords are missing — distance unknown).
+	SelfDeliveryDistanceKm    float64 `json:"selfDeliveryDistanceKm,omitempty"`
+	SelfDeliveryMaxDistanceKm float64 `json:"selfDeliveryMaxDistanceKm,omitempty"`
 }
 
 func (o *Order) ToResponse() OrderResponse {
