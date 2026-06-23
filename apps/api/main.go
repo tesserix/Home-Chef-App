@@ -13,6 +13,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
+	"github.com/homechef/api/internal/observability"
 	"github.com/homechef/api/logger"
 	"github.com/homechef/api/routes"
 	"github.com/homechef/api/services"
@@ -63,6 +64,20 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = traceShutdown(shutdownCtx)
+	}()
+
+	// OpenTelemetry traces + metrics over OTLP gRPC to the in-cluster collector.
+	// Set up after the Cloud Trace provider so the OTLP provider becomes the
+	// active global Tracer/Meter provider. No-ops when OTEL_EXPORTER_OTLP_ENDPOINT
+	// is empty, so local dev boots without a collector.
+	otelShutdown, oerr := observability.Init(context.Background(), "homechef-api")
+	if oerr != nil {
+		log.Printf("Warning: observability init failed: %v", oerr)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = otelShutdown(shutdownCtx)
 	}()
 
 	// Connect to database

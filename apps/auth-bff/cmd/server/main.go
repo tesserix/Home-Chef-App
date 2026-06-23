@@ -24,6 +24,7 @@ import (
 	"github.com/homechef/auth-bff/internal/config"
 	gippkg "github.com/homechef/auth-bff/internal/gip"
 	"github.com/homechef/auth-bff/internal/headerproxy"
+	"github.com/homechef/auth-bff/internal/observability"
 	"github.com/homechef/auth-bff/internal/obsmw"
 	oidcpkg "github.com/homechef/auth-bff/internal/oidc"
 	"github.com/homechef/auth-bff/internal/productregistry"
@@ -32,6 +33,10 @@ import (
 	"github.com/homechef/auth-bff/internal/tracing"
 )
 
+// serviceName identifies this service in OpenTelemetry resources, the gin OTel
+// middleware, and span attributes.
+const serviceName = "auth-bff"
+
 func main() {
 	_ = godotenv.Load(".env.local")
 
@@ -39,6 +44,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	// OpenTelemetry → in-cluster OTLP collector (traces + metrics). No-ops
+	// when OTEL_EXPORTER_OTLP_ENDPOINT is unset (local dev).
+	otelShutdown, oerr := observability.Init(context.Background(), serviceName)
+	if oerr != nil {
+		log.Printf("warning: observability init failed: %v", oerr)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = otelShutdown(shutdownCtx)
+	}()
 
 	// OpenTelemetry → Cloud Trace (same project as homechef-api when
 	// GCP_PROJECT_ID is set). No-ops cleanly without creds/project.
@@ -96,7 +113,7 @@ func main() {
 	// Correlation id first, then an OTel span per request, then echo the trace
 	// id — so a login can be followed across auth-bff and the API in Cloud Trace.
 	r.Use(obsmw.RequestID())
-	r.Use(otelgin.Middleware("auth-bff"))
+	r.Use(otelgin.Middleware(serviceName))
 	r.Use(obsmw.TraceContext())
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
