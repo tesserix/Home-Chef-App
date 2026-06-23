@@ -90,11 +90,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
+      - name: Configure GitHub Packages auth
+        # @tesserix/otto-widget is GH-Packages-only and the hoisted layout pulls
+        # it into every workspace install, so even mobile needs the token.
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
       - name: Install dependencies
         # eas build evaluates the app config + Expo config plugins (expo-router,
         # etc.) on the runner before queuing the cloud build, so node_modules
-        # must be present. @tesserix packages are public npm (no token), and
-        # node-linker=hoisted (root .npmrc) gives Expo/RN the flat layout it needs.
+        # must be present. node-linker=hoisted (root .npmrc) gives Expo/RN the
+        # flat layout it needs.
         run: pnpm install --filter @homechef/mobile-${{ matrix.app }}... --frozen-lockfile
 
       - name: Set up EAS CLI
