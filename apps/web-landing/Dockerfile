@@ -17,7 +17,15 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY patches ./patches
 COPY apps/web-landing/package.json ./apps/web-landing/
 
-RUN pnpm install --frozen-lockfile --filter @homechef/web-landing...
+# BuildKit secret so the GitHub Packages token never lands in a layer.
+# @tesserix/otto-widget is published only to GitHub Packages, and pnpm's
+# hoisted layout fetches it even though the landing doesn't import it, so the
+# install needs GH Packages auth.
+RUN --mount=type=secret,id=npm_token \
+    NPM_TOKEN=$(cat /run/secrets/npm_token) && \
+    echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc && \
+    pnpm install --frozen-lockfile --filter @homechef/web-landing... && \
+    sed -i '/_authToken/d' .npmrc
 
 COPY apps/web-landing ./apps/web-landing
 WORKDIR /app/apps/web-landing
