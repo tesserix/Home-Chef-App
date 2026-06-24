@@ -244,10 +244,14 @@ export function useUpdateOrderStatus() {
     mutationFn: ({
       orderId,
       status,
+      carrier,
     }: {
       orderId: string;
       status: Order['status'];
-    }) => api.put(`/chef/orders/${orderId}/status`, { status }),
+      // Optional carrier choice the chef makes at Mark Ready (self-delivery
+      // chefs only): 'chef_delivery' = I'll deliver, 'delivery' = hand to a rider.
+      carrier?: 'chef_delivery' | 'delivery';
+    }) => api.put(`/chef/orders/${orderId}/status`, { status, carrier }),
     onMutate: async ({ orderId, status }) => {
       await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'detail', orderId] });
       const previous = queryClient.getQueryData<Order>(['chef', 'orders', 'detail', orderId]);

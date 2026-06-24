@@ -862,10 +862,27 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 
 	var req struct {
 		Status string `json:"status" binding:"required"`
+		// Optional carrier choice the chef makes at Mark Ready (self-delivery
+		// chefs only): "chef_delivery" = I'll deliver, "delivery" = hand to a rider.
+		Carrier string `json:"carrier"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Apply the chef's carrier choice — allowed only before the order is en route.
+	if req.Carrier != "" {
+		if order.Status == models.OrderStatusPickedUp || order.Status == models.OrderStatusDelivered {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "carrier is locked once the order is out for delivery"})
+			return
+		}
+		ft, err := resolveReadyCarrier(order.FulfillmentType, req.Carrier, chef)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		order.FulfillmentType = ft
 	}
 
 	priorStatus := order.Status
@@ -1251,11 +1268,12 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		PaymentMethod: order.PaymentMethod,
 	}
 
-	// Chef self-delivery: surface the chef→drop distance and the chef's
-	// configured comfort radius so the vendor app can show a soft "beyond your
-	// range" warning. Soft only — chef_delivery is still offered at checkout
-	// regardless of distance; the gate is the chef's per-order decision.
-	if order.FulfillmentType == models.FulfillmentChefDelivery {
+	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
+	// decision: on chef_delivery orders AND on delivery orders the chef COULD
+	// self-deliver (so the distance is visible before they choose "I'll deliver").
+	// Soft only — the gate is the chef's per-order decision, not the distance.
+	if order.FulfillmentType == models.FulfillmentChefDelivery ||
+		(order.FulfillmentType == models.FulfillmentDelivery && chef.OffersSelfDelivery) {
 		detail.SelfDeliveryDistanceKm = services.ComputeSelfDeliveryDistanceKm(
 			chef, order.DeliveryLatitude, order.DeliveryLongitude,
 		)

@@ -163,10 +163,8 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
-		// "I'll have it delivered" → the chef decides who carries it.
-		if chef.OffersSelfDelivery {
-			return models.FulfillmentChefDelivery, nil
-		}
+		// The carrier (chef vs 3PL) is chosen by the chef at Mark Ready, not at
+		// creation — so a delivery order is always created as plain delivery.
 		return models.FulfillmentDelivery, nil
 	case models.FulfillmentPickup:
 		if !chef.OffersPickup {
@@ -182,6 +180,30 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 		return models.FulfillmentChefDelivery, nil
 	default:
 		return "", fmt.Errorf("unsupported fulfillment option")
+	}
+}
+
+// resolveReadyCarrier resolves the chef's per-order carrier choice made at Mark
+// Ready. The customer chose delivery vs pickup; the chef chooses who carries a
+// delivery order. Empty keeps the current type. Only delivery↔chef_delivery
+// switches are allowed, only for a self-delivering chef, and never for pickup.
+func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile) (models.FulfillmentType, error) {
+	if requested == "" {
+		return current, nil
+	}
+	if current == models.FulfillmentPickup {
+		return "", fmt.Errorf("pickup orders have no carrier choice")
+	}
+	switch models.FulfillmentType(requested) {
+	case models.FulfillmentChefDelivery:
+		if !chef.OffersSelfDelivery {
+			return "", fmt.Errorf("this kitchen does not offer self-delivery")
+		}
+		return models.FulfillmentChefDelivery, nil
+	case models.FulfillmentDelivery:
+		return models.FulfillmentDelivery, nil
+	default:
+		return "", fmt.Errorf("unsupported carrier")
 	}
 }
 
