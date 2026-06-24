@@ -71,14 +71,28 @@ const STATUS_LABEL: Record<OrderDetailStatus, string> = {
   rejected: 'Rejected',
 };
 
-// Pickup orders have no driver leg, so the terminal `delivered` status reads
-// "Collected" and the "ready" state means "ready for the customer to collect".
+// Carrier-aware status wording. The generic STATUS_LABEL only fits pickup
+// orders; delivery/chef-delivery need their own copy so a chef-delivery order
+// never reads "awaiting pickup"/"awaiting driver":
+//  • pickup: terminal reads "Collected", ready reads "Ready for pickup".
+//  • chef_delivery: ready reads "Ready", picked_up reads "Out for delivery".
+//  • delivery (3PL): ready reads "Ready · awaiting rider", picked_up reads
+//    "Picked up by rider".
 function statusLabelFor(
   status: OrderDetailStatus,
   fulfillment: FulfillmentType,
 ): string {
   if (fulfillment === 'pickup') {
     if (status === 'delivered' || status === 'picked_up') return 'Collected';
+    if (status === 'ready') return 'Ready for pickup';
+  }
+  if (status === 'ready') {
+    if (fulfillment === 'chef_delivery') return 'Ready';
+    if (fulfillment === 'delivery') return 'Ready · awaiting rider';
+  }
+  if (status === 'picked_up') {
+    if (fulfillment === 'chef_delivery') return 'Out for delivery';
+    if (fulfillment === 'delivery') return 'Picked up by rider';
   }
   return STATUS_LABEL[status] ?? status;
 }
@@ -253,6 +267,8 @@ interface FooterActionsProps {
   onMarkReady: () => void;
   /** Mark Ready carrying the chef's carrier choice (self-delivery chefs). */
   onReadyCarrier: (carrier: 'chef_delivery' | 'delivery') => void;
+  /** Flip deliver↔rider while the order is still `ready` (no new photo). */
+  onSwitchCarrier: (carrier: 'chef_delivery' | 'delivery') => void;
   onMarkHandedOver: () => void;
   onMarkOutForDelivery: () => void;
   onMarkDelivered: () => void;
@@ -276,6 +292,7 @@ function FooterActions({
   onMarkPreparing,
   onMarkReady,
   onReadyCarrier,
+  onSwitchCarrier,
   onMarkHandedOver,
   onMarkOutForDelivery,
   onMarkDelivered,
@@ -507,19 +524,19 @@ function FooterActions({
     }
     if (isChefDelivery) {
       // The chef delivers themselves → they advance the order out for delivery.
+      // Until they're en route they can still hand it to a rider instead.
       return (
-        <View style={styles.footer}>
+        <View style={[styles.footer, styles.footerColumn]}>
           <Pressable
             onPress={onMarkOutForDelivery}
             disabled={disabled}
-            style={styles.flex1}
             accessibilityRole="button"
             accessibilityLabel="Mark order out for delivery"
           >
             {({ pressed }) => (
               <View
                 style={[
-                  styles.primaryBtnFull,
+                  styles.carrierBtnPrimary,
                   pressed && { opacity: 0.85 },
                   disabled && { opacity: 0.4 },
                 ]}
@@ -528,13 +545,37 @@ function FooterActions({
               </View>
             )}
           </Pressable>
+          <Pressable
+            onPress={() => onSwitchCarrier('delivery')}
+            disabled={disabled}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Hand this order to a rider instead"
+            style={styles.switchLinkWrap}
+          >
+            <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
+          </Pressable>
           {cancelLink}
         </View>
       );
     }
+    // 3PL delivery, still `ready` → waiting on a rider. A self-delivering chef
+    // can take it over themselves before anyone is en route.
     return (
-      <View style={[styles.footer, styles.footerCaptionWrap]}>
-        <Text style={styles.footerCaption}>{`Waiting for driver to pick up${readyElapsed}.`}</Text>
+      <View style={[styles.footer, styles.footerColumn, styles.footerCaptionWrap]}>
+        <Text style={styles.footerCaption}>{`Waiting for a rider to pick up${readyElapsed}.`}</Text>
+        {canSelfDeliver ? (
+          <Pressable
+            onPress={() => onSwitchCarrier('chef_delivery')}
+            disabled={disabled}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Deliver this order yourself instead"
+            style={styles.switchLinkWrap}
+          >
+            <Text style={styles.switchLinkLabel}>I&apos;ll deliver this instead</Text>
+          </Pressable>
+        ) : null}
         {cancelLink}
       </View>
     );
@@ -685,6 +726,27 @@ export default function OrderDetailScreen() {
     } catch {
       showToast({
         message: 'Could not update the order. Please try again.',
+        tone: 'error',
+      });
+    }
+  }
+
+  // Re-send `ready` with the other carrier to flip deliver↔rider while the
+  // order is still on the chef's side (before anyone is en route). No new photo
+  // — the ready photo already exists; only the carrier flips server-side.
+  async function switchReadyCarrier(
+    carrier: 'chef_delivery' | 'delivery',
+  ): Promise<void> {
+    if (!order || updateStatus.isPending) return;
+    try {
+      await updateStatus.mutateAsync({
+        orderId: order.id,
+        status: 'ready',
+        carrier,
+      });
+    } catch {
+      showToast({
+        message: 'Could not switch the carrier. Please try again.',
         tone: 'error',
       });
     }
@@ -1169,6 +1231,7 @@ export default function OrderDetailScreen() {
         }
         onMarkReady={() => captureAndAdvance('ready', 'ready')}
         onReadyCarrier={(carrier) => captureAndAdvanceWithCarrier(carrier)}
+        onSwitchCarrier={(carrier) => switchReadyCarrier(carrier)}
         onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
         onMarkOutForDelivery={() =>
           updateStatus.mutate({ orderId: order.id, status: 'picked_up' })
@@ -1673,6 +1736,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
+  },
+  // Quiet carrier-switch link (deliver↔rider) in the `ready` footer — same
+  // low-affordance treatment as the cancel link but in muted ink so it reads
+  // as a secondary "actually, do it the other way" affordance.
+  switchLinkWrap: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+  },
+  switchLinkLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
   },
   // Per-line cancel — smaller, lower-affordance link inside the item
   // row. The whole-order cancel is the loud one; this is for the chef
