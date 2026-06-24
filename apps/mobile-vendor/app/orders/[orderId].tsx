@@ -931,13 +931,13 @@ export default function OrderDetailScreen() {
     order.selfDeliveryMaxDistanceKm > 0 &&
     order.selfDeliveryDistanceKm > order.selfDeliveryMaxDistanceKm;
 
-  // A still-`delivery` order the chef COULD self-deliver: the backend surfaces a
-  // distance/radius only when the chef offers self-delivery, so the presence of
-  // either value signals eligibility for the Mark-Ready carrier choice. If the
-  // drop is beyond the chef's radius, steer them to "Hand to a rider".
+  // A still-`delivery` order the chef COULD self-deliver. Gate on the chef's
+  // self-delivery CAPABILITY flag — NOT on distance data, which is 0 when the
+  // chef set no comfort radius / coords are missing (the old heuristic hid the
+  // carrier choice for exactly those chefs). The distance fields below stay
+  // purely for the soft over-range nudge.
   const canSelfDeliver =
-    order.fulfillmentType === 'delivery' &&
-    (order.selfDeliveryMaxDistanceKm > 0 || order.selfDeliveryDistanceKm > 0);
+    order.fulfillmentType === 'delivery' && order.offersSelfDelivery;
   const overReadyRange =
     canSelfDeliver &&
     order.selfDeliveryMaxDistanceKm > 0 &&

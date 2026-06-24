@@ -74,6 +74,11 @@ export interface OrderDetail {
   deliveryInstructions?: string;
   timing: OrderDetailTiming;
   pricing: OrderDetailPricing;
+  // Authoritative self-delivery CAPABILITY (the chef's "I deliver myself"
+  // toggle). The Mark-Ready carrier choice is gated on THIS — not on the
+  // distance fields below, which are 0 when the chef set no radius / coords are
+  // missing and so can't distinguish "can't self-deliver" from "no radius set".
+  offersSelfDelivery: boolean;
   // Chef self-delivery distance gate (chef_delivery only). distanceKm is the
   // chef→drop straight-line distance; maxDistanceKm is the chef's configured
   // comfort radius. The screen shows a soft "beyond your range" warning when
@@ -127,7 +132,8 @@ interface RawChefOrderDetailResponse {
   tax?: number;
   chefTip?: number;
   total?: number;
-  // Self-delivery distance gate (chef_delivery only)
+  // Self-delivery capability + distance gate
+  offersSelfDelivery?: boolean;
   selfDeliveryDistanceKm?: number;
   selfDeliveryMaxDistanceKm?: number;
 }
@@ -172,6 +178,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       chefTip: raw.chefTip ?? 0,
       total: raw.total ?? 0,
     },
+    offersSelfDelivery: raw.offersSelfDelivery ?? false,
     selfDeliveryDistanceKm: raw.selfDeliveryDistanceKm ?? 0,
     selfDeliveryMaxDistanceKm: raw.selfDeliveryMaxDistanceKm ?? 0,
   };

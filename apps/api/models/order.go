@@ -343,6 +343,12 @@ type ChefOrderDetailResponse struct {
 	DeliveryInstructions string `json:"deliveryInstructions,omitempty"`
 	// Payment method
 	PaymentMethod string `json:"paymentMethod,omitempty"`
+	// OffersSelfDelivery is the chef's self-delivery CAPABILITY (the "I deliver
+	// myself" toggle), surfaced so the vendor app can offer the Mark-Ready
+	// carrier choice on a delivery order. This is the authoritative gate — NOT
+	// the distance fields below, which are 0 when the chef set no radius or
+	// coords are missing and must never be used to infer the capability.
+	OffersSelfDelivery bool `json:"offersSelfDelivery"`
 	// Chef self-delivery distance gate (chef_delivery only). DistanceKm is the
 	// chef→drop straight-line distance; MaxDistanceKm is the chef's configured
 	// comfort radius. The vendor app shows a soft "beyond your range" warning
