@@ -1,12 +1,16 @@
 # fe3dr.com landing Dockerfile.
-# Builds the Next.js static export (out/) and serves it with nginx.
+# Builds the Next.js static export (out/) and serves it with the hardened
+# tesserix base images — same as the apps/web SPA — so the homechef-web image
+# clears the Trivy CRITICAL/HIGH gate (base-nginx-spa is non-root + Trivy-clean,
+# unlike the raw nginx:alpine base which lagged the security feed).
 #
 # NOTE: Build from monorepo root with:
 #   docker build -f apps/web-landing/Dockerfile .
 
 # ─── builder ───────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
+# base-node-builder-22: corepack + pnpm + libc6-compat pre-baked.
+FROM ghcr.io/tesserix/base-node-builder-22:latest AS builder
+USER 0:0
 WORKDIR /app
 
 # Monorepo root files required for pnpm workspace resolution.
@@ -33,16 +37,13 @@ WORKDIR /app/apps/web-landing
 RUN pnpm build
 
 # ─── runtime ───────────────────────────────────────────────────────────
-# nginx:1.29-alpine aligns with the tesserix base-nginx-spa the other SPAs use.
-# `apk upgrade` pulls the latest patched Alpine packages (openssl/libxml2/zlib/
-# musl/libpng/libexpat) so the image clears the Trivy CRITICAL/HIGH gate (#15)
-# — the pinned base tag lags a few package revisions behind the security feed.
-FROM nginx:1.29-alpine AS runtime
+# base-nginx-spa: non-root uid 10001, envsubst on /etc/nginx/templates,
+# Trivy-clean. The apps/web SPA uses the same base + passes the gate. The
+# landing's nginx.conf has no ${VAR}s, so envsubst leaves it unchanged.
+FROM ghcr.io/tesserix/base-nginx-spa:latest AS runtime
 
-RUN apk upgrade --no-cache
-
-COPY apps/web-landing/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/apps/web-landing/out /usr/share/nginx/html
+COPY apps/web-landing/nginx.conf /etc/nginx/templates/default.conf.template
+COPY --from=builder --chown=10001:10001 /app/apps/web-landing/out /usr/share/nginx/html
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
