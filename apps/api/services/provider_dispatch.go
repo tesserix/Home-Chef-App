@@ -22,7 +22,7 @@ import (
 // is not treated as an error so the chef's status update still succeeds.
 func DispatchOrderDelivery(orderID uuid.UUID) error {
 	var order models.Order
-	if err := database.DB.Preload("Chef").Preload("Customer").
+	if err := database.DB.Preload("Chef").Preload("Chef.User").Preload("Customer").
 		First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("dispatch: load order: %w", err)
 	}
@@ -58,15 +58,25 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 
 	req := ProviderDeliveryRequest{
 		OrderID:           order.ID,
+		ClientOrderID:     order.OrderNumber,
 		PickupAddress:     joinAddress(order.Chef.AddressLine1, order.Chef.City),
+		PickupName:        order.Chef.BusinessName,
+		PickupPhone:       order.Chef.User.Phone,
 		PickupLat:         order.Chef.Latitude,
 		PickupLng:         order.Chef.Longitude,
+		PickupCity:        order.Chef.City,
+		PickupState:       order.Chef.State,
+		PickupPincode:     order.Chef.PostalCode,
 		DropoffAddress:    joinAddress(order.DeliveryAddressLine1, order.DeliveryAddressCity),
 		DropoffLat:        order.DeliveryLatitude,
 		DropoffLng:        order.DeliveryLongitude,
+		DropoffCity:       order.DeliveryAddressCity,
+		DropoffState:      order.DeliveryAddressState,
+		DropoffPincode:    order.DeliveryAddressPostalCode,
 		CustomerName:      strings.TrimSpace(order.Customer.FirstName + " " + order.Customer.LastName),
 		CustomerPhone:     order.Customer.Phone,
 		ItemDescription:   fmt.Sprintf("Order %s", order.OrderNumber),
+		OrderValue:        order.Subtotal,
 		Weight:            1.0,                // TODO: derive from item count/weights when available
 		ScheduledPickupAt: order.ScheduledFor, // #51: timed to the chosen delivery slot
 	}
