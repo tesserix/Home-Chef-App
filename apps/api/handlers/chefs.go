@@ -511,6 +511,18 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 		"state":           chef.State,
 		"postalCode":      chef.PostalCode,
 		"operatingHours":  operatingHours,
+		// Fulfillment capabilities + self-delivery pricing. These MUST be
+		// returned so the vendor profile editor reflects the saved state — when
+		// they were omitted the toggles always re-read as OFF after a reload, and
+		// the next save echoed that stale OFF straight back into the DB, silently
+		// disabling pickup/self-delivery the chef had turned on.
+		"offersPickup":              chef.OffersPickup,
+		"offersSelfDelivery":        chef.OffersSelfDelivery,
+		"selfDeliveryBaseFee":       chef.SelfDeliveryBaseFee,
+		"selfDeliveryFreeRadiusKm":  chef.SelfDeliveryFreeRadiusKm,
+		"selfDeliveryPerKm":         chef.SelfDeliveryPerKm,
+		"selfDeliveryMaxFee":        chef.SelfDeliveryMaxFee,
+		"selfDeliveryMaxDistanceKm": chef.SelfDeliveryMaxDistanceKm,
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -1267,6 +1279,12 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		// address detail. The 3PL rider receives it server-to-server instead.
 		PaymentMethod: order.PaymentMethod,
 	}
+
+	// The authoritative self-delivery CAPABILITY flag — the vendor app gates the
+	// Mark-Ready carrier choice on this, NOT on the distance fields below (which
+	// are 0 when the chef set no radius or coords are missing, so they can't tell
+	// "can't self-deliver" apart from "no radius configured").
+	detail.OffersSelfDelivery = chef.OffersSelfDelivery
 
 	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
 	// decision: on chef_delivery orders AND on delivery orders the chef COULD
