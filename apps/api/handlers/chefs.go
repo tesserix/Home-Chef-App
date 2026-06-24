@@ -1268,11 +1268,12 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 		PaymentMethod: order.PaymentMethod,
 	}
 
-	// Chef self-delivery: surface the chef→drop distance and the chef's
-	// configured comfort radius so the vendor app can show a soft "beyond your
-	// range" warning. Soft only — chef_delivery is still offered at checkout
-	// regardless of distance; the gate is the chef's per-order decision.
-	if order.FulfillmentType == models.FulfillmentChefDelivery {
+	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
+	// decision: on chef_delivery orders AND on delivery orders the chef COULD
+	// self-deliver (so the distance is visible before they choose "I'll deliver").
+	// Soft only — the gate is the chef's per-order decision, not the distance.
+	if order.FulfillmentType == models.FulfillmentChefDelivery ||
+		(order.FulfillmentType == models.FulfillmentDelivery && chef.OffersSelfDelivery) {
 		detail.SelfDeliveryDistanceKm = services.ComputeSelfDeliveryDistanceKm(
 			chef, order.DeliveryLatitude, order.DeliveryLongitude,
 		)
