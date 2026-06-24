@@ -11,6 +11,11 @@ name: HomeChef Web - CI Build (paused)
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Push the image so Kargo deploys it to the homechef-web slot. WARNING: this OVERWRITES the live web-landing serving fe3dr.com. Leave false to only build-validate apps/web (no push, no deploy)."
+        type: boolean
+        default: false
   # Re-enable these when apps/web returns:
   # push:
   #   branches:
@@ -90,7 +95,10 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          # Guard against clobbering the live web-landing on the shared
+          # homechef-web slot: only push (→ Kargo deploys) on an explicit
+          # deploy=true dispatch. The default build-validates apps/web only.
+          push: ${{ inputs.deploy == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -115,8 +123,9 @@ jobs:
       # --- Security scanning (gated: fails the build on CRITICAL+HIGH) ---
       - name: Run Trivy vulnerability scanner
         id: trivy
-        if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@master
+        # Scans the pushed image by digest, so only when we actually pushed.
+        if: inputs.deploy == true
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_push.outputs.digest }}
           format: sarif
@@ -127,7 +136,7 @@ jobs:
           limit-severities-for-sarif: true
 
       - name: Upload Trivy results to GitHub Security tab
-        if: always() && github.event_name != 'pull_request'
+        if: always() && inputs.deploy == true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
