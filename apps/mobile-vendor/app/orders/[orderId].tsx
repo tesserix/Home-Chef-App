@@ -239,10 +239,20 @@ interface FooterActionsProps {
   /** ISO timestamp of the last status transition — used to compute
    *  waiting-for-driver elapsed time in the `ready` state. */
   updatedAt?: string;
+  /** True when this is a `delivery` order the chef could self-deliver — the
+   *  Mark-Ready footer then offers the I'll-deliver vs hand-to-rider choice. */
+  canSelfDeliver: boolean;
+  /** True when the drop is beyond the chef's self-delivery radius — visually
+   *  recommends "Hand to a rider" at the carrier choice. */
+  overRange: boolean;
+  selfDeliveryDistanceKm: number;
+  selfDeliveryMaxDistanceKm: number;
   onAccept: () => void;
   onReject: () => void;
   onMarkPreparing: () => void;
   onMarkReady: () => void;
+  /** Mark Ready carrying the chef's carrier choice (self-delivery chefs). */
+  onReadyCarrier: (carrier: 'chef_delivery' | 'delivery') => void;
   onMarkHandedOver: () => void;
   onMarkOutForDelivery: () => void;
   onMarkDelivered: () => void;
@@ -257,10 +267,15 @@ function FooterActions({
   total,
   disabled,
   updatedAt,
+  canSelfDeliver,
+  overRange,
+  selfDeliveryDistanceKm,
+  selfDeliveryMaxDistanceKm,
   onAccept,
   onReject,
   onMarkPreparing,
   onMarkReady,
+  onReadyCarrier,
   onMarkHandedOver,
   onMarkOutForDelivery,
   onMarkDelivered,
@@ -372,6 +387,65 @@ function FooterActions({
   }
 
   if (status === 'preparing') {
+    // Self-deliverable delivery order: the chef chooses, at Mark Ready, whether
+    // to deliver it themselves or hand it to a rider. Over-range orders emphasise
+    // "Hand to a rider" (primary) and de-emphasise "I'll deliver" (outline).
+    if (canSelfDeliver) {
+      return (
+        <View style={[styles.footer, styles.footerColumn]}>
+          {overRange ? (
+            <Text style={styles.carrierHint}>
+              {`This drop is ${selfDeliveryDistanceKm.toFixed(1)} km away — beyond your ${selfDeliveryMaxDistanceKm} km range. Handing it to a rider is recommended.`}
+            </Text>
+          ) : null}
+          <Pressable
+            onPress={() => onReadyCarrier('chef_delivery')}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel="Mark ready, I will deliver it myself"
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  overRange ? styles.carrierBtnSecondary : styles.carrierBtnPrimary,
+                  pressed && { opacity: 0.85 },
+                  disabled && { opacity: 0.4 },
+                ]}
+              >
+                <Text
+                  style={overRange ? styles.carrierLabelSecondary : styles.primaryLabel}
+                >
+                  Ready · I&apos;ll deliver
+                </Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => onReadyCarrier('delivery')}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel="Mark ready, hand to a rider"
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  overRange ? styles.carrierBtnPrimary : styles.carrierBtnSecondary,
+                  pressed && { opacity: 0.85 },
+                  disabled && { opacity: 0.4 },
+                ]}
+              >
+                <Text
+                  style={overRange ? styles.primaryLabel : styles.carrierLabelSecondary}
+                >
+                  Ready · Hand to a rider
+                </Text>
+              </View>
+            )}
+          </Pressable>
+          {cancelLink}
+        </View>
+      );
+    }
     return (
       <View style={styles.footer}>
         <Pressable
@@ -388,7 +462,9 @@ function FooterActions({
                 disabled && { opacity: 0.4 },
               ]}
             >
-              <Text style={styles.primaryLabel}>Mark ready for pickup</Text>
+              <Text style={styles.primaryLabel}>
+                {isPickup ? 'Mark ready for pickup' : 'Mark ready'}
+              </Text>
             </View>
           )}
         </Pressable>
@@ -571,30 +647,7 @@ export default function OrderDetailScreen() {
     nextStatus: 'ready' | 'delivered',
   ): Promise<void> {
     if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
-
-    let asset: ImagePicker.ImagePickerAsset | undefined;
-    // Real devices capture a live photo (proof the food is genuinely ready).
-    // Simulators/emulators have no camera — the camera UI opens with no way to
-    // capture — so fall back to the photo library there. Device.isDevice is
-    // false only on a simulator/emulator, so production behaviour is unchanged.
-    const canUseCamera =
-      Device.isDevice &&
-      (await ImagePicker.requestCameraPermissionsAsync()).granted;
-    if (canUseCamera) {
-      const shot = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.6,
-      });
-      if (shot.canceled) return;
-      asset = shot.assets[0];
-    } else {
-      const lib = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.6,
-      });
-      if (lib.canceled) return;
-      asset = lib.assets[0];
-    }
+    const asset = await pickReadyPhoto();
     if (!asset?.uri) return;
 
     try {
@@ -603,6 +656,35 @@ export default function OrderDetailScreen() {
     } catch {
       showToast({
         message: 'Could not upload the photo. Please try again.',
+        tone: 'error',
+      });
+    }
+  }
+
+  // Mark Ready WITH a carrier choice (self-delivering chefs only): capture the
+  // ready photo, then advance to `ready` carrying the chef's carrier decision
+  // ('chef_delivery' = I'll deliver, 'delivery' = hand to a rider). Shares the
+  // camera/library capture with captureAndAdvance via pickReadyPhoto().
+  async function captureAndAdvanceWithCarrier(
+    carrier: 'chef_delivery' | 'delivery',
+  ): Promise<void> {
+    if (!order || uploadPhoto.isPending || updateStatus.isPending) return;
+    const asset = await pickReadyPhoto();
+    if (!asset?.uri) return;
+    try {
+      await uploadPhoto.mutateAsync({
+        orderId: order.id,
+        kind: 'ready',
+        uri: asset.uri,
+      });
+      await updateStatus.mutateAsync({
+        orderId: order.id,
+        status: 'ready',
+        carrier,
+      });
+    } catch {
+      showToast({
+        message: 'Could not update the order. Please try again.',
         tone: 'error',
       });
     }
@@ -784,6 +866,18 @@ export default function OrderDetailScreen() {
   const overSelfDeliveryRange =
     isChefDelivery &&
     isActiveStatus &&
+    order.selfDeliveryMaxDistanceKm > 0 &&
+    order.selfDeliveryDistanceKm > order.selfDeliveryMaxDistanceKm;
+
+  // A still-`delivery` order the chef COULD self-deliver: the backend surfaces a
+  // distance/radius only when the chef offers self-delivery, so the presence of
+  // either value signals eligibility for the Mark-Ready carrier choice. If the
+  // drop is beyond the chef's radius, steer them to "Hand to a rider".
+  const canSelfDeliver =
+    order.fulfillmentType === 'delivery' &&
+    (order.selfDeliveryMaxDistanceKm > 0 || order.selfDeliveryDistanceKm > 0);
+  const overReadyRange =
+    canSelfDeliver &&
     order.selfDeliveryMaxDistanceKm > 0 &&
     order.selfDeliveryDistanceKm > order.selfDeliveryMaxDistanceKm;
 
@@ -1064,12 +1158,17 @@ export default function OrderDetailScreen() {
           cancelOrder.isPending
         }
         updatedAt={order.timing.preparedAt ?? order.timing.orderedAt}
+        canSelfDeliver={canSelfDeliver}
+        overRange={overReadyRange}
+        selfDeliveryDistanceKm={order.selfDeliveryDistanceKm}
+        selfDeliveryMaxDistanceKm={order.selfDeliveryMaxDistanceKm}
         onAccept={() => triggerAction(order.id, 'accepted')}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
           updateStatus.mutate({ orderId: order.id, status: 'preparing' })
         }
         onMarkReady={() => captureAndAdvance('ready', 'ready')}
+        onReadyCarrier={(carrier) => captureAndAdvanceWithCarrier(carrier)}
         onMarkHandedOver={() => captureAndAdvance('handover', 'delivered')}
         onMarkOutForDelivery={() =>
           updateStatus.mutate({ orderId: order.id, status: 'picked_up' })
@@ -1081,6 +1180,33 @@ export default function OrderDetailScreen() {
       />
     </SafeAreaView>
   );
+}
+
+// pickReadyPhoto opens the camera on a real device (live proof the food is
+// genuinely ready) and falls back to the photo library on a simulator/emulator
+// (no camera there — Device.isDevice is false only on a simulator, so
+// production behaviour is unchanged). Returns the picked asset, or undefined if
+// the chef cancelled. Shared by the plain Mark-Ready flow and the carrier flow.
+async function pickReadyPhoto(): Promise<
+  ImagePicker.ImagePickerAsset | undefined
+> {
+  const canUseCamera =
+    Device.isDevice &&
+    (await ImagePicker.requestCameraPermissionsAsync()).granted;
+  if (canUseCamera) {
+    const shot = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+    });
+    if (shot.canceled) return undefined;
+    return shot.assets[0];
+  }
+  const lib = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.6,
+  });
+  if (lib.canceled) return undefined;
+  return lib.assets[0];
 }
 
 // downloadInvoice fetches the chef-side PDF invoice with the chef's
@@ -1470,8 +1596,47 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  // Stacks the two Mark-Ready carrier buttons (+ optional hint) vertically
+  // inside the footer instead of the default side-by-side row.
+  footerColumn: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: theme.spacing[2],
+  },
   footerCaptionWrap: {
     justifyContent: 'center',
+  },
+  // Carrier choice buttons — full-width (no flex, so they don't stretch
+  // vertically in the column footer). Primary = ink fill, secondary = ink
+  // outline. The emphasis swaps when the drop is over the chef's range.
+  carrierBtnPrimary: {
+    backgroundColor: theme.colors.ink.DEFAULT,
+    borderRadius: theme.radius.md,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  carrierBtnSecondary: {
+    backgroundColor: theme.colors.paper,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.strong,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  carrierLabelSecondary: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    letterSpacing: 0.3,
+  },
+  carrierHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 20,
+    paddingHorizontal: theme.spacing[1],
   },
   footerCaption: {
     fontFamily: 'Inter',
