@@ -42,6 +42,32 @@ func TestResolveFulfillment(t *testing.T) {
 	}
 }
 
+func TestResolveReadyCarrier(t *testing.T) {
+	self := models.ChefProfile{OffersSelfDelivery: true}
+	noSelf := models.ChefProfile{}
+
+	// no carrier requested → keep current
+	if ft, err := resolveReadyCarrier(models.FulfillmentDelivery, "", self); err != nil || ft != models.FulfillmentDelivery {
+		t.Fatalf("empty keeps current; got %q err=%v", ft, err)
+	}
+	// self-delivering chef picks "I'll deliver"
+	if ft, err := resolveReadyCarrier(models.FulfillmentDelivery, "chef_delivery", self); err != nil || ft != models.FulfillmentChefDelivery {
+		t.Fatalf("want chef_delivery; got %q err=%v", ft, err)
+	}
+	// switch back to rider while still delivery-side
+	if ft, err := resolveReadyCarrier(models.FulfillmentChefDelivery, "delivery", self); err != nil || ft != models.FulfillmentDelivery {
+		t.Fatalf("want delivery; got %q err=%v", ft, err)
+	}
+	// chef who doesn't self-deliver cannot pick chef_delivery
+	if _, err := resolveReadyCarrier(models.FulfillmentDelivery, "chef_delivery", noSelf); err == nil {
+		t.Fatal("non-self-delivering chef must be rejected")
+	}
+	// pickup orders reject any carrier choice
+	if _, err := resolveReadyCarrier(models.FulfillmentPickup, "chef_delivery", self); err == nil {
+		t.Fatal("pickup orders must reject a carrier choice")
+	}
+}
+
 func TestChefTrackCoords_PickupIsExact(t *testing.T) {
 	o := models.Order{FulfillmentType: models.FulfillmentPickup}
 	o.Chef.ID = uuid.New()

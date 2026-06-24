@@ -862,10 +862,27 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 
 	var req struct {
 		Status string `json:"status" binding:"required"`
+		// Optional carrier choice the chef makes at Mark Ready (self-delivery
+		// chefs only): "chef_delivery" = I'll deliver, "delivery" = hand to a rider.
+		Carrier string `json:"carrier"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Apply the chef's carrier choice — allowed only before the order is en route.
+	if req.Carrier != "" {
+		if order.Status == models.OrderStatusPickedUp || order.Status == models.OrderStatusDelivered {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "carrier is locked once the order is out for delivery"})
+			return
+		}
+		ft, err := resolveReadyCarrier(order.FulfillmentType, req.Carrier, chef)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		order.FulfillmentType = ft
 	}
 
 	priorStatus := order.Status

@@ -183,6 +183,30 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 	}
 }
 
+// resolveReadyCarrier resolves the chef's per-order carrier choice made at Mark
+// Ready. The customer chose delivery vs pickup; the chef chooses who carries a
+// delivery order. Empty keeps the current type. Only delivery↔chef_delivery
+// switches are allowed, only for a self-delivering chef, and never for pickup.
+func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile) (models.FulfillmentType, error) {
+	if requested == "" {
+		return current, nil
+	}
+	if current == models.FulfillmentPickup {
+		return "", fmt.Errorf("pickup orders have no carrier choice")
+	}
+	switch models.FulfillmentType(requested) {
+	case models.FulfillmentChefDelivery:
+		if !chef.OffersSelfDelivery {
+			return "", fmt.Errorf("this kitchen does not offer self-delivery")
+		}
+		return models.FulfillmentChefDelivery, nil
+	case models.FulfillmentDelivery:
+		return models.FulfillmentDelivery, nil
+	default:
+		return "", fmt.Errorf("unsupported carrier")
+	}
+}
+
 type CreateAddressRequest struct {
 	Line1      string `json:"line1" binding:"required"`
 	Line2      string `json:"line2"`
