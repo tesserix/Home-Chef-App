@@ -64,6 +64,8 @@ func ClientFor(p *models.DeliveryProvider) (DeliveryProviderClient, bool) {
 	switch p.Code {
 	case "shadowfax":
 		return newShadowfaxClient(p), true
+	case "borzo":
+		return newBorzoClient(p), true
 	default:
 		return nil, false
 	}
