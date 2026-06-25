@@ -56,6 +56,10 @@ type Config struct {
 	RazorpayKeySecret     string
 	RazorpayWebhookSecret string
 
+	// Shadowfax 3PL (from Secret Manager; empty leaves the provider disabled)
+	ShadowfaxAPIToken      string
+	ShadowfaxWebhookSecret string
+
 	// Email — SendGrid primary, Resend fallback
 	SendGridAPIKey string
 	ResendAPIKey   string
@@ -232,6 +236,9 @@ func Load() {
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),
 		RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
 		RazorpayWebhookSecret: getEnv("RAZORPAY_WEBHOOK_SECRET", ""),
+
+		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
+		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
 
 		// Email — SendGrid primary, Resend fallback
 		SendGridAPIKey: getEnv("SENDGRID_API_KEY", ""),
