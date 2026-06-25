@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -227,6 +228,13 @@ export default function OrderDetailScreen() {
     order.status === 'picked_up' || order.status === 'delivering';
   const showMap = isActiveOrder && (isEnRoute || driverIsLive);
 
+  // 3PL (Shadowfax) live-tracking page. The Unified API gives no raw rider GPS,
+  // so when a hosted tracking URL is present on an active order we offer a
+  // "Track live" button that opens it rather than plotting a rider ourselves.
+  const trackLiveUrl = isActiveOrder
+    ? tracking?.delivery?.externalTrackingUrl
+    : undefined;
+
   const subtotal = order.items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
@@ -406,6 +414,23 @@ export default function OrderDetailScreen() {
             </Pressable>
           </View>
         )}
+
+        {/* 3PL live-tracking — opens the courier's hosted live map (we have no
+            raw rider GPS for our own map on the Unified API). */}
+        {trackLiveUrl ? (
+          <Pressable
+            onPress={() => WebBrowser.openBrowserAsync(trackLiveUrl)}
+            accessibilityRole="button"
+            accessibilityLabel="Track your delivery live"
+            style={styles.trackLiveBtn}
+          >
+            {({ pressed }) => (
+              <View style={[styles.trackLiveInner, pressed && { opacity: 0.85 }]}>
+                <Text style={styles.trackLiveLabel}>Track live</Text>
+              </View>
+            )}
+          </Pressable>
+        ) : null}
 
         {/* Inline map card — only while the order is actually en route (a driver/
             chef is moving). Tapping opens the full-screen tracking experience.
@@ -864,6 +889,23 @@ const styles = StyleSheet.create({
   mapCardWrapper: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  // 3PL "Track live" — coral primary button opening the courier's hosted page.
+  trackLiveBtn: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  trackLiveInner: {
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderRadius: 14,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackLiveLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#FFFFFF',
   },
   // Food-ready photo — compact tappable thumbnail row, opens a lightbox.
   photoRow: {

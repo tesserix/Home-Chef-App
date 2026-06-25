@@ -186,6 +186,9 @@ export interface TrackingResponse {
     currentLongitude?: number;   // driver live location (from DeliveryPartner.CurrentLongitude)
     dropoffLatitude?: number;    // customer destination (from Delivery.DropoffLatitude)
     dropoffLongitude?: number;   // customer destination (from Delivery.DropoffLongitude)
+    // 3PL hosted live-tracking page (e.g. Shadowfax customer_track_url). The
+    // Unified API exposes no raw rider GPS, so the customer opens this for a live map.
+    externalTrackingUrl?: string;
     // NOTE: Backend gap — DeliveryResponse DTO (ToResponse()) omits dropoff and driver coords.
     // These fields will be undefined until backend adds them to the TrackOrder handler response.
     // Fallback: use chef.latitude / chef.longitude as destination marker when dropoff is missing.
