@@ -56,6 +56,18 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 		return nil
 	}
 
+	// Serviceability gate: the provider may serve the city but not this exact drop
+	// pincode. If it isn't serviceable, park the order for manual handling rather
+	// than erroring (the chef's status update already succeeded).
+	if q, qerr := svc.GetProviderQuote(provider, QuoteRequest{
+		DropoffPincode: order.DeliveryAddressPostalCode,
+		City:           city,
+	}); qerr == nil && q != nil && !q.Serviceable {
+		log.Printf("dispatch: drop pincode %q not serviceable by %s for order=%s — parked",
+			order.DeliveryAddressPostalCode, provider.Code, orderID)
+		return nil
+	}
+
 	req := ProviderDeliveryRequest{
 		OrderID:           order.ID,
 		ClientOrderID:     order.OrderNumber,
@@ -186,7 +198,9 @@ func QuoteCheckoutDeliveryFee(chef models.ChefProfile, city, country string, dro
 		City:       city,
 		Weight:     1.0,
 	})
-	if err != nil || quote == nil || !quote.Serviceable {
+	// Fee<=0 means the provider quoted no price (e.g. Shadowfax, whose Unified API
+	// has no rate endpoint) — keep the flat configured fee rather than charging 0.
+	if err != nil || quote == nil || !quote.Serviceable || quote.Fee <= 0 {
 		return 0, false
 	}
 	return quote.Fee, true
