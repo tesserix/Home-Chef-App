@@ -314,23 +314,28 @@ type DeliveryResponse struct {
 	// 3PL rider identity (safe to expose: a contracted courier, not an internal driver)
 	RiderName  string `json:"riderName,omitempty"`
 	RiderPhone string `json:"riderPhone,omitempty"`
+	// ExternalTrackingURL is the 3PL's hosted live-tracking page (e.g. Shadowfax's
+	// customer_track_url). The customer app opens it for a live map, since the
+	// Unified API exposes no raw rider GPS for our own map.
+	ExternalTrackingURL string `json:"externalTrackingUrl,omitempty"`
 }
 
 func (d *Delivery) ToResponse() DeliveryResponse {
 	resp := DeliveryResponse{
-		ID:                d.ID,
-		OrderID:           d.OrderID,
-		Status:            d.Status,
-		Distance:          d.Distance,
-		EstimatedDuration: d.EstimatedDuration,
-		DeliveryFee:       d.DeliveryFee,
-		AssignedAt:        d.AssignedAt,
-		PickedUpAt:        d.PickedUpAt,
-		DeliveredAt:       d.DeliveredAt,
-		DropoffLatitude:   d.DropoffLatitude,
-		DropoffLongitude:  d.DropoffLongitude,
-		PickupLatitude:    d.PickupLatitude,
-		PickupLongitude:   d.PickupLongitude,
+		ID:                  d.ID,
+		OrderID:             d.OrderID,
+		Status:              d.Status,
+		Distance:            d.Distance,
+		EstimatedDuration:   d.EstimatedDuration,
+		DeliveryFee:         d.DeliveryFee,
+		AssignedAt:          d.AssignedAt,
+		PickedUpAt:          d.PickedUpAt,
+		DeliveredAt:         d.DeliveredAt,
+		DropoffLatitude:     d.DropoffLatitude,
+		DropoffLongitude:    d.DropoffLongitude,
+		PickupLatitude:      d.PickupLatitude,
+		PickupLongitude:     d.PickupLongitude,
+		ExternalTrackingURL: d.ExternalTrackingURL,
 	}
 	// Live rider position. Prefer the 3PL rider coords (fed by provider
 	// webhooks) when present; otherwise fall back to the own-fleet partner's

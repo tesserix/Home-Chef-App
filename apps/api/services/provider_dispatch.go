@@ -22,7 +22,7 @@ import (
 // is not treated as an error so the chef's status update still succeeds.
 func DispatchOrderDelivery(orderID uuid.UUID) error {
 	var order models.Order
-	if err := database.DB.Preload("Chef").Preload("Customer").
+	if err := database.DB.Preload("Chef").Preload("Chef.User").Preload("Customer").
 		First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("dispatch: load order: %w", err)
 	}
@@ -56,17 +56,39 @@ func DispatchOrderDelivery(orderID uuid.UUID) error {
 		return nil
 	}
 
+	// Serviceability gate: the provider may serve the city but not this exact drop
+	// pincode. If it isn't serviceable, park the order for manual handling rather
+	// than erroring (the chef's status update already succeeded).
+	if q, qerr := svc.GetProviderQuote(provider, QuoteRequest{
+		DropoffPincode: order.DeliveryAddressPostalCode,
+		City:           city,
+	}); qerr == nil && q != nil && !q.Serviceable {
+		log.Printf("dispatch: drop pincode %q not serviceable by %s for order=%s — parked",
+			order.DeliveryAddressPostalCode, provider.Code, orderID)
+		return nil
+	}
+
 	req := ProviderDeliveryRequest{
 		OrderID:           order.ID,
+		ClientOrderID:     order.OrderNumber,
 		PickupAddress:     joinAddress(order.Chef.AddressLine1, order.Chef.City),
+		PickupName:        order.Chef.BusinessName,
+		PickupPhone:       order.Chef.User.Phone,
 		PickupLat:         order.Chef.Latitude,
 		PickupLng:         order.Chef.Longitude,
+		PickupCity:        order.Chef.City,
+		PickupState:       order.Chef.State,
+		PickupPincode:     order.Chef.PostalCode,
 		DropoffAddress:    joinAddress(order.DeliveryAddressLine1, order.DeliveryAddressCity),
 		DropoffLat:        order.DeliveryLatitude,
 		DropoffLng:        order.DeliveryLongitude,
+		DropoffCity:       order.DeliveryAddressCity,
+		DropoffState:      order.DeliveryAddressState,
+		DropoffPincode:    order.DeliveryAddressPostalCode,
 		CustomerName:      strings.TrimSpace(order.Customer.FirstName + " " + order.Customer.LastName),
 		CustomerPhone:     order.Customer.Phone,
 		ItemDescription:   fmt.Sprintf("Order %s", order.OrderNumber),
+		OrderValue:        order.Subtotal,
 		Weight:            1.0,                // TODO: derive from item count/weights when available
 		ScheduledPickupAt: order.ScheduledFor, // #51: timed to the chosen delivery slot
 	}
@@ -176,7 +198,9 @@ func QuoteCheckoutDeliveryFee(chef models.ChefProfile, city, country string, dro
 		City:       city,
 		Weight:     1.0,
 	})
-	if err != nil || quote == nil || !quote.Serviceable {
+	// Fee<=0 means the provider quoted no price (e.g. Shadowfax, whose Unified API
+	// has no rate endpoint) — keep the flat configured fee rather than charging 0.
+	if err != nil || quote == nil || !quote.Serviceable || quote.Fee <= 0 {
 		return 0, false
 	}
 	return quote.Fee, true

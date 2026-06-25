@@ -26,6 +26,18 @@ type ProviderDeliveryRequest struct {
 	CustomerPhone   string
 	ItemDescription string
 	Weight          float64 // estimated weight in kg
+	// Real-3PL fields (Shadowfax needs pincodes/city/state + a pickup contact +
+	// the order value). PickupName/Phone identify the chef to the rider.
+	ClientOrderID  string // our order id as the provider's client_order_id
+	PickupName     string
+	PickupPhone    string
+	PickupCity     string
+	PickupState    string
+	PickupPincode  string
+	DropoffCity    string
+	DropoffState   string
+	DropoffPincode string
+	OrderValue     float64 // order subtotal — sent as product_value
 	// ScheduledPickupAt is the order's scheduled delivery-slot pickup time (#51),
 	// nil for ASAP orders. Adapters that support scheduled bookings should pass
 	// it to the 3PL so the rider is timed to the slot; adapters that don't may
@@ -212,6 +224,13 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	var provider models.DeliveryProvider
 	if err := database.DB.Where("code = ?", providerCode).First(&provider).Error; err != nil {
 		return fmt.Errorf("provider not found: %w", err)
+	}
+
+	// Shadowfax's Push Callback keys on our order number (not the AWB) and uses a
+	// code-based status map, so it takes a dedicated path rather than the generic
+	// external_delivery_id + StatusMapping flow below.
+	if provider.Code == "shadowfax" {
+		return s.handleShadowfaxWebhook(&provider, payload)
 	}
 
 	// Parse the webhook payload — generic structure

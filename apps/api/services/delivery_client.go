@@ -8,12 +8,13 @@ import (
 
 // QuoteRequest asks a provider for a price + ETA for a pickup→dropoff leg.
 type QuoteRequest struct {
-	PickupLat  float64
-	PickupLng  float64
-	DropoffLat float64
-	DropoffLng float64
-	City       string
-	Weight     float64 // estimated weight in kg
+	PickupLat      float64
+	PickupLng      float64
+	DropoffLat     float64
+	DropoffLng     float64
+	City           string
+	DropoffPincode string  // drop pincode — Shadowfax serviceability is a pincode check
+	Weight         float64 // estimated weight in kg
 }
 
 // QuoteResponse is a provider's price + ETA for a delivery leg.
