@@ -226,6 +226,13 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		return fmt.Errorf("provider not found: %w", err)
 	}
 
+	// Shadowfax's Push Callback keys on our order number (not the AWB) and uses a
+	// code-based status map, so it takes a dedicated path rather than the generic
+	// external_delivery_id + StatusMapping flow below.
+	if provider.Code == "shadowfax" {
+		return s.handleShadowfaxWebhook(&provider, payload)
+	}
+
 	// Parse the webhook payload — generic structure
 	var webhookData map[string]interface{}
 	if err := json.Unmarshal(payload, &webhookData); err != nil {
