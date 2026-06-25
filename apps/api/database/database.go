@@ -373,8 +373,9 @@ func Migrate() error {
 	// empty slugs; new/updated chefs get one from ChefProfile.BeforeSave.
 	backfillChefSlugs()
 
-	// Seed the Shadowfax 3PL provider (disabled until the owner flips it on).
+	// Seed the 3PL providers (disabled until the owner flips them on).
 	SeedShadowfaxProvider(DB)
+	SeedBorzoProvider(DB)
 
 	log.Println("Database migrations completed")
 	return nil

@@ -232,6 +232,9 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	if provider.Code == "shadowfax" {
 		return s.handleShadowfaxWebhook(&provider, payload)
 	}
+	if provider.Code == "borzo" {
+		return s.handleBorzoWebhook(&provider, payload)
+	}
 
 	// Parse the webhook payload — generic structure
 	var webhookData map[string]interface{}

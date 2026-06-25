@@ -60,6 +60,9 @@ type Config struct {
 	ShadowfaxAPIToken      string
 	ShadowfaxWebhookSecret string
 
+	// Borzo 3PL (from Secret Manager; empty leaves the provider disabled)
+	BorzoAPIToken string
+
 	// Email — SendGrid primary, Resend fallback
 	SendGridAPIKey string
 	ResendAPIKey   string
@@ -239,6 +242,8 @@ func Load() {
 
 		ShadowfaxAPIToken:      getEnv("SHADOWFAX_API_TOKEN", ""),
 		ShadowfaxWebhookSecret: getEnv("SHADOWFAX_WEBHOOK_SECRET", ""),
+
+		BorzoAPIToken: getEnv("BORZO_API_TOKEN", ""),
 
 		// Email — SendGrid primary, Resend fallback
 		SendGridAPIKey: getEnv("SENDGRID_API_KEY", ""),
