@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "eas-build-pre-install": "if [ -n \"$NODE_AUTH_TOKEN\" ]; then echo \"//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN\" >> \"$HOME/.npmrc\"; fi",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
