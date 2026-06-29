@@ -1,0 +1,25 @@
+name: iOS TestFlight (customer)
+
+# Deliberate release trigger only — NOT every push.
+# Push a tag like `customer-v1.0.0`, or run manually with `eas workflow:run ios-testflight.yml`.
+on:
+  push:
+    tags:
+      - customer-v*
+  workflow_dispatch: {}
+
+jobs:
+  build_ios:
+    name: Build iOS (production)
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Submit to TestFlight
+    type: submit
+    needs: [build_ios]
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+      profile: production
