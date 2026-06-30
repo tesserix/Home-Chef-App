@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { useToast } from '@homechef/mobile-shared/ui';
 import {
   useCreateTicket,
@@ -44,14 +46,63 @@ const PRIORITY_CHIPS: { value: TicketPriority; label: string }[] = [
   { value: 'urgent', label: 'Urgent' },
 ];
 
+interface SupportTicketDraft {
+  categoryId: string | null;
+  subject: string;
+  description: string;
+  priority: TicketPriority;
+}
+
 export default function NewTicketScreen() {
   const { show: showToast } = useToast();
   const create = useCreateTicket();
+  const { ready, draft, saveDraft, clearDraft } =
+    useFormDraft<SupportTicketDraft>('support-ticket-draft');
 
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
+
+  // Restore a saved draft once, when the async load resolves.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!ready || restored.current || !draft) return;
+    restored.current = true;
+    setCategoryId(draft.categoryId);
+    setSubject(draft.subject);
+    setDescription(draft.description);
+    setPriority(draft.priority);
+  }, [ready, draft]);
+
+  // Persist on every change (debounced in the hook). Guard until the initial
+  // load resolves so we never overwrite a saved draft with the empty defaults.
+  useEffect(() => {
+    if (!ready) return;
+    saveDraft({ categoryId, subject, description, priority });
+  }, [ready, categoryId, subject, description, priority, saveDraft]);
+
+  // Back-button dirty guard — a half-written ticket shouldn't vanish on a
+  // stray tap. Discarding clears the persisted draft too.
+  function handleBack(): void {
+    const dirty =
+      !!categoryId || subject.trim().length > 0 || description.trim().length > 0;
+    if (!dirty) {
+      router.back();
+      return;
+    }
+    Alert.alert('Discard ticket?', "Your draft hasn't been sent.", [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          clearDraft();
+          router.back();
+        },
+      },
+    ]);
+  }
 
   const selectedCategory = CATEGORY_CHIPS.find((c) => c.id === categoryId);
   const canSubmit =
@@ -80,6 +131,7 @@ export default function NewTicketScreen() {
         description: description.trim(),
         priority,
       });
+      clearDraft();
       // Land on the new ticket. `replace` so Back from the detail returns to
       // the list, not this now-stale form.
       router.replace(`/support/${ticket.id}`);
@@ -100,7 +152,7 @@ export default function NewTicketScreen() {
       >
         <View style={styles.commandBar}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleBack}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Back"

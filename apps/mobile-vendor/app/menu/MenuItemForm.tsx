@@ -5,7 +5,7 @@
  * group cards per labelled section, bone-filled inputs, ink-fill pill chips
  * for category/diet/prep-time selectors. Single-column.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -103,6 +103,11 @@ export interface MenuItemFormProps {
   /** Called when the chef confirms they want to back out. Parent owns the
    *  actual navigation. */
   onBack: () => void;
+  /** Called on every field change with the current values so the parent can
+   *  persist an in-progress draft (new mode only). Photo URIs are local file
+   *  paths that may dangle across cold starts, so they're intentionally not
+   *  part of the draft. */
+  onDraftChange?: (values: MenuItemFormValues) => void;
 }
 
 // ---- Inline sub-components --------------------------------------------------
@@ -429,6 +434,7 @@ export function MenuItemForm({
   isUploadingPhoto = false,
   onCreateCategory,
   onBack,
+  onDraftChange,
 }: MenuItemFormProps) {
   const { show: showToast } = useToast();
 
@@ -452,6 +458,40 @@ export function MenuItemForm({
 
   // Local photo URIs (new-mode queuing or pre-upload preview)
   const [localPhotoUris, setLocalPhotoUris] = useState<string[]>([]);
+
+  // Persist an in-progress draft on every field change (new mode only — the
+  // parent only wires onDraftChange there). Text/selection fields only; photo
+  // URIs are excluded (see prop doc).
+  useEffect(() => {
+    onDraftChange?.({
+      name,
+      description,
+      price,
+      categoryId,
+      isVeg,
+      dietaryTags: dietTags,
+      allergens,
+      isCombo,
+      modifierGroups,
+      comboItems,
+      preparationTime,
+      hsn,
+    });
+  }, [
+    name,
+    description,
+    price,
+    categoryId,
+    isVeg,
+    dietTags,
+    allergens,
+    isCombo,
+    modifierGroups,
+    comboItems,
+    preparationTime,
+    hsn,
+    onDraftChange,
+  ]);
 
   // Validation errors (surface on Save attempt)
   const [errors, setErrors] = useState<Partial<Record<keyof MenuItemFormValues, string>>>({});

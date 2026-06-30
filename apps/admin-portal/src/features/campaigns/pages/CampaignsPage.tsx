@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Megaphone, Loader2, Plus, Send, Clock, Beaker, X, BarChart3 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
@@ -185,6 +185,15 @@ function CampaignEditor({ campaign, onClose }: { campaign: Campaign | null; onCl
   const [scheduledAt, setScheduledAt] = useState('');
   const [audience, setAudience] = useState<SegmentPreview | null>(null);
 
+  // Snapshot the form as first mounted so we can detect unsaved edits and
+  // confirm before discarding them on close.
+  const initialFormRef = useRef(form);
+  const isDirty = JSON.stringify(form) !== JSON.stringify(initialFormRef.current) || scheduledAt !== '';
+  const requestClose = () => {
+    if (isDirty && !window.confirm('Discard unsaved changes to this campaign?')) return;
+    onClose();
+  };
+
   // Refresh the audience preview when the segment or channels change.
   useEffect(() => {
     const t = setTimeout(() => {
@@ -258,7 +267,7 @@ function CampaignEditor({ campaign, onClose }: { campaign: Campaign | null; onCl
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Megaphone className="h-5 w-5 text-primary" /> {campaign ? 'Edit campaign' : 'New campaign'}
         </h3>
-        <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg p-1 hover:bg-muted">
+        <button type="button" aria-label="Close" onClick={requestClose} className="rounded-lg p-1 hover:bg-muted">
           <X className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>

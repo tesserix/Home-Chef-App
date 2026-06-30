@@ -2,7 +2,7 @@
 // optional photo. Small/clear cases are refunded to the wallet instantly; others
 // go to assisted review. Mirrors the review screen's form pattern.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, Camera, Check } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReportIssue, type IssueReason } from '../../../hooks/useReportIssue';
@@ -34,15 +35,47 @@ function money(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
+// Per-order draft envelope. Photo URIs are local file paths that may dangle
+// across cold starts, so they're intentionally not persisted.
+interface ReportIssueDraft {
+  reason: IssueReason | null;
+  selectedItemIds: string[];
+  description: string;
+}
+
 export default function ReportIssueScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isLoading } = useOrder(id ?? '');
   const report = useReportIssue();
+  const { ready, draft, saveDraft, clearDraft } = useFormDraft<ReportIssueDraft>(
+    `report-issue-${id ?? 'unknown'}`,
+  );
 
   const [reason, setReason] = useState<IssueReason | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [description, setDescription] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
+
+  // Restore a saved draft once, when the async load resolves.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!ready || restored.current || !draft) return;
+    restored.current = true;
+    setReason(draft.reason);
+    setSelectedItems(new Set(draft.selectedItemIds));
+    setDescription(draft.description);
+  }, [ready, draft]);
+
+  // Persist on every change (debounced in the hook). Guard until the initial
+  // load resolves so we never overwrite a saved draft with the empty defaults.
+  useEffect(() => {
+    if (!ready) return;
+    saveDraft({
+      reason,
+      selectedItemIds: Array.from(selectedItems),
+      description,
+    });
+  }, [ready, reason, selectedItems, description, saveDraft]);
 
   const order = data?.data;
   const items = order?.items ?? [];
@@ -119,6 +152,7 @@ export default function ReportIssueScreen() {
       },
       {
         onSuccess: (res) => {
+          clearDraft();
           if (res.status === 'auto_refunded' && res.refundAmount > 0) {
             Alert.alert(
               'Refunded to your wallet',

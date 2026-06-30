@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
+import { getServerErrorMessage } from '@homechef/mobile-shared/api';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button } from '@homechef/mobile-shared/ui';
 import {
@@ -59,6 +61,10 @@ const cellKey = (dow: number, slot: MealSlot, variant: MealVariant) =>
 export default function WeeklyMenuEditorScreen() {
   const { data, isLoading } = useWeeklyMenu();
   const save = useSaveWeeklyMenu();
+  // Local backup of the in-progress grid — a pre-save safety net so an app
+  // background/kill before the server "Save draft" doesn't lose the chef's edits.
+  const { ready, draft, saveDraft, clearDraft } =
+    useFormDraft<Record<string, Cell>>('weekly-menu-draft');
 
   const [selectedDow, setSelectedDow] = useState<number>(1);
   const [cells, setCells] = useState<Record<string, Cell>>({});
@@ -66,19 +72,38 @@ export default function WeeklyMenuEditorScreen() {
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate once from the server payload; later refetches don't clobber edits.
+  // Wait for the draft load too: an unsaved local backup (most recent edits)
+  // wins over the server copy when present.
   useEffect(() => {
-    if (hydrated || !data) return;
-    const next: Record<string, Cell> = {};
-    for (const it of data.items ?? []) {
-      next[cellKey(it.dayOfWeek, it.slot, it.variant)] = {
-        name: it.name ?? '',
-        price: it.price ? String(it.price) : '',
-      };
+    if (hydrated || !data || !ready) return;
+    if (draft && Object.keys(draft).length > 0) {
+      setCells(draft);
+    } else {
+      const next: Record<string, Cell> = {};
+      for (const it of data.items ?? []) {
+        next[cellKey(it.dayOfWeek, it.slot, it.variant)] = {
+          name: it.name ?? '',
+          price: it.price ? String(it.price) : '',
+        };
+      }
+      setCells(next);
     }
-    setCells(next);
     setPublished(Boolean(data.isPublished));
     setHydrated(true);
-  }, [data, hydrated]);
+  }, [data, hydrated, ready, draft]);
+
+  // Persist the grid as a local backup on every change, once hydrated. Skip the
+  // hydration-coincident run so we only back up the chef's own edits, not an
+  // untouched server copy (which would otherwise always shadow fresh data).
+  const persistArmed = useRef(false);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!persistArmed.current) {
+      persistArmed.current = true;
+      return;
+    }
+    saveDraft(cells);
+  }, [hydrated, cells, saveDraft]);
 
   const filledByDay = useMemo(() => {
     const set = new Set<number>();
@@ -154,6 +179,8 @@ export default function WeeklyMenuEditorScreen() {
       { isPublished: nextPublished, items },
       {
         onSuccess: () => {
+          // Server now holds the grid — the local backup is redundant.
+          clearDraft();
           setPublished(nextPublished);
           Alert.alert(
             'Saved',
@@ -162,7 +189,18 @@ export default function WeeklyMenuEditorScreen() {
               : 'Saved as a draft (not visible to customers yet).',
           );
         },
-        onError: () => Alert.alert('Could not save', 'Please try again.'),
+        // Surface the server's reason (e.g. the validatePublishableGrid 400
+        // message naming the missing day) instead of a generic failure.
+        onError: (err) =>
+          Alert.alert(
+            nextPublished ? 'Could not publish' : 'Could not save',
+            getServerErrorMessage(
+              err,
+              nextPublished
+                ? 'Fill every offered day before publishing, then try again.'
+                : 'Please try again.',
+            ),
+          ),
       },
     );
   }

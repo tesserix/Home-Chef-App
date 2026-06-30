@@ -21,7 +21,6 @@ import { apiClient } from '@/shared/services/api-client';
 import { staggerContainer, fadeInUp } from '@/shared/utils/animations';
 import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
-import { Input } from '@/shared/components/ui/Input';
 import type { Chef, OperatingHours, DayHours } from '@/shared/types';
 
 const BFF_URL = (() => { const env = import.meta.env.VITE_BFF_URL; if (env) return env; if (typeof window !== "undefined" && window.location.hostname !== "localhost") { return `${window.location.origin}/bff`; } return "/bff"; })();
@@ -43,9 +42,6 @@ const kitchenSchema = z.object({
     saturday: dayHoursSchema,
     sunday: dayHoursSchema,
   }),
-  bankName: z.string().optional(),
-  accountNumber: z.string().optional(),
-  ifscCode: z.string().optional(),
 });
 
 type KitchenFormData = z.infer<typeof kitchenSchema>;
@@ -101,9 +97,6 @@ export default function KitchenSetupPage() {
         saturday: DEFAULT_HOURS,
         sunday: undefined,
       },
-      bankName: '',
-      accountNumber: '',
-      ifscCode: '',
     },
   });
 
@@ -131,9 +124,6 @@ export default function KitchenSetupPage() {
           saturday: hours.saturday || DEFAULT_HOURS,
           sunday: hours.sunday || undefined,
         },
-        bankName: '',
-        accountNumber: '',
-        ifscCode: '',
       });
     }
   }, [profile, reset]);
@@ -501,32 +491,17 @@ export default function KitchenSetupPage() {
             Bank account details for receiving your earnings
           </p>
 
-          <div className="mt-6 rounded-lg border border-amber/30 bg-amber-tint p-3">
-            <p className="text-sm text-amber">
-              <CreditCard className="mr-1.5 inline h-4 w-4" />
-              Payout integration coming soon. These details are saved locally for now.
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-mist bg-bone p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-ink-soft">
+              Bank account and UPI payout details are managed in Settings, where they're
+              stored securely and used to disburse your earnings.
             </p>
-          </div>
-
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Input
-                label="Bank Name"
-                placeholder="e.g. State Bank of India"
-                {...register('bankName')}
-              />
-            </div>
-            <Input
-              label="Account Number"
-              placeholder="Enter account number"
-              type="text"
-              {...register('accountNumber')}
-            />
-            <Input
-              label="IFSC Code"
-              placeholder="e.g. SBIN0001234"
-              {...register('ifscCode')}
-            />
+            <Button asChild variant="secondary" size="sm" className="shrink-0">
+              <Link to="/settings">
+                <CreditCard className="h-4 w-4" />
+                Manage payouts
+              </Link>
+            </Button>
           </div>
         </Card>
       </motion.div>

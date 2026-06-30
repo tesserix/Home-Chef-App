@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Tag, Loader2, Plus, BarChart3, Power, Search } from 'lucide-react';
@@ -67,11 +67,102 @@ function errMsg(e: unknown): string | undefined {
   return e instanceof Error ? e.message : undefined;
 }
 
+// --- New-promo draft persistence (#39) ---
+// The create form is mounted behind a toggle, so closing the panel or reloading
+// the page would otherwise wipe a half-filled promo. Persist it to localStorage
+// (48h TTL, matching the vendor-portal draft hook) and restore on reopen.
+
+const PROMO_DRAFT_KEY = 'draft:admin-promo-create';
+const PROMO_DRAFT_TTL_MS = 48 * 60 * 60 * 1000;
+
+interface PromoDraft {
+  code: string;
+  description: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: string;
+  minOrderAmount: string;
+  maxDiscount: string;
+  usageLimit: string;
+  perUserLimit: string;
+  budgetCap: string;
+  applicableTo: string;
+  fundingSource: 'platform' | 'chef';
+  chefId: string;
+  validUntil: string;
+}
+
+const EMPTY_PROMO_DRAFT: PromoDraft = {
+  code: '',
+  description: '',
+  discountType: 'percentage',
+  discountValue: '',
+  minOrderAmount: '',
+  maxDiscount: '',
+  usageLimit: '',
+  perUserLimit: '',
+  budgetCap: '',
+  applicableTo: 'all',
+  fundingSource: 'platform',
+  chefId: '',
+  validUntil: '',
+};
+
+function loadPromoDraft(): PromoDraft {
+  try {
+    const raw = localStorage.getItem(PROMO_DRAFT_KEY);
+    if (!raw) return { ...EMPTY_PROMO_DRAFT };
+    const env = JSON.parse(raw) as { data?: PromoDraft; savedAt?: number };
+    if (!env?.data || !env.savedAt || Date.now() - env.savedAt > PROMO_DRAFT_TTL_MS) {
+      localStorage.removeItem(PROMO_DRAFT_KEY);
+      return { ...EMPTY_PROMO_DRAFT };
+    }
+    return { ...EMPTY_PROMO_DRAFT, ...env.data };
+  } catch {
+    localStorage.removeItem(PROMO_DRAFT_KEY);
+    return { ...EMPTY_PROMO_DRAFT };
+  }
+}
+
+function savePromoDraft(data: PromoDraft) {
+  try {
+    localStorage.setItem(PROMO_DRAFT_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+}
+
+function clearPromoDraft() {
+  localStorage.removeItem(PROMO_DRAFT_KEY);
+}
+
 export default function PromosPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [analyticsFor, setAnalyticsFor] = useState<string | null>(null);
+  // Whether the create form has unsaved edits — set by CreatePromoForm so the
+  // header toggle can confirm before collapsing the panel.
+  const createDirtyRef = useRef(false);
+  const setCreateDirty = useCallback((dirty: boolean) => {
+    createDirtyRef.current = dirty;
+  }, []);
+
+  const toggleCreate = useCallback(() => {
+    setShowCreate((open) => {
+      if (open) {
+        if (
+          createDirtyRef.current &&
+          !window.confirm(
+            'You have an unsaved promo draft. Close the form? Your entries are saved and will be restored when you reopen it.',
+          )
+        ) {
+          return open;
+        }
+        return false;
+      }
+      return true;
+    });
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-promos', search],
@@ -98,12 +189,12 @@ export default function PromosPage() {
             are billed to the chef at settlement.
           </p>
         </div>
-        <Button variant="primary" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setShowCreate((v) => !v)}>
+        <Button variant="primary" leftIcon={<Plus className="h-4 w-4" />} onClick={toggleCreate}>
           {showCreate ? 'Close' : 'New promo'}
         </Button>
       </div>
 
-      {showCreate && <CreatePromoForm onDone={() => setShowCreate(false)} />}
+      {showCreate && <CreatePromoForm onDone={() => setShowCreate(false)} onDirtyChange={setCreateDirty} />}
 
       <form
         onSubmit={(e) => e.preventDefault()}
@@ -229,21 +320,57 @@ function PromoAnalytics({ promoId }: { promoId: string }) {
   );
 }
 
-function CreatePromoForm({ onDone }: { onDone: () => void }) {
+function CreatePromoForm({ onDone, onDirtyChange }: { onDone: () => void; onDirtyChange: (dirty: boolean) => void }) {
   const queryClient = useQueryClient();
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
-  const [discountValue, setDiscountValue] = useState('');
-  const [minOrderAmount, setMinOrderAmount] = useState('');
-  const [maxDiscount, setMaxDiscount] = useState('');
-  const [usageLimit, setUsageLimit] = useState('');
-  const [perUserLimit, setPerUserLimit] = useState('');
-  const [budgetCap, setBudgetCap] = useState('');
-  const [applicableTo, setApplicableTo] = useState('all');
-  const [fundingSource, setFundingSource] = useState<'platform' | 'chef'>('platform');
-  const [chefId, setChefId] = useState('');
-  const [validUntil, setValidUntil] = useState('');
+  // Restore any persisted draft once on mount.
+  const [initial] = useState(loadPromoDraft);
+  const [code, setCode] = useState(initial.code);
+  const [description, setDescription] = useState(initial.description);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>(initial.discountType);
+  const [discountValue, setDiscountValue] = useState(initial.discountValue);
+  const [minOrderAmount, setMinOrderAmount] = useState(initial.minOrderAmount);
+  const [maxDiscount, setMaxDiscount] = useState(initial.maxDiscount);
+  const [usageLimit, setUsageLimit] = useState(initial.usageLimit);
+  const [perUserLimit, setPerUserLimit] = useState(initial.perUserLimit);
+  const [budgetCap, setBudgetCap] = useState(initial.budgetCap);
+  const [applicableTo, setApplicableTo] = useState(initial.applicableTo);
+  const [fundingSource, setFundingSource] = useState<'platform' | 'chef'>(initial.fundingSource);
+  const [chefId, setChefId] = useState(initial.chefId);
+  const [validUntil, setValidUntil] = useState(initial.validUntil);
+
+  const draft = useMemo<PromoDraft>(
+    () => ({
+      code,
+      description,
+      discountType,
+      discountValue,
+      minOrderAmount,
+      maxDiscount,
+      usageLimit,
+      perUserLimit,
+      budgetCap,
+      applicableTo,
+      fundingSource,
+      chefId,
+      validUntil,
+    }),
+    [code, description, discountType, discountValue, minOrderAmount, maxDiscount, usageLimit, perUserLimit, budgetCap, applicableTo, fundingSource, chefId, validUntil],
+  );
+  const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(EMPTY_PROMO_DRAFT), [draft]);
+
+  // Surface dirtiness so the parent can confirm before closing the panel.
+  useEffect(() => {
+    onDirtyChange(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  // Persist (debounced) so a close or reload doesn't wipe the in-progress promo.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (isDirty) savePromoDraft(draft);
+      else clearPromoDraft();
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draft, isDirty]);
 
   const { data: chefData } = useQuery({
     queryKey: ['admin-chefs-for-promo'],
@@ -256,11 +383,21 @@ function CreatePromoForm({ onDone }: { onDone: () => void }) {
     mutationFn: (body: Record<string, unknown>) => apiClient.post('/admin/promos', body),
     onSuccess: () => {
       toast.success('Promo created');
+      clearPromoDraft();
+      onDirtyChange(false);
       queryClient.invalidateQueries({ queryKey: ['admin-promos'] });
       onDone();
     },
     onError: (e: unknown) => toast.error(errMsg(e) || 'Could not create promo'),
   });
+
+  // Explicit discard: clear the persisted draft after confirming.
+  const requestClose = () => {
+    if (isDirty && !window.confirm('Discard this promo draft? Your entries will be cleared.')) return;
+    clearPromoDraft();
+    onDirtyChange(false);
+    onDone();
+  };
 
   const submit = () => {
     const value = Number(discountValue);
@@ -375,7 +512,7 @@ function CreatePromoForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="mt-5 flex justify-end gap-3">
-        <Button variant="ghost" onClick={onDone}>
+        <Button variant="ghost" onClick={requestClose}>
           Cancel
         </Button>
         <Button variant="primary" isLoading={create.isPending} onClick={submit}>

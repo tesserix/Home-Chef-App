@@ -6,10 +6,12 @@
  *  2. Handles navigation (back + post-create).
  *  3. Provides the ChevronLeft back Pressable (form's backBtn fires router.back).
  */
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { router } from 'expo-router';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { useToast } from '@homechef/mobile-shared/ui';
+import { theme } from '@homechef/mobile-shared/theme';
 import {
   useVendorMenu,
   useCreateMenuItem,
@@ -40,6 +42,12 @@ export default function NewMenuItemScreen() {
   const createMutation = useCreateMenuItem();
   const createCategoryMutation = useCreateCategory();
   const { show: showToast } = useToast();
+
+  // Persist the in-progress item so a background/kill/accidental back doesn't
+  // wipe what the chef typed. Restored into initialValues once the load
+  // resolves; cleared on a successful create.
+  const { ready, draft, saveDraft, clearDraft } =
+    useFormDraft<MenuItemFormValues>('menu-item-new');
 
   // The newly-created item's ID is needed for photo upload. We hold it in a
   // ref so we can construct the upload hook once at the top of the component
@@ -80,6 +88,7 @@ export default function NewMenuItemScreen() {
         }
       }
 
+      clearDraft();
       showToast({ message: `${values.name} added to menu`, tone: 'success' });
       router.back();
     } catch (err: unknown) {
@@ -94,16 +103,27 @@ export default function NewMenuItemScreen() {
     return createCategoryMutation.mutateAsync(name);
   }
 
+  // Wait for the draft load to resolve before mounting the form — it seeds its
+  // local state from initialValues once, so the restored draft must be ready.
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.bone, justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.colors.ink.muted} />
+      </View>
+    );
+  }
+
   return (
     <MenuItemForm
       mode="new"
-      initialValues={BLANK}
+      initialValues={draft ?? BLANK}
       categories={categories}
       menuItems={(menuData?.items ?? []).map((m) => ({ id: m.id, name: m.name }))}
       onSave={handleSave}
       isSaving={isSaving}
       onCreateCategory={handleCreateCategory}
       onBack={() => router.back()}
+      onDraftChange={saveDraft}
     />
   );
 }
