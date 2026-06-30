@@ -11,6 +11,7 @@ import {
   Alert,
   Animated,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -39,6 +40,10 @@ import type {
 
 const PREP_TIME_OPTIONS = [5, 10, 15, 20, 30, 45, 60] as const;
 type PrepTime = (typeof PREP_TIME_OPTIONS)[number];
+
+// Keep menu photos light — reject anything over 5 MB after the picker's own
+// compression. (Images are captured/picked at quality 0.6.)
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // Diet tags the chef adds beyond the veg/non-veg toggle (#41). "vegetarian" is
 // excluded — that's the DIET toggle's job.
@@ -544,23 +549,84 @@ export function MenuItemForm({
     );
   }
 
-  async function handlePickPhoto() {
-    const result = await ImagePicker.launchImageLibraryAsync({
+  // Ask for the right OS permission up front; if denied, point the chef at
+  // Settings instead of silently doing nothing.
+  async function ensurePermission(kind: 'camera' | 'library'): Promise<boolean> {
+    const res =
+      kind === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (res.granted) return true;
+    Alert.alert(
+      kind === 'camera' ? 'Camera access needed' : 'Photo access needed',
+      `Allow ${kind === 'camera' ? 'camera' : 'photo library'} access in Settings to ${
+        kind === 'camera' ? 'take a photo of your dish' : 'choose a photo'
+      }.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+      ],
+    );
+    return false;
+  }
+
+  function acceptImage(asset: ImagePicker.ImagePickerAsset): boolean {
+    if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_IMAGE_BYTES) {
+      Alert.alert(
+        'Photo too large',
+        'Please use a photo under 5 MB — try cropping it or taking a new shot.',
+      );
+      return false;
+    }
+    return true;
+  }
+
+  function addPhoto(uri: string) {
+    if (mode === 'edit') {
+      // Upload immediately in edit mode; parent handles the API call.
+      onAddPhoto?.(uri);
+    } else {
+      // Queue for after create in new mode.
+      setLocalPhotoUris((prev) => [...prev, uri]);
+    }
+  }
+
+  async function takePhoto() {
+    if (!(await ensurePermission('camera'))) return;
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
-      quality: 0.85,
+      quality: 0.6,
       allowsEditing: true,
       aspect: [4, 3],
     });
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      if (mode === 'edit') {
-        // Upload immediately in edit mode; parent handles the API call
-        onAddPhoto?.(uri);
-      } else {
-        // Queue for after create in new mode
-        setLocalPhotoUris((prev) => [...prev, uri]);
-      }
-    }
+    const asset = result.canceled ? null : result.assets[0];
+    if (asset && acceptImage(asset)) addPhoto(asset.uri);
+  }
+
+  async function pickFromLibrary() {
+    if (!(await ensurePermission('library'))) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    const asset = result.canceled ? null : result.assets[0];
+    if (asset && acceptImage(asset)) addPhoto(asset.uri);
+  }
+
+  // Let the chef take a live photo or pick from the library, with a clear
+  // reminder to keep personal information out of the shot.
+  function handleAddMedia() {
+    Alert.alert(
+      'Add a photo',
+      "Show the dish only — please don't include people's faces, IDs, addresses, vehicle number plates, or any personal information.",
+      [
+        { text: 'Take Photo', onPress: () => void takePhoto() },
+        { text: 'Choose from Library', onPress: () => void pickFromLibrary() },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
   }
 
   async function handleCreateCategory() {
@@ -694,14 +760,15 @@ export function MenuItemForm({
                 />
               ))}
               {canAddMore && (
-                <PhotoAddTile onPress={handlePickPhoto} uploading={isUploadingPhoto} />
+                <PhotoAddTile onPress={handleAddMedia} uploading={isUploadingPhoto} />
               )}
             </ScrollView>
             {isUploadingPhoto && (
               <Text style={styles.uploadingLabel}>Uploading…</Text>
             )}
             <Text style={styles.photoHint}>
-              Up to 5 photos. First photo is shown to customers.
+              Up to 5 photos. First photo is shown to customers. Show the dish
+              only — no faces, IDs, addresses, or other personal information.
             </Text>
           </View>
 
