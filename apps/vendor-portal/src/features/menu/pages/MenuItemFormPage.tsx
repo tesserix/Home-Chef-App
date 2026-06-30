@@ -57,7 +57,7 @@ const menuItemSchema = z.object({
     .min(10, 'Description must be at least 10 characters')
     .max(500, 'Description must be under 500 characters'),
   price: z
-    .number({ invalid_type_error: 'Price is required' })
+    .number({ error: 'Price is required' })
     .min(20, 'Minimum price is ₹20')
     .max(9999.99, 'Price must be under ₹10,000'),
   categoryId: z.string().min(1, 'Category is required'),
@@ -69,12 +69,12 @@ const menuItemSchema = z.object({
     .array(z.string())
     .min(1, 'Declare allergens or mark "none" — required for customer safety'),
   prepTime: z
-    .number({ invalid_type_error: 'Prep time is required' })
+    .number({ error: 'Prep time is required' })
     .min(1, 'Prep time must be at least 1 minute')
     .max(480, 'Prep time must be under 8 hours'),
   portionSize: z.string().optional().or(z.literal('')),
   serves: z
-    .number({ invalid_type_error: 'Serves count is required' })
+    .number({ error: 'Serves count is required' })
     .min(1, 'Must serve at least 1')
     .max(100, 'Must serve under 100'),
 });
@@ -86,6 +86,17 @@ type MenuItemSavePayload = MenuItemFormValues & {
   isCombo: boolean;
   modifierGroups: ModifierGroupInput[];
   comboItems: ComboItemInput[];
+};
+
+/**
+ * Draft envelope persisted to localStorage. Covers the react-hook-form text
+ * fields plus the add-ons / combo state that lives outside RHF (#52), so a
+ * reload restores everything the chef had typed — not just the text fields.
+ */
+type MenuItemDraft = MenuItemFormValues & {
+  modifierGroups?: ModifierGroupInput[];
+  isCombo?: boolean;
+  comboItems?: ComboItemInput[];
 };
 
 const DIETARY_TAG_OPTIONS = [
@@ -239,7 +250,7 @@ export default function MenuItemFormPage() {
 
   const isEditMode = Boolean(id);
   const draftKey = isEditMode ? `menu-item-edit-${id}` : 'menu-item-new';
-  const { loadDraft, saveDraft, clearDraft } = useDraftForm<MenuItemFormValues>(draftKey);
+  const { loadDraft, saveDraft, clearDraft } = useDraftForm<MenuItemDraft>(draftKey);
   const draftLoadedRef = useRef(false);
 
   // Fetch existing item for edit mode
@@ -376,19 +387,31 @@ export default function MenuItemFormPage() {
       if (draft) {
         draft.allergens = normalizeAllergens(draft.allergens);
         reset(draft);
+        // Restore add-ons / combo state persisted alongside the text fields (#52).
+        if (Array.isArray(draft.modifierGroups)) setModifierGroups(draft.modifierGroups);
+        if (typeof draft.isCombo === 'boolean') setIsCombo(draft.isCombo);
+        if (Array.isArray(draft.comboItems)) setComboItems(draft.comboItems);
         toast.info('Restored your unsaved draft');
       }
     }
   }, [existingItem, reset, loadDraft, clearDraft]);
 
-  // Auto-save draft on form changes
+  // Auto-save draft on form changes — text fields plus the add-ons / combo
+  // state that lives outside RHF (#52), so a reload restores both.
   const formValues = watch();
   useEffect(() => {
-    // Only save if user has started filling something
-    if (formValues.name || formValues.description || formValues.price) {
-      saveDraft(formValues);
+    // Only save once the user has started filling something in
+    if (
+      formValues.name ||
+      formValues.description ||
+      formValues.price ||
+      isCombo ||
+      modifierGroups.length > 0 ||
+      comboItems.length > 0
+    ) {
+      saveDraft({ ...formValues, modifierGroups, isCombo, comboItems });
     }
-  }, [formValues, saveDraft]);
+  }, [formValues, modifierGroups, isCombo, comboItems, saveDraft]);
 
   // Create mutation
   const createItem = useMutation({

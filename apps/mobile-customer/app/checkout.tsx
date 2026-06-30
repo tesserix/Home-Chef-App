@@ -4,7 +4,7 @@
 // which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
 // routes to /payment/result. No WebView, no visible web page load.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -38,6 +38,7 @@ import {
 } from '../hooks/useLocations';
 import { startOrderPayment } from '../lib/payment';
 import { friendlyErrorMessage } from '../lib/errors';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { AddressLabelSelect } from '../components/address/AddressLabelSelect';
 import type { Address } from '../types/customer';
 
@@ -120,6 +121,25 @@ export default function CheckoutScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');
+  // Persist the optional note-to-chef so it survives a background/kill (the
+  // cart itself is already persisted by cart-store). Cleared once the order is
+  // created, which consumes the note as specialInstructions.
+  const {
+    ready: noteReady,
+    draft: noteDraft,
+    saveDraft: saveNoteDraft,
+    clearDraft: clearNoteDraft,
+  } = useFormDraft<string>('checkout-note');
+  const noteRestored = useRef(false);
+  useEffect(() => {
+    if (!noteReady || noteRestored.current || noteDraft == null) return;
+    noteRestored.current = true;
+    setNote(noteDraft);
+  }, [noteReady, noteDraft]);
+  useEffect(() => {
+    if (!noteReady) return;
+    saveNoteDraft(note);
+  }, [noteReady, note, saveNoteDraft]);
   // Scheduled delivery slot (#51) — null = ASAP. Only shown when the chef
   // offers slots; the chosen slot+date ride along on the create-order payload.
   const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
@@ -239,6 +259,8 @@ export default function CheckoutScreen() {
       });
 
       const orderId = orderResult.data.id;
+      // Order created — the note is now persisted server-side; drop the backup.
+      clearNoteDraft();
 
       // Steps 2–3: create the Razorpay payment and open the NATIVE checkout
       // sheet. startOrderPayment handles the full-wallet (already-paid) shortcut

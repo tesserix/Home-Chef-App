@@ -2,7 +2,7 @@
 // POST /v1/catering/requests  → create request
 // GET  /v1/catering/requests  → list my requests
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ import {
 } from '../hooks/useCatering';
 import type { CateringRequest } from '../hooks/useCatering';
 import { friendlyErrorMessage } from '../lib/errors';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
 
 // Threat model T-02-05-02: Zod validates required fields before POST
@@ -48,6 +49,20 @@ const cateringSchema = z.object({
 });
 
 type CateringFormValues = z.infer<typeof cateringSchema>;
+
+// Envelope for the persisted draft — the RHF fields plus the preferences /
+// location state that lives outside RHF.
+interface CateringDraft {
+  form: CateringFormValues;
+  selectedEventType: string;
+  cuisines: string[];
+  dietary: string[];
+  menuStyle: string;
+  eventTime: string;
+  venueName: string;
+  addressLine1: string;
+  postalCode: string;
+}
 
 const EVENT_TYPES = [
   'Wedding',
@@ -275,6 +290,8 @@ function ChipGroup({
 
 function RequestForm({ onSuccess }: { onSuccess: () => void }) {
   const createRequest = useCreateCateringRequest();
+  const { ready, draft, saveDraft, clearDraft } =
+    useFormDraft<CateringDraft>('catering-draft');
   const [selectedEventType, setSelectedEventType] = useState('');
   // Preferences + location managed outside RHF (optional, no validation).
   const [cuisines, setCuisines] = useState<string[]>([]);
@@ -293,6 +310,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
     handleSubmit,
     setValue,
     reset,
+    watch,
     formState: { errors },
   } = useForm<CateringFormValues>({
     resolver: zodResolver(cateringSchema),
@@ -306,6 +324,52 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
       description: '',
     },
   });
+
+  // Restore a saved draft once, when the async load resolves.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!ready || restored.current || !draft) return;
+    restored.current = true;
+    reset(draft.form);
+    setSelectedEventType(draft.selectedEventType);
+    setCuisines(draft.cuisines);
+    setDietary(draft.dietary);
+    setMenuStyle(draft.menuStyle);
+    setEventTime(draft.eventTime);
+    setVenueName(draft.venueName);
+    setAddressLine1(draft.addressLine1);
+    setPostalCode(draft.postalCode);
+  }, [ready, draft, reset]);
+
+  // Persist on every change (debounced in the hook). Guard until the initial
+  // load resolves so we never overwrite a saved draft with the empty defaults.
+  const watched = watch();
+  useEffect(() => {
+    if (!ready) return;
+    saveDraft({
+      form: watched,
+      selectedEventType,
+      cuisines,
+      dietary,
+      menuStyle,
+      eventTime,
+      venueName,
+      addressLine1,
+      postalCode,
+    });
+  }, [
+    ready,
+    watched,
+    selectedEventType,
+    cuisines,
+    dietary,
+    menuStyle,
+    eventTime,
+    venueName,
+    addressLine1,
+    postalCode,
+    saveDraft,
+  ]);
 
   function selectEventType(t: string) {
     setSelectedEventType(t);
@@ -336,6 +400,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
             'Request Submitted!',
             'Chefs will review and send quotes.',
           );
+          clearDraft();
           reset();
           setSelectedEventType('');
           setCuisines([]);

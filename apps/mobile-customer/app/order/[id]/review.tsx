@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Star } from 'lucide-react-native';
+import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useCreateReview } from '../../../hooks/useCreateReview';
@@ -67,6 +68,9 @@ export default function OrderReviewScreen() {
   const { data, isLoading } = useOrder(id ?? '');
   const order = data?.data;
   const createReview = useCreateReview();
+  const { ready, draft, saveDraft, clearDraft } = useFormDraft<string>(
+    `review-${id ?? 'unknown'}`,
+  );
 
   const [overall, setOverall] = useState(0);
   const [food, setFood] = useState(0);
@@ -77,6 +81,19 @@ export default function OrderReviewScreen() {
   const [dishRatings, setDishRatings] = useState<Record<string, number>>({});
   const [title, setTitle] = useState('');
   const [comment, setComment] = useState('');
+
+  // Persist the free-text comment (the typing-heavy field) so a background/kill
+  // doesn't wipe it. Restored once the async load resolves; cleared on submit.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!ready || restored.current || draft == null) return;
+    restored.current = true;
+    setComment(draft);
+  }, [ready, draft]);
+  useEffect(() => {
+    if (!ready) return;
+    saveDraft(comment);
+  }, [ready, comment, saveDraft]);
 
   // One row per distinct dish in the order (#145).
   const dishes = useMemo(() => {
@@ -107,6 +124,7 @@ export default function OrderReviewScreen() {
       },
       {
         onSuccess: () => {
+          clearDraft();
           Alert.alert('Thanks!', 'Your review has been submitted.');
           router.back();
         },
