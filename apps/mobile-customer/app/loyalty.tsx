@@ -1,9 +1,10 @@
 import React from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Award, Flame, Sparkles, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 import {
   useLoyalty,
   useLoyaltyTransactions,
@@ -85,8 +86,8 @@ export default function LoyaltyScreen() {
   };
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-canvas">
-      <Stack.Screen options={{ title: 'Rewards' }} />
+    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-canvas">
+      <ScreenHeader title="Rewards" />
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={customerColors.charcoal.soft} />

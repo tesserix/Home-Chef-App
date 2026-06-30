@@ -14,9 +14,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Send, ShieldCheck } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../../../components/ScreenHeader';
 import { useOrderMessages, useSendMessage, type Message } from '../../../hooks/useMessaging';
 
 function timeLabel(iso: string): string {
@@ -45,8 +46,8 @@ export default function MessagesScreen() {
   };
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-canvas">
-      <Stack.Screen options={{ title: 'Messages' }} />
+    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} className="flex-1 bg-canvas">
+      <ScreenHeader title="Messages" />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

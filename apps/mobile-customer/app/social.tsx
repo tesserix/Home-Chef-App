@@ -17,6 +17,7 @@ import { Camera, Heart } from 'lucide-react-native';
 import { useSocialFeed, useLikePost } from '../hooks/useSocial';
 import type { SocialPost } from '../hooks/useSocial';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 const PAGE_LIMIT = 20;
 
@@ -195,15 +196,7 @@ export default function SocialScreen() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
 
-      {/* ── Geist-Bold header ── */}
-      <View className="px-4 pt-3 pb-2">
-        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-          Social Feed
-        </Text>
-      </View>
-
-      {/* ── Hairline under header ── */}
-      <View className="h-px bg-hairline" />
+      <ScreenHeader title="Social Feed" />
 
       <FlatList<SocialPost>
         data={allPosts}
