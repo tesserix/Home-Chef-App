@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { Search, MapPin } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
@@ -22,6 +22,7 @@ import {
   type AddressSuggestion,
 } from '../../hooks/useLocations';
 import { AddressLabelSelect } from '../../components/address/AddressLabelSelect';
+import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 
 const schema = z.object({
   label: z.string().min(1),
@@ -35,11 +36,7 @@ const schema = z.object({
 type AddressForm = z.infer<typeof schema>;
 
 export default function AddressScreen() {
-  const params = useLocalSearchParams<{
-    firstName: string;
-    lastName: string;
-    phone: string;
-  }>();
+  const draft = useCustomerOnboardingStore();
 
   const {
     control,
@@ -48,13 +45,15 @@ export default function AddressScreen() {
     formState: { errors },
   } = useForm<AddressForm>({
     resolver: zodResolver(schema),
+    // Seed from the saved draft so navigating back to this step (or resuming
+    // after the app was backgrounded) shows the entered address, not a blank.
     defaultValues: {
-      label: 'Home',
-      addressLine2: '',
-      addressLine1: '',
-      city: '',
-      state: '',
-      pincode: '',
+      label: draft.label || 'Home',
+      addressLine2: draft.addressLine2,
+      addressLine1: draft.addressLine1,
+      city: draft.city,
+      state: draft.state,
+      pincode: draft.pincode,
     },
   });
 
@@ -69,7 +68,11 @@ export default function AddressScreen() {
   // so the server can run delivery-zone checks + live 3PL quotes. Cleared when
   // the user manually edits the street line (the geocode would be stale), in
   // which case the server falls back to a flat delivery fee.
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(
+    draft.latitude != null && draft.longitude != null
+      ? { lat: draft.latitude, lon: draft.longitude }
+      : null,
+  );
 
   function pickSuggestion(s: AddressSuggestion): void {
     setValue('addressLine1', s.line1 || s.description, { shouldValidate: true });
@@ -87,22 +90,17 @@ export default function AddressScreen() {
   }
 
   const onSubmit = (data: AddressForm) => {
-    router.push({
-      pathname: '/(onboarding)/preferences',
-      params: {
-        firstName: params.firstName,
-        lastName: params.lastName,
-        phone: params.phone,
-        label: data.label,
-        addressLine1: data.addressLine1,
-        addressLine2: data.addressLine2 ?? '',
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        latitude: coords ? String(coords.lat) : '',
-        longitude: coords ? String(coords.lon) : '',
-      },
+    draft.update({
+      label: data.label,
+      addressLine1: data.addressLine1,
+      addressLine2: data.addressLine2 ?? '',
+      city: data.city,
+      state: data.state,
+      pincode: data.pincode,
+      latitude: coords ? coords.lat : null,
+      longitude: coords ? coords.lon : null,
     });
+    router.push('/(onboarding)/preferences');
   };
 
   return (

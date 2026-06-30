@@ -23,7 +23,7 @@ type FormValues = z.infer<typeof schema>;
 export default function PersonalInfoScreen() {
   const { t } = useTranslation();
   const { user } = useAuthStore();
-  const { updatePersonalInfo, setStep } = useVendorOnboardingStore();
+  const { personalInfo, updatePersonalInfo, setStep } = useVendorOnboardingStore();
 
   const {
     control,
@@ -31,10 +31,14 @@ export default function PersonalInfoScreen() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    // Seed from the persisted draft so editing this step from Review (or
+    // resuming after the app was backgrounded) shows the saved values instead
+    // of a blank form. RHF captures defaultValues once at mount, which is what
+    // we want here — each Edit tap mounts a fresh instance.
     defaultValues: {
-      fullName: '',
-      phone: '',
-      email: user?.email ?? '',
+      fullName: personalInfo.fullName,
+      phone: personalInfo.phone,
+      email: personalInfo.email || (user?.email ?? ''),
     },
   });
 

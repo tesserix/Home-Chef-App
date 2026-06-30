@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { router } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
+import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 
 const schema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
@@ -30,28 +31,29 @@ export default function UserInfoScreen() {
   // captures name + phone into the auth store; social sign-up leaves them
   // blank). Saves re-typing details we already have.
   const user = useAuthStore((s) => s.user);
+  const draft = useCustomerOnboardingStore();
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<UserInfoForm>({
     resolver: zodResolver(schema),
+    // Prefer the saved draft (so resuming / coming back shows what was typed),
+    // then fall back to whatever sign-up captured into the auth store.
     defaultValues: {
-      firstName: user?.firstName ?? '',
-      lastName: user?.lastName ?? '',
-      phone: user?.phone ?? '',
+      firstName: draft.firstName || (user?.firstName ?? ''),
+      lastName: draft.lastName || (user?.lastName ?? ''),
+      phone: draft.phone || (user?.phone ?? ''),
     },
   });
 
   const onSubmit = (data: UserInfoForm) => {
-    router.push({
-      pathname: '/(onboarding)/address',
-      params: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-      },
+    draft.update({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
     });
+    router.push('/(onboarding)/address');
   };
 
   return (
