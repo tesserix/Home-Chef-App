@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,6 +55,45 @@ type ApprovalRequest struct {
 	Partner     DeliveryPartner `gorm:"foreignKey:PartnerID" json:"partner,omitempty"`
 	SubmittedBy User            `gorm:"foreignKey:SubmittedByID" json:"submittedBy,omitempty"`
 	ReviewedBy  *User           `gorm:"foreignKey:ReviewedByID" json:"reviewedBy,omitempty"`
+
+	// Computed display fields (not persisted) — populated by the admin
+	// handlers from the preloaded relations so every approval, of any type,
+	// clearly shows who submitted it and which kitchen it belongs to.
+	RequestedByName  string `gorm:"-" json:"requestedByName,omitempty"`
+	RequestedByEmail string `gorm:"-" json:"requestedByEmail,omitempty"`
+	KitchenName      string `gorm:"-" json:"kitchenName,omitempty"`
+}
+
+// PopulateDisplayFields fills RequestedByName / RequestedByEmail / KitchenName
+// from the preloaded SubmittedBy, Chef and Partner relations. Prefers the
+// submitter's own identity, falling back to the chef's / partner's linked user.
+// Safe to call with zero-valued relations (fields just stay empty). Call after
+// Preload("Chef.User"), Preload("Partner.User") and Preload("SubmittedBy").
+func (a *ApprovalRequest) PopulateDisplayFields() {
+	name := strings.TrimSpace(a.SubmittedBy.FirstName + " " + a.SubmittedBy.LastName)
+	email := a.SubmittedBy.Email
+
+	if a.ChefID != nil {
+		if a.Chef.BusinessName != "" {
+			a.KitchenName = a.Chef.BusinessName
+		}
+		if name == "" {
+			name = strings.TrimSpace(a.Chef.User.FirstName + " " + a.Chef.User.LastName)
+		}
+		if email == "" {
+			email = a.Chef.User.Email
+		}
+	} else if a.PartnerID != nil {
+		if name == "" {
+			name = strings.TrimSpace(a.Partner.User.FirstName + " " + a.Partner.User.LastName)
+		}
+		if email == "" {
+			email = a.Partner.User.Email
+		}
+	}
+
+	a.RequestedByName = name
+	a.RequestedByEmail = email
 }
 
 // ApprovalRequestHistory tracks state transitions
