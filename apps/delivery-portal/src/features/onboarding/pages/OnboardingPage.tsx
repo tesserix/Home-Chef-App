@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, Loader2 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
-import { clearAllFormCache, clearStepCache } from '@/shared/utils/form-cache';
+import { clearAllFormCache, clearStepCache, getCachedFormData } from '@/shared/utils/form-cache';
 import { StepProgress } from '../components/StepProgress';
 import { StepPersonalInfo } from '../components/StepPersonalInfo';
 import { StepVehicleDetails } from '../components/StepVehicleDetails';
@@ -23,6 +23,9 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<Record<string, unknown>>({});
+  // True while the driver is editing a single step reached via "Edit" on the
+  // Review screen — used to send them back to Review after they save.
+  const [returnToReview, setReturnToReview] = useState(false);
 
   const refreshProfile = useCallback(async () => {
     try {
@@ -83,14 +86,42 @@ export default function OnboardingPage() {
     setCurrentStep(step);
   };
 
+  // Jump to a step from the Review screen to fix something. Unlike plain
+  // back-navigation, this remembers to return the driver to Review after they
+  // save, and refreshes the server profile as a fallback data source in case
+  // the local draft is unavailable (e.g. storage disabled).
+  const editFromReview = (step: number) => {
+    setReturnToReview(true);
+    setCurrentStep(step);
+    void refreshProfile();
+  };
+
   const handleStepComplete = async (stepNumber: number) => {
     // Refresh profile data from server after each step save
     // This ensures vehicleType and other fields are up-to-date for subsequent steps
-    await refreshProfile();
+    const status = await refreshProfile();
 
     if (stepNumber === 1) {
-      // If vehicle type changed, clear stale vehicle step cache
-      clearStepCache('vehicle');
+      // The vehicle step's draft (make/model/registration/etc.) only applies to
+      // one vehicle type. If the driver switched type on the personal step, drop
+      // just that draft so it re-seeds cleanly; otherwise keep it so their
+      // entered details survive an edit-from-review round trip.
+      const newType =
+        (status?.profile as Record<string, string> | undefined)?.vehicleType ??
+        getCachedFormData('personal')?.vehicleType;
+      const cachedVehicleType = getCachedFormData('vehicle')?.vehicleType;
+      if (cachedVehicleType && newType && cachedVehicleType !== newType) {
+        clearStepCache('vehicle');
+      }
+    }
+
+    // If the driver came here from Review to edit one step, send them straight
+    // back to Review after saving instead of marching them forward through
+    // every remaining step again.
+    if (returnToReview) {
+      setReturnToReview(false);
+      setCurrentStep(5);
+      return;
     }
 
     if (currentStep < 5) {
@@ -167,7 +198,7 @@ export default function OnboardingPage() {
             <StepReview
               onComplete={handleSubmitComplete}
               onBack={() => goToStep(4)}
-              onGoToStep={goToStep}
+              onGoToStep={editFromReview}
             />
           )}
         </div>

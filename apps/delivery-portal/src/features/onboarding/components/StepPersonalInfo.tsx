@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bike, Car, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { toast } from 'sonner';
-import { getCachedFormData, setCachedFormData, clearStepCache } from '@/shared/utils/form-cache';
+import { getCachedFormData, setCachedFormData } from '@/shared/utils/form-cache';
 
 const vehicleTypes = [
   { value: 'bicycle', label: 'Bicycle', icon: Bike },
@@ -87,7 +87,9 @@ export function StepPersonalInfo({ initialData, onComplete }: StepPersonalInfoPr
         vehicleType: form.vehicleType,
         referralCode: form.referralCode || undefined,
       });
-      clearStepCache('personal');
+      // Keep the draft in localStorage until the whole application is
+      // submitted — clearing it here is what made the form go blank when the
+      // driver later edited this step from the Review screen.
       toast.success('Personal info saved');
       onComplete();
     } catch {
