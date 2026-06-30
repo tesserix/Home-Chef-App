@@ -1,9 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
 import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useWallet, useWalletTransactions } from '../hooks/useWallet';
 
 function formatMoney(amount: number, currency: string): string {
@@ -35,8 +35,8 @@ export default function WalletScreen() {
   const currency = wallet?.currency ?? 'INR';
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-canvas">
-      <Stack.Screen options={{ title: 'Wallet' }} />
+    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-canvas">
+      <ScreenHeader title="Wallet" />
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={customerColors.charcoal.soft} />

@@ -1,9 +1,10 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, router } from 'expo-router';
+import { router } from 'expo-router';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useChefs } from '../hooks/useChefs';
 
 // Fallback when no chef has coordinates yet (Bengaluru centre). The map recenters
@@ -28,29 +29,31 @@ export default function ChefsMapScreen() {
       : DEFAULT_REGION;
 
   return (
-    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: customerColors.canvas }}>
-      <Stack.Screen options={{ title: 'Chefs near you' }} />
-      {isLoading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={customerColors.charcoal.soft} />
-        </View>
-      ) : located.length === 0 ? (
-        <Text style={{ textAlign: 'center', marginTop: 32, color: customerColors.charcoal.soft, fontFamily: 'Inter' }}>
-          No chefs with a mapped location yet.
-        </Text>
-      ) : (
-        <MapView style={StyleSheet.absoluteFill} provider={PROVIDER_DEFAULT} initialRegion={region}>
-          {located.map((c) => (
-            <Marker
-              key={c.id}
-              coordinate={{ latitude: c.latitude as number, longitude: c.longitude as number }}
-              title={c.name}
-              description={c.cuisine}
-              onCalloutPress={() => router.push(`/chef/${c.id}`)}
-            />
-          ))}
-        </MapView>
-      )}
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: customerColors.canvas }}>
+      <ScreenHeader title="Chefs near you" />
+      <View style={{ flex: 1 }}>
+        {isLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={customerColors.charcoal.soft} />
+          </View>
+        ) : located.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 32, color: customerColors.charcoal.soft, fontFamily: 'Inter' }}>
+            No chefs with a mapped location yet.
+          </Text>
+        ) : (
+          <MapView style={StyleSheet.absoluteFill} provider={PROVIDER_DEFAULT} initialRegion={region}>
+            {located.map((c) => (
+              <Marker
+                key={c.id}
+                coordinate={{ latitude: c.latitude as number, longitude: c.longitude as number }}
+                title={c.name}
+                description={c.cuisine}
+                onCalloutPress={() => router.push(`/chef/${c.id}`)}
+              />
+            ))}
+          </MapView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }

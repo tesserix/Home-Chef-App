@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useSearchDishes, type DishResult } from '../hooks/useSearchDishes';
 
 function formatMoney(amount: number): string {
@@ -77,8 +78,8 @@ export default function SearchDishesScreen() {
   );
 
   return (
-    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: customerColors.canvas }}>
-      <Stack.Screen options={{ title: 'Search dishes' }} />
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: customerColors.canvas }}>
+      <ScreenHeader title="Search dishes" />
       <View style={{ padding: 16 }}>
         <View
           style={{

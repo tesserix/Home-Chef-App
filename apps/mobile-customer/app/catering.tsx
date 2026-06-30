@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronRight, UtensilsCrossed } from 'lucide-react-native';
+import { ScreenHeader } from '../components/ScreenHeader';
 import {
   useCateringRequests,
   useCreateCateringRequest,
@@ -716,12 +717,7 @@ export default function CateringScreen() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
 
-      {/* ── Geist-Bold header ── */}
-      <View className="px-4 pt-3 pb-2">
-        <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-          Catering
-        </Text>
-      </View>
+      <ScreenHeader title="Catering" />
 
       {/* ── Segmented tab bar ── */}
       <View className="mx-4 my-3 bg-surface-soft rounded-lg p-1 flex-row">

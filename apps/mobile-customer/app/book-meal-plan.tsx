@@ -54,7 +54,7 @@ const selKey = (date: string, slot: MealSlot) => `${date}-${slot}`;
 // accepts all or cherry-picks; a trim comes back here for approval.
 export default function BookMealPlanScreen() {
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
-  const { data: menu, isLoading } = useChefWeeklyMenu(chefId);
+  const { data: menu, isLoading, isError, refetch } = useChefWeeklyMenu(chefId);
   const create = useCreateMealPlan();
 
   const [selection, setSelection] = useState<Record<string, Selected>>({});
@@ -151,6 +151,24 @@ export default function BookMealPlanScreen() {
       {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator color={customerColors.coral.DEFAULT} />
+        </View>
+      ) : isError ? (
+        // The request failed (network/server) — don't masquerade as "no menu",
+        // which would tell the customer the chef has nothing when they might.
+        <View style={styles.centered}>
+          <CalendarDays size={40} color={customerColors.charcoal.soft} strokeWidth={1.5} />
+          <Text style={styles.emptyTitle}>Couldn&apos;t load the menu</Text>
+          <Text style={styles.emptyText}>
+            Something went wrong fetching this chef&apos;s weekly menu. Check your
+            connection and try again.
+          </Text>
+          <Pressable
+            onPress={() => void refetch()}
+            accessibilityRole="button"
+            style={styles.retryBtn}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : !menu?.isPublished ? (
         <View style={styles.centered}>
@@ -288,6 +306,19 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.soft,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: customerColors.coral.DEFAULT,
+  },
+  retryText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.coral.pressed,
   },
   scroll: { paddingHorizontal: 16, paddingBottom: 24 },
   intro: {
