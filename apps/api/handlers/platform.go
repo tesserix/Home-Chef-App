@@ -140,6 +140,9 @@ func (h *PlatformHandler) AdminUpdatePolicy(c *gin.Context) {
 		}
 		current.OperatingDays = days
 	}
+	if v, ok := req["groupOrdersEnabled"].(bool); ok {
+		current.GroupOrdersEnabled = v
+	}
 
 	if err := services.SavePlatformPolicy(current, &userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

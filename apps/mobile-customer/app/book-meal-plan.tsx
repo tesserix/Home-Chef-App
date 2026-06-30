@@ -152,13 +152,22 @@ export default function BookMealPlanScreen() {
         <View style={styles.centered}>
           <ActivityIndicator color={customerColors.coral.DEFAULT} />
         </View>
-      ) : !menu?.isPublished || dates.length === 0 ? (
+      ) : !menu?.isPublished ? (
         <View style={styles.centered}>
           <CalendarDays size={40} color={customerColors.charcoal.soft} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>No weekly menu yet</Text>
           <Text style={styles.emptyText}>
             This chef hasn&apos;t published a tiffin menu you can pre-book. Try
             ordering individual dishes instead.
+          </Text>
+        </View>
+      ) : dates.length === 0 ? (
+        <View style={styles.centered}>
+          <CalendarDays size={40} color={customerColors.charcoal.soft} strokeWidth={1.5} />
+          <Text style={styles.emptyTitle}>No upcoming days to book</Text>
+          <Text style={styles.emptyText}>
+            This chef&apos;s weekly menu has no upcoming days open for pre-booking
+            right now. Please check back soon.
           </Text>
         </View>
       ) : (
