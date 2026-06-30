@@ -61,7 +61,16 @@ export default function ChefDetailScreen() {
         { chefId, type, splitMode: 'split' },
         {
           onSuccess: (d) => router.push(`/group-order/${d.groupOrder.id}` as never),
-          onError: () => Alert.alert('Could not start', 'Group orders may not be enabled yet.'),
+          onError: (err: unknown) => {
+            const e = err as { response?: { status?: number; data?: { error?: string } } };
+            const status = e?.response?.status;
+            const serverMsg = e?.response?.data?.error;
+            const msg =
+              status === 503
+                ? "Group orders aren't available right now. Please try again later."
+                : serverMsg || "We couldn't start the group order. Please try again.";
+            Alert.alert('Could not start', msg);
+          },
         },
       );
     Alert.alert('Start a group order', 'Who is this for?', [

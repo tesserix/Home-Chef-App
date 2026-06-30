@@ -33,8 +33,15 @@ type GroupOrderHandler struct{}
 
 func NewGroupOrderHandler() *GroupOrderHandler { return &GroupOrderHandler{} }
 
+// groupOrdersEnabled is true when EITHER the startup env flag
+// (GROUP_ORDERS_ENABLED) or the runtime platform_policy override is on. The
+// policy override lets admins flip group orders from the console without a
+// redeploy — env-only flags were a dead toggle in the admin UI before this.
 func groupOrdersEnabled() bool {
-	return config.AppConfig != nil && config.AppConfig.GroupOrdersEnabled
+	if config.AppConfig != nil && config.AppConfig.GroupOrdersEnabled {
+		return true
+	}
+	return services.GetPlatformPolicy().GroupOrdersEnabled
 }
 
 func generateJoinToken() string {

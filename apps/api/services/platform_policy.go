@@ -36,6 +36,12 @@ type PlatformPolicy struct {
 	ClosingTime   string `json:"closingTime"`   // "HH:MM" 24h
 	OperatingDays []int  `json:"operatingDays"` // 0=Sunday..6=Saturday; empty = all days
 	ClosedMessage string `json:"closedMessage"` // shown at checkout when closed
+
+	// Feature flags — runtime overrides for env-based gates. When true the
+	// feature is on even if its env var is off, so prod can toggle it from the
+	// admin console without a redeploy. The gate is `env OR this`, so the env
+	// default-on still works and this only ever turns a feature MORE on.
+	GroupOrdersEnabled bool `json:"groupOrdersEnabled"` // group/office ("corporate") orders
 }
 
 // DefaultPlatformPolicy matches what was hardcoded in handlers/orders.go
@@ -53,6 +59,9 @@ func DefaultPlatformPolicy() PlatformPolicy {
 		ClosingTime:         "",
 		OperatingDays:       nil,
 		ClosedMessage:       "We're currently closed. Please come back during our operating hours.",
+		// Default off here — the env var (GROUP_ORDERS_ENABLED) provides the
+		// baseline; this policy field only adds a runtime override on top.
+		GroupOrdersEnabled: false,
 	}
 }
 
@@ -237,6 +246,7 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 		ClosingTime         *string  `json:"closingTime"`
 		OperatingDays       *[]int   `json:"operatingDays"`
 		ClosedMessage       *string  `json:"closedMessage"`
+		GroupOrdersEnabled  *bool    `json:"groupOrdersEnabled"`
 	}
 	var p partial
 	if err := json.Unmarshal([]byte(setting.Value), &p); err != nil {
@@ -276,6 +286,9 @@ func loadPlatformPolicyFromDB() PlatformPolicy {
 	}
 	if p.ClosedMessage != nil && *p.ClosedMessage != "" {
 		out.ClosedMessage = *p.ClosedMessage
+	}
+	if p.GroupOrdersEnabled != nil {
+		out.GroupOrdersEnabled = *p.GroupOrdersEnabled
 	}
 	return out
 }
