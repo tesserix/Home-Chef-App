@@ -67,7 +67,7 @@ export function useChefWeeklyMenu(chefId: string | undefined) {
   return useQuery<WeeklyMenu>({
     queryKey: ['chef-weekly-menu', chefId],
     queryFn: () =>
-      api.get<WeeklyMenu>(`/chefs/${chefId}/weekly-menu`).then((r) => r.data),
+      api.get<WeeklyMenu>(`/v1/chefs/${chefId}/weekly-menu`).then((r) => r.data),
     enabled: Boolean(chefId),
     staleTime: 5 * 60_000,
   });
@@ -78,7 +78,7 @@ export function useMyMealPlans() {
   return useQuery<{ data: MealPlan[] }>({
     queryKey: ['meal-plans'],
     queryFn: () =>
-      api.get<{ data: MealPlan[] }>('/meal-plans').then((r) => r.data),
+      api.get<{ data: MealPlan[] }>('/v1/meal-plans').then((r) => r.data),
   });
 }
 
@@ -88,7 +88,7 @@ export function useMealPlan(id: string | undefined) {
   return useQuery<{ mealPlan: MealPlan }>({
     queryKey: ['meal-plans', id],
     queryFn: () =>
-      api.get<{ mealPlan: MealPlan }>(`/meal-plans/${id}`).then((r) => r.data),
+      api.get<{ mealPlan: MealPlan }>(`/v1/meal-plans/${id}`).then((r) => r.data),
     enabled: Boolean(id),
     refetchInterval: (query) => {
       const s = query.state.data?.mealPlan?.status;
@@ -104,7 +104,7 @@ export function useCreateMealPlan() {
     mutationFn: (body: { chefId: string; days: CreateMealPlanDay[] }) =>
       api
         .post<{ mealPlan: MealPlan; escrowEnabled?: boolean }>(
-          '/meal-plans',
+          '/v1/meal-plans',
           body,
         )
         .then((r) => r.data),
@@ -119,7 +119,7 @@ export function useSkipMealPlanDay() {
     mutationFn: (vars: { planId: string; dayId: string }) =>
       api
         .put<{ mealPlan: MealPlan }>(
-          `/meal-plans/${vars.planId}/days/${vars.dayId}/skip`,
+          `/v1/meal-plans/${vars.planId}/days/${vars.dayId}/skip`,
         )
         .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
@@ -133,7 +133,7 @@ export function useFinalizeMealPlan() {
     mutationFn: (vars: { id: string; approve: boolean }) =>
       api
         .put<{ mealPlan: MealPlan }>(
-          `/meal-plans/${vars.id}/${vars.approve ? 'approve' : 'reject'}`,
+          `/v1/meal-plans/${vars.id}/${vars.approve ? 'approve' : 'reject'}`,
         )
         .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
