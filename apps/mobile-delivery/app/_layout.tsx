@@ -31,6 +31,27 @@ const queryClient = new QueryClient({
   },
 });
 
+// Map the server-reported onboarding step to the wizard screen so an
+// interrupted application resumes where the driver left off. Return type is
+// left to inference (a union of route literals) so it stays assignable to the
+// typed-routes Href the router expects.
+function wizardPathForStep(step: number) {
+  switch (step) {
+    case 2:
+      return '/(onboarding)/vehicle' as const;
+    case 3:
+      return '/(onboarding)/documents' as const;
+    case 4:
+      return '/(onboarding)/payout' as const;
+    case 5:
+      return '/(onboarding)/subscription' as const;
+    case 6:
+      return '/(onboarding)/review' as const;
+    default:
+      return '/(onboarding)/personal' as const;
+  }
+}
+
 // Set global notification handler at module level — before any notification arrives.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -161,8 +182,14 @@ function AppNavigator() {
       router.replace('/(tabs)');
     } else if (onboardingStatus.data.status === 'not_started') {
       router.replace('/(onboarding)/personal');
+    } else if (onboardingStatus.data.status === 'in_progress') {
+      // Resume the half-finished application at the step the driver reached,
+      // instead of bouncing them to the "under review" screen — that used to
+      // strand them mid-wizard with no way back in (and, with the draft now
+      // persisted, would have hidden their saved progress).
+      router.replace(wizardPathForStep(onboardingStatus.data.step));
     } else {
-      // in_progress, pending_review, rejected
+      // pending_review / rejected — application already submitted; show status.
       router.replace('/(onboarding)/pending');
     }
   }, [isAuthenticated, isLoading, onboardingStatus, onboardingLoading]);

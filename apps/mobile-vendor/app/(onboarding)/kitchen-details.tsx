@@ -72,7 +72,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function KitchenDetailsScreen() {
   const { t } = useTranslation();
-  const { updateKitchenDetails, setStep } = useVendorOnboardingStore();
+  const { kitchenDetails, updateKitchenDetails, setStep } = useVendorOnboardingStore();
 
   const {
     control,
@@ -82,15 +82,17 @@ export default function KitchenDetailsScreen() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    // Seed from the persisted draft so editing this step from Review (or
+    // resuming after backgrounding) shows the saved values, not a blank form.
     defaultValues: {
-      businessName: '',
-      cuisines: [],
-      description: '',
-      addressLine1: '',
-      addressLine2: '',
-      city: '',
-      state: '',
-      postalCode: '',
+      businessName: kitchenDetails.businessName,
+      cuisines: kitchenDetails.cuisines,
+      description: kitchenDetails.description,
+      addressLine1: kitchenDetails.addressLine1,
+      addressLine2: kitchenDetails.addressLine2,
+      city: kitchenDetails.city,
+      state: kitchenDetails.state,
+      postalCode: kitchenDetails.postalCode,
     },
   });
 

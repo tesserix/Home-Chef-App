@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Banknote, Smartphone } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
 import { toast } from 'sonner';
-import { getCachedFormData, setCachedFormData, clearStepCache } from '@/shared/utils/form-cache';
+import { getCachedFormData, setCachedFormData } from '@/shared/utils/form-cache';
 
 type PayoutMethod = 'bank_transfer' | 'upi';
 
@@ -63,7 +63,9 @@ export function StepPayoutDetails({ initialData, onComplete, onBack }: StepPayou
         bankAccountName: form.payoutMethod === 'bank_transfer' ? form.bankAccountName : undefined,
         upiId: form.payoutMethod === 'upi' ? form.upiId : undefined,
       });
-      clearStepCache('payout');
+      // Keep the draft until the whole application is submitted so editing
+      // this step from Review re-seeds the entered values instead of a blank
+      // form.
       toast.success('Payout details saved');
       onComplete();
     } catch {

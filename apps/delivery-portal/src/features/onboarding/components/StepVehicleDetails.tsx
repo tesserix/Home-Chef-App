@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/shared/services/api-client';
 import { toast } from 'sonner';
-import { getCachedFormData, setCachedFormData, clearStepCache } from '@/shared/utils/form-cache';
+import { getCachedFormData, setCachedFormData } from '@/shared/utils/form-cache';
 
 interface VehicleData {
   vehicleType: string;
@@ -78,7 +78,9 @@ export function StepVehicleDetails({ initialData, onComplete, onBack }: StepVehi
         licenseNumber: isBicycle ? undefined : form.licenseNumber,
         hasDeliveryBoxSpace: isBicycle ? form.hasDeliveryBoxSpace === 'yes' : undefined,
       });
-      clearStepCache('vehicle');
+      // Keep the draft until the whole application is submitted so editing
+      // this step from Review re-seeds the entered values instead of a blank
+      // form. A vehicle-type change is handled separately in OnboardingPage.
       toast.success('Vehicle details saved');
       onComplete();
     } catch {

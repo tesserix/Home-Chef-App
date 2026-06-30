@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useAuthStore } from '../../store/auth-store';
+import { useCustomerOnboardingStore } from '../../store/onboarding-store';
 import { api } from '../../lib/api';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -26,33 +27,20 @@ const CUISINE_OPTIONS = [
 ] as const;
 
 export default function PreferencesScreen() {
-  const [selected, setSelected] = useState<string[]>([]);
+  const draft = useCustomerOnboardingStore();
+  const selected = draft.cuisinePreferences;
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const params = useLocalSearchParams<{
-    firstName: string;
-    lastName: string;
-    phone: string;
-    label: string;
-    addressLine1: string;
-    addressLine2: string;
-    city: string;
-    state: string;
-    pincode: string;
-    latitude: string;
-    longitude: string;
-  }>();
 
   const setOnboardingComplete = useAuthStore(
     (s) => s.setOnboardingComplete
   );
 
   const toggleChip = (cuisine: string) => {
-    setSelected((prev) =>
-      prev.includes(cuisine)
-        ? prev.filter((c) => c !== cuisine)
-        : [...prev, cuisine]
-    );
+    draft.update({
+      cuisinePreferences: selected.includes(cuisine)
+        ? selected.filter((c) => c !== cuisine)
+        : [...selected, cuisine],
+    });
   };
 
   const onFinish = async () => {
@@ -62,23 +50,26 @@ export default function PreferencesScreen() {
       // `address` object — addressCity / addressState / addressPostalCode.
       // Sending a nested object silently dropped the address before.
       await api.post('/v1/customer/onboarding/complete', {
-        firstName: params.firstName,
-        lastName: params.lastName,
-        phone: params.phone,
-        addressLabel: params.label || 'Home',
-        addressLine1: params.addressLine1,
-        addressLine2: params.addressLine2 ?? '',
-        addressCity: params.city,
-        addressState: params.state,
-        addressPostalCode: params.pincode,
+        firstName: draft.firstName,
+        lastName: draft.lastName,
+        phone: draft.phone,
+        addressLabel: draft.label || 'Home',
+        addressLine1: draft.addressLine1,
+        addressLine2: draft.addressLine2 ?? '',
+        addressCity: draft.city,
+        addressState: draft.state,
+        addressPostalCode: draft.pincode,
         addressCountry: 'IN',
         // Geocoded from the address autocomplete pick; 0 when the user typed
         // the address manually (server then uses a flat fee + skips zones).
-        addressLatitude: params.latitude ? Number(params.latitude) : 0,
-        addressLongitude: params.longitude ? Number(params.longitude) : 0,
+        addressLatitude: draft.latitude ?? 0,
+        addressLongitude: draft.longitude ?? 0,
         cuisinePreferences: selected,
       });
 
+      // Application saved — clear the local draft so a future re-onboard
+      // (or a different account on this device) starts clean.
+      draft.reset();
       await setOnboardingComplete(true);
       router.replace('/(tabs)');
     } catch (error: unknown) {
