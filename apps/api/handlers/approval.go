@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +22,22 @@ type ApprovalHandler struct{}
 
 func NewApprovalHandler() *ApprovalHandler {
 	return &ApprovalHandler{}
+}
+
+// submittedDataValue returns the stored onboarding/menu payload as a parsed
+// JSON object so the admin UI can render its fields. The column holds raw JSON
+// text; returning it as a Go string made it marshal as an escaped string that
+// the UI iterated character-by-character. Falls back to the raw string if it
+// isn't valid JSON, and to nil when empty.
+func submittedDataValue(raw string) interface{} {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var v interface{}
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return raw
+	}
+	return v
 }
 
 // GetApprovalRequests returns paginated approval requests with filters
@@ -92,6 +110,11 @@ func (h *ApprovalHandler) GetApprovalRequests(c *gin.Context) {
 			ELSE 5
 		END ASC, created_at DESC
 	`).Offset(offset).Limit(limit).Find(&approvals)
+
+	// Surface who submitted each request + which kitchen, for every type.
+	for i := range approvals {
+		approvals[i].PopulateDisplayFields()
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": approvals,
@@ -167,6 +190,8 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	approval.PopulateDisplayFields()
+
 	// Fetch documents based on approval type
 	response := gin.H{
 		"id":            approval.ID,
@@ -181,7 +206,7 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		"entityId":      approval.EntityID,
 		"title":         approval.Title,
 		"description":   approval.Description,
-		"submittedData": approval.SubmittedData,
+		"submittedData": submittedDataValue(approval.SubmittedData),
 		"adminNotes":    approval.AdminNotes,
 		"reviewedAt":    approval.ReviewedAt,
 		"createdAt":     approval.CreatedAt,
@@ -190,6 +215,10 @@ func (h *ApprovalHandler) GetApprovalRequest(c *gin.Context) {
 		"partner":       approval.Partner,
 		"submittedBy":   approval.SubmittedBy,
 		"reviewedBy":    approval.ReviewedBy,
+		// Computed identity for the admin UI — works for every approval type.
+		"requestedByName":  approval.RequestedByName,
+		"requestedByEmail": approval.RequestedByEmail,
+		"kitchenName":      approval.KitchenName,
 	}
 
 	// Fetch appropriate documents based on approval type
