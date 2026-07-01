@@ -81,6 +81,11 @@ export default function CheckoutScreen() {
   const createOrder = useCreateOrder();
   const { data: chefData } = useChef(cartStore.chefId ?? '');
   const offersPickup = !!chefData?.data?.offersPickup;
+  // Whether the customer can pick "Delivery" at all. Server-computed = the chef
+  // self-delivers OR a 3PL provider is live. With 3PL dark and a non-self-
+  // delivering chef this is false, so we offer pickup only (no unfulfillable
+  // delivery order). Default true so an older API without the field still works.
+  const offersDelivery = chefData?.data?.offersDelivery ?? true;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -109,8 +114,9 @@ export default function CheckoutScreen() {
   // The customer only chooses delivery vs pickup. WHO delivers (the chef
   // themselves vs a 3PL rider) is the chef's decision, resolved server-side
   // from the chef's "I deliver myself" setting — never a customer choice.
+  // Delivery only appears when it's actually fulfillable (offersDelivery).
   const fulfillmentModes: Array<'delivery' | 'pickup' | 'chef_delivery'> = [
-    'delivery',
+    ...(offersDelivery ? (['delivery'] as const) : []),
     ...(offersPickup ? (['pickup'] as const) : []),
   ];
   const fulfillmentLabel: Record<typeof fulfillment, string> = {
@@ -118,6 +124,21 @@ export default function CheckoutScreen() {
     chef_delivery: 'Chef delivery',
     pickup: 'Pickup',
   };
+  // Once the chef loads, snap the selection to an available mode. Guards the case
+  // where the chef can't deliver (3PL dark + no self-delivery) so we never post an
+  // unfulfillable delivery order — the customer sees pickup pre-selected instead.
+  useEffect(() => {
+    const available: Array<'delivery' | 'pickup'> = [
+      ...(offersDelivery ? (['delivery'] as const) : []),
+      ...(offersPickup ? (['pickup'] as const) : []),
+    ];
+    if (
+      available.length > 0 &&
+      !available.includes(fulfillment as 'delivery' | 'pickup')
+    ) {
+      setFulfillment(available[0]);
+    }
+  }, [offersDelivery, offersPickup, fulfillment]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');

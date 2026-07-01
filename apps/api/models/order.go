@@ -349,6 +349,13 @@ type ChefOrderDetailResponse struct {
 	// the distance fields below, which are 0 when the chef set no radius or
 	// coords are missing and must never be used to infer the capability.
 	OffersSelfDelivery bool `json:"offersSelfDelivery"`
+	// RiderDispatchAvailable is a COMPUTED flag: whether a 3PL provider is
+	// currently enabled, i.e. whether "hand to a rider" is a real option. The
+	// vendor app gates the Mark-Ready rider button (and the mid-ready "hand to a
+	// rider" switch) on this, so the chef is never offered a rider while 3PL is
+	// dark. Flipping a provider's is_enabled=true re-enables the rider path with
+	// no app change.
+	RiderDispatchAvailable bool `json:"riderDispatchAvailable"`
 	// Chef self-delivery distance gate (chef_delivery only). DistanceKm is the
 	// chef→drop straight-line distance; MaxDistanceKm is the chef's configured
 	// comfort radius. The vendor app shows a soft "beyond your range" warning
