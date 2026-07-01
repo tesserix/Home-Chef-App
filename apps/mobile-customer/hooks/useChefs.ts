@@ -46,6 +46,7 @@ interface ApiChefProfile {
   offersPickup?: boolean;
   offersSelfDelivery?: boolean;
   offersDelivery?: boolean;
+  deliverableToYou?: boolean;
 }
 
 interface ApiMenuItem {
@@ -99,6 +100,7 @@ export function mapChef(c: ApiChefProfile): Chef {
     offersPickup: c.offersPickup,
     offersSelfDelivery: c.offersSelfDelivery,
     offersDelivery: c.offersDelivery,
+    deliverableToYou: c.deliverableToYou,
   };
 }
 
@@ -143,12 +145,16 @@ export function useChefs(filters: ChefFilters = {}) {
   });
 }
 
-export function useChef(id: string) {
+export function useChef(id: string, coords?: { lat: number; lng: number }) {
   return useQuery<{ data: Chef }>({
-    queryKey: ['chef', id],
+    // Coords are part of the key so switching the active address re-computes
+    // deliverableToYou (whether this chef reaches the customer).
+    queryKey: ['chef', id, coords?.lat, coords?.lng],
     queryFn: async () => {
-      // GetChef returns the chef object directly (not wrapped in `data`).
-      const r = await api.get(`/v1/chefs/${id}`);
+      // GetChef returns the chef object directly (not wrapped in `data`). Pass
+      // the customer's coordinates so the server can compute deliverableToYou.
+      const params = coords ? { lat: coords.lat, lng: coords.lng } : undefined;
+      const r = await api.get(`/v1/chefs/${id}`, { params });
       return { data: mapChef(r.data as ApiChefProfile) };
     },
     enabled: !!id,

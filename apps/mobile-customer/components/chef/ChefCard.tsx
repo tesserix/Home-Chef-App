@@ -162,6 +162,16 @@ export function ChefCard({ chef }: ChefCardProps) {
                   </Text>
                 )}
 
+                {/* Outside this chef's delivery range — they're listed because
+                    they offer pickup. Restrained text, matching the card's
+                    chrome-light style. Only shown when the app knows the
+                    customer's location (deliverableToYou is defined). */}
+                {chef.deliverableToYou === false && (
+                  <Text style={styles.pickupOnly} numberOfLines={1}>
+                    Pickup only · outside delivery area
+                  </Text>
+                )}
+
                 {/* Open / Closed — small text, not a loud badge */}
                 <Text
                   style={[
@@ -311,6 +321,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: customerColors.charcoal.soft,
     letterSpacing: 0,
+  },
+  pickupOnly: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
   },
 
   // Open/Closed as small text — not a loud badge

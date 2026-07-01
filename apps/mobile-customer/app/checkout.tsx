@@ -26,6 +26,7 @@ import { z } from 'zod';
 import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useChef } from '../hooks/useChefs';
+import { useCustomerCoords } from '../hooks/useCustomerCoords';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
 import { useWinback } from '../hooks/useWinback';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
@@ -79,13 +80,20 @@ function slotDayLabel(dateStr: string): string {
 export default function CheckoutScreen() {
   const cartStore = useCartStore();
   const createOrder = useCreateOrder();
-  const { data: chefData } = useChef(cartStore.chefId ?? '');
+  const coords = useCustomerCoords();
+  const { data: chefData } = useChef(cartStore.chefId ?? '', coords ?? undefined);
   const offersPickup = !!chefData?.data?.offersPickup;
   // Whether the customer can pick "Delivery" at all. Server-computed = the chef
   // self-delivers OR a 3PL provider is live. With 3PL dark and a non-self-
   // delivering chef this is false, so we offer pickup only (no unfulfillable
   // delivery order). Default true so an older API without the field still works.
   const offersDelivery = chefData?.data?.offersDelivery ?? true;
+  // Delivery-area reach: even if the chef offers delivery, a self-delivering
+  // chef the customer is outside the radius of comes back deliverableToYou=false
+  // — the app must offer pickup only. Undefined (no coords) keeps delivery
+  // available; the server order guard is the final backstop.
+  const deliverableHere = chefData?.data?.deliverableToYou !== false;
+  const deliveryAvailable = offersDelivery && deliverableHere;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -114,9 +122,10 @@ export default function CheckoutScreen() {
   // The customer only chooses delivery vs pickup. WHO delivers (the chef
   // themselves vs a 3PL rider) is the chef's decision, resolved server-side
   // from the chef's "I deliver myself" setting — never a customer choice.
-  // Delivery only appears when it's actually fulfillable (offersDelivery).
+  // Delivery only appears when it's actually fulfillable AND reaches the
+  // customer (deliveryAvailable = offersDelivery && within the chef's range).
   const fulfillmentModes: Array<'delivery' | 'pickup' | 'chef_delivery'> = [
-    ...(offersDelivery ? (['delivery'] as const) : []),
+    ...(deliveryAvailable ? (['delivery'] as const) : []),
     ...(offersPickup ? (['pickup'] as const) : []),
   ];
   const fulfillmentLabel: Record<typeof fulfillment, string> = {
@@ -129,7 +138,7 @@ export default function CheckoutScreen() {
   // unfulfillable delivery order — the customer sees pickup pre-selected instead.
   useEffect(() => {
     const available: Array<'delivery' | 'pickup'> = [
-      ...(offersDelivery ? (['delivery'] as const) : []),
+      ...(deliveryAvailable ? (['delivery'] as const) : []),
       ...(offersPickup ? (['pickup'] as const) : []),
     ];
     if (
@@ -138,7 +147,7 @@ export default function CheckoutScreen() {
     ) {
       setFulfillment(available[0]);
     }
-  }, [offersDelivery, offersPickup, fulfillment]);
+  }, [deliveryAvailable, offersPickup, fulfillment]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [applyWallet, setApplyWallet] = useState(false);
   const [note, setNote] = useState('');

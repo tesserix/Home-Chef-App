@@ -513,6 +513,22 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
+	// Self-delivery reach guard: a chef who delivers their own orders can only
+	// serve addresses inside their delivery radius. Reject an out-of-range
+	// chef-delivery order server-side — the mirror of the discovery filter that
+	// hides out-of-range delivery-only chefs, so a crafted request can't create
+	// an undeliverable order. Only enforced when the chef set a radius and the
+	// drop address has real coordinates (otherwise we can't range-check, matching
+	// the zones-off behaviour above).
+	if fulfillment == models.FulfillmentChefDelivery && chef.DeliveryRadius > 0 &&
+		(deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0) &&
+		!services.ChefDeliversTo(chef, deliveryAddr.Latitude, deliveryAddr.Longitude) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "This chef doesn't deliver to that address. Try pickup, or choose an address closer to the kitchen.",
+		})
+		return
+	}
+
 	// Generate order number
 	orderNumber := generateOrderNumber()
 
