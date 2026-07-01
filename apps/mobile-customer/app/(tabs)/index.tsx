@@ -37,6 +37,7 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
+import { CATERING_ENABLED } from '../../lib/features';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useChefs } from '../../hooks/useChefs';
@@ -311,15 +312,18 @@ export default function HomeScreen() {
               <Text style={styles.navLinkLabel}>Social Feed</Text>
             </View>
           </Pressable>
-          <Pressable
-            onPress={() => router.push('/catering')}
-            accessibilityRole="button"
-            accessibilityLabel="Go to Catering"
-          >
-            <View style={styles.navLinkPill}>
-              <Text style={styles.navLinkLabel}>Catering</Text>
-            </View>
-          </Pressable>
+          {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
+          {CATERING_ENABLED ? (
+            <Pressable
+              onPress={() => router.push('/catering')}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Catering"
+            >
+              <View style={styles.navLinkPill}>
+                <Text style={styles.navLinkLabel}>Catering</Text>
+              </View>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </>
