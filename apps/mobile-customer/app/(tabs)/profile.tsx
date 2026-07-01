@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { TIFFIN_ENABLED, CATERING_ENABLED } from '../../lib/features';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
@@ -567,20 +568,32 @@ export default function ProfileScreen() {
               icon={<MessageSquare size={18} color={customerColors.charcoal.soft} />}
               label="Social Feed"
               onPress={() => router.push('/social')}
+              isLast={!CATERING_ENABLED && !TIFFIN_ENABLED}
             />
-            <NavRowDivider />
-            <NavRow
-              icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
-              label="Catering"
-              onPress={() => router.push('/catering')}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<CalendarDays size={18} color={customerColors.charcoal.soft} />}
-              label="My meal plans"
-              onPress={() => router.push('/meal-plans' as never)}
-              isLast
-            />
+            {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
+            {CATERING_ENABLED ? (
+              <>
+                <NavRowDivider />
+                <NavRow
+                  icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
+                  label="Catering"
+                  onPress={() => router.push('/catering')}
+                  isLast={!TIFFIN_ENABLED}
+                />
+              </>
+            ) : null}
+            {/* Tiffin meal plans — DEFERRED for v1 (subscription/escrow off). */}
+            {TIFFIN_ENABLED ? (
+              <>
+                <NavRowDivider />
+                <NavRow
+                  icon={<CalendarDays size={18} color={customerColors.charcoal.soft} />}
+                  label="My meal plans"
+                  onPress={() => router.push('/meal-plans' as never)}
+                  isLast
+                />
+              </>
+            ) : null}
           </View>
         </View>
 
