@@ -16,6 +16,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 import { ActiveOrderCard } from './ActiveOrderCard';
@@ -34,18 +35,22 @@ interface ActiveOrderStackProps {
 
 export function ActiveOrderStack({ orders }: ActiveOrderStackProps) {
   const [expanded, setExpanded] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   if (orders.length === 0) return null;
   if (orders.length === 1) return <ActiveOrderCard order={orders[0]} />;
 
   function toggle(next: boolean) {
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        200,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity,
-      ),
-    );
+    // Honor the OS "reduce motion" setting — skip the expand/collapse tween.
+    if (!reduceMotion) {
+      LayoutAnimation.configureNext(
+        LayoutAnimation.create(
+          200,
+          LayoutAnimation.Types.easeInEaseOut,
+          LayoutAnimation.Properties.opacity,
+        ),
+      );
+    }
     setExpanded(next);
   }
 

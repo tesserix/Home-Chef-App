@@ -193,6 +193,7 @@ export default function OrderReviewScreen() {
               onChangeText={setTitle}
               maxLength={120}
               placeholder="Title (optional)"
+              accessibilityLabel="Review title"
               placeholderTextColor={customerColors.charcoal.soft}
               style={inputStyle}
             />
@@ -201,6 +202,7 @@ export default function OrderReviewScreen() {
               onChangeText={setComment}
               maxLength={1000}
               placeholder="Tell others about your order (optional)"
+              accessibilityLabel="Review details"
               placeholderTextColor={customerColors.charcoal.soft}
               multiline
               style={[inputStyle, { minHeight: 96, textAlignVertical: 'top' }]}

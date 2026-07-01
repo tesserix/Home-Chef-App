@@ -29,6 +29,7 @@ function CartItemRow({ item }: CartItemRowProps) {
           contentFit="cover"
           placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
           transition={150}
+          accessible={false}
         />
       ) : (
         // Missing image → surface-soft placeholder per spec
@@ -54,7 +55,9 @@ function CartItemRow({ item }: CartItemRowProps) {
       <View className="flex-row items-center gap-2">
         <Pressable
           onPress={() => updateQty(item.lineId, item.quantity - 1)}
-          accessibilityLabel="Decrease quantity"
+          accessibilityRole="button"
+          accessibilityLabel={`Decrease quantity of ${item.name}`}
+          hitSlop={10}
         >
           <View className="w-7 h-7 rounded-full border border-hairline items-center justify-center bg-canvas">
             <Minus size={14} color="#717171" />
@@ -68,7 +71,9 @@ function CartItemRow({ item }: CartItemRowProps) {
 
         <Pressable
           onPress={() => updateQty(item.lineId, item.quantity + 1)}
-          accessibilityLabel="Increase quantity"
+          accessibilityRole="button"
+          accessibilityLabel={`Increase quantity of ${item.name}`}
+          hitSlop={10}
         >
           <View className="w-7 h-7 rounded-full border border-coral items-center justify-center bg-canvas">
             <Plus size={14} color="#FF385C" />
@@ -77,7 +82,9 @@ function CartItemRow({ item }: CartItemRowProps) {
 
         <Pressable
           onPress={() => removeItem(item.lineId)}
+          accessibilityRole="button"
           accessibilityLabel={`Remove ${item.name}`}
+          hitSlop={10}
         >
           <View className="w-7 h-7 rounded-full bg-surface-soft items-center justify-center ml-1">
             <Trash2 size={14} color="#717171" />
