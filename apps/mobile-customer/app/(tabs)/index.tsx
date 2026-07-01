@@ -37,7 +37,7 @@ import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
 import { FilterSheet } from '../../components/home/FilterSheet';
-import { CATERING_ENABLED } from '../../lib/features';
+import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useChefs } from '../../hooks/useChefs';
@@ -303,15 +303,18 @@ export default function HomeScreen() {
         {/* Right side: Social Feed + Catering — navigation, not filter controls.
             Moved from their own row to the same slim bar, saving one full row. */}
         <View style={styles.navLinks}>
-          <Pressable
-            onPress={() => router.push('/social')}
-            accessibilityRole="button"
-            accessibilityLabel="Go to Social Feed"
-          >
-            <View style={styles.navLinkPill}>
-              <Text style={styles.navLinkLabel}>Social Feed</Text>
-            </View>
-          </Pressable>
+          {/* Social Feed — DEFERRED for v1 (stub, no real feed yet). */}
+          {SOCIAL_ENABLED ? (
+            <Pressable
+              onPress={() => router.push('/social')}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Social Feed"
+            >
+              <View style={styles.navLinkPill}>
+                <Text style={styles.navLinkLabel}>Social Feed</Text>
+              </View>
+            </Pressable>
+          ) : null}
           {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
           {CATERING_ENABLED ? (
             <Pressable

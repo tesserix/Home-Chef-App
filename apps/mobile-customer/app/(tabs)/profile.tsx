@@ -29,7 +29,14 @@ import {
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
-import { TIFFIN_ENABLED, CATERING_ENABLED } from '../../lib/features';
+import {
+  TIFFIN_ENABLED,
+  CATERING_ENABLED,
+  WALLET_ENABLED,
+  REWARDS_ENABLED,
+  REFERRAL_ENABLED,
+  SOCIAL_ENABLED,
+} from '../../lib/features';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
@@ -532,70 +539,77 @@ export default function ProfileScreen() {
         {/* ═══════════════════════════════════════════════════════════════════
             Section — More (iOS grouped nav rows)
         ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>More</SectionLabel>
+        {/* MORE nav rows are each gated by a feature flag — everything deferred for
+            v1 (wallet/rewards/referral/social/catering/tiffin) is hidden, and the
+            whole section drops out when no row is enabled. Flip the flag in
+            lib/features.ts (+ any backend flag) to bring a row back. */}
+        {(() => {
+          const moreRows = [
+            WALLET_ENABLED && {
+              icon: <Wallet size={18} color={customerColors.charcoal.soft} />,
+              label: 'Wallet',
+              route: '/wallet',
+            },
+            REWARDS_ENABLED && {
+              icon: <Award size={18} color={customerColors.charcoal.soft} />,
+              label: 'Rewards',
+              route: '/loyalty',
+            },
+            REFERRAL_ENABLED && {
+              icon: <Gift size={18} color={customerColors.charcoal.soft} />,
+              label: 'Refer & Earn',
+              route: '/referral',
+            },
+            SOCIAL_ENABLED && {
+              icon: <MessageSquare size={18} color={customerColors.charcoal.soft} />,
+              label: 'Social Feed',
+              route: '/social',
+            },
+            CATERING_ENABLED && {
+              icon: <UtensilsCrossed size={18} color={customerColors.charcoal.soft} />,
+              label: 'Catering',
+              route: '/catering',
+            },
+            TIFFIN_ENABLED && {
+              icon: <CalendarDays size={18} color={customerColors.charcoal.soft} />,
+              label: 'My meal plans',
+              route: '/meal-plans',
+            },
+          ].filter(Boolean) as { icon: React.ReactNode; label: string; route: string }[];
 
-        {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
-        <View
-          className="mx-4"
-          style={{
-            shadowColor: customerColors.charcoal.DEFAULT,
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.06,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <View className="rounded-xl overflow-hidden">
-            <NavRow
-              icon={<Wallet size={18} color={customerColors.charcoal.soft} />}
-              label="Wallet"
-              onPress={() => router.push('/wallet')}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<Award size={18} color={customerColors.charcoal.soft} />}
-              label="Rewards"
-              onPress={() => router.push('/loyalty' as never)}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<Gift size={18} color={customerColors.charcoal.soft} />}
-              label="Refer & Earn"
-              onPress={() => router.push('/referral' as never)}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<MessageSquare size={18} color={customerColors.charcoal.soft} />}
-              label="Social Feed"
-              onPress={() => router.push('/social')}
-              isLast={!CATERING_ENABLED && !TIFFIN_ENABLED}
-            />
-            {/* Catering — DEFERRED for v1 (CATERING_DEPOSIT_ENABLED off). */}
-            {CATERING_ENABLED ? (
-              <>
-                <NavRowDivider />
-                <NavRow
-                  icon={<UtensilsCrossed size={18} color={customerColors.charcoal.soft} />}
-                  label="Catering"
-                  onPress={() => router.push('/catering')}
-                  isLast={!TIFFIN_ENABLED}
-                />
-              </>
-            ) : null}
-            {/* Tiffin meal plans — DEFERRED for v1 (subscription/escrow off). */}
-            {TIFFIN_ENABLED ? (
-              <>
-                <NavRowDivider />
-                <NavRow
-                  icon={<CalendarDays size={18} color={customerColors.charcoal.soft} />}
-                  label="My meal plans"
-                  onPress={() => router.push('/meal-plans' as never)}
-                  isLast
-                />
-              </>
-            ) : null}
-          </View>
-        </View>
+          if (moreRows.length === 0) return null;
+
+          return (
+            <>
+              <SectionLabel>More</SectionLabel>
+              {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
+              <View
+                className="mx-4"
+                style={{
+                  shadowColor: customerColors.charcoal.DEFAULT,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <View className="rounded-xl overflow-hidden">
+                  {moreRows.map((r, i) => (
+                    <View key={r.label}>
+                      {i > 0 ? <NavRowDivider /> : null}
+                      <NavRow
+                        icon={r.icon}
+                        label={r.label}
+                        onPress={() => router.push(r.route as never)}
+                        isLast={i === moreRows.length - 1}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════
             Section — Legal (Terms · Privacy · Refund)
