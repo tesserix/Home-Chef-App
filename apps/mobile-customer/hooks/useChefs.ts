@@ -14,6 +14,12 @@ export interface ChefFilters {
   maxPrice?: number;
   lat?: number;
   lng?: number;
+  // radius (km) for the legacy near-me bounding box. Discovery is gated by each
+  // chef's own delivery reach (deliverableToYou), not a fixed cap around the
+  // customer, so the home feed passes a very large radius to disable the box —
+  // otherwise a customer with no chefs within 15km sees an empty feed. The map /
+  // near-me views can still pass a real radius.
+  radius?: number;
   sort?: 'rating' | 'orders' | 'newest' | 'price' | 'distance';
   page?: number;
   limit?: number;

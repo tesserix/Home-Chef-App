@@ -125,10 +125,13 @@ export default function HomeScreen() {
   }, [searchText]);
 
   // ── Data fetching ────────────────────────────────────────────────────────
-  // Customer location drives near-me + the chef delivery-area gate: a chef who
-  // only delivers (no pickup) and can't reach the customer is hidden, and chefs
-  // shown for pickup-only carry deliverableToYou=false. Omitted when unknown, so
-  // discovery falls back to un-located.
+  // Customer location drives the chef delivery-area gate: a chef who only
+  // delivers (no pickup) and can't reach the customer is hidden, and chefs shown
+  // for pickup-only carry deliverableToYou=false. Omitted when unknown, so
+  // discovery falls back to un-located. We pass a very large radius so the legacy
+  // 15km near-me box doesn't ALSO hard-cap the feed — reach is decided per-chef
+  // by the delivery-area gate, not a fixed circle around the customer (otherwise
+  // a customer with no chef within 15km sees an empty feed).
   const coords = useCustomerCoords();
   const filters: ChefFilters = {
     search: debouncedSearch || undefined,
@@ -139,6 +142,7 @@ export default function HomeScreen() {
     sort,
     lat: coords?.lat,
     lng: coords?.lng,
+    radius: coords ? 20000 : undefined,
     limit: 20,
   };
 
