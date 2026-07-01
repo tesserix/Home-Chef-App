@@ -38,6 +38,21 @@ func CapacityDay(t time.Time) time.Time {
 	return time.Date(ist.Year(), ist.Month(), ist.Day(), 0, 0, 0, 0, capacityIST)
 }
 
+// TodayWeekday returns the current IST weekday (0=Sun..6=Sat), matching the
+// MenuItem.AvailableDays weekly-menu schedule convention. Used to surface only
+// today's scheduled dishes on the menu + at order creation.
+func TodayWeekday() int {
+	return int(CapacityDay(time.Now()).Weekday())
+}
+
+// MenuScheduleClause returns the SQL predicate + arg that limits a menu-item
+// query to dishes offered on the given weekday. An empty/NULL AvailableDays means
+// "every day", so those always pass. Kept in one place so GetChefMenu and order
+// creation stay consistent.
+func MenuScheduleClause(weekday int) (string, interface{}) {
+	return "(available_days IS NULL OR cardinality(available_days) = 0 OR ? = ANY(available_days))", weekday
+}
+
 // ReserveCapacity atomically reserves qty of a capped dish for the given IST day
 // inside the caller's transaction. No-op when cap <= 0 (unlimited). Returns
 // ErrSoldOut if the reservation would exceed the cap. Concurrency-safe: the

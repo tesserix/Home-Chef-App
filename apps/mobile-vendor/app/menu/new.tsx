@@ -35,6 +35,7 @@ const BLANK: MenuItemFormValues = {
   comboItems: [],
   preparationTime: 15,
   hsn: '',
+  availableDays: [],
 };
 
 export default function NewMenuItemScreen() {
@@ -73,6 +74,7 @@ export default function NewMenuItemScreen() {
         comboItems: values.comboItems,
         preparationTime: values.preparationTime,
         hsn: values.hsn || undefined,
+        availableDays: values.availableDays,
       });
 
       const createdId = result.item.id;

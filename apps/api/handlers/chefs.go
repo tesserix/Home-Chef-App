@@ -356,7 +356,11 @@ func (h *ChefHandler) GetChefMenu(c *gin.Context) {
 
 	category := c.Query("category")
 
+	// Only today's scheduled dishes appear — the chef's weekly menu (AvailableDays)
+	// auto-surfaces the right dishes for the day; an empty schedule = every day.
+	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
 	query := database.DB.Where("chef_id = ? AND is_available = ?", chefID, true).
+		Where(schedClause, schedArg).
 		Preload("Images").
 		// Add-ons + combo composition (#52) so the customer can pick modifiers
 		// and see what a combo includes.

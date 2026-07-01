@@ -318,10 +318,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 	var capReservations []capReservation
 
+	// Only today's scheduled dishes are orderable — a dish not on the chef's
+	// weekly menu for today (per AvailableDays) can't be ordered even by id.
+	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
 	for i, item := range req.Items {
 		var menuItem models.MenuItem
 		if err := database.DB.Where("id = ? AND chef_id = ? AND is_available = ?",
-			item.MenuItemID, req.ChefID, true).First(&menuItem).Error; err != nil {
+			item.MenuItemID, req.ChefID, true).
+			Where(schedClause, schedArg).First(&menuItem).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Menu item %s not found or unavailable", item.MenuItemID)})
 			return
 		}

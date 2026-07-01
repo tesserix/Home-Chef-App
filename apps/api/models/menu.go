@@ -45,6 +45,12 @@ type MenuItem struct {
 	IsVeg       *bool `gorm:"" json:"isVeg,omitempty"`
 	IsAvailable bool  `gorm:"default:true" json:"isAvailable"`
 	IsApproved  bool  `gorm:"default:false" json:"isApproved"`
+	// AvailableDays is the chef's weekly-menu schedule: the weekdays this dish is
+	// offered (0=Sun..6=Sat). Empty/nil = available EVERY day (default, backward-
+	// compatible for existing dishes). Resolved on read — GetChefMenu and order
+	// creation only surface a dish when today's IST weekday is in this set (or it's
+	// empty). Lets a chef set a fixed weekly rotation instead of toggling daily.
+	AvailableDays pq.Int64Array `gorm:"type:integer[]" json:"availableDays"`
 	// DailyCapacity caps how many of this dish the chef will make per day (#48).
 	// nil or <= 0 means unlimited. Remaining/sold-out are derived from the
 	// MenuItemDailySales counter (IST calendar day), not a mutated flag.
@@ -120,7 +126,9 @@ type MenuItemResponse struct {
 	// IsVeg is omitted from JSON when nil (legacy items where the flag was not set).
 	IsVeg       *bool   `json:"isVeg,omitempty"`
 	IsAvailable bool    `json:"isAvailable"`
-	IsFeatured  bool    `json:"isFeatured"`
+	// AvailableDays is the weekly-menu schedule (0=Sun..6=Sat). Empty = every day.
+	AvailableDays []int64 `json:"availableDays"`
+	IsFeatured    bool    `json:"isFeatured"`
 	Rating      float64 `json:"rating"`
 	HSN         string  `json:"hsn,omitempty"`
 	// Capacity (#48). DailyCapacity nil = unlimited. RemainingToday + SoldOut are
@@ -175,6 +183,7 @@ func (m *MenuItem) ToResponse() MenuItemResponse {
 		SpiceLevel:     m.SpiceLevel,
 		IsVeg:          m.IsVeg,
 		IsAvailable:    m.IsAvailable,
+		AvailableDays:  ensureInt64Array(m.AvailableDays),
 		IsFeatured:     m.IsFeatured,
 		Rating:         m.Rating,
 		HSN:            m.HSN,
@@ -206,4 +215,27 @@ func ensureCombo(c []ComboItem) []ComboItem {
 		return []ComboItem{}
 	}
 	return c
+}
+
+// ensureInt64Array renders a nil AvailableDays as an empty slice so the JSON is
+// always [] (an empty schedule means "every day", never null).
+func ensureInt64Array(a pq.Int64Array) []int64 {
+	if a == nil {
+		return []int64{}
+	}
+	return a
+}
+
+// IsAvailableOn reports whether the dish is offered on the given weekday
+// (0=Sun..6=Sat). An empty AvailableDays means "every day" (the default).
+func (m *MenuItem) IsAvailableOn(weekday int) bool {
+	if len(m.AvailableDays) == 0 {
+		return true
+	}
+	for _, d := range m.AvailableDays {
+		if int(d) == weekday {
+			return true
+		}
+	}
+	return false
 }

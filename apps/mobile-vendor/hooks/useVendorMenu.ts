@@ -22,6 +22,9 @@ export interface MenuItem {
   dietaryTags: string[];
   // Declared allergens (#41) — surfaced as customer badges + checkout warnings.
   allergens: string[];
+  // Weekly-menu schedule: weekdays (0=Sun..6=Sat) the dish is offered. Empty =
+  // every day. Drives which dishes auto-show to customers each day.
+  availableDays: number[];
   images: MenuItemImage[];
   preparationTime: number;
   // HSN/SAC code for GST classification. Surfaces the backend's value
@@ -109,6 +112,8 @@ export interface CreateMenuItemPayload {
   preparationTime: number;
   // Optional HSN — empty string lets the DB default (996331) apply.
   hsn?: string;
+  // Weekly-menu schedule (0=Sun..6=Sat). Empty/omitted = every day.
+  availableDays?: number[];
   // Add-ons / combos (#52) — replace-all on save, passed straight to the API.
   isCombo?: boolean;
   modifierGroups?: ModifierGroupInput[];
@@ -142,6 +147,7 @@ function normalizeItem(
   item: MenuItem & {
     dietaryTags?: string[] | null;
     allergens?: string[] | null;
+    availableDays?: number[] | null;
     prepTime?: number;
     preparationTime?: number;
     isVeg?: boolean | null;
@@ -157,6 +163,7 @@ function normalizeItem(
     ...item,
     dietaryTags: tags,
     allergens: item.allergens ?? [],
+    availableDays: item.availableDays ?? [],
     isVeg,
     preparationTime: prep,
     hsn: (item as { hsn?: string }).hsn ?? '',
