@@ -13,15 +13,29 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarDays, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
+  useChefDailyMenu,
   useChefWeeklyMenu,
   useCreateMealPlan,
   type MealSlot,
   type MealVariant,
   type WeeklyMenuItem,
 } from '../hooks/useMealPlans';
+import { comboLabel } from '../lib/combo-label';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
+
+// A bookable choice for one (date, slot) — sourced from the chef's per-date menu
+// (#405/#406, incl. combos) when published for that date, else the weekly cell.
+interface BookableCell {
+  slot: MealSlot;
+  variant: MealVariant;
+  name: string;
+  price: number;
+  dailyMenuItemId?: string; // present for per-date items
+  isCombo?: boolean;
+  comboComponents?: string[];
+}
 
 interface Selected {
   date: string; // YYYY-MM-DD
@@ -29,6 +43,7 @@ interface Selected {
   variant: MealVariant;
   price: number;
   name: string;
+  dailyMenuItemId?: string;
 }
 
 function isoDate(d: Date): string {
@@ -55,48 +70,98 @@ const selKey = (date: string, slot: MealSlot) => `${date}-${slot}`;
 export default function BookMealPlanScreen() {
   const { chefId } = useLocalSearchParams<{ chefId: string }>();
   const { data: menu, isLoading, isError, refetch } = useChefWeeklyMenu(chefId);
+
+  // The horizon window (tomorrow .. +HORIZON_DAYS) for the per-date menu.
+  const window = useMemo(() => {
+    const base = new Date();
+    const from = new Date(base);
+    from.setDate(base.getDate() + 1);
+    const to = new Date(base);
+    to.setDate(base.getDate() + HORIZON_DAYS);
+    return { from: isoDate(from), to: isoDate(to) };
+  }, []);
+  const { data: daily } = useChefDailyMenu(chefId, window.from, window.to);
   const create = useCreateMealPlan();
 
   const [selection, setSelection] = useState<Record<string, Selected>>({});
 
-  // Upcoming dates (from tomorrow) that the chef cooks, each with its cells.
+  // Upcoming dates (from tomorrow) the chef cooks. Each date's cells come from
+  // the chef's PUBLISHED per-date menu when it has one (dynamic dishes + combos,
+  // #405/#406); otherwise they fall back to the fixed weekly template.
   const dates = useMemo(() => {
-    const items = menu?.items ?? [];
-    if (items.length === 0) return [];
-    const out: { date: string; label: string; cells: WeeklyMenuItem[] }[] = [];
+    const weekly = menu?.items ?? [];
+    const dailyByDate = new Map(
+      (daily?.days ?? []).map((d) => [d.date, d.items]),
+    );
+    if (weekly.length === 0 && dailyByDate.size === 0) return [];
+    const out: { date: string; label: string; cells: BookableCell[] }[] = [];
     const base = new Date();
-    // Skip days the server's lead-time cutoff would reject (a late-evening
-    // booking can't take tomorrow's meal). Mirrors mealPlanLeadTime on the API.
     const cutoff = base.getTime() + LEAD_MS;
+    const bySlotVariant = (a: BookableCell, b: BookableCell) =>
+      a.slot === b.slot
+        ? a.variant.localeCompare(b.variant)
+        : a.slot.localeCompare(b.slot);
+
     for (let i = 1; i <= HORIZON_DAYS; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
       d.setHours(0, 0, 0, 0);
       if (d.getTime() < cutoff) continue;
-      const cells = items
-        .filter((it) => it.dayOfWeek === d.getDay())
-        .sort((a, b) =>
-          a.slot === b.slot
-            ? a.variant.localeCompare(b.variant)
-            : a.slot.localeCompare(b.slot),
-        );
+      const iso = isoDate(d);
+
+      let cells: BookableCell[];
+      const dayItems = dailyByDate.get(iso);
+      if (dayItems && dayItems.length > 0) {
+        // Per-date menu: combos first (the default choice), then à-la-carte.
+        cells = dayItems
+          .map((it) => ({
+            slot: it.slot,
+            variant: it.variant,
+            name: it.name,
+            price: it.price,
+            dailyMenuItemId: it.id,
+            isCombo: it.isCombo,
+            comboComponents: it.comboComponents,
+          }))
+          .sort((a, b) =>
+            a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
+          );
+      } else {
+        cells = weekly
+          .filter((it) => it.dayOfWeek === d.getDay())
+          .map((it) => ({
+            slot: it.slot,
+            variant: it.variant,
+            name: it.name,
+            price: it.price,
+          }))
+          .sort(bySlotVariant);
+      }
       if (cells.length > 0) {
-        out.push({ date: isoDate(d), label: dayLabel(d), cells });
+        out.push({ date: iso, label: dayLabel(d), cells });
       }
     }
     return out;
-  }, [menu]);
+  }, [menu, daily]);
 
   const selected = Object.values(selection);
   const total = selected.reduce((s, x) => s + x.price, 0);
 
-  function toggle(date: string, cell: WeeklyMenuItem) {
+  // One choice per (date, slot). Tapping the selected cell again clears it.
+  // Cell identity is the per-date item id when present, else the weekly variant.
+  function isSameCell(cur: Selected | undefined, cell: BookableCell): boolean {
+    if (!cur) return false;
+    return cell.dailyMenuItemId
+      ? cur.dailyMenuItemId === cell.dailyMenuItemId
+      : !cur.dailyMenuItemId && cur.variant === cell.variant;
+  }
+
+  function toggle(date: string, cell: BookableCell) {
     const key = selKey(date, cell.slot);
     setSelection((prev) => {
       const next = { ...prev };
-      const cur = next[key];
-      if (cur && cur.variant === cell.variant) {
-        delete next[key]; // tapping the same chip clears the slot
+      if (isSameCell(next[key], cell)) {
+        delete next[key];
       } else {
         next[key] = {
           date,
@@ -104,6 +169,7 @@ export default function BookMealPlanScreen() {
           variant: cell.variant,
           price: cell.price,
           name: cell.name,
+          dailyMenuItemId: cell.dailyMenuItemId,
         };
       }
       return next;
@@ -119,6 +185,7 @@ export default function BookMealPlanScreen() {
           date: s.date,
           slot: s.slot,
           variant: s.variant,
+          ...(s.dailyMenuItemId ? { dailyMenuItemId: s.dailyMenuItemId } : {}),
         })),
       },
       {
@@ -224,14 +291,14 @@ export default function BookMealPlanScreen() {
                 <View style={styles.cellWrap}>
                   {d.cells.map((cell) => {
                     const sel = selection[selKey(d.date, cell.slot)];
-                    const active = sel?.variant === cell.variant;
+                    const active = isSameCell(sel, cell);
                     const accent =
                       cell.variant === 'veg'
                         ? customerColors.success.DEFAULT
                         : customerColors.destructive.DEFAULT;
                     return (
                       <Pressable
-                        key={`${cell.slot}-${cell.variant}`}
+                        key={cell.dailyMenuItemId ?? `${cell.slot}-${cell.variant}`}
                         onPress={() => toggle(d.date, cell)}
                         accessibilityRole="button"
                         accessibilityState={{ selected: active }}
@@ -244,11 +311,17 @@ export default function BookMealPlanScreen() {
                             <Text style={styles.cellSlot}>
                               {cell.slot === 'lunch' ? 'Lunch' : 'Dinner'} ·{' '}
                               {cell.variant === 'veg' ? 'Veg' : 'Non-veg'}
+                              {cell.isCombo ? ` · ${comboLabel()}` : ''}
                             </Text>
                           </View>
                           <Text style={styles.cellName} numberOfLines={1}>
                             {cell.name}
                           </Text>
+                          {cell.isCombo && cell.comboComponents?.length ? (
+                            <Text style={styles.cellCombo} numberOfLines={1}>
+                              {cell.comboComponents.join(' · ')}
+                            </Text>
+                          ) : null}
                           <Text style={styles.cellPrice}>₹{cell.price.toFixed(0)}</Text>
                         </View>
                       </Pressable>
@@ -382,6 +455,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: customerColors.charcoal.DEFAULT,
+  },
+  cellCombo: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
+    marginTop: 2,
   },
   cellPrice: {
     fontFamily: 'Inter-SemiBold',
