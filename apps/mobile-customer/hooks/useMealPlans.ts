@@ -30,6 +30,30 @@ export interface WeeklyMenu {
   items: WeeklyMenuItem[];
 }
 
+// Per-date dynamic menu (#405/#406): a date can carry MULTIPLE dishes per slot,
+// and a dish can be a combo (bundle) with its set price + component names. The
+// label ("Thali"/"Combo") is localized client-side via comboLabel().
+export interface DailyMenuItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  slot: MealSlot;
+  variant: MealVariant;
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl?: string;
+  isCombo: boolean;
+  comboComponents: string[];
+  sortOrder: number;
+}
+
+export interface DailyMenuDay {
+  date: string; // YYYY-MM-DD
+  isPublished: boolean;
+  publishedAt?: string | null;
+  items: DailyMenuItem[];
+}
+
 export interface MealPlanDay {
   id: string;
   date: string;
@@ -68,6 +92,27 @@ export function useChefWeeklyMenu(chefId: string | undefined) {
     queryKey: ['chef-weekly-menu', chefId],
     queryFn: () =>
       api.get<WeeklyMenu>(`/v1/chefs/${chefId}/weekly-menu`).then((r) => r.data),
+    enabled: Boolean(chefId),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The chef's PUBLISHED per-date menu over [from, to] (#405/#406). Each day lists
+ * its dishes + combos; the customer books a specific dish/combo by id.
+ */
+export function useChefDailyMenu(
+  chefId: string | undefined,
+  from?: string,
+  to?: string,
+) {
+  const qs = from && to ? `?from=${from}&to=${to}` : '';
+  return useQuery<{ days: DailyMenuDay[] }>({
+    queryKey: ['chef-daily-menu', chefId, from, to],
+    queryFn: () =>
+      api
+        .get<{ days: DailyMenuDay[] }>(`/v1/chefs/${chefId}/daily-menu${qs}`)
+        .then((r) => r.data),
     enabled: Boolean(chefId),
     staleTime: 5 * 60_000,
   });
