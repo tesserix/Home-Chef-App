@@ -104,6 +104,58 @@ export function useSaveWeeklyMenu() {
   });
 }
 
+// Per-date dynamic menu (#405/#406): a date holds MULTIPLE dishes per slot, and a
+// dish can be a combo (bundle) with its set price + component names.
+export interface DailyMenuItemInput {
+  slot: MealSlot;
+  variant: MealVariant;
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl?: string;
+  isCombo: boolean;
+  comboComponents: string[];
+  sortOrder: number;
+}
+
+export interface DailyMenuDay {
+  date: string; // YYYY-MM-DD
+  isPublished: boolean;
+  publishedAt?: string | null;
+  items: (DailyMenuItemInput & { id?: string })[];
+}
+
+/** The chef's own per-date menus (incl. drafts) over [from, to]. */
+export function useMyDailyMenu(from: string, to: string) {
+  return useQuery<{ days: DailyMenuDay[] }>({
+    queryKey: ['chef', 'daily-menu', from, to],
+    queryFn: () =>
+      api
+        .get<{ days: DailyMenuDay[] }>(`/chef/daily-menu?from=${from}&to=${to}`)
+        .then((r) => r.data),
+    staleTime: 60_000,
+  });
+}
+
+/** Replace-all save + publish toggle for ONE date's menu. */
+export function useSaveDailyMenu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      date: string;
+      isPublished: boolean;
+      items: DailyMenuItemInput[];
+    }) =>
+      api
+        .put(`/chef/daily-menu/${vars.date}`, {
+          isPublished: vars.isPublished,
+          items: vars.items,
+        })
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['chef', 'daily-menu'] }),
+  });
+}
+
 /** The chef's meal-plan requests for a given status (default: awaiting their response). */
 export function useChefMealPlanRequests(status: string = 'pending_chef') {
   return useQuery<{ data: MealPlan[] }>({
