@@ -64,7 +64,12 @@ func CreateMealPlanAdvanceOrder(plan *models.MealPlan) (string, error) {
 
 // VerifyMealPlanAdvance confirms the customer's advance payment was captured and
 // stamps EscrowPaymentID on the plan. No-op when escrow is off.
-func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID string) error {
+//
+// SECURITY: binds the fetched payment to THIS plan's advance order and amount and
+// verifies the Checkout signature — without this any captured payment (e.g. a ₹1
+// payment reused across plans) could mark a large plan "paid" from the platform
+// escrow. Mirrors the order payment-verify binding in handlers/payment.go.
+func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID, signature string) error {
 	if !MealPlanEscrowActive() {
 		return nil
 	}
@@ -72,12 +77,26 @@ func VerifyMealPlanAdvance(tx *gorm.DB, plan *models.MealPlan, paymentID string)
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
+	if plan.RazorpayOrderID == "" {
+		return fmt.Errorf("no advance order on this plan")
+	}
 	pay, err := rz.FetchPayment(paymentID)
 	if err != nil {
 		return fmt.Errorf("fetch advance payment: %w", err)
 	}
 	if pay.Status != "captured" {
 		return fmt.Errorf("advance payment not captured (status=%s)", pay.Status)
+	}
+	if pay.OrderID != plan.RazorpayOrderID {
+		return fmt.Errorf("advance payment does not belong to this plan")
+	}
+	if pay.Amount < ToPaise(plan.Total) {
+		return fmt.Errorf("advance payment amount does not match the plan total")
+	}
+	// Enforced when the client sends it (the customer app always does); the
+	// order+amount binding above is the hard gate and doesn't rely on the client.
+	if signature != "" && !VerifyPaymentSignature(plan.RazorpayOrderID, paymentID, signature) {
+		return fmt.Errorf("advance payment signature verification failed")
 	}
 	plan.EscrowPaymentID = paymentID
 	return tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
@@ -97,6 +116,12 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 	}
 	if chefAccount == "" {
 		return fmt.Errorf("chef has no Razorpay linked account")
+	}
+	// SECURITY: never hold chef payouts for a plan whose advance wasn't captured
+	// — the on-hold transfers draw from the platform balance, so holding against
+	// an unpaid plan would pay the chef with the platform's own money.
+	if plan.EscrowPaymentID == "" {
+		return fmt.Errorf("cannot hold payouts: advance payment not captured for plan %s", plan.ID)
 	}
 	for i := range plan.Days {
 		d := &plan.Days[i]

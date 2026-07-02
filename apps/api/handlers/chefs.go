@@ -1065,6 +1065,14 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		services.SignalOrderReady(order.ID)
 	case models.OrderStatusDelivered:
 		services.SignalOrderDelivered(order.ID)
+		// Self-delivery release: a chef marking their OWN order delivered (tiffin
+		// days are usually chef-delivered) must release any held meal-plan-day /
+		// group-order payout — otherwise release only ever fires from the courier
+		// pipeline (handlers/delivery.go) and a self-delivered chef is never paid.
+		// Both are idempotent and no-op for orders that aren't a meal-plan day or
+		// consolidated group order.
+		services.MarkMealPlanDayDelivered(order.ID)
+		services.MarkGroupOrderDelivered(order.ID)
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}
