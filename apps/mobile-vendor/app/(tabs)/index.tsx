@@ -43,6 +43,7 @@ import {
   describeDocumentType,
 } from '../../hooks/useExpiringDocuments';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
+import { useChefMealPlanRequests, type MealPlan } from '../../hooks/useMealPlans';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
 import {
@@ -68,6 +69,15 @@ function deriveDisplayName(
     }
   }
   return 'Chef';
+}
+
+// Display name for a meal-plan request's customer (first + last, falling back
+// to "A customer") — shown on the home ACTION REQUIRED card.
+function mealPlanCustomerName(p: MealPlan): string {
+  const first = p.customer?.firstName?.trim() ?? '';
+  const last = p.customer?.lastName?.trim() ?? '';
+  const full = [first, last].filter(Boolean).join(' ');
+  return full.length > 0 ? full : 'A customer';
 }
 
 // Time-of-day greeting key for the two-line command bar (UI-V2 spec §4).
@@ -120,6 +130,8 @@ export default function DashboardScreen() {
   const { triggerAction, isLoading: orderActionLoading } = useOrderAction();
   const { data: expiringDocsData } = useExpiringDocuments();
   const { data: actionRequests } = useActionRequiredAdminRequests();
+  const { data: mealPlanResp, refetch: refetchMealPlans } =
+    useChefMealPlanRequests();
 
   // User-initiated pull-to-refresh only — avoids the stuck-spinner bug when
   // React Query's isRefetching fires for background refetches (focus, mutation
@@ -128,13 +140,14 @@ export default function DashboardScreen() {
   async function onPullRefresh(): Promise<void> {
     setIsPulling(true);
     try {
-      await Promise.all([refetch(), refetchPending()]);
+      await Promise.all([refetch(), refetchPending(), refetchMealPlans()]);
     } finally {
       setIsPulling(false);
     }
   }
 
   const expiringDocs = expiringDocsData?.documents ?? [];
+  const pendingMealPlans = mealPlanResp?.data ?? [];
 
   const displayName = deriveDisplayName(
     user as { name?: string; email?: string } | null,
@@ -280,7 +293,9 @@ export default function DashboardScreen() {
     (minutesSinceLastOrder === null || minutesSinceLastOrder > 120);
 
   const hasAlerts =
-    (actionRequests?.length ?? 0) > 0 || expiringDocs.length > 0;
+    pendingMealPlans.length > 0 ||
+    (actionRequests?.length ?? 0) > 0 ||
+    expiringDocs.length > 0;
 
   // Today card visibility — hidden when the chef has truly zero history
   // (new install): `₹0 | 0 orders | 0.0★` reads as a broken screen.
@@ -468,6 +483,60 @@ export default function DashboardScreen() {
           >
             <Text style={styles.sectionLabel}>{t('dashboard.actionRequired')}</Text>
             <View style={styles.alertCards}>
+              {pendingMealPlans.length > 0 && (
+                <Pressable
+                  onPress={() =>
+                    pendingMealPlans.length === 1
+                      ? router.push(`/meal-plans/${pendingMealPlans[0]!.id}`)
+                      : router.push('/meal-plans')
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    pendingMealPlans.length === 1
+                      ? `Meal plan request from ${mealPlanCustomerName(
+                          pendingMealPlans[0]!,
+                        )}. Tap to review and confirm the days.`
+                      : `${pendingMealPlans.length} meal plan requests awaiting your confirmation. Tap to review.`
+                  }
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.alertCard,
+                        { borderLeftColor: theme.colors.herb.DEFAULT },
+                        pressed && { opacity: 0.85 },
+                      ]}
+                    >
+                      <View style={styles.alertRowTop}>
+                        <View
+                          style={[
+                            styles.alertDot,
+                            { backgroundColor: theme.colors.herb.DEFAULT },
+                          ]}
+                        />
+                        <Text style={styles.alertLabel} numberOfLines={1}>
+                          {pendingMealPlans.length === 1
+                            ? t('dashboard.mealPlanRequestOne')
+                            : t('dashboard.mealPlanRequestMany', {
+                                count: pendingMealPlans.length,
+                              })}
+                        </Text>
+                        <Text style={styles.alertCta}>
+                          {t('dashboard.mealPlanReview')}
+                        </Text>
+                      </View>
+                      <Text style={styles.alertBody} numberOfLines={1}>
+                        {pendingMealPlans.length === 1
+                          ? t('dashboard.mealPlanBodyOne', {
+                              name: mealPlanCustomerName(pendingMealPlans[0]!),
+                              count: pendingMealPlans[0]!.days.length,
+                            })
+                          : t('dashboard.mealPlanBodyMany')}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              )}
               {(actionRequests ?? []).map((req) => (
                 <Pressable
                   key={req.id}
