@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
+import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useMealChefOffer } from '../../hooks/useMealSubscription';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
@@ -39,7 +40,13 @@ export default function ChefDetailScreen() {
   const insets = useSafeAreaInsets();
   const cartSheetRef = useRef<BottomSheet>(null);
 
-  const { data: chefData, isLoading: chefLoading, isError: chefError } = useChef(id ?? '');
+  // Customer coords let the server compute deliverableToYou (can this chef reach
+  // you) so the detail screen can show delivery as pickup-only when out of range.
+  const coords = useCustomerCoords();
+  const { data: chefData, isLoading: chefLoading, isError: chefError } = useChef(
+    id ?? '',
+    coords ?? undefined,
+  );
   // The route param may be a slug (SEO/universal links, #58) or a UUID. GetChef
   // resolves both; the menu endpoint takes a UUID, so use the resolved chef.id
   // once it loads (falls back to the raw param for the initial render).
@@ -377,6 +384,16 @@ export default function ChefDetailScreen() {
                 Restrained text — trust signal at the point of ordering. */}
             {chef.foodSafetyBadge ? (
               <Text style={styles.foodSafe}>✓ Food safety verified</Text>
+            ) : null}
+
+            {/* Outside this chef's delivery range: they're orderable for pickup
+                only. Shown only when the app knows the customer's location and
+                the chef offers pickup (delivery-only, out-of-range chefs don't
+                appear in discovery at all). */}
+            {chef.deliverableToYou === false && chef.offersPickup ? (
+              <Text style={styles.pickupOnlyNote}>
+                Outside delivery area · pickup only
+              </Text>
             ) : null}
 
             {/* Tiffin pre-booking entry (#196) — plan a week/fortnight of meals
@@ -748,6 +765,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#15803D',
+    marginTop: 6,
+  },
+  pickupOnlyNote: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '600',
+    color: customerColors.charcoal.soft,
     marginTop: 6,
   },
 

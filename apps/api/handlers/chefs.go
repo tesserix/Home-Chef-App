@@ -122,6 +122,10 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		}
 	}
 
+	// Whether any 3PL provider is live, looked up once for this request: it both
+	// disables the delivery-area gate below and feeds each chef's delivery flags.
+	tplEnabled := services.ThirdPartyDeliveryEnabled()
+
 	// Near-me: bounding-box prefilter around the customer's coords (#36). radius
 	// defaults to 15km. Cheap, SQL-side, paginates correctly.
 	if hasGeo {
@@ -134,6 +138,18 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		minLat, maxLat, minLng, maxLng := chefBoundingBox(geoLat, geoLng, radiusKm)
 		query = query.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
 			minLat, maxLat, minLng, maxLng)
+
+		// Chef delivery-area gate (hybrid): a chef that only offers delivery must
+		// actually reach the customer to appear, so a self-delivering chef the
+		// customer is outside the radius of — and who offers no pickup — is hidden
+		// (no unorderable listing). Chefs offering pickup, or whose own-fleet reach
+		// covers the customer, still show. Skipped entirely when a 3PL provider is
+		// live, since the provider covers the area (no radius gate). Runs in SQL so
+		// the count + pagination stay correct.
+		if !tplEnabled {
+			keepSQL, keepVars := services.DeliveryAreaKeepSQL(geoLat, geoLng)
+			query = query.Where(keepSQL, keepVars...)
+		}
 	}
 
 	// Get total count
@@ -193,6 +209,17 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	responses := make([]models.ChefProfileResponse, len(chefs))
 	for i, chef := range chefs {
 		responses[i] = chef.ToResponse()
+		// Delivery capability: whether the customer can pick "Delivery" at all
+		// (chef self-delivers OR a 3PL is live), mirroring GetChef so cards and the
+		// detail screen agree.
+		responses[i].OffersDelivery = chef.OffersSelfDelivery || tplEnabled
+		// Per-customer reach: only when the request carried coordinates. A false
+		// here on a listed chef means "shown for pickup only — outside delivery
+		// range"; nil (no geo) lets the app fall back to OffersDelivery.
+		if hasGeo {
+			d := services.DeliverableToYou(chef, geoLat, geoLng, tplEnabled)
+			responses[i].DeliverableToYou = &d
+		}
 		// Customer-facing: never expose the chef's exact coordinates. Show an
 		// approximate area (deterministic per-chef offset) so the "chefs near
 		// you" map can place them without revealing the kitchen address.
@@ -328,7 +355,19 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 	// Whether the customer can pick "Delivery" at all: the chef self-delivers OR
 	// a 3PL provider is live. With 3PL dark and a non-self-delivering chef this is
 	// false, so the checkout offers pickup only — no unfulfillable delivery order.
-	resp.OffersDelivery = chef.OffersSelfDelivery || services.ThirdPartyDeliveryEnabled()
+	tplEnabled := services.ThirdPartyDeliveryEnabled()
+	resp.OffersDelivery = chef.OffersSelfDelivery || tplEnabled
+	// Per-customer reach: if the request carried the customer's coordinates,
+	// tell the app whether this chef can deliver to them. A deep link opened by
+	// an out-of-range customer then shows delivery as read-only (pickup only).
+	if latS, lngS := c.Query("lat"), c.Query("lng"); latS != "" && lngS != "" {
+		if la, e1 := strconv.ParseFloat(latS, 64); e1 == nil {
+			if lo, e2 := strconv.ParseFloat(lngS, 64); e2 == nil {
+				d := services.DeliverableToYou(chef, la, lo, tplEnabled)
+				resp.DeliverableToYou = &d
+			}
+		}
+	}
 	// Customer-facing: approximate the kitchen location (deterministic per-chef
 	// offset) so the exact address is never exposed to customers.
 	resp.Latitude, resp.Longitude =

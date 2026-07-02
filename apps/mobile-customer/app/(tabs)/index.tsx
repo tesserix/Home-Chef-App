@@ -41,6 +41,7 @@ import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/typ
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
+import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -124,6 +125,14 @@ export default function HomeScreen() {
   }, [searchText]);
 
   // ── Data fetching ────────────────────────────────────────────────────────
+  // Customer location drives the chef delivery-area gate: a chef who only
+  // delivers (no pickup) and can't reach the customer is hidden, and chefs shown
+  // for pickup-only carry deliverableToYou=false. Omitted when unknown, so
+  // discovery falls back to un-located. We pass a very large radius so the legacy
+  // 15km near-me box doesn't ALSO hard-cap the feed — reach is decided per-chef
+  // by the delivery-area gate, not a fixed circle around the customer (otherwise
+  // a customer with no chef within 15km sees an empty feed).
+  const coords = useCustomerCoords();
   const filters: ChefFilters = {
     search: debouncedSearch || undefined,
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
@@ -131,6 +140,9 @@ export default function HomeScreen() {
     isOpen: isOpenOnly || undefined,
     maxPrice,
     sort,
+    lat: coords?.lat,
+    lng: coords?.lng,
+    radius: coords ? 20000 : undefined,
     limit: 20,
   };
 
