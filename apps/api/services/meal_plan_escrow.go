@@ -39,6 +39,32 @@ func dayRefundKey(dayID uuid.UUID) string {
 	return "mealplan-refund:" + dayID.String()
 }
 
+// MealPlanFeeTotals computes the GST + per-day delivery the customer pays ON TOP
+// of the food subtotal, from the current platform policy. The chef is paid only
+// the food price; the platform keeps GST + delivery (it remits the tax and covers
+// logistics). These are snapshotted onto the plan (Subtotal/Tax/Total) at booking
+// so later per-day refunds don't drift if policy changes. Returns (tax, delivery).
+func MealPlanFeeTotals(subtotal float64, numDays int) (float64, float64) {
+	policy := GetPlatformPolicy()
+	tax := Round2(subtotal * (policy.TaxPercent / 100.0))
+	delivery := Round2(policy.BaseDeliveryFee * float64(numDays))
+	return tax, delivery
+}
+
+// perDayGross is the full amount the customer paid for a single day — food +
+// proportional GST + flat per-day delivery — derived from the plan's snapshotted
+// totals (not live policy), so a per-day refund makes the customer whole for the
+// whole day they paid for regardless of later policy changes.
+func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
+	n := len(plan.Days)
+	if plan.Subtotal <= 0 || n == 0 {
+		return day.Price
+	}
+	tax := plan.Tax * (day.Price / plan.Subtotal)
+	delivery := (plan.Total - plan.Subtotal - plan.Tax) / float64(n)
+	return Round2(day.Price + tax + delivery)
+}
+
 // CreateMealPlanAdvanceOrder creates the Razorpay order for the full plan total
 // at booking time and stamps RazorpayOrderID. Returns the order id for the
 // client checkout. No-op (empty id) when escrow is off.
@@ -183,7 +209,9 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 			log.Printf("meal-plan refund: reverse transfer %s failed (continuing to refund): %v", day.PayoutTransferID, err)
 		}
 	}
-	txn, err := CreditWallet(tx, plan.CustomerID, day.Price, models.WalletSourceRefund, nil,
+	// Refund the FULL amount the customer paid for the day (food + GST + delivery),
+	// not just the food price — otherwise they'd lose the fees on an unserved day.
+	txn, err := CreditWallet(tx, plan.CustomerID, perDayGross(plan, day), models.WalletSourceRefund, nil,
 		fmt.Sprintf("Tiffin %s — %s", plan.MealPlanNumber, reason), dayRefundKey(day.ID), nil)
 	if err != nil {
 		return fmt.Errorf("refund day %s to wallet: %w", day.ID, err)
