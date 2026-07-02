@@ -42,6 +42,24 @@ func isPlaceholderBusinessName(n string) bool {
 	return strings.HasPrefix(n, draftBusinessNamePrefix)
 }
 
+// sniffContentType detects the real content type of an uploaded file from its
+// first 512 bytes (http.DetectContentType) and rewinds the reader so the full
+// file still uploads afterwards. Multipart files implement io.Seeker. This
+// guards against a spoofed multipart Content-Type header (e.g. an executable or
+// SVG sent as image/png) since the byte-level sniff can't be faked by the header.
+func sniffContentType(file io.ReadSeeker) (string, error) {
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	ct := http.DetectContentType(buf[:n])
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	return ct, nil
+}
+
 // getOrCreateChefProfile finds the chef profile for the user, creating a placeholder if needed.
 // During onboarding, documents may be uploaded before the full profile is submitted.
 func getOrCreateChefProfile(userID uuid.UUID) (*models.ChefProfile, error) {
@@ -118,6 +136,22 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 	}
 	if !isPhoto && !services.IsDocContentType(contentType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, PDF."})
+		return
+	}
+
+	// Also validate the real bytes so a spoofed Content-Type header can't slip
+	// a disallowed payload through. Rewinds the reader so the full file uploads.
+	sniffed, serr := sniffContentType(file)
+	if serr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+	if isPhoto && !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
+	if !isPhoto && !services.IsDocContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed file type."})
 		return
 	}
 
@@ -235,6 +269,11 @@ func (h *UploadHandler) UploadProfileImage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
 		return
 	}
+	sniffed, serr := sniffContentType(file)
+	if serr != nil || !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
 
 	// Per-chef directory: chefs/{chefID}/avatar/{uuid}.{ext}
 	folder := fmt.Sprintf("chefs/%s/avatar", chef.ID.String())
@@ -277,6 +316,11 @@ func (h *UploadHandler) UploadBannerImage(c *gin.Context) {
 	contentType := header.Header.Get("Content-Type")
 	if !services.IsImageContentType(contentType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
+		return
+	}
+	sniffed, serr := sniffContentType(file)
+	if serr != nil || !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
 		return
 	}
 
@@ -326,6 +370,11 @@ func (h *UploadHandler) UploadKitchenPhoto(c *gin.Context) {
 	contentType := header.Header.Get("Content-Type")
 	if !services.IsImageContentType(contentType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
+		return
+	}
+	sniffed, serr := sniffContentType(file)
+	if serr != nil || !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
 		return
 	}
 
@@ -1079,6 +1128,21 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	}
 	if !isPhoto && !services.IsDocContentType(contentType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, PDF."})
+		return
+	}
+
+	// Also validate the real bytes so a spoofed Content-Type can't slip through.
+	sniffed, serr := sniffContentType(file)
+	if serr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+	if isPhoto && !services.IsImageContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+		return
+	}
+	if !isPhoto && !services.IsDocContentType(sniffed) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed file type."})
 		return
 	}
 

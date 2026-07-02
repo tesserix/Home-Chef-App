@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -124,13 +125,17 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 				log.Printf("order issue photo open failed for order %s: %v", order.ID, oerr)
 				continue
 			}
+			// Evidence photos can contain sensitive imagery, so store them in the
+			// PRIVATE bucket (unguessable object key) and serve via short-lived
+			// signed URLs at read time (see signIssuePhotoURLs). PhotoURLs holds
+			// the object PATH, not a public URL.
 			folder := fmt.Sprintf("order_issues/%s", order.ID.String())
-			url, uerr := services.UploadPublicFile(c.Request.Context(), folder, header.Filename, file, ct)
+			objectPath, uerr := services.UploadPrivateFile(c.Request.Context(), folder, header.Filename, file, ct)
 			file.Close()
 			if uerr != nil {
 				log.Printf("order issue photo upload failed for order %s: %v", order.ID, uerr)
 			} else {
-				photoURLs = append(photoURLs, url)
+				photoURLs = append(photoURLs, objectPath)
 			}
 		}
 	}
@@ -204,7 +209,35 @@ func (h *OrderIssueHandler) GetMyOrderIssues(c *gin.Context) {
 	var issues []models.OrderIssue
 	database.DB.Where("order_id = ? AND customer_id = ?", orderID, userID).
 		Order("created_at DESC").Find(&issues)
+	signIssuePhotoURLs(c.Request.Context(), issues)
 	c.JSON(http.StatusOK, gin.H{"data": issues, "count": len(issues)})
+}
+
+// signIssuePhotoURLs replaces each stored private object path in an issue's
+// PhotoURLs with a short-lived signed URL so the client can render evidence
+// photos without the bucket being world-readable. The mutation is in-memory
+// only (never persisted). Rows written before the private-bucket switch may
+// already hold a full public URL — those are passed through unchanged.
+func signIssuePhotoURLs(ctx context.Context, issues []models.OrderIssue) {
+	for i := range issues {
+		if len(issues[i].PhotoURLs) == 0 {
+			continue
+		}
+		signed := make([]string, 0, len(issues[i].PhotoURLs))
+		for _, p := range issues[i].PhotoURLs {
+			if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+				signed = append(signed, p) // legacy public URL
+				continue
+			}
+			u, err := services.GenerateSignedURL(ctx, p, 15*time.Minute)
+			if err != nil {
+				log.Printf("order issue: failed to sign photo %q: %v", p, err)
+				continue
+			}
+			signed = append(signed, u)
+		}
+		issues[i].PhotoURLs = signed
+	}
 }
 
 // normalizeIDList flattens repeated + comma-joined form values into a de-duped,
@@ -234,6 +267,7 @@ func (h *OrderIssueHandler) AdminListIssues(c *gin.Context) {
 	}
 	var issues []models.OrderIssue
 	q.Limit(200).Find(&issues)
+	signIssuePhotoURLs(c.Request.Context(), issues)
 	c.JSON(http.StatusOK, gin.H{"data": issues, "count": len(issues)})
 }
 

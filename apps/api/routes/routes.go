@@ -579,10 +579,13 @@ func SetupRouter() *gin.Engine {
 		support := v1.Group("/support")
 		support.Use(bffAuth(bffKey, bffWindow))
 		{
-			support.POST("/tickets", supportHandler.CreateTicket)
+			// Conservative per-user throttle on the write paths so a single
+			// account can't flood ticket creation / replies.
+			supportLimit := middleware.RateLimitByUser(1, 3) // 1 rps sustained, 3 burst per user
+			support.POST("/tickets", supportLimit, supportHandler.CreateTicket)
 			support.GET("/tickets", supportHandler.GetMyTickets)
 			support.GET("/tickets/:id", supportHandler.GetTicket)
-			support.POST("/tickets/:id/messages", supportHandler.AddMessage)
+			support.POST("/tickets/:id/messages", supportLimit, supportHandler.AddMessage)
 			support.PUT("/tickets/:id/close", supportHandler.CloseTicket)
 		}
 

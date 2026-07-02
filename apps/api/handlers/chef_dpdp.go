@@ -69,7 +69,18 @@ func (h *ChefDPDPHandler) ExportMyData(c *gin.Context) {
 		dump["chefSchedules"] = findByChef(chef.ID, &[]models.ChefSchedule{})
 		dump["chefSettings"] = findByChef(chef.ID, &[]models.ChefSettings{})
 		dump["menuItems"] = findByChef(chef.ID, &[]models.MenuItem{})
-		dump["orders"] = findByChef(chef.ID, &[]models.Order{})
+		// Orders are mapped through ToChefResponse so the export carries only the
+		// data the chef is already entitled to see — the customer's exact delivery
+		// address, geo and delivery instructions are redacted (area/first name
+		// only), never dumped raw into the chef's export.
+		var chefOrders []models.Order
+		database.DB.Where("chef_id = ?", chef.ID).
+			Preload("Items").Preload("Customer").Find(&chefOrders)
+		orderExports := make([]models.OrderResponse, 0, len(chefOrders))
+		for i := range chefOrders {
+			orderExports = append(orderExports, chefOrders[i].ToChefResponse())
+		}
+		dump["orders"] = orderExports
 		dump["reviews"] = findByChef(chef.ID, &[]models.Review{})
 
 		var prefs models.ChefNotificationPreferences

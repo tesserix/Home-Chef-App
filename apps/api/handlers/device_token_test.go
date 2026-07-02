@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/homechef/api/database"
+)
+
+// Well-formed sample tokens: real FCM tokens are long URL-safe strings, so the
+// handler enforces a 100–4096 charset-bounded shape. These sit inside that range.
+var (
+	validFCMToken  = strings.Repeat("a", 140)
+	validFCMToken2 = strings.Repeat("b", 150)
 )
 
 // device_token_test.go — coverage for the push-token registration endpoint
@@ -56,9 +64,9 @@ func TestUpdateDeviceToken(t *testing.T) {
 	}
 
 	t.Run("persists a token", func(t *testing.T) {
-		w := callDeviceToken(t, uid, map[string]string{"token": "fcm-abc-123"})
+		w := callDeviceToken(t, uid, map[string]string{"token": validFCMToken})
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "fcm-abc-123", read())
+		assert.Equal(t, validFCMToken, read())
 	})
 
 	t.Run("empty token clears it", func(t *testing.T) {
@@ -72,10 +80,16 @@ func TestUpdateDeviceToken(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
+	t.Run("malformed token is a 400", func(t *testing.T) {
+		// Too short + contains a disallowed character.
+		w := callDeviceToken(t, uid, map[string]string{"token": "fcm-abc-123!"})
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
 	t.Run("idempotent re-register", func(t *testing.T) {
-		require.Equal(t, http.StatusOK, callDeviceToken(t, uid, map[string]string{"token": "tok-1"}).Code)
-		w := callDeviceToken(t, uid, map[string]string{"token": "tok-1"})
+		require.Equal(t, http.StatusOK, callDeviceToken(t, uid, map[string]string{"token": validFCMToken2}).Code)
+		w := callDeviceToken(t, uid, map[string]string{"token": validFCMToken2})
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "tok-1", read())
+		assert.Equal(t, validFCMToken2, read())
 	})
 }

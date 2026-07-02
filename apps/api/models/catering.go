@@ -230,6 +230,23 @@ func (r *CateringRequest) ToResponse() CateringRequestResponse {
 	}
 }
 
+// ToBrowseResponse is the pre-quote browse variant of a catering request, shown
+// to every chef who can bid on an open request. It deliberately omits the
+// customer's exact location (venue name, street address lines, postal code) and
+// phone number — a chef only needs the city/state and a contact name to decide
+// whether to quote. The full venue address + phone are revealed only after a
+// quote is accepted, via ToResponse in the chef's bookings view. ContactEmail is
+// already excluded from the DTO entirely.
+func (r *CateringRequest) ToBrowseResponse() CateringRequestResponse {
+	resp := r.ToResponse()
+	resp.VenueName = ""
+	resp.AddressLine1 = ""
+	resp.AddressLine2 = ""
+	resp.PostalCode = ""
+	resp.ContactPhone = ""
+	return resp
+}
+
 func (q *CateringQuote) ToResponse() CateringQuoteResponse {
 	menuItems := []string{}
 	if q.MenuItems != nil {

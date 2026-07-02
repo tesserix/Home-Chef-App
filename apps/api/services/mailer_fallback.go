@@ -50,11 +50,11 @@ func (f *FallbackMailer) deliver(ctx context.Context, to, subject string, send f
 		return primaryErr
 	}
 
-	log.Printf("Warning: primary email provider failed, retrying on fallback: to=%s subject=%s error=%v", to, subject, primaryErr)
+	log.Printf("Warning: primary email provider failed, retrying on fallback: to=%s subject=%s error=%v", maskEmail(to), subject, primaryErr)
 
 	fallbackErr := send(f.fallback)
 	if fallbackErr == nil {
-		log.Printf("Email delivered via fallback provider: to=%s subject=%s", to, subject)
+		log.Printf("Email delivered via fallback provider: to=%s subject=%s", maskEmail(to), subject)
 		return nil
 	}
 	return errors.Join(primaryErr, fallbackErr)

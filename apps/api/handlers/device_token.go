@@ -2,11 +2,25 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
+)
+
+// fcmTokenRe matches the allowed charset of an FCM registration token (long,
+// URL-safe strings). Length is bounded separately (100–4096) because Go's RE2
+// caps inline repeat counts at 1000. Anything outside this charset/length is
+// rejected so a malicious or malformed value can't be persisted (and later
+// spliced into the FCM IID URL). An empty token is allowed separately
+// (logout-clear).
+var fcmTokenRe = regexp.MustCompile(`^[A-Za-z0-9:_-]+$`)
+
+const (
+	fcmTokenMinLen = 100
+	fcmTokenMaxLen = 4096
 )
 
 // DeviceTokenHandler manages the authenticated user's push (FCM) device token.
@@ -47,15 +61,31 @@ func (h *DeviceTokenHandler) UpdateDeviceToken(c *gin.Context) {
 		return
 	}
 
+	// Empty = logout-clear. A non-empty token must be well-formed.
+	token := *req.Token
+	if token != "" && (len(token) < fcmTokenMinLen || len(token) > fcmTokenMaxLen || !fcmTokenRe.MatchString(token)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid device token"})
+		return
+	}
+
 	var user models.User
 	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	if err := database.DB.Model(&user).Update("fcm_token", *req.Token).Error; err != nil {
+	if err := database.DB.Model(&user).Update("fcm_token", token).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save device token"})
 		return
+	}
+
+	// A device only ever belongs to one account. Clear this token from any
+	// other user row so a re-installed / re-used device (same FCM token) never
+	// keeps delivering pushes to a previous account.
+	if token != "" {
+		database.DB.Model(&models.User{}).
+			Where("fcm_token = ? AND id <> ?", token, userID).
+			Update("fcm_token", "")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
