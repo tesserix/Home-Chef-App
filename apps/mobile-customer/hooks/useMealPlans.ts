@@ -97,15 +97,46 @@ export function useMealPlan(id: string | undefined) {
   });
 }
 
+/** The create response: when escrow is on the server returns a Razorpay order to
+ *  collect the full advance before the chef is notified; when it's off only the
+ *  plan comes back (unpaid handshake). `paymentError` flags an escrow-on plan the
+ *  server couldn't attach a payment order to. */
+export interface CreateMealPlanResponse {
+  mealPlan: MealPlan;
+  escrowEnabled?: boolean;
+  razorpayOrderId?: string;
+  razorpayKeyId?: string;
+  paymentError?: string;
+}
+
 /** Book a calendar of days from one chef. */
 export function useCreateMealPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { chefId: string; days: CreateMealPlanDay[] }) =>
       api
-        .post<{ mealPlan: MealPlan; escrowEnabled?: boolean }>(
-          '/v1/meal-plans',
-          body,
+        .post<CreateMealPlanResponse>('/v1/meal-plans', body)
+        .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  });
+}
+
+/** Confirm the advance payment for a meal plan after Razorpay checkout (escrow). */
+export function useVerifyMealPlanPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      id: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    }) =>
+      api
+        .post<{ mealPlan: MealPlan }>(
+          `/v1/meal-plans/${vars.id}/verify-payment`,
+          {
+            razorpayPaymentId: vars.razorpayPaymentId,
+            razorpaySignature: vars.razorpaySignature,
+          },
         )
         .then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),

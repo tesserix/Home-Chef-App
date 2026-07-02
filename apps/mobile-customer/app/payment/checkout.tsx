@@ -27,11 +27,14 @@ interface PaymentCheckoutParams {
   phone?: string;
   // kind='tip' reuses this sheet for a post-delivery tip charge (#45); kind='group'
   // for a group-order share (#46); kind='catering' for a catering deposit (#55,
-  // verifies via /catering/requests/:cateringId/deposit/verify).
+  // verifies via /catering/requests/:cateringId/deposit/verify); kind='mealplan'
+  // for a tiffin plan's full advance (#196, verifies via
+  // /meal-plans/:mealPlanId/verify-payment).
   kind?: string;
   tipId?: string;
   groupId?: string;
   cateringId?: string;
+  mealPlanId?: string;
 }
 
 // Bridge message shapes posted by the embedded checkout.js below.
@@ -183,6 +186,16 @@ export default function PaymentCheckout() {
           router.replace(`/catering/${params.cateringId}` as never);
           return;
         }
+        // Tiffin meal-plan advance (#196): verify the full escrow advance, then
+        // show the customer their now-confirmed plan.
+        if (params.kind === 'mealplan') {
+          await api.post(`/v1/meal-plans/${params.mealPlanId}/verify-payment`, {
+            razorpayPaymentId: msg.razorpay_payment_id,
+            razorpaySignature: msg.razorpay_signature,
+          });
+          router.replace(`/meal-plans/${params.mealPlanId}` as never);
+          return;
+        }
         await api.post(`/v1/payments/order/${params.orderId}/verify`, {
           razorpayPaymentId: msg.razorpay_payment_id,
           razorpayOrderId: msg.razorpay_order_id,
@@ -206,7 +219,7 @@ export default function PaymentCheckout() {
         });
       }
     },
-    [params.orderId, params.kind, params.tipId, params.groupId, params.cateringId],
+    [params.orderId, params.kind, params.tipId, params.groupId, params.cateringId, params.mealPlanId],
   );
 
   return (
