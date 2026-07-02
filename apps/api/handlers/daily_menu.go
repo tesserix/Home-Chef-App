@@ -31,7 +31,10 @@ type dailyMenuItemInput struct {
 	DietaryTags []string `json:"dietaryTags"`
 	Allergens   []string `json:"allergens"`
 	MenuItemID  *string  `json:"menuItemId"`
-	SortOrder   int      `json:"sortOrder"`
+	// IsThali + ThaliComponents make this entry a priced bundle (#406).
+	IsThali         bool     `json:"isThali"`
+	ThaliComponents []string `json:"thaliComponents"`
+	SortOrder       int      `json:"sortOrder"`
 }
 
 type dailyMenuUpsertRequest struct {
@@ -128,6 +131,12 @@ func (h *ChefHandler) PutDailyMenu(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "price cannot be negative"})
 			return
 		}
+		// A thali is a bundle: it must list at least two component dishes and
+		// carry a set price (customers book it as one priced choice).
+		if in.IsThali && (len(in.ThaliComponents) < 2 || in.Price <= 0) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a thali needs at least two components and a set price"})
+			return
+		}
 		var menuItemID *uuid.UUID
 		if in.MenuItemID != nil && *in.MenuItemID != "" {
 			if id, perr := uuid.Parse(*in.MenuItemID); perr == nil {
@@ -135,18 +144,20 @@ func (h *ChefHandler) PutDailyMenu(c *gin.Context) {
 			}
 		}
 		items = append(items, models.DailyMenuItem{
-			ChefID:      chef.ID,
-			Date:        date,
-			Slot:        models.MealSlot(in.Slot),
-			Variant:     models.MealVariant(in.Variant),
-			Name:        in.Name,
-			Description: in.Description,
-			Price:       in.Price,
-			ImageURL:    in.ImageURL,
-			DietaryTags: ensureStringArray(in.DietaryTags),
-			Allergens:   ensureStringArray(in.Allergens),
-			MenuItemID:  menuItemID,
-			SortOrder:   in.SortOrder,
+			ChefID:          chef.ID,
+			Date:            date,
+			Slot:            models.MealSlot(in.Slot),
+			Variant:         models.MealVariant(in.Variant),
+			Name:            in.Name,
+			Description:     in.Description,
+			Price:           in.Price,
+			ImageURL:        in.ImageURL,
+			DietaryTags:     ensureStringArray(in.DietaryTags),
+			Allergens:       ensureStringArray(in.Allergens),
+			MenuItemID:      menuItemID,
+			IsThali:         in.IsThali,
+			ThaliComponents: ensureStringArray(in.ThaliComponents),
+			SortOrder:       in.SortOrder,
 		})
 	}
 	if req.IsPublished && len(items) == 0 {

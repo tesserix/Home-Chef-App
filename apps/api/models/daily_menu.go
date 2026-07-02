@@ -43,6 +43,12 @@ type DailyMenuItem struct {
 	Allergens   pq.StringArray `gorm:"type:text[]" json:"allergens"`
 	// MenuItemID optionally links the dish to an à-la-carte MenuItem (reuse image).
 	MenuItemID *uuid.UUID `gorm:"type:uuid" json:"menuItemId,omitempty"`
+	// IsThali marks this entry as a bundled thali/combo for the (date, slot):
+	// one set Price covering ThaliComponents (the dishes it includes, e.g.
+	// rice + dal + sabji + curry). A thali is the default plan choice for its
+	// slot; non-thali items are à-la-carte add-ons. (#406)
+	IsThali         bool           `gorm:"default:false" json:"isThali"`
+	ThaliComponents pq.StringArray `gorm:"type:text[]" json:"thaliComponents"`
 	// SortOrder controls display order within a (date, slot).
 	SortOrder int       `gorm:"default:0" json:"sortOrder"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
