@@ -160,9 +160,16 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 // a "delivery" order to a chef who self-delivers becomes a chef-delivered order
 // (the chef drives it), otherwise it routes to 3PL. The customer never chooses
 // chef_delivery directly.
-func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
+func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile, thirdPartyEnabled bool) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
+		// A delivery order is fulfillable only if SOMEONE can carry it: the chef
+		// self-delivers, or a 3PL provider is enabled. With 3PL dark and a chef
+		// who doesn't self-deliver, accepting it would silently dead-end at Mark
+		// Ready (no provider, no rider) — so reject it up front instead.
+		if !chef.OffersSelfDelivery && !thirdPartyEnabled {
+			return "", fmt.Errorf("this kitchen isn't delivering right now — please choose pickup")
+		}
 		// The carrier (chef vs 3PL) is chosen by the chef at Mark Ready, not at
 		// creation — so a delivery order is always created as plain delivery.
 		return models.FulfillmentDelivery, nil
@@ -187,7 +194,7 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 // Ready. The customer chose delivery vs pickup; the chef chooses who carries a
 // delivery order. Empty keeps the current type. Only delivery↔chef_delivery
 // switches are allowed, only for a self-delivering chef, and never for pickup.
-func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile) (models.FulfillmentType, error) {
+func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile, thirdPartyEnabled bool) (models.FulfillmentType, error) {
 	if requested == "" {
 		return current, nil
 	}
@@ -201,6 +208,11 @@ func resolveReadyCarrier(current models.FulfillmentType, requested string, chef 
 		}
 		return models.FulfillmentChefDelivery, nil
 	case models.FulfillmentDelivery:
+		// Handing to a rider is only valid when a 3PL provider is enabled;
+		// otherwise there is no carrier to dispatch to.
+		if !thirdPartyEnabled {
+			return "", fmt.Errorf("no delivery partner is available right now")
+		}
 		return models.FulfillmentDelivery, nil
 	default:
 		return "", fmt.Errorf("unsupported carrier")
@@ -272,8 +284,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Resolve and validate the fulfillment mode. Pickup is only allowed when
-	// the chef explicitly offers it; unknown modes are rejected early.
-	fulfillment, err := resolveFulfillment(req, chef)
+	// the chef explicitly offers it; delivery is only allowed when someone can
+	// carry it (chef self-delivers OR a 3PL provider is enabled); unknown modes
+	// are rejected early.
+	fulfillment, err := resolveFulfillment(req, chef, services.ThirdPartyDeliveryEnabled())
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -318,10 +332,14 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 	var capReservations []capReservation
 
+	// Only today's scheduled dishes are orderable — a dish not on the chef's
+	// weekly menu for today (per AvailableDays) can't be ordered even by id.
+	schedClause, schedArg := services.MenuScheduleClause(services.TodayWeekday())
 	for i, item := range req.Items {
 		var menuItem models.MenuItem
 		if err := database.DB.Where("id = ? AND chef_id = ? AND is_available = ?",
-			item.MenuItemID, req.ChefID, true).First(&menuItem).Error; err != nil {
+			item.MenuItemID, req.ChefID, true).
+			Where(schedClause, schedArg).First(&menuItem).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Menu item %s not found or unavailable", item.MenuItemID)})
 			return
 		}
@@ -497,6 +515,22 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	// Self-delivery reach guard: a chef who delivers their own orders can only
+	// serve addresses inside their delivery radius. Reject an out-of-range
+	// chef-delivery order server-side — the mirror of the discovery filter that
+	// hides out-of-range delivery-only chefs, so a crafted request can't create
+	// an undeliverable order. Only enforced when the chef set a radius and the
+	// drop address has real coordinates (otherwise we can't range-check, matching
+	// the zones-off behaviour above).
+	if fulfillment == models.FulfillmentChefDelivery && chef.DeliveryRadius > 0 &&
+		(deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0) &&
+		!services.ChefDeliversTo(chef, deliveryAddr.Latitude, deliveryAddr.Longitude) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "This chef doesn't deliver to that address. Try pickup, or choose an address closer to the kitchen.",
+		})
+		return
 	}
 
 	// Generate order number

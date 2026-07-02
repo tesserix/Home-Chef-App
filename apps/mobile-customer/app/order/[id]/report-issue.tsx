@@ -232,6 +232,7 @@ export default function ReportIssueScreen() {
           <TextInput
             style={styles.textArea}
             placeholder="Describe the problem…"
+            accessibilityLabel="Describe the problem"
             placeholderTextColor={customerColors.charcoal.soft}
             value={description}
             onChangeText={setDescription}

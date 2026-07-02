@@ -53,6 +53,7 @@ export default function EditMenuItemScreen() {
     comboItems: [],
     preparationTime: 15,
     hsn: '',
+    availableDays: [],
   });
 
   const seenItemId = useRef<string | null>(null);
@@ -81,6 +82,7 @@ export default function EditMenuItemScreen() {
         comboItems: (item.comboItems ?? []).map((c) => ({ menuItemId: c.menuItemId, quantity: c.quantity })),
         preparationTime: item.preparationTime ?? 15,
         hsn: item.hsn ?? '',
+        availableDays: item.availableDays ?? [],
       });
       // Bump key so MenuItemForm re-initialises its useState from the new initialValues
       setFormKey((k) => k + 1);
@@ -117,6 +119,7 @@ export default function EditMenuItemScreen() {
           comboItems: values.comboItems,
           preparationTime: values.preparationTime,
           hsn: values.hsn,
+          availableDays: values.availableDays,
         },
       });
       showToast({ message: 'Item saved', tone: 'success' });

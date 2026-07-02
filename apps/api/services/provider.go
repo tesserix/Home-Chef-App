@@ -127,6 +127,26 @@ func (s *ProviderService) FindAvailableProvider(city string, distance float64, c
 	return nil, nil // no provider available
 }
 
+// AnyProviderEnabled reports whether at least one 3PL delivery provider is
+// enabled AND active. This is the single source of truth for whether the 3PL /
+// rider surface is live at all: when it's false everything third-party is dark
+// — no rider dispatch, no "hand to a rider" UI, and "delivery" is only offered
+// for chefs who self-deliver. Flipping a provider's is_enabled=true (e.g. once
+// Borzo is validated) lights the whole path back up with no code change.
+func (s *ProviderService) AnyProviderEnabled() bool {
+	var count int64
+	database.DB.Model(&models.DeliveryProvider{}).
+		Where("is_enabled = ? AND is_active = ?", true, true).
+		Count(&count)
+	return count > 0
+}
+
+// ThirdPartyDeliveryEnabled is a package-level convenience over
+// ProviderService.AnyProviderEnabled for handlers that don't hold a service.
+func ThirdPartyDeliveryEnabled() bool {
+	return NewProviderService().AnyProviderEnabled()
+}
+
 // CreateProviderDelivery books a delivery with a third-party provider. When an
 // outbound adapter exists for the provider's code (ClientFor) the real API is
 // called; providers without an adapter yet get a deterministic mock response so

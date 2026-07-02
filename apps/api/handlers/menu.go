@@ -202,11 +202,12 @@ func (h *MenuHandler) CreateMenuItem(c *gin.Context) {
 		PortionSize:  req.PortionSize,
 		Serves:       max(req.Serves, 1),
 		SpiceLevel:   req.SpiceLevel,
-		IsVeg:        req.IsVeg,
-		IsAvailable:  true,
-		IsFeatured:   req.IsFeatured,
-		HSN:          req.HSN,
-		IsCombo:      req.IsCombo,
+		IsVeg:         req.IsVeg,
+		IsAvailable:   true,
+		AvailableDays: sanitizeWeekdays(req.AvailableDays),
+		IsFeatured:    req.IsFeatured,
+		HSN:           req.HSN,
+		IsCombo:       req.IsCombo,
 	}
 
 	if req.CategoryID != "" {
@@ -329,6 +330,9 @@ func (h *MenuHandler) UpdateMenuItem(c *gin.Context) {
 	}
 	if req.IsFeatured != nil {
 		updates["is_featured"] = *req.IsFeatured
+	}
+	if req.AvailableDays != nil {
+		updates["available_days"] = pq.Int64Array(sanitizeWeekdays(*req.AvailableDays))
 	}
 	if req.HSN != nil {
 		updates["hsn"] = *req.HSN
@@ -785,6 +789,9 @@ type CreateMenuItemRequest struct {
 	// HSN/SAC code for GST classification. Optional — empty string
 	// causes the DB default ("996331", restaurant services) to apply.
 	HSN string `json:"hsn"`
+	// AvailableDays is the weekly-menu schedule (0=Sun..6=Sat). Empty/omitted =
+	// available every day. Invalid values are dropped server-side.
+	AvailableDays []int `json:"availableDays"`
 	// Add-ons / combos (#52). ModifierGroups + ComboItems replace-all on save.
 	IsCombo        bool                 `json:"isCombo"`
 	ModifierGroups []ModifierGroupInput `json:"modifierGroups"`
@@ -833,6 +840,9 @@ type UpdateMenuItemRequest struct {
 	IsAvailable *bool   `json:"isAvailable"`
 	HSN         *string `json:"hsn"`
 	IsFeatured  *bool   `json:"isFeatured"`
+	// AvailableDays: send the weekly-menu schedule (0=Sun..6=Sat) to replace it;
+	// an empty array clears it (back to "every day"). Omit to leave unchanged.
+	AvailableDays *[]int `json:"availableDays"`
 	// Add-ons / combos (#52) — when present, replace-all the item's groups/combo.
 	IsCombo        *bool                 `json:"isCombo"`
 	ModifierGroups *[]ModifierGroupInput `json:"modifierGroups"`
@@ -859,6 +869,22 @@ func ensureStringArray(arr []string) pq.StringArray {
 		return pq.StringArray{}
 	}
 	return pq.StringArray(arr)
+}
+
+// sanitizeWeekdays validates a weekly-menu schedule: keeps only weekdays 0..6,
+// de-dupes, and preserves order. Invalid values are dropped rather than
+// rejected. Returns an empty (non-nil) array for "every day".
+func sanitizeWeekdays(days []int) pq.Int64Array {
+	out := pq.Int64Array{}
+	seen := map[int]bool{}
+	for _, d := range days {
+		if d < 0 || d > 6 || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, int64(d))
+	}
+	return out
 }
 
 // saveItemModifiers replaces a menu item's modifier groups (+ options) and combo

@@ -130,6 +130,7 @@ function TipPicker({
       <TextInput
         style={[styles.custom, isCustom && styles.customActive]}
         placeholder="Custom amount (₹)"
+        accessibilityLabel="Custom tip amount in rupees"
         placeholderTextColor={customerColors.charcoal.soft}
         keyboardType="numeric"
         value={isCustom ? String(amount) : ''}

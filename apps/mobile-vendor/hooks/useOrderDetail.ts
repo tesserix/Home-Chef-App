@@ -85,6 +85,11 @@ export interface OrderDetail {
   // distanceKm > maxDistanceKm > 0. Both 0 for other modes / unknown coords.
   selfDeliveryDistanceKm: number;
   selfDeliveryMaxDistanceKm: number;
+  // Server-computed: whether a 3PL provider is live, i.e. whether "hand to a
+  // rider" is a real option. The Mark-Ready rider button (and the mid-ready
+  // switch-to-rider link) are hidden when this is false, so the chef is never
+  // offered a rider while 3PL is dark.
+  riderDispatchAvailable: boolean;
 }
 
 // ---- Hook --------------------------------------------------------------------
@@ -136,6 +141,7 @@ interface RawChefOrderDetailResponse {
   offersSelfDelivery?: boolean;
   selfDeliveryDistanceKm?: number;
   selfDeliveryMaxDistanceKm?: number;
+  riderDispatchAvailable?: boolean;
 }
 
 function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
@@ -181,6 +187,7 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
     offersSelfDelivery: raw.offersSelfDelivery ?? false,
     selfDeliveryDistanceKm: raw.selfDeliveryDistanceKm ?? 0,
     selfDeliveryMaxDistanceKm: raw.selfDeliveryMaxDistanceKm ?? 0,
+    riderDispatchAvailable: raw.riderDispatchAvailable ?? false,
   };
 }
 

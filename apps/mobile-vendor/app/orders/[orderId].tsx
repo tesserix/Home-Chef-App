@@ -256,6 +256,9 @@ interface FooterActionsProps {
   /** True when this is a `delivery` order the chef could self-deliver — the
    *  Mark-Ready footer then offers the I'll-deliver vs hand-to-rider choice. */
   canSelfDeliver: boolean;
+  /** True when a 3PL provider is live — i.e. "hand to a rider" is a real option.
+   *  When false the rider buttons/links are hidden (3PL dark, chef-only). */
+  riderAvailable: boolean;
   /** True when the drop is beyond the chef's self-delivery radius — visually
    *  recommends "Hand to a rider" at the carrier choice. */
   overRange: boolean;
@@ -284,6 +287,7 @@ function FooterActions({
   disabled,
   updatedAt,
   canSelfDeliver,
+  riderAvailable,
   overRange,
   selfDeliveryDistanceKm,
   selfDeliveryMaxDistanceKm,
@@ -408,9 +412,13 @@ function FooterActions({
     // to deliver it themselves or hand it to a rider. Over-range orders emphasise
     // "Hand to a rider" (primary) and de-emphasise "I'll deliver" (outline).
     if (canSelfDeliver) {
+      // Only emphasise "hand to a rider" when a rider is actually available (3PL
+      // live). With 3PL dark the rider button is hidden entirely and "I'll
+      // deliver" is the single primary action.
+      const emphasizeRider = overRange && riderAvailable;
       return (
         <View style={[styles.footer, styles.footerColumn]}>
-          {overRange ? (
+          {emphasizeRider ? (
             <Text style={styles.carrierHint}>
               {`This drop is ${selfDeliveryDistanceKm.toFixed(1)} km away — beyond your ${selfDeliveryMaxDistanceKm} km range. Handing it to a rider is recommended.`}
             </Text>
@@ -424,41 +432,43 @@ function FooterActions({
             {({ pressed }) => (
               <View
                 style={[
-                  overRange ? styles.carrierBtnSecondary : styles.carrierBtnPrimary,
+                  emphasizeRider ? styles.carrierBtnSecondary : styles.carrierBtnPrimary,
                   pressed && { opacity: 0.85 },
                   disabled && { opacity: 0.4 },
                 ]}
               >
                 <Text
-                  style={overRange ? styles.carrierLabelSecondary : styles.primaryLabel}
+                  style={emphasizeRider ? styles.carrierLabelSecondary : styles.primaryLabel}
                 >
                   Ready · I&apos;ll deliver
                 </Text>
               </View>
             )}
           </Pressable>
-          <Pressable
-            onPress={() => onReadyCarrier('delivery')}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel="Mark ready, hand to a rider"
-          >
-            {({ pressed }) => (
-              <View
-                style={[
-                  overRange ? styles.carrierBtnPrimary : styles.carrierBtnSecondary,
-                  pressed && { opacity: 0.85 },
-                  disabled && { opacity: 0.4 },
-                ]}
-              >
-                <Text
-                  style={overRange ? styles.primaryLabel : styles.carrierLabelSecondary}
+          {riderAvailable ? (
+            <Pressable
+              onPress={() => onReadyCarrier('delivery')}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityLabel="Mark ready, hand to a rider"
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    emphasizeRider ? styles.carrierBtnPrimary : styles.carrierBtnSecondary,
+                    pressed && { opacity: 0.85 },
+                    disabled && { opacity: 0.4 },
+                  ]}
                 >
-                  Ready · Hand to a rider
-                </Text>
-              </View>
-            )}
-          </Pressable>
+                  <Text
+                    style={emphasizeRider ? styles.primaryLabel : styles.carrierLabelSecondary}
+                  >
+                    Ready · Hand to a rider
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          ) : null}
           {cancelLink}
         </View>
       );
@@ -545,16 +555,18 @@ function FooterActions({
               </View>
             )}
           </Pressable>
-          <Pressable
-            onPress={() => onSwitchCarrier('delivery')}
-            disabled={disabled}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Hand this order to a rider instead"
-            style={styles.switchLinkWrap}
-          >
-            <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
-          </Pressable>
+          {riderAvailable ? (
+            <Pressable
+              onPress={() => onSwitchCarrier('delivery')}
+              disabled={disabled}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Hand this order to a rider instead"
+              style={styles.switchLinkWrap}
+            >
+              <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
+            </Pressable>
+          ) : null}
           {cancelLink}
         </View>
       );
@@ -1221,6 +1233,7 @@ export default function OrderDetailScreen() {
         }
         updatedAt={order.timing.preparedAt ?? order.timing.orderedAt}
         canSelfDeliver={canSelfDeliver}
+        riderAvailable={order.riderDispatchAvailable}
         overRange={overReadyRange}
         selfDeliveryDistanceKm={order.selfDeliveryDistanceKm}
         selfDeliveryMaxDistanceKm={order.selfDeliveryMaxDistanceKm}

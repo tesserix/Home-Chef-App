@@ -23,6 +23,18 @@ export interface Chef {
   // offersSelfDelivery: chef delivers the order themselves (Phase 2) — surfaces
   // the "Chef delivery" mode in checkout.
   offersSelfDelivery?: boolean;
+  // offersDelivery: server-computed — whether "Delivery" is fulfillable at all
+  // (chef self-delivers OR a 3PL provider is live). Gates the delivery option in
+  // checkout so no unfulfillable delivery order is placed. Defaults true when the
+  // API omits it (older builds).
+  offersDelivery?: boolean;
+  // deliverableToYou: per-customer, server-computed from the coordinates the app
+  // sent — whether THIS chef can deliver to the customer's location (own-fleet
+  // within radius, or any location when a 3PL is live). Undefined when the app
+  // sent no coordinates (fall back to offersDelivery). `false` means the chef is
+  // shown for pickup only because the customer is outside the chef's delivery
+  // range — the app must not offer delivery in that case.
+  deliverableToYou?: boolean;
   // Full street address — only surfaced by TrackOrder for a PICKUP order (the
   // customer needs it to collect). Absent/fuzzed for delivery (privacy).
   address?: string;
