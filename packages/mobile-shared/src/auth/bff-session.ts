@@ -146,6 +146,36 @@ export async function fetchSessionUser(bffUrl: string): Promise<BFFSessionUser |
   return r.json();
 }
 
+// ── Silent-refresh registry (#428) ─────────────────────────────────────────
+// On a 401 the api client asks for a fresh session token instead of logging the
+// user out. The concrete strategy (re-mint from the durable Firebase identity)
+// is registered by the AuthProvider at startup, so this module stays free of any
+// Firebase/store coupling. Concurrent 401s share ONE in-flight refresh
+// (single-flight) so a burst of failing requests mints at most one new session.
+type SessionRefresher = () => Promise<string | null>;
+let sessionRefresher: SessionRefresher | null = null;
+let inflightRefresh: Promise<string | null> | null = null;
+
+/** Register (or clear, with null) the concrete refresh strategy. */
+export function setSessionRefresher(fn: SessionRefresher | null): void {
+  sessionRefresher = fn;
+}
+
+/** Mint a fresh session token, or null if no refresher is registered or it fails.
+ *  Single-flight: concurrent callers await the same in-flight refresh. */
+export async function refreshSession(): Promise<string | null> {
+  if (!sessionRefresher) return null;
+  if (!inflightRefresh) {
+    inflightRefresh = Promise.resolve()
+      .then(() => sessionRefresher!())
+      .catch(() => null)
+      .finally(() => {
+        inflightRefresh = null;
+      });
+  }
+  return inflightRefresh;
+}
+
 export async function logoutBFF(bffUrl: string): Promise<void> {
   const tok = await getStoredSession();
   if (tok) {

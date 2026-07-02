@@ -6,8 +6,11 @@ import {
   clearStoredSession,
   fetchSessionUser,
   logoutBFF,
+  setSessionRefresher,
 } from "./bff-session";
 import { getIdToken, signOut as fbSignOut } from "./sign-in";
+import { setTokens } from "../utils/storage";
+import { useAuthStore } from "../hooks/useAuth";
 
 export interface AuthUser {
   id: string;
@@ -89,6 +92,32 @@ export function AuthProvider({ children, bffUrl, tenantId }: AuthProviderProps) 
       cancelled = true;
       unsub?.();
     };
+  }, [bffUrl, tenantId]);
+
+  // Register the silent-refresh strategy the api client uses on a 401 (#428):
+  // re-mint a BFF session from the still-valid Firebase identity, then persist
+  // the fresh token everywhere the client reads it (the Zustand store that feeds
+  // getToken, the mirrored SecureStore access_token, and — via autoLogin — the
+  // BFF SESSION_KEY). Returning a token lets the client retry instead of logging
+  // the user out; returning null (no Firebase user) lets it fall through to
+  // clearing the session.
+  useEffect(() => {
+    setSessionRefresher(async () => {
+      const idToken = await getIdToken();
+      if (!idToken) return null;
+      const body = await autoLogin(bffUrl, idToken, tenantId);
+      const token = body.session_token;
+      await setTokens({ accessToken: token });
+      useAuthStore.setState({ accessToken: token, isAuthenticated: true });
+      setUser({
+        id: body.user.id,
+        email: body.user.email,
+        role: body.user.role,
+        pool: body.user.pool,
+      });
+      return token;
+    });
+    return () => setSessionRefresher(null);
   }, [bffUrl, tenantId]);
 
   const completeSignIn = async () => {

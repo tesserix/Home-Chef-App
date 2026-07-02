@@ -11,7 +11,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 import { clearTokens } from '../utils/storage';
-import { clearStoredSession } from '../auth/bff-session';
+import { clearStoredSession, refreshSession } from '../auth/bff-session';
 
 export interface UpgradeRequiredPayload {
   minVersion?: string;
@@ -70,12 +70,15 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
     (error) => Promise.reject(error)
   );
 
-  // Response interceptor: 401 → clear session; 426 → upgrade wall.
-  // We do NOT attempt a client-side refresh on 401: the BFF
-  // session_token has no matching refresh token on the client. If the
-  // Firebase user is still signed in, the app can call
-  // AuthProvider.completeSignIn() to mint a fresh session. Otherwise
-  // the user must re-authenticate.
+  // Response interceptor: 401 → silent refresh + retry once, else clear session;
+  // 426 → upgrade wall.
+  //
+  // On a 401 we ask refreshSession() for a fresh session token (the AuthProvider
+  // registers a strategy that re-mints from the durable Firebase identity — the
+  // BFF /auth/refresh only sets a cookie, so mobile can't use it). If we get a
+  // token, we retry the ORIGINAL request once with it; only when refresh yields
+  // nothing do we tear down the session. This keeps a logged-in user signed in
+  // across an expired access token instead of bouncing them to login. (#428)
   instance.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
@@ -84,10 +87,23 @@ export function createApiClient(options: ApiClientOptions): AxiosInstance {
         // race a session refresh on cold start) must NOT tear down the session
         // on a 401 — that would bounce a logged-in user to the login screen.
         const cfg = error.config as
-          | (InternalAxiosRequestConfig & { skipAuthFailure?: boolean })
+          | (InternalAxiosRequestConfig & {
+              skipAuthFailure?: boolean;
+              _retried?: boolean;
+            })
           | undefined;
         if (cfg?.skipAuthFailure) {
           return Promise.reject(error);
+        }
+        // Try a single silent refresh + retry before giving up on the session.
+        if (cfg && !cfg._retried) {
+          const newToken = await refreshSession();
+          if (newToken) {
+            cfg._retried = true;
+            cfg.headers = cfg.headers ?? {};
+            (cfg.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
+            return instance(cfg);
+          }
         }
         try {
           await clearTokens();

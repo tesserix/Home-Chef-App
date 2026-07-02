@@ -23,6 +23,7 @@ vi.mock('expo-secure-store', () => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn(),
   deleteItemAsync: vi.fn(),
+  AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK',
 }));
 
 import { createApiClient } from '../api/client';
