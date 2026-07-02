@@ -1,3 +1,9 @@
+// Deploy note: forces a fresh apps/api build so the prod image tag resolves to
+// the full v1 backend (#369 fulfillment + #372 delivery-area + #370 weekly-menu).
+// The ensure-image-tags carry-forward had tagged the deploy commit with the
+// pre-#372 API image because the intermediate deploy-advances were cancelled by
+// GitHub Actions concurrency when several PRs merged in quick succession.
+
 package main
 
 import (
