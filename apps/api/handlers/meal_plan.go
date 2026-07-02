@@ -477,6 +477,7 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 
 type verifyMealPlanPaymentRequest struct {
 	RazorpayPaymentID string `json:"razorpayPaymentId"`
+	RazorpaySignature string `json:"razorpaySignature"`
 }
 
 // VerifyMealPlanPayment — POST /meal-plans/:id/verify-payment. Confirms the
@@ -495,7 +496,7 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		return
 	}
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		return services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID)
+		return services.VerifyMealPlanAdvance(tx, &plan, req.RazorpayPaymentID, req.RazorpaySignature)
 	}); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return
@@ -514,8 +515,13 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 	}
 	status := c.DefaultQuery("status", string(models.MealPlanPendingChef))
 	var plans []models.MealPlan
-	database.DB.Where("chef_id = ? AND status = ?", chef.ID, status).
-		Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
+	q := database.DB.Where("chef_id = ? AND status = ?", chef.ID, status)
+	// When escrow is on, only surface plans whose advance the customer has paid —
+	// the chef shouldn't act on (or be held liable to cook for) an unpaid request.
+	if services.MealPlanEscrowActive() {
+		q = q.Where("escrow_payment_id <> ''")
+	}
+	q.Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
