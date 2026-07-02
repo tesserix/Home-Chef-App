@@ -210,9 +210,11 @@ func Migrate() error {
 		&models.CateringRequest{},
 		&models.CateringQuote{},
 
-		// Tiffin weekly menu (#192) + meal plans (#193)
+		// Tiffin weekly menu (#192) + per-date menu (#405) + meal plans (#193)
 		&models.WeeklyMenu{},
 		&models.WeeklyMenuItem{},
+		&models.DailyMenu{},
+		&models.DailyMenuItem{},
 		&models.MealPlan{},
 		&models.MealPlanDay{},
 
