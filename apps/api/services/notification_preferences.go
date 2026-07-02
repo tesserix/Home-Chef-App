@@ -29,7 +29,7 @@ func notificationTypeCategory(notifType string) models.NotificationCategory {
 		return models.NotifCategoryDelivery
 	case "promo", "marketing":
 		return models.NotifCategoryMarketing
-	case "weekly_menu_published":
+	case "weekly_menu_published", "daily_menu_published":
 		return models.NotifCategoryFavorites
 	default:
 		return models.NotifCategoryAccount
