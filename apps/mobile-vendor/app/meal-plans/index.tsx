@@ -53,6 +53,31 @@ export default function MealPlansScreen() {
         )}
       </Pressable>
 
+      {/* Per-date dynamic menu (#405/#406) — different dishes + a combo per day */}
+      <Pressable
+        onPress={() => router.push('/meal-plans/daily-menu' as never)}
+        accessibilityRole="button"
+      >
+        {({ pressed }) => (
+          <View style={[styles.menuCta, pressed && styles.pressed]}>
+            <View style={styles.menuIcon}>
+              <UtensilsCrossed
+                size={20}
+                color={theme.colors.herb.DEFAULT}
+                strokeWidth={1.75}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuCtaTitle}>Daily menu</Text>
+              <Text style={styles.menuCtaCaption}>
+                Different dishes each day + a combo/thali per day
+              </Text>
+            </View>
+            <CalendarDays size={18} color={theme.colors.ink.muted} />
+          </View>
+        )}
+      </Pressable>
+
       {/* Bulk prep view entry (#50) */}
       <Pressable
         onPress={() => router.push('/meal-plans/prep' as never)}
