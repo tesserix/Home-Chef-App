@@ -211,6 +211,19 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		}
 	}
 
+	// Escrow (paid) plans charge the full amount upfront: food + GST + per-day
+	// delivery. The chef is paid only the food price; the platform keeps GST +
+	// delivery. Snapshot Tax/Total onto the plan so per-day refunds stay stable
+	// even if platform policy changes after booking. Escrow off = unpaid handshake,
+	// so Total stays the food subtotal (nothing is charged).
+	planTax := 0.0
+	planTotal := subtotal
+	if services.MealPlanEscrowActive() {
+		tax, delivery := services.MealPlanFeeTotals(subtotal, len(days))
+		planTax = tax
+		planTotal = services.Round2(subtotal + tax + delivery)
+	}
+
 	respondBy := time.Now().Add(chefRespondWindow)
 	plan := models.MealPlan{
 		MealPlanNumber: mealPlanNumber(),
@@ -220,7 +233,8 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		StartDate:      minDate,
 		EndDate:        maxDate,
 		Subtotal:       subtotal,
-		Total:          subtotal, // tax/GST + delivery resolved at per-day order generation (#197)
+		Tax:            planTax,
+		Total:          planTotal,
 		Currency:       "INR",
 		ChefRespondBy:  &respondBy,
 		Days:           days,

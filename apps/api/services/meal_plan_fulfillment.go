@@ -111,6 +111,19 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 	}
 	scheduled := d.Date
 
+	// Per-day breakdown mirrors the advance: food + GST + delivery (chef is paid
+	// food only; platform keeps GST + delivery). Informational on the order record
+	// — escrow money conservation is handled by the plan total + per-day refunds.
+	dayTax := 0.0
+	dayDelivery := 0.0
+	dayTotal := d.Price
+	if MealPlanEscrowActive() {
+		policy := GetPlatformPolicy()
+		dayTax = Round2(d.Price * (policy.TaxPercent / 100.0))
+		dayDelivery = Round2(policy.BaseDeliveryFee)
+		dayTotal = Round2(d.Price + dayTax + dayDelivery)
+	}
+
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		order := models.Order{
 			OrderNumber:               mealPlanOrderNumber(),
@@ -120,7 +133,9 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 			PaymentStatus:             paymentStatus,
 			Currency:                  p.Currency,
 			Subtotal:                  d.Price,
-			Total:                     d.Price,
+			Tax:                       dayTax,
+			DeliveryFee:               dayDelivery,
+			Total:                     dayTotal,
 			DeliveryAddressLine1:      addr.Line1,
 			DeliveryAddressLine2:      addr.Line2,
 			DeliveryAddressCity:       addr.City,
