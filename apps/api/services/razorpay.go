@@ -510,6 +510,22 @@ func VerifyWebhookSignature(payload []byte, signature string) bool {
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
+// VerifyPaymentSignature validates a Razorpay Checkout payment signature:
+// HMAC-SHA256(order_id + "|" + payment_id, keySecret) must equal the signature
+// the client received from Razorpay. This proves Razorpay authorized THIS
+// (order, payment) pair for our merchant, so a captured payment from a
+// different order can't be reused to settle this one. Constant-time compare.
+func VerifyPaymentSignature(razorpayOrderID, razorpayPaymentID, signature string) bool {
+	if razorpayClient == nil || razorpayClient.keySecret == "" {
+		log.Println("Warning: Razorpay key secret not configured")
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(razorpayClient.keySecret))
+	mac.Write([]byte(razorpayOrderID + "|" + razorpayPaymentID))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
 // GetKeyID returns the Razorpay publishable key ID (for frontend checkout).
 // This is safe to expose — it's the equivalent of a Stripe publishable key.
 func (c *RazorpayClient) GetKeyID() string {
