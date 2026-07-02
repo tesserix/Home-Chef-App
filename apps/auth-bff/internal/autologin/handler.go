@@ -25,6 +25,8 @@ func (h *Handler) post(c *gin.Context) {
 	switch {
 	case errors.Is(err, ErrTenantNotAllowed):
 		c.JSON(http.StatusForbidden, gin.H{"error": "tenant_not_allowed"})
+	case errors.Is(err, ErrEmailNotAllowed):
+		c.JSON(http.StatusForbidden, gin.H{"error": "email_not_allowed"})
 	case errors.Is(err, ErrTokenInvalid):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
 	case err != nil:

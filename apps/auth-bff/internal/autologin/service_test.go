@@ -165,6 +165,48 @@ func TestAutoLogin_RoleClaim_Overrides(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"role":"delivery"`)
 }
 
+func TestAutoLogin_AdminEmailNotInAllowlist_403(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "allowed@fe3dr.com")
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	deps := newDeps(t,
+		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "intruder@evil.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password", Claims: map[string]any{}}},
+		api,
+		&fakeSessions{encoded: "sess"},
+	)
+	r := gin.New()
+	NewHandler(deps).Register(r)
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Internal-gyofe"}`
+	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, 403, w.Code)
+	assert.Contains(t, w.Body.String(), "email_not_allowed")
+	// A rejected admin must never be upserted.
+	require.False(t, api.captured)
+}
+
+func TestAutoLogin_AdminAllowlistUnset_AllowsWithWarning(t *testing.T) {
+	// Fail-open: an unconfigured allowlist must not lock admins out.
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
+	deps := newDeps(t,
+		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password", Claims: map[string]any{}}},
+		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
+		&fakeSessions{encoded: "sess"},
+	)
+	r := gin.New()
+	NewHandler(deps).Register(r)
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Internal-gyofe"}`
+	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, 200, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"role":"admin"`)
+}
+
 func TestAutoLogin_InvalidBody_400(t *testing.T) {
 	deps := newDeps(t, &fakeGIP{}, &fakeAPI{}, &fakeSessions{})
 	r := gin.New()

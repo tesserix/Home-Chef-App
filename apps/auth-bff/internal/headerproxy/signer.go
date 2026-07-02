@@ -56,7 +56,10 @@ func (s *Signer) Sign(r *http.Request, body []byte, id Identity) error {
 	r.Header.Set(HdrUserRole, id.Role)
 	r.Header.Set(HdrAuthPool, id.Pool)
 	r.Header.Set(HdrAuthTs, ts)
-	r.Header.Set(HdrSignature, s.compute(r.Method, r.URL.Path, body, ts))
+	// The identity passed to compute is the SAME set of values stamped into the
+	// X-User-Id / X-User-Email / X-User-Role / X-Auth-Pool headers above, so the
+	// signature binds them and they can't be swapped in transit.
+	r.Header.Set(HdrSignature, s.compute(r.Method, r.URL.Path, body, ts, id))
 	return nil
 }
 
@@ -70,8 +73,14 @@ func (s *Signer) Verify(r *http.Request, body []byte) (*Identity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bad X-Auth-Ts: %w", err)
 	}
+	id := Identity{
+		UserID: r.Header.Get(HdrUserID),
+		Email:  r.Header.Get(HdrUserEmail),
+		Role:   r.Header.Get(HdrUserRole),
+		Pool:   r.Header.Get(HdrAuthPool),
+	}
 	// Verify signature FIRST (constant-time, no timing oracle on ts validity)
-	want := s.compute(r.Method, r.URL.Path, body, ts)
+	want := s.compute(r.Method, r.URL.Path, body, ts, id)
 	if !hmac.Equal([]byte(sig), []byte(want)) {
 		return nil, ErrSignatureMismatch
 	}
@@ -80,17 +89,21 @@ func (s *Signer) Verify(r *http.Request, body []byte) (*Identity, error) {
 	if d > s.cfg.Window || d < -s.cfg.Window {
 		return nil, ErrStaleTimestamp
 	}
-	return &Identity{
-		UserID: r.Header.Get(HdrUserID),
-		Email:  r.Header.Get(HdrUserEmail),
-		Role:   r.Header.Get(HdrUserRole),
-		Pool:   r.Header.Get(HdrAuthPool),
-	}, nil
+	return &id, nil
 }
 
-func (s *Signer) compute(method, path string, body []byte, ts string) string {
+// compute builds the HMAC over the canonical message. The identity fields are
+// appended after method/path/body/ts, in the exact order userID, email, role,
+// pool, so a signed request can't be replayed with swapped identity headers.
+//
+// CRITICAL: this string MUST stay byte-identical to
+// apps/api/middleware/bff_auth.go:compute — same header value order, same "\n"
+// separators. Any drift shows up as HMAC mismatch (401) at the API.
+func (s *Signer) compute(method, path string, body []byte, ts string, id Identity) string {
 	bodyHash := sha256.Sum256(body)
 	m := hmac.New(sha256.New, s.cfg.Key)
-	fmt.Fprintf(m, "%s\n%s\n%s\n%s", method, path, hex.EncodeToString(bodyHash[:]), ts)
+	fmt.Fprintf(m, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s",
+		method, path, hex.EncodeToString(bodyHash[:]), ts,
+		id.UserID, id.Email, id.Role, id.Pool)
 	return hex.EncodeToString(m.Sum(nil))
 }

@@ -1,6 +1,8 @@
 package models
 
 import (
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -288,17 +290,46 @@ func (s *StaffMember) CanAccessDeliveryPortal() bool {
 	return false
 }
 
-// SuperAdminEmails are the default super admin emails (always have full access)
-var SuperAdminEmails = []string{
+// defaultSuperAdminEmails is the built-in super admin allowlist used when the
+// SUPER_ADMIN_EMAILS env var is unset or empty. Preserves the historical behavior.
+var defaultSuperAdminEmails = []string{
 	"samyak.rout@gmail.com",
 	"mahesh.sangawar@gmail.com",
 	"unidevidp@gmail.com",
 }
 
-// IsSuperAdminEmail checks if an email is a default super admin
+// SuperAdminEmails is the effective super admin allowlist (always full access).
+// Sourced from the comma-separated SUPER_ADMIN_EMAILS env var at startup,
+// falling back to defaultSuperAdminEmails when that env var is unset or empty.
+// Entries are trimmed and lowercased so IsSuperAdminEmail compares
+// case-insensitively.
+var SuperAdminEmails = loadSuperAdminEmails()
+
+// loadSuperAdminEmails reads SUPER_ADMIN_EMAILS (comma-separated), falling back
+// to the hardcoded default when unset/empty so today's behavior is preserved.
+func loadSuperAdminEmails() []string {
+	if out := normalizeEmails(strings.Split(os.Getenv("SUPER_ADMIN_EMAILS"), ",")); len(out) > 0 {
+		return out
+	}
+	return normalizeEmails(defaultSuperAdminEmails)
+}
+
+// normalizeEmails trims and lowercases each entry, dropping blanks.
+func normalizeEmails(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, e := range in {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// IsSuperAdminEmail checks if an email is a super admin (case-insensitive).
 func IsSuperAdminEmail(email string) bool {
+	want := strings.ToLower(strings.TrimSpace(email))
 	for _, e := range SuperAdminEmails {
-		if e == email {
+		if e == want {
 			return true
 		}
 	}
