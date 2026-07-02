@@ -525,7 +525,11 @@ export default function ChefDetailScreen() {
           {/* ── MENU ITEMS ── */}
           {filteredItems.length === 0 ? (
             <View style={styles.emptyMenu}>
-              <Text style={styles.emptyMenuText}>No items in this category</Text>
+              <Text style={styles.emptyMenuText}>
+                {menuItems.length === 0
+                  ? "This kitchen hasn't published a menu right now — check back soon."
+                  : 'No items in this category'}
+              </Text>
             </View>
           ) : (
             <View style={styles.menuList}>
