@@ -79,3 +79,43 @@ func (r *Registry) IsMobileTenantAllowed(tenantID string) bool {
 	}
 	return false
 }
+
+// ResolveByTenant returns the first app registered with the given GIP tenant ID,
+// or nil when no app matches. The mobile auto-login path resolves apps by tenant
+// (there is no request host), so it uses this instead of ResolveByHost.
+func (r *Registry) ResolveByTenant(tenantID string) *App {
+	for i := range r.Products {
+		for j := range r.Products[i].Apps {
+			if r.Products[i].Apps[j].GIPTenantID == tenantID {
+				return &r.Products[i].Apps[j]
+			}
+		}
+	}
+	return nil
+}
+
+// IsEmailAllowed reports whether email passes the app's admin email allowlist,
+// resolved at call time from the env var named by AllowedEmailsEnv
+// (comma-separated, case-insensitive, space-trimmed).
+//
+// The second return value reports whether an allowlist is actually configured.
+// When configured is false the caller should fail OPEN (allow + log) so an unset
+// env var doesn't lock everyone out; when configured is true the caller MUST
+// fail CLOSED whenever allowed is false.
+func (a *App) IsEmailAllowed(email string) (allowed, configured bool) {
+	if a.AllowedEmailsEnv == "" {
+		return false, false
+	}
+	want := strings.ToLower(strings.TrimSpace(email))
+	for _, e := range strings.Split(os.Getenv(a.AllowedEmailsEnv), ",") {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		configured = true
+		if e == want {
+			allowed = true
+		}
+	}
+	return allowed, configured
+}

@@ -19,9 +19,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// sign mirrors apps/auth-bff/internal/headerproxy/signer.go:compute exactly.
-// Used by tests to simulate BFF signing without importing the other module.
-func sign(method, path string, body []byte, ts string, key []byte) string {
+// sign mirrors apps/auth-bff/internal/headerproxy/signer.go:compute exactly —
+// the identity-bound canonical message. Used by tests to simulate BFF signing
+// without importing the other module.
+func sign(method, path string, body []byte, ts string, key []byte, id BFFIdentity) string {
+	bodyHash := sha256.Sum256(body)
+	m := hmac.New(sha256.New, key)
+	_, _ = fmt.Fprintf(m, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s",
+		method, path, hex.EncodeToString(bodyHash[:]), ts,
+		id.UserID, id.Email, id.Role, id.Pool)
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// signLegacy mirrors the DEPRECATED pre-identity-binding format
+// (method/path/body/ts only). Used to exercise the backward-compat fallback.
+func signLegacy(method, path string, body []byte, ts string, key []byte) string {
 	bodyHash := sha256.Sum256(body)
 	m := hmac.New(sha256.New, key)
 	_, _ = fmt.Fprintf(m, "%s\n%s\n%s\n%s", method, path, hex.EncodeToString(bodyHash[:]), ts)
@@ -35,7 +47,7 @@ func attachSigned(r *http.Request, body []byte, key []byte, id BFFIdentity, ts i
 	r.Header.Set(HdrUserRole, id.Role)
 	r.Header.Set(HdrAuthPool, id.Pool)
 	r.Header.Set(HdrAuthTs, tsStr)
-	r.Header.Set(HdrSignature, sign(r.Method, r.URL.Path, body, tsStr, key))
+	r.Header.Set(HdrSignature, sign(r.Method, r.URL.Path, body, tsStr, key, id))
 }
 
 func TestBFFAuth_ValidSignature_SetsContext(t *testing.T) {
@@ -105,6 +117,51 @@ func TestBFFAuth_TamperedBody_401(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, 401, w.Code)
+}
+
+// TestBFFAuth_LegacySignature_Accepted covers the rolling-deploy fallback: a
+// request signed with the OLD format (no identity binding) must still verify so
+// an in-flight old-BFF request isn't 401'd mid-rollout.
+func TestBFFAuth_LegacySignature_Accepted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	key := []byte("test-key-32-bytes-padding-padding!")
+	r := gin.New()
+	r.POST("/x", BFFAuth(BFFAuthConfig{HMACKey: key, Window: time.Minute}), func(c *gin.Context) {
+		role, _ := c.Get("user_role")
+		c.JSON(200, gin.H{"role": role})
+	})
+
+	body := []byte(`{"hello":"world"}`)
+	req := httptest.NewRequest("POST", "/x", bytes.NewReader(body))
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	req.Header.Set(HdrUserID, "u1")
+	req.Header.Set(HdrUserRole, "customer")
+	req.Header.Set(HdrAuthTs, ts)
+	req.Header.Set(HdrSignature, signLegacy(req.Method, req.URL.Path, body, ts, key))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, 200, w.Code, "legacy signatures must still be accepted during rollout")
+	assert.Contains(t, w.Body.String(), `"role":"customer"`)
+}
+
+// TestBFFAuth_TamperedRoleHeader_401 proves the new identity binding: a request
+// signed as "customer" whose X-User-Role header is then escalated to "admin"
+// must be rejected (neither the new nor the legacy signature covers the swap).
+func TestBFFAuth_TamperedRoleHeader_401(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	key := []byte("test-key-32-bytes-padding-padding!")
+	r := gin.New()
+	r.POST("/x", BFFAuth(BFFAuthConfig{HMACKey: key, Window: time.Minute}), func(c *gin.Context) { c.Status(200) })
+
+	body := []byte(`{}`)
+	req := httptest.NewRequest("POST", "/x", bytes.NewReader(body))
+	attachSigned(req, body, key, BFFIdentity{UserID: "u1", Email: "a@b.com", Role: "customer", Pool: "customer"}, time.Now().Unix())
+	req.Header.Set(HdrUserRole, "admin") // escalate after signing
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, 401, w.Code, "swapping X-User-Role must break the identity-bound signature")
 }
 
 func TestBFFAuth_WrongKey_401(t *testing.T) {

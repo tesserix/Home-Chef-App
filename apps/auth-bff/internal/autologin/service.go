@@ -3,6 +3,7 @@ package autologin
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -56,6 +57,7 @@ type User struct {
 var (
 	ErrTenantNotAllowed = errors.New("tenant not allowed for mobile")
 	ErrTokenInvalid     = errors.New("id_token invalid")
+	ErrEmailNotAllowed  = errors.New("email not allowed for admin")
 )
 
 func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
@@ -70,6 +72,22 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 	role := defaultRoleForPool(pool)
 	if r, ok := tok.Claims["role"].(string); ok && r != "" {
 		role = r
+	}
+	// Admin allowlist enforcement (security). Mirror the OIDC web path: for
+	// internal/admin logins the verified email must be in the app's allowlist.
+	// Backward-compatible: fail OPEN + log when the allowlist is unconfigured
+	// (or the tenant has no registered app), fail CLOSED when it IS configured.
+	if pool == "internal" || role == "admin" {
+		if app := d.Registry.ResolveByTenant(req.ExpectedTenantID); app != nil {
+			if allowed, configured := app.IsEmailAllowed(tok.Email); configured && !allowed {
+				log.Printf("autologin: rejected admin login for %q — not in %s allowlist", tok.Email, app.AllowedEmailsEnv)
+				return nil, ErrEmailNotAllowed
+			} else if !configured {
+				log.Printf("autologin: admin allowlist %s unconfigured — allowing admin login for %q (set the env to enforce)", app.AllowedEmailsEnv, tok.Email)
+			}
+		} else {
+			log.Printf("autologin: no app registered for tenant %q — allowing admin login for %q without allowlist check", req.ExpectedTenantID, tok.Email)
+		}
 	}
 	upsert, err := d.API.UpsertUser(ctx, apiclient.UpsertUserRequest{
 		GIPUid:        tok.UID,

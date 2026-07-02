@@ -129,6 +129,51 @@ func TestExchange_Happy(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Set-Cookie"), "hc_session=sess-blob")
 }
 
+func TestExchange_AdminEmailNotInAllowlist_403(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "allowed@fe3dr.com")
+	ver := &fakeVerifier{
+		tok: &gip.VerifiedToken{
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
+			Claims: map[string]any{"sub": "g1", "email": "x@y.com"},
+		},
+	}
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, ver, api)
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "email_not_allowed")
+}
+
+func TestExchange_AdminEmailInAllowlist_OK(t *testing.T) {
+	// Case-insensitive + space-trimmed match.
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", " X@Y.com , other@fe3dr.com ")
+	ver := &fakeVerifier{
+		tok: &gip.VerifiedToken{
+			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
+			Claims: map[string]any{"sub": "g1", "email": "x@y.com"},
+		},
+	}
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, ver, api)
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"user_id":"u1"`)
+}
+
 func TestExchange_InvalidBody_400(t *testing.T) {
 	h := newHandlers(t, &fakeVerifier{}, &fakeAPI{})
 	r := gin.New()

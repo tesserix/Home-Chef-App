@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -166,6 +167,22 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 	role := app.DefaultRole
 	if r, ok := claims["role"].(string); ok && r != "" {
 		role = r
+	}
+	// Admin allowlist enforcement (security). For internal/admin logins the
+	// verified email must be in the app's HOMECHEF_ADMIN_ALLOWED_EMAILS
+	// allowlist. Backward-compatible: when the allowlist is unconfigured we log
+	// and allow so prod doesn't break if the env isn't set; when it IS set we
+	// enforce strictly. Reject BEFORE the user upsert so a blocked email never
+	// gets an admin row/session.
+	if pool == "internal" || role == "admin" {
+		email := getStr(claims, "email")
+		if allowed, configured := app.IsEmailAllowed(email); configured && !allowed {
+			log.Printf("oidc: rejected admin login for %q — not in %s allowlist", email, app.AllowedEmailsEnv)
+			c.JSON(http.StatusForbidden, gin.H{"error": "email_not_allowed"})
+			return
+		} else if !configured {
+			log.Printf("oidc: admin allowlist %s unconfigured — allowing admin login for %q (set the env to enforce)", app.AllowedEmailsEnv, email)
+		}
 	}
 	provider := ""
 	if fb, ok := claims["firebase"].(map[string]any); ok {
