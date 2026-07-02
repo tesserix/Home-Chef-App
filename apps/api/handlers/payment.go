@@ -447,11 +447,11 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	case "stripe":
 		h.verifyStripePayment(c, &order, req.StripePaymentIntentID)
 	default:
-		h.verifyRazorpayPayment(c, &order, req.RazorpayPaymentID, req.RazorpayOrderID)
+		h.verifyRazorpayPayment(c, &order, req.RazorpayPaymentID, req.RazorpayOrderID, req.RazorpaySignature)
 	}
 }
 
-func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID string) {
+func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Order, paymentID, rzOrderID, signature string) {
 	if paymentID == "" || rzOrderID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "razorpayPaymentId and razorpayOrderId are required"})
 		return
@@ -476,6 +476,32 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 
 	if payment.Status != "captured" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Payment not captured, status: %s", payment.Status)})
+		return
+	}
+
+	// SECURITY: bind the fetched payment to THIS order and its amount. Without
+	// these checks any captured payment on the merchant account (e.g. a ₹1
+	// payment reused across orders) would settle this order. payment.OrderID and
+	// payment.Amount come from Razorpay (via FetchPayment), so they can't be
+	// forged by the client.
+	if payment.OrderID != order.RazorpayOrderID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment does not belong to this order"})
+		return
+	}
+	expectedPaise := services.ToPaise(order.Total) - services.ToPaise(order.WalletApplied)
+	if expectedPaise < 0 {
+		expectedPaise = 0
+	}
+	if payment.Amount < expectedPaise {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the order total"})
+		return
+	}
+	// Verify the Checkout signature (order_id|payment_id) the client received
+	// from Razorpay. Enforced when present (the customer app always sends it);
+	// tolerated-if-absent since the binding + amount checks above are the hard
+	// gate and don't rely on the client.
+	if signature != "" && !services.VerifyPaymentSignature(rzOrderID, paymentID, signature) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 		return
 	}
 

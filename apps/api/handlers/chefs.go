@@ -902,6 +902,29 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	})
 }
 
+// chefOrderTransitions is the set of order-status changes a chef may make via
+// UpdateOrderStatus. Forward-only, and deliberately excludes cancelled/refunded
+// (those must go through the refund-aware cancel path) and any jump straight to
+// delivered before the order is ready — otherwise a chef could release the held
+// payout early or mark an order cancelled without refunding the customer.
+var chefOrderTransitions = map[models.OrderStatus][]models.OrderStatus{
+	models.OrderStatusPending:    {models.OrderStatusAccepted, models.OrderStatusRejected},
+	models.OrderStatusAccepted:   {models.OrderStatusPreparing, models.OrderStatusReady},
+	models.OrderStatusPreparing:  {models.OrderStatusReady},
+	models.OrderStatusReady:      {models.OrderStatusPickedUp, models.OrderStatusDelivering, models.OrderStatusDelivered},
+	models.OrderStatusPickedUp:   {models.OrderStatusDelivering, models.OrderStatusDelivered},
+	models.OrderStatusDelivering: {models.OrderStatusDelivered},
+}
+
+func chefCanTransition(from, to models.OrderStatus) bool {
+	for _, allowed := range chefOrderTransitions[from] {
+		if allowed == to {
+			return true
+		}
+	}
+	return false
+}
+
 // UpdateOrderStatus updates an order's status
 func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -945,7 +968,18 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	priorStatus := order.Status
-	order.Status = models.OrderStatus(req.Status)
+	newStatus := models.OrderStatus(req.Status)
+
+	// SECURITY: only allow legal forward transitions. Without this a chef could
+	// stamp any status on their own paid order — jump straight to "delivered"
+	// (early payout release + closes the customer's cancel window) or
+	// "cancelled" (marking it cancelled without the refund the cancel path
+	// issues). Re-stamping the same status is a safe idempotent no-op.
+	if newStatus != priorStatus && !chefCanTransition(priorStatus, newStatus) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot change order status from %s to %s", priorStatus, newStatus)})
+		return
+	}
+	order.Status = newStatus
 
 	// Stamp the lifecycle timestamp for this transition (idempotent — only set
 	// once) so the chef/customer order timelines render real times instead of

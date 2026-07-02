@@ -636,16 +636,23 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 
-	if provider.WebhookSecret != "" {
-		signature := c.GetHeader("X-Webhook-Signature")
-		if !verifyHMACSHA256(body, signature, provider.WebhookSecret) {
-			log.Printf("delivery webhook signature mismatch for provider=%s", provider.Code)
-			services.CaptureSentryError(c, fmt.Errorf("delivery webhook bad signature: provider=%s", provider.Code))
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
-			return
-		}
-	} else {
-		log.Printf("delivery webhook accepted without HMAC: provider=%s has no webhook_secret configured", provider.Code)
+	// SECURITY: fail closed. A provider webhook mutates order/delivery state
+	// (a "delivered" event can release the held escrow payout), so an
+	// unauthenticated call must never be processed. Reject when no secret is
+	// configured or the signature doesn't verify — don't accept anonymous
+	// state mutations just because a partner hasn't set a secret yet.
+	if provider.WebhookSecret == "" {
+		log.Printf("delivery webhook rejected: provider=%s has no webhook_secret configured", provider.Code)
+		services.CaptureSentryError(c, fmt.Errorf("delivery webhook rejected, no secret configured: provider=%s", provider.Code))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Webhook not configured for this provider"})
+		return
+	}
+	signature := c.GetHeader("X-Webhook-Signature")
+	if !verifyHMACSHA256(body, signature, provider.WebhookSecret) {
+		log.Printf("delivery webhook signature mismatch for provider=%s", provider.Code)
+		services.CaptureSentryError(c, fmt.Errorf("delivery webhook bad signature: provider=%s", provider.Code))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+		return
 	}
 
 	providerService := services.NewProviderService()

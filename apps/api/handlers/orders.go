@@ -79,7 +79,7 @@ type CreateOrderRequest struct {
 	DeliveryAddress      *CreateAddressRequest `json:"deliveryAddress"`
 	DeliveryInstructions string                `json:"deliveryInstructions"`
 	SpecialInstructions  string                `json:"specialInstructions"`
-	Tip                  float64               `json:"tip"`
+	Tip                  float64               `json:"tip" binding:"gte=0"`
 	PromoCode            string                `json:"promoCode"`
 	PaymentMethodID      *uuid.UUID            `json:"paymentMethodId"`
 	ScheduledFor         *time.Time            `json:"scheduledFor"`
