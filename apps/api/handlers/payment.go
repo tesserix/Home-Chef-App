@@ -689,20 +689,34 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
-	// Validate refund amount
+	// Validate refund amount against what is STILL refundable. Partial refunds
+	// via the chef-cancel path increment order.RefundAmount but leave the order
+	// "completed", so we must subtract them — otherwise a chef could partial-refund
+	// via that path and then refund the whole order total again here (and the
+	// to-wallet branch would credit that as platform-funded store credit,
+	// bypassing the gateway's cumulative-refund ceiling).
+	if req.Amount < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot be negative"})
+		return
+	}
+	remaining := order.Total - order.RefundAmount
+	if remaining <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Order has already been fully refunded"})
+		return
+	}
 	refundAmount := req.Amount
 	if refundAmount == 0 {
-		refundAmount = order.Total // Full refund
+		refundAmount = remaining // full refund of whatever is still refundable
 	}
-	if refundAmount > order.Total {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot exceed order total"})
+	if refundAmount > remaining {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot exceed the remaining refundable amount"})
 		return
 	}
 
 	// Release reserved daily capacity (#48) only on a FULL refund of an order that
 	// hasn't been delivered yet — those dishes won't be made. Partial and
 	// post-delivery refunds keep the capacity consumed.
-	releaseCapOnRefund := refundAmount >= order.Total &&
+	releaseCapOnRefund := (order.RefundAmount+refundAmount) >= order.Total &&
 		order.Status != models.OrderStatusDelivered &&
 		order.Status != models.OrderStatusCancelled &&
 		order.Status != models.OrderStatusRefunded
@@ -752,7 +766,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				"payment_status":      models.PaymentRefunded,
 				"status":              models.OrderStatusRefunded,
 				"refund_id":           "wallet:" + txn.ID.String(),
-				"refund_amount":       refundAmount,
+				"refund_amount":       order.RefundAmount + refundAmount,
 				"refund_reason":       req.Reason,
 				"refund_initiated_by": initiatedBy,
 				"refunded_at":         &now,
@@ -810,6 +824,28 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}
 	}
 
+	// SECURITY: atomically claim the refund before calling the gateway. The
+	// gateway CreateRefund calls carry no idempotency key, so two concurrent
+	// requests (double-click / client retry) could otherwise both issue a real
+	// refund. Flip completed→refunded in one conditional UPDATE; only the winner
+	// (RowsAffected==1) proceeds. On any downstream failure we revert to
+	// completed so the refund can be retried.
+	claim := database.DB.Model(&models.Order{}).
+		Where("id = ? AND payment_status = ?", order.ID, models.PaymentCompleted).
+		Update("payment_status", models.PaymentRefunded)
+	if claim.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+		return
+	}
+	if claim.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
+		return
+	}
+	revertClaim := func() {
+		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+			Update("payment_status", models.PaymentCompleted)
+	}
+
 	var refundID, refundStatus string
 
 	switch provider {
@@ -822,6 +858,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			"refund:"+order.ID.String(), nil)
 		if werr != nil {
 			log.Printf("wallet-order refund failed order=%s: %v", order.OrderNumber, werr)
+			revertClaim()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
 			return
 		}
@@ -829,11 +866,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundStatus = "processed"
 	case "stripe":
 		if order.StripePaymentIntentID == "" {
+			revertClaim()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})
 			return
 		}
 		st := services.GetStripe()
 		if st == nil {
+			revertClaim()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 			return
 		}
@@ -856,6 +895,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		})
 		if err != nil {
 			log.Printf("Failed to create Stripe refund for order %s: %v", order.OrderNumber, err)
+			revertClaim()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
 			return
 		}
@@ -863,11 +903,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundStatus = r.Status
 	default: // razorpay
 		if order.RazorpayPaymentID == "" {
+			revertClaim()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Razorpay payment found for this order"})
 			return
 		}
 		rz := services.GetRazorpay()
 		if rz == nil {
+			revertClaim()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 			return
 		}
@@ -884,6 +926,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		})
 		if err != nil {
 			log.Printf("Failed to create Razorpay refund for order %s: %v", order.OrderNumber, err)
+			revertClaim()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
 			return
 		}
@@ -898,7 +941,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			"payment_status":      models.PaymentRefunded,
 			"status":              models.OrderStatusRefunded,
 			"refund_id":           refundID,
-			"refund_amount":       refundAmount,
+			"refund_amount":       order.RefundAmount + refundAmount,
 			"refund_reason":       req.Reason,
 			"refund_initiated_by": initiatedBy,
 			"refunded_at":         &now,
