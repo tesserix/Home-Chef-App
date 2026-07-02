@@ -2,6 +2,14 @@ import * as SecureStore from "expo-secure-store";
 
 const SESSION_KEY = "hc_session_token";
 
+// Keep the BFF session token readable across restarts / pre-unlock launches so
+// the app stays logged in (matches TOKEN_KEYCHAIN_OPTIONS in utils/storage). The
+// default WHEN_UNLOCKED makes a background/push launch before first unlock read
+// null → spurious sign-out. (#428)
+const SESSION_KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
 export interface BFFAutoLoginResponse {
   session_token: string;
   expires_at: number;
@@ -64,7 +72,7 @@ export async function autoLogin(
     throw e;
   }
   const body: BFFAutoLoginResponse = await r.json();
-  await SecureStore.setItemAsync(SESSION_KEY, body.session_token);
+  await SecureStore.setItemAsync(SESSION_KEY, body.session_token, SESSION_KEYCHAIN_OPTIONS);
   return body;
 }
 
