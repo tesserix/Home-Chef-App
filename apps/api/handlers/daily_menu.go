@@ -31,9 +31,9 @@ type dailyMenuItemInput struct {
 	DietaryTags []string `json:"dietaryTags"`
 	Allergens   []string `json:"allergens"`
 	MenuItemID  *string  `json:"menuItemId"`
-	// IsThali + ThaliComponents make this entry a priced bundle (#406).
-	IsThali         bool     `json:"isThali"`
-	ThaliComponents []string `json:"thaliComponents"`
+	// IsCombo + ComboComponents make this entry a priced bundle (#406).
+	IsCombo         bool     `json:"isCombo"`
+	ComboComponents []string `json:"comboComponents"`
 	SortOrder       int      `json:"sortOrder"`
 }
 
@@ -133,8 +133,8 @@ func (h *ChefHandler) PutDailyMenu(c *gin.Context) {
 		}
 		// A thali is a bundle: it must list at least two component dishes and
 		// carry a set price (customers book it as one priced choice).
-		if in.IsThali && (len(in.ThaliComponents) < 2 || in.Price <= 0) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "a thali needs at least two components and a set price"})
+		if in.IsCombo && (len(in.ComboComponents) < 2 || in.Price <= 0) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a combo needs at least two components and a set price"})
 			return
 		}
 		var menuItemID *uuid.UUID
@@ -155,8 +155,8 @@ func (h *ChefHandler) PutDailyMenu(c *gin.Context) {
 			DietaryTags:     ensureStringArray(in.DietaryTags),
 			Allergens:       ensureStringArray(in.Allergens),
 			MenuItemID:      menuItemID,
-			IsThali:         in.IsThali,
-			ThaliComponents: ensureStringArray(in.ThaliComponents),
+			IsCombo:         in.IsCombo,
+			ComboComponents: ensureStringArray(in.ComboComponents),
 			SortOrder:       in.SortOrder,
 		})
 	}

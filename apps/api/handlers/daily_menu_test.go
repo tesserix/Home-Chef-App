@@ -35,7 +35,7 @@ func setupDailyMenuDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE daily_menu_items (id text PRIMARY KEY, daily_menu_id text, chef_id text, date datetime,
 			slot text, variant text, name text, description text, price real DEFAULT 0, image_url text,
 			dietary_tags text DEFAULT '{}', allergens text DEFAULT '{}', menu_item_id text,
-			is_thali integer DEFAULT 0, thali_components text DEFAULT '{}', sort_order integer DEFAULT 0,
+			is_combo integer DEFAULT 0, combo_components text DEFAULT '{}', sort_order integer DEFAULT 0,
 			created_at datetime, updated_at datetime)`,
 		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text,
 			aggregate_id text, payload text, status text DEFAULT 'pending', attempts integer DEFAULT 0,
@@ -188,15 +188,15 @@ func TestDailyMenuPublishGatesPublicRead(t *testing.T) {
 
 // A chef can bundle the day's dishes into a priced thali that round-trips, and a
 // malformed thali (too few components / no price) is rejected. (#406)
-func TestDailyMenuThali(t *testing.T) {
+func TestDailyMenuCombo(t *testing.T) {
 	db := setupDailyMenuDB(t)
 	userID, _ := seedDailyChef(t, db)
 
 	body := dailyMenuUpsertRequest{Items: []dailyMenuItemInput{
 		{Slot: "lunch", Variant: "veg", Name: "Rice", Price: 20},
 		{Slot: "lunch", Variant: "veg", Name: "Dal", Price: 30},
-		{Slot: "lunch", Variant: "veg", Name: "Veg Thali", Price: 90, IsThali: true,
-			ThaliComponents: []string{"Rice", "Dal", "Bhindi", "Chutney", "Papad"}},
+		{Slot: "lunch", Variant: "veg", Name: "Veg Combo", Price: 90, IsCombo: true,
+			ComboComponents: []string{"Rice", "Dal", "Bhindi", "Chutney", "Papad"}},
 	}}
 	require.Equal(t, http.StatusOK, chefReq(t, userID, http.MethodPut, "/chef/daily-menu/2026-07-15", body).Code)
 
@@ -205,22 +205,22 @@ func TestDailyMenuThali(t *testing.T) {
 	require.Len(t, items, 3)
 	var thali map[string]any
 	for _, it := range items {
-		if it["isThali"] == true {
+		if it["isCombo"] == true {
 			thali = it
 		}
 	}
 	require.NotNil(t, thali, "the thali is returned")
 	require.Equal(t, float64(90), thali["price"])
-	require.Len(t, thali["thaliComponents"], 5)
+	require.Len(t, thali["comboComponents"], 5)
 
 	// Malformed thali: fewer than two components → 400.
 	bad := dailyMenuUpsertRequest{Items: []dailyMenuItemInput{
-		{Slot: "lunch", Variant: "veg", Name: "Half Thali", Price: 50, IsThali: true, ThaliComponents: []string{"Rice"}},
+		{Slot: "lunch", Variant: "veg", Name: "Half Combo", Price: 50, IsCombo: true, ComboComponents: []string{"Rice"}},
 	}}
 	require.Equal(t, http.StatusBadRequest, chefReq(t, userID, http.MethodPut, "/chef/daily-menu/2026-07-15", bad).Code)
 	// Thali with no price → 400.
 	bad2 := dailyMenuUpsertRequest{Items: []dailyMenuItemInput{
-		{Slot: "lunch", Variant: "veg", Name: "Free Thali", Price: 0, IsThali: true, ThaliComponents: []string{"Rice", "Dal"}},
+		{Slot: "lunch", Variant: "veg", Name: "Free Combo", Price: 0, IsCombo: true, ComboComponents: []string{"Rice", "Dal"}},
 	}}
 	require.Equal(t, http.StatusBadRequest, chefReq(t, userID, http.MethodPut, "/chef/daily-menu/2026-07-15", bad2).Code)
 }

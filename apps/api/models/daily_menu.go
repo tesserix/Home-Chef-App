@@ -43,12 +43,14 @@ type DailyMenuItem struct {
 	Allergens   pq.StringArray `gorm:"type:text[]" json:"allergens"`
 	// MenuItemID optionally links the dish to an à-la-carte MenuItem (reuse image).
 	MenuItemID *uuid.UUID `gorm:"type:uuid" json:"menuItemId,omitempty"`
-	// IsThali marks this entry as a bundled thali/combo for the (date, slot):
-	// one set Price covering ThaliComponents (the dishes it includes, e.g.
-	// rice + dal + sabji + curry). A thali is the default plan choice for its
-	// slot; non-thali items are à-la-carte add-ons. (#406)
-	IsThali         bool           `gorm:"default:false" json:"isThali"`
-	ThaliComponents pq.StringArray `gorm:"type:text[]" json:"thaliComponents"`
+	// IsCombo marks this entry as a bundled set for the (date, slot): one set
+	// Price covering ComboComponents (the dishes it includes, e.g. rice + dal +
+	// sabji + curry). The API term is intentionally NEUTRAL ("combo"); clients
+	// LOCALIZE the label by country/locale — "Thali" in India, "Combo" elsewhere.
+	// A combo is the default plan choice for its slot; other items are à-la-carte.
+	// (#406)
+	IsCombo         bool           `gorm:"default:false" json:"isCombo"`
+	ComboComponents pq.StringArray `gorm:"type:text[]" json:"comboComponents"`
 	// SortOrder controls display order within a (date, slot).
 	SortOrder int       `gorm:"default:0" json:"sortOrder"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
