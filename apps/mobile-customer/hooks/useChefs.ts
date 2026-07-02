@@ -185,7 +185,11 @@ export function useChefMenu(chefId: string) {
       };
     },
     enabled: !!chefId,
-    staleTime: 1000 * 60 * 5, // 5 minutes — menu changes rarely
+    // Short staleTime + refetch-on-mount so dishes the vendor has since
+    // removed/made unavailable don't linger in the customer's cache (#433).
+    staleTime: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 

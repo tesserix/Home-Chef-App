@@ -89,14 +89,18 @@ export interface CreateMealPlanDay {
   dailyMenuItemId?: string;
 }
 
-/** A chef's published weekly menu (the cells a customer books against). */
+/** A chef's published weekly menu (the cells a customer books against).
+ *  Short staleTime + refetch-on-mount so a menu the vendor has since cleared or
+ *  unpublished doesn't linger in the customer's cache (#433). */
 export function useChefWeeklyMenu(chefId: string | undefined) {
   return useQuery<WeeklyMenu>({
     queryKey: ['chef-weekly-menu', chefId],
     queryFn: () =>
       api.get<WeeklyMenu>(`/v1/chefs/${chefId}/weekly-menu`).then((r) => r.data),
     enabled: Boolean(chefId),
-    staleTime: 5 * 60_000,
+    staleTime: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -117,7 +121,10 @@ export function useChefDailyMenu(
         .get<{ days: DailyMenuDay[] }>(`/v1/chefs/${chefId}/daily-menu${qs}`)
         .then((r) => r.data),
     enabled: Boolean(chefId),
-    staleTime: 5 * 60_000,
+    // Reflect a cleared/unpublished per-date menu promptly (#433).
+    staleTime: 30_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
