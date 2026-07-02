@@ -59,10 +59,30 @@ func userDisplayName(userID uuid.UUID) string {
 	if len(name) > 1 {
 		return name
 	}
-	if u.Email != "" {
-		return u.Email
-	}
+	// Never fall back to the email — the display name is shown to every
+	// co-participant, so a nameless user would leak their email to strangers.
 	return "A guest"
+}
+
+// scrubGroupChef replaces the preloaded raw ChefProfile on a group order with a
+// minimal, privacy-safe projection before it is serialized to customers. The raw
+// profile exposes the (often home) chef's exact street address, GPS, FSSAI and
+// GSTIN; group members only need the business identity and an approximate area —
+// matching what the public chef listing exposes (fuzzed geo, no street address).
+func scrubGroupChef(g *models.GroupOrder) {
+	if g == nil || g.Chef == nil {
+		return
+	}
+	lat, lng := services.FuzzCoordinate(g.Chef.Latitude, g.Chef.Longitude, g.Chef.ID.String())
+	g.Chef = &models.ChefProfile{
+		ID:           g.Chef.ID,
+		BusinessName: g.Chef.BusinessName,
+		ProfileImage: g.Chef.ProfileImage,
+		City:         g.Chef.City,
+		State:        g.Chef.State,
+		Latitude:     lat,
+		Longitude:    lng,
+	}
 }
 
 // loadGroupForParticipant loads a group + the caller's participant row, enforcing
@@ -260,6 +280,9 @@ func (h *GroupOrderHandler) GetMyGroupOrders(c *gin.Context) {
 		database.DB.Preload("Chef").Where("id IN ?", ids).
 			Order("created_at DESC").Find(&groups)
 	}
+	for i := range groups {
+		scrubGroupChef(&groups[i])
+	}
 	c.JSON(http.StatusOK, gin.H{"data": groups})
 }
 
@@ -276,6 +299,7 @@ func (h *GroupOrderHandler) GetGroupOrder(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
 		return
 	}
+	scrubGroupChef(&g)
 	resp := gin.H{"groupOrder": g, "me": me}
 	// Only the host gets the invite token/link.
 	if me.Role == models.GroupRoleHost {
@@ -589,6 +613,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 
 	// Reload for the response.
 	g, _, _ = loadGroupForParticipant(id, userID)
+	scrubGroupChef(&g)
 	c.JSON(http.StatusOK, gin.H{"groupOrder": g})
 }
 
