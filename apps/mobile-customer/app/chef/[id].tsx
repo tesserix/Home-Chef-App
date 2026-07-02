@@ -26,6 +26,7 @@ import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
 import { WeeklyMenuPreview } from '../../components/chef/WeeklyMenuPreview';
+import { TIFFIN_ENABLED, GROUP_ORDERS_ENABLED } from '../../lib/features';
 import { CartSheet } from '../../components/cart/CartSheet';
 
 // Compact photo header — ~28% of viewport (capped at 260) so the menu shows
@@ -396,71 +397,82 @@ export default function ChefDetailScreen() {
               </Text>
             ) : null}
 
-            {/* Tiffin pre-booking entry (#196) — plan a week/fortnight of meals
-                from this chef's weekly menu, paid in advance. */}
-            <Pressable
-              onPress={() => router.push(`/book-meal-plan?chefId=${chef.id}` as never)}
-              accessibilityRole="button"
-              accessibilityLabel="Plan a week of meals"
-              style={mealPlanCtaStyles.cta}
-            >
-              <CalendarDays
-                size={18}
-                color={customerColors.coral.DEFAULT}
-                strokeWidth={2}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={mealPlanCtaStyles.title}>Plan a week of meals</Text>
-                <Text style={mealPlanCtaStyles.caption}>
-                  Pre-book tiffin from this chef
-                </Text>
-              </View>
-              <Text style={mealPlanCtaStyles.chevron}>›</Text>
-            </Pressable>
+            {/* Tiffin pre-booking + daily subscription (#196/#283) — DEFERRED for
+                v1 (escrow/UPI-Autopay not live yet). Hidden behind TIFFIN_ENABLED
+                so no unfulfillable money flow is surfaced; flip when it ships. */}
+            {TIFFIN_ENABLED ? (
+              <>
+                <Pressable
+                  onPress={() => router.push(`/book-meal-plan?chefId=${chef.id}` as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Plan a week of meals"
+                  style={mealPlanCtaStyles.cta}
+                >
+                  <CalendarDays
+                    size={18}
+                    color={customerColors.coral.DEFAULT}
+                    strokeWidth={2}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={mealPlanCtaStyles.title}>Plan a week of meals</Text>
+                    <Text style={mealPlanCtaStyles.caption}>
+                      Pre-book tiffin from this chef
+                    </Text>
+                  </View>
+                  <Text style={mealPlanCtaStyles.chevron}>›</Text>
+                </Pressable>
 
-            {/* Daily tiffin SUBSCRIPTION entry (#283) — recurring, auto-placed.
-                Only shown when the chef has an active subscription offer. */}
-            {mealOffer?.available ? (
+                {/* Only shown when the chef has an active subscription offer. */}
+                {mealOffer?.available ? (
+                  <Pressable
+                    onPress={() => router.push(`/meal-subscription/${chef.id}` as never)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Subscribe to a daily tiffin"
+                    style={mealPlanCtaStyles.cta}
+                  >
+                    <CalendarDays size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={mealPlanCtaStyles.title}>Subscribe to daily tiffin</Text>
+                      <Text style={mealPlanCtaStyles.caption}>
+                        Recurring meals, delivered automatically
+                      </Text>
+                    </View>
+                    <Text style={mealPlanCtaStyles.chevron}>›</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+
+            {/* Group / office order (#46) — DEFERRED for v1 (GROUP_ORDERS_ENABLED
+                off on the backend). Hidden until the split-pay flow is live. */}
+            {GROUP_ORDERS_ENABLED ? (
               <Pressable
-                onPress={() => router.push(`/meal-subscription/${chef.id}` as never)}
+                onPress={() => startGroupOrder(chef.id)}
                 accessibilityRole="button"
-                accessibilityLabel="Subscribe to a daily tiffin"
+                accessibilityLabel="Start a group or office order"
                 style={mealPlanCtaStyles.cta}
               >
-                <CalendarDays size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
+                <Users size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
                 <View style={{ flex: 1 }}>
-                  <Text style={mealPlanCtaStyles.title}>Subscribe to daily tiffin</Text>
+                  <Text style={mealPlanCtaStyles.title}>Start a group / office order</Text>
                   <Text style={mealPlanCtaStyles.caption}>
-                    Recurring meals, delivered automatically
+                    Everyone adds their own items, split the bill
                   </Text>
                 </View>
                 <Text style={mealPlanCtaStyles.chevron}>›</Text>
               </Pressable>
             ) : null}
-
-            {/* Group / office order entry (#46) — shared cart, split pay. */}
-            <Pressable
-              onPress={() => startGroupOrder(chef.id)}
-              accessibilityRole="button"
-              accessibilityLabel="Start a group or office order"
-              style={mealPlanCtaStyles.cta}
-            >
-              <Users size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
-              <View style={{ flex: 1 }}>
-                <Text style={mealPlanCtaStyles.title}>Start a group / office order</Text>
-                <Text style={mealPlanCtaStyles.caption}>
-                  Everyone adds their own items, split the bill
-                </Text>
-              </View>
-              <Text style={mealPlanCtaStyles.chevron}>›</Text>
-            </Pressable>
           </View>
 
           {/* Hairline divider */}
           <View style={styles.hairline} />
 
-          {/* Fixed weekly menu (#1) — read-only, only when the chef has published. */}
-          {weeklyMenu?.isPublished && (weeklyMenu.items?.length ?? 0) > 0 ? (
+          {/* Tiffin weekly-menu grid (#1) — part of the DEFERRED tiffin
+              subscription, hidden for v1. (Distinct from the à-la-carte weekly
+              scheduling, which drives the normal menu below.) */}
+          {TIFFIN_ENABLED &&
+          weeklyMenu?.isPublished &&
+          (weeklyMenu.items?.length ?? 0) > 0 ? (
             <>
               <WeeklyMenuPreview items={weeklyMenu.items} />
               <View style={styles.hairline} />
