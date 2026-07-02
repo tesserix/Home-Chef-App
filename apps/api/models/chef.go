@@ -240,6 +240,13 @@ type ChefProfileResponse struct {
 	PriceRange    string    `json:"priceRange"`
 	ServiceRadius float64   `json:"serviceRadius"`
 	OffersPickup  bool      `json:"offersPickup"`
+	// OffersDelivery is a COMPUTED capability (not persisted): whether this chef
+	// can fulfil a "delivery" order at all right now = the chef self-delivers OR a
+	// 3PL provider is currently enabled. It is the single flag the customer app
+	// gates the "Delivery" checkout option on, so no unfulfillable delivery order
+	// can be placed. Set by the handler (needs the live provider state); defaults
+	// false on responses that don't compute it (e.g. the chef's own profile).
+	OffersDelivery bool `json:"offersDelivery"`
 	// Chef self-delivery offering + pricing (Phase 2). Surfaced so the customer
 	// checkout selector can show the mode and compute its fee.
 	OffersSelfDelivery        bool    `json:"offersSelfDelivery"`

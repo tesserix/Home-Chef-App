@@ -160,9 +160,16 @@ func validateAndPriceModifiers(groups []models.ModifierGroup, selected []uuid.UU
 // a "delivery" order to a chef who self-delivers becomes a chef-delivered order
 // (the chef drives it), otherwise it routes to 3PL. The customer never chooses
 // chef_delivery directly.
-func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models.FulfillmentType, error) {
+func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile, thirdPartyEnabled bool) (models.FulfillmentType, error) {
 	switch models.FulfillmentType(req.FulfillmentType) {
 	case "", models.FulfillmentDelivery:
+		// A delivery order is fulfillable only if SOMEONE can carry it: the chef
+		// self-delivers, or a 3PL provider is enabled. With 3PL dark and a chef
+		// who doesn't self-deliver, accepting it would silently dead-end at Mark
+		// Ready (no provider, no rider) — so reject it up front instead.
+		if !chef.OffersSelfDelivery && !thirdPartyEnabled {
+			return "", fmt.Errorf("this kitchen isn't delivering right now — please choose pickup")
+		}
 		// The carrier (chef vs 3PL) is chosen by the chef at Mark Ready, not at
 		// creation — so a delivery order is always created as plain delivery.
 		return models.FulfillmentDelivery, nil
@@ -187,7 +194,7 @@ func resolveFulfillment(req CreateOrderRequest, chef models.ChefProfile) (models
 // Ready. The customer chose delivery vs pickup; the chef chooses who carries a
 // delivery order. Empty keeps the current type. Only delivery↔chef_delivery
 // switches are allowed, only for a self-delivering chef, and never for pickup.
-func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile) (models.FulfillmentType, error) {
+func resolveReadyCarrier(current models.FulfillmentType, requested string, chef models.ChefProfile, thirdPartyEnabled bool) (models.FulfillmentType, error) {
 	if requested == "" {
 		return current, nil
 	}
@@ -201,6 +208,11 @@ func resolveReadyCarrier(current models.FulfillmentType, requested string, chef 
 		}
 		return models.FulfillmentChefDelivery, nil
 	case models.FulfillmentDelivery:
+		// Handing to a rider is only valid when a 3PL provider is enabled;
+		// otherwise there is no carrier to dispatch to.
+		if !thirdPartyEnabled {
+			return "", fmt.Errorf("no delivery partner is available right now")
+		}
 		return models.FulfillmentDelivery, nil
 	default:
 		return "", fmt.Errorf("unsupported carrier")
@@ -272,8 +284,10 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// Resolve and validate the fulfillment mode. Pickup is only allowed when
-	// the chef explicitly offers it; unknown modes are rejected early.
-	fulfillment, err := resolveFulfillment(req, chef)
+	// the chef explicitly offers it; delivery is only allowed when someone can
+	// carry it (chef self-delivers OR a 3PL provider is enabled); unknown modes
+	// are rejected early.
+	fulfillment, err := resolveFulfillment(req, chef, services.ThirdPartyDeliveryEnabled())
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

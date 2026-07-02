@@ -325,6 +325,10 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 
 	resp := chef.ToPublicResponse(schedules)
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
+	// Whether the customer can pick "Delivery" at all: the chef self-delivers OR
+	// a 3PL provider is live. With 3PL dark and a non-self-delivering chef this is
+	// false, so the checkout offers pickup only — no unfulfillable delivery order.
+	resp.OffersDelivery = chef.OffersSelfDelivery || services.ThirdPartyDeliveryEnabled()
 	// Customer-facing: approximate the kitchen location (deterministic per-chef
 	// offset) so the exact address is never exposed to customers.
 	resp.Latitude, resp.Longitude =
@@ -889,7 +893,7 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "carrier is locked once the order is out for delivery"})
 			return
 		}
-		ft, err := resolveReadyCarrier(order.FulfillmentType, req.Carrier, chef)
+		ft, err := resolveReadyCarrier(order.FulfillmentType, req.Carrier, chef, services.ThirdPartyDeliveryEnabled())
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -1285,6 +1289,11 @@ func (h *ChefHandler) GetOrderDetail(c *gin.Context) {
 	// are 0 when the chef set no radius or coords are missing, so they can't tell
 	// "can't self-deliver" apart from "no radius configured").
 	detail.OffersSelfDelivery = chef.OffersSelfDelivery
+
+	// Whether "hand to a rider" is a real option — true only when a 3PL provider
+	// is enabled. The vendor app hides the rider button when this is false, so the
+	// chef is never offered a rider while 3PL is dark.
+	detail.RiderDispatchAvailable = services.ThirdPartyDeliveryEnabled()
 
 	// Surface the chef→drop distance + comfort radius for the Mark-Ready carrier
 	// decision: on chef_delivery orders AND on delivery orders the chef COULD
