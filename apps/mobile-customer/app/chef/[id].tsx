@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
+import { MyPlanChip } from '../../components/MyPlanChip';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useMealChefOffer } from '../../hooks/useMealSubscription';
@@ -421,6 +422,10 @@ export default function ChefDetailScreen() {
                   </View>
                   <Text style={mealPlanCtaStyles.chevron}>›</Text>
                 </Pressable>
+
+                {/* Compact entry to an existing reserved/active plan with this
+                    chef — opens a sheet with each day's fulfilment status (#434). */}
+                <MyPlanChip chefId={chef.id} />
 
                 {/* Only shown when the chef has an active subscription offer. */}
                 {mealOffer?.available ? (
