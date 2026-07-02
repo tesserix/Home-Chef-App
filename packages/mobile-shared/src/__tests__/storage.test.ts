@@ -7,6 +7,7 @@ vi.mock('expo-secure-store', () => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn(),
   deleteItemAsync: vi.fn(),
+  AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK',
 }));
 
 import * as SecureStore from 'expo-secure-store';
@@ -37,11 +38,33 @@ describe('storage utils', () => {
     expect(result).toBeNull();
   });
 
-  it('setTokens writes both access_token and refresh_token atomically', async () => {
+  // #428 — a Keychain read that THROWS (transient cold-start race) must not be
+  // treated as "no token" (which logs the user out). Retry once.
+  it('getAccessToken retries once when the read throws, then returns the value', async () => {
+    vi.mocked(SecureStore.getItemAsync)
+      .mockRejectedValueOnce(new Error('keychain unavailable'))
+      .mockResolvedValueOnce('token123');
+    const result = await getAccessToken();
+    expect(result).toBe('token123');
+    expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('getAccessToken returns null only after the read throws twice', async () => {
+    vi.mocked(SecureStore.getItemAsync).mockRejectedValue(new Error('keychain unavailable'));
+    const result = await getAccessToken();
+    expect(result).toBeNull();
+    expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('setTokens writes both tokens with AFTER_FIRST_UNLOCK keychain accessibility', async () => {
     vi.mocked(SecureStore.setItemAsync).mockResolvedValue(undefined);
     await setTokens({ accessToken: 'access123', refreshToken: 'refresh456' });
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.ACCESS_TOKEN, 'access123');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.REFRESH_TOKEN, 'refresh456');
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.ACCESS_TOKEN, 'access123', {
+      keychainAccessible: 'AFTER_FIRST_UNLOCK',
+    });
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.REFRESH_TOKEN, 'refresh456', {
+      keychainAccessible: 'AFTER_FIRST_UNLOCK',
+    });
     expect(SecureStore.setItemAsync).toHaveBeenCalledTimes(2);
   });
 
