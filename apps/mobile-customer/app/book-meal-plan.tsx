@@ -193,8 +193,8 @@ export default function BookMealPlanScreen() {
           <ScrollView contentContainerStyle={styles.scroll}>
             <Text style={styles.intro}>
               Pick the meals you want over the next two weeks. Choose veg or
-              non-veg for each — pay once, the chef confirms the days they can
-              cook.
+              non-veg for each — send your plan and the chef confirms the days
+              they can cook.
             </Text>
             {dates.map((d) => (
               <View key={d.date} style={styles.daySection}>

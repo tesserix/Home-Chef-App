@@ -12,10 +12,10 @@
  */
 
 /** Tiffin meal-plans ("plan a week") + daily tiffin subscription (escrow, UPI Autopay). */
-export const TIFFIN_ENABLED: boolean = false;
+export const TIFFIN_ENABLED: boolean = true;
 
 /** Group / office orders — shared cart, split payment. */
-export const GROUP_ORDERS_ENABLED: boolean = false;
+export const GROUP_ORDERS_ENABLED: boolean = true;
 
 /** Catering deposit / advance-order flow. */
 export const CATERING_ENABLED: boolean = false;
