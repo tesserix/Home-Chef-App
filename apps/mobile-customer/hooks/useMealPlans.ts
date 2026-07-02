@@ -84,6 +84,9 @@ export interface CreateMealPlanDay {
   date: string; // YYYY-MM-DD
   slot: MealSlot;
   variant: MealVariant;
+  // When set, book this specific dish/combo from the chef's published per-date
+  // menu for that date (#406), overriding the weekly cell.
+  dailyMenuItemId?: string;
 }
 
 /** A chef's published weekly menu (the cells a customer books against). */
