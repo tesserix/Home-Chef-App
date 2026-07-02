@@ -741,9 +741,11 @@ export default function CheckoutScreen() {
                     value={promoInput}
                     onChangeText={(t) => setPromoInput(t.toUpperCase())}
                     placeholder="Promo code"
-                    placeholderTextColor="#9CA3AF"
+                    // #717171 (charcoal-soft) meets AA on canvas; #9CA3AF did not.
+                    placeholderTextColor="#717171"
                     autoCapitalize="characters"
                     autoCorrect={false}
+                    accessibilityLabel="Promo code"
                     className="flex-1 rounded-lg border border-hairline bg-canvas px-3 py-2 text-sm text-charcoal"
                   />
                   <Pressable

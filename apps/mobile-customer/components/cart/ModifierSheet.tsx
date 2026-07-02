@@ -70,7 +70,7 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
           <Text className="text-lg font-bold text-charcoal font-display flex-1" numberOfLines={1}>
             {item.name}
           </Text>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
+          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
             <X size={24} color={customerColors.charcoal.DEFAULT} />
           </Pressable>
         </View>
@@ -131,13 +131,13 @@ export function ModifierSheet({ item, visible, onClose, onConfirm }: ModifierShe
           <View className="flex-row items-center justify-between mt-2">
             <Text className="text-base font-semibold text-charcoal">Quantity</Text>
             <View className="flex-row items-center border border-coral rounded-lg overflow-hidden">
-              <Pressable onPress={() => setQty((q) => Math.max(1, q - 1))} className="w-10 h-10 items-center justify-center" accessibilityLabel="Decrease quantity">
+              <Pressable onPress={() => setQty((q) => Math.max(1, q - 1))} className="w-10 h-10 items-center justify-center" accessibilityRole="button" accessibilityLabel="Decrease quantity" hitSlop={6}>
                 <Minus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
               </Pressable>
               <Text className="min-w-[28px] text-center text-charcoal font-semibold" style={{ fontVariant: ['tabular-nums'] }}>
                 {qty}
               </Text>
-              <Pressable onPress={() => setQty((q) => q + 1)} className="w-10 h-10 items-center justify-center" accessibilityLabel="Increase quantity">
+              <Pressable onPress={() => setQty((q) => q + 1)} className="w-10 h-10 items-center justify-center" accessibilityRole="button" accessibilityLabel="Increase quantity" hitSlop={6}>
                 <Plus size={16} color={customerColors.coral.DEFAULT} strokeWidth={2.5} />
               </Pressable>
             </View>

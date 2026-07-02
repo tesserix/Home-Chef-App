@@ -108,6 +108,7 @@ export default function MessagesScreen() {
           <TextInput
             className="max-h-28 flex-1 rounded-2xl bg-surface-soft px-4 py-2.5 text-base text-charcoal"
             placeholder="Message…"
+            accessibilityLabel="Message"
             placeholderTextColor={customerColors.charcoal.soft}
             value={text}
             onChangeText={setText}
