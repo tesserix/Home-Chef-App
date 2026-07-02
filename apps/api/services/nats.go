@@ -37,6 +37,7 @@ const (
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
 	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
+	SubjectDailyMenuPublished  = "chef.daily_menu.published"  // → followers: a favorited chef published a per-date menu (#405)
 	SubjectReferralRewarded    = "referral.reward.granted"    // → referrer: a referee placed their first paid order (#38)
 	SubjectLoyaltyEarned       = "loyalty.points_earned"      // → customer: earned points on a delivered order / streak (#40)
 	SubjectLoyaltyRedeemed     = "loyalty.redeemed"           // → customer: points converted to wallet credit (#40)
@@ -77,7 +78,7 @@ const (
 	SubjectMealSubscriptionPaused    = "subscription.meal.paused"
 	SubjectMealSubscriptionResumed   = "subscription.meal.resumed"
 	SubjectMealSubscriptionCancelled = "subscription.meal.cancelled"
-	SubjectEarningsThresholdMet       = "subscription.earnings.threshold_met"
+	SubjectEarningsThresholdMet      = "subscription.earnings.threshold_met"
 
 	SubjectProviderDeliveryCreated = "provider.delivery.created"
 	SubjectProviderDeliveryUpdated = "provider.delivery.updated"

@@ -361,6 +361,7 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/menu", chefHandler.GetChefMenu)
 			chefs.GET("/:id/reviews", chefHandler.GetChefReviews)
 			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
+			chefs.GET("/:id/daily-menu", chefHandler.GetPublicDailyMenu)       // #405 per-date menu
 			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)        // #280 tiffin offer
 			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
 		}
@@ -429,6 +430,9 @@ func SetupRouter() *gin.Engine {
 			// Weekly fixed menu (#192) — veg/nonveg dish per (day × slot).
 			chefDashboard.GET("/weekly-menu", chefHandler.GetMyWeeklyMenu)
 			chefDashboard.PUT("/weekly-menu", chefHandler.PutWeeklyMenu)
+			// Per-date dynamic menu (#405) — multiple dishes per (date × slot).
+			chefDashboard.GET("/daily-menu", chefHandler.GetMyDailyMenu)
+			chefDashboard.PUT("/daily-menu/:date", chefHandler.PutDailyMenu)
 			chefDashboard.GET("/orders", chefHandler.GetChefOrders)
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
