@@ -16,6 +16,8 @@ import { ChevronLeft, Plus, Trash2 } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button } from '@homechef/mobile-shared/ui';
+import { ComboComposer } from '../../components/vendor/ComboComposer';
+import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
   useMyDailyMenu,
   useSaveDailyMenu,
@@ -74,6 +76,11 @@ export default function DailyMenuScreen() {
   }, []);
   const [selected, setSelected] = useState(dates[0]!);
   const { data, isLoading } = useMyDailyMenu(dates[0]!, dates[dates.length - 1]!);
+  const { data: menu } = useVendorMenu();
+  const menuItems = useMemo(
+    () => (menu?.items ?? []).map((m) => ({ id: m.id, name: m.name })),
+    [menu],
+  );
   const save = useSaveDailyMenu();
 
   const [rows, setRows] = useState<DailyMenuItemInput[]>([]);
@@ -205,12 +212,10 @@ export default function DailyMenuScreen() {
               </View>
 
               {row.isCombo ? (
-                <TextInput
-                  value={row.comboComponents.join(', ')}
-                  onChangeText={(t) => patchRow(i, { comboComponents: t.split(',').map((s) => s.trim()) })}
-                  placeholder="Items in the combo (e.g. Rice, Dal, Sabji, Papad)"
-                  placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.comboInput}
+                <ComboComposer
+                  menuItems={menuItems}
+                  value={row.comboComponents}
+                  onChange={(names) => patchRow(i, { comboComponents: names })}
                 />
               ) : null}
             </View>
@@ -290,13 +295,6 @@ const styles = StyleSheet.create({
   priceLabel: { fontFamily: 'Inter-SemiBold', color: theme.colors.ink.DEFAULT },
   priceInput: { width: 80, fontFamily: 'Inter', color: theme.colors.ink.DEFAULT, fontVariant: ['tabular-nums'] },
   comboLabel: { marginLeft: 'auto', fontFamily: 'Inter', fontSize: theme.typography.size.bodySm.size, color: theme.colors.ink.soft },
-  comboInput: {
-    fontFamily: 'Inter',
-    color: theme.colors.ink.DEFAULT,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.mist.DEFAULT,
-    paddingTop: theme.spacing[2],
-  },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingVertical: theme.spacing[2] },
   addBtnText: { fontFamily: 'Inter-SemiBold', color: theme.colors.herb.DEFAULT },
   publishRow: { marginTop: theme.spacing[2] },
