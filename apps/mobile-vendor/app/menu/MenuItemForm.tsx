@@ -70,7 +70,23 @@ export interface MenuItemFormValues {
   // an "Advanced" field so it doesn't add visual noise to the
   // common case.
   hsn: string;
+  // Weekly-menu schedule: weekdays (0=Sun..6=Sat) this dish is offered. Empty =
+  // available every day. Lets the chef set a fixed rotation instead of toggling
+  // availability daily — today's dishes auto-show for customers.
+  availableDays: number[];
 }
+
+// DAY_OPTIONS drives the weekly-menu day chips (0=Sun..6=Sat), matching the
+// backend AvailableDays convention.
+const DAY_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+];
 
 export interface MenuItemFormProps {
   /** "new" or "edit" — drives title, right-header action, and delete affordance */
@@ -452,6 +468,7 @@ export function MenuItemForm({
   const [isCombo, setIsCombo] = useState(initialValues.isCombo ?? false);
   const [preparationTime, setPreparationTime] = useState(initialValues.preparationTime);
   const [hsn, setHsn] = useState(initialValues.hsn);
+  const [availableDays, setAvailableDays] = useState<number[]>(initialValues.availableDays ?? []);
 
   const toggleIn = (set: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
     set((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
@@ -476,6 +493,7 @@ export function MenuItemForm({
       comboItems,
       preparationTime,
       hsn,
+      availableDays,
     });
   }, [
     name,
@@ -490,6 +508,7 @@ export function MenuItemForm({
     comboItems,
     preparationTime,
     hsn,
+    availableDays,
     onDraftChange,
   ]);
 
@@ -515,6 +534,7 @@ export function MenuItemForm({
     JSON.stringify(comboItems) !== JSON.stringify(initialValues.comboItems ?? []) ||
     preparationTime !== initialValues.preparationTime ||
     hsn !== initialValues.hsn ||
+    availableDays.join('|') !== (initialValues.availableDays ?? []).join('|') ||
     localPhotoUris.length > 0 ||
     mode === 'new'; // new form is always "ready to save"
 
@@ -569,6 +589,7 @@ export function MenuItemForm({
         comboItems: isCombo ? comboItems : [],
         preparationTime,
         hsn: hsn.trim(),
+        availableDays: [...availableDays].sort((a, b) => a - b),
       },
       localPhotoUris,
     );
@@ -1040,6 +1061,34 @@ export function MenuItemForm({
                   />
                 ))}
               </ScrollView>
+            </View>
+          </View>
+
+          {/* AVAILABLE DAYS — weekly-menu schedule. Pick the days this dish is
+              offered; leave all off to serve it every day. Today's dishes then
+              auto-show for customers without daily edits. */}
+          <Text style={styles.sectionLabel}>AVAILABLE DAYS</Text>
+          <View style={styles.card}>
+            <Text style={styles.allergenHint}>
+              {availableDays.length === 0
+                ? 'Available every day. Pick specific days to set a weekly menu.'
+                : 'Only shown to customers on the selected days.'}
+            </Text>
+            <View style={styles.wrapChips}>
+              {DAY_OPTIONS.map((opt) => (
+                <MultiChip
+                  key={opt.value}
+                  label={opt.label}
+                  active={availableDays.includes(opt.value)}
+                  onPress={() =>
+                    setAvailableDays((prev) =>
+                      prev.includes(opt.value)
+                        ? prev.filter((d) => d !== opt.value)
+                        : [...prev, opt.value],
+                    )
+                  }
+                />
+              ))}
             </View>
           </View>
 
