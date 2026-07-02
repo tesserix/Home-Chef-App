@@ -99,7 +99,11 @@ func mealPlanNumber() string {
 type createMealPlanDayInput struct {
 	Date    string `json:"date"`    // YYYY-MM-DD
 	Slot    string `json:"slot"`    // lunch|dinner
-	Variant string `json:"variant"` // veg|nonveg
+	Variant string `json:"variant"` // veg|nonveg (weekly-menu bookings)
+	// DailyMenuItemID (#406) — when set, book this specific dish/combo from the
+	// chef's PUBLISHED per-date menu for that date, overriding the weekly cell.
+	// The variant is taken from the item.
+	DailyMenuItemID string `json:"dailyMenuItemId"`
 }
 
 type createMealPlanRequest struct {
@@ -172,8 +176,12 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "date must be YYYY-MM-DD"})
 			return
 		}
-		if !validSlot(d.Slot) || !validVariant(d.Variant) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "slot must be lunch|dinner, variant veg|nonveg"})
+		if !validSlot(d.Slot) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "slot must be lunch|dinner"})
+			return
+		}
+		if d.DailyMenuItemID == "" && !validVariant(d.Variant) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "variant must be veg|nonveg"})
 			return
 		}
 		// One booking per (date, slot) — can't double-book a slot.
@@ -187,6 +195,43 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "day " + d.Date + " is past the booking cutoff"})
 			return
 		}
+
+		// Per-date override (#406): the customer picked a specific dish/combo from
+		// the chef's PUBLISHED daily menu for that date. Book it directly and take
+		// its price + variant; a combo carries its set bundle price.
+		if d.DailyMenuItemID != "" {
+			itemID, perr := uuid.Parse(d.DailyMenuItemID)
+			if perr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid dailyMenuItemId"})
+				return
+			}
+			var item models.DailyMenuItem
+			if err := database.DB.
+				Joins("JOIN daily_menus ON daily_menus.id = daily_menu_items.daily_menu_id").
+				Where("daily_menu_items.id = ? AND daily_menu_items.chef_id = ? AND daily_menu_items.date = ? AND daily_menu_items.slot = ? AND daily_menus.is_published = ?",
+					itemID, chefID, date, d.Slot, true).
+				First(&item).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("that dish isn't on the chef's published menu for %s %s", d.Slot, d.Date)})
+				return
+			}
+			subtotal += item.Price
+			days = append(days, models.MealPlanDay{
+				Date:     date,
+				Slot:     models.MealSlot(d.Slot),
+				Variant:  item.Variant,
+				DishName: item.Name,
+				Price:    item.Price,
+				Status:   models.MealPlanDayRequested,
+			})
+			if minDate.IsZero() || date.Before(minDate) {
+				minDate = date
+			}
+			if date.After(maxDate) {
+				maxDate = date
+			}
+			continue
+		}
+
 		cell, has := cellBy[fmt.Sprintf("%d|%s|%s", int(date.Weekday()), d.Slot, d.Variant)]
 		if !has {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("chef has no %s %s on %s", d.Variant, d.Slot, d.Date)})
@@ -209,6 +254,27 @@ func (h *MealPlanHandler) CreateMealPlan(c *gin.Context) {
 		if date.After(maxDate) {
 			maxDate = date
 		}
+	}
+
+	// #409: one active plan per (customer, chef, week). Block a second request that
+	// overlaps an existing plan still in the pending→active lifecycle, so a
+	// customer can't double-book a chef for the same dates. Re-allowed once the
+	// prior plan is rejected/expired/cancelled or its dates pass.
+	liveStatuses := []models.MealPlanStatus{
+		models.MealPlanPendingChef, models.MealPlanChefAcceptedFull, models.MealPlanChefModified,
+		models.MealPlanAwaitingCustomer, models.MealPlanConfirmed, models.MealPlanActive,
+	}
+	var existing models.MealPlan
+	if err := database.DB.
+		Where("customer_id = ? AND chef_id = ? AND status IN ? AND start_date <= ? AND end_date >= ?",
+			customerID, chefID, liveStatuses, maxDate, minDate).
+		First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "You already have a plan with this chef for these dates — it's with the chef for approval.",
+			"code":           "duplicate_plan",
+			"existingPlanId": existing.ID,
+		})
+		return
 	}
 
 	// Escrow (paid) plans charge the full amount upfront: food + GST + per-day
