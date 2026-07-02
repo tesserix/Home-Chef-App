@@ -122,7 +122,29 @@ export default function BookMealPlanScreen() {
         })),
       },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
+          // Escrow on but the server couldn't attach a payment order — don't
+          // silently proceed as if the advance were collected.
+          if (created.paymentError) {
+            Alert.alert('Payment unavailable', created.paymentError);
+            return;
+          }
+          // Escrow on: collect the FULL advance before the chef is notified.
+          if (created.razorpayOrderId) {
+            router.push({
+              pathname: '/payment/checkout',
+              params: {
+                kind: 'mealplan',
+                mealPlanId: created.mealPlan.id,
+                razorpayOrderId: created.razorpayOrderId,
+                razorpayKeyId: created.razorpayKeyId ?? '',
+                amount: String(Math.round(total * 100)), // paise
+                currency: created.mealPlan.currency ?? 'INR',
+              },
+            });
+            return;
+          }
+          // Escrow off: unpaid handshake — chef reviews and confirms the days.
           Alert.alert(
             'Request sent',
             'Your chef will review the days and confirm. You’ll be notified when they respond.',
