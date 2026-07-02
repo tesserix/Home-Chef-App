@@ -41,6 +41,16 @@ func (h *SupportHandler) CreateTicket(c *gin.Context) {
 		return
 	}
 
+	// Cap free-text length to keep oversized non-UI payloads out of the DB.
+	if len(req.Subject) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Subject must be 200 characters or fewer"})
+		return
+	}
+	if len(req.Description) > 5000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Description must be 5000 characters or fewer"})
+		return
+	}
+
 	// Validate category
 	validCategories := map[string]bool{
 		"order_issue": true, "payment_issue": true, "account_issue": true,
@@ -183,6 +193,12 @@ func (h *SupportHandler) AddMessage(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Cap message length to keep oversized non-UI payloads out of the DB.
+	if len(req.Content) > 5000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Message must be 5000 characters or fewer"})
 		return
 	}
 

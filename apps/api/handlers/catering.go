@@ -418,9 +418,11 @@ func (h *CateringHandler) GetAvailableRequests(c *gin.Context) {
 		return
 	}
 
+	// Pre-quote browse list: redact the customer's exact venue address + phone.
+	// Chefs see city/state + contact name only until their quote is accepted.
 	responses := make([]models.CateringRequestResponse, len(requests))
 	for i, req := range requests {
-		responses[i] = req.ToResponse()
+		responses[i] = req.ToBrowseResponse()
 	}
 
 	c.JSON(http.StatusOK, gin.H{

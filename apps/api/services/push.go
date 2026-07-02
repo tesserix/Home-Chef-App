@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -260,7 +261,9 @@ func iidTopicCall(method, token, topic string) error {
 		return fmt.Errorf("fcm topic call: access token: %w", err)
 	}
 
-	endpoint := "https://iid.googleapis.com/iid/v1/" + token + "/rel/topics/" + topic
+	// Escape the token before splicing it into the path — it's caller-supplied
+	// and could otherwise inject extra path segments into the IID URL.
+	endpoint := "https://iid.googleapis.com/iid/v1/" + url.PathEscape(token) + "/rel/topics/" + topic
 	req, err := http.NewRequest(method, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("fcm topic call: build request: %w", err)

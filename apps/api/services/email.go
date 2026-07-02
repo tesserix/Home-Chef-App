@@ -4,10 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/homechef/api/config"
 )
+
+// maskEmail redacts a recipient address for logs, keeping the first character
+// and the domain so entries stay traceable without leaking the full PII
+// address. An empty string stays empty; a value with no usable "@" is reduced
+// to its first character plus "***".
+func maskEmail(e string) string {
+	if e == "" {
+		return ""
+	}
+	at := strings.LastIndex(e, "@")
+	if at < 1 {
+		return e[:1] + "***"
+	}
+	return e[:1] + "***@" + e[at+1:]
+}
 
 // EmailService handles sending transactional emails. The provider chain is
 // built in InitEmailService: SendGrid primary, Resend fallback.
@@ -76,7 +92,7 @@ func (s *EmailService) Send(to, subject, htmlBody string) error {
 
 func (s *EmailService) send(to, subject, htmlBody string) error {
 	if s.mailer == nil {
-		log.Printf("Email skipped (no API key): to=%s subject=%s", to, subject)
+		log.Printf("Email skipped (no API key): to=%s subject=%s", maskEmail(to), subject)
 		return nil
 	}
 
@@ -84,7 +100,7 @@ func (s *EmailService) send(to, subject, htmlBody string) error {
 		return err
 	}
 
-	log.Printf("Email sent: to=%s subject=%s", to, subject)
+	log.Printf("Email sent: to=%s subject=%s", maskEmail(to), subject)
 	return nil
 }
 
@@ -127,7 +143,7 @@ func (s *EmailService) SendChefVerificationApproved(to, chefName string) error {
 // every other send helper.
 func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBytes []byte, filename string) error {
 	if s.mailer == nil {
-		log.Printf("Email skipped (no API key): to=%s subject=invoice %s", to, orderNumber)
+		log.Printf("Email skipped (no API key): to=%s subject=invoice %s", maskEmail(to), orderNumber)
 		return nil
 	}
 	name := firstName
@@ -152,7 +168,7 @@ func (s *EmailService) SendOrderInvoice(to, firstName, orderNumber string, pdfBy
 	if err := s.mailer.SendWithAttachment(context.Background(), to, subject, body, att); err != nil {
 		return fmt.Errorf("email: invoice send: %w", err)
 	}
-	log.Printf("Invoice email sent: to=%s order=%s", to, orderNumber)
+	log.Printf("Invoice email sent: to=%s order=%s", maskEmail(to), orderNumber)
 	return nil
 }
 

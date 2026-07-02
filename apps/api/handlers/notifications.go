@@ -164,8 +164,10 @@ func (h *NotificationHandler) UpdatePreference(c *gin.Context) {
 }
 
 // notifWSUpgrader upgrades HTTP connections to WebSocket for the notification stream.
+// Reuses allowedWSOrigin (see handlers/orders.go) so the notification socket enforces
+// the same cross-site WS hijacking protection as the order-track socket.
 var notifWSUpgrader = websocket.Upgrader{
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     allowedWSOrigin,
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }

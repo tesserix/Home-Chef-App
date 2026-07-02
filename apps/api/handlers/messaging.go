@@ -359,7 +359,7 @@ func (h *MessagingHandler) AdminExportConversation(c *gin.Context) {
 			}
 			_ = w.Write([]string{
 				m.CreatedAt.UTC().Format(time.RFC3339), m.SenderRole, m.RecipientRole,
-				m.RelayStatus, pii, m.Content, m.Filename,
+				m.RelayStatus, pii, csvSafe(m.Content), csvSafe(m.Filename),
 			})
 		}
 		w.Flush()
@@ -457,12 +457,33 @@ func (h *MessagingHandler) DownloadAttachment(c *gin.Context) {
 		return
 	}
 	c.Header("Content-Type", msg.ContentType)
-	c.Header("Content-Disposition", "inline; filename=\""+msg.Filename+"\"")
+	// Stop the browser from MIME-sniffing the payload into something executable,
+	// and force non-image types (e.g. PDF) to download rather than render inline.
+	c.Header("X-Content-Type-Options", "nosniff")
+	disposition := "attachment"
+	if services.IsImageContentType(msg.ContentType) {
+		disposition = "inline"
+	}
+	c.Header("Content-Disposition", disposition+"; filename=\""+msg.Filename+"\"")
 	c.Header("Cache-Control", "private, no-store")
 	if err := services.DownloadChatAttachment(c.Request.Context(), attachmentID, c.Writer); err != nil {
 		// Headers may already be flushed; nothing more we can do but log upstream.
 		return
 	}
+}
+
+// csvSafe neutralises CSV formula injection: a cell that begins with a formula
+// trigger (= + - @, tab or carriage return) is prefixed with a single quote so
+// spreadsheet apps treat it as literal text instead of evaluating it.
+func csvSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
 }
 
 func messagingActionError(c *gin.Context, err error) {
