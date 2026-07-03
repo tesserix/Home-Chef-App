@@ -21,12 +21,10 @@ import (
 	"github.com/homechef/api/models"
 )
 
-// settledAtOf reads the raw payout_settled_at for an order (nil when NULL).
+// settledAtOf reads payout_settled_at for an order (nil when NULL).
 func settledAtOf(t *testing.T, db *gorm.DB, id uuid.UUID) *time.Time {
 	t.Helper()
-	var ts *time.Time
-	require.NoError(t, db.Raw(`SELECT payout_settled_at FROM orders WHERE id = ?`, id.String()).Scan(&ts).Error)
-	return ts
+	return loadOrder(t, db, id).PayoutSettledAt
 }
 
 // withEscrowFlag sets config.AppConfig for the duration of fn (save/restore).
