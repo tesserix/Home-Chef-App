@@ -23,7 +23,7 @@ func notificationTypeCategory(notifType string) models.NotificationCategory {
 	switch notifType {
 	case "order_confirmation", "order_status", "order_cancelled", "order_delivered":
 		return models.NotifCategoryOrder
-	case "chef_new_order", "chef_verified", "chef_rejected":
+	case "chef_new_order", "chef_verified", "chef_rejected", "review_posted":
 		return models.NotifCategoryChef
 	case "delivery_assigned", "delivery_picked_up", "delivery_arrived":
 		return models.NotifCategoryDelivery

@@ -93,6 +93,9 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// durable so the fan-out is independent of the chef-facing notifications.
 		{Stream: "CHEF", Durable: "notify-daily-menu", Handler: h,
 			Subjects: []string{SubjectDailyMenuPublished}},
+		// New review on a chef's order → notify the chef (#422).
+		{Stream: "REVIEWS", Durable: "notify-reviews", Handler: h,
+			Subjects: []string{SubjectReviewPosted}},
 		// Referral reward granted → notify the referrer (#38).
 		{Stream: "REFERRAL", Durable: "notify-referral", Handler: h,
 			Subjects: []string{SubjectReferralRewarded}},
@@ -150,6 +153,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleWeeklyMenuPublished)
 	case SubjectDailyMenuPublished:
 		return decodeThen(data, s.handleDailyMenuPublished)
+	case SubjectReviewPosted:
+		return decodeThen(data, s.handleReviewPosted)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
 	case SubjectLoyaltyEarned:
@@ -440,6 +445,35 @@ func (s *NotificationService) handleTipReceived(event Event) error {
 		Data:    string(data),
 	}); err != nil {
 		return fmt.Errorf("save tip_received notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{
+		UserID: event.UserID, Type: "push",
+		Title: title, Message: message, Data: event.Data,
+	})
+	return nil
+}
+
+// handleReviewPosted notifies the chef when a customer leaves a review on one of
+// their delivered orders (#422). The event targets the chef's user id.
+func (s *NotificationService) handleReviewPosted(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	rating, _ := event.Data["rating"].(float64)
+	title := "New review ⭐"
+	message := "A customer reviewed one of your orders."
+	if rating > 0 {
+		message = fmt.Sprintf("A customer left you a %.0f-star review.", rating)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID:  event.UserID,
+		Type:    "review_posted",
+		Title:   title,
+		Message: message,
+		Data:    string(data),
+	}); err != nil {
+		return fmt.Errorf("save review_posted notification: %w", err)
 	}
 	PublishNotification(NotificationEvent{
 		UserID: event.UserID, Type: "push",
