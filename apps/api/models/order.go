@@ -160,6 +160,14 @@ type Order struct {
 	RefundReason          string     `gorm:"" json:"refundReason,omitempty"`
 	RefundInitiatedBy     string     `gorm:"type:varchar(20)" json:"refundInitiatedBy,omitempty"` // chef, admin, system
 
+	// Payout hold (#387). Independent of Status: on delivery the hold becomes
+	// awaiting_customer_confirmation (no money moves); the customer confirming
+	// advances it to release_eligible, which the admin payout queue (#388)
+	// consumes to drive the real Razorpay release. release_eligible itself moves
+	// no money. Empty for meal-plan/consolidated orders (they settle their own).
+	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);default:''" json:"payoutHoldStatus,omitempty"`
+	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
+
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

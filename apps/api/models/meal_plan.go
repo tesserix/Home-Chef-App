@@ -121,6 +121,12 @@ type MealPlanDay struct {
 	DeliveredAt *time.Time `gorm:"" json:"deliveredAt,omitempty"`
 	RefundTxnID *uuid.UUID `gorm:"type:uuid" json:"refundTxnId,omitempty"`
 
+	// Payout hold (#387). Same semantics as Order: on delivery the day's hold
+	// becomes awaiting_customer_confirmation (no release); the customer confirming
+	// advances it to release_eligible for the admin payout queue (#388).
+	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);default:''" json:"payoutHoldStatus,omitempty"`
+	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }
