@@ -31,10 +31,10 @@ type reasonReq struct {
 	Reason string `json:"reason"`
 }
 
-// parseAggType accepts only the two payout aggregates; anything else → 400.
+// parseAggType accepts only the payout aggregates; anything else → 400.
 func parseAggType(c *gin.Context) (string, bool) {
 	agg := c.Param("aggType")
-	if agg != "order" && agg != "meal-plan-day" {
+	if agg != "order" && agg != "meal-plan-day" && agg != "group-order" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_agg_type", "message": "Unknown payout type."})
 		return "", false
 	}
@@ -191,7 +191,7 @@ func (h *AdminPayoutHandler) BulkReleasePayouts(c *gin.Context) {
 	skipped := make([]gin.H, 0)
 	for _, it := range items {
 		id, err := uuid.Parse(it.ID)
-		if err != nil || (it.AggType != "order" && it.AggType != "meal-plan-day") {
+		if err != nil || (it.AggType != "order" && it.AggType != "meal-plan-day" && it.AggType != "group-order") {
 			skipped = append(skipped, gin.H{"id": it.ID, "reason": "invalid"})
 			continue
 		}
