@@ -13,6 +13,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { api } from '../../lib/api';
+import { RAZORPAY_DISPLAY_CONFIG } from '../../lib/razorpay-config';
 import { useCartStore } from '../../store/cart-store';
 import { friendlyErrorMessage } from '../../lib/errors';
 
@@ -67,6 +68,8 @@ function buildCheckoutHtml(opts: {
       email: opts.email ?? '',
       contact: opts.phone ?? '',
     },
+    // UPI-first ordering (GPay/PhonePe/BHIM on top), cards/netbanking below.
+    config: RAZORPAY_DISPLAY_CONFIG,
     theme: { color: '#FF385C' },
   });
 
