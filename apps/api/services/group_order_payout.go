@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -22,7 +23,13 @@ func GroupChefPayout(g *models.GroupOrder) float64 { return g.Subtotal + g.Tax }
 
 // HoldGroupChefPayout creates the single on-hold Route transfer to the chef and
 // stamps PayoutTransferID. Idempotent (skips when already held or no account).
+// Flag-gated on payoutMovementEnabled() (#456): with escrow OFF at launch this
+// moves no live money — the group hold is driven purely as DB state, exactly like
+// order/meal-plan-day, until the flag flips.
 func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) error {
+	if !payoutMovementEnabled() {
+		return nil
+	}
 	if g.PayoutTransferID != "" || chefAccount == "" {
 		return nil
 	}
@@ -46,15 +53,20 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 		Update("payout_transfer_id", tr.ID).Error
 }
 
-// ReleaseGroupChefPayout releases the held transfer on delivery. DB-guard the
-// caller on PayoutTransferID; here we no-op if it's empty.
+// ReleaseGroupChefPayout releases the held transfer. Since #456 no delivery path
+// calls this directly (delivery parks a hold instead); it is the seam the admin
+// payout queue drives off release_eligible. Flag-gated on payoutMovementEnabled()
+// (#456 P0 stop-the-bleed) — OFF ⇒ no money moves.
 func ReleaseGroupChefPayout(g *models.GroupOrder) error {
+	if !payoutMovementEnabled() {
+		return nil
+	}
 	if g.PayoutTransferID == "" {
 		return nil
 	}
 	rz := GetRazorpay()
 	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
+		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
 	}
 	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
 		return fmt.Errorf("release group payout %s: %w", g.PayoutTransferID, err)
@@ -63,7 +75,11 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 }
 
 // ReverseGroupChefPayout claws the held transfer back to the platform on cancel.
+// Flag-gated on payoutMovementEnabled() (#456) — OFF ⇒ no money moves.
 func ReverseGroupChefPayout(g *models.GroupOrder) {
+	if !payoutMovementEnabled() {
+		return
+	}
 	if g.PayoutTransferID == "" {
 		return
 	}
@@ -93,7 +109,10 @@ func RefundGroupParticipant(tx *gorm.DB, p *models.GroupOrderParticipant, reason
 }
 
 // MarkGroupOrderDelivered is the delivery-pipeline hook: when the consolidated
-// order is delivered, mark the group delivered + release the chef payout. Safe +
+// order is delivered, mark the group delivered and PARK its chef payout in a
+// customer-confirmation hold — it no longer releases money on delivery (#456).
+// Delivered no longer implies paid: the host confirming advances the hold to
+// release_eligible, which the admin payout queue drives (flag-gated). Safe +
 // idempotent on any order (no-op if not a group order or already delivered).
 func MarkGroupOrderDelivered(orderID uuid.UUID) {
 	var g models.GroupOrder
@@ -103,19 +122,25 @@ func MarkGroupOrderDelivered(orderID uuid.UUID) {
 	if g.Status == models.GroupOrderDelivered {
 		return
 	}
-	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		res := tx.Model(&models.GroupOrder{}).
-			Where("id = ? AND status <> ?", g.ID, models.GroupOrderDelivered).
-			Update("status", models.GroupOrderDelivered)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil
-		}
-		return ReleaseGroupChefPayout(&g)
-	})
-	if err != nil {
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		return parkGroupOrderOnDelivery(tx, g.ID)
+	}); err != nil {
 		log.Printf("group-order: mark delivered for order %s failed: %v", orderID, err)
 	}
+}
+
+// parkGroupOrderOnDelivery runs the guarded delivered transition and, only when it
+// genuinely advances the row, stamps delivered_at + parks the payout hold in the
+// same tx. The WHERE guard makes a replayed delivered event a no-op.
+func parkGroupOrderOnDelivery(tx *gorm.DB, groupID uuid.UUID) error {
+	res := tx.Model(&models.GroupOrder{}).
+		Where("id = ? AND status <> ?", groupID, models.GroupOrderDelivered).
+		Updates(map[string]any{"status": models.GroupOrderDelivered, "delivered_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil
+	}
+	return SetGroupOrderHoldAwaitingConfirmation(tx, groupID)
 }

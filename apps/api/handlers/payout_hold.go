@@ -98,6 +98,40 @@ func (h *PayoutHoldHandler) ConfirmMealPlanDayReceived(c *gin.Context) {
 	})
 }
 
+// ConfirmGroupOrderReceived advances a group/office order's hold to release_eligible
+// on the HOST confirming receipt (or -> disputed on an open issue). POST
+// /group-orders/:id/confirm-received — host-scoped, idempotent. The host is the
+// payer/receiver of the consolidated order, so it mirrors CancelGroupOrder's guard.
+func (h *PayoutHoldHandler) ConfirmGroupOrderReceived(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
+		return
+	}
+
+	g, me, ok := loadGroupForParticipant(id, userID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
+		return
+	}
+	if me.Role != models.GroupRoleHost {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only the host can confirm receipt"})
+		return
+	}
+
+	status, err := services.ConfirmGroupOrderHold(database.DB, &g)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not confirm receipt"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"payoutHoldStatus":    status,
+		"customerConfirmedAt": g.CustomerConfirmedAt,
+		"message":             confirmMessage(status),
+	})
+}
+
 // ConfirmTodaysTiffin bulk-confirms all of the caller's delivered-today,
 // still-awaiting tiffin days. POST /tiffin/confirm-today.
 func (h *PayoutHoldHandler) ConfirmTodaysTiffin(c *gin.Context) {

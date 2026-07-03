@@ -869,6 +869,10 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 	}
 
 	now := time.Now()
+	// Flag-gated (#456): a no-op while OrderPayoutAutoReleaseEnabled is OFF, so cancel
+	// can't move money ungated at launch — the minimum P0 fix.
+	// TODO(#456-followup): route cancel reverse through ReverseHold / inside the guarded
+	// tx before flags-ON (the reverse currently runs outside the status transition).
 	services.ReverseGroupChefPayout(&g)
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&models.GroupOrder{}).

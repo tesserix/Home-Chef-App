@@ -76,6 +76,20 @@ type GroupOrder struct {
 	OrderID          *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
 	PayoutTransferID string     `gorm:"" json:"-"`
 
+	// Payout hold (#456). The group order is a first-class payout-hold aggregate,
+	// mirroring Order/MealPlanDay: on delivery the hold parks at
+	// awaiting_customer_confirmation (no money moves), the host confirming advances
+	// it to release_eligible, which the admin payout queue (#388) consumes to drive
+	// the real (flag-gated) Razorpay release. release_eligible itself moves no money.
+	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);not null;default:''" json:"payoutHoldStatus,omitempty"`
+	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
+	DeliveredAt         *time.Time       `gorm:"" json:"deliveredAt,omitempty"`
+	// PayoutSettledAt marks the money seam actually completed (#459) — stamped only
+	// AFTER releaseMoney/reverseMoney returns nil. PayoutSettleAttempts bounds the
+	// payout-reconcile re-drives of a released/reversed row still settled_at NULL.
+	PayoutSettledAt      *time.Time `gorm:"" json:"payoutSettledAt,omitempty"`
+	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
+
 	// Single drop — frozen at lock (mirrors Order's delivery columns).
 	DeliveryAddressLine1      string  `gorm:"" json:"deliveryAddressLine1,omitempty"`
 	DeliveryAddressLine2      string  `gorm:"" json:"deliveryAddressLine2,omitempty"`

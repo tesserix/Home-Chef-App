@@ -702,6 +702,7 @@ func SetupRouter() *gin.Engine {
 			groupOrders.POST("/:id/pay/verify", groupOrderHandler.VerifyGroupShare)
 			groupOrders.POST("/:id/cancel", groupOrderHandler.CancelGroupOrder)
 			groupOrders.POST("/:id/leave", groupOrderHandler.LeaveGroupOrder)
+			groupOrders.POST("/:id/confirm-received", payoutHoldHandler.ConfirmGroupOrderReceived) // #456
 		}
 
 		// Tiffin meal plans — chef side (#195). Scoped to the authed chef.

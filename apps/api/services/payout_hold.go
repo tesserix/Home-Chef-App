@@ -62,6 +62,20 @@ func SetMealPlanDayHoldAwaitingConfirmation(tx *gorm.DB, dayID uuid.UUID) error 
 	return nil
 }
 
+// SetGroupOrderHoldAwaitingConfirmation parks a delivered group order's payout in a
+// customer-confirmation hold. Called inside the delivery transaction. Idempotent
+// (the conditional update only advances from the empty pre-delivery state, so a
+// replayed delivered event is a no-op).
+func SetGroupOrderHoldAwaitingConfirmation(tx *gorm.DB, groupOrderID uuid.UUID) error {
+	res := tx.Model(&models.GroupOrder{}).
+		Where("id = ? AND payout_hold_status = ?", groupOrderID, models.PayoutHoldNone).
+		Update("payout_hold_status", models.PayoutHoldAwaitingConfirmation)
+	if res.Error != nil {
+		return fmt.Errorf("payout-hold: park group order %s: %w", groupOrderID, res.Error)
+	}
+	return nil
+}
+
 // HasOpenOrderIssue reports whether the order has a pending (still-under-review)
 // OrderIssue — the dispute signal that blocks a hold from reaching release_eligible.
 func HasOpenOrderIssue(db *gorm.DB, orderID uuid.UUID) bool {
@@ -158,6 +172,32 @@ func ConfirmMealPlanDayHold(db *gorm.DB, day *models.MealPlanDay) (models.Payout
 	}
 	day.PayoutHoldStatus = updated.PayoutHoldStatus
 	day.CustomerConfirmedAt = updated.CustomerConfirmedAt
+	return updated.PayoutHoldStatus, nil
+}
+
+// ConfirmGroupOrderHold is ConfirmOrderHold for a group/office order (#456). The
+// host confirming receipt advances the hold awaiting -> release_eligible, or ->
+// disputed when the consolidated order has an open OrderIssue (keyed on OrderID; a
+// group with no consolidated order has no dispute source and proceeds). Idempotent
+// on an already-confirmed group. Returns the resulting status.
+func ConfirmGroupOrderHold(db *gorm.DB, g *models.GroupOrder) (models.PayoutHoldStatus, error) {
+	if g.CustomerConfirmedAt != nil {
+		return g.PayoutHoldStatus, nil
+	}
+	disputed := g.OrderID != nil && HasOpenOrderIssue(db, *g.OrderID)
+	now := time.Now()
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return applyHoldConfirm(tx, &models.GroupOrder{}, "group-order", g.ID, disputed, now)
+	}); err != nil {
+		return "", fmt.Errorf("payout-hold: confirm group order %s: %w", g.ID, err)
+	}
+	var updated models.GroupOrder
+	if err := db.Select("payout_hold_status", "customer_confirmed_at").
+		First(&updated, "id = ?", g.ID).Error; err != nil {
+		return "", fmt.Errorf("payout-hold: reload group order %s: %w", g.ID, err)
+	}
+	g.PayoutHoldStatus = updated.PayoutHoldStatus
+	g.CustomerConfirmedAt = updated.CustomerConfirmedAt
 	return updated.PayoutHoldStatus, nil
 }
 
