@@ -1,6 +1,6 @@
 import '../global.css';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -40,6 +40,12 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
     useAuthStore();
+  const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
+  // Whether we've reconciled onboarding state with the SERVER for this session.
+  // The local `onboardingComplete` flag is device-only and is cleared on logout,
+  // so on re-login we must ask the server before deciding — otherwise a returning
+  // user with a completed profile gets wrongly sent back through setup (#profile).
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   // Cleanup ref for push subscription teardown.
   const pushCleanupRef = useRef<(() => void) | null>(null);
@@ -158,18 +164,53 @@ export default function RootLayout() {
     };
   }, [isAuthenticated, isLoading]);
 
+  // Reconcile onboarding state with the server whenever the user is authenticated
+  // but the device flag says not-onboarded. A returning user (who onboarded on a
+  // previous session, then logged out — which clears the local flag) has
+  // OnboardingCompleted=true server-side, so we restore the flag and skip setup
+  // instead of forcing them through the wizard again and losing their details.
   useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) {
-        router.replace('/(auth)/login');
-      } else if (!onboardingComplete) {
-        // Gate: authenticated but hasn't completed onboarding wizard
-        router.replace('/(onboarding)/user-info');
-      } else {
-        router.replace('/(tabs)');
-      }
+    let cancelled = false;
+    if (isLoading || !isAuthenticated || onboardingComplete) {
+      setOnboardingChecked(true);
+      return;
     }
-  }, [isAuthenticated, isLoading, onboardingComplete]);
+    setOnboardingChecked(false);
+    api
+      .get<{ onboardingCompleted?: boolean }>('/v1/customer/onboarding/status')
+      .then((r) => {
+        if (cancelled) return;
+        if (r.data?.onboardingCompleted) {
+          // Server says they're set up — restore the local flag; the gate below
+          // then routes them straight to the app.
+          setOnboardingComplete(true);
+        }
+      })
+      .catch(() => {
+        // On a transient failure, fall through to the wizard rather than block
+        // the user — they can still finish (the server upserts idempotently).
+      })
+      .finally(() => {
+        if (!cancelled) setOnboardingChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isLoading, onboardingComplete, setOnboardingComplete]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+    } else if (!onboardingComplete) {
+      // Wait for the server reconciliation before deciding, so we never flash the
+      // setup wizard at a returning user whose profile is already complete.
+      if (!onboardingChecked) return;
+      router.replace('/(onboarding)/user-info');
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, isLoading, onboardingComplete, onboardingChecked]);
 
   return (
     // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
