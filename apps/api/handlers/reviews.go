@@ -149,6 +149,21 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 	// Update chef's rating stats
 	go updateChefRating(order.ChefID)
 
+	// Notify the chef of the new review (#422). Best-effort: the review is
+	// already committed, so a staging failure must never fail the request.
+	var chefUserID uuid.UUID
+	if err := database.DB.Model(&models.ChefProfile{}).
+		Where("id = ?", order.ChefID).
+		Select("user_id").Scan(&chefUserID).Error; err == nil && chefUserID != uuid.Nil {
+		if err := services.EnqueueEvent(database.DB, services.SubjectReviewPosted, "review_posted", chefUserID, map[string]any{
+			"review_id": review.ID.String(),
+			"order_id":  order.ID.String(),
+			"rating":    review.OverallRating,
+		}); err != nil {
+			log.Printf("review_posted: enqueue for chef %s: %v", chefUserID, err)
+		}
+	}
+
 	// Per-dish ratings (#145): optional `dishRatings` JSON form field —
 	// [{ "menuItemId": "...", "rating": 1-5 }]. Each rolls up into the dish's
 	// MenuItem.Rating so customers see per-dish scores, not just a chef average.
