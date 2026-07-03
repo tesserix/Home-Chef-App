@@ -64,6 +64,10 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 		return 0, fmt.Errorf("load statement rows: %w", err)
 	}
 
+	// Flat platform commission (ADR-0001 / #390) — a single runtime rate for all
+	// chefs, resolved once before the bucket loop.
+	flatRate := GetCommissionRate(database.DB)
+
 	// Group rows by chef so each chef's totals are computed in one pass.
 	type chefBucket struct {
 		userID         uuid.UUID
@@ -75,9 +79,7 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 	for _, r := range rows {
 		b := buckets[r.ChefID]
 		if b == nil {
-			// Premium commission (#44) resolved once per chef → their actual
-			// payout reflects the lower rate.
-			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: PremiumCommissionRateForChef(r.ChefID)}
+			b = &chefBucket{userID: r.UserID, chefState: r.ChefState, commissionRate: flatRate}
 			buckets[r.ChefID] = b
 		}
 		b.totals.Add(ComputeOrderEarnings(EarningsInput{

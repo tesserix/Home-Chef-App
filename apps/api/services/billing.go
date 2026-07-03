@@ -80,6 +80,8 @@ func GetPlanSettings(countryCode string, subType models.SubscriberType) (*PlanCo
 		PremiumMonthlyPrice:   999,
 		PremiumQuarterlyPrice: 2599,
 		PremiumYearlyPrice:    8999,
+		// Premium tier no longer affects payout commission (ADR-0001/#390 flat
+		// rate); retained as legacy subscription-tier metadata only.
 		PremiumCommissionRate: 0.12,
 	}
 

@@ -23,8 +23,8 @@ func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 
 	got := computeOrderBreakdown(row, chefState, 0)
 
-	// commission = 0.15 × 1000 = 150
-	wantCommission := 150.00
+	// commission = 0.06 × 1000 = 60 (flat default, 0 rate falls back to 6%)
+	wantCommission := 60.00
 	if got.PlatformCommission != wantCommission {
 		t.Errorf("PlatformCommission: got %.2f, want %.2f", got.PlatformCommission, wantCommission)
 	}
@@ -35,14 +35,14 @@ func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 		t.Errorf("Gross: got %.2f, want %.2f", got.Gross, wantGross)
 	}
 
-	// CGST = 9% × 150 = 13.50
-	wantCGST := 13.50
+	// CGST = 9% × 60 = 5.40
+	wantCGST := 5.40
 	if got.CGST != wantCGST {
 		t.Errorf("CGST: got %.2f, want %.2f", got.CGST, wantCGST)
 	}
 
-	// SGST = 9% × 150 = 13.50
-	wantSGST := 13.50
+	// SGST = 9% × 60 = 5.40
+	wantSGST := 5.40
 	if got.SGST != wantSGST {
 		t.Errorf("SGST: got %.2f, want %.2f", got.SGST, wantSGST)
 	}
@@ -58,8 +58,8 @@ func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 		t.Errorf("TDS: got %.2f, want %.2f", got.TDS, wantTDS)
 	}
 
-	// netPayout = 1070 - 150 - 10.70 = 909.30
-	wantNet := 909.30
+	// netPayout = 1070 - 60 - 10.70 = 999.30
+	wantNet := 999.30
 	if got.NetPayout != wantNet {
 		t.Errorf("NetPayout: got %.2f, want %.2f", got.NetPayout, wantNet)
 	}
@@ -89,8 +89,8 @@ func TestComputeOrderBreakdown_InterState(t *testing.T) {
 		t.Errorf("SGST: got %.2f, want 0 (inter-state)", got.SGST)
 	}
 
-	// IGST = 18% × (0.15 × 500) = 18% × 75 = 13.50
-	wantIGST := 13.50
+	// IGST = 18% × (0.06 × 500) = 18% × 30 = 5.40
+	wantIGST := 5.40
 	if got.IGST != wantIGST {
 		t.Errorf("IGST: got %.2f, want %.2f", got.IGST, wantIGST)
 	}
@@ -115,7 +115,7 @@ func TestComputeOrderBreakdown_ZeroTip(t *testing.T) {
 		t.Errorf("Gross: got %.2f, want %.2f", got.Gross, wantGross)
 	}
 
-	wantCommission := 30.00 // 15% of 200
+	wantCommission := 12.00 // 6% of 200
 	if got.PlatformCommission != wantCommission {
 		t.Errorf("PlatformCommission: got %.2f, want %.2f", got.PlatformCommission, wantCommission)
 	}
@@ -125,8 +125,8 @@ func TestComputeOrderBreakdown_ZeroTip(t *testing.T) {
 		t.Errorf("TDS: got %.2f, want %.2f", got.TDS, wantTDS)
 	}
 
-	// netPayout = 200 - 30 - 2 = 168
-	wantNet := 168.00
+	// netPayout = 200 - 12 - 2 = 186
+	wantNet := 186.00
 	if got.NetPayout != wantNet {
 		t.Errorf("NetPayout: got %.2f, want %.2f", got.NetPayout, wantNet)
 	}

@@ -44,8 +44,9 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("load statement orders: %w", err)
 	}
-	// Premium commission (#44) so the PDF matches the chef's stored statement.
-	commissionRate := PremiumCommissionRateForChef(stmt.ChefID)
+	// Flat platform commission (ADR-0001 / #390) so the PDF matches the chef's
+	// stored statement.
+	commissionRate := GetCommissionRate(database.DB)
 	lines := make([]OrderEarnings, 0, len(rows))
 	for _, r := range rows {
 		if r.ChefID != stmt.ChefID {
@@ -74,7 +75,7 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 
 	addStatementHeader(m, &stmt)
 	addStatementChef(m, &chef, &stmt)
-	addStatementSummary(m, &stmt)
+	addStatementSummary(m, &stmt, commissionRate)
 	addStatementOrders(m, lines)
 	addStatementFooter(m)
 
@@ -138,7 +139,7 @@ func addStatementChef(m core.Maroto, chef *models.ChefProfile, stmt *models.Week
 	m.AddRow(4, col.New(12).Add(spacer()))
 }
 
-func addStatementSummary(m core.Maroto, stmt *models.WeeklyStatement) {
+func addStatementSummary(m core.Maroto, stmt *models.WeeklyStatement, commissionRate float64) {
 	curr := stmt.Currency
 	if curr == "" {
 		curr = "INR"
@@ -161,7 +162,7 @@ func addStatementSummary(m core.Maroto, stmt *models.WeeklyStatement) {
 	m.AddRow(6, col.New(12).Add(text.New("SETTLEMENT SUMMARY", props.Text{Size: 8, Style: fontstyle.Bold, Color: &props.Color{Red: 90, Green: 90, Blue: 90}})))
 	rows := []core.Row{
 		line("Gross revenue", stmt.GrossRevenue, false, false),
-		line(fmt.Sprintf("Platform commission (%.0f%%)", RateCommission*100), stmt.PlatformCommission, false, true),
+		line(fmt.Sprintf("Platform commission (%.0f%%)", commissionRate*100), stmt.PlatformCommission, false, true),
 	}
 	if stmt.IGST > 0 {
 		rows = append(rows, line(fmt.Sprintf("GST · IGST (%.0f%%)", RateGST*100), stmt.IGST, false, true))
