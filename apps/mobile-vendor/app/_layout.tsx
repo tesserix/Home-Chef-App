@@ -264,11 +264,25 @@ function AppNavigator() {
         });
       });
 
-      // Increment badge on foreground notification receipt.
-      const notifSub = Notifications.addNotificationReceivedListener(async () => {
-        const current = await Notifications.getBadgeCountAsync();
-        await Notifications.setBadgeCountAsync(current + 1);
-      });
+      // Increment badge on foreground notification receipt, and — for an order /
+      // meal-plan / group-order push — live-refresh the dashboard instead of
+      // waiting for the 10s poll. This turns the existing chef_new_order push
+      // pipeline into a real-time order feed across every order type (#435).
+      const notifSub = Notifications.addNotificationReceivedListener(
+        async (notification) => {
+          const current = await Notifications.getBadgeCountAsync();
+          await Notifications.setBadgeCountAsync(current + 1);
+          const type = String(
+            (notification.request.content.data as Record<string, unknown> | undefined)
+              ?.type ?? '',
+          );
+          if (/order|meal_plan|group/i.test(type)) {
+            queryClient.invalidateQueries({ queryKey: ['chef', 'orders'] });
+            queryClient.invalidateQueries({ queryKey: ['chef', 'dashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['chef', 'meal-plans'] });
+          }
+        },
+      );
 
       // Handle notification tap and lock-screen actions.
       // CRITICAL: Accept/Reject MUST use SecureStore + fetch — NOT the React-context-bound
