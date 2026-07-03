@@ -29,10 +29,12 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
 			razorpay_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			customer_confirmed_at DATETIME, delivered_at DATETIME, refunded_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME,
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
@@ -60,6 +62,17 @@ func seedRegularOrder(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus) u
 	id := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status) VALUES (?,?,?,?,?)`,
 		id.String(), uuid.NewString(), "delivered", "order_rzp_123", string(hold)).Error)
+	return id
+}
+
+// seedReleasedOrder inserts a gateway-charged order already flipped to the given
+// terminal hold status with the given (nullable) settled_at — the drift shape the
+// reconcile re-drives (released/reversed + settled_at NULL).
+func seedReleasedOrder(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus, settledAt *time.Time) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, customer_id, status, razorpay_order_id, payout_hold_status, payout_settled_at) VALUES (?,?,?,?,?,?)`,
+		id.String(), uuid.NewString(), "delivered", "order_rzp_123", string(hold), settledAt).Error)
 	return id
 }
 
