@@ -524,7 +524,7 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
-			orders.POST("/:id/reorder", orderHandler.ReorderOrder)          // #238
+			orders.POST("/:id/reorder", orderHandler.ReorderOrder)                       // #238
 			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue)              // #37
 			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)                // #37
 			orders.POST("/:id/confirm-received", payoutHoldHandler.ConfirmOrderReceived) // #387
