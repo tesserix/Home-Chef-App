@@ -348,13 +348,16 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		return fmt.Errorf("failed to update delivery: %w", err)
 	}
 
-	// On 3PL delivery, fire the escrow/group payout release hooks (the own-fleet
-	// path does this in handlers/delivery.go). Both are status-guarded no-ops for
-	// orders that aren't meal-plan/group orders.
+	// On 3PL delivery, mark the meal-plan/group order delivered and park the
+	// regular order's payout in a customer-confirmation hold (#387) — delivery no
+	// longer releases funds; the customer confirming (or #388) drives release.
+	// All three are status-guarded no-ops for orders they don't apply to.
 	if models.DeliveryStatus(fe3drStatus) == models.DeliveryDelivered && delivery.OrderID != uuid.Nil {
 		MarkMealPlanDayDelivered(delivery.OrderID)
 		MarkGroupOrderDelivered(delivery.OrderID)
-		ReleaseOrderPayouts(delivery.OrderID)
+		if err := SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
+			log.Printf("payout-hold: park order %s on 3PL delivery failed: %v", delivery.OrderID, err)
+		}
 	}
 
 	// Durable event publication via the transactional outbox.

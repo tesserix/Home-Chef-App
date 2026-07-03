@@ -195,10 +195,10 @@ func completeFinishedPlans() {
 }
 
 // MarkMealPlanDayDelivered is the delivery-pipeline hook: when an order linked to
-// a meal-plan day is delivered, mark the day delivered, release its held chef
-// payout (escrow; gated), and emit the day-delivered event. Safe + idempotent on
-// any order (no-op if the order isn't a meal-plan order or the day is already
-// delivered).
+// a meal-plan day is delivered, mark the day delivered, park its payout in a
+// customer-confirmation hold (#387; no release), and emit the day-delivered
+// event. Safe + idempotent on any order (no-op if the order isn't a meal-plan
+// order or the day is already delivered).
 func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 	var day models.MealPlanDay
 	if err := database.DB.Where("order_id = ?", orderID).First(&day).Error; err != nil {
@@ -218,7 +218,7 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 		if res.RowsAffected == 0 {
 			return nil
 		}
-		if err := ReleaseDayPayout(tx, &day); err != nil {
+		if err := SetMealPlanDayHoldAwaitingConfirmation(tx, day.ID); err != nil {
 			return err
 		}
 		return EnqueueEvent(tx, SubjectMealPlanDayDelivered, "meal_plan_day.delivered", day.MealPlanID, map[string]any{

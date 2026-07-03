@@ -165,6 +165,7 @@ func SetupRouter() *gin.Engine {
 	referralHandler := handlers.NewReferralHandler()
 	winbackHandler := handlers.NewWinbackHandler()
 	orderIssueHandler := handlers.NewOrderIssueHandler()
+	payoutHoldHandler := handlers.NewPayoutHoldHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
@@ -523,9 +524,10 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
-			orders.POST("/:id/reorder", orderHandler.ReorderOrder)          // #238
-			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue) // #37
-			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)   // #37
+			orders.POST("/:id/reorder", orderHandler.ReorderOrder)                       // #238
+			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue)              // #37
+			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)                // #37
+			orders.POST("/:id/confirm-received", payoutHoldHandler.ConfirmOrderReceived) // #387
 			orders.GET("/:id/track", orderHandler.TrackOrder)
 			orders.GET("/:id/track/ws", orderHandler.TrackOrderWS)
 			orders.GET("/:id/invoice", orderHandler.GetOrderInvoice)
@@ -670,7 +672,16 @@ func SetupRouter() *gin.Engine {
 			mealPlans.PUT("/:id/approve", mealPlanHandler.ApproveMealPlan)
 			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
 			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
+			mealPlans.POST("/:id/days/:dayId/confirm-received", payoutHoldHandler.ConfirmMealPlanDayReceived) // #387
 			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)
+		}
+
+		// Tiffin bulk confirm (#387) — its own group because a static segment can't
+		// share the /orders/:id or /meal-plans/:id wildcard slot (httprouter).
+		tiffin := v1.Group("/tiffin")
+		tiffin.Use(bffAuth(bffKey, bffWindow))
+		{
+			tiffin.POST("/confirm-today", payoutHoldHandler.ConfirmTodaysTiffin) // #387
 		}
 
 		// Group / office orders (#46). Public invite preview by token + authed

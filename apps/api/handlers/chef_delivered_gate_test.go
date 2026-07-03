@@ -80,6 +80,7 @@ const ordersDDL = `CREATE TABLE orders (
 	payment_provider text, stripe_payment_intent_id text, razorpay_order_id text,
 	razorpay_payment_id text, refund_id text, refunded_at datetime, refund_amount real DEFAULT 0,
 	refund_reason text, refund_initiated_by text,
+	payout_hold_status text DEFAULT '', customer_confirmed_at datetime,
 	created_at datetime, updated_at datetime, deleted_at datetime)`
 
 const orderItemsDDL = `CREATE TABLE order_items (
