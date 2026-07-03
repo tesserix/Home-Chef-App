@@ -44,6 +44,8 @@ func orderRazorpayID(orderID uuid.UUID) (string, error) {
 }
 
 // ReleaseOrderPayouts releases any held Route transfers on a delivered order.
+// Since #387 no delivery path calls this directly (delivery parks a hold instead);
+// it remains the seam the admin payout queue (#388) will drive off release_eligible.
 func ReleaseOrderPayouts(orderID uuid.UUID) error {
 	if !payoutMovementEnabled() {
 		return nil

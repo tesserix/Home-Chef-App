@@ -76,10 +76,13 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 	if status == models.DeliveryDelivered {
 		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
 			Update("status", models.OrderStatusDelivered)
-		// Mirror the generic 3PL path: release escrow/meal-plan/group payouts.
+		// Mirror the generic 3PL path: mark meal-plan/group delivered and park the
+		// regular order's payout in a customer-confirmation hold (#387; no release).
 		MarkMealPlanDayDelivered(order.ID)
 		MarkGroupOrderDelivered(order.ID)
-		_ = ReleaseOrderPayouts(order.ID)
+		if err := SetOrderHoldAwaitingConfirmation(database.DB, order.ID); err != nil {
+			log.Printf("payout-hold: park order %s on shadowfax delivery failed: %v", order.ID, err)
+		}
 	}
 
 	log.Printf("shadowfax webhook: order=%s delivery=%s -> %s", clientOrderID, delivery.ID, status)

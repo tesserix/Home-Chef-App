@@ -177,7 +177,9 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 }
 
 // ReleaseDayPayout releases the held transfer for a delivered day. DB-guarded:
-// only acts if a transfer id is present. No-op when escrow is off.
+// only acts if a transfer id is present. No-op when escrow is off. Since #387 the
+// delivery hook parks a hold instead of calling this; it remains the seam the
+// admin payout queue (#388) will drive off release_eligible.
 func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 	if !MealPlanEscrowActive() || day.PayoutTransferID == "" {
 		return nil
