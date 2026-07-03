@@ -55,14 +55,15 @@ const (
 	SubjectApprovalInfoRequested = "approvals.info_requested"
 
 	// Tiffin meal plans (#193) — the request→accept→approve handshake + per-day lifecycle.
-	SubjectMealPlanCreated      = "meal_plans.created"       // → chef: new request
-	SubjectMealPlanAcceptedFull = "meal_plans.accepted_full" // → customer: notify only
-	SubjectMealPlanModified     = "meal_plans.modified"      // → customer: approve the trim
-	SubjectMealPlanConfirmed    = "meal_plans.confirmed"
-	SubjectMealPlanCancelled    = "meal_plans.cancelled"
-	SubjectMealPlanDayPrepared  = "meal_plans.day_prepared" // → customer: dish is being cooked (#50)
-	SubjectMealPlanDayDelivered = "meal_plans.day_delivered"
-	SubjectMealPlanDayRefunded  = "meal_plans.day_refunded"
+	SubjectMealPlanCreated        = "meal_plans.created"       // → chef: new request
+	SubjectMealPlanAcceptedFull   = "meal_plans.accepted_full" // → customer: notify only
+	SubjectMealPlanModified       = "meal_plans.modified"      // → customer: approve the trim
+	SubjectMealPlanConfirmed      = "meal_plans.confirmed"
+	SubjectMealPlanCancelled      = "meal_plans.cancelled"
+	SubjectMealPlanDayPrepared    = "meal_plans.day_prepared" // → customer: dish is being cooked (#50)
+	SubjectMealPlanDayDelivered   = "meal_plans.day_delivered"
+	SubjectMealPlanDayRefunded    = "meal_plans.day_refunded"
+	SubjectMealPlanDaySkippedChef = "meal_plans.day_skipped_chef" // → chef: customer skipped a day (#422)
 
 	SubjectDriverOnboardingSubmitted = "driver.onboarding.submitted"
 

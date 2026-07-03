@@ -118,7 +118,7 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		{Stream: "APPROVALS", Durable: "notify-approvals", Handler: h,
 			Subjects: []string{SubjectApprovalApproved, SubjectApprovalRejected, SubjectApprovalInfoRequested, SubjectApprovalCreated}},
 		{Stream: "MEAL_PLANS", Durable: "notify-meal-plans", Handler: h,
-			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded}},
+			Subjects: []string{SubjectMealPlanCreated, SubjectMealPlanAcceptedFull, SubjectMealPlanModified, SubjectMealPlanConfirmed, SubjectMealPlanCancelled, SubjectMealPlanDayDelivered, SubjectMealPlanDayRefunded, SubjectMealPlanDaySkippedChef}},
 		{Stream: "GROUP_ORDERS", Durable: "notify-group-orders", Handler: h,
 			Subjects: []string{SubjectGroupOrderLocked, SubjectGroupOrderPlaced, SubjectGroupOrderCancelled}},
 	}
@@ -155,6 +155,8 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleDailyMenuPublished)
 	case SubjectReviewPosted:
 		return decodeThen(data, s.handleReviewPosted)
+	case SubjectMealPlanDaySkippedChef:
+		return decodeThen(data, s.handleMealPlanDaySkippedChef)
 	case SubjectReferralRewarded:
 		return decodeThen(data, s.handleReferralRewarded)
 	case SubjectLoyaltyEarned:
@@ -1130,6 +1132,14 @@ func (s *NotificationService) handleMealPlanDayRefunded(event Event) error {
 	return s.notifyMealPlan(event, "meal_plan_day_refunded",
 		"Day refunded to your wallet",
 		"A meal-plan day was refunded to your HomeChef wallet.")
+}
+
+// handleMealPlanDaySkippedChef notifies the CHEF that a customer skipped a plan
+// day, so they don't cook it (#422). The event targets the chef's user id.
+func (s *NotificationService) handleMealPlanDaySkippedChef(event Event) error {
+	return s.notifyMealPlan(event, "meal_plan_day_skipped_chef",
+		"A plan day was skipped",
+		"A customer skipped a day in their tiffin plan — no need to cook that meal.")
 }
 
 // handleMealPlanCancelled → chef or customer (event.UserID), tailored by cause:
