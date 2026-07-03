@@ -36,6 +36,7 @@ func cronJobs() []cronJob {
 		{"meal-sub-orders", mealSubOrderScanInterval, runMealSubscriptionDailyOrders, StartMealSubscriptionOrderCron},
 		{"campaign-dispatch", campaignDispatchInterval, runCampaignDispatch, StartCampaignCron},
 		{"stale-order", staleOrderInterval, runStaleOrderScan, StartStaleOrderCron},
+		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 	}
 }
 
