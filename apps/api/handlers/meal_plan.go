@@ -541,9 +541,21 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 		if err := services.RefundDay(tx, &plan, day, "customer skipped this day"); err != nil {
 			return err
 		}
-		return services.EnqueueEvent(tx, services.SubjectMealPlanDayRefunded, "meal_plan_day.skipped", customerID, map[string]any{
+		if err := services.EnqueueEvent(tx, services.SubjectMealPlanDayRefunded, "meal_plan_day.skipped", customerID, map[string]any{
 			"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
-		})
+		}); err != nil {
+			return err
+		}
+		// Also tell the chef the day was skipped, so they don't cook it (#422).
+		var chefUserID uuid.UUID
+		if err := tx.Model(&models.ChefProfile{}).Where("id = ?", plan.ChefID).
+			Select("user_id").Scan(&chefUserID).Error; err == nil && chefUserID != uuid.Nil {
+			return services.EnqueueEvent(tx, services.SubjectMealPlanDaySkippedChef, "meal_plan_day.skipped_chef", chefUserID, map[string]any{
+				"meal_plan_id": plan.ID.String(), "day_id": day.ID.String(),
+				"date": day.Date.Format("2006-01-02"),
+			})
+		}
+		return nil
 	}); err != nil {
 		if errors.Is(err, errPlanConflict) {
 			c.JSON(http.StatusConflict, gin.H{"error": "This day can no longer be skipped"})
