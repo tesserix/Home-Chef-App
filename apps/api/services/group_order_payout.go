@@ -22,7 +22,13 @@ func GroupChefPayout(g *models.GroupOrder) float64 { return g.Subtotal + g.Tax }
 
 // HoldGroupChefPayout creates the single on-hold Route transfer to the chef and
 // stamps PayoutTransferID. Idempotent (skips when already held or no account).
+// Flag-gated on payoutMovementEnabled() (#456): with escrow OFF at launch this
+// moves no live money — the group hold is driven purely as DB state, exactly like
+// order/meal-plan-day, until the flag flips.
 func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) error {
+	if !payoutMovementEnabled() {
+		return nil
+	}
 	if g.PayoutTransferID != "" || chefAccount == "" {
 		return nil
 	}
@@ -46,9 +52,14 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 		Update("payout_transfer_id", tr.ID).Error
 }
 
-// ReleaseGroupChefPayout releases the held transfer on delivery. DB-guard the
-// caller on PayoutTransferID; here we no-op if it's empty.
+// ReleaseGroupChefPayout releases the held transfer. Since #456 no delivery path
+// calls this directly (delivery parks a hold instead); it is the seam the admin
+// payout queue drives off release_eligible. Flag-gated on payoutMovementEnabled()
+// (#456 P0 stop-the-bleed) — OFF ⇒ no money moves.
 func ReleaseGroupChefPayout(g *models.GroupOrder) error {
+	if !payoutMovementEnabled() {
+		return nil
+	}
 	if g.PayoutTransferID == "" {
 		return nil
 	}
@@ -63,7 +74,11 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 }
 
 // ReverseGroupChefPayout claws the held transfer back to the platform on cancel.
+// Flag-gated on payoutMovementEnabled() (#456) — OFF ⇒ no money moves.
 func ReverseGroupChefPayout(g *models.GroupOrder) {
+	if !payoutMovementEnabled() {
+		return
+	}
 	if g.PayoutTransferID == "" {
 		return
 	}
