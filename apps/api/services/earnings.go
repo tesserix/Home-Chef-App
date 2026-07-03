@@ -24,8 +24,16 @@ import (
 // values; defined as consts so they can be lifted to env/DB config later
 // without touching call sites.
 const (
-	// RateCommission is the platform's share of each order's item revenue.
-	RateCommission = 0.15
+	// DefaultCommissionRate is the flat platform commission on the food subtotal
+	// (ADR-0001 / #390); runtime-tunable via GetCommissionRate. Every chef is
+	// charged this by default — there is no premium reduced-rate tier in the
+	// payout math.
+	DefaultCommissionRate = 0.06
+
+	// RateCommission is the platform's share of each order's item revenue. It is
+	// the flat DefaultCommissionRate — a single source value that keeps the
+	// display references (statement/earnings labels) showing the current rate.
+	RateCommission = DefaultCommissionRate
 
 	// RateGST is the total GST rate applied to the commission amount.
 	RateGST = 0.18
@@ -46,9 +54,9 @@ type EarningsInput struct {
 	DeliveryFee   float64
 	ChefTip       float64
 	DeliveryState string
-	// CommissionRate overrides the platform take-rate for this order (#44 premium
-	// tier). Zero/unset uses the standard RateCommission, so existing callers are
-	// unaffected.
+	// CommissionRate is the resolved flat commission rate for this order; 0/unset
+	// uses DefaultCommissionRate. Callers resolve it from PlatformSettings via
+	// GetCommissionRate and inject it here, keeping the math pure.
 	CommissionRate float64
 	// ChefFundedDiscount is the chef-funded promo discount the chef bears (#39).
 	// It reduces the chef's food revenue before commission/gross/TDS. Zero for
@@ -94,10 +102,11 @@ type EarningsTotals struct {
 //	tds        = RateTDS × gross
 //	netPayout  = gross − commission − tds   (GST is not deducted from chef)
 func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
-	// Premium chefs (#44) carry a lower commission rate; 0/unset = the standard rate.
+	// The flat commission rate is injected per order; 0/unset (or out of range)
+	// falls back to the flat DefaultCommissionRate.
 	rate := in.CommissionRate
 	if rate <= 0 || rate >= 1 {
-		rate = RateCommission
+		rate = DefaultCommissionRate
 	}
 	// A chef-funded promo (#39) comes out of the chef's food revenue before
 	// commission/gross/TDS — the chef bears the discount they funded. Floored at 0.
