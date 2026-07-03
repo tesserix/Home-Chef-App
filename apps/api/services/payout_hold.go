@@ -17,6 +17,7 @@ package services
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -169,4 +170,24 @@ func ConfirmTodaysTiffinForCustomer(db *gorm.DB, customerID uuid.UUID) (int, err
 		confirmed++
 	}
 	return confirmed, nil
+}
+
+// GetCustomerConfirmWindowHours reads the auto-confirm window (hours) from
+// PlatformSettings `payout.*` keys, defaulting to 24. Consumed by the follow-up
+// auto-confirm sweep that advances stale awaiting_customer_confirmation holds; the
+// setting exists now so ops can pre-tune it. Mirrors GetIssueConfig's fold pattern
+// (parse errors are ignored, keeping the default). Not called by any transition
+// in this slice.
+func GetCustomerConfirmWindowHours(db *gorm.DB) int {
+	hours := 24
+	var settings []models.PlatformSettings
+	db.Where("key LIKE ?", "payout.%").Find(&settings)
+	for _, s := range settings {
+		if s.Key == "payout.customer_confirm_window_hours" {
+			if v, err := strconv.Atoi(s.Value); err == nil {
+				hours = v
+			}
+		}
+	}
+	return hours
 }
