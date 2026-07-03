@@ -227,7 +227,46 @@ func ReleaseHold(db *gorm.DB, aggType string, id uuid.UUID) error {
 	if !ok {
 		return ErrHoldNotEligible
 	}
-	return releaseMoney(db, aggType, id)
+	return settleRelease(db, aggType, id)
+}
+
+// stampPayoutSettled marks that the money seam completed for a hold (#459): a
+// conditional UPDATE `SET payout_settled_at = now WHERE id = ? AND
+// payout_settled_at IS NULL`. Idempotent — a row already settled is left
+// untouched, so a re-drive never moves the original stamp. This is the single
+// source of truth for "seam succeeded → mark settled", reused by both the primary
+// ReleaseHold/ReverseHold path and the payout-reconcile cron (no duplicated logic).
+func stampPayoutSettled(db *gorm.DB, aggType string, id uuid.UUID) error {
+	model, err := holdModel(aggType)
+	if err != nil {
+		return err
+	}
+	res := db.Model(model).
+		Where("id = ? AND payout_settled_at IS NULL", id).
+		Update("payout_settled_at", time.Now())
+	if res.Error != nil {
+		return fmt.Errorf("payout-release: stamp settled %s %s: %w", aggType, id, res.Error)
+	}
+	return nil
+}
+
+// settleRelease runs the release seam and, ONLY on success (seam == nil), stamps
+// payout_settled_at. A seam failure returns the error and leaves settled_at NULL —
+// the drift the reconcile re-drives.
+func settleRelease(db *gorm.DB, aggType string, id uuid.UUID) error {
+	if err := releaseMoney(db, aggType, id); err != nil {
+		return err
+	}
+	return stampPayoutSettled(db, aggType, id)
+}
+
+// settleReverse runs the reverse seam and, ONLY on success (seam == nil), stamps
+// payout_settled_at. Same drift contract as settleRelease over reverseMoney.
+func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
+	if err := reverseMoney(db, aggType, id); err != nil {
+		return err
+	}
+	return stampPayoutSettled(db, aggType, id)
 }
 
 // releaseMoney runs the post-commit, flag-gated release seam. Order → the Route
@@ -285,7 +324,7 @@ func ReverseHold(db *gorm.DB, aggType string, id uuid.UUID, reason string) error
 	if !ok {
 		return ErrHoldNotEligible
 	}
-	return reverseMoney(db, aggType, id)
+	return settleReverse(db, aggType, id)
 }
 
 // reverseMoney runs the post-commit, flag-gated reverse seam. Order → the Route
