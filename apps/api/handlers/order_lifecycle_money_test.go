@@ -104,8 +104,8 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 	if got.ItemRevenue != 600.0 {
 		t.Fatalf("earnings item revenue: got %.2f, want 600.00 (must reflect the refund)", got.ItemRevenue)
 	}
-	if got.PlatformCommission != 90.0 { // 0.15 * 600, not 0.15 * 1000
-		t.Fatalf("earnings commission: got %.2f, want 90.00 (15%% of the refunded-down revenue)", got.PlatformCommission)
+	if got.PlatformCommission != 36.0 { // 0.06 * 600, not 0.06 * 1000
+		t.Fatalf("earnings commission: got %.2f, want 36.00 (6%% of the refunded-down revenue)", got.PlatformCommission)
 	}
 	if got.Gross != 660.0 { // 600 + 40 + 20
 		t.Fatalf("earnings gross: got %.2f, want 660.00", got.Gross)

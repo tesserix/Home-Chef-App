@@ -8,10 +8,10 @@ import "testing"
 // the flat DefaultCommissionRate — a bad admin value never charges a nonsense rate.
 func TestParseCommissionRate(t *testing.T) {
 	tests := []struct {
-		name    string
-		raw     string
-		want    float64
-		wantOK  bool
+		name   string
+		raw    string
+		want   float64
+		wantOK bool
 	}{
 		{"six percent", "0.06", 0.06, true},
 		{"eight percent override", "0.08", 0.08, true},
