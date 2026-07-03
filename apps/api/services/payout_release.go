@@ -329,6 +329,51 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 	return nil
 }
 
+// WithholdOrReverseOrderHoldForRefund cross-guards an order refund against the
+// payout hold (#457): whatever refund path fired, the chef must not keep money the
+// customer got back. It drives ONLY the order aggregate:
+//   - release_eligible | awaiting_customer_confirmation → withheld (block the payout).
+//   - released → reversed, then settleReverse claws the transfer back (state-only
+//     while the escrow flag is OFF; stampPayoutSettled keeps the reconcile safe).
+//   - none | withheld | reversed | disputed → no-op.
+//
+// Idempotent + race-safe: transitionHold's conditional `WHERE payout_hold_status
+// IN (from)` means a double refund never double-reverses. Best-effort audit on a
+// real transition; callers invoke this best-effort so a hold-drive failure never
+// fails the refund (the release-side guard is the backstop).
+func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason string) error {
+	var order models.Order
+	if err := db.Select("payout_hold_status").First(&order, "id = ?", orderID).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: load order %s: %w", orderID, err)
+	}
+	old := order.PayoutHoldStatus
+	var to models.PayoutHoldStatus
+	var ok bool
+	var err error
+	switch old {
+	case models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation:
+		to = models.PayoutHoldWithheld
+		ok, err = transitionHold(db, aggTypeOrder, orderID,
+			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation}, to, false)
+	case models.PayoutHoldReleased:
+		to = models.PayoutHoldReversed
+		if ok, err = transitionHold(db, aggTypeOrder, orderID,
+			[]models.PayoutHoldStatus{models.PayoutHoldReleased}, to, false); ok && err == nil {
+			err = settleReverse(db, aggTypeOrder, orderID)
+		}
+	default:
+		return nil // none / withheld / reversed / disputed — nothing to cross-guard
+	}
+	if err != nil {
+		return fmt.Errorf("payout-crossguard: drive order %s refund hold: %w", orderID, err)
+	}
+	if ok {
+		LogSystemAudit(nil, "payout.hold.refund_crossguard", "order", orderID.String(),
+			string(old), map[string]any{"to": string(to), "reason": reason})
+	}
+	return nil
+}
+
 // WithholdHold blocks an eligible payout: release_eligible/awaiting → withheld. No
 // event, no money. The reason is recorded in audit at the handler (guarded here
 // too so a direct call can't skip it). Terminal — the row leaves the queue.
