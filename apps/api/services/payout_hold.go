@@ -12,8 +12,8 @@ package services
 // fail the WHERE and are untouched.
 //
 // Setting the hold is plain DB state and runs regardless of the escrow flags;
-// the flags only gate real MONEY movement (ReleaseOrderPayouts / ReleaseDayPayout),
-// which #388 will drive off release_eligible.
+// the flags only gate real MONEY movement (the release/reverse seams in
+// order_payout.go / meal_plan_escrow.go), which #388 will drive off release_eligible.
 
 import (
 	"fmt"
