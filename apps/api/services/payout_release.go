@@ -265,6 +265,12 @@ func transitionHold(db *gorm.DB, aggType string, id uuid.UUID,
 func orderRefundBlocks(db *gorm.DB, orderID uuid.UUID) (bool, error) {
 	var order models.Order
 	if err := db.Select("status", "refunded_at").First(&order, "id = ?", orderID).Error; err != nil {
+		// A missing / soft-deleted linked order has no refund to guard against — do
+		// not block a legitimate release on an unloadable row (this is a backstop;
+		// the five refund wiring sites already drove the hold at refund time).
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
 		return false, fmt.Errorf("payout-release: load order %s for release guard: %w", orderID, err)
 	}
 	if order.Status == models.OrderStatusRefunded || order.Status == models.OrderStatusCancelled {

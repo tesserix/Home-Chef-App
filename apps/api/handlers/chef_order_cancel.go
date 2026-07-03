@@ -177,6 +177,17 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, order.ToChefResponse())
 }
 
+// TODO(#457-followup): deferred cross-guard edges not wired in this slice —
+//   - CancelOrderItem (below): per-line refund is SAFE without a hold drive because
+//     it only runs pre-delivery (cancellableStatuses), where payout_hold_status is
+//     still 'none' (the hold is parked at delivery). Wire it only if per-line refunds
+//     ever become reachable post-delivery.
+//   - handleRefundProcessed webhook (payment.go): an out-of-band gateway refund that
+//     leaves orders.status='delivered' should also drive the hold.
+//   - RefundGroupParticipant → hold-reverse parity for the group-order aggregate.
+//   - day/group admin queue-exclusion (the ReleaseHold pre-check already backstops
+//     all three aggregates; the queue filter itself is order-only for now).
+
 // CancelOrderItem marks a single line as unfulfillable, refunds only
 // that line (subtotal + proportional tax share), and recomputes the
 // order totals atomically. The remaining items continue prep.
