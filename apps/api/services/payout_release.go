@@ -159,7 +159,7 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 // (GRP-<8 hex>), never a raw UUID.
 func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	q := db.Table("group_orders").
-		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, " +
+		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, "+
 			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context").
 		Where("payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {

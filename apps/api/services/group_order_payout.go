@@ -66,7 +66,7 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 	}
 	rz := GetRazorpay()
 	if rz == nil {
-		return fmt.Errorf("razorpay not configured")
+		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
 	}
 	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
 		return fmt.Errorf("release group payout %s: %w", g.PayoutTransferID, err)

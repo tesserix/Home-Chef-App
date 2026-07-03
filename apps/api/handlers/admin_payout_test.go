@@ -43,6 +43,12 @@ const payoutDaysDDL = `CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_pl
 const payoutPlansDDL = `CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 	customer_id TEXT, chef_id TEXT, status TEXT)`
 
+const payoutGroupOrdersDDL = `CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT,
+	order_id TEXT, status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+	customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
+	payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
+	currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`
+
 const payoutOutboxDDL = `CREATE TABLE outbox_events (id TEXT DEFAULT '00000000-0000-0000-0000-000000000000',
 	subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT, payload TEXT,
 	status TEXT, attempts INTEGER DEFAULT 0, last_error TEXT, next_retry_at DATETIME,
@@ -57,7 +63,7 @@ func setupPayoutHandlerDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		payoutOrdersDDL, payoutDaysDDL, payoutPlansDDL, payoutOutboxDDL, payoutAuditDDL,
+		payoutOrdersDDL, payoutDaysDDL, payoutPlansDDL, payoutGroupOrdersDDL, payoutOutboxDDL, payoutAuditDDL,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
