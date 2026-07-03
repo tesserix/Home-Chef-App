@@ -117,9 +117,9 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	orderItems := make([]earningsOrderResponse, 0, len(rows))
 	var totals earningsTotals
 
-	// Premium commission override (#44) — resolved once for this chef so the
-	// breakdown they see matches the lower rate they're charged.
-	commissionRate := services.PremiumCommissionRateForChef(chef.ID)
+	// Flat platform commission (ADR-0001 / #390) — resolved once from
+	// PlatformSettings so the breakdown matches the rate the chef is charged.
+	commissionRate := services.GetCommissionRate(database.DB)
 
 	for _, row := range rows {
 		breakdown := computeOrderBreakdown(row, chef.State, commissionRate)
@@ -145,12 +145,8 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	totals.TDS = round2(totals.TDS)
 	totals.NetPayout = round2(totals.NetPayout)
 
-	// Surface the effective commission rate so a premium chef sees their lower
-	// rate, not the standard one (#44).
-	effectiveCommission := services.RateCommission
-	if commissionRate > 0 {
-		effectiveCommission = commissionRate
-	}
+	// Surface the resolved runtime commission rate the chef is charged.
+	effectiveCommission := commissionRate
 
 	c.JSON(http.StatusOK, gin.H{
 		"cycleStart": cycleStart,

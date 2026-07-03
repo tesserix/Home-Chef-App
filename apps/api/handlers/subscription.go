@@ -91,8 +91,11 @@ func (h *SubscriptionHandler) GetAvailablePlans(c *gin.Context) {
 	plans := intervalPlans(planCfg.MonthlyPrice, planCfg.QuarterlyPrice, planCfg.YearlyPrice)
 	premiumPlans := intervalPlans(planCfg.PremiumMonthlyPrice, planCfg.PremiumQuarterlyPrice, planCfg.PremiumYearlyPrice)
 
+	// Flat platform commission (ADR-0001 / #390) — reflect the runtime rate the
+	// pricing screen should display, not a compile-time const.
+	standardCommission := services.GetCommissionRate(database.DB)
 	premiumCommissionPct := strconv.FormatFloat(models.RoundAmount(planCfg.PremiumCommissionRate*100), 'f', -1, 64)
-	standardCommissionPct := strconv.FormatFloat(models.RoundAmount(services.RateCommission*100), 'f', -1, 64)
+	standardCommissionPct := strconv.FormatFloat(models.RoundAmount(standardCommission*100), 'f', -1, 64)
 
 	c.JSON(http.StatusOK, gin.H{
 		"plans":                plans,
@@ -104,7 +107,7 @@ func (h *SubscriptionHandler) GetAvailablePlans(c *gin.Context) {
 		// Premium tier (#44) — additive so existing consumers are unaffected.
 		"premiumPlans":           premiumPlans,
 		"premiumCommissionRate":  planCfg.PremiumCommissionRate,
-		"standardCommissionRate": services.RateCommission,
+		"standardCommissionRate": standardCommission,
 		"premiumPerks": []string{
 			"Verified-Pro badge on your profile",
 			"Priority placement in search & discovery",
