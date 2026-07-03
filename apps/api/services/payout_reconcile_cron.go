@@ -86,6 +86,8 @@ func runPayoutReconcileScan(_ context.Context) {
 	n += reconcileOrders(models.PayoutHoldReversed, settleReverse)
 	n += reconcileMealPlanDays(models.PayoutHoldReleased, settleRelease)
 	n += reconcileMealPlanDays(models.PayoutHoldReversed, settleReverse)
+	n += reconcileGroupOrders(models.PayoutHoldReleased, settleRelease)
+	n += reconcileGroupOrders(models.PayoutHoldReversed, settleReverse)
 	if n > 0 {
 		log.Printf("payout-reconcile: re-drove %d stranded hold(s)", n)
 	}
@@ -117,6 +119,20 @@ func reconcileMealPlanDays(status models.PayoutHoldStatus, settle settleFn) int 
 		return 0
 	}
 	return driveSettles(aggTypeMealPlanDay, ids, settle)
+}
+
+// reconcileGroupOrders re-drives drift group/office order holds in the given status.
+// Guards on a present transfer id (the seam has nothing to release otherwise).
+func reconcileGroupOrders(status models.PayoutHoldStatus, settle settleFn) int {
+	var ids []string
+	if err := database.DB.Model(&models.GroupOrder{}).
+		Where("payout_hold_status = ? AND payout_settled_at IS NULL AND payout_transfer_id <> '' AND payout_settle_attempts < ?",
+			status, payoutReconcileMaxAttempts).
+		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
+		log.Printf("payout-reconcile: query %s group orders failed: %v", status, err)
+		return 0
+	}
+	return driveSettles(aggTypeGroupOrder, ids, settle)
 }
 
 // driveSettles runs the settle seam per id, log-and-continue on failure (with an

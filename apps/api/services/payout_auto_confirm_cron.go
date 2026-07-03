@@ -55,8 +55,10 @@ func runPayoutAutoConfirmScan(_ context.Context) {
 	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour)
 	orders := sweepOrders(cutoff)
 	days := sweepMealPlanDays(cutoff)
-	if orders > 0 || days > 0 {
-		log.Printf("payout-auto-confirm-sweep: advanced %d order(s), %d meal-plan day(s) (window=%dh)", orders, days, hours)
+	groups := sweepGroupOrders(cutoff)
+	if orders > 0 || days > 0 || groups > 0 {
+		log.Printf("payout-auto-confirm-sweep: advanced %d order(s), %d meal-plan day(s), %d group order(s) (window=%dh)",
+			orders, days, groups, hours)
 	}
 }
 
@@ -97,4 +99,23 @@ func sweepMealPlanDays(cutoff time.Time) int {
 		}
 	}
 	return len(days)
+}
+
+// sweepGroupOrders confirms every stale awaiting group/office order hold; returns
+// the count scanned. Dispute-vs-release is decided inside ConfirmGroupOrderHold.
+func sweepGroupOrders(cutoff time.Time) int {
+	var groups []models.GroupOrder
+	if err := database.DB.
+		Where("payout_hold_status = ? AND delivered_at IS NOT NULL AND delivered_at <= ? AND customer_confirmed_at IS NULL",
+			models.PayoutHoldAwaitingConfirmation, cutoff).
+		Limit(sweepBatchLimit).Find(&groups).Error; err != nil {
+		log.Printf("payout-auto-confirm-sweep: query group orders failed: %v", err)
+		return 0
+	}
+	for i := range groups {
+		if _, err := ConfirmGroupOrderHold(database.DB, &groups[i]); err != nil {
+			log.Printf("payout-auto-confirm-sweep: confirm group order %s failed: %v", groups[i].ID, err)
+		}
+	}
+	return len(groups)
 }
