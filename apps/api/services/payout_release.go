@@ -65,7 +65,8 @@ type PendingPayout struct {
 	DeliveredAt         *time.Time              `json:"deliveredAt,omitempty"`
 	AgeHours            float64                 `json:"ageHours"` // now - DeliveredAt (SLA clock vs 24h)
 	CustomerConfirmedAt *time.Time              `json:"customerConfirmedAt,omitempty"`
-	Context             string                  `json:"context"` // order / meal-plan number for the queue row
+	Context             string                  `json:"context"`      // order / meal-plan number for the queue row
+	HasOpenIssue        bool                    `json:"hasOpenIssue"` // order aggregate has a pending OrderIssue (#457)
 }
 
 // PendingFilter narrows the pending queue.
@@ -115,12 +116,20 @@ type pendingRow struct {
 	DeliveredAt         *time.Time
 	CustomerConfirmedAt *time.Time
 	Context             string
+	HasOpenIssue        bool
 }
 
 func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	q := db.Table("orders").
-		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, order_number AS context").
-		Where("payout_hold_status IN ?", f.pendingStatuses())
+		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
+			"order_number AS context, "+
+			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
+		Where("payout_hold_status IN ?", f.pendingStatuses()).
+		// Cross-guard (#457): never surface a refunded/cancelled order NOR one with
+		// refunded_at set (the issue path leaves status='delivered' but stamps
+		// refunded_at). The admin must not be able to release a refunded order.
+		Where("status NOT IN ?", []string{string(models.OrderStatusRefunded), string(models.OrderStatusCancelled)}).
+		Where("refunded_at IS NULL")
 	if f.ChefID != uuid.Nil {
 		q = q.Where("chef_id = ?", f.ChefID)
 	}
@@ -190,6 +199,7 @@ func toPending(aggType string, rows []pendingRow) []PendingPayout {
 			AggType: aggType, ID: id, ChefID: chef, Amount: r.Amount,
 			HoldStatus: models.PayoutHoldStatus(r.PayoutHoldStatus), DeliveredAt: r.DeliveredAt,
 			AgeHours: age, CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
+			HasOpenIssue: r.HasOpenIssue, // populated only for order rows; day/group default false
 		})
 	}
 	return out
@@ -249,7 +259,63 @@ func transitionHold(db *gorm.DB, aggType string, id uuid.UUID,
 // UPDATE, committed) then dispatches the flag-gated money seam. Re-release of an
 // already-released row is a no-op → ErrHoldNotEligible. See the file header on
 // post-commit partial-failure drift (safe only while flags are OFF).
+// orderRefundBlocks reports whether an underlying order forbids a payout release
+// (#457): it is refunded/cancelled, has refunded_at stamped (the issue path leaves
+// status='delivered' but sets refunded_at), or still has a pending OrderIssue.
+func orderRefundBlocks(db *gorm.DB, orderID uuid.UUID) (bool, error) {
+	var order models.Order
+	if err := db.Select("status", "refunded_at").First(&order, "id = ?", orderID).Error; err != nil {
+		return false, fmt.Errorf("payout-release: load order %s for release guard: %w", orderID, err)
+	}
+	if order.Status == models.OrderStatusRefunded || order.Status == models.OrderStatusCancelled {
+		return true, nil
+	}
+	if order.RefundedAt != nil {
+		return true, nil
+	}
+	return HasOpenOrderIssue(db, orderID), nil
+}
+
+// releaseBlockedForAgg resolves the underlying order for any aggregate and asks
+// orderRefundBlocks (#457). A meal-plan-day / group-order whose OrderID is nil has
+// no dispute source and is never blocked here.
+func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, error) {
+	switch aggType {
+	case aggTypeOrder:
+		return orderRefundBlocks(db, id)
+	case aggTypeMealPlanDay:
+		var day models.MealPlanDay
+		if err := db.Select("order_id").First(&day, "id = ?", id).Error; err != nil {
+			return false, fmt.Errorf("payout-release: load day %s for release guard: %w", id, err)
+		}
+		if day.OrderID == nil {
+			return false, nil
+		}
+		return orderRefundBlocks(db, *day.OrderID)
+	case aggTypeGroupOrder:
+		var g models.GroupOrder
+		if err := db.Select("order_id").First(&g, "id = ?", id).Error; err != nil {
+			return false, fmt.Errorf("payout-release: load group order %s for release guard: %w", id, err)
+		}
+		if g.OrderID == nil {
+			return false, nil
+		}
+		return orderRefundBlocks(db, *g.OrderID)
+	}
+	return false, nil
+}
+
 func ReleaseHold(db *gorm.DB, aggType string, id uuid.UUID) error {
+	// Cross-guard (#457): refuse to release any aggregate whose underlying order is
+	// refunded/cancelled/refunded_at-set/pending-issue — the belt-and-suspenders
+	// backstop for the five refund paths. Runs before the transition so no state moves.
+	blocked, err := releaseBlockedForAgg(db, aggType, id)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return ErrHoldNotEligible
+	}
 	ok, err := transitionHold(db, aggType, id,
 		[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible}, models.PayoutHoldReleased, true)
 	if err != nil {
