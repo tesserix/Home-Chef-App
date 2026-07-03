@@ -175,6 +175,32 @@ func ConfirmMealPlanDayHold(db *gorm.DB, day *models.MealPlanDay) (models.Payout
 	return updated.PayoutHoldStatus, nil
 }
 
+// ConfirmGroupOrderHold is ConfirmOrderHold for a group/office order (#456). The
+// host confirming receipt advances the hold awaiting -> release_eligible, or ->
+// disputed when the consolidated order has an open OrderIssue (keyed on OrderID; a
+// group with no consolidated order has no dispute source and proceeds). Idempotent
+// on an already-confirmed group. Returns the resulting status.
+func ConfirmGroupOrderHold(db *gorm.DB, g *models.GroupOrder) (models.PayoutHoldStatus, error) {
+	if g.CustomerConfirmedAt != nil {
+		return g.PayoutHoldStatus, nil
+	}
+	disputed := g.OrderID != nil && HasOpenOrderIssue(db, *g.OrderID)
+	now := time.Now()
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return applyHoldConfirm(tx, &models.GroupOrder{}, "group-order", g.ID, disputed, now)
+	}); err != nil {
+		return "", fmt.Errorf("payout-hold: confirm group order %s: %w", g.ID, err)
+	}
+	var updated models.GroupOrder
+	if err := db.Select("payout_hold_status", "customer_confirmed_at").
+		First(&updated, "id = ?", g.ID).Error; err != nil {
+		return "", fmt.Errorf("payout-hold: reload group order %s: %w", g.ID, err)
+	}
+	g.PayoutHoldStatus = updated.PayoutHoldStatus
+	g.CustomerConfirmedAt = updated.CustomerConfirmedAt
+	return updated.PayoutHoldStatus, nil
+}
+
 // ConfirmTodaysTiffinForCustomer bulk-confirms every one of the customer's own
 // delivered-today, still-awaiting meal-plan days (bounded to the caller's plans).
 // Returns the number confirmed.

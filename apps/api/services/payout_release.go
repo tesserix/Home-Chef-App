@@ -48,16 +48,19 @@ var ErrHoldNotEligible = errors.New("payout hold not in an eligible state")
 const (
 	aggTypeOrder       = "order"
 	aggTypeMealPlanDay = "meal-plan-day"
+	aggTypeGroupOrder  = "group-order"
 )
 
 // PendingPayout is one release-eligible hold row for the admin queue. It is a
-// review DTO (amount = gross the customer paid), not a reconciliation record — the
-// actual Razorpay transfer split is gateway-side.
+// review DTO, not a reconciliation record — the actual Razorpay transfer split is
+// gateway-side. Amount is per-aggregate: Order.Total (gross the customer paid),
+// MealPlanDay.Price (the day's price), or the group order's chef slice
+// (subtotal + tax) — NOT always the gross customer total.
 type PendingPayout struct {
-	AggType             string                  `json:"aggType"` // "order" | "meal-plan-day"
+	AggType             string                  `json:"aggType"` // "order" | "meal-plan-day" | "group-order"
 	ID                  uuid.UUID               `json:"id"`
 	ChefID              uuid.UUID               `json:"chefId"`
-	Amount              float64                 `json:"amount"` // Order.Total / MealPlanDay.Price
+	Amount              float64                 `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
 	HoldStatus          models.PayoutHoldStatus `json:"holdStatus"`
 	DeliveredAt         *time.Time              `json:"deliveredAt,omitempty"`
 	AgeHours            float64                 `json:"ageHours"` // now - DeliveredAt (SLA clock vs 24h)
@@ -93,7 +96,12 @@ func ListPendingPayouts(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if err != nil {
 		return nil, fmt.Errorf("payout-release: list pending days: %w", err)
 	}
+	groups, err := listPendingGroupOrders(db, f)
+	if err != nil {
+		return nil, fmt.Errorf("payout-release: list pending group orders: %w", err)
+	}
 	out := append(orders, days...)
+	out = append(out, groups...)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].AgeHours > out[j].AgeHours })
 	return out, nil
 }
@@ -146,6 +154,27 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	return toPending(aggTypeMealPlanDay, rows), nil
 }
 
+// listPendingGroupOrders lists group/office order holds in the pending states. The
+// amount is the chef slice (subtotal + tax); context is a short human-scannable id
+// (GRP-<8 hex>), never a raw UUID.
+func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	q := db.Table("group_orders").
+		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, " +
+			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context").
+		Where("payout_hold_status IN ?", f.pendingStatuses())
+	if f.ChefID != uuid.Nil {
+		q = q.Where("chef_id = ?", f.ChefID)
+	}
+	if f.Before != nil {
+		q = q.Where("delivered_at < ?", *f.Before)
+	}
+	var rows []pendingRow
+	if err := q.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return toPending(aggTypeGroupOrder, rows), nil
+}
+
 // toPending maps flat rows to DTOs, computing AgeHours from DeliveredAt.
 func toPending(aggType string, rows []pendingRow) []PendingPayout {
 	now := time.Now()
@@ -173,6 +202,8 @@ func holdModel(aggType string) (any, error) {
 		return &models.Order{}, nil
 	case aggTypeMealPlanDay:
 		return &models.MealPlanDay{}, nil
+	case aggTypeGroupOrder:
+		return &models.GroupOrder{}, nil
 	default:
 		return nil, fmt.Errorf("payout-release: unknown aggregate type %q", aggType)
 	}
@@ -286,6 +317,14 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 		if err := ReleaseDayPayout(database.DB, &day); err != nil {
 			return fmt.Errorf("payout-release: release day payout %s: %w", id, err)
 		}
+	case aggTypeGroupOrder:
+		var g models.GroupOrder
+		if err := db.First(&g, "id = ?", id).Error; err != nil {
+			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
+		}
+		if err := ReleaseGroupChefPayout(&g); err != nil {
+			return fmt.Errorf("payout-release: release group payout %s: %w", id, err)
+		}
 	}
 	return nil
 }
@@ -346,6 +385,12 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 				return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
 			}
 		}
+	case aggTypeGroupOrder:
+		var g models.GroupOrder
+		if err := db.First(&g, "id = ?", id).Error; err != nil {
+			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
+		}
+		ReverseGroupChefPayout(&g) // flag-gated; best-effort claw-back to the platform
 	}
 	return nil
 }
