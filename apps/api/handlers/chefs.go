@@ -925,6 +925,21 @@ func chefCanTransition(from, to models.OrderStatus) bool {
 	return false
 }
 
+// chefMayMarkDelivered reports whether a chef is permitted to move an order to
+// Delivered given its fulfilment type. 3PL `delivery` orders reach Delivered
+// ONLY via the courier pipeline / webhook (handlers/delivery.go) — a chef
+// marking one delivered would release the held payout to themselves without
+// delivering it (GH #391). chef_delivery and pickup are legit chef-side
+// handoffs. Empty/unset fulfilment normalizes to `delivery` (the GORM column
+// default) and is blocked for safety (deny-by-default). The gate applies only to
+// the Delivered transition; every other status change is unaffected.
+func chefMayMarkDelivered(to models.OrderStatus, ft models.FulfillmentType) bool {
+	if to != models.OrderStatusDelivered {
+		return true
+	}
+	return ft == models.FulfillmentChefDelivery || ft == models.FulfillmentPickup
+}
+
 // UpdateOrderStatus updates an order's status
 func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -979,6 +994,22 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot change order status from %s to %s", priorStatus, newStatus)})
 		return
 	}
+
+	// SECURITY (GH #391): gate the Delivered transition by fulfilment type. A 3PL
+	// `delivery` order is delivered by a courier and reaches Delivered ONLY via
+	// the delivery pipeline / webhook — a chef stamping it delivered here would
+	// release the held payout to themselves without delivering it. This is the
+	// single choke point: every path that later fires the delivered release
+	// side-effects (MarkMealPlanDayDelivered / MarkGroupOrderDelivered) passes
+	// through here, so nothing bypasses the guard.
+	if !chefMayMarkDelivered(newStatus, order.FulfillmentType) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "delivery_confirmation_forbidden",
+			"message": "This order is delivered by a courier — it can only be marked delivered by the delivery service.",
+		})
+		return
+	}
+
 	order.Status = newStatus
 
 	// Stamp the lifecycle timestamp for this transition (idempotent — only set
@@ -1073,6 +1104,11 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// consolidated group order.
 		services.MarkMealPlanDayDelivered(order.ID)
 		services.MarkGroupOrderDelivered(order.ID)
+		// Audit every chef-initiated delivered transition (repudiation control,
+		// GH #391): captures the chef actor (from c's userID), order id, and the
+		// fulfilment type that was allowed through the gate. Non-blocking.
+		services.LogAudit(c, "chef.order.delivered", "order", order.ID.String(), nil,
+			map[string]any{"fulfillmentType": string(order.FulfillmentType)})
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}
