@@ -166,6 +166,7 @@ func SetupRouter() *gin.Engine {
 	winbackHandler := handlers.NewWinbackHandler()
 	orderIssueHandler := handlers.NewOrderIssueHandler()
 	payoutHoldHandler := handlers.NewPayoutHoldHandler()
+	adminPayoutHandler := handlers.NewAdminPayoutHandler()
 	deliveryHandler := handlers.NewDeliveryHandler()
 	staffHandler := handlers.NewStaffHandler()
 	subscriptionHandler := handlers.NewSubscriptionHandler()
@@ -806,6 +807,14 @@ func SetupRouter() *gin.Engine {
 			// Customer wallet — admin view + audited adjustment (#33)
 			admin.GET("/wallet/:userId", adminHandler.GetCustomerWallet)
 			admin.POST("/wallet/:userId/adjust", adminHandler.AdjustWallet)
+
+			// Payout release queue (#388) — list eligible holds + release / withhold
+			// / reverse (single + bulk). Money stays behind the escrow flags; audited.
+			admin.GET("/payouts/pending", adminPayoutHandler.GetPendingPayouts)
+			admin.POST("/payouts/:aggType/:id/release", adminPayoutHandler.ReleasePayout)
+			admin.POST("/payouts/:aggType/:id/withhold", adminPayoutHandler.WithholdPayout)
+			admin.POST("/payouts/:aggType/:id/reverse", adminPayoutHandler.ReversePayout)
+			admin.POST("/payouts/release-bulk", adminPayoutHandler.BulkReleasePayouts)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)
