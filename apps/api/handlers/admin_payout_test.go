@@ -65,6 +65,8 @@ func setupPayoutHandlerDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		payoutOrdersDDL, payoutDaysDDL, payoutPlansDDL, payoutGroupOrdersDDL, payoutOutboxDDL, payoutAuditDDL,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
+		// order_issues backs the pending-queue open-issue flag + release guard (#457).
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

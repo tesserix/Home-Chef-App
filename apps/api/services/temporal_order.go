@@ -132,11 +132,25 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 		}
 	}
 	now := time.Now()
-	return database.DB.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]any{
+	if err := database.DB.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]any{
 		"status":         models.OrderStatusRefunded,
 		"payment_status": models.PaymentRefunded,
 		"refunded_at":    &now,
 		"refund_amount":  order.Total,
 		"refund_reason":  reason,
-	}).Error
+	}).Error; err != nil {
+		return err
+	}
+	// Cross-guard the payout hold (#457): flip the hold to withheld/reversed so the
+	// admin queue and any release can never pay out this refunded order. Best-effort
+	// — never fail the refund on a hold-drive error. NOTE: the ReverseOrderPayouts
+	// above already clawed the Route split; the helper's released→reversed branch may
+	// call ReverseOrderPayouts a SECOND time. That is safe because the second gateway
+	// reverse is GATEWAY-REJECTED and logged non-fatal (order_payout.go:108 —
+	// "already reversed errors on Razorpay; logged, not fatal"), NOT because
+	// stampPayoutSettled skips it.
+	if hErr := WithholdOrReverseOrderHoldForRefund(database.DB, orderID, "saga refund: "+reason); hErr != nil {
+		log.Printf("payout cross-guard failed for saga refund order %s: %v", orderID, hErr)
+	}
+	return nil
 }

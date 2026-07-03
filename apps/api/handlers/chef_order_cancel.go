@@ -146,6 +146,11 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}
+	// Cross-guard the payout hold (#457) — the customer was fully refunded, so the
+	// chef must not be paid. Best-effort; never fail the cancel on a hold-drive error.
+	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "chef cancel: "+string(reason)); hErr != nil {
+		log.Printf("payout cross-guard failed for cancelled order %s: %v", order.ID, hErr)
+	}
 	// Release the reserved daily capacity (#48) — these dishes won't be made.
 	// Runs once per cancel (the already-cancelled guard above prevents re-entry).
 	capDay := services.CapacityDay(order.CreatedAt)
@@ -171,6 +176,17 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 
 	c.JSON(http.StatusOK, order.ToChefResponse())
 }
+
+// TODO(#457-followup): deferred cross-guard edges not wired in this slice —
+//   - CancelOrderItem (below): per-line refund is SAFE without a hold drive because
+//     it only runs pre-delivery (cancellableStatuses), where payout_hold_status is
+//     still 'none' (the hold is parked at delivery). Wire it only if per-line refunds
+//     ever become reachable post-delivery.
+//   - handleRefundProcessed webhook (payment.go): an out-of-band gateway refund that
+//     leaves orders.status='delivered' should also drive the hold.
+//   - RefundGroupParticipant → hold-reverse parity for the group-order aggregate.
+//   - day/group admin queue-exclusion (the ReleaseHold pre-check already backstops
+//     all three aggregates; the queue filter itself is order-only for now).
 
 // CancelOrderItem marks a single line as unfulfillable, refunds only
 // that line (subtotal + proportional tax share), and recomputes the
@@ -438,6 +454,11 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
+	}
+	// Cross-guard the payout hold (#457) — a goodwill refund on a delivered order
+	// must withhold/reverse the chef payout. Best-effort; never fail the 200.
+	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
+		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
 	}
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
