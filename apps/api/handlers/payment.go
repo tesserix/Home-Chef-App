@@ -785,6 +785,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, err)
 			services.CaptureBackgroundError(err)
 		}
+		// Cross-guard the payout hold (#457): this primary refund endpoint is
+		// reachable on an already-released order, so drive the hold to
+		// withheld/reversed. Best-effort — never change the HTTP response.
+		if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
+			log.Printf("payout cross-guard failed for wallet-refunded order %s: %v", order.ID, hErr)
+			services.CaptureBackgroundError(hErr)
+		}
 		services.LogSystemAudit(c, "order.refund.to_wallet", "order", order.ID.String(), nil, map[string]any{
 			"amount": refundAmount, "walletTxnId": txn.ID.String(), "reason": req.Reason, "initiatedBy": initiatedBy,
 		})
@@ -963,6 +970,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	}); err != nil {
 		log.Printf("Failed to persist refund + event for order %s: %v", order.ID, err)
 		services.CaptureBackgroundError(err)
+	}
+	// Cross-guard the payout hold (#457): the gateway-persist branch sets
+	// status=refunded, so drive the hold to withheld/reversed. Best-effort — never
+	// change the HTTP response.
+	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
+		log.Printf("payout cross-guard failed for refunded order %s: %v", order.ID, hErr)
+		services.CaptureBackgroundError(hErr)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

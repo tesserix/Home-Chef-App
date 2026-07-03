@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -111,7 +112,7 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 	}
 	now := time.Now()
 
-	return db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		// Lock + re-read the order so the cap reflects any concurrent refund.
 		readTx := tx
 		if tx.Dialector.Name() == "postgres" {
@@ -177,4 +178,15 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		issue.RefundAmount = credit
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// Cross-guard the payout hold (#457): the customer just got money back, so the
+	// chef must not keep it. Best-effort — a hold-drive failure must never fail the
+	// refund (the release-side guard + reconcile are the backstop). This single
+	// choke point covers both the auto handler and the admin path.
+	if hErr := WithholdOrReverseOrderHoldForRefund(db, issue.OrderID, "order issue refund: "+string(issue.Reason)); hErr != nil {
+		log.Printf("payout cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, hErr)
+	}
+	return nil
 }

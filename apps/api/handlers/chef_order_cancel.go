@@ -146,6 +146,11 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}
+	// Cross-guard the payout hold (#457) — the customer was fully refunded, so the
+	// chef must not be paid. Best-effort; never fail the cancel on a hold-drive error.
+	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "chef cancel: "+string(reason)); hErr != nil {
+		log.Printf("payout cross-guard failed for cancelled order %s: %v", order.ID, hErr)
+	}
 	// Release the reserved daily capacity (#48) — these dishes won't be made.
 	// Runs once per cancel (the already-cancelled guard above prevents re-entry).
 	capDay := services.CapacityDay(order.CreatedAt)
@@ -438,6 +443,11 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
+	}
+	// Cross-guard the payout hold (#457) — a goodwill refund on a delivered order
+	// must withhold/reverse the chef payout. Best-effort; never fail the 200.
+	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
+		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
 	}
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
