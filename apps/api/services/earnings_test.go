@@ -5,8 +5,72 @@ import (
 	"time"
 )
 
-func TestComputeOrderEarnings_PremiumCommissionOverride(t *testing.T) {
-	// Premium chef (#44): a 12% commission override instead of the default 15%.
+func TestComputeOrderEarnings_FlatSixPercent_MoneyConserved(t *testing.T) {
+	// The launch model (ADR-0001 / #390): a flat 6% platform commission.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:    1000,
+		DeliveryFee:    50,
+		ChefTip:        20,
+		DeliveryState:  "maharashtra",
+		CommissionRate: 0.06,
+	}, "Maharashtra")
+
+	// commission 6% of 1000 = 60
+	if got.PlatformCommission != 60 {
+		t.Errorf("commission = %.2f, want 60 (6%% flat)", got.PlatformCommission)
+	}
+	// gross = 1000 + 50 + 20 = 1070
+	if got.Gross != 1070 {
+		t.Errorf("gross = %.2f, want 1070", got.Gross)
+	}
+	// intra-state GST off the commission: 9% each side of 60 = 5.40
+	if got.CGST != 5.4 || got.SGST != 5.4 {
+		t.Errorf("cgst/sgst = %.2f/%.2f, want 5.40/5.40", got.CGST, got.SGST)
+	}
+	// tds 1% of gross = 10.70
+	if got.TDS != 10.7 {
+		t.Errorf("tds = %.2f, want 10.70", got.TDS)
+	}
+	// net = gross 1070 - commission 60 - tds 10.70 = 999.30
+	if got.NetPayout != 999.3 {
+		t.Errorf("netPayout = %.2f, want 999.30", got.NetPayout)
+	}
+
+	// Money conservation: commission + tds + netPayout == gross.
+	if got.PlatformCommission+got.TDS+got.NetPayout != got.Gross {
+		t.Errorf("money not conserved: commission %.2f + tds %.2f + net %.2f = %.2f, want gross %.2f",
+			got.PlatformCommission, got.TDS, got.NetPayout,
+			got.PlatformCommission+got.TDS+got.NetPayout, got.Gross)
+	}
+
+	// Captured-conservation: platformRetained (commission + tds) + netPayout +
+	// refunds (0 on a clean order) == gross. Every rupee the customer paid is
+	// accounted for as platform-retained, chef payout, or refund.
+	const refunds = 0.0
+	platformRetained := got.PlatformCommission + got.TDS
+	if platformRetained+got.NetPayout+refunds != got.Gross {
+		t.Errorf("captured-conservation broken: retained %.2f + net %.2f + refunds %.2f = %.2f, want gross %.2f",
+			platformRetained, got.NetPayout, refunds,
+			platformRetained+got.NetPayout+refunds, got.Gross)
+	}
+}
+
+func TestComputeOrderEarnings_DefaultRateIsSixPercent(t *testing.T) {
+	// A 0 / unset CommissionRate must fall back to the flat 6% default, NOT 15%.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:   1000,
+		DeliveryState: "maharashtra",
+	}, "Maharashtra")
+
+	if got.PlatformCommission != 60 {
+		t.Errorf("commission = %.2f, want 60 (6%% default, not 150)", got.PlatformCommission)
+	}
+}
+
+func TestComputeOrderEarnings_InjectedRate(t *testing.T) {
+	// The per-order rate is injected via EarningsInput.CommissionRate; injecting
+	// 0.12 still yields a 12% commission (the injection point survives the flat
+	// default; only the "premium" framing is gone).
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:    1000,
 		DeliveryFee:    50,
@@ -15,11 +79,11 @@ func TestComputeOrderEarnings_PremiumCommissionOverride(t *testing.T) {
 		CommissionRate: 0.12,
 	}, "Maharashtra")
 
-	// commission 12% of 1000 = 120 (not 150)
+	// commission 12% of 1000 = 120
 	if got.PlatformCommission != 120 {
-		t.Errorf("commission = %.2f, want 120 (12%% override)", got.PlatformCommission)
+		t.Errorf("commission = %.2f, want 120 (0.12 injected)", got.PlatformCommission)
 	}
-	// GST is computed off the (lower) commission: 9% each side of 120 = 10.8
+	// GST is computed off the injected commission: 9% each side of 120 = 10.8
 	if got.CGST != 10.8 || got.SGST != 10.8 {
 		t.Errorf("cgst/sgst = %.2f/%.2f, want 10.8/10.8", got.CGST, got.SGST)
 	}
@@ -43,32 +107,24 @@ func TestComputeOrderEarnings_ChefFundedDiscount(t *testing.T) {
 	if got.ItemRevenue != 900 {
 		t.Errorf("itemRevenue = %.2f, want 900 (net of chef-funded discount)", got.ItemRevenue)
 	}
-	// commission 15% of 900 = 135 (not 150)
-	if got.PlatformCommission != 135 {
-		t.Errorf("commission = %.2f, want 135", got.PlatformCommission)
+	// commission 6% of 900 = 54
+	if got.PlatformCommission != 54 {
+		t.Errorf("commission = %.2f, want 54", got.PlatformCommission)
 	}
-	// gross = 900 + 50 + 20 = 970; tds 1% = 9.7; net = 970 - 135 - 9.7 = 825.3
+	// gross = 900 + 50 + 20 = 970; tds 1% = 9.7; net = 970 - 54 - 9.7 = 906.3
 	if got.Gross != 970 {
 		t.Errorf("gross = %.2f, want 970", got.Gross)
 	}
-	if got.NetPayout != 825.3 {
-		t.Errorf("netPayout = %.2f, want 825.3", got.NetPayout)
+	if got.NetPayout != 906.3 {
+		t.Errorf("netPayout = %.2f, want 906.3", got.NetPayout)
 	}
 }
 
 func TestComputeOrderEarnings_PlatformFundedLeavesChefWhole(t *testing.T) {
 	// Platform-funded promo → ChefFundedDiscount 0 → chef earnings unchanged.
 	got := ComputeOrderEarnings(EarningsInput{ItemRevenue: 1000, DeliveryState: "x"}, "y")
-	if got.ItemRevenue != 1000 || got.PlatformCommission != 150 {
+	if got.ItemRevenue != 1000 || got.PlatformCommission != 60 {
 		t.Errorf("platform-funded should leave chef whole: itemRevenue=%.2f commission=%.2f", got.ItemRevenue, got.PlatformCommission)
-	}
-}
-
-func TestComputeOrderEarnings_ZeroRateFallsBackToDefault(t *testing.T) {
-	// A 0 / unset CommissionRate must use the standard 15% (back-compat).
-	got := ComputeOrderEarnings(EarningsInput{ItemRevenue: 1000, DeliveryState: "x"}, "y")
-	if got.PlatformCommission != 150 {
-		t.Errorf("commission = %.2f, want 150 (default rate)", got.PlatformCommission)
 	}
 }
 
@@ -80,26 +136,26 @@ func TestComputeOrderEarnings_IntraState(t *testing.T) {
 		DeliveryState: "maharashtra",
 	}, "Maharashtra")
 
-	// commission 15% of 1000 = 150; gross = 1070
-	if got.PlatformCommission != 150 {
-		t.Errorf("commission = %.2f, want 150", got.PlatformCommission)
+	// commission 6% of 1000 = 60; gross = 1070
+	if got.PlatformCommission != 60 {
+		t.Errorf("commission = %.2f, want 60", got.PlatformCommission)
 	}
 	if got.Gross != 1070 {
 		t.Errorf("gross = %.2f, want 1070", got.Gross)
 	}
-	// intra-state: CGST 9% + SGST 9% of commission, IGST 0
-	if got.CGST != 13.5 || got.SGST != 13.5 {
-		t.Errorf("cgst/sgst = %.2f/%.2f, want 13.5/13.5", got.CGST, got.SGST)
+	// intra-state: CGST 9% + SGST 9% of commission (60), IGST 0
+	if got.CGST != 5.4 || got.SGST != 5.4 {
+		t.Errorf("cgst/sgst = %.2f/%.2f, want 5.4/5.4", got.CGST, got.SGST)
 	}
 	if got.IGST != 0 {
 		t.Errorf("igst = %.2f, want 0 (intra-state)", got.IGST)
 	}
-	// tds 1% of gross = 10.7; net = 1070 - 150 - 10.7
+	// tds 1% of gross = 10.7; net = 1070 - 60 - 10.7
 	if got.TDS != 10.7 {
 		t.Errorf("tds = %.2f, want 10.7", got.TDS)
 	}
-	if got.NetPayout != 909.3 {
-		t.Errorf("netPayout = %.2f, want 909.3", got.NetPayout)
+	if got.NetPayout != 999.3 {
+		t.Errorf("netPayout = %.2f, want 999.3", got.NetPayout)
 	}
 }
 
@@ -109,9 +165,9 @@ func TestComputeOrderEarnings_InterState(t *testing.T) {
 		DeliveryState: "Delhi",
 	}, "Maharashtra")
 
-	// inter-state: IGST 18% of commission (150) = 27; CGST/SGST 0
-	if got.IGST != 27 {
-		t.Errorf("igst = %.2f, want 27", got.IGST)
+	// inter-state: IGST 18% of commission (60) = 10.8; CGST/SGST 0
+	if got.IGST != 10.8 {
+		t.Errorf("igst = %.2f, want 10.8", got.IGST)
 	}
 	if got.CGST != 0 || got.SGST != 0 {
 		t.Errorf("cgst/sgst = %.2f/%.2f, want 0/0 (inter-state)", got.CGST, got.SGST)
