@@ -3,6 +3,7 @@ import '../global.css';
 import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack, router } from 'expo-router';
 import { OfflineBanner } from '@homechef/mobile-shared';
 import * as Notifications from 'expo-notifications';
@@ -174,15 +175,20 @@ export default function RootLayout() {
     // GestureHandlerRootView must wrap the whole app so @gorhom/bottom-sheet's
     // GestureDetector (used by CartSheet on the chef detail screen) works.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider
-        bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
-        tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
-      >
-        <QueryClientProvider client={queryClient}>
-          <OfflineBanner />
-          <Stack screenOptions={{ headerShown: false }} />
-        </QueryClientProvider>
-      </AuthProvider>
+      {/* BottomSheetModalProvider is required by the shared <Sheet> (a
+          BottomSheetModal) — e.g. the "Show my plan" sheet on the chef page.
+          Without it, mounting a BottomSheetModal crashes the app. */}
+      <BottomSheetModalProvider>
+        <AuthProvider
+          bffUrl={process.env.EXPO_PUBLIC_BFF_URL ?? ''}
+          tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
+        >
+          <QueryClientProvider client={queryClient}>
+            <OfflineBanner />
+            <Stack screenOptions={{ headerShown: false }} />
+          </QueryClientProvider>
+        </AuthProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

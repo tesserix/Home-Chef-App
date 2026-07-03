@@ -64,7 +64,7 @@ export function MyPlanChip({ chefId }: { chefId: string }) {
         snapPoints={['70%']}
       >
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
-          {plan.days.map((d) => {
+          {(plan.days ?? []).map((d) => {
             const dm = mealPlanDayStatusMeta(d.status);
             return (
               <View key={d.id} style={styles.dayRow}>
