@@ -38,6 +38,7 @@ const (
 	// (payments.>) and drive the admin release queue (#388) downstream.
 	SubjectHoldReleaseEligible = "payments.hold_release_eligible" // → hold advanced awaiting → release_eligible
 	SubjectHoldDisputed        = "payments.hold_disputed"         // → hold advanced awaiting → disputed
+	SubjectHoldReleased        = "payments.hold_released"         // → admin payout queue released the hold (#388)
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
 	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
