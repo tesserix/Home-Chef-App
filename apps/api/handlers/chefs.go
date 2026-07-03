@@ -1109,6 +1109,12 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// fulfilment type that was allowed through the gate. Non-blocking.
 		services.LogAudit(c, "chef.order.delivered", "order", order.ID.String(), nil,
 			map[string]any{"fulfillmentType": string(order.FulfillmentType)})
+		// Regular chef-self-delivered orders also park the payout in a
+		// customer-confirmation hold (#387). No-op for tiffin/group orders
+		// (gated on razorpay_order_id).
+		if err := services.SetOrderHoldAwaitingConfirmation(database.DB, order.ID); err != nil {
+			log.Printf("payout-hold: park order %s on chef self-delivery failed: %v", order.ID, err)
+		}
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}

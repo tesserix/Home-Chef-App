@@ -94,12 +94,14 @@ func NotifyChefNewOrder(_ context.Context, orderID uuid.UUID) error {
 	})
 }
 
-// SettleOrderPayouts releases a delivered order's held Route transfers (#123).
-// Durable + retried (the activity retries on a transient gateway failure) and
-// idempotent (releasing an already-released transfer is a no-op). No-op unless
-// ORDER_PAYOUT_AUTO_RELEASE_ENABLED is on.
+// SettleOrderPayouts parks a delivered order's payout in a customer-confirmation
+// hold (#387) — the settle-on-delivery saga step no longer releases funds
+// directly; the customer confirming (or #388, gated by
+// ORDER_PAYOUT_AUTO_RELEASE_ENABLED) drives the real release off release_eligible.
+// Durable + retried (the returned error retries the activity on a transient DB
+// failure) and idempotent (the hold update only fires from the pre-delivery state).
 func SettleOrderPayouts(_ context.Context, orderID uuid.UUID) error {
-	return ReleaseOrderPayouts(orderID)
+	return SetOrderHoldAwaitingConfirmation(database.DB, orderID)
 }
 
 // CompensateOrderRefund is the saga's compensation — refund the customer to
