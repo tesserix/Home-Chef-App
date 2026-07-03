@@ -75,17 +75,40 @@ func HasOpenOrderIssue(db *gorm.DB, orderID uuid.UUID) bool {
 // applyHoldConfirm performs the guarded confirm transition on a model row: to
 // disputed when an open issue exists (only from awaiting/disputed), otherwise to
 // release_eligible (only from awaiting). The WHERE guard IS the safety invariant —
-// a released row can never flip to release_eligible.
-func applyHoldConfirm(tx *gorm.DB, model any, id uuid.UUID, disputed bool, now time.Time) error {
+// a released row can never flip to release_eligible. When (and only when) the
+// conditional UPDATE actually changes a row it emits the matching NATS event onto
+// the transactional outbox within the same tx, so a replayed/no-op confirm never
+// double-emits. aggType is the aggregate identity ("order" / "meal_plan_day").
+func applyHoldConfirm(tx *gorm.DB, model any, aggType string, id uuid.UUID, disputed bool, now time.Time) error {
+	target := models.PayoutHoldReleaseEligible
+	where := tx.Model(model).Where("id = ? AND payout_hold_status = ?", id, models.PayoutHoldAwaitingConfirmation)
 	if disputed {
-		return tx.Model(model).
-			Where("id = ? AND payout_hold_status IN ?", id,
-				[]models.PayoutHoldStatus{models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}).
-			Updates(map[string]any{"payout_hold_status": models.PayoutHoldDisputed, "customer_confirmed_at": now}).Error
+		target = models.PayoutHoldDisputed
+		where = tx.Model(model).Where("id = ? AND payout_hold_status IN ?", id,
+			[]models.PayoutHoldStatus{models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed})
 	}
-	return tx.Model(model).
-		Where("id = ? AND payout_hold_status = ?", id, models.PayoutHoldAwaitingConfirmation).
-		Updates(map[string]any{"payout_hold_status": models.PayoutHoldReleaseEligible, "customer_confirmed_at": now}).Error
+	res := where.Updates(map[string]any{"payout_hold_status": target, "customer_confirmed_at": now})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil // no genuine transition — nothing to emit
+	}
+	return emitHoldEvent(tx, target, aggType, id)
+}
+
+// emitHoldEvent stages the hold-transition event onto the outbox within tx.
+func emitHoldEvent(tx *gorm.DB, target models.PayoutHoldStatus, aggType string, id uuid.UUID) error {
+	subject, eventType := SubjectHoldReleaseEligible, "payout.hold_release_eligible"
+	if target == models.PayoutHoldDisputed {
+		subject, eventType = SubjectHoldDisputed, "payout.hold_disputed"
+	}
+	if err := EnqueueEvent(tx, subject, eventType, id, map[string]any{
+		"aggregate_type": aggType, "aggregate_id": id.String(), "payout_hold_status": string(target),
+	}); err != nil {
+		return fmt.Errorf("payout-hold: emit %s for %s %s: %w", subject, aggType, id, err)
+	}
+	return nil
 }
 
 // ConfirmOrderHold advances a regular order's hold awaiting -> release_eligible on
@@ -100,7 +123,7 @@ func ConfirmOrderHold(db *gorm.DB, order *models.Order) (models.PayoutHoldStatus
 	disputed := HasOpenOrderIssue(db, order.ID)
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.Order{}, order.ID, disputed, now)
+		return applyHoldConfirm(tx, &models.Order{}, "order", order.ID, disputed, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm order %s: %w", order.ID, err)
 	}
@@ -124,7 +147,7 @@ func ConfirmMealPlanDayHold(db *gorm.DB, day *models.MealPlanDay) (models.Payout
 	disputed := day.OrderID != nil && HasOpenOrderIssue(db, *day.OrderID)
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.MealPlanDay{}, day.ID, disputed, now)
+		return applyHoldConfirm(tx, &models.MealPlanDay{}, "meal_plan_day", day.ID, disputed, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm meal-plan day %s: %w", day.ID, err)
 	}
