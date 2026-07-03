@@ -29,7 +29,7 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
 			razorpay_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
-			customer_confirmed_at DATETIME, refunded_at DATETIME,
+			customer_confirmed_at DATETIME, delivered_at DATETIME, refunded_at DATETIME,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
@@ -38,10 +38,21 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
+		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
+			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
+			next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
 	return db
+}
+
+// countOutbox returns how many staged outbox rows carry the given subject.
+func countOutbox(t *testing.T, db *gorm.DB, subject string) int {
+	t.Helper()
+	var n int
+	require.NoError(t, db.Raw(`SELECT count(*) FROM outbox_events WHERE subject = ?`, subject).Scan(&n).Error)
+	return n
 }
 
 func seedRegularOrder(t *testing.T, db *gorm.DB, hold models.PayoutHoldStatus) uuid.UUID {
@@ -121,6 +132,10 @@ func TestConfirmOrderHold_AwaitingToReleaseEligible(t *testing.T) {
 	got := loadOrder(t, db, id)
 	require.Equal(t, models.PayoutHoldReleaseEligible, got.PayoutHoldStatus)
 	require.NotNil(t, got.CustomerConfirmedAt)
+
+	// The confirm-endpoint path emits exactly one release-eligible event.
+	require.Equal(t, 1, countOutbox(t, db, SubjectHoldReleaseEligible))
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldDisputed))
 }
 
 // An open (pending) OrderIssue forces disputed, never release_eligible.
@@ -135,6 +150,10 @@ func TestConfirmOrderHold_OpenIssueDisputes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, models.PayoutHoldDisputed, status)
 	require.Equal(t, models.PayoutHoldDisputed, loadOrder(t, db, id).PayoutHoldStatus)
+
+	// A disputed transition emits hold_disputed and never release_eligible.
+	require.Equal(t, 1, countOutbox(t, db, SubjectHoldDisputed))
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleaseEligible))
 }
 
 // Re-confirming an already-confirmed order is an idempotent no-op that keeps the
@@ -156,6 +175,9 @@ func TestConfirmOrderHold_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, models.PayoutHoldReleaseEligible, second)
 	require.WithinDuration(t, *stamp, *loadOrder(t, db, id).CustomerConfirmedAt, time.Millisecond, "confirmed stamp must not be overwritten")
+
+	// The no-op re-confirm must not double-emit.
+	require.Equal(t, 1, countOutbox(t, db, SubjectHoldReleaseEligible))
 }
 
 // A disputed hold can never flip to release_eligible.

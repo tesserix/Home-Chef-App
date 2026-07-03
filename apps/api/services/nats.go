@@ -34,6 +34,10 @@ const (
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
 	SubjectPaymentSuccess      = "payments.success"
 	SubjectPaymentFailed       = "payments.failed"
+	// Payout hold state machine (#387). Both route to the PAYMENTS stream
+	// (payments.>) and drive the admin release queue (#388) downstream.
+	SubjectHoldReleaseEligible = "payments.hold_release_eligible" // → hold advanced awaiting → release_eligible
+	SubjectHoldDisputed        = "payments.hold_disputed"         // → hold advanced awaiting → disputed
 	SubjectUserRegistered      = "users.registered"
 	SubjectChefVerified        = "chef.verified"
 	SubjectWeeklyMenuPublished = "chef.weekly_menu.published" // → followers: a favorited chef dropped a new menu (#239)
