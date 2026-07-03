@@ -127,6 +127,13 @@ type MealPlanDay struct {
 	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);default:''" json:"payoutHoldStatus,omitempty"`
 	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
 
+	// PayoutSettledAt / PayoutSettleAttempts — same semantics as Order (#459): the
+	// money seam (ReleaseDayPayout / ReverseTransfer) is only stamped settled after
+	// it returns nil; a released/reversed day with settled_at NULL is drift the
+	// payout-reconcile cron re-drives, bounded by the attempt counter.
+	PayoutSettledAt      *time.Time `gorm:"" json:"payoutSettledAt,omitempty"`
+	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }

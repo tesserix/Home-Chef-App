@@ -168,6 +168,15 @@ type Order struct {
 	PayoutHoldStatus    PayoutHoldStatus `gorm:"type:varchar(32);default:''" json:"payoutHoldStatus,omitempty"`
 	CustomerConfirmedAt *time.Time       `gorm:"" json:"customerConfirmedAt,omitempty"`
 
+	// PayoutSettledAt marks that the money seam actually completed (#459) — stamped
+	// only AFTER releaseMoney/reverseMoney returns nil. It decouples
+	// status-committed (payout_hold_status flipped in the primary tx) from
+	// money-confirmed-moved: a released/reversed row with settled_at NULL is drift
+	// the payout-reconcile cron re-drives. PayoutSettleAttempts bounds those
+	// re-drives (alert + stop at the cap for a permanently-bad transfer).
+	PayoutSettledAt      *time.Time `gorm:"" json:"payoutSettledAt,omitempty"`
+	PayoutSettleAttempts int        `gorm:"default:0" json:"-"`
+
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

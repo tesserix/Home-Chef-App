@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -179,7 +180,17 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 // ReleaseDayPayout releases the held transfer for a delivered day. DB-guarded:
 // only acts if a transfer id is present. No-op when escrow is off. Since #387 the
 // delivery hook parks a hold instead of calling this; it remains the seam the
-// admin payout queue (#388) will drive off release_eligible.
+// admin payout queue (#388) drives off release_eligible and the payout-reconcile
+// cron (#459) re-drives for drift rows.
+//
+// IDEMPOTENT RE-DRIVE (#459): ReleaseTransfer is a PATCH on_hold:false that
+// Razorpay treats as a no-op on an already-released transfer, but a partially-
+// applied release can still surface an "already released" gateway error. Tolerate
+// it (log + return nil) so a re-drive cannot loop forever. TRADEOFF: string-
+// matching the gateway message is the fragile part — the durable guard is the
+// reconcile only re-driving rows with payout_settled_at IS NULL (a settled day is
+// never re-driven); a single-transfer FetchTransfer on the client would let us
+// verify on-hold state instead (out of scope, noted as a follow-up).
 func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 	if !MealPlanEscrowActive() || day.PayoutTransferID == "" {
 		return nil
@@ -189,9 +200,27 @@ func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 		return fmt.Errorf("razorpay not configured")
 	}
 	if _, err := rz.ReleaseTransfer(day.PayoutTransferID); err != nil {
+		if isAlreadyReleasedErr(err) {
+			log.Printf("meal-plan release: transfer %s already released (idempotent re-drive): %v", day.PayoutTransferID, err)
+			return nil
+		}
 		return fmt.Errorf("release payout %s: %w", day.PayoutTransferID, err)
 	}
 	return nil
+}
+
+// isAlreadyReleasedErr reports whether a gateway error indicates the transfer was
+// already released / no longer on hold — the idempotent re-drive case
+// ReleaseDayPayout tolerates so the reconcile cannot loop on a settled transfer.
+func isAlreadyReleasedErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already released") ||
+		strings.Contains(msg, "already settled") ||
+		strings.Contains(msg, "not on hold") ||
+		strings.Contains(msg, "not_on_hold")
 }
 
 // RefundDay refunds a single day to the customer's wallet (idempotent on the

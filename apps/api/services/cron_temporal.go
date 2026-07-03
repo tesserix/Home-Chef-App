@@ -37,6 +37,7 @@ func cronJobs() []cronJob {
 		{"campaign-dispatch", campaignDispatchInterval, runCampaignDispatch, StartCampaignCron},
 		{"stale-order", staleOrderInterval, runStaleOrderScan, StartStaleOrderCron},
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
+		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
 	}
 }
 
