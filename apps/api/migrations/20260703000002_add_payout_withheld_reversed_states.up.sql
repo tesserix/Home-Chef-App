@@ -1,0 +1,19 @@
+-- Add 'withheld' and 'reversed' payout hold states (#388 — admin payout queue).
+--
+-- The admin payout release queue drives the #387 hold state machine out of
+-- 'release_eligible' into real (flag-gated) vendor payouts. Two new terminal
+-- states are written by the admin actions:
+--   - withheld: an admin blocked an eligible payout (open concern / fraud); no
+--     money moved, and the row drops out of the pending queue.
+--   - reversed: an admin clawed a released/eligible payout back to the platform
+--     (refund/chargeback); drives Razorpay ReverseTransfer behind the escrow flag.
+--
+-- NO SCHEMA CHANGE IS REQUIRED. payout_hold_status is a plain VARCHAR(32) (not a
+-- Postgres ENUM), so these are just new string values — nothing to ALTER. The
+-- column itself was created by 20260703000001_add_payout_hold_state (via
+-- DB.AutoMigrate). NO NEW COLUMNS are added: the withhold/reverse REASON is
+-- captured in audit_logs (services/audit.go LogAudit), not a dedicated column.
+--
+-- This timestamped pair exists only as auditable DDL matching repo convention;
+-- the SELECT 1 keeps it valid SQL for the migrate tooling.
+SELECT 1;

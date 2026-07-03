@@ -26,4 +26,12 @@ const (
 	// PayoutHoldDisputed blocks release: an open OrderIssue forced it at confirm
 	// time. A disputed hold can never transition to release_eligible.
 	PayoutHoldDisputed PayoutHoldStatus = "disputed"
+	// PayoutHoldWithheld is set by the admin payout queue (#388) when an admin
+	// blocks an eligible payout (open concern / suspected fraud). Terminal: no
+	// money moved, and a withheld hold drops out of the pending queue.
+	PayoutHoldWithheld PayoutHoldStatus = "withheld"
+	// PayoutHoldReversed is set by the admin payout queue (#388) when an admin
+	// claws a released/eligible payout back to the platform (refund/chargeback).
+	// Terminal; the reverse drives Razorpay ReverseTransfer behind the escrow flag.
+	PayoutHoldReversed PayoutHoldStatus = "reversed"
 )
