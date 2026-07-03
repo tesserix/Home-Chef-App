@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -108,7 +109,10 @@ func RefundGroupParticipant(tx *gorm.DB, p *models.GroupOrderParticipant, reason
 }
 
 // MarkGroupOrderDelivered is the delivery-pipeline hook: when the consolidated
-// order is delivered, mark the group delivered + release the chef payout. Safe +
+// order is delivered, mark the group delivered and PARK its chef payout in a
+// customer-confirmation hold — it no longer releases money on delivery (#456).
+// Delivered no longer implies paid: the host confirming advances the hold to
+// release_eligible, which the admin payout queue drives (flag-gated). Safe +
 // idempotent on any order (no-op if not a group order or already delivered).
 func MarkGroupOrderDelivered(orderID uuid.UUID) {
 	var g models.GroupOrder
@@ -118,19 +122,25 @@ func MarkGroupOrderDelivered(orderID uuid.UUID) {
 	if g.Status == models.GroupOrderDelivered {
 		return
 	}
-	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		res := tx.Model(&models.GroupOrder{}).
-			Where("id = ? AND status <> ?", g.ID, models.GroupOrderDelivered).
-			Update("status", models.GroupOrderDelivered)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil
-		}
-		return ReleaseGroupChefPayout(&g)
-	})
-	if err != nil {
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		return parkGroupOrderOnDelivery(tx, g.ID)
+	}); err != nil {
 		log.Printf("group-order: mark delivered for order %s failed: %v", orderID, err)
 	}
+}
+
+// parkGroupOrderOnDelivery runs the guarded delivered transition and, only when it
+// genuinely advances the row, stamps delivered_at + parks the payout hold in the
+// same tx. The WHERE guard makes a replayed delivered event a no-op.
+func parkGroupOrderOnDelivery(tx *gorm.DB, groupID uuid.UUID) error {
+	res := tx.Model(&models.GroupOrder{}).
+		Where("id = ? AND status <> ?", groupID, models.GroupOrderDelivered).
+		Updates(map[string]any{"status": models.GroupOrderDelivered, "delivered_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil
+	}
+	return SetGroupOrderHoldAwaitingConfirmation(tx, groupID)
 }

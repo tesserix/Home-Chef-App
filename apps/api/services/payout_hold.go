@@ -62,6 +62,20 @@ func SetMealPlanDayHoldAwaitingConfirmation(tx *gorm.DB, dayID uuid.UUID) error 
 	return nil
 }
 
+// SetGroupOrderHoldAwaitingConfirmation parks a delivered group order's payout in a
+// customer-confirmation hold. Called inside the delivery transaction. Idempotent
+// (the conditional update only advances from the empty pre-delivery state, so a
+// replayed delivered event is a no-op).
+func SetGroupOrderHoldAwaitingConfirmation(tx *gorm.DB, groupOrderID uuid.UUID) error {
+	res := tx.Model(&models.GroupOrder{}).
+		Where("id = ? AND payout_hold_status = ?", groupOrderID, models.PayoutHoldNone).
+		Update("payout_hold_status", models.PayoutHoldAwaitingConfirmation)
+	if res.Error != nil {
+		return fmt.Errorf("payout-hold: park group order %s: %w", groupOrderID, res.Error)
+	}
+	return nil
+}
+
 // HasOpenOrderIssue reports whether the order has a pending (still-under-review)
 // OrderIssue — the dispute signal that blocks a hold from reaching release_eligible.
 func HasOpenOrderIssue(db *gorm.DB, orderID uuid.UUID) bool {
