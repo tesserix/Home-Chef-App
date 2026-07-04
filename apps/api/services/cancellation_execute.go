@@ -61,8 +61,16 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 		cr.RefundExecuted = true
 		// Key by order_id (one request per order, unique) so this is robust even
 		// when the request id was assigned by the DB default.
-		return tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
-			Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error
+		if err := tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
+			Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error; err != nil {
+			return err
+		}
+		// Tell the customer their cancellation is confirmed + refund issued.
+		// Staged in THIS tx (transactional outbox) so the notification is never
+		// lost even if the process dies right after the refund commits.
+		return EnqueueEvent(tx, SubjectCancellationResolved, "cancellation.resolved", order.CustomerID, map[string]any{
+			"order_id": order.ID.String(), "refund": refund, "reason": cr.VendorReason,
+		})
 	})
 	if err != nil {
 		return err

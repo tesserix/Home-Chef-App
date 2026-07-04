@@ -35,6 +35,8 @@ func setupSweepDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE wallet_txns (id text PRIMARY KEY, wallet_id text, user_id text, type text, source text,
 			amount real, balance_after real, currency text, order_id text, reason text, created_by text,
 			idempotency_key text UNIQUE, created_at datetime)`,
+		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text, aggregate_id text,
+			payload text, status text, attempts int, last_error text, next_retry_at datetime, created_at datetime, updated_at datetime, published_at datetime)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
