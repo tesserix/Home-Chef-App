@@ -575,6 +575,22 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// chefVisibleOrders returns a FRESH query scoped to the orders a chef may see.
+// Order rows are created BEFORE payment, so unpaid/abandoned checkouts
+// (payment_status pending/failed) must never surface in the chef app — not in
+// the queue, not in the history, and not in the dashboard counters. Completed +
+// refunded stay visible (refunded for the history paper trail).
+//
+// Every vendor-facing order read MUST go through this scope. The dashboard
+// header once counted ALL rows created today while the orders tab filtered to
+// paid — so a chef saw "3 Orders" over an empty queue while the customer
+// (whose own list has no payment filter) waited on an order the chef could
+// never see.
+func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
+	return database.DB.Model(&models.Order{}).Where("chef_id = ? AND payment_status IN ?", chefID,
+		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded})
+}
+
 // GetChefDashboard returns the chef's dashboard data
 func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
@@ -592,29 +608,29 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	todayStart := services.CapacityDay(time.Now())
 	weekStart := todayStart.AddDate(0, 0, -7)
 
-	// Get today's stats
+	// Today's stats. Counters use chefVisibleOrders so the header can never
+	// disagree with the orders tab; revenue stays completed-only (captured money).
 	var todayOrders int64
 	var todayRevenue float64
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= ?", chef.ID, todayStart).
+	chefVisibleOrders(chef.ID).
+		Where("created_at >= ?", todayStart).
 		Count(&todayOrders)
 	database.DB.Model(&models.Order{}).
 		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, todayStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&todayRevenue)
 
-	// Get pending orders — only PAID ones. An order row is created before
-	// payment, so unpaid/abandoned orders (payment_status pending/failed) must
-	// not surface to the chef as new orders.
+	// Pending badge — same scope as the New tab, so the badge always equals the
+	// list the chef lands on.
 	var pendingOrders int64
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND status = ? AND payment_status = ?", chef.ID, models.OrderStatusPending, models.PaymentCompleted).
+	chefVisibleOrders(chef.ID).
+		Where("status = ?", models.OrderStatusPending).
 		Count(&pendingOrders)
 
-	// Get this week's stats (IST week window)
+	// This week's stats (IST week window)
 	var weekOrders int64
 	var weekRevenue float64
-	database.DB.Model(&models.Order{}).
-		Where("chef_id = ? AND created_at >= ?", chef.ID, weekStart).
+	chefVisibleOrders(chef.ID).
+		Where("created_at >= ?", weekStart).
 		Count(&weekOrders)
 	database.DB.Model(&models.Order{}).
 		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
@@ -626,7 +642,7 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 	// it on the InFlightRow and the dead-screen reassurance copy reads
 	// `lastOrderIso` from `createdAt`).
 	var recent []models.Order
-	database.DB.Where("chef_id = ? AND payment_status IN ?", chef.ID, []models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded}).
+	chefVisibleOrders(chef.ID).
 		Preload("Customer").
 		Order("created_at DESC").
 		Limit(10).
@@ -864,11 +880,9 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset := (page - 1) * limit
 
-	// Only show PAID orders to the chef. Orders are created before payment, so
-	// exclude unpaid/abandoned ones (payment_status pending/failed); keep
-	// completed + refunded (the latter for history).
-	query := database.DB.Where("chef_id = ? AND payment_status IN ?", chef.ID,
-		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded})
+	// Only PAID orders reach the chef — the same chefVisibleOrders scope the
+	// dashboard counters use, so the tabs and the header always agree.
+	query := chefVisibleOrders(chef.ID)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
