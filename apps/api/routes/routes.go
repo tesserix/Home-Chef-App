@@ -820,6 +820,9 @@ func SetupRouter() *gin.Engine {
 
 			// Payout release queue (#388) — list eligible holds + release / withhold
 			// / reverse (single + bulk). Money stays behind the escrow flags; audited.
+			// Cancellation arbitration queue (#480): disputes + vendor timeouts.
+			admin.GET("/cancel-requests", cancellationHandler.GetAdminCancellationRequests)
+			admin.POST("/cancel-requests/:id/resolve", cancellationHandler.ResolveCancellationAdmin)
 			admin.GET("/payouts/pending", adminPayoutHandler.GetPendingPayouts)
 			admin.POST("/payouts/:aggType/:id/release", adminPayoutHandler.ReleasePayout)
 			admin.POST("/payouts/:aggType/:id/withhold", adminPayoutHandler.WithholdPayout)
