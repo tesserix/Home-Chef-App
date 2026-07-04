@@ -146,6 +146,35 @@ func openOrderIssueSubquery(tx *gorm.DB, orderID uuid.UUID) *gorm.DB {
 		Where("order_id = ? AND status = ?", orderID, models.IssuePending)
 }
 
+// ReleaseDisputedOrderHoldIfCleared advances a regular order's payout hold out of
+// the `disputed` dead-end once the dispute is resolved in the chef's favour — i.e.
+// an admin rejected the OrderIssue (#458). It advances disputed → release_eligible
+// only when nothing blocks the payout: the order is not refunded/cancelled, has no
+// refunded_at stamp, and carries NO remaining pending OrderIssue (an order may hold
+// several). One atomic guarded UPDATE with the block predicates folded into the
+// WHERE (same pattern as applyHoldConfirm) — a genuine transition emits
+// hold_release_eligible onto the outbox in the same tx; otherwise a no-op.
+//
+// MUST be called inside a transaction in which the just-rejected issue is already
+// persisted, so the NOT EXISTS(pending) predicate observes it as non-pending. Scoped
+// to the order aggregate (its release/reverse money seam is wired); meal-plan-day /
+// group-order disputed holds are surfaced in the queue but driven by a follow-up.
+func ReleaseDisputedOrderHoldIfCleared(tx *gorm.DB, orderID uuid.UUID) error {
+	res := tx.Model(&models.Order{}).
+		Where("id = ? AND payout_hold_status = ?", orderID, models.PayoutHoldDisputed).
+		Where("status NOT IN ?", []string{string(models.OrderStatusRefunded), string(models.OrderStatusCancelled)}).
+		Where("refunded_at IS NULL").
+		Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, orderID)).
+		Update("payout_hold_status", models.PayoutHoldReleaseEligible)
+	if res.Error != nil {
+		return fmt.Errorf("payout-hold: clear disputed order %s: %w", orderID, res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return nil // still disputed for a reason (pending issue / refunded), or not disputed
+	}
+	return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, "order", orderID)
+}
+
 // emitHoldEvent stages the hold-transition event onto the outbox within tx.
 func emitHoldEvent(tx *gorm.DB, target models.PayoutHoldStatus, aggType string, id uuid.UUID) error {
 	subject, eventType := SubjectHoldReleaseEligible, "payout.hold_release_eligible"

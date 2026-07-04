@@ -144,6 +144,46 @@ func TestListPendingPayouts_ReturnsEligibleOnly(t *testing.T) {
 	require.True(t, found, "awaiting order surfaced with the opt-in filter")
 }
 
+// TestListPendingPayouts_IncludeDisputed — disputed holds surface only with the
+// opt-in filter (#458), for admin visibility; they stay excluded by default.
+func TestListPendingPayouts_IncludeDisputed(t *testing.T) {
+	db := setupReleaseDB(t)
+	now := time.Now()
+	seedOrderHold(t, db, models.PayoutHoldReleaseEligible, now.Add(-30*time.Hour))
+	disputed := seedOrderHold(t, db, models.PayoutHoldDisputed, now.Add(-5*time.Hour))
+
+	def, err := ListPendingPayouts(db, PendingFilter{})
+	require.NoError(t, err)
+	for _, r := range def {
+		require.NotEqual(t, disputed, r.ID, "disputed excluded by default")
+	}
+
+	withDisputed, err := ListPendingPayouts(db, PendingFilter{IncludeDisputed: true})
+	require.NoError(t, err)
+	found := false
+	for _, r := range withDisputed {
+		if r.ID == disputed {
+			found = true
+			require.Equal(t, models.PayoutHoldDisputed, r.HoldStatus)
+		}
+	}
+	require.True(t, found, "disputed order surfaced with the opt-in filter")
+}
+
+// TestDisputedRow_NotActionable — a disputed hold surfaced in the queue (#458)
+// stays non-actionable: release / withhold / reverse all reject it (disputed is in
+// none of their source-state from-lists), so surfacing it is safe/read-only.
+func TestDisputedRow_NotActionable(t *testing.T) {
+	flagsOff(t)
+	db := setupReleaseDB(t)
+	id := seedOrderHold(t, db, models.PayoutHoldDisputed, time.Now().Add(-5*time.Hour))
+
+	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+	require.ErrorIs(t, WithholdHold(db, aggTypeOrder, id, "reason"), ErrHoldNotEligible)
+	require.ErrorIs(t, ReverseHold(db, aggTypeOrder, id, "reason"), ErrHoldNotEligible)
+	require.Equal(t, models.PayoutHoldDisputed, loadOrderHold(t, db, id), "row stays disputed")
+}
+
 // TestReleaseHold_FlagOff_AdvancesNoMoney — flag OFF: release_eligible → released
 // is a pure DB advance that stages the hold_released event; GetRazorpay() is nil,
 // no panic.

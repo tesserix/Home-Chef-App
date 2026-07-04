@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -316,7 +317,11 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": string(issue.Status), "refundAmount": issue.RefundAmount})
 }
 
-// AdminRejectIssue declines an issue with no refund.
+// AdminRejectIssue declines an issue with no refund. A rejected dispute means the
+// chef legitimately earned the payout, so — in the SAME transaction — it drives the
+// order's disputed payout hold out of the dead-end back to release_eligible (#458).
+// Folding both writes into one tx means the just-rejected issue is visible to the
+// hold-drive's NOT EXISTS(pending) guard and closes any crash-stranding window.
 func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 	adminID, _ := middleware.GetUserID(c)
 	issueID, err := uuid.Parse(c.Param("issueId"))
@@ -325,10 +330,40 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 		return
 	}
 	now := time.Now()
-	res := database.DB.Model(&models.OrderIssue{}).
-		Where("id = ? AND status = ?", issueID, models.IssuePending).
-		Updates(map[string]any{"status": models.IssueRejected, "resolved_at": now, "resolved_by": adminID})
-	if res.RowsAffected == 0 {
+
+	var found, rejected bool
+	if txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Load the issue's order so its payout hold can be driven in the same tx.
+		var issue models.OrderIssue
+		if err := tx.Select("id", "order_id").First(&issue, "id = ?", issueID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil // found stays false → 404
+			}
+			return err
+		}
+		found = true
+
+		res := tx.Model(&models.OrderIssue{}).
+			Where("id = ? AND status = ?", issueID, models.IssuePending).
+			Updates(map[string]any{"status": models.IssueRejected, "resolved_at": now, "resolved_by": adminID})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // already handled → rejected stays false → 409
+		}
+		rejected = true
+
+		return services.ReleaseDisputedOrderHoldIfCleared(tx, issue.OrderID)
+	}); txErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not reject the issue"})
+		return
+	}
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
+		return
+	}
+	if !rejected {
 		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
 		return
 	}

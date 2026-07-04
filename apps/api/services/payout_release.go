@@ -72,16 +72,23 @@ type PendingPayout struct {
 // PendingFilter narrows the pending queue.
 type PendingFilter struct {
 	IncludeAwaiting bool      // also surface awaiting_customer_confirmation
+	IncludeDisputed bool      // also surface disputed (visibility only — non-releasable) (#458)
 	ChefID          uuid.UUID // optional chef scope
 	Before          *time.Time
 }
 
 // pendingStatuses is the source set the queue lists: release_eligible always, plus
-// awaiting_customer_confirmation on opt-in. Never disputed/withheld/reversed/released.
+// awaiting_customer_confirmation and/or disputed on opt-in. disputed rows are
+// surfaced for admin visibility only — they stay non-releasable (the release path's
+// pending-issue guard and the release_eligible-only source guard both block them).
+// Never withheld/reversed/released.
 func (f PendingFilter) pendingStatuses() []models.PayoutHoldStatus {
 	s := []models.PayoutHoldStatus{models.PayoutHoldReleaseEligible}
 	if f.IncludeAwaiting {
 		s = append(s, models.PayoutHoldAwaitingConfirmation)
+	}
+	if f.IncludeDisputed {
+		s = append(s, models.PayoutHoldDisputed)
 	}
 	return s
 }
@@ -404,10 +411,12 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 // WithholdOrReverseOrderHoldForRefund cross-guards an order refund against the
 // payout hold (#457): whatever refund path fired, the chef must not keep money the
 // customer got back. It drives ONLY the order aggregate:
-//   - release_eligible | awaiting_customer_confirmation → withheld (block the payout).
+//   - release_eligible | awaiting_customer_confirmation | disputed → withheld
+//     (block the payout). disputed is included so an approved assisted-refund on a
+//     disputed order leaves the hold blocked, not stuck in the dead-end (#458).
 //   - released → reversed, then settleReverse claws the transfer back (state-only
 //     while the escrow flag is OFF; stampPayoutSettled keeps the reconcile safe).
-//   - none | withheld | reversed | disputed → no-op.
+//   - none | withheld | reversed → no-op.
 //
 // Idempotent + race-safe: transitionHold's conditional `WHERE payout_hold_status
 // IN (from)` means a double refund never double-reverses. Best-effort audit on a
@@ -423,10 +432,10 @@ func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason 
 	var ok bool
 	var err error
 	switch old {
-	case models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation:
+	case models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed:
 		to = models.PayoutHoldWithheld
 		ok, err = transitionHold(db, aggTypeOrder, orderID,
-			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation}, to, false)
+			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}, to, false)
 	case models.PayoutHoldReleased:
 		to = models.PayoutHoldReversed
 		if ok, err = transitionHold(db, aggTypeOrder, orderID,
@@ -434,7 +443,7 @@ func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason 
 			err = settleReverse(db, aggTypeOrder, orderID)
 		}
 	default:
-		return nil // none / withheld / reversed / disputed — nothing to cross-guard
+		return nil // none / withheld / reversed — nothing to cross-guard
 	}
 	if err != nil {
 		return fmt.Errorf("payout-crossguard: drive order %s refund hold: %w", orderID, err)
