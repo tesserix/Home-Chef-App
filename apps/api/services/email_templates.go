@@ -1,6 +1,18 @@
 package services
 
-import "fmt"
+import (
+	"fmt"
+	"html"
+)
+
+// esc HTML-escapes user-controlled free text before it is interpolated into an
+// email template (audit #7). These templates are assembled with fmt.Sprintf (not
+// html/template), so without this a chef-controlled value (business name, menu
+// item name) or a customer address could inject markup — a phishing link or
+// image — into an email sent from the trusted Fe3dr brand. System-generated
+// values (URLs, numbers, fixed labels) don't need it; free-text names/addresses/
+// tax fields do.
+func esc(s string) string { return html.EscapeString(s) }
 
 // Enterprise HTML email templates for Fe3dr / HomeChef
 // Responsive, branded layout matching the Fe3dr design system.
@@ -80,7 +92,7 @@ func WelcomeEmailHTML(firstName string) (subject, html string) {
           </ul>
           <a href="https://fe3dr.com" class="btn">Start Exploring</a>
           <p class="muted">If you didn't create this account, please ignore this email.</p>
-`, firstName)
+`, esc(firstName))
 	html = emailBase(subject, "Welcome to Fe3dr — discover home-cooked meals near you", body)
 	return
 }
@@ -98,7 +110,7 @@ func EmailVerificationHTML(firstName, verifyURL string) (subject, html string) {
           <hr class="divider">
           <p class="muted">Button not working? Copy and paste this URL into your browser:<br>
           <span style="word-break:break-all;color:#FF6B35;">%s</span></p>
-`, firstName, verifyURL, verifyURL)
+`, esc(firstName), verifyURL, verifyURL)
 	html = emailBase(subject, "Verify your email to start using Fe3dr", body)
 	return
 }
@@ -116,8 +128,8 @@ func StaffInvitationHTML(inviterName, role, acceptURL string) (subject, html str
           </div>
           <hr class="divider">
           <p class="muted">If you weren't expecting this invitation, you can safely ignore it.</p>
-`, inviterName, role, acceptURL)
-	html = emailBase(subject, fmt.Sprintf("%s invited you to join Fe3dr", inviterName), body)
+`, esc(inviterName), esc(role), acceptURL)
+	html = emailBase(subject, fmt.Sprintf("%s invited you to join Fe3dr", esc(inviterName)), body)
 	return
 }
 
@@ -189,7 +201,7 @@ func OrderConfirmationHTML(orderNumber string, items []OrderItemSummary, total f
             <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#374151;">%s</td>
             <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#374151;text-align:center;">%d</td>
             <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#374151;text-align:right;">₹%.2f</td>
-          </tr>`, item.Name, item.Quantity, item.Price)
+          </tr>`, esc(item.Name), item.Quantity, item.Price)
 	}
 
 	// Resolve invoice details with safe defaults so the template stays
@@ -272,16 +284,16 @@ func renderInvoiceHeader(d *OrderInvoiceDetails) string {
 	}
 	parts := ""
 	if d.InvoiceNumber != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Invoice no.</strong> %s</p>`, d.InvoiceNumber)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Invoice no.</strong> %s</p>`, esc(d.InvoiceNumber))
 	}
 	if d.SupplierGSTIN != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>GSTIN:</strong> %s</p>`, d.SupplierGSTIN)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>GSTIN:</strong> %s</p>`, esc(d.SupplierGSTIN))
 	}
 	if d.HSNCode != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>HSN/SAC:</strong> %s (prepared food via e-commerce)</p>`, d.HSNCode)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>HSN/SAC:</strong> %s (prepared food via e-commerce)</p>`, esc(d.HSNCode))
 	}
 	if d.PlaceOfSupply != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Place of supply:</strong> %s</p>`, d.PlaceOfSupply)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#4b5563;font-size:14px;"><strong>Place of supply:</strong> %s</p>`, esc(d.PlaceOfSupply))
 	}
 	return fmt.Sprintf(`<div style="background:#f9fafb;border-radius:8px;padding:12px 16px;margin:16px 0;">%s</div>`, parts)
 }
@@ -295,15 +307,15 @@ func renderFulfilmentBlock(d *OrderInvoiceDetails) string {
 	if d.ChefName != "" {
 		fssai := ""
 		if d.ChefFSSAI != "" {
-			fssai = fmt.Sprintf(` <span class="muted">(FSSAI %s)</span>`, d.ChefFSSAI)
+			fssai = fmt.Sprintf(` <span class="muted">(FSSAI %s)</span>`, esc(d.ChefFSSAI))
 		}
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Chef:</strong> %s%s</p>`, d.ChefName, fssai)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Chef:</strong> %s%s</p>`, esc(d.ChefName), fssai)
 	}
 	if d.DeliveryAddress != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Delivering to:</strong> %s</p>`, d.DeliveryAddress)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Delivering to:</strong> %s</p>`, esc(d.DeliveryAddress))
 	}
 	if d.ETA != "" {
-		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Expected by:</strong> %s</p>`, d.ETA)
+		parts += fmt.Sprintf(`<p style="margin:4px 0;color:#374151;font-size:14px;"><strong>Expected by:</strong> %s</p>`, esc(d.ETA))
 	}
 	return fmt.Sprintf(`<div style="border-left:3px solid #FF6B35;padding:8px 12px;margin:16px 0;">%s</div>`, parts)
 }
@@ -346,7 +358,7 @@ func renderInvoiceSummary(d *OrderInvoiceDetails) string {
 // CGST Rule 46 (name + address of supplier). Always rendered with sensible
 // defaults so the email is invoice-shaped even when the caller passes nil.
 func renderSupplierFooter(d *OrderInvoiceDetails) string {
-	return fmt.Sprintf(`<p class="muted" style="margin-top:24px;">Supplied by <strong>%s</strong>, %s.</p>`, d.SupplierName, d.SupplierAddress)
+	return fmt.Sprintf(`<p class="muted" style="margin-top:24px;">Supplied by <strong>%s</strong>, %s.</p>`, esc(d.SupplierName), esc(d.SupplierAddress))
 }
 
 // renderRefundBlurb returns the short cancellation/refund policy line.
