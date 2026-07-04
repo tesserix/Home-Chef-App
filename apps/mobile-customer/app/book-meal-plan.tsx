@@ -20,7 +20,11 @@ import {
   type MealVariant,
   type WeeklyMenuItem,
 } from '../hooks/useMealPlans';
-import { comboLabel } from '../lib/combo-label';
+import {
+  WeeklyMenuDayHeader,
+  WeeklyMenuDishCard,
+  istTodayIso,
+} from '../components/chef/WeeklyMenuDishCard';
 
 const HORIZON_DAYS = 14; // how far ahead a customer can pre-book
 const LEAD_MS = 12 * 60 * 60 * 1000; // server's booking lead time (mealPlanLeadTime)
@@ -35,6 +39,10 @@ interface BookableCell {
   dailyMenuItemId?: string; // present for per-date items
   isCombo?: boolean;
   comboComponents?: string[];
+  // Presentation-only extras for the photo-forward card — never part of the
+  // selection identity (that stays dailyMenuItemId / variant).
+  imageUrl?: string;
+  description?: string;
 }
 
 interface Selected {
@@ -122,6 +130,8 @@ export default function BookMealPlanScreen() {
             dailyMenuItemId: it.id,
             isCombo: it.isCombo,
             comboComponents: it.comboComponents,
+            imageUrl: it.imageUrl,
+            description: it.description,
           }))
           .sort((a, b) =>
             a.isCombo === b.isCombo ? bySlotVariant(a, b) : a.isCombo ? -1 : 1,
@@ -134,6 +144,8 @@ export default function BookMealPlanScreen() {
             variant: it.variant,
             name: it.name,
             price: it.price,
+            imageUrl: it.imageUrl,
+            description: it.description,
           }))
           .sort(bySlotVariant);
       }
@@ -146,6 +158,10 @@ export default function BookMealPlanScreen() {
 
   const selected = Object.values(selection);
   const total = selected.reduce((s, x) => s + x.price, 0);
+
+  // "Today" affordance — IST, never the device timezone. The horizon starts
+  // tomorrow, so this only shows for devices running behind IST.
+  const todayIso = istTodayIso();
 
   // One choice per (date, slot). Tapping the selected cell again clears it.
   // Cell identity is the per-date item id when present, else the weekly variant.
@@ -287,47 +303,34 @@ export default function BookMealPlanScreen() {
             </Text>
             {dates.map((d) => (
               <View key={d.date} style={styles.daySection}>
-                <Text style={styles.dayLabel}>{d.label}</Text>
-                <View style={styles.cellWrap}>
+                <WeeklyMenuDayHeader title={d.label} isToday={d.date === todayIso} />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.dayRow}
+                  contentContainerStyle={styles.dayRowContent}
+                >
                   {d.cells.map((cell) => {
                     const sel = selection[selKey(d.date, cell.slot)];
                     const active = isSameCell(sel, cell);
-                    const accent =
-                      cell.variant === 'veg'
-                        ? customerColors.success.DEFAULT
-                        : customerColors.destructive.DEFAULT;
                     return (
-                      <Pressable
+                      <WeeklyMenuDishCard
                         key={cell.dailyMenuItemId ?? `${cell.slot}-${cell.variant}`}
+                        name={cell.name}
+                        slot={cell.slot}
+                        variant={cell.variant}
+                        price={cell.price}
+                        imageUrl={cell.imageUrl}
+                        description={cell.description}
+                        isCombo={cell.isCombo}
+                        comboComponents={cell.comboComponents}
+                        selectable
+                        selected={active}
                         onPress={() => toggle(d.date, cell)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                      >
-                        <View
-                          style={[styles.cell, active && styles.cellActive]}
-                        >
-                          <View style={styles.cellTop}>
-                            <View style={[styles.dot, { backgroundColor: accent }]} />
-                            <Text style={styles.cellSlot}>
-                              {cell.slot === 'lunch' ? 'Lunch' : 'Dinner'} ·{' '}
-                              {cell.variant === 'veg' ? 'Veg' : 'Non-veg'}
-                              {cell.isCombo ? ` · ${comboLabel()}` : ''}
-                            </Text>
-                          </View>
-                          <Text style={styles.cellName} numberOfLines={1}>
-                            {cell.name}
-                          </Text>
-                          {cell.isCombo && cell.comboComponents?.length ? (
-                            <Text style={styles.cellCombo} numberOfLines={1}>
-                              {cell.comboComponents.join(' · ')}
-                            </Text>
-                          ) : null}
-                          <Text style={styles.cellPrice}>₹{cell.price.toFixed(0)}</Text>
-                        </View>
-                      </Pressable>
+                      />
                     );
                   })}
-                </View>
+                </ScrollView>
               </View>
             ))}
           </ScrollView>
@@ -423,50 +426,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
-  daySection: { marginBottom: 20 },
-  dayLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
-    color: customerColors.charcoal.DEFAULT,
-    marginBottom: 10,
-  },
-  cellWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  cell: {
-    width: 150,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: customerColors.hairline,
-    backgroundColor: customerColors.surface.DEFAULT,
-    padding: 12,
-    gap: 4,
-  },
-  cellActive: {
-    borderColor: customerColors.coral.DEFAULT,
-    backgroundColor: customerColors.coral.tint,
-  },
-  cellTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 2 },
-  cellSlot: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: customerColors.charcoal.soft,
-  },
-  cellName: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: customerColors.charcoal.DEFAULT,
-  },
-  cellCombo: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    color: customerColors.charcoal.soft,
-    marginTop: 2,
-  },
-  cellPrice: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: customerColors.charcoal.DEFAULT,
-  },
+  daySection: { marginBottom: 24 },
+  // Day rows bleed to the screen edge so a peeking card invites the scroll.
+  dayRow: { marginHorizontal: -16 },
+  dayRowContent: { paddingHorizontal: 16, gap: 12 },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -490,6 +453,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 20,
     color: customerColors.charcoal.DEFAULT,
+    fontVariant: ['tabular-nums'],
   },
   cta: {
     height: 52,
