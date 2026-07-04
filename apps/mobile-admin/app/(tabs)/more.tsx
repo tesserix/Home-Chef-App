@@ -3,6 +3,7 @@ import { type Href, router } from 'expo-router';
 import {
   BadgeCheck,
   ShieldAlert,
+  AlertTriangle,
   Users,
   Star,
   Wallet,
@@ -29,6 +30,7 @@ const OPERATIONS: Item[] = [
   { label: 'Users', sub: 'Customers & accounts', href: '/users', icon: Users },
   { label: 'FSSAI Lockouts', sub: 'Expired licences & overrides', href: '/fssai', icon: ShieldAlert },
   { label: 'Reviews', sub: 'Moderate ratings', href: '/reviews', icon: Star },
+  { label: 'Cancellations', sub: 'Disputes & vendor timeouts', href: '/cancellations', icon: AlertTriangle },
   { label: 'Wallets', sub: 'Customer credit & adjustments', href: '/wallets', icon: Wallet },
   { label: 'Meal Plans', sub: 'Subscriptions oversight', href: '/meal-plans', icon: CalendarRange },
   { label: 'Delivery', sub: 'Partners & deliveries', href: '/delivery', icon: Truck },
