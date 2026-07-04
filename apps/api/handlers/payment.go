@@ -72,6 +72,17 @@ func (h *PaymentHandler) CreateOrderPayment(c *gin.Context) {
 		requestedWalletPaise = services.ToPaise(body.WalletAmount)
 	}
 
+	// Freeze the platform commission rate on the order ONCE at checkout (#390),
+	// for BOTH gateway paths. After this, order.CommissionRate is the single source
+	// for the chef/driver split — a later admin retune of the runtime rate can no
+	// longer make the settlement statement disagree with the transfer already sent.
+	// Skip if already frozen (idempotent on a retry of an unpaid order).
+	if order.CommissionRate <= 0 {
+		rate := services.GetCommissionRate(database.DB)
+		database.DB.Model(&order).Update("commission_rate", rate)
+		order.CommissionRate = rate // same request uses the frozen rate
+	}
+
 	// Pick gateway from chef's configured provider. Falls back to razorpay
 	// for older chef profiles that don't have the column populated yet.
 	provider := strings.ToLower(order.Chef.PaymentProvider)
@@ -104,7 +115,7 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	// food-safety licence has lapsed. orderSettlements() clears the chef account so
 	// no transfer is built; here we record the freeze for the regulatory trail.
 	if services.IsChefFSSAIExpired(&order.Chef) {
-		chefAmount := chefGrossPayout(order)
+		chefAmount := chefNetPayout(order)
 		middleware.RecordFSSAILockout("payout_withheld")
 		log.Printf("fssai-lockout: withholding chef payout order=%s chef=%s amount=%.2f",
 			order.OrderNumber, order.Chef.ID, chefAmount)
@@ -176,25 +187,39 @@ func (h *PaymentHandler) createRazorpayPayment(c *gin.Context, order *models.Ord
 	})
 }
 
-// orderSettlements derives the chef + driver payouts for an order, chef first so
-// its (larger) food payout stays a single payment-linked transfer when the capture
-// allows (#141). The chef account is cleared when its FSSAI licence has lapsed, so
-// that slice is withheld and never transferred. Requires Chef and
-// Delivery.DeliveryPartner preloaded. Deterministic, so create and verify produce
-// the same split for a given order.
-// chefGrossPayout is the chef's pre-Route payout for an order: food revenue +
-// tax + chef tip, less any chef-funded promo discount the chef bears (#39).
-// Platform-funded promos leave ChefFundedDiscount at 0, so the chef stays whole.
-// Single source of truth shared by the Route split, the Stripe transfer, and the
-// FSSAI-withhold audit so the three can't drift.
-func chefGrossPayout(order *models.Order) float64 {
-	amount := order.Subtotal + order.Tax + order.ChefTip - order.ChefFundedDiscount
-	if amount < 0 {
-		amount = 0
-	}
-	return amount
+// chefNetPayout is the chef's actual Route/Transfer payout for an order: NET of
+// platform commission and TDS (#390). It is the SINGLE SOURCE OF TRUTH shared by
+// the Route split, the Stripe transfer, and the FSSAI-withhold audit, so the three
+// can never drift — and it equals ComputeOrderEarnings(order).NetPayout, the exact
+// figure on the settlement statement.
+//
+//	gross = Subtotal + Tax + ChefTip (less any chef-funded promo the chef bears);
+//	net   = gross − commission − TDS.
+//
+// The commission rate is read from the FROZEN order.CommissionRate (stamped at
+// checkout), so a mid-flight admin rate change cannot make the statement disagree
+// with a transfer already sent. A legacy 0 falls back to DefaultCommissionRate
+// inside ComputeOrderEarnings. Delivery is the DRIVER's money and is excluded.
+// Requires order.Chef preloaded (for the intra/inter-state GST state).
+func chefNetPayout(order *models.Order) float64 {
+	return services.ComputeOrderEarnings(services.EarningsInput{
+		ItemRevenue:        order.Subtotal,
+		Tax:                order.Tax,
+		ChefTip:            order.ChefTip,
+		DeliveryFee:        order.DeliveryFee,
+		ChefFundedDiscount: order.ChefFundedDiscount,
+		DeliveryState:      order.DeliveryAddressState,
+		CommissionRate:     order.CommissionRate,
+	}, order.Chef.State).NetPayout
 }
 
+// orderSettlements derives the chef + driver payouts for an order, chef first so
+// its (larger) food payout stays a single payment-linked transfer when the capture
+// allows (#141). The chef slice is NET (chefNetPayout, reading the frozen
+// order.CommissionRate); the chef account is cleared when its FSSAI licence has
+// lapsed, so that slice is withheld and never transferred. Requires Chef and
+// Delivery.DeliveryPartner preloaded. Deterministic — because the rate is frozen
+// on the row, create and verify produce the identical split for a given order.
 func orderSettlements(order *models.Order) []services.Settlement {
 	chefAccount := order.Chef.RazorpayAccountID
 	if services.IsChefFSSAIExpired(&order.Chef) {
@@ -205,7 +230,7 @@ func orderSettlements(order *models.Order) []services.Settlement {
 		driverAccount = order.Delivery.DeliveryPartner.RazorpayAccountID
 	}
 	return []services.Settlement{
-		{Account: chefAccount, Amount: services.ToPaise(chefGrossPayout(order)), Hold: true,
+		{Account: chefAccount, Amount: services.ToPaise(chefNetPayout(order)), Hold: true,
 			Notes: map[string]string{"purpose": "food_payment", "order_number": order.OrderNumber}},
 		{Account: driverAccount, Amount: services.ToPaise(order.DeliveryFee + order.DriverTip), Hold: true,
 			Notes: map[string]string{"purpose": "delivery_payment", "order_number": order.OrderNumber}},
@@ -299,11 +324,12 @@ func (h *PaymentHandler) settleFullWalletOrder(c *gin.Context, order *models.Ord
 }
 
 // createStripePayment creates a PaymentIntent against the chef's Connect
-// account. Chef receives (subtotal + tax + chefTip) via
-// `transfer_data[destination]`; the platform retains (deliveryFee +
-// driverTip) as `application_fee_amount` and settles the driver separately.
-// Stripe rejects charges whose currency doesn't match the chef's Connect
-// country, so we derive currency from PayoutCountry rather than hardcoding.
+// account. Chef receives their NET payout (gross − commission − TDS, where gross
+// is subtotal + tax + chefTip) via `transfer_data[destination]`; the platform
+// retains the rest (commission + TDS + deliveryFee + driverTip) as
+// `application_fee_amount` and settles the driver separately. Stripe rejects
+// charges whose currency doesn't match the chef's Connect country, so we derive
+// currency from PayoutCountry rather than hardcoding.
 func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order, userID uuid.UUID) {
 	st := services.GetStripe()
 	if st == nil {
@@ -330,10 +356,11 @@ func (h *PaymentHandler) createStripePayment(c *gin.Context, order *models.Order
 	}
 	totalMinor := services.ToMinor(order.Total, currency)
 
-	// Chef receives: subtotal + tax + chefTip (less any chef-funded promo). Platform
-	// keeps the rest (deliveryFee + driverTip) as application_fee; driver gets paid
-	// out of platform balance via a follow-up Transfer on delivery confirmation.
-	chefAmount := chefGrossPayout(order)
+	// Chef receives NET: gross (subtotal + tax + chefTip, less any chef-funded
+	// promo) minus commission and TDS (#390). Platform keeps the rest (commission +
+	// TDS + deliveryFee + driverTip) as application_fee; the driver is paid out of
+	// the platform balance via a follow-up Transfer on delivery confirmation.
+	chefAmount := chefNetPayout(order)
 	chefMinor := services.ToMinor(chefAmount, currency)
 	applicationFee := totalMinor - chefMinor
 	if applicationFee < 0 {
@@ -553,6 +580,10 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 			log.Printf("wallet-debit failed order=%s: %v", order.OrderNumber, err)
 			services.CaptureBackgroundError(err)
 		}
+		// orderSettlements recomputes the IDENTICAL split here: the order was
+		// reloaded with its persisted commission_rate, and chefNetPayout reads that
+		// frozen rate — so create and verify are deterministic, never re-resolving
+		// the live rate (#390).
 		appliedPaise := services.ToPaise(order.WalletApplied)
 		plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(order))
 		settleWalletTopUps(order, plan.DirectTopUps)
