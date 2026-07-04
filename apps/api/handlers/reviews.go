@@ -173,10 +173,21 @@ func (h *ReviewHandler) CreateReview(c *gin.Context) {
 			Rating     int    `json:"rating"`
 		}
 		if err := json.Unmarshal([]byte(raw), &dishes); err == nil {
+			// SECURITY (audit #8): a dish rating may only target a MenuItem that was
+			// actually on THIS order. Without this, a customer could deflate any
+			// chef's dish ratings by submitting arbitrary menuItemIds (any chef's
+			// dishes) from one legitimate order. Build the allowed set from the
+			// order's own items.
+			validDish := map[uuid.UUID]bool{}
+			var orderItems []models.OrderItem
+			database.DB.Where("order_id = ?", parsedOrderID).Find(&orderItems)
+			for _, oi := range orderItems {
+				validDish[oi.MenuItemID] = true
+			}
 			affected := map[uuid.UUID]bool{}
 			for _, d := range dishes {
 				mid, perr := uuid.Parse(d.MenuItemID)
-				if perr != nil || d.Rating < 1 || d.Rating > 5 {
+				if perr != nil || d.Rating < 1 || d.Rating > 5 || !validDish[mid] {
 					continue
 				}
 				dr := models.DishRating{ReviewID: review.ID, MenuItemID: mid, ChefID: order.ChefID, Rating: d.Rating}
