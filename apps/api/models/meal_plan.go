@@ -92,9 +92,62 @@ type MealPlan struct {
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 
-	Days     []MealPlanDay `gorm:"foreignKey:MealPlanID" json:"days,omitempty"`
-	Customer *User         `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
-	Chef     *ChefProfile  `gorm:"foreignKey:ChefID" json:"chef,omitempty"`
+	Days []MealPlanDay `gorm:"foreignKey:MealPlanID" json:"days,omitempty"`
+	// SECURITY (audit H1/M1): the raw relations are json:"-" so they never
+	// auto-serialize. A chef must not receive the customer's email/phone (the
+	// off-platform-contact bypass the rest of the platform guards), and a customer
+	// must not receive the home-chef's street address / lat-long / FSSAI / GSTIN.
+	// Handlers populate the minimized, role-appropriate views below via ProjectFor*.
+	Customer *User        `gorm:"foreignKey:CustomerID" json:"-"`
+	Chef     *ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
+
+	CustomerView *MealPlanCustomerView `gorm:"-" json:"customer,omitempty"`
+	ChefView     *MealPlanChefView     `gorm:"-" json:"chef,omitempty"`
+}
+
+// MealPlanCustomerView is the customer info a chef (or admin) may see about a
+// plan. Email/Phone are populated ONLY for the admin projection.
+type MealPlanCustomerView struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email,omitempty"`
+	Phone     string `json:"phone,omitempty"`
+}
+
+// MealPlanChefView is the chef info a customer may see — business identity only,
+// never the home-chef's precise location or licence numbers.
+type MealPlanChefView struct {
+	BusinessName string `json:"businessName"`
+	ProfileImage string `json:"profileImage,omitempty"`
+}
+
+// ProjectForChef exposes only the customer's name to the chef (no email/phone).
+func (m *MealPlan) ProjectForChef() {
+	if m.Customer != nil {
+		m.CustomerView = &MealPlanCustomerView{FirstName: m.Customer.FirstName, LastName: m.Customer.LastName}
+	}
+	m.ChefView = nil
+}
+
+// ProjectForCustomer exposes only the chef's business name + image to the customer.
+func (m *MealPlan) ProjectForCustomer() {
+	if m.Chef != nil {
+		m.ChefView = &MealPlanChefView{BusinessName: m.Chef.BusinessName, ProfileImage: m.Chef.ProfileImage}
+	}
+	m.CustomerView = nil
+}
+
+// ProjectForAdmin (RequireAdmin routes only) keeps full customer contact for support.
+func (m *MealPlan) ProjectForAdmin() {
+	if m.Customer != nil {
+		m.CustomerView = &MealPlanCustomerView{
+			FirstName: m.Customer.FirstName, LastName: m.Customer.LastName,
+			Email: m.Customer.Email, Phone: m.Customer.Phone,
+		}
+	}
+	if m.Chef != nil {
+		m.ChefView = &MealPlanChefView{BusinessName: m.Chef.BusinessName, ProfileImage: m.Chef.ProfileImage}
+	}
 }
 
 // MealPlanDay is one slot on one date within a plan.

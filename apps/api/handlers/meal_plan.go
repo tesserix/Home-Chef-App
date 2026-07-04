@@ -351,6 +351,9 @@ func (h *MealPlanHandler) GetMyMealPlans(c *gin.Context) {
 	var plans []models.MealPlan
 	database.DB.Where("customer_id = ?", customerID).
 		Preload("Days").Preload("Chef").Order("created_at DESC").Find(&plans)
+	for i := range plans {
+		plans[i].ProjectForCustomer()
+	}
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
@@ -362,6 +365,7 @@ func (h *MealPlanHandler) GetMealPlan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
 		return
 	}
+	plan.ProjectForCustomer()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
@@ -481,6 +485,7 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize meal plan"})
 		return
 	}
+	plan.ProjectForCustomer()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
@@ -564,6 +569,7 @@ func (h *MealPlanHandler) SkipMealPlanDay(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to skip day"})
 		return
 	}
+	plan.ProjectForCustomer()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
@@ -593,6 +599,7 @@ func (h *MealPlanHandler) VerifyMealPlanPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment verification failed"})
 		return
 	}
+	plan.ProjectForCustomer()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "paymentVerified": true})
 }
 
@@ -614,6 +621,9 @@ func (h *MealPlanHandler) GetChefMealPlanRequests(c *gin.Context) {
 		q = q.Where("escrow_payment_id <> ''")
 	}
 	q.Preload("Days").Preload("Customer").Order("created_at DESC").Find(&plans)
+	for i := range plans {
+		plans[i].ProjectForChef()
+	}
 	c.JSON(http.StatusOK, gin.H{"data": plans})
 }
 
@@ -739,6 +749,7 @@ func (h *MealPlanHandler) RespondMealPlan(c *gin.Context) {
 		return
 	}
 	plan.Subtotal, plan.Total = acceptedTotal, acceptedTotal
+	plan.ProjectForChef()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan, "allAccepted": allAccepted})
 }
 
@@ -769,6 +780,9 @@ func (h *MealPlanHandler) AdminListMealPlans(c *gin.Context) {
 	var plans []models.MealPlan
 	q.Preload("Days").Preload("Customer").Preload("Chef").
 		Order("created_at DESC").Offset(offset).Limit(limit).Find(&plans)
+	for i := range plans {
+		plans[i].ProjectForAdmin()
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": plans,
@@ -796,6 +810,7 @@ func (h *MealPlanHandler) AdminGetMealPlan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
 		return
 	}
+	plan.ProjectForAdmin()
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
