@@ -397,6 +397,66 @@ func TestChefTransferEqualsStatementNetPayout(t *testing.T) {
 	}
 }
 
+// TestConservationExcludesGSTOnCommission (#390, B1) locks the money-conservation
+// identity against the CAPTURED order total, with GST-on-commission EXCLUDED. GST
+// on the platform's commission is a downstream remittance obligation on the
+// platform's own revenue — it is NOT money the customer paid, so it is absent from
+// order.Total and must NOT appear in the identity (mirrors earnings_test.go which
+// asserts commission + tds + net == gross with GST excluded).
+func TestConservationExcludesGSTOnCommission(t *testing.T) {
+	// 1000 food + 50 tax + 70 delivery + 20 chef tip, intra-state, 6%, no service
+	// fee, no refund. Customer pays 1000 + 50 + 20 + 70 = 1140.
+	order := &models.Order{
+		Subtotal:             1000,
+		Tax:                  50,
+		DeliveryFee:          70,
+		ChefTip:              20,
+		DriverTip:            0,
+		ServiceFee:           0,
+		ChefFundedDiscount:   0,
+		DeliveryAddressState: "Maharashtra",
+		CommissionRate:       0.06,
+		Total:                1140,
+	}
+	order.Chef.State = "Maharashtra"
+
+	e := services.ComputeOrderEarnings(services.EarningsInput{
+		ItemRevenue:        order.Subtotal,
+		Tax:                order.Tax,
+		ChefTip:            order.ChefTip,
+		DeliveryFee:        order.DeliveryFee,
+		ChefFundedDiscount: order.ChefFundedDiscount,
+		DeliveryState:      order.DeliveryAddressState,
+		CommissionRate:     order.CommissionRate,
+	}, order.Chef.State)
+
+	// Platform retains commission + TDS + serviceFee — NOT the GST on commission.
+	platformRetained := e.PlatformCommission + e.TDS + order.ServiceFee
+	driver := order.DeliveryFee + order.DriverTip
+	const refunds = 0.0
+
+	sum := services.Round2(e.NetPayout + platformRetained + driver + refunds)
+	if sum != order.Total {
+		t.Fatalf("conservation broken: net %.2f + retained %.2f + driver %.2f + refunds %.2f = %.2f, want total %.2f",
+			e.NetPayout, platformRetained, driver, refunds, sum, order.Total)
+	}
+
+	// The chef's actual transfer equals the statement's NetPayout.
+	if got := chefNetPayout(order); got != e.NetPayout {
+		t.Fatalf("chefNetPayout %.2f != statement net %.2f", got, e.NetPayout)
+	}
+
+	// GST-on-commission is genuinely OUTSIDE the captured total: folding it into
+	// the identity must OVERSHOOT order.Total (proving it is not customer money).
+	gstOnCommission := e.CGST + e.SGST + e.IGST
+	if gstOnCommission <= 0 {
+		t.Fatalf("expected a non-zero GST-on-commission for this order, got %.2f", gstOnCommission)
+	}
+	if services.Round2(sum+gstOnCommission) == order.Total {
+		t.Fatalf("GST-on-commission (%.2f) must NOT be part of order.Total — it is a downstream carve-out", gstOnCommission)
+	}
+}
+
 // TestFrozenRateSurvivesRetune (#390, B2) proves chefNetPayout uses the rate
 // FROZEN on the order, not the live runtime setting. Even if an admin retunes
 // GetCommissionRate after checkout, an order stamped with CommissionRate 0.06

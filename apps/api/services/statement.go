@@ -62,6 +62,12 @@ func MostRecentClosedWeek(now time.Time) (time.Time, time.Time) {
 // GenerateWeeklyStatements computes and persists a WeeklyStatement for every
 // chef with delivered orders in [weekStart, weekEnd), then pushes each chef.
 // Safe to call repeatedly — already-issued statements are skipped.
+//
+// #390: statements now use gross = itemRevenue + Tax + chefTip (food GST in,
+// delivery out) and read the per-order FROZEN commission_rate (rowRate falls back
+// to the live rate for legacy rows that lack one). Pre-#390 rows were computed on
+// the old delivery-in / tax-out basis; they are NOT rewritten — see the plan's
+// MIGRATION-NOTE.md for the historical-rows and TDS-certificate caveats.
 func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time) (int, error) {
 	rows, err := loadStatementOrderRows(weekStart, weekEnd)
 	if err != nil {
