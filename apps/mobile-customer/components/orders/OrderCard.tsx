@@ -13,8 +13,24 @@ interface OrderCardProps {
 // cancelled → surface-soft bg + charcoal-soft text (neutral)
 type ChipStyle = { bg: string; text: string; label: string };
 
-function getStatusChip(status: Order['status']): ChipStyle {
-  switch (status) {
+function getStatusChip(order: Order): ChipStyle {
+  // An order row exists BEFORE payment. If the payment never completed
+  // (sheet dismissed, verify failed), the chef cannot see this order — so a
+  // plain "Pending" chip reads as "waiting for the chef" and leaves the
+  // customer waiting forever. Say what's actually wrong; the detail screen
+  // offers the Pay-now path.
+  if (
+    (order.paymentStatus === 'pending' || order.paymentStatus === 'failed') &&
+    order.status !== 'cancelled' &&
+    order.status !== 'delivered'
+  ) {
+    return {
+      bg: customerColors.destructive.tint,
+      text: customerColors.destructive.DEFAULT,
+      label: 'Payment incomplete',
+    };
+  }
+  switch (order.status) {
     case 'pending':
       return {
         bg: customerColors.coral.tint,
@@ -67,7 +83,7 @@ function getStatusChip(status: Order['status']): ChipStyle {
       return {
         bg: customerColors.surface.soft,
         text: customerColors.charcoal.soft,
-        label: status,
+        label: order.status,
       };
   }
 }
@@ -84,7 +100,7 @@ function formatDate(dateStr: string): string {
 
 export function OrderCard({ order }: OrderCardProps) {
   const router = useRouter();
-  const chip = getStatusChip(order.status);
+  const chip = getStatusChip(order);
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
   function handlePress() {
