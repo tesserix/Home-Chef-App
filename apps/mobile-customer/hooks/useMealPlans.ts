@@ -212,6 +212,25 @@ export function useSkipMealPlanDay() {
   });
 }
 
+/** Cancel a plan that hasn't started/been served — withdraw a pending request or
+ *  cancel a confirmed-but-unstarted plan. Full refund server-side (nothing was
+ *  served). Cancelling frees the customer to rebook with the same chef. */
+export function useCancelMealPlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.put<{ mealPlan: MealPlan }>(`/v1/meal-plans/${id}/cancel`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  });
+}
+
+/** Whether the customer may cancel this plan for a full refund (before start). */
+export function canCancelMealPlan(plan: Pick<MealPlan, 'status' | 'days'>): boolean {
+  const live = ['pending_chef', 'chef_accepted_full', 'chef_modified', 'awaiting_customer', 'confirmed'];
+  if (!live.includes(plan.status)) return false;
+  return !(plan.days ?? []).some((d) => d.status === 'prepared' || d.status === 'delivered');
+}
+
 /** Approve or reject the chef's revised (cherry-picked) plan. */
 export function useFinalizeMealPlan() {
   const qc = useQueryClient();

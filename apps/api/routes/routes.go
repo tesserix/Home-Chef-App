@@ -672,6 +672,7 @@ func SetupRouter() *gin.Engine {
 			mealPlans.GET("/:id", mealPlanHandler.GetMealPlan)
 			mealPlans.PUT("/:id/approve", mealPlanHandler.ApproveMealPlan)
 			mealPlans.PUT("/:id/reject", mealPlanHandler.RejectMealPlan)
+			mealPlans.PUT("/:id/cancel", mealPlanHandler.CancelMealPlan)
 			mealPlans.PUT("/:id/days/:dayId/skip", mealPlanHandler.SkipMealPlanDay)
 			mealPlans.POST("/:id/days/:dayId/confirm-received", payoutHoldHandler.ConfirmMealPlanDayReceived) // #387
 			mealPlans.POST("/:id/verify-payment", mealPlanHandler.VerifyMealPlanPayment)

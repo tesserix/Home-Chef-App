@@ -12,6 +12,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronLeft, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
+  canCancelMealPlan,
+  useCancelMealPlan,
   useFinalizeMealPlan,
   useMealPlan,
   useSkipMealPlanDay,
@@ -38,7 +40,33 @@ export default function MealPlanDetailScreen() {
   const { data, isLoading } = useMealPlan(id);
   const finalize = useFinalizeMealPlan();
   const skipDay = useSkipMealPlanDay();
+  const cancel = useCancelMealPlan();
   const plan = data?.mealPlan;
+
+  function handleCancel() {
+    if (!id) return;
+    Alert.alert(
+      'Cancel this plan?',
+      "You haven't been served yet, so you'll be fully refunded. This can't be undone.",
+      [
+        { text: 'Keep plan', style: 'cancel' },
+        {
+          text: 'Cancel plan',
+          style: 'destructive',
+          onPress: () =>
+            cancel.mutate(id, {
+              onSuccess: () =>
+                Alert.alert(
+                  'Plan cancelled',
+                  'Your plan was cancelled and any advance refunded.',
+                  [{ text: 'OK', onPress: () => router.back() }],
+                ),
+              onError: () => Alert.alert('Something went wrong', 'Please try again.'),
+            }),
+        },
+      ],
+    );
+  }
 
   if (isLoading) {
     return (
@@ -247,6 +275,21 @@ export default function MealPlanDetailScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.approveText}>Approve {acceptedDays.length} days</Text>
+            )}
+          </Pressable>
+        </View>
+      ) : canCancelMealPlan(plan) ? (
+        <View style={styles.footer}>
+          <Pressable
+            onPress={handleCancel}
+            disabled={cancel.isPending}
+            style={styles.rejectBtn}
+            accessibilityRole="button"
+          >
+            {cancel.isPending ? (
+              <ActivityIndicator color={customerColors.destructive.DEFAULT} />
+            ) : (
+              <Text style={styles.rejectText}>Cancel plan</Text>
             )}
           </Pressable>
         </View>
