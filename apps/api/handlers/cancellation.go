@@ -8,14 +8,11 @@ package handlers
 // hold cross-guard paths. Platform fee is always kept.
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
@@ -125,7 +122,9 @@ func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create cancellation"})
 			return
 		}
-		if err := h.executeRefund(&order, &cr); err != nil {
+		// If this inline attempt fails, the request stays refund_executed=false and
+		// the cancellation-sweep retries it — the refund is never lost.
+		if err := services.ExecuteCancellationRefund(&order, &cr); err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Cancelled, but the refund could not be issued — support will follow up", "request": cr})
 			return
 		}
@@ -196,70 +195,12 @@ func (h *CancellationHandler) ConfirmCancellation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save the cancellation"})
 		return
 	}
-	if err := h.executeRefund(&order, &cr); err != nil {
+	// A failure here leaves refund_executed=false; the cancellation-sweep retries.
+	if err := services.ExecuteCancellationRefund(&order, &cr); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Approved, but the refund could not be issued — support will follow up", "request": cr})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"request": cr})
-}
-
-// executeRefund moves the money: it credits the customer's chosen destination for
-// RefundTotalPaise, cancels the order, records the refund, and cross-guards the
-// payout hold so the vendor is never paid the refunded slice (audit #10). The
-// per-tier split is the SNAPSHOT already on cr; the platform fee is never in it.
-func (h *CancellationHandler) executeRefund(order *models.Order, cr *models.CancellationRequest) error {
-	refund := float64(cr.RefundTotalPaise) / 100.0
-
-	err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if refund > 0 {
-			if cr.RefundDestination == "original" {
-				if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
-					return fmt.Errorf("original-method refund needs a razorpay payment")
-				}
-				rzp := services.GetRazorpay()
-				if rzp == nil {
-					return fmt.Errorf("razorpay unavailable")
-				}
-				resp, rErr := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
-					Amount: cr.RefundTotalPaise, Speed: "normal",
-					Notes: map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
-				})
-				if rErr != nil {
-					return rErr
-				}
-				cr.RefundRef = resp.ID
-			} else {
-				if _, wErr := services.CreditWallet(tx, order.CustomerID, refund, models.WalletSourceRefund,
-					&order.ID, "Cancellation refund", "cancel:"+cr.ID.String(), nil); wErr != nil {
-					return wErr
-				}
-				cr.RefundRef = "wallet:cancel:" + cr.ID.String()
-			}
-		}
-		now := time.Now()
-		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
-			"status":        models.OrderStatusCancelled,
-			"refund_amount": order.RefundAmount + refund,
-			"refunded_at":   now,
-			"refund_reason": "customer cancellation",
-		}).Error; err != nil {
-			return err
-		}
-		cr.RefundExecuted = true
-		// Key by order_id (one request per order, unique) so this works even when
-		// the request id was assigned by the DB default and isn't on cr yet.
-		return tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
-			Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef}).Error
-	})
-	if err != nil {
-		return err
-	}
-	// Cross-guard the payout hold — the refunded slice must never reach the chef
-	// (audit #10). Best-effort, after the refund committed.
-	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, "customer cancellation"); hErr != nil {
-		log.Printf("cancellation payout cross-guard failed for order %s: %v", order.ID, hErr)
-	}
-	return nil
 }
 
 // ListChefCancellationRequests — GET /chef/cancel-requests?status= (vendor queue).
