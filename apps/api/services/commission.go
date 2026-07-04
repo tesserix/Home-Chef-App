@@ -30,6 +30,16 @@ func parseCommissionRate(raw string) (float64, bool) {
 	return rate, true
 }
 
+// rowRate returns the per-order FROZEN commission rate when it is set (>0), else
+// the resolved live/default fallback (#390). Legacy orders placed before the
+// commission_rate column existed carry 0 and settle on the live rate.
+func rowRate(frozen, fallback float64) float64 {
+	if frozen > 0 {
+		return frozen
+	}
+	return fallback
+}
+
 // GetCommissionRate resolves the flat platform commission rate from
 // PlatformSettings (`payout.commission_rate`), falling back to
 // DefaultCommissionRate when the setting is missing or invalid. Never panics.

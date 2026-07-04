@@ -6,10 +6,11 @@ import (
 )
 
 func TestComputeOrderEarnings_FlatSixPercent_MoneyConserved(t *testing.T) {
-	// The launch model (ADR-0001 / #390): a flat 6% platform commission.
+	// The launch model (ADR-0001 / #390): a flat 6% platform commission. Gross
+	// carries the food GST (Tax), NOT the delivery fee — delivery is the driver's.
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:    1000,
-		DeliveryFee:    50,
+		Tax:            50,
 		ChefTip:        20,
 		DeliveryState:  "maharashtra",
 		CommissionRate: 0.06,
@@ -55,6 +56,33 @@ func TestComputeOrderEarnings_FlatSixPercent_MoneyConserved(t *testing.T) {
 	}
 }
 
+func TestComputeOrderEarnings_GrossUsesTaxNotDelivery(t *testing.T) {
+	// #390: the chef's gross is food revenue + food GST (Tax) + chef tip. The
+	// delivery fee is the DRIVER's money and must be EXCLUDED from gross/net, even
+	// though OrderEarnings.DeliveryFee is retained as a display/context field.
+	got := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue:    1000,
+		Tax:            50,
+		DeliveryFee:    70,
+		ChefTip:        20,
+		DeliveryState:  "maharashtra",
+		CommissionRate: 0.06,
+	}, "Maharashtra")
+
+	// gross = 1000 + 50(tax) + 20(tip) = 1070 — the ₹70 delivery is NOT in gross.
+	if got.Gross != 1070 {
+		t.Errorf("gross = %.2f, want 1070 (delivery 70 excluded)", got.Gross)
+	}
+	// net = 1070 - commission 60 - tds 10.70 = 999.30
+	if got.NetPayout != 999.3 {
+		t.Errorf("netPayout = %.2f, want 999.30", got.NetPayout)
+	}
+	// DeliveryFee is still surfaced for display, just not folded into gross/net.
+	if got.DeliveryFee != 70 {
+		t.Errorf("DeliveryFee = %.2f, want 70 (display context retained)", got.DeliveryFee)
+	}
+}
+
 func TestComputeOrderEarnings_DefaultRateIsSixPercent(t *testing.T) {
 	// A 0 / unset CommissionRate must fall back to the flat 6% default, NOT 15%.
 	got := ComputeOrderEarnings(EarningsInput{
@@ -73,7 +101,7 @@ func TestComputeOrderEarnings_InjectedRate(t *testing.T) {
 	// default; only the "premium" framing is gone).
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:    1000,
-		DeliveryFee:    50,
+		Tax:            50,
 		ChefTip:        20,
 		DeliveryState:  "maharashtra",
 		CommissionRate: 0.12,
@@ -87,7 +115,7 @@ func TestComputeOrderEarnings_InjectedRate(t *testing.T) {
 	if got.CGST != 10.8 || got.SGST != 10.8 {
 		t.Errorf("cgst/sgst = %.2f/%.2f, want 10.8/10.8", got.CGST, got.SGST)
 	}
-	// net = gross 1070 - commission 120 - tds 10.7 = 939.3
+	// gross = 1000 + 50(tax) + 20 = 1070; net = 1070 - commission 120 - tds 10.7 = 939.3
 	if got.NetPayout != 939.3 {
 		t.Errorf("netPayout = %.2f, want 939.3", got.NetPayout)
 	}
@@ -98,7 +126,7 @@ func TestComputeOrderEarnings_ChefFundedDiscount(t *testing.T) {
 	// before commission/gross/TDS. Effective itemRevenue = 1000 - 100 = 900.
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:        1000,
-		DeliveryFee:        50,
+		Tax:                50,
 		ChefTip:            20,
 		DeliveryState:      "maharashtra",
 		ChefFundedDiscount: 100,
@@ -111,7 +139,7 @@ func TestComputeOrderEarnings_ChefFundedDiscount(t *testing.T) {
 	if got.PlatformCommission != 54 {
 		t.Errorf("commission = %.2f, want 54", got.PlatformCommission)
 	}
-	// gross = 900 + 50 + 20 = 970; tds 1% = 9.7; net = 970 - 54 - 9.7 = 906.3
+	// gross = 900 + 50(tax) + 20 = 970; tds 1% = 9.7; net = 970 - 54 - 9.7 = 906.3
 	if got.Gross != 970 {
 		t.Errorf("gross = %.2f, want 970", got.Gross)
 	}
@@ -129,9 +157,12 @@ func TestComputeOrderEarnings_PlatformFundedLeavesChefWhole(t *testing.T) {
 }
 
 func TestComputeOrderEarnings_IntraState(t *testing.T) {
+	// New formula (#390): gross carries Tax (the food GST the chef receives), not
+	// the delivery fee. Tax:50 drives gross 1070; DeliveryFee is intentionally
+	// absent from gross/net.
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:   1000,
-		DeliveryFee:   50,
+		Tax:           50,
 		ChefTip:       20,
 		DeliveryState: "maharashtra",
 	}, "Maharashtra")

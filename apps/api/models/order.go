@@ -82,12 +82,17 @@ type Order struct {
 	// TaxRate / TaxName freeze the rule applied when the order was placed so
 	// that later edits to TaxRate rows don't retroactively change historical
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
-	TaxRate   float64 `gorm:"default:0" json:"taxRate"`
-	TaxName   string  `gorm:"type:varchar(40);default:''" json:"taxName"`
-	Tip       float64 `gorm:"default:0" json:"tip"`       // Legacy: total tip (kept for backward compat)
-	ChefTip   float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
-	DriverTip float64 `gorm:"default:0" json:"driverTip"` // Tip for the delivery driver
-	Discount  float64 `gorm:"default:0" json:"discount"`
+	TaxRate float64 `gorm:"default:0" json:"taxRate"`
+	TaxName string  `gorm:"type:varchar(40);default:''" json:"taxName"`
+	// CommissionRate freezes the platform commission rate applied when the order
+	// was placed, so a later admin retune of the runtime rate cannot make the
+	// settlement statement disagree with the Route transfer already sent (#390).
+	// 0/unset for legacy rows → callers fall back to the live rate/default.
+	CommissionRate float64 `gorm:"default:0" json:"commissionRate"`
+	Tip            float64 `gorm:"default:0" json:"tip"`       // Legacy: total tip (kept for backward compat)
+	ChefTip        float64 `gorm:"default:0" json:"chefTip"`   // Tip for the chef/kitchen
+	DriverTip      float64 `gorm:"default:0" json:"driverTip"` // Tip for the delivery driver
+	Discount       float64 `gorm:"default:0" json:"discount"`
 	// ChefFundedDiscount is the portion of Discount funded by the chef via a
 	// chef-funded promo (#39). It is billed to the chef at settlement (subtracted
 	// from their Route payout + earnings); platform-funded promos leave it 0 and

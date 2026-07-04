@@ -56,9 +56,17 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
 		chef_tip REAL DEFAULT 0, driver_tip REAL DEFAULT 0, delivery_fee REAL DEFAULT 0,
+		chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
+		delivery_address_state TEXT DEFAULT '',
 		currency TEXT DEFAULT 'INR', razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
 		stripe_payment_intent_id TEXT DEFAULT '', refund_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
+	)`).Error)
+	// PlatformSettings backs services.GetCommissionRate — present so the
+	// frozen-rate test can set a live rate that differs from the order's column.
+	require.NoError(t, db.Exec(`CREATE TABLE platform_settings (
+		id TEXT PRIMARY KEY DEFAULT '', key TEXT, value TEXT DEFAULT '',
+		type TEXT DEFAULT 'string', updated_by TEXT, updated_at DATETIME
 	)`).Error)
 	// CreateOrderPayment preloads Delivery.DeliveryPartner — the tables must
 	// exist (no rows in these tests, so the nested scan stays empty).
@@ -282,26 +290,31 @@ func TestInitiateRefund_AdminAllowed_NoRazorpayPayment_400(t *testing.T) {
 	}
 }
 
-// Chef-funded promo (#39): the chef bears the discount, so their Route payout +
-// the gross-payout helper drop by ChefFundedDiscount; platform-funded leaves it
-// whole. orderSettlements reflects the same reduced chef transfer.
-func TestChefGrossPayout_ChefFunded(t *testing.T) {
-	base := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20}
-	if got := chefGrossPayout(base); got != 1070 {
-		t.Fatalf("platform-funded chef payout = %.2f, want 1070", got)
+// Chef NET payout (#390): the chef's Route transfer is now net of commission and
+// TDS (gross = food + tax + chef tip, less any chef-funded promo they bear).
+// chefNetPayout reads the FROZEN order.CommissionRate — no rate argument — so the
+// transfer can never drift from the settlement statement computed on the same row.
+func TestChefNetPayout(t *testing.T) {
+	// 1000 food + 50 tax + 20 tip @ 6%: gross 1070, commission 60, tds 10.70,
+	// net = 1070 - 60 - 10.70 = 999.30.
+	base := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, CommissionRate: 0.06}
+	if got := chefNetPayout(base); got != 999.3 {
+		t.Fatalf("chef net payout = %.2f, want 999.30", got)
 	}
-	chefFunded := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, ChefFundedDiscount: 100}
-	if got := chefGrossPayout(chefFunded); got != 970 {
-		t.Fatalf("chef-funded chef payout = %.2f, want 970 (less 100 discount)", got)
+	// Chef-funded promo (#39): itemRevenue 900, gross 970, commission 54, tds 9.70,
+	// net = 970 - 54 - 9.70 = 906.30.
+	chefFunded := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, ChefFundedDiscount: 100, CommissionRate: 0.06}
+	if got := chefNetPayout(chefFunded); got != 906.3 {
+		t.Fatalf("chef-funded net payout = %.2f, want 906.30", got)
 	}
-	// Never negative even if a discount somehow exceeds the payout.
-	huge := &models.Order{Subtotal: 100, ChefFundedDiscount: 500}
-	if got := chefGrossPayout(huge); got != 0 {
-		t.Fatalf("over-discounted chef payout = %.2f, want 0 (floored)", got)
+	// Never negative even if a discount somehow exceeds the food revenue.
+	huge := &models.Order{Subtotal: 100, ChefFundedDiscount: 500, CommissionRate: 0.06}
+	if got := chefNetPayout(huge); got != 0 {
+		t.Fatalf("over-discounted net payout = %.2f, want 0 (floored)", got)
 	}
 }
 
-func TestOrderSettlements_ChefFundedReducesChefTransfer(t *testing.T) {
+func TestOrderSettlements_ChefNetTransfer(t *testing.T) {
 	order := &models.Order{
 		OrderNumber:        "HC-1",
 		Subtotal:           1000,
@@ -309,15 +322,157 @@ func TestOrderSettlements_ChefFundedReducesChefTransfer(t *testing.T) {
 		ChefTip:            20,
 		DeliveryFee:        40,
 		ChefFundedDiscount: 100,
+		CommissionRate:     0.06,
 	}
 	order.Chef.RazorpayAccountID = "acc_chef"
 	settlements := orderSettlements(order)
-	// Chef settlement = (1000 + 50 + 20 - 100) = 970 → 97000 paise.
-	if settlements[0].Amount != services.ToPaise(970) {
-		t.Fatalf("chef settlement = %d paise, want %d", settlements[0].Amount, services.ToPaise(970))
+	// Chef settlement = NET: itemRevenue 900, gross 970, commission 54, tds 9.70,
+	// net = 906.30 → 90630 paise.
+	if settlements[0].Amount != services.ToPaise(906.3) {
+		t.Fatalf("chef settlement = %d paise, want %d (net)", settlements[0].Amount, services.ToPaise(906.3))
 	}
-	// Driver settlement (deliveryFee + driverTip) is unaffected by the chef's promo.
+	// Driver settlement (deliveryFee + driverTip) is UNCHANGED — the driver's money.
 	if settlements[1].Amount != services.ToPaise(40) {
 		t.Fatalf("driver settlement = %d paise, want %d", settlements[1].Amount, services.ToPaise(40))
+	}
+}
+
+// TestChefTransferEqualsStatementNetPayout (#390, W3) is the non-tautological
+// guard against field-mapping drift between the two construction sites: the
+// payout side (payment.go → chefNetPayout) and the statement side (statement.go →
+// scanned statementOrderRow). It builds ONE order, maps the payout-side input the
+// way chefNetPayout does, and the statement-side input the way statement.go maps a
+// scanned row (subtotal→ItemRevenue, tax→Tax, delivery_fee→DeliveryFee,
+// chef_tip→ChefTip, chef_funded_discount→ChefFundedDiscount,
+// delivery_address_state→DeliveryState, commission_rate→CommissionRate), then
+// asserts payout NetPayout == statement NetPayout == chefNetPayout(order). A
+// mistake like reading Total instead of Subtotal on one side would break this.
+// TODO(#390): promote to a live SQL round-trip once a handler test DB is wired.
+func TestChefTransferEqualsStatementNetPayout(t *testing.T) {
+	order := &models.Order{
+		OrderNumber:          "HC-EQ",
+		Subtotal:             1000,
+		Tax:                  50,
+		ChefTip:              20,
+		DeliveryFee:          70,
+		DriverTip:            0,
+		ChefFundedDiscount:   0,
+		DeliveryAddressState: "Maharashtra",
+		CommissionRate:       0.06,
+	}
+	order.Chef.State = "Maharashtra"
+
+	// Payout-side input: exactly what chefNetPayout(order) maps.
+	payoutInput := services.EarningsInput{
+		ItemRevenue:        order.Subtotal,
+		Tax:                order.Tax,
+		ChefTip:            order.ChefTip,
+		DeliveryFee:        order.DeliveryFee,
+		ChefFundedDiscount: order.ChefFundedDiscount,
+		DeliveryState:      order.DeliveryAddressState,
+		CommissionRate:     order.CommissionRate,
+	}
+	// Statement-side input: exactly what statement.go maps from a scanned
+	// statementOrderRow for the SAME order (columns spelled out independently).
+	statementInput := services.EarningsInput{
+		ItemRevenue:        order.Subtotal,             // o.subtotal
+		Tax:                order.Tax,                  // o.tax
+		ChefTip:            order.ChefTip,              // o.chef_tip
+		DeliveryFee:        order.DeliveryFee,          // o.delivery_fee
+		ChefFundedDiscount: order.ChefFundedDiscount,   // o.chef_funded_discount
+		DeliveryState:      order.DeliveryAddressState, // o.delivery_address_state
+		CommissionRate:     order.CommissionRate,       // o.commission_rate
+	}
+
+	payoutNet := services.ComputeOrderEarnings(payoutInput, order.Chef.State).NetPayout
+	statementNet := services.ComputeOrderEarnings(statementInput, order.Chef.State).NetPayout
+	if payoutNet != statementNet {
+		t.Fatalf("payout net %.2f != statement net %.2f — field mapping drifted", payoutNet, statementNet)
+	}
+	if got := chefNetPayout(order); got != payoutNet {
+		t.Fatalf("chefNetPayout %.2f != computed net %.2f", got, payoutNet)
+	}
+	if payoutNet != 999.3 {
+		t.Fatalf("net = %.2f, want 999.30", payoutNet)
+	}
+}
+
+// TestConservationExcludesGSTOnCommission (#390, B1) locks the money-conservation
+// identity against the CAPTURED order total, with GST-on-commission EXCLUDED. GST
+// on the platform's commission is a downstream remittance obligation on the
+// platform's own revenue — it is NOT money the customer paid, so it is absent from
+// order.Total and must NOT appear in the identity (mirrors earnings_test.go which
+// asserts commission + tds + net == gross with GST excluded).
+func TestConservationExcludesGSTOnCommission(t *testing.T) {
+	// 1000 food + 50 tax + 70 delivery + 20 chef tip, intra-state, 6%, no service
+	// fee, no refund. Customer pays 1000 + 50 + 20 + 70 = 1140.
+	order := &models.Order{
+		Subtotal:             1000,
+		Tax:                  50,
+		DeliveryFee:          70,
+		ChefTip:              20,
+		DriverTip:            0,
+		ServiceFee:           0,
+		ChefFundedDiscount:   0,
+		DeliveryAddressState: "Maharashtra",
+		CommissionRate:       0.06,
+		Total:                1140,
+	}
+	order.Chef.State = "Maharashtra"
+
+	e := services.ComputeOrderEarnings(services.EarningsInput{
+		ItemRevenue:        order.Subtotal,
+		Tax:                order.Tax,
+		ChefTip:            order.ChefTip,
+		DeliveryFee:        order.DeliveryFee,
+		ChefFundedDiscount: order.ChefFundedDiscount,
+		DeliveryState:      order.DeliveryAddressState,
+		CommissionRate:     order.CommissionRate,
+	}, order.Chef.State)
+
+	// Platform retains commission + TDS + serviceFee — NOT the GST on commission.
+	platformRetained := e.PlatformCommission + e.TDS + order.ServiceFee
+	driver := order.DeliveryFee + order.DriverTip
+	const refunds = 0.0
+
+	sum := services.Round2(e.NetPayout + platformRetained + driver + refunds)
+	if sum != order.Total {
+		t.Fatalf("conservation broken: net %.2f + retained %.2f + driver %.2f + refunds %.2f = %.2f, want total %.2f",
+			e.NetPayout, platformRetained, driver, refunds, sum, order.Total)
+	}
+
+	// The chef's actual transfer equals the statement's NetPayout.
+	if got := chefNetPayout(order); got != e.NetPayout {
+		t.Fatalf("chefNetPayout %.2f != statement net %.2f", got, e.NetPayout)
+	}
+
+	// GST-on-commission is genuinely OUTSIDE the captured total: folding it into
+	// the identity must OVERSHOOT order.Total (proving it is not customer money).
+	gstOnCommission := e.CGST + e.SGST + e.IGST
+	if gstOnCommission <= 0 {
+		t.Fatalf("expected a non-zero GST-on-commission for this order, got %.2f", gstOnCommission)
+	}
+	if services.Round2(sum+gstOnCommission) == order.Total {
+		t.Fatalf("GST-on-commission (%.2f) must NOT be part of order.Total — it is a downstream carve-out", gstOnCommission)
+	}
+}
+
+// TestFrozenRateSurvivesRetune (#390, B2) proves chefNetPayout uses the rate
+// FROZEN on the order, not the live runtime setting. Even if an admin retunes
+// GetCommissionRate after checkout, an order stamped with CommissionRate 0.06
+// still settles at 999.30 — the equality with the already-sent transfer holds.
+func TestFrozenRateSurvivesRetune(t *testing.T) {
+	db := setupPayDB(t)
+	// Live setting says 12%, but the order froze 6% at checkout.
+	require.NoError(t, db.Exec(
+		`INSERT INTO platform_settings (key, value) VALUES ('payout.commission_rate', '0.12')`).Error)
+	if live := services.GetCommissionRate(db); live != 0.12 {
+		t.Fatalf("live rate = %.2f, want 0.12 (precondition)", live)
+	}
+
+	order := &models.Order{Subtotal: 1000, Tax: 50, ChefTip: 20, CommissionRate: 0.06}
+	// chefNetPayout must read the frozen 6%, not the live 12% → 999.30 (not 939.30).
+	if got := chefNetPayout(order); got != 999.3 {
+		t.Fatalf("net = %.2f, want 999.30 (frozen 6%%, not live 12%%)", got)
 	}
 }
