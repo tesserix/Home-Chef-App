@@ -43,6 +43,7 @@ const NAV_ROWS: NavRow[] = [
   { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
   { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
   { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
+  { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: Inbox },
   // Wave 2 additions — surfaced from the More tab so they're
   // discoverable beyond the dashboard cards / settings deep links.
   { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },

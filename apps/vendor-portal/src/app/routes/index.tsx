@@ -44,6 +44,9 @@ const MenuItemFormPage = lazyWithRetry(() => import('@/features/menu/pages/MenuI
 const MenuItemViewPage = lazyWithRetry(() => import('@/features/menu/pages/MenuItemViewPage'));
 const CapacityPage = lazyWithRetry(() => import('@/features/capacity/pages/CapacityPage'));
 const PrepPage = lazyWithRetry(() => import('@/features/meal-plans/pages/PrepPage'));
+const CancellationRequestsPage = lazyWithRetry(
+  () => import('@/features/cancellations/pages/CancellationRequestsPage'),
+);
 const LiveOrdersPage = lazyWithRetry(() => import('@/features/orders/pages/LiveOrdersPage'));
 const OrderHistoryPage = lazyWithRetry(() => import('@/features/orders/pages/OrderHistoryPage'));
 const EarningsPage = lazyWithRetry(() => import('@/features/earnings/pages/EarningsPage'));
@@ -120,6 +123,7 @@ export function AppRoutes() {
           <Route path="subscriptions" element={<SubscriptionSetupPage />} />
           <Route path="capacity" element={<CapacityPage />} />
           <Route path="prep" element={<PrepPage />} />
+          <Route path="cancel-requests" element={<CancellationRequestsPage />} />
           <Route path="menu/new" element={<MenuItemFormPage />} />
           <Route path="menu/:id" element={<MenuItemViewPage />} />
           <Route path="menu/:id/edit" element={<MenuItemFormPage />} />

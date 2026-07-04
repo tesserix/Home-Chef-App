@@ -347,7 +347,8 @@
     "legalAgreement": "Chef & Vendor Agreement",
     "legalEula": "End User Licence",
     "signOut": "Sign out",
-    "logOut": "Log out"
+    "logOut": "Log out",
+    "cancellations": "Cancellations"
   },
   "language": {
     "title": "Language",

@@ -35,6 +35,7 @@ const navigation = [
   { name: 'Subscriptions', href: '/subscriptions', icon: CalendarClock },
   { name: 'Capacity', href: '/capacity', icon: Gauge },
   { name: 'Orders', href: '/orders', icon: ClipboardList },
+  { name: 'Cancellations', href: '/cancel-requests', icon: ClipboardList },
   { name: 'Earnings', href: '/earnings', icon: DollarSign },
   { name: 'Admin Requests', href: '/admin-requests', icon: ClipboardList },
   { name: 'Reviews', href: '/reviews', icon: Star },
