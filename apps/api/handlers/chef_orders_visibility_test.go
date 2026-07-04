@@ -28,6 +28,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/services"
 )
 
 func setupChefVisDB(t *testing.T) *gorm.DB {
@@ -79,10 +80,19 @@ func seedVisChef(t *testing.T, db *gorm.DB) (uuid.UUID, uuid.UUID) {
 
 func seedVisOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, status, payStatus string) {
 	t.Helper()
+	// Anchor created_at to IST noon *today* — the SAME IST basis the dashboard's
+	// "today" boundary uses (services.CapacityDay = IST midnight). Bare time.Now()
+	// is UTC/local in CI, and sqlite compares the naive datetime strings without
+	// timezone normalization: when CI runs after IST midnight (18:30–24:00 UTC), a
+	// UTC-stamped created_at sorts on the *previous* calendar day and drops out of
+	// `created_at >= todayStart`, making todayOrders 0. IST noon has 12h of margin on
+	// each side of the boundary, so the count is stable in every runner timezone.
+	// (Production Postgres compares timestamptz as instants and is unaffected.)
+	createdAt := services.CapacityDay(time.Now()).Add(12 * time.Hour)
 	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, total, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, 100, ?)`,
 		uuid.NewString(), "ORD-"+uuid.NewString()[:6], uuid.NewString(), chefID.String(),
-		status, payStatus, time.Now()).Error)
+		status, payStatus, createdAt).Error)
 }
 
 func chefVisRouter(userID uuid.UUID) *gin.Engine {
