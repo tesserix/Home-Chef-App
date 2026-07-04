@@ -218,6 +218,9 @@ func Migrate() error {
 		&models.MealPlan{},
 		&models.MealPlanDay{},
 
+		// Cancellation with vendor arbitration + tiered refund (#475)
+		&models.CancellationRequest{},
+
 		// Post-delivery tips (#45)
 		&models.Tip{},
 
