@@ -186,17 +186,82 @@ func TestCrossguard_ReleasedReversed(t *testing.T) {
 	require.NotNil(t, loadOrder(t, db, id).PayoutSettledAt, "reverse seam stamped settled once")
 }
 
+// TestCrossguard_DisputedWithheld — an approved refund on a disputed order blocks
+// the payout (#458). Before the fix the crossguard no-op'd on disputed, leaving the
+// hold stuck in the dead-end even though the customer got their money back.
+func TestCrossguard_DisputedWithheld(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", nil)
+
+	require.NoError(t, WithholdOrReverseOrderHoldForRefund(db, id, "order issue refund"))
+	require.Equal(t, models.PayoutHoldWithheld, loadOrderHold(t, db, id), "refund on a disputed order withholds the payout")
+	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+}
+
 func TestCrossguard_NoopStates(t *testing.T) {
 	flagsOff(t)
 	db := setupCrossguardDB(t)
 	for _, hold := range []models.PayoutHoldStatus{
 		models.PayoutHoldNone, models.PayoutHoldWithheld,
-		models.PayoutHoldReversed, models.PayoutHoldDisputed,
+		models.PayoutHoldReversed,
 	} {
 		id, _ := seedCrossOrder(t, db, hold, "delivered", nil)
 		require.NoError(t, WithholdOrReverseOrderHoldForRefund(db, id, "refund"))
 		require.Equal(t, hold, loadOrderHold(t, db, id), "no-op for %s", hold)
 	}
+}
+
+// ── Reject drive: disputed → release_eligible (#458) ───────────────────────
+
+// A rejected dispute with no remaining pending issue releases the held payout.
+func TestReleaseDisputedOrderHoldIfCleared_Releases(t *testing.T) {
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", nil)
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return ReleaseDisputedOrderHoldIfCleared(tx, id)
+	}))
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, id))
+	require.Equal(t, 1, countOutbox(t, db, SubjectHoldReleaseEligible), "emits release-eligible on the transition")
+}
+
+// A still-pending issue keeps the hold disputed (order may carry several issues).
+func TestReleaseDisputedOrderHoldIfCleared_PendingIssueBlocks(t *testing.T) {
+	db := setupCrossguardDB(t)
+	id, customer := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", nil)
+	seedPendingIssue(t, db, id, customer)
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return ReleaseDisputedOrderHoldIfCleared(tx, id)
+	}))
+	require.Equal(t, models.PayoutHoldDisputed, loadOrderHold(t, db, id), "still disputed while an issue is pending")
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleaseEligible))
+}
+
+// A refunded order never releases, even if the dispute was rejected.
+func TestReleaseDisputedOrderHoldIfCleared_RefundedBlocks(t *testing.T) {
+	db := setupCrossguardDB(t)
+	now := time.Now()
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", &now)
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return ReleaseDisputedOrderHoldIfCleared(tx, id)
+	}))
+	require.Equal(t, models.PayoutHoldDisputed, loadOrderHold(t, db, id), "refunded_at blocks release")
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleaseEligible))
+}
+
+// A non-disputed hold is left untouched (no-op).
+func TestReleaseDisputedOrderHoldIfCleared_NonDisputedNoop(t *testing.T) {
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldAwaitingConfirmation, "delivered", nil)
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return ReleaseDisputedOrderHoldIfCleared(tx, id)
+	}))
+	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadOrderHold(t, db, id))
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleaseEligible))
 }
 
 func TestCrossguard_Idempotent(t *testing.T) {

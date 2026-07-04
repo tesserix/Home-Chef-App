@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/homechef/api/database"
+	"github.com/homechef/api/models"
 )
 
 // order_issue_test.go — #37. Guardrails on the report endpoint: one open report
@@ -32,12 +34,16 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, payment_status TEXT,
 			status TEXT, subtotal REAL, tax REAL, total REAL, refund_amount REAL DEFAULT 0,
-			refund_reason TEXT, refund_initiated_by TEXT, refunded_at DATETIME, created_at DATETIME,
+			refund_reason TEXT, refund_initiated_by TEXT, refunded_at DATETIME,
+			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, created_at DATETIME,
 			updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, name TEXT, price REAL, quantity INTEGER,
 			subtotal REAL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, issue_count INTEGER DEFAULT 0, deleted_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
+		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
+			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
+			next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 	}
 	for _, s := range stmts {
 		require.NoError(t, db.Exec(s).Error)
@@ -113,4 +119,80 @@ func TestReportIssueGuards(t *testing.T) {
 		w := reportIssueReq(t, attacker, orderID, "reason=missing_item")
 		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
+}
+
+// rejectIssueReq POSTs an admin reject for the given issue.
+func rejectIssueReq(t *testing.T, adminID, issueID uuid.UUID) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("userID", adminID); c.Next() })
+	r.POST("/admin/issues/:issueId/reject", NewOrderIssueHandler().AdminRejectIssue)
+	req := httptest.NewRequest(http.MethodPost, "/admin/issues/"+issueID.String()+"/reject", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// TestAdminRejectIssue_DrivesDisputedHoldToReleaseEligible — rejecting the dispute
+// (#458) advances the order's disputed payout hold back to release_eligible in the
+// same transaction, so the chef's legitimately-earned payout leaves the dead-end.
+func TestAdminRejectIssue_DrivesDisputedHoldToReleaseEligible(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, payout_hold_status, customer_confirmed_at)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 400, ?, ?)`,
+		orderID.String(), customer.String(), chefID.String(), string(models.PayoutHoldDisputed), time.Now()).Error)
+	issueID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status)
+		 VALUES (?, ?, ?, ?, 'quality_issue', 'pending')`,
+		issueID.String(), orderID.String(), chefID.String(), customer.String()).Error)
+
+	w := rejectIssueReq(t, admin, issueID)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var status, hold string
+	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM orders WHERE id = ?`, orderID.String()).Scan(&hold).Error)
+	require.Equal(t, string(models.IssueRejected), status)
+	require.Equal(t, string(models.PayoutHoldReleaseEligible), hold, "rejecting the dispute releases the held payout")
+}
+
+// TestAdminRejectIssue_MultiIssue_StaysDisputedUntilLastCleared — an order can carry
+// several pending issues; rejecting one must keep the hold disputed while another is
+// still pending, and only release once the last one clears (#458 NOT EXISTS guard).
+func TestAdminRejectIssue_MultiIssue_StaysDisputedUntilLastCleared(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, payout_hold_status, customer_confirmed_at)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 400, ?, ?)`,
+		orderID.String(), customer.String(), chefID.String(), string(models.PayoutHoldDisputed), time.Now()).Error)
+	issue1, issue2 := uuid.New(), uuid.New()
+	for _, iid := range []uuid.UUID{issue1, issue2} {
+		require.NoError(t, db.Exec(
+			`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status)
+			 VALUES (?, ?, ?, ?, 'quality_issue', 'pending')`,
+			iid.String(), orderID.String(), chefID.String(), customer.String()).Error)
+	}
+
+	// Reject the first — the second is still pending, so the hold must stay disputed.
+	require.Equal(t, http.StatusOK, rejectIssueReq(t, admin, issue1).Code)
+	require.Equal(t, string(models.PayoutHoldDisputed), orderHold(t, db, orderID), "still disputed while issue2 pending")
+
+	// Reject the second — now nothing is pending, the hold releases.
+	require.Equal(t, http.StatusOK, rejectIssueReq(t, admin, issue2).Code)
+	require.Equal(t, string(models.PayoutHoldReleaseEligible), orderHold(t, db, orderID), "released once the last issue cleared")
+
+	// Rejecting an already-handled issue is a 409 and changes nothing.
+	require.Equal(t, http.StatusConflict, rejectIssueReq(t, admin, issue2).Code)
+}
+
+func orderHold(t *testing.T, db *gorm.DB, orderID uuid.UUID) string {
+	t.Helper()
+	var hold string
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM orders WHERE id = ?`, orderID.String()).Scan(&hold).Error)
+	return hold
 }

@@ -75,10 +75,16 @@ func requireReason(c *gin.Context) (string, bool) {
 	return reason, true
 }
 
-// GetPendingPayouts lists release-eligible holds (awaiting via ?include=awaiting),
-// optionally scoped by ?chefId / ?before. GET /admin/payouts/pending.
+// GetPendingPayouts lists release-eligible holds, with awaiting and/or disputed
+// surfaced via ?include= (comma-tolerant: "awaiting", "disputed", "awaiting,disputed").
+// Disputed rows are visibility-only (non-releasable). Optionally scoped by
+// ?chefId / ?before. GET /admin/payouts/pending.
 func (h *AdminPayoutHandler) GetPendingPayouts(c *gin.Context) {
-	f := services.PendingFilter{IncludeAwaiting: c.Query("include") == "awaiting"}
+	include := c.Query("include")
+	f := services.PendingFilter{
+		IncludeAwaiting: strings.Contains(include, "awaiting"),
+		IncludeDisputed: strings.Contains(include, "disputed"),
+	}
 	if v := c.Query("chefId"); v != "" {
 		if id, err := uuid.Parse(v); err == nil {
 			f.ChefID = id
