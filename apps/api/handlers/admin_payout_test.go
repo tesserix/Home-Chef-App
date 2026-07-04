@@ -203,3 +203,46 @@ func TestBulkRelease_SkipsIneligible(t *testing.T) {
 	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM orders WHERE id = ?`, eligible.String()).Scan(&status).Error)
 	require.Equal(t, string(models.PayoutHoldReleased), status)
 }
+
+// TestBulkRelease_LabelsRealFailureNotSkipped — a genuine (non-sentinel) release
+// error must land in `failed` (a reconcile candidate), NOT be mislabeled a benign
+// `skipped` (#462). A missing meal-plan-day makes ReleaseHold return a wrapped
+// (non-ErrHoldNotEligible) error.
+func TestBulkRelease_LabelsRealFailureNotSkipped(t *testing.T) {
+	db := setupPayoutHandlerDB(t)
+	eligible := seedHandlerOrder(t, db, models.PayoutHoldReleaseEligible)
+	alreadyDone := seedHandlerOrder(t, db, models.PayoutHoldReleased)
+	missingDay := uuid.New()
+
+	body := map[string]any{"items": []map[string]string{
+		{"aggType": "order", "id": eligible.String()},
+		{"aggType": "order", "id": alreadyDone.String()},
+		{"aggType": "meal-plan-day", "id": missingDay.String()},
+	}}
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPost, "/admin/payouts/release-bulk", body)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		Released int              `json:"released"`
+		Skipped  []map[string]any `json:"skipped"`
+		Failed   []map[string]any `json:"failed"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Released, "the eligible row advanced")
+	require.Len(t, resp.Skipped, 1, "the already-released row is a benign skip")
+	require.Len(t, resp.Failed, 1, "the genuine error is reported as failed, not skipped")
+	require.Equal(t, missingDay.String(), resp.Failed[0]["id"])
+}
+
+// TestBulkRelease_CapsBatchSize — an oversized batch is rejected (400), not
+// silently processed/truncated (#462).
+func TestBulkRelease_CapsBatchSize(t *testing.T) {
+	db := setupPayoutHandlerDB(t)
+	_ = db
+	items := make([]map[string]string, 0, 501)
+	for i := 0; i < 501; i++ {
+		items = append(items, map[string]string{"aggType": "order", "id": uuid.NewString()})
+	}
+	w := doJSON(t, payoutRouter(uuid.New()), http.MethodPost, "/admin/payouts/release-bulk", map[string]any{"items": items})
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}

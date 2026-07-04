@@ -10,6 +10,7 @@ package handlers
 // writes an audit_logs row (actor + old→new + mandatory reason for withhold/reverse).
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,10 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// maxBulkReleaseItems caps a single bulk-release batch. Oversized batches are
+// rejected (400) rather than silently truncated (#462).
+const maxBulkReleaseItems = 500
 
 type AdminPayoutHandler struct{}
 
@@ -54,7 +59,7 @@ func parsePayoutID(c *gin.Context) (uuid.UUID, bool) {
 // respondActionError maps a service error to the right status + code. A racing /
 // duplicate action (ErrHoldNotEligible) is a 409, not a 500.
 func respondActionError(c *gin.Context, err error) {
-	if err == services.ErrHoldNotEligible {
+	if errors.Is(err, services.ErrHoldNotEligible) {
 		c.JSON(http.StatusConflict, gin.H{"error": "hold_not_eligible",
 			"message": "This payout is no longer in a state that allows this action."})
 		return
@@ -193,23 +198,44 @@ func (h *AdminPayoutHandler) BulkReleasePayouts(c *gin.Context) {
 		return
 	}
 	items := h.resolveBulkItems(req)
+	if len(items) > maxBulkReleaseItems {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too_many_items",
+			"message": "Too many payouts in one batch — narrow by date or chef and retry (max 500)."})
+		return
+	}
 	releasedIDs := make([]string, 0, len(items))
+	skippedIDs := make([]string, 0)
+	failedIDs := make([]string, 0)
 	skipped := make([]gin.H, 0)
+	failed := make([]gin.H, 0)
 	for _, it := range items {
 		id, err := uuid.Parse(it.ID)
 		if err != nil || (it.AggType != "order" && it.AggType != "meal-plan-day" && it.AggType != "group-order") {
 			skipped = append(skipped, gin.H{"id": it.ID, "reason": "invalid"})
+			skippedIDs = append(skippedIDs, it.ID)
 			continue
 		}
 		if err := services.ReleaseHold(database.DB, it.AggType, id); err != nil {
-			skipped = append(skipped, gin.H{"id": it.ID, "reason": "not_eligible"})
+			// A benign racing/duplicate action (the sentinel) is a skip; any other
+			// error is a genuine failure and a reconcile candidate — surface it as
+			// `failed` instead of silently labeling everything `not_eligible` (#462).
+			if errors.Is(err, services.ErrHoldNotEligible) {
+				skipped = append(skipped, gin.H{"id": it.ID, "reason": "not_eligible"})
+				skippedIDs = append(skippedIDs, it.ID)
+			} else {
+				failed = append(failed, gin.H{"id": it.ID, "reason": "release_failed"})
+				failedIDs = append(failedIDs, it.ID)
+			}
 			continue
 		}
 		releasedIDs = append(releasedIDs, it.ID)
 	}
 	services.LogAudit(c, "payout.bulk_released", "payout", "",
-		nil, gin.H{"released": len(releasedIDs), "skipped": len(skipped)})
-	c.JSON(http.StatusOK, gin.H{"released": len(releasedIDs), "releasedIds": releasedIDs, "skipped": skipped})
+		nil, gin.H{"released": releasedIDs, "skipped": skippedIDs, "failed": failedIDs})
+	c.JSON(http.StatusOK, gin.H{
+		"released": len(releasedIDs), "releasedIds": releasedIDs,
+		"skipped": skipped, "failed": failed,
+	})
 }
 
 // resolveBulkItems returns the explicit items, or (when none are given but a

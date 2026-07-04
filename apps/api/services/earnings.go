@@ -126,13 +126,16 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	// delivery fee is intentionally NOT here — it is the driver's money (#390).
 	gross := Round2(itemRevenue + in.Tax + in.ChefTip)
 
+	// GST on the platform's commission. Split so CGST+SGST reconciles EXACTLY to the
+	// full GST liability (#462): compute the full GST once, then put the odd paise (if
+	// any) on SGST via the remainder. For odd-paise commission the two heads can differ
+	// by 1 paise — standard GST rounding — rather than the halves drifting off the
+	// total (the old cgst=sgst=Round2(GST/2*commission) could sum ±1 paise off).
 	var cgst, sgst, igst float64
-	halfGST := Round2(RateGST / 2 * commission)
 	fullGST := Round2(RateGST * commission)
-
 	if NormaliseState(in.DeliveryState) == NormaliseState(chefState) {
-		cgst = halfGST
-		sgst = halfGST
+		cgst = Round2(fullGST / 2)
+		sgst = Round2(fullGST - cgst)
 	} else {
 		igst = fullGST
 	}
