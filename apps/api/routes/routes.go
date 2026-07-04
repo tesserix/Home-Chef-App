@@ -179,6 +179,7 @@ func SetupRouter() *gin.Engine {
 	socialHandler := handlers.NewSocialHandler()
 	cateringHandler := handlers.NewCateringHandler()
 	mealPlanHandler := handlers.NewMealPlanHandler()
+	cancellationHandler := handlers.NewCancellationHandler()
 	supportHandler := handlers.NewSupportHandler()
 	promoHandler := handlers.NewPromoHandler()
 	chatHandler := handlers.NewChatHandler()
@@ -455,6 +456,9 @@ func SetupRouter() *gin.Engine {
 			// Post-delivery refund — partial or full goodwill remedy on
 			// an already-delivered order. Distinct from cancel.
 			chefDashboard.POST("/orders/:orderId/refund", chefOrderCancelHandler.RefundOrder)
+			// Vendor arbitration of cancellation requests (#475)
+			chefDashboard.GET("/cancel-requests", cancellationHandler.ListChefCancellationRequests)
+			chefDashboard.POST("/cancel-requests/:id/confirm", cancellationHandler.ConfirmCancellation)
 			// Chef can download the same GSTIN tax invoice the customer
 			// gets — used for their own bookkeeping. Wave 3 §invoicing.
 			chefDashboard.GET("/orders/:orderId/invoice.pdf", chefOrderCancelHandler.GetOrderInvoicePDF)
@@ -525,6 +529,9 @@ func SetupRouter() *gin.Engine {
 			orders.GET("", orderHandler.GetOrders)
 			orders.GET("/:id", orderHandler.GetOrder)
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
+			// Cancellation with vendor arbitration + tiered refund (#475)
+			orders.POST("/:id/cancel-request", cancellationHandler.RequestCancellation)
+			orders.POST("/:id/cancel-request/dispute", cancellationHandler.DisputeCancellation)
 			orders.POST("/:id/reorder", orderHandler.ReorderOrder)                       // #238
 			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue)              // #37
 			orders.GET("/:id/issues", orderIssueHandler.GetMyOrderIssues)                // #37
