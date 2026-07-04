@@ -30,6 +30,7 @@ const ChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/ChefsPage')
 const FssaiLockedChefsPage = lazyWithRetry(() => import('@/features/chefs/pages/FssaiLockedChefsPage'));
 const WalletAdminPage = lazyWithRetry(() => import('@/features/wallet/pages/WalletAdminPage'));
 const OrderIssuesPage = lazyWithRetry(() => import('@/features/order-issues/pages/OrderIssuesPage'));
+const CancellationsPage = lazyWithRetry(() => import('@/features/cancellations/pages/CancellationsPage'));
 const PromosPage = lazyWithRetry(() => import('@/features/promos/pages/PromosPage'));
 const WinbackPage = lazyWithRetry(() => import('@/features/winback/pages/WinbackPage'));
 const LoyaltyPage = lazyWithRetry(() => import('@/features/loyalty/pages/LoyaltyPage'));
@@ -107,6 +108,7 @@ export function AppRoutes() {
           <Route path="fssai-lockouts" element={<FssaiLockedChefsPage />} />
           <Route path="wallets" element={<WalletAdminPage />} />
           <Route path="order-issues" element={<OrderIssuesPage />} />
+          <Route path="cancellations" element={<CancellationsPage />} />
           <Route path="promos" element={<PromosPage />} />
           <Route path="winback" element={<WinbackPage />} />
           <Route path="loyalty" element={<LoyaltyPage />} />

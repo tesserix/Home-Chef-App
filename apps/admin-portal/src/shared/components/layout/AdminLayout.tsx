@@ -45,6 +45,7 @@ const navigation = [
   { name: 'Meal Plans', href: '/meal-plans', icon: CalendarRange },
   { name: 'Wallets', href: '/wallets', icon: Wallet },
   { name: 'Order Issues', href: '/order-issues', icon: AlertTriangle },
+  { name: 'Cancellations', href: '/cancellations', icon: AlertTriangle },
   { name: 'Promo Codes', href: '/promos', icon: Tag },
   { name: 'Win-back', href: '/winback', icon: Gift },
   { name: 'Loyalty', href: '/loyalty', icon: Award },
