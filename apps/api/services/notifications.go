@@ -78,6 +78,10 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 		// issue fan-out is independent of the order-lifecycle notifications.
 		{Stream: "ORDERS", Durable: "notify-order-issue", Handler: h,
 			Subjects: []string{SubjectOrderIssueReported}},
+		// Cancellation arbitration (#475): notify the chef of a request, the
+		// customer of the refund. Own durable, independent of order lifecycle.
+		{Stream: "ORDERS", Durable: "notify-cancellation", Handler: h,
+			Subjects: []string{SubjectCancellationRequested, SubjectCancellationResolved}},
 		{Stream: "NOTIFICATIONS", Durable: "notify-dispatch", Handler: h,
 			Subjects: []string{SubjectNotificationEmail, SubjectNotificationPush, SubjectNotificationSMS}},
 		{Stream: "USERS", Durable: "notify-users", Handler: h,
@@ -135,6 +139,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleOrderUpdated)
 	case SubjectOrderCancelled:
 		return decodeThen(data, s.handleOrderCancelled)
+	case SubjectCancellationRequested:
+		return decodeThen(data, s.handleCancellationRequested)
+	case SubjectCancellationResolved:
+		return decodeThen(data, s.handleCancellationResolved)
 	case SubjectOrderDelivered:
 		return decodeThen(data, s.handleOrderDelivered)
 	case SubjectChefNewOrder:
@@ -481,6 +489,46 @@ func (s *NotificationService) handleReviewPosted(event Event) error {
 		UserID: event.UserID, Type: "push",
 		Title: title, Message: message, Data: event.Data,
 	})
+	return nil
+}
+
+// handleCancellationRequested notifies the chef that a customer wants to cancel
+// an order — confirm it + pick a refund tier (#475). Targets the chef's user id.
+func (s *NotificationService) handleCancellationRequested(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	title := "Cancellation request"
+	message := "A customer asked to cancel an order — confirm it and choose the refund in the app."
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID: event.UserID, Type: "cancellation_requested", Title: title, Message: message, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save cancellation_requested notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "push", Title: title, Message: message, Data: event.Data})
+	return nil
+}
+
+// handleCancellationResolved notifies the customer that their cancellation was
+// confirmed and a refund issued (#475). Targets the customer's user id.
+func (s *NotificationService) handleCancellationResolved(event Event) error {
+	if event.UserID == uuid.Nil {
+		return nil
+	}
+	refund, _ := event.Data["refund"].(float64)
+	title := "Order cancelled"
+	message := "Your cancellation is confirmed."
+	if refund > 0 {
+		message = fmt.Sprintf("Your cancellation is confirmed — ₹%.0f refunded.", refund)
+	}
+	data, _ := json.Marshal(event.Data)
+	if err := s.saveNotification(&models.Notification{
+		UserID: event.UserID, Type: "cancellation_resolved", Title: title, Message: message, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save cancellation_resolved notification: %w", err)
+	}
+	PublishNotification(NotificationEvent{UserID: event.UserID, Type: "push", Title: title, Message: message, Data: event.Data})
 	return nil
 }
 

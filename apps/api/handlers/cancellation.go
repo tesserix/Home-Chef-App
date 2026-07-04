@@ -144,7 +144,7 @@ func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 	// Tell the chef a cancellation is awaiting their confirmation.
 	var chef models.ChefProfile
 	if database.DB.Select("user_id").First(&chef, "id = ?", order.ChefID).Error == nil && chef.UserID != uuid.Nil {
-		_ = services.EnqueueEvent(database.DB, services.SubjectChefNewOrder, "cancellation.requested", chef.UserID, map[string]any{
+		_ = services.EnqueueEvent(database.DB, services.SubjectCancellationRequested, "cancellation.requested", chef.UserID, map[string]any{
 			"cancellation_request_id": cr.ID.String(), "order_id": orderID.String(),
 		})
 	}
@@ -216,6 +216,23 @@ func (h *CancellationHandler) ListChefCancellationRequests(c *gin.Context) {
 	database.DB.Where("chef_id = ? AND status = ?", chef.ID, status).
 		Order("created_at DESC").Find(&reqs)
 	c.JSON(http.StatusOK, gin.H{"data": reqs})
+}
+
+// GetCancellationRequest — GET /orders/:id/cancel-request (customer). Returns the
+// request (status + refund snapshot) so the customer app can show progress.
+func (h *CancellationHandler) GetCancellationRequest(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order id"})
+		return
+	}
+	var cr models.CancellationRequest
+	if err := database.DB.Where("order_id = ? AND customer_id = ?", orderID, customerID).First(&cr).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No cancellation request for this order"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"request": cr})
 }
 
 // DisputeCancellation — POST /orders/:id/cancel-request/dispute (customer).

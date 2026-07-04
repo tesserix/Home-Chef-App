@@ -49,6 +49,8 @@ func setupCancelDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID, uuid.UUID) {
 			amount real, balance_after real, currency text, order_id text, reason text, created_by text,
 			idempotency_key text UNIQUE, created_at datetime)`,
 		`CREATE TABLE platform_settings (id text PRIMARY KEY, key text, value text, type text, updated_by text, updated_at datetime)`,
+		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text, aggregate_id text,
+			payload text, status text, attempts int, last_error text, next_retry_at datetime, created_at datetime, updated_at datetime, published_at datetime)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

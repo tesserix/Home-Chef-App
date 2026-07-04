@@ -20,9 +20,12 @@ const (
 	SubjectOrderCancelled     = "orders.cancelled"
 	SubjectOrderDelivered     = "orders.delivered"
 	SubjectOrderIssueReported = "orders.issue_reported" // → chef: a customer reported an order issue (#37)
-	SubjectChefNewOrder       = "chef.new_order"
-	SubjectChefTipReceived    = "chef.tip_received"   // → chef: post-delivery tip
-	SubjectDriverTipReceived  = "driver.tip_received" // → rider: post-delivery tip
+	// Cancellation with vendor arbitration (#475).
+	SubjectCancellationRequested = "orders.cancellation_requested" // → chef: confirm the cancellation
+	SubjectCancellationResolved  = "orders.cancellation_resolved"  // → customer: refund issued
+	SubjectChefNewOrder          = "chef.new_order"
+	SubjectChefTipReceived       = "chef.tip_received"   // → chef: post-delivery tip
+	SubjectDriverTipReceived     = "driver.tip_received" // → rider: post-delivery tip
 
 	// Group / office orders (#46)
 	SubjectGroupOrderInvited   = "group_orders.invited"   // → guest: invited/joined

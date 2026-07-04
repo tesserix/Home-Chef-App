@@ -531,6 +531,7 @@ func SetupRouter() *gin.Engine {
 			orders.POST("/:id/cancel", orderHandler.CancelOrder)
 			// Cancellation with vendor arbitration + tiered refund (#475)
 			orders.POST("/:id/cancel-request", cancellationHandler.RequestCancellation)
+			orders.GET("/:id/cancel-request", cancellationHandler.GetCancellationRequest)
 			orders.POST("/:id/cancel-request/dispute", cancellationHandler.DisputeCancellation)
 			orders.POST("/:id/reorder", orderHandler.ReorderOrder)                       // #238
 			orders.POST("/:id/report-issue", orderIssueHandler.ReportIssue)              // #37
