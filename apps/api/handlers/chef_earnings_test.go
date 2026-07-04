@@ -11,11 +11,12 @@ import (
 // intra-state order (delivery state == chef state → CGST + SGST, no IGST).
 func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 	row := earningsOrderRow{
-		OrderID:       uuid.MustParse("00000000-0000-0000-0000-000000000001"),
-		OrderNumber:   "HC001",
-		CompletedAt:   time.Now(),
-		ItemRevenue:   1000.00,
-		DeliveryFee:   50.00,
+		OrderID:     uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		OrderNumber: "HC001",
+		CompletedAt: time.Now(),
+		ItemRevenue: 1000.00,
+		// #390: gross carries the food GST (Tax), not the delivery fee.
+		Tax:           50.00,
 		ChefTip:       20.00,
 		DeliveryState: "Maharashtra",
 	}
@@ -29,7 +30,7 @@ func TestComputeOrderBreakdown_IntraState(t *testing.T) {
 		t.Errorf("PlatformCommission: got %.2f, want %.2f", got.PlatformCommission, wantCommission)
 	}
 
-	// gross = 1000 + 50 + 20 = 1070
+	// gross = 1000 + 50(tax) + 20 = 1070
 	wantGross := 1070.00
 	if got.Gross != wantGross {
 		t.Errorf("Gross: got %.2f, want %.2f", got.Gross, wantGross)

@@ -96,6 +96,7 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 		OrderNumber:   "HC-LIFECYCLE",
 		CompletedAt:   time.Now(),
 		ItemRevenue:   sub1, // survived subtotal after the partial refund
+		Tax:           tax1, // #390: the SURVIVING food GST also flows to the chef
 		DeliveryFee:   deliveryFee,
 		ChefTip:       tip,
 		DeliveryState: "Maharashtra",
@@ -107,7 +108,9 @@ func TestOrderLifecycle_RefundRecomputeAndEarnings(t *testing.T) {
 	if got.PlatformCommission != 36.0 { // 0.06 * 600, not 0.06 * 1000
 		t.Fatalf("earnings commission: got %.2f, want 36.00 (6%% of the refunded-down revenue)", got.PlatformCommission)
 	}
-	if got.Gross != 660.0 { // 600 + 40 + 20
-		t.Fatalf("earnings gross: got %.2f, want 660.00", got.Gross)
+	// #390: gross = itemRevenue 600 + surviving tax 30 + chef tip 20 = 650. The
+	// delivery fee (40) is the driver's and is excluded from the chef's gross.
+	if got.Gross != 650.0 {
+		t.Fatalf("earnings gross: got %.2f, want 650.00", got.Gross)
 	}
 }
