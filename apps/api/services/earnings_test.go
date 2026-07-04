@@ -190,6 +190,41 @@ func TestComputeOrderEarnings_IntraState(t *testing.T) {
 	}
 }
 
+// TestComputeOrderEarnings_GSTSplitReconciles — the CGST/SGST split must reconcile
+// EXACTLY to the full GST on commission, even for odd-paise commission (#462). The
+// old split (cgst=sgst=Round2(GST/2*commission)) could sum ±1 paise off the total.
+// commission 0.50 → fullGST = Round2(0.18*0.50) = 0.09; halving 0.045 doesn't
+// reconcile under the old code. Compared in integer paise to avoid float noise.
+func TestComputeOrderEarnings_GSTSplitReconciles(t *testing.T) {
+	intra := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue: 5, CommissionRate: 0.10, DeliveryState: "maharashtra",
+	}, "Maharashtra")
+	if paise(intra.PlatformCommission) != 50 {
+		t.Fatalf("commission = %.2f, want 0.50 (odd-paise GST setup)", intra.PlatformCommission)
+	}
+	fullGST := paise(Round2(RateGST * intra.PlatformCommission)) // 9 paise
+	if paise(intra.CGST)+paise(intra.SGST) != fullGST {
+		t.Errorf("cgst+sgst = %d+%d paise, want %d (must reconcile to full GST)",
+			paise(intra.CGST), paise(intra.SGST), fullGST)
+	}
+	if intra.IGST != 0 {
+		t.Errorf("igst = %.2f, want 0 (intra-state)", intra.IGST)
+	}
+
+	inter := ComputeOrderEarnings(EarningsInput{
+		ItemRevenue: 5, CommissionRate: 0.10, DeliveryState: "delhi",
+	}, "Maharashtra")
+	if paise(inter.IGST) != paise(Round2(RateGST*inter.PlatformCommission)) {
+		t.Errorf("igst = %.2f, want full GST", inter.IGST)
+	}
+	if inter.CGST != 0 || inter.SGST != 0 {
+		t.Errorf("cgst/sgst = %.2f/%.2f, want 0/0 (inter-state)", inter.CGST, inter.SGST)
+	}
+}
+
+// paise converts a rupee amount to integer paise for exact comparison.
+func paise(rupees float64) int64 { return int64(rupees*100 + 0.5) }
+
 func TestComputeOrderEarnings_InterState(t *testing.T) {
 	got := ComputeOrderEarnings(EarningsInput{
 		ItemRevenue:   1000,
