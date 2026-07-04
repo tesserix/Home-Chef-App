@@ -489,6 +489,106 @@ func (h *MealPlanHandler) finalizeByCustomer(c *gin.Context, customerID uuid.UUI
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
+// CancelMealPlan — PUT /meal-plans/:id/cancel. The customer cancels a plan that
+// has NOT started or been served: withdraw a pending request, back out while it's
+// with the chef / awaiting their own approval, or cancel a confirmed plan whose
+// first day hasn't been prepared. FULL refund of any advance collected (nothing
+// was served), so no penalty math. Mid-week cancellation once days have been
+// served (the >=20% penalty flow, #411) is out of scope and rejected here.
+// Cancelling frees the customer to rebook — `cancelled` is not a "live" status,
+// so the duplicate-plan guard (#409) no longer blocks a fresh request.
+// mealPlanCancellableBeforeStart reports whether a customer may cancel this plan
+// for a FULL refund — it must still be in flight or confirmed (not a terminal
+// state), and no day may have been prepared or delivered. Once the chef has begun
+// serving, cancellation is the mid-week penalty flow (#411), not this free one.
+func mealPlanCancellableBeforeStart(status models.MealPlanStatus, days []models.MealPlanDay) (bool, string) {
+	cancellable := map[models.MealPlanStatus]bool{
+		models.MealPlanPendingChef:      true,
+		models.MealPlanChefAcceptedFull: true,
+		models.MealPlanChefModified:     true,
+		models.MealPlanAwaitingCustomer: true,
+		models.MealPlanConfirmed:        true,
+	}
+	if !cancellable[status] {
+		return false, "This plan can no longer be cancelled"
+	}
+	for i := range days {
+		if s := days[i].Status; s == models.MealPlanDayPrepared || s == models.MealPlanDayDelivered {
+			return false, "This plan has already started — meals have been served. Skip upcoming days instead."
+		}
+	}
+	return true, ""
+}
+
+func (h *MealPlanHandler) CancelMealPlan(c *gin.Context) {
+	customerID, _ := middleware.GetUserID(c)
+	plan, ok := loadScopedPlan(c.Param("id"), "customer_id", customerID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+
+	if ok, reason := mealPlanCancellableBeforeStart(plan.Status, plan.Days); !ok {
+		c.JSON(http.StatusConflict, gin.H{"error": reason})
+		return
+	}
+
+	okLock, release := idempotencyGuard(c.Request.Context(), fmt.Sprintf("cancelplan:%s", plan.ID))
+	if !okLock {
+		c.JSON(http.StatusConflict, gin.H{"error": "Already processing"})
+		return
+	}
+	defer release()
+
+	var chefProfile models.ChefProfile
+	database.DB.First(&chefProfile, "id = ?", plan.ChefID)
+	chefUserID := chefProfile.UserID
+
+	now := time.Now()
+	fromStatuses := []models.MealPlanStatus{
+		models.MealPlanPendingChef, models.MealPlanChefAcceptedFull,
+		models.MealPlanChefModified, models.MealPlanAwaitingCustomer, models.MealPlanConfirmed,
+	}
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Status-guarded: lose to a concurrent expiry/respond/skip that already moved it.
+		res := tx.Model(&models.MealPlan{}).
+			Where("id = ? AND status IN ?", plan.ID, fromStatuses).
+			Update("status", models.MealPlanCancelled)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errPlanConflict
+		}
+		plan.Status = models.MealPlanCancelled
+		plan.CancelledAt = &now
+		plan.CancelReason = "cancelled by customer before start"
+		if err := tx.Model(&models.MealPlan{}).Where("id = ?", plan.ID).
+			Updates(map[string]any{"cancelled_at": now, "cancel_reason": plan.CancelReason}).Error; err != nil {
+			return err
+		}
+		// Escrow (gated): full refund — nothing was served. No-op when escrow is
+		// off (unpaid handshake) or no advance was collected.
+		if err := services.RefundUndeliveredDays(tx, &plan, "cancelled by customer before start"); err != nil {
+			return err
+		}
+		// Notify the chef the request/plan was cancelled.
+		return services.EnqueueEvent(tx, services.SubjectMealPlanCancelled, "meal_plan.cancelled_by_customer", chefUserID, map[string]any{
+			"meal_plan_id": plan.ID.String(), "meal_plan_no": plan.MealPlanNumber,
+			"customer_id": customerID.String(), "chef_id": plan.ChefID.String(),
+		})
+	}); err != nil {
+		if errors.Is(err, errPlanConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "This plan can no longer be cancelled"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel meal plan"})
+		return
+	}
+	plan.ProjectForCustomer()
+	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
+}
+
 // SkipMealPlanDay — PUT /meal-plans/:id/days/:dayId/skip. The customer skips a
 // confirmed day whose order hasn't been generated yet, before the lead-time
 // cutoff; the day is refunded to wallet (escrow; gated).
