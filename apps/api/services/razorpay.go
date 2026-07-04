@@ -557,6 +557,31 @@ func FromPaise(paise int) float64 {
 	return float64(paise) / 100.0
 }
 
+// ValidateCapturedPayment is the single hard gate every payment "verify" leg
+// (order, catering deposit, featured-ad, tip, group share) MUST apply: a
+// gateway-fetched payment has to be captured, belong to the EXPECTED Razorpay
+// order, and cover the EXPECTED amount (paise). payment.OrderID / Amount /
+// Status come from the gateway (FetchPayment), so the client can't forge them —
+// without this binding, any captured payment on the merchant account (e.g. a ₹1
+// charge, or a payment from an unrelated order) could be replayed to settle a
+// different object for free. Returns (true, "") when valid, else (false, reason).
+func ValidateCapturedPayment(paymentStatus, paymentOrderID, expectedOrderID string, paymentAmountPaise, expectedPaise int) (bool, string) {
+	if paymentStatus != "captured" {
+		return false, "Payment not captured"
+	}
+	if expectedOrderID == "" {
+		// The verify leg was called without first creating the gateway order.
+		return false, "Start the payment first"
+	}
+	if paymentOrderID != expectedOrderID {
+		return false, "Payment does not belong to this order"
+	}
+	if paymentAmountPaise < expectedPaise {
+		return false, "Payment amount does not match the expected amount"
+	}
+	return true, ""
+}
+
 // doRequest executes an authenticated HTTP request to the Razorpay API
 func (c *RazorpayClient) doRequest(method, path string, body []byte) ([]byte, error) {
 	url := razorpayBaseURL + path
