@@ -493,14 +493,21 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 		return
 	}
 
-	// Update order with delivery reference
+	// Update order with delivery reference. Targeted Updates (not a full-row
+	// Save(&order)) so this pickup persist can never clobber the payout-hold
+	// columns (#460 race 1); it writes only the columns this path owns.
+	now := time.Now()
 	order.DeliveryID = &delivery.ID
 	order.Status = models.OrderStatusPickedUp
-	now := time.Now()
 	order.PickedUpAt = &now
 	order.EstimatedDeliveryTime = estimatedDuration
 
-	if err := tx.Save(&order).Error; err != nil {
+	if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
+		"delivery_id":             order.DeliveryID,
+		"status":                  order.Status,
+		"picked_up_at":            order.PickedUpAt,
+		"estimated_delivery_time": order.EstimatedDeliveryTime,
+	}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
 		return
@@ -1421,13 +1428,20 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 		return
 	}
 
+	// Targeted Updates (not a full-row Save(&order)) so this manual-assign persist
+	// can never clobber the payout-hold columns (#460 race 1).
+	now := time.Now()
 	order.DeliveryID = &delivery.ID
 	order.Status = models.OrderStatusPickedUp
-	now := time.Now()
 	order.PickedUpAt = &now
 	order.EstimatedDeliveryTime = estimatedDuration
 
-	if err := tx.Save(&order).Error; err != nil {
+	if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
+		"delivery_id":             order.DeliveryID,
+		"status":                  order.Status,
+		"picked_up_at":            order.PickedUpAt,
+		"estimated_delivery_time": order.EstimatedDeliveryTime,
+	}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
 		return

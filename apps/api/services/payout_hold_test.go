@@ -210,6 +210,38 @@ func TestConfirmOrderHold_DisputedStaysDisputed(t *testing.T) {
 	require.Equal(t, models.PayoutHoldDisputed, loadOrder(t, db, id).PayoutHoldStatus)
 }
 
+// TestConfirmOrderHold_IssueRacingTheConfirm_StaysDisputed proves the dispute
+// check is atomic with the transition (#460 race 2). A pending OrderIssue filed
+// in the check→UPDATE window must still block release_eligible. We simulate the
+// race with a one-shot Before-update callback that inserts the issue immediately
+// before the guarded transition UPDATE runs (a fresh NewDB session so it doesn't
+// clobber the in-flight statement). Under the old design (dispute read as a bool
+// BEFORE the tx) the confirm wrongly commits release_eligible; with the predicate
+// folded into the guarded UPDATE it lands in disputed.
+func TestConfirmOrderHold_IssueRacingTheConfirm_StaysDisputed(t *testing.T) {
+	db := setupHoldDB(t)
+	id := seedRegularOrder(t, db, models.PayoutHoldAwaitingConfirmation)
+	order := loadOrder(t, db, id)
+
+	injected := false
+	require.NoError(t, db.Callback().Update().Before("gorm:update").Register("inject_issue", func(tx *gorm.DB) {
+		if injected {
+			return
+		}
+		injected = true
+		tx.Session(&gorm.Session{NewDB: true}).Exec(
+			`INSERT INTO order_issues (id, order_id, status) VALUES (?,?,?)`,
+			uuid.NewString(), id.String(), string(models.IssuePending))
+	}))
+
+	status, err := ConfirmOrderHold(db, &order)
+	require.NoError(t, err)
+	require.Equal(t, models.PayoutHoldDisputed, status, "an issue racing the confirm must land in disputed, never release_eligible")
+	require.Equal(t, models.PayoutHoldDisputed, loadOrder(t, db, id).PayoutHoldStatus)
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleaseEligible), "must not emit release-eligible when an issue races in")
+	require.Equal(t, 1, countOutbox(t, db, SubjectHoldDisputed))
+}
+
 func TestGetCustomerConfirmWindowHours(t *testing.T) {
 	db := setupHoldDB(t)
 	require.Equal(t, 24, GetCustomerConfirmWindowHours(db), "default is 24h")
