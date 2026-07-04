@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
+import { CancellationSection } from '../../../components/orders/CancellationSection';
 import { useCartStore, makeLineId } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
 import { CookingIndicator } from '../../../components/status/CookingIndicator';
@@ -394,6 +395,9 @@ export default function OrderDetailScreen() {
             </Text>
           ) : null}
         </View>
+
+        {/* Cancellation with vendor arbitration (#475/#478). */}
+        <CancellationSection orderId={order.id} status={order.status} />
 
         {/* Pay now — unpaid order recovery (verify failed / sheet dismissed). */}
         {needsPayment && (
