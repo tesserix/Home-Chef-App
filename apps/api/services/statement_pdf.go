@@ -57,11 +57,14 @@ func GenerateWeeklyStatementPDF(statementID uuid.UUID) ([]byte, string, error) {
 			OrderNumber:        r.OrderNumber,
 			CompletedAt:        r.CompletedAt,
 			ItemRevenue:        r.ItemRevenue,
+			Tax:                r.Tax,
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,
 			DeliveryState:      r.DeliveryState,
-			CommissionRate:     commissionRate,
+			// Per-row frozen rate (#390), falling back to the once-resolved live
+			// rate for legacy orders — so the PDF matches the stored statement.
+			CommissionRate: rowRate(r.CommissionRate, commissionRate),
 		}, chef.State))
 	}
 

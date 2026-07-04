@@ -41,10 +41,14 @@ type earningsOrderRow struct {
 	OrderNumber        string    `gorm:"column:order_number"`
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
+	Tax                float64   `gorm:"column:tax"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
 	DeliveryState      string    `gorm:"column:delivery_address_state"`
+	// CommissionRate is the rate FROZEN on the order at checkout (#390); 0 for
+	// legacy rows → falls back to the live/default rate via rowRate.
+	CommissionRate float64 `gorm:"column:commission_rate"`
 }
 
 // earningsOrderResponse is the per-order breakdown shape on the wire.
@@ -100,8 +104,8 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	// Query delivered orders within the period
 	var rows []earningsOrderRow
 	if err := database.DB.Raw(`
-		SELECT id, order_number, delivered_at, subtotal, chef_funded_discount,
-		       delivery_fee, chef_tip, delivery_address_state
+		SELECT id, order_number, delivered_at, subtotal, tax, chef_funded_discount,
+		       delivery_fee, chef_tip, delivery_address_state, commission_rate
 		FROM   orders
 		WHERE  chef_id       = ?
 		AND    status        = 'delivered'
@@ -172,11 +176,14 @@ func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRat
 		OrderNumber:        row.OrderNumber,
 		CompletedAt:        row.CompletedAt,
 		ItemRevenue:        row.ItemRevenue,
+		Tax:                row.Tax,
 		ChefFundedDiscount: row.ChefFundedDiscount,
 		DeliveryFee:        row.DeliveryFee,
 		ChefTip:            row.ChefTip,
 		DeliveryState:      row.DeliveryState,
-		CommissionRate:     commissionRate,
+		// Per-row frozen rate (#390), falling back to the once-resolved live rate
+		// for legacy orders so the breakdown matches the settlement statement.
+		CommissionRate: rowRate(row.CommissionRate, commissionRate),
 	}, chefState)
 
 	return earningsOrderResponse{
@@ -248,3 +255,13 @@ func normaliseState(s string) string { return services.NormaliseState(s) }
 // round2 delegates to services.Round2 (kept as a local alias for the totals
 // loop and the package's unit tests).
 func round2(v float64) float64 { return services.Round2(v) }
+
+// rowRate returns the per-order FROZEN commission rate when set (>0), else the
+// resolved live/default fallback (#390). Legacy orders placed before the
+// commission_rate column existed carry 0 and settle on the live rate.
+func rowRate(frozen, fallback float64) float64 {
+	if frozen > 0 {
+		return frozen
+	}
+	return fallback
+}

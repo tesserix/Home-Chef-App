@@ -33,13 +33,17 @@ type statementOrderRow struct {
 	OrderNumber        string    `gorm:"column:order_number"`
 	CompletedAt        time.Time `gorm:"column:delivered_at"`
 	ItemRevenue        float64   `gorm:"column:subtotal"`
+	Tax                float64   `gorm:"column:tax"`
 	ChefFundedDiscount float64   `gorm:"column:chef_funded_discount"`
 	DeliveryFee        float64   `gorm:"column:delivery_fee"`
 	ChefTip            float64   `gorm:"column:chef_tip"`
 	DeliveryState      string    `gorm:"column:delivery_address_state"`
-	ChefID             uuid.UUID `gorm:"column:chef_id"`
-	UserID             uuid.UUID `gorm:"column:user_id"`
-	ChefState          string    `gorm:"column:chef_state"`
+	// CommissionRate is the rate FROZEN on the order at checkout (#390); 0 for
+	// legacy rows → callers fall back to the live/default rate via rowRate.
+	CommissionRate float64   `gorm:"column:commission_rate"`
+	ChefID         uuid.UUID `gorm:"column:chef_id"`
+	UserID         uuid.UUID `gorm:"column:user_id"`
+	ChefState      string    `gorm:"column:chef_state"`
 }
 
 // MostRecentClosedWeek returns the [start, end) bounds — in UTC — of the most
@@ -87,11 +91,14 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 			OrderNumber:        r.OrderNumber,
 			CompletedAt:        r.CompletedAt,
 			ItemRevenue:        r.ItemRevenue,
+			Tax:                r.Tax,
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,
 			DeliveryState:      r.DeliveryState,
-			CommissionRate:     b.commissionRate,
+			// Per-row frozen rate (#390); the once-resolved flatRate is the legacy
+			// fallback for orders placed before commission_rate was stamped.
+			CommissionRate: rowRate(r.CommissionRate, flatRate),
 		}, b.chefState))
 	}
 
@@ -121,8 +128,8 @@ func GenerateWeeklyStatements(ctx context.Context, weekStart, weekEnd time.Time)
 func loadStatementOrderRows(weekStart, weekEnd time.Time) ([]statementOrderRow, error) {
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.chef_funded_discount,
-		       o.delivery_fee, o.chef_tip, o.delivery_address_state,
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax, o.chef_funded_discount,
+		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id

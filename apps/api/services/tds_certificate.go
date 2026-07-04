@@ -64,8 +64,8 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 
 	var rows []statementOrderRow
 	err := database.DB.Raw(`
-		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.chef_funded_discount,
-		       o.delivery_fee, o.chef_tip, o.delivery_address_state,
+		SELECT o.id, o.order_number, o.delivered_at, o.subtotal, o.tax, o.chef_funded_discount,
+		       o.delivery_fee, o.chef_tip, o.delivery_address_state, o.commission_rate,
 		       o.chef_id, c.user_id, c.state AS chef_state
 		FROM   orders o
 		JOIN   chef_profiles c ON c.id = o.chef_id
@@ -91,10 +91,15 @@ func GenerateTDSCertificatePDF(chefID uuid.UUID, fyStartYear int) ([]byte, strin
 	for _, r := range rows {
 		e := ComputeOrderEarnings(EarningsInput{
 			ItemRevenue:        r.ItemRevenue,
+			Tax:                r.Tax,
 			ChefFundedDiscount: r.ChefFundedDiscount,
 			DeliveryFee:        r.DeliveryFee,
 			ChefTip:            r.ChefTip,
 			DeliveryState:      r.DeliveryState,
+			// Per-row frozen rate (#390). This file resolves no live rate of its
+			// own, so a legacy 0 falls through to DefaultCommissionRate inside
+			// ComputeOrderEarnings — the intended legacy behaviour.
+			CommissionRate: r.CommissionRate,
 		}, chef.State)
 		qi := financialQuarterIndex(r.CompletedAt)
 		quarters[qi].gross += e.Gross
