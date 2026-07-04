@@ -17,7 +17,9 @@
     "ios": {
       "bundleIdentifier": "com.tesserix.homechef.admin",
       "entitlements": {
-        "keychain-access-groups": ["$(AppIdentifierPrefix)$(CFBundleIdentifier)"]
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)$(CFBundleIdentifier)"
+        ]
       },
       "supportsTablet": true,
       "usesAppleSignIn": true,
@@ -81,7 +83,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "1e67b44d-a418-4e92-8623-4355adc98303"
       }
     },
     "owner": "tesserix-org"
