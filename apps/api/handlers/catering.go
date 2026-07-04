@@ -771,6 +771,12 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
+	// Gate on the same flag as CreateDeposit — the verify leg must not be a way
+	// around a disabled money flow.
+	if config.AppConfig == nil || !config.AppConfig.CateringDepositEnabled {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Catering deposits aren't available yet"})
+		return
+	}
 	requestID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request ID"})
@@ -779,6 +785,7 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 	var req struct {
 		RazorpayPaymentID string `json:"razorpayPaymentId" binding:"required"`
 		RazorpayOrderID   string `json:"razorpayOrderId"`
+		RazorpaySignature string `json:"razorpaySignature"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -803,12 +810,22 @@ func (h *CateringHandler) VerifyDeposit(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify payment"})
 		return
 	}
-	if payment.Status != "captured" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+	// SECURITY: the deposit order must have been created first (CreateDeposit
+	// stamps razorpay_order_id), and the fetched payment must be captured, bind to
+	// THAT order, and cover the deposit amount. Without this, calling verify
+	// without create — or reusing any captured payment on the merchant account
+	// (a ₹1 charge) — would confirm the booking for free.
+	if ok, msg := services.ValidateCapturedPayment(
+		payment.Status, payment.OrderID, request.RazorpayOrderID,
+		payment.Amount, services.ToPaise(request.DepositAmount)); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
-	if request.RazorpayOrderID != "" && payment.OrderID != request.RazorpayOrderID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
+	// Verify the Checkout signature when the client sends it (the binding + amount
+	// checks above are the hard gate and don't depend on the client).
+	if req.RazorpaySignature != "" &&
+		!services.VerifyPaymentSignature(request.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 		return
 	}
 	now := time.Now()

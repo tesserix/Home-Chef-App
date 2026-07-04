@@ -167,14 +167,26 @@ func (h *PromotionHandler) ConfirmFeaturedAd(c *gin.Context) {
 		return
 	}
 
-	// Verify payment
+	// Verify payment. SECURITY: bind the fetched payment to THIS promotion's
+	// order + amount, and FAIL CLOSED when the gateway is unconfigured. The prior
+	// `if rz != nil` with no order/amount binding let a chef activate a paid
+	// featured listing for free by passing any captured payment id (a ₹1 charge).
+	// Mirrors VerifyPayment (payment.go).
 	rz := services.GetRazorpay()
-	if rz != nil {
-		payment, err := rz.FetchPayment(req.RazorpayPaymentID)
-		if err != nil || payment.Status != "captured" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
-			return
-		}
+	if rz == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
+		return
+	}
+	payment, err := rz.FetchPayment(req.RazorpayPaymentID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment not captured"})
+		return
+	}
+	if ok, msg := services.ValidateCapturedPayment(
+		payment.Status, payment.OrderID, promo.RazorpayOrderID,
+		payment.Amount, services.ToPaise(promo.Amount)); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
 	}
 
 	now := time.Now()
