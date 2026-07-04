@@ -8,9 +8,13 @@ package services
 // drifting — a rate change here propagates everywhere.
 //
 //   - Platform commission on item revenue (subtotal only).
+//   - gross = itemRevenue + Tax + chefTip. The food GST (Tax) is the chef's
+//     income and enters gross; the delivery fee is the DRIVER's money and is
+//     EXCLUDED from the chef's gross/net (#390).
 //   - GST 18% on the commission: CGST 9% + SGST 9% (intra-state) or
-//     IGST 18% (inter-state). GST is levied on the platform's revenue,
-//     NOT deducted from the chef's payout.
+//     IGST 18% (inter-state). This GST is the platform's downstream remittance
+//     obligation on its own commission — NOT deducted from the chef's payout and
+//     NOT part of the customer's captured order total.
 //   - TDS 1% under Section 194-O on gross order value.
 //   - netPayout = gross − platformCommission − tds.
 
@@ -47,11 +51,14 @@ const (
 
 // EarningsInput is the per-order data the math operates on.
 type EarningsInput struct {
-	OrderID       uuid.UUID
-	OrderNumber   string
-	CompletedAt   time.Time
-	ItemRevenue   float64
-	DeliveryFee   float64
+	OrderID     uuid.UUID
+	OrderNumber string
+	CompletedAt time.Time
+	ItemRevenue float64
+	DeliveryFee float64
+	// Tax is the order's food GST. The chef receives it, so it enters the chef's
+	// gross (and thus TDS base) — unlike DeliveryFee, which is the driver's (#390).
+	Tax           float64
 	ChefTip       float64
 	DeliveryState string
 	// CommissionRate is the resolved flat commission rate for this order; 0/unset
@@ -96,7 +103,7 @@ type EarningsTotals struct {
 // ComputeOrderEarnings applies the settlement rules to a single order.
 //
 //	commission = RateCommission × itemRevenue
-//	gross      = itemRevenue + deliveryFee + chefTip
+//	gross      = itemRevenue + Tax + chefTip   (delivery fee is the driver's, excluded)
 //	intra-state (order.state == chef.state): CGST 9% + SGST 9% on commission
 //	inter-state (order.state != chef.state): IGST 18% on commission
 //	tds        = RateTDS × gross
@@ -115,7 +122,9 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 		itemRevenue = 0
 	}
 	commission := Round2(rate * itemRevenue)
-	gross := Round2(itemRevenue + in.DeliveryFee + in.ChefTip)
+	// Gross is the chef's income: food revenue + food GST (Tax) + chef tip. The
+	// delivery fee is intentionally NOT here — it is the driver's money (#390).
+	gross := Round2(itemRevenue + in.Tax + in.ChefTip)
 
 	var cgst, sgst, igst float64
 	halfGST := Round2(RateGST / 2 * commission)
@@ -132,10 +141,12 @@ func ComputeOrderEarnings(in EarningsInput, chefState string) OrderEarnings {
 	netPayout := Round2(gross - commission - tds)
 
 	return OrderEarnings{
-		OrderID:            in.OrderID,
-		OrderNumber:        in.OrderNumber,
-		CompletedAt:        in.CompletedAt,
-		ItemRevenue:        Round2(itemRevenue),
+		OrderID:     in.OrderID,
+		OrderNumber: in.OrderNumber,
+		CompletedAt: in.CompletedAt,
+		ItemRevenue: Round2(itemRevenue),
+		// DeliveryFee is retained for display/context only — it does NOT enter
+		// gross or net (it is the driver's money, settled separately) (#390).
 		DeliveryFee:        Round2(in.DeliveryFee),
 		Tip:                Round2(in.ChefTip),
 		Gross:              gross,
