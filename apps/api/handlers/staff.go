@@ -57,6 +57,21 @@ func (h *StaffHandler) ListStaff(c *gin.Context) {
 	search := c.Query("search")
 	portal := c.Query("portal") // "admin" or "delivery"
 
+	// SECURITY (audit #9): a delivery-tier staffer (fleet_manager/delivery_ops)
+	// must not enumerate admin-portal staff PII. The client-supplied `portal` is
+	// only honored for platform admins; everyone else is force-scoped to the
+	// delivery portal.
+	currentUserID, _ := middleware.GetUserID(c)
+	var caller models.StaffMember
+	if err := database.DB.Where("user_id = ? AND is_active = ?", currentUserID, true).
+		First(&caller).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Not a staff member"})
+		return
+	}
+	if !models.StaffRoleIsPlatformAdmin(caller.StaffRole) {
+		portal = "delivery"
+	}
+
 	query := database.DB.Preload("User").Preload("InvitedBy")
 
 	if roleFilter != "" {
@@ -263,6 +278,16 @@ func (h *StaffHandler) CreateInvitation(c *gin.Context) {
 		return
 	}
 
+	// SECURITY (audit #4): the invited StaffRole maps to User.Role on accept —
+	// every role except fleet_manager/delivery_ops maps to RoleAdmin (full
+	// admin-portal access, incl. money movement). A lower-trust inviter (e.g. a
+	// delivery FleetManager, who holds SPInviteStaff for delivery ops) must NOT be
+	// able to mint a platform admin. Only an actual admin/super_admin may invite
+	// an admin-tier role.
+	if models.StaffRoleGrantsPlatformAdmin(req.StaffRole) && !models.StaffRoleIsPlatformAdmin(inviterStaff.StaffRole) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only invite delivery-team roles (fleet_manager, delivery_ops)"})
+		return
+	}
 	// Only super admins can invite super admins
 	if req.StaffRole == models.StaffRoleSuperAdmin && inviterStaff.StaffRole != models.StaffRoleSuperAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only super admins can invite other super admins"})
@@ -353,6 +378,22 @@ func (h *StaffHandler) ListInvitations(c *gin.Context) {
 
 	if status != "" {
 		query = query.Where("status = ?", status)
+	}
+
+	// SECURITY (audit #9): a delivery-tier staffer must not see admin-tier pending
+	// invitations (email PII / phishing recon). Scope to delivery roles unless the
+	// caller is a platform admin.
+	currentUserID, _ := middleware.GetUserID(c)
+	var invCaller models.StaffMember
+	if err := database.DB.Where("user_id = ? AND is_active = ?", currentUserID, true).
+		First(&invCaller).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Not a staff member"})
+		return
+	}
+	if !models.StaffRoleIsPlatformAdmin(invCaller.StaffRole) {
+		query = query.Where("staff_role IN ?", []models.StaffRole{
+			models.StaffRoleFleetManager, models.StaffRoleDeliveryOps,
+		})
 	}
 
 	// Expire old invitations
@@ -512,10 +553,11 @@ func (h *StaffHandler) AcceptInvitation(c *gin.Context) {
 		return
 	}
 
-	// Update user role based on staff role
-	newRole := models.RoleAdmin
-	if invitation.StaffRole == models.StaffRoleFleetManager || invitation.StaffRole == models.StaffRoleDeliveryOps {
-		newRole = models.RoleDelivery
+	// Update user role based on staff role. Uses the same predicate the invite
+	// gate does, so the "who maps to admin" rule can't drift between the two.
+	newRole := models.RoleDelivery
+	if models.StaffRoleGrantsPlatformAdmin(invitation.StaffRole) {
+		newRole = models.RoleAdmin
 	}
 	tx.Model(&models.User{}).Where("id = ?", userID).Update("role", newRole)
 

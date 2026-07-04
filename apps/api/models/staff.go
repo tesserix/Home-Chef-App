@@ -20,6 +20,22 @@ const (
 	StaffRoleSupport      StaffRole = "support"
 )
 
+// StaffRoleGrantsPlatformAdmin reports whether accepting an invitation for this
+// StaffRole sets User.Role = RoleAdmin — i.e. full admin-portal access, incl.
+// money movement. Only fleet_manager / delivery_ops are delivery-portal roles
+// (RoleDelivery); everything else is platform-admin. This is the SINGLE source
+// of truth shared by AcceptInvitation (the role mapping) and CreateInvitation
+// (the security gate) so they can never drift (audit #4).
+func StaffRoleGrantsPlatformAdmin(role StaffRole) bool {
+	return role != StaffRoleFleetManager && role != StaffRoleDeliveryOps
+}
+
+// StaffRoleIsPlatformAdmin reports whether a StaffRole is one of the actual
+// platform administrators allowed to invite admin-tier staff.
+func StaffRoleIsPlatformAdmin(role StaffRole) bool {
+	return role == StaffRoleSuperAdmin || role == StaffRoleAdmin
+}
+
 // StaffPermission represents a granular permission
 type StaffPermission string
 
