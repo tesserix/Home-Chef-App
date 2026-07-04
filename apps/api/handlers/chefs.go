@@ -1066,10 +1066,31 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		subject = services.SubjectOrderDelivered
 	}
 
+	// Persist ONLY the columns this handler owns via a targeted Updates — never a
+	// full-row Save(&order) (#460 race 1). A re-submitted `delivered` is an allowed
+	// idempotent no-op, so a full-row Save would write the load-time payout-hold
+	// columns back over any value a concurrent customer-confirm / auto-confirm sweep
+	// / admin-release advanced in the load→persist window (lost update). Excluding
+	// the hold columns from the map lets a concurrent transition survive.
+	orderUpdates := map[string]any{"status": order.Status}
+	if req.Carrier != "" {
+		orderUpdates["fulfillment_type"] = order.FulfillmentType
+	}
+	switch order.Status {
+	case models.OrderStatusAccepted:
+		orderUpdates["accepted_at"] = order.AcceptedAt
+	case models.OrderStatusReady:
+		orderUpdates["prepared_at"] = order.PreparedAt
+	case models.OrderStatusPickedUp:
+		orderUpdates["picked_up_at"] = order.PickedUpAt
+	case models.OrderStatusDelivered:
+		orderUpdates["delivered_at"] = order.DeliveredAt
+	}
+
 	// Persist the status change and stage the event atomically (transactional
 	// outbox) so the status update is delivered durably by the relay (#131).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(&order).Error; err != nil {
+		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(orderUpdates).Error; err != nil {
 			return err
 		}
 		if releaseCap {

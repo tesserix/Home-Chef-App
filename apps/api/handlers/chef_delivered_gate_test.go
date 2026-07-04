@@ -213,6 +213,46 @@ func TestUpdateOrderStatus_AllowsPickup(t *testing.T) {
 	require.Equal(t, "delivered", orderStatus(t, db, orderID))
 }
 
+// TestUpdateOrderStatus_ReStamp_PreservesAdvancedHold proves the chef status
+// persist no longer clobbers the payout-hold columns (#460 race 1). A chef
+// re-submitting `delivered` on an already-delivered order must NOT revert a hold
+// that a concurrent customer-confirm advanced in the load→persist window. We
+// simulate that concurrent confirm with a one-shot Before-update callback that
+// flips the row to release_eligible (fresh NewDB session) just before the
+// handler's persist UPDATE. Under the old full-row tx.Save(&order) the load-time
+// `awaiting` overwrites it; the targeted Updates leaves the hold columns untouched.
+func TestUpdateOrderStatus_ReStamp_PreservesAdvancedHold(t *testing.T) {
+	db, userID, chefID := setupChefOrderDB(t)
+	orderID, custID := uuid.New(), uuid.New()
+	past := time.Now().Add(-time.Hour)
+	require.NoError(t, db.Exec(`INSERT INTO orders
+		(id, order_number, customer_id, chef_id, status, payment_status, fulfillment_type,
+		 subtotal, total, currency, delivered_at, payout_hold_status, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		orderID.String(), "ORD-"+orderID.String()[:8], custID.String(), chefID.String(),
+		"delivered", "completed", "chef_delivery", 100.0, 100.0, "INR", past,
+		string(models.PayoutHoldAwaitingConfirmation), time.Now(), time.Now()).Error)
+
+	injected := false
+	require.NoError(t, db.Callback().Update().Before("gorm:update").Register("inject_confirm", func(tx *gorm.DB) {
+		if injected {
+			return
+		}
+		injected = true
+		tx.Session(&gorm.Session{NewDB: true}).Exec(
+			`UPDATE orders SET payout_hold_status = ?, customer_confirmed_at = ? WHERE id = ?`,
+			string(models.PayoutHoldReleaseEligible), time.Now(), orderID.String())
+	}))
+
+	w := postStatus(t, userID, orderID, "delivered")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var hold string
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM orders WHERE id = ?`, orderID.String()).Scan(&hold).Error)
+	require.Equal(t, string(models.PayoutHoldReleaseEligible), hold,
+		"chef status persist must not clobber a concurrently-advanced payout hold")
+}
+
 // TestUpdateOrderStatus_WritesAuditOnAllowedDelivered — every chef-initiated
 // Delivered transition writes an AuditLog row capturing actor, order id, and
 // fulfilment type (repudiation control, T-391-02).

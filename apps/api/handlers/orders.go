@@ -828,8 +828,14 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 
 	// Persist the cancellation and stage the event atomically (transactional
 	// outbox): the order.cancelled event is delivered durably by the relay (#131).
+	// Targeted Updates (not a full-row Save(&order)) so the persist writes only the
+	// cancel columns and can never clobber the payout-hold columns (#460 race 1).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(&order).Error; err != nil {
+		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
+			"status":        order.Status,
+			"cancelled_at":  order.CancelledAt,
+			"cancel_reason": order.CancelReason,
+		}).Error; err != nil {
 			return err
 		}
 		// Release the reserved daily capacity back to the chef (#48), keyed to the

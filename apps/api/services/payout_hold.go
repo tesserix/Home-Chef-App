@@ -86,29 +86,64 @@ func HasOpenOrderIssue(db *gorm.DB, orderID uuid.UUID) bool {
 	return count > 0
 }
 
-// applyHoldConfirm performs the guarded confirm transition on a model row: to
-// disputed when an open issue exists (only from awaiting/disputed), otherwise to
-// release_eligible (only from awaiting). The WHERE guard IS the safety invariant —
-// a released row can never flip to release_eligible. When (and only when) the
-// conditional UPDATE actually changes a row it emits the matching NATS event onto
+// applyHoldConfirm performs the guarded confirm transition on a model row with the
+// dispute check folded INTO the guarded UPDATE (#460 race 2): an OrderIssue filed
+// concurrently is observed by the UPDATE's own (NOT) EXISTS predicate, closing the
+// check-then-act window that could otherwise leak release_eligible past a just-filed
+// dispute. The disputed (EXISTS) update runs FIRST, then the release_eligible
+// (NOT EXISTS, from awaiting only) update — this ordering makes a dispute that races
+// the confirm fail safe: if the issue lands after the disputed update no-ops, the
+// release update's NOT EXISTS catches it and the row stays awaiting (money held)
+// rather than releasing.
+//
+// The WHERE guards ARE the safety invariant — a released row can never flip to
+// release_eligible. `customer_confirmed_at IS NULL` makes confirmation idempotency
+// DB-enforced, so a stale in-memory caller can't re-stamp or re-emit. Each
+// conditional UPDATE that genuinely changes a row emits the matching NATS event onto
 // the transactional outbox within the same tx, so a replayed/no-op confirm never
-// double-emits. aggType is the aggregate identity ("order" / "meal_plan_day").
-func applyHoldConfirm(tx *gorm.DB, model any, aggType string, id uuid.UUID, disputed bool, now time.Time) error {
-	target := models.PayoutHoldReleaseEligible
-	where := tx.Model(model).Where("id = ? AND payout_hold_status = ?", id, models.PayoutHoldAwaitingConfirmation)
-	if disputed {
-		target = models.PayoutHoldDisputed
-		where = tx.Model(model).Where("id = ? AND payout_hold_status IN ?", id,
-			[]models.PayoutHoldStatus{models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed})
+// double-emits. issueOrderID is the order carrying the dispute signal (nil = no
+// dispute source, e.g. a meal-plan day with no order → proceeds to release_eligible).
+// aggType is the aggregate identity ("order" / "meal_plan_day" / "group-order").
+func applyHoldConfirm(tx *gorm.DB, model any, aggType string, id uuid.UUID, issueOrderID *uuid.UUID, now time.Time) error {
+	// 1) awaiting|disputed -> disputed, when an open issue exists on the source order.
+	if issueOrderID != nil {
+		res := tx.Model(model).
+			Where("id = ? AND customer_confirmed_at IS NULL AND payout_hold_status IN ?", id,
+				[]models.PayoutHoldStatus{models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}).
+			Where("EXISTS (?)", openOrderIssueSubquery(tx, *issueOrderID)).
+			Updates(map[string]any{"payout_hold_status": models.PayoutHoldDisputed, "customer_confirmed_at": now})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			return emitHoldEvent(tx, models.PayoutHoldDisputed, aggType, id)
+		}
 	}
-	res := where.Updates(map[string]any{"payout_hold_status": target, "customer_confirmed_at": now})
+	// 2) awaiting -> release_eligible, only when NO open issue exists at UPDATE time.
+	q := tx.Model(model).
+		Where("id = ? AND customer_confirmed_at IS NULL AND payout_hold_status = ?", id, models.PayoutHoldAwaitingConfirmation)
+	if issueOrderID != nil {
+		q = q.Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, *issueOrderID))
+	}
+	res := q.Updates(map[string]any{"payout_hold_status": models.PayoutHoldReleaseEligible, "customer_confirmed_at": now})
 	if res.Error != nil {
 		return res.Error
 	}
-	if res.RowsAffected == 0 {
-		return nil // no genuine transition — nothing to emit
+	if res.RowsAffected > 0 {
+		return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, aggType, id)
 	}
-	return emitHoldEvent(tx, target, aggType, id)
+	return nil // no genuine transition — nothing to emit
+}
+
+// openOrderIssueSubquery builds a bare `SELECT 1 FROM order_issues WHERE
+// order_id = ? AND status = 'pending'` for use inside an EXISTS/NOT EXISTS predicate.
+// NewDB yields a clean statement so it renders against order_issues rather than
+// inheriting the outer UPDATE's target table and clauses.
+func openOrderIssueSubquery(tx *gorm.DB, orderID uuid.UUID) *gorm.DB {
+	return tx.Session(&gorm.Session{NewDB: true}).
+		Model(&models.OrderIssue{}).
+		Select("1").
+		Where("order_id = ? AND status = ?", orderID, models.IssuePending)
 }
 
 // emitHoldEvent stages the hold-transition event onto the outbox within tx.
@@ -134,10 +169,9 @@ func ConfirmOrderHold(db *gorm.DB, order *models.Order) (models.PayoutHoldStatus
 	if order.CustomerConfirmedAt != nil {
 		return order.PayoutHoldStatus, nil
 	}
-	disputed := HasOpenOrderIssue(db, order.ID)
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.Order{}, "order", order.ID, disputed, now)
+		return applyHoldConfirm(tx, &models.Order{}, "order", order.ID, &order.ID, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm order %s: %w", order.ID, err)
 	}
@@ -158,10 +192,9 @@ func ConfirmMealPlanDayHold(db *gorm.DB, day *models.MealPlanDay) (models.Payout
 	if day.CustomerConfirmedAt != nil {
 		return day.PayoutHoldStatus, nil
 	}
-	disputed := day.OrderID != nil && HasOpenOrderIssue(db, *day.OrderID)
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.MealPlanDay{}, "meal_plan_day", day.ID, disputed, now)
+		return applyHoldConfirm(tx, &models.MealPlanDay{}, "meal_plan_day", day.ID, day.OrderID, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm meal-plan day %s: %w", day.ID, err)
 	}
@@ -184,10 +217,9 @@ func ConfirmGroupOrderHold(db *gorm.DB, g *models.GroupOrder) (models.PayoutHold
 	if g.CustomerConfirmedAt != nil {
 		return g.PayoutHoldStatus, nil
 	}
-	disputed := g.OrderID != nil && HasOpenOrderIssue(db, *g.OrderID)
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.GroupOrder{}, "group-order", g.ID, disputed, now)
+		return applyHoldConfirm(tx, &models.GroupOrder{}, "group-order", g.ID, g.OrderID, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm group order %s: %w", g.ID, err)
 	}
