@@ -849,11 +849,15 @@ func SetupRouter() *gin.Engine {
 			// Cancellation arbitration queue (#480): disputes + vendor timeouts.
 			admin.GET("/cancel-requests", cancellationHandler.GetAdminCancellationRequests)
 			admin.POST("/cancel-requests/:id/resolve", cancellationHandler.ResolveCancellationAdmin)
-			admin.GET("/payouts/pending", adminPayoutHandler.GetPendingPayouts)
-			admin.POST("/payouts/:aggType/:id/release", adminPayoutHandler.ReleasePayout)
-			admin.POST("/payouts/:aggType/:id/withhold", adminPayoutHandler.WithholdPayout)
-			admin.POST("/payouts/:aggType/:id/reverse", adminPayoutHandler.ReversePayout)
-			admin.POST("/payouts/release-bulk", adminPayoutHandler.BulkReleasePayouts)
+			// Money-release surface — gated on the granular SPManagePayouts
+			// staff-permission (super_admin only) on top of the group's
+			// RequireAdmin + internal-pool checks (#515 / #461 step 2).
+			payoutPerm := middleware.RequireStaffPermission(models.SPManagePayouts)
+			admin.GET("/payouts/pending", payoutPerm, adminPayoutHandler.GetPendingPayouts)
+			admin.POST("/payouts/:aggType/:id/release", payoutPerm, adminPayoutHandler.ReleasePayout)
+			admin.POST("/payouts/:aggType/:id/withhold", payoutPerm, adminPayoutHandler.WithholdPayout)
+			admin.POST("/payouts/:aggType/:id/reverse", payoutPerm, adminPayoutHandler.ReversePayout)
+			admin.POST("/payouts/release-bulk", payoutPerm, adminPayoutHandler.BulkReleasePayouts)
 
 			// Review moderation (#35) — list, hide, unhide (audited; recomputes rating)
 			admin.GET("/reviews", adminHandler.AdminListReviews)

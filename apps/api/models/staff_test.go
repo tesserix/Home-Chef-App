@@ -11,6 +11,27 @@ func staffTestContains(s []string, v string) bool {
 	return false
 }
 
+// TestSPManagePayouts_GrantedToSuperAdminOnly locks in the least-privilege
+// policy for the money-release surface (#515 / #461 step 2). Releasing,
+// withholding, or reversing an escrow payout hold is a finance-sensitive
+// action, so only the super_admin role carries SPManagePayouts by default.
+// Regular admin/support staff must NOT be able to move payout money even
+// though they can reach the rest of the admin panel.
+func TestSPManagePayouts_GrantedToSuperAdminOnly(t *testing.T) {
+	su := &StaffMember{StaffRole: StaffRoleSuperAdmin}
+	if !su.HasPermission(SPManagePayouts) {
+		t.Fatalf("super_admin must have SPManagePayouts")
+	}
+	for _, role := range []StaffRole{
+		StaffRoleAdmin, StaffRoleFleetManager, StaffRoleDeliveryOps, StaffRoleSupport,
+	} {
+		s := &StaffMember{StaffRole: role}
+		if s.HasPermission(SPManagePayouts) {
+			t.Fatalf("role %q must NOT have SPManagePayouts (least privilege for money release)", role)
+		}
+	}
+}
+
 func TestLoadSuperAdminEmails_DefaultWhenUnset(t *testing.T) {
 	t.Setenv("SUPER_ADMIN_EMAILS", "")
 	got := loadSuperAdminEmails()
