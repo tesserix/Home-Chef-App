@@ -450,23 +450,60 @@ func stampPayoutSettled(db *gorm.DB, aggType string, id uuid.UUID) error {
 	return nil
 }
 
-// settleRelease runs the release seam and, ONLY on success (seam == nil), stamps
-// payout_settled_at. A seam failure returns the error and leaves settled_at NULL —
-// the drift the reconcile re-drives.
-func settleRelease(db *gorm.DB, aggType string, id uuid.UUID) error {
-	if err := releaseMoney(db, aggType, id); err != nil {
+// settlePayout is the single money-seam dispatcher (#508). It RE-READS the hold's
+// CURRENT terminal status and runs the seam that matches THAT status — not the
+// transition the calling goroutine happened to win. This closes the check-then-act
+// window where ReleaseHold committed `released` and dispatched releaseMoney while a
+// concurrent refund had since flipped the row to `reversed` (chef paid after the
+// claw-back). By re-reading, a goroutine that lost the race observes `reversed` and
+// runs reverseMoney instead of releaseMoney — no chef payment survives a claw-back.
+//
+// Idempotent: a row already settled (payout_settled_at set) is skipped, and the
+// underlying seams tolerate an already-applied gateway op, so a residual concurrent
+// double-dispatch is a safe no-op. On seam failure settled_at stays NULL and the
+// error propagates — the drift the payout-reconcile cron re-drives (which now also
+// dispatches through settlePayout, so it too acts on the fresh status).
+func settlePayout(db *gorm.DB, aggType string, id uuid.UUID) error {
+	model, err := holdModel(aggType)
+	if err != nil {
 		return err
 	}
-	return stampPayoutSettled(db, aggType, id)
+	var rows []struct {
+		PayoutHoldStatus models.PayoutHoldStatus
+		PayoutSettledAt  *time.Time
+	}
+	if err := db.Model(model).Select("payout_hold_status", "payout_settled_at").
+		Where("id = ?", id).Scan(&rows).Error; err != nil {
+		return fmt.Errorf("payout-release: settle re-read %s %s: %w", aggType, id, err)
+	}
+	if len(rows) == 0 || rows[0].PayoutSettledAt != nil {
+		return nil // gone, or already settled — nothing to move
+	}
+	switch rows[0].PayoutHoldStatus {
+	case models.PayoutHoldReleased:
+		if err := releaseMoney(db, aggType, id); err != nil {
+			return err
+		}
+		return stampPayoutSettled(db, aggType, id)
+	case models.PayoutHoldReversed:
+		if err := reverseMoney(db, aggType, id); err != nil {
+			return err
+		}
+		return stampPayoutSettled(db, aggType, id)
+	}
+	return nil // not a terminal money state (a concurrent path moved it) — nothing to settle
 }
 
-// settleReverse runs the reverse seam and, ONLY on success (seam == nil), stamps
-// payout_settled_at. Same drift contract as settleRelease over reverseMoney.
+// settleRelease and settleReverse are thin, backward-compatible wrappers over
+// settlePayout so the ReleaseHold / ReverseHold / crossguard / reconcile call sites
+// stay unchanged. Both dispatch by the FRESH status, so which wrapper a caller uses
+// no longer decides which seam runs — the row's current state does (#508).
+func settleRelease(db *gorm.DB, aggType string, id uuid.UUID) error {
+	return settlePayout(db, aggType, id)
+}
+
 func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
-	if err := reverseMoney(db, aggType, id); err != nil {
-		return err
-	}
-	return stampPayoutSettled(db, aggType, id)
+	return settlePayout(db, aggType, id)
 }
 
 // releaseMoney runs the post-commit, flag-gated release seam. Order → the Route
@@ -597,7 +634,7 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 			return fmt.Errorf("payout-release: load day %s: %w", id, err)
 		}
 		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpay() != nil {
-			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil {
+			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
 				return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
 			}
 		}
@@ -606,7 +643,9 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 		if err := db.First(&g, "id = ?", id).Error; err != nil {
 			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
 		}
-		ReverseGroupChefPayout(&g) // flag-gated; best-effort claw-back to the platform
+		if err := ReverseGroupChefPayout(&g); err != nil { // flag-gated claw-back
+			return fmt.Errorf("payout-release: reverse group payout %s: %w", id, err)
+		}
 	}
 	return nil
 }

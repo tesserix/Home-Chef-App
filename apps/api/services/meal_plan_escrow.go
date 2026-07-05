@@ -223,6 +223,22 @@ func isAlreadyReleasedErr(err error) bool {
 		strings.Contains(msg, "not_on_hold")
 }
 
+// isAlreadyReversedErr reports whether a gateway error indicates the transfer was
+// already reversed — the idempotent case the reverse seam tolerates so a residual
+// concurrent double-dispatch (#508) or a reconcile re-drive can't loop/fail on a
+// transfer that's already been clawed back.
+func isAlreadyReversedErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already reversed") ||
+		strings.Contains(msg, "fully reversed") ||
+		strings.Contains(msg, "already refunded") ||
+		strings.Contains(msg, "not_reversible") ||
+		strings.Contains(msg, "not reversible")
+}
+
 // RefundDay refunds a single day to the customer's wallet (idempotent on the
 // day id) and stamps RefundTxnID. If the day's payout was already held, the
 // held transfer is reversed first so the chef isn't paid for a refunded day.

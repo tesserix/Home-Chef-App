@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -873,7 +874,11 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 	// can't move money ungated at launch — the minimum P0 fix.
 	// TODO(#456-followup): route cancel reverse through ReverseHold / inside the guarded
 	// tx before flags-ON (the reverse currently runs outside the status transition).
-	services.ReverseGroupChefPayout(&g)
+	if rErr := services.ReverseGroupChefPayout(&g); rErr != nil {
+		// Best-effort here (W-A #456-followup: route through ReverseHold inside the tx);
+		// the payout-reconcile cron re-drives an unsettled reversed group hold.
+		log.Printf("group-order: reverse chef payout on cancel for %s failed: %v", g.ID, rErr)
+	}
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&models.GroupOrder{}).
 			Where("id = ? AND status NOT IN ?", g.ID, []models.GroupOrderStatus{models.GroupOrderCancelled, models.GroupOrderDelivered}).
