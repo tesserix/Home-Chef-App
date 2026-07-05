@@ -19,9 +19,6 @@ import {
   MessageSquare,
   UtensilsCrossed,
   User,
-  FileText,
-  Shield,
-  Receipt,
   ScrollText,
   Wallet,
   Gift,
@@ -630,9 +627,12 @@ export default function ProfileScreen() {
         })()}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            Section — Legal (Terms · Privacy · Refund)
+            Section — Privacy & Legal. Two rows: "Your Data" stays top-level
+            (DPDP action center — export/delete, functional not reference) and
+            the four reference documents consolidate behind one "Legal" row
+            (app/legal.tsx index).
         ═══════════════════════════════════════════════════════════════════ */}
-        <SectionLabel>Legal</SectionLabel>
+        <SectionLabel>Privacy & Legal</SectionLabel>
 
         {/* Shadow on outer View, overflow+radius on clip View — iOS shadow gotcha */}
         <View
@@ -647,33 +647,15 @@ export default function ProfileScreen() {
         >
           <View className="rounded-xl overflow-hidden">
             <NavRow
-              icon={<FileText size={18} color={customerColors.charcoal.soft} />}
-              label="Terms of Service"
-              onPress={() => router.push('/terms')}
-            />
-            <NavRowDivider />
-            <NavRow
-              icon={<Shield size={18} color={customerColors.charcoal.soft} />}
-              label="Privacy Policy"
-              onPress={() => router.push('/privacy')}
-            />
-            <NavRowDivider />
-            <NavRow
               icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
               label="Your Data"
               onPress={() => router.push('/data-privacy')}
             />
             <NavRowDivider />
             <NavRow
-              icon={<Receipt size={18} color={customerColors.charcoal.soft} />}
-              label="Refund Policy"
-              onPress={() => router.push('/refund')}
-            />
-            <NavRowDivider />
-            <NavRow
               icon={<ScrollText size={18} color={customerColors.charcoal.soft} />}
-              label="End User Licence"
-              onPress={() => router.push('/eula')}
+              label="Legal"
+              onPress={() => router.push('/legal')}
               isLast
             />
           </View>
