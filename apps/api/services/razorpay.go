@@ -386,9 +386,13 @@ type TransferResponse struct {
 	RecipientType string `json:"recipient_settlement_id"`
 	Account       string `json:"recipient"`
 	Amount        int    `json:"amount"`
-	Currency      string `json:"currency"`
-	Status        string `json:"status"`
-	OnHold        bool   `json:"on_hold"`
+	// AmountReversed is how much of this transfer Razorpay has already reversed —
+	// (Amount − AmountReversed) is what remains un-reversed, so a repeated partial
+	// claw-back (#549) never tries to reverse more than is left on the transfer.
+	AmountReversed int    `json:"amount_reversed"`
+	Currency       string `json:"currency"`
+	Status         string `json:"status"`
+	OnHold         bool   `json:"on_hold"`
 }
 
 // CreateTransfer issues a direct transfer from the platform balance to a linked

@@ -72,6 +72,10 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT,
 			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
+		// chef_profiles — the partial-refund claw-back (#549) resolves the chef's
+		// Route account by joining orders.chef_id → chef_profiles.id.
+		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, razorpay_account_id TEXT DEFAULT '',
+			payout_country TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
