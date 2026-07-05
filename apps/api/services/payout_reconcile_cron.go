@@ -91,6 +91,11 @@ func runPayoutReconcileScan(_ context.Context) {
 	// A cancelled group whose reverse never ran sits at a non-terminal hold with a
 	// held transfer — invisible to the status-keyed sweeps above (#534).
 	n += reconcileCancelledGroups()
+	// Same class for orders + meal-plan days: a refund cross-guard that crashed before
+	// flipping the hold terminal leaves a cancelled/refunded aggregate at a parked hold
+	// with a held transfer, unseen by the released/reversed sweeps (#542).
+	n += reconcileCancelledOrders()
+	n += reconcileRefundedDays()
 	if n > 0 {
 		log.Printf("payout-reconcile: re-drove %d stranded hold(s)", n)
 	}
@@ -211,6 +216,82 @@ func reconcileCancelledGroups() int {
 		}
 		if err := ReverseGroupHoldForCancel(database.DB, id, "reconcile: stranded cancelled group"); err != nil {
 			bumpSettleAttempt(aggTypeGroupOrder, id, err)
+			continue
+		}
+		driven++
+	}
+	return driven
+}
+
+// parkedActionableHolds is the set of non-terminal holds a stranded refund/cancel
+// can still act on: withheld/reversed are terminal (already handled) and none has no
+// hold to drive. withholdOrReverseHoldForRefund moves these → withheld (parked) or
+// → reversed (released), so after a drive the row drops out of the next scan.
+var parkedActionableHolds = []models.PayoutHoldStatus{
+	models.PayoutHoldAwaitingConfirmation,
+	models.PayoutHoldReleaseEligible,
+	models.PayoutHoldDisputed,
+	models.PayoutHoldReleased,
+}
+
+// reconcileCancelledOrders drives the refund cross-guard on an order that was
+// refunded/cancelled but whose hold never reached a terminal state — the crash
+// window #542 closes (mirror of reconcileCancelledGroups for the order aggregate).
+// An order refunded via the issue path keeps status='delivered' but stamps
+// refunded_at, so both are matched. Scoped to gateway-charged orders (a wallet-only
+// order has no Route transfer to strand). Idempotent: withholdOrReverseHoldForRefund
+// moves the hold out of parkedActionableHolds, so a driven row leaves the scan.
+func reconcileCancelledOrders() int {
+	var ids []string
+	if err := database.DB.Model(&models.Order{}).
+		Where(`(status IN ? OR refunded_at IS NOT NULL) AND payout_hold_status IN ?
+		       AND payout_settled_at IS NULL AND razorpay_order_id <> '' AND payout_settle_attempts < ?`,
+			[]models.OrderStatus{models.OrderStatusCancelled, models.OrderStatusRefunded},
+			parkedActionableHolds, payoutReconcileMaxAttempts).
+		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
+		log.Printf("payout-reconcile: query stranded refunded/cancelled orders failed: %v", err)
+		return 0
+	}
+	driven := 0
+	for _, raw := range ids {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			log.Printf("payout-reconcile: bad order id %q: %v", raw, err)
+			continue
+		}
+		if err := withholdOrReverseHoldForRefund(database.DB, aggTypeOrder, id, "reconcile: stranded refunded/cancelled order"); err != nil {
+			bumpSettleAttempt(aggTypeOrder, id, err)
+			continue
+		}
+		driven++
+	}
+	return driven
+}
+
+// reconcileRefundedDays is reconcileCancelledOrders for the meal-plan-day aggregate:
+// a day refunded/cancelled but left at a parked hold with a held transfer (its
+// RefundDay cross-guard crashed before markRefundedDayHold). Scoped to days that
+// actually hold a transfer (payout_transfer_id <> ”).
+func reconcileRefundedDays() int {
+	var ids []string
+	if err := database.DB.Model(&models.MealPlanDay{}).
+		Where(`status IN ? AND payout_hold_status IN ? AND payout_settled_at IS NULL
+		       AND payout_transfer_id <> '' AND payout_settle_attempts < ?`,
+			[]models.MealPlanDayStatus{models.MealPlanDayRefunded, models.MealPlanDayCancelled},
+			parkedActionableHolds, payoutReconcileMaxAttempts).
+		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
+		log.Printf("payout-reconcile: query stranded refunded/cancelled days failed: %v", err)
+		return 0
+	}
+	driven := 0
+	for _, raw := range ids {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			log.Printf("payout-reconcile: bad meal-plan-day id %q: %v", raw, err)
+			continue
+		}
+		if err := withholdOrReverseHoldForRefund(database.DB, aggTypeMealPlanDay, id, "reconcile: stranded refunded/cancelled day"); err != nil {
+			bumpSettleAttempt(aggTypeMealPlanDay, id, err)
 			continue
 		}
 		driven++
