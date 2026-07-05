@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -547,9 +548,14 @@ func (c *RazorpayClient) HealthCheck() error {
 
 // --- Helpers ---
 
-// ToPaise converts a float amount (e.g. 499.00 INR) to paise (49900)
+// ToPaise converts a float amount (e.g. 499.00 INR) to paise (49900). It ROUNDS
+// (not truncates): int(amount*100) alone loses a paise on IEEE-754 near-integer
+// products (0.29*100 == 28.9999… → 28), which under-charges/under-settles real
+// Route money now that Round2-ed NET payouts feed straight in (#518). Rounds
+// identically to ToMinor(amount, "INR") so both gateway paths mint the same
+// minor-unit value (#524/#396).
 func ToPaise(amount float64) int {
-	return int(amount * 100)
+	return int(math.Round(amount * 100))
 }
 
 // FromPaise converts paise to float amount
