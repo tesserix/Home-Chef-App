@@ -98,7 +98,10 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	// can refund now. amountToRefund is in paise — Razorpay's native
 	// unit. Floor + min 1 paise; if there's nothing left to refund we
 	// flip the status and skip the gateway call.
-	refundable := order.Total - order.RefundAmount
+	// #527: RemainingRefundable, NOT Total − RefundAmount — a prior per-line cancel
+	// reduced Total AND bumped RefundAmount, so the naive difference double-subtracts
+	// the refunded lines and strands the remaining live items' money on this full cancel.
+	refundable := services.RemainingRefundable(&order)
 	amountPaise := int(roundPaise(refundable))
 	var refundID string
 	var refundedAt time.Time
