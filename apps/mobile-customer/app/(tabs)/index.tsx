@@ -34,6 +34,7 @@ import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
+import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
@@ -108,6 +109,7 @@ export default function HomeScreen() {
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<BottomSheetMethods>(null);
+  const addressSheetRef = useRef<BottomSheetMethods>(null);
 
   // ── Search debounce ─────────────────────────────────────────────────────
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,7 +170,7 @@ export default function HomeScreen() {
     <>
       {/* ── Row 0: Active delivery address — drives the discovery coords below.
           Tapping opens a sheet to view/switch which saved address is active. ── */}
-      <AddressSwitcher />
+      <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
 
       {/* ── Row 1: Search pill + quick-navigation links ── */}
       <View style={styles.searchPillWrapper}>
@@ -439,6 +441,12 @@ export default function HomeScreen() {
           isOpenOnly={isOpenOnly}
           onIsOpenOnlyChange={setIsOpenOnly}
         />
+
+        {/* AddressSwitcherSheet — mounted at the screen root (sibling of the
+            FlatList), NOT inside the list header, so @gorhom overlays the whole
+            screen instead of being trapped in the header's layout box. Hidden at
+            index -1 until the address pill is tapped (addressSheetRef.expand). */}
+        <AddressSwitcherSheet ref={addressSheetRef} />
       </View>
     </SafeAreaView>
   );
