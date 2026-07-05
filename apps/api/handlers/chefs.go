@@ -1160,6 +1160,17 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			log.Printf("payout-hold: park order %s on chef self-delivery failed: %v", order.ID, err)
 		}
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
+		// #392: a chef rejecting/cancelling a PAID order must refund the customer in
+		// full (chef's fault). Previously this only signalled the Temporal saga, which
+		// is a no-op when ORDER_SAGA_ENABLED is off (the default) → the customer was
+		// charged and got nothing. RefundOrderForCancellation is idempotent + no-ops an
+		// unpaid order. Both it and the saga's CompensateOrderRefund now claim the SAME
+		// atomic refund mutex (payment_status completed→refunded), so even with the saga
+		// enabled exactly one of them refunds. Best-effort: never fail the status change.
+		if rErr := services.RefundOrderForCancellation(&order, "chef", "chef "+string(order.Status)); rErr != nil {
+			log.Printf("cancel-refund: chef %s of order %s failed: %v", order.Status, order.ID, rErr)
+			services.CaptureBackgroundError(rErr)
+		}
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}
 

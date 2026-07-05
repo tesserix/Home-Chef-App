@@ -866,6 +866,16 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
+	// #392: refund a PAID order on cancellation. This legacy direct-cancel path
+	// previously refunded ₹0 (the customer app uses the /cancel-request arbitration
+	// flow, but this route is still live). RefundOrderForCancellation no-ops an unpaid
+	// pending order and shares the refund claim, so it never double-refunds against a
+	// concurrent /cancel-request. Best-effort — never fail the cancel on a refund error.
+	if rErr := services.RefundOrderForCancellation(&order, "customer", "customer cancellation"); rErr != nil {
+		log.Printf("cancel-refund: customer cancel of order %s failed: %v", order.ID, rErr)
+		services.CaptureBackgroundError(rErr)
+	}
+
 	// Cancel any booked 3PL delivery (no-op if none exists yet). Off the
 	// response path; failure must not fail the order cancellation.
 	go func() {
