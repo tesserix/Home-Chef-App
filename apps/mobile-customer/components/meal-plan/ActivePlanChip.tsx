@@ -60,20 +60,26 @@ export function ActivePlanChip() {
   );
 }
 
+// Neutral chrome (accent discipline): this is a status, not a promotion — the
+// small coral calendar icon is the only accent, so the chip doesn't compete
+// with the dock pill / selected filters for the eye.
 const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     alignSelf: 'flex-start',
+    marginHorizontal: 16,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: customerColors.coral.tint,
+    backgroundColor: customerColors.canvas,
+    borderWidth: 1,
+    borderColor: customerColors.hairline,
   },
   chipText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 13,
-    color: customerColors.coral.DEFAULT,
+    color: customerColors.charcoal.DEFAULT,
   },
 });

@@ -21,7 +21,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import Animated, {
@@ -31,7 +30,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Search, SlidersHorizontal } from 'lucide-react-native';
+import { Map, Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
@@ -95,8 +94,8 @@ export default function HomeScreen() {
   // ── Filter state ────────────────────────────────────────────────────────
   // All five filter dimensions live here and flow into useChefs(filters).
   // FilterSheet receives setters as props so it drives the same state.
-  const [searchText, setSearchText] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Text search lives on the unified search screen (/search-dishes) — the
+  // home search pill is a navigation button, not an inline input.
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
   const [selectedDiet, setSelectedDiet] = useState<string>('');
   const [isOpenOnly, setIsOpenOnly] = useState(false);
@@ -112,24 +111,6 @@ export default function HomeScreen() {
   const filterSheetRef = useRef<BottomSheetMethods>(null);
   const addressSheetRef = useRef<BottomSheetMethods>(null);
 
-  // ── Search debounce ─────────────────────────────────────────────────────
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(searchText);
-    }, 400);
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, [searchText]);
-
   // ── Data fetching ────────────────────────────────────────────────────────
   // Customer location drives the chef delivery-area gate: a chef who only
   // delivers (no pickup) and can't reach the customer is hidden, and chefs shown
@@ -140,7 +121,6 @@ export default function HomeScreen() {
   // a customer with no chef within 15km sees an empty feed).
   const coords = useCustomerCoords();
   const filters: ChefFilters = {
-    search: debouncedSearch || undefined,
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
     dietary: selectedDiet || undefined,
     isOpen: isOpenOnly || undefined,
@@ -173,51 +153,42 @@ export default function HomeScreen() {
   // ── Header component ─────────────────────────────────────────────────────
   const renderHeader = () => (
     <>
-      {/* ── Row 0: Active delivery address — drives the discovery coords below.
-          Tapping opens a sheet to view/switch which saved address is active. ── */}
-      <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
+      {/* ── Row 0: Active delivery address + map entry on one row. The address
+          pill opens the switcher sheet; the circular map button replaces the
+          old "Map view →" text link. ── */}
+      <View style={styles.addressRow}>
+        <View style={styles.addressRowPill}>
+          <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
+        </View>
+        <Pressable
+          onPress={() => router.push('/chefs-map')}
+          accessibilityRole="button"
+          accessibilityLabel="View chefs on a map"
+        >
+          <View style={styles.mapButton}>
+            <Map size={18} color={customerColors.charcoal.DEFAULT} />
+          </View>
+        </Pressable>
+      </View>
 
-      {/* ── Row 1: Search pill + quick-navigation links ── */}
+      {/* ── Row 1: Search entry. A button, not an inline input — typing happens
+          on the unified search screen (dishes + chefs) with proper focus. The
+          old "Search dishes →" link folded into this. ── */}
       <View style={styles.searchPillWrapper}>
-        <View style={styles.searchPill}>
-          <Search
-            size={18}
-            color={customerColors.charcoal.soft}
-            accessibilityElementsHidden
-          />
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="What are you craving?"
-            placeholderTextColor={customerColors.charcoal.soft}
-            style={styles.searchInput}
-            returnKeyType="search"
-            accessibilityLabel="Search chefs"
-          />
-        </View>
-        {/* Discovery entries (#143): dish-name search + map view */}
-        <View style={styles.searchQuickLinks}>
-          <Pressable
-            onPress={() =>
-              router.push(
-                searchText.trim()
-                  ? `/search-dishes?q=${encodeURIComponent(searchText.trim())}`
-                  : '/search-dishes'
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Search dishes by name"
-          >
-            <Text style={styles.searchQuickLinkText}>Search dishes →</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/chefs-map')}
-            accessibilityRole="button"
-            accessibilityLabel="View chefs on a map"
-          >
-            <Text style={styles.searchQuickLinkText}>Map view →</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => router.push('/search-dishes')}
+          accessibilityRole="button"
+          accessibilityLabel="Search dishes and chefs"
+        >
+          <View style={styles.searchPill}>
+            <Search
+              size={18}
+              color={customerColors.charcoal.soft}
+              accessibilityElementsHidden
+            />
+            <Text style={styles.searchPlaceholder}>What are you craving?</Text>
+          </View>
+        </Pressable>
       </View>
 
       {/* Win-back offer (#42) — surfaces an active offer; auto-prefills checkout. */}
@@ -489,9 +460,29 @@ const styles = StyleSheet.create({
   },
 
   // ── Row 1: Search pill ────────────────────────────────────────────────────
+  // ── Row 0: Address + map entry ────────────────────────────────────────────
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 16,
+  },
+  addressRowPill: {
+    flex: 1,
+  },
+  mapButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: customerColors.surface.DEFAULT,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+  },
+
   searchPillWrapper: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 12,
   },
   searchPill: {
@@ -509,24 +500,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  searchInput: {
+  searchPlaceholder: {
     flex: 1,
     fontFamily: 'Inter',
     fontSize: 15,
-    color: customerColors.charcoal.DEFAULT,
-    padding: 0,
-  },
-  searchQuickLinks: {
-    flexDirection: 'row',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    gap: 20,
-  },
-  searchQuickLinkText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    fontWeight: '600',
-    color: customerColors.coral.DEFAULT,
+    color: customerColors.charcoal.soft,
   },
 
   // ── Row 2: Cuisine chip row ───────────────────────────────────────────────
@@ -590,12 +568,14 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
   },
+  // Accent discipline: the SELECTED state is the accent — the idle dot stays
+  // neutral so the chip doesn't compete with the dock pill / cart pill.
   openNowDotActive: {
     backgroundColor: customerColors.coral.DEFAULT,
   },
   openNowDotInactive: {
-    backgroundColor: customerColors.coral.DEFAULT,
-    opacity: 0.6,
+    backgroundColor: customerColors.charcoal.soft,
+    opacity: 0.5,
   },
   openNowLabel: {
     fontFamily: 'Inter-SemiBold',
