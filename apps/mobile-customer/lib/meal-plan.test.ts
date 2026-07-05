@@ -7,6 +7,7 @@ import {
   isLiveMealPlanStatus,
   isDeclinedDayStatus,
   summarizeLivePlan,
+  toLocalDateKey,
 } from './meal-plan';
 import type { MealPlan, MealPlanDay } from '../hooks/useMealPlans';
 
@@ -93,6 +94,16 @@ describe('summarizeLivePlan', () => {
     const days = [day({ date: '2026-07-05', status: 'prepared' })];
     expect(summarizeLivePlan(days, '2026-07-05').todayStatus).toBe('prepared');
     expect(summarizeLivePlan(days, '2026-07-06').todayStatus).toBeNull();
+  });
+
+  it('matches the API RFC3339 timestamp shape, not just YYYY-MM-DD', () => {
+    // MealPlanDay.date arrives as a full instant; the today-match must normalize
+    // it to a local calendar day. Compute the expected key the same way so the
+    // assertion is timezone-independent.
+    const iso = '2026-07-05T00:00:00Z';
+    const days = [day({ date: iso, status: 'prepared' })];
+    const key = toLocalDateKey(iso);
+    expect(summarizeLivePlan(days, key).todayStatus).toBe('prepared');
   });
 
   it('handles an empty plan', () => {

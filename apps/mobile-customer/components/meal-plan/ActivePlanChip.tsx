@@ -18,17 +18,9 @@ import {
   pickLiveMealPlan,
   summarizeLivePlan,
   mealPlanDayStatusMeta,
+  toLocalDateKey,
 } from '../../lib/meal-plan';
 import { MealPlanSheet } from './MealPlanSheet';
-
-function todayISO(): string {
-  // Local calendar date as YYYY-MM-DD (day.date is a local date, not a UTC
-  // instant), so "today" matches the plan's day dates.
-  const d = new Date();
-  const m = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
 
 export function ActivePlanChip() {
   const { data } = useMyMealPlans();
@@ -37,7 +29,7 @@ export function ActivePlanChip() {
   const plan = pickLiveMealPlan(data?.data);
 
   const summary = useMemo(
-    () => (plan ? summarizeLivePlan(plan.days ?? [], todayISO()) : null),
+    () => (plan ? summarizeLivePlan(plan.days ?? [], toLocalDateKey(new Date().toISOString())) : null),
     [plan],
   );
 

@@ -17,7 +17,6 @@ import {
   useFinalizeMealPlan,
   useMealPlan,
   useSkipMealPlanDay,
-  type MealPlanDay,
 } from '../../hooks/useMealPlans';
 import { mealPlanStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
 import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
