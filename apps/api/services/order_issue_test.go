@@ -63,6 +63,7 @@ func setupIssueDB(t *testing.T) *gorm.DB {
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, total REAL, refund_amount REAL DEFAULT 0, refund_reason TEXT,
 			refund_initiated_by TEXT, refunded_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0, currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,
 			amount REAL, balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT,
@@ -128,6 +129,24 @@ func TestRefundIssueToWallet(t *testing.T) {
 		var orderRefund float64
 		db.Raw(`SELECT refund_amount FROM orders WHERE id = ?`, orderID.String()).Scan(&orderRefund)
 		assert.Equal(t, 120.0, orderRefund, "order refund incremented once")
+	})
+
+	// #560/#527: after a per-line cancel (Total reduced AND RefundAmount bumped by the
+	// refunded line), the naive Total − RefundAmount caps to 0 and strands a legitimate
+	// issue refund on the remaining LIVE item. RemainingRefundable adds the per-line
+	// refund back, so the live-item value stays refundable.
+	t.Run("per-line cancel doesn't strand a legit issue refund", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		// 2×₹110 order, per-line cancel of item 1 → Total 110, RefundAmount 110, cancelled item refund 110.
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 110, 110)`, orderID.String()).Error)
+		require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,?,?)`,
+			uuid.NewString(), orderID.String(), true, 110).Error)
+		iss := seedIssue(t, db, customer, orderID)
+
+		// The remaining live item (₹110) is still owed — must NOT be capped to 0.
+		require.NoError(t, RefundIssueToWallet(db, iss, 110, "system", nil))
+		assert.Equal(t, 110.0, balanceOfUser(t, db, customer), "the live-item value is refundable, not stranded")
 	})
 
 	t.Run("admin resolve marks resolved (not auto)", func(t *testing.T) {
