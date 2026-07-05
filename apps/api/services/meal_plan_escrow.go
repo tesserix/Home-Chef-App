@@ -248,8 +248,14 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 		return fmt.Errorf("refund day %s to wallet: %w", day.ID, err)
 	}
 	day.RefundTxnID = &txn.ID
-	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
-		Update("refund_txn_id", txn.ID).Error
+	if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
+		Update("refund_txn_id", txn.ID).Error; err != nil {
+		return err
+	}
+	// #498: drive the day's payout hold out of the releasable set so the admin queue
+	// can't release a refunded day (double-pay). STATE-ONLY — the held transfer is
+	// already reversed above, so this must not re-run the money seam.
+	return markRefundedDayHold(tx, day.ID)
 }
 
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once

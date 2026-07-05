@@ -513,34 +513,104 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 // real transition; callers invoke this best-effort so a hold-drive failure never
 // fails the refund (the release-side guard is the backstop).
 func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason string) error {
-	var order models.Order
-	if err := db.Select("payout_hold_status").First(&order, "id = ?", orderID).Error; err != nil {
-		return fmt.Errorf("payout-crossguard: load order %s: %w", orderID, err)
+	// Drive the order aggregate itself, then fan out (#498) to any meal-plan-day /
+	// group-order carrying its hold on the linked order: each per-day fulfillment
+	// order maps to exactly one day and each consolidated order to one group, and a
+	// standalone food order has zero linked rows (no-op). All three key on the SAME
+	// order refund, so the refund must withhold/reverse them together.
+	if err := withholdOrReverseHoldForRefund(db, aggTypeOrder, orderID, reason); err != nil {
+		return err
 	}
-	old := order.PayoutHoldStatus
+	var dayIDs []uuid.UUID
+	if err := db.Model(&models.MealPlanDay{}).Where("order_id = ?", orderID).Pluck("id", &dayIDs).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: list days for order %s: %w", orderID, err)
+	}
+	for _, id := range dayIDs {
+		if err := withholdOrReverseHoldForRefund(db, aggTypeMealPlanDay, id, reason); err != nil {
+			return err
+		}
+	}
+	var groupIDs []uuid.UUID
+	if err := db.Model(&models.GroupOrder{}).Where("order_id = ?", orderID).Pluck("id", &groupIDs).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: list groups for order %s: %w", orderID, err)
+	}
+	for _, id := range groupIDs {
+		if err := withholdOrReverseHoldForRefund(db, aggTypeGroupOrder, id, reason); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withholdOrReverseHoldForRefund drives ONE aggregate's payout hold on refund and is
+// the aggType-generic core shared by the order entry point and its day/group fan-out:
+// release_eligible | awaiting | disputed → withheld; released → reversed (then
+// settleReverse claws the transfer back — state-only while the escrow flag is OFF).
+// none | withheld | reversed → no-op. Idempotent + race-safe via transitionHold's
+// conditional WHERE. Best-effort audit on a genuine transition.
+func withholdOrReverseHoldForRefund(db *gorm.DB, aggType string, id uuid.UUID, reason string) error {
+	model, err := holdModel(aggType)
+	if err != nil {
+		return err
+	}
+	var statuses []models.PayoutHoldStatus
+	if err := db.Model(model).Where("id = ?", id).Pluck("payout_hold_status", &statuses).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: load %s %s: %w", aggType, id, err)
+	}
+	if len(statuses) == 0 {
+		return nil // aggregate gone — nothing to cross-guard
+	}
+	old := statuses[0]
 	var to models.PayoutHoldStatus
 	var ok bool
-	var err error
 	switch old {
 	case models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed:
 		to = models.PayoutHoldWithheld
-		ok, err = transitionHold(db, aggTypeOrder, orderID,
+		ok, err = transitionHold(db, aggType, id,
 			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}, to, false)
 	case models.PayoutHoldReleased:
 		to = models.PayoutHoldReversed
-		if ok, err = transitionHold(db, aggTypeOrder, orderID,
+		if ok, err = transitionHold(db, aggType, id,
 			[]models.PayoutHoldStatus{models.PayoutHoldReleased}, to, false); ok && err == nil {
-			err = settleReverse(db, aggTypeOrder, orderID)
+			err = settleReverse(db, aggType, id)
 		}
 	default:
 		return nil // none / withheld / reversed — nothing to cross-guard
 	}
 	if err != nil {
-		return fmt.Errorf("payout-crossguard: drive order %s refund hold: %w", orderID, err)
+		return fmt.Errorf("payout-crossguard: drive %s %s refund hold: %w", aggType, id, err)
 	}
 	if ok {
-		LogSystemAudit(nil, "payout.hold.refund_crossguard", "order", orderID.String(),
+		LogSystemAudit(nil, "payout.hold.refund_crossguard", aggType, id.String(),
 			string(old), map[string]any{"to": string(to), "reason": reason})
+	}
+	return nil
+}
+
+// markRefundedDayHold drives a meal-plan-day's payout hold out of the releasable set
+// after RefundDay has already refunded the customer AND already reversed any held
+// transfer at the gateway (#498, Part C). STATE-ONLY by design: it must NOT run
+// reverseMoney, or it would double-reverse the transfer RefundDay reversed (and the
+// day reverseMoney branch does not tolerate an already-reversed gateway error). A
+// released day → reversed + payout_settled_at stamped, so the reconcile cron (which
+// re-drives released/reversed-but-unsettled holds) will not reverse it a second time;
+// an eligible/awaiting/disputed day → withheld; none/withheld/reversed → no-op.
+func markRefundedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
+	res := tx.Model(&models.MealPlanDay{}).
+		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldReleased).
+		Update("payout_hold_status", models.PayoutHoldReversed)
+	if res.Error != nil {
+		return fmt.Errorf("payout-release: mark refunded day %s reversed: %w", dayID, res.Error)
+	}
+	if res.RowsAffected > 0 {
+		return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
+	}
+	res = tx.Model(&models.MealPlanDay{}).
+		Where("id = ? AND payout_hold_status IN ?", dayID,
+			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}).
+		Update("payout_hold_status", models.PayoutHoldWithheld)
+	if res.Error != nil {
+		return fmt.Errorf("payout-release: mark refunded day %s withheld: %w", dayID, res.Error)
 	}
 	return nil
 }

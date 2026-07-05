@@ -172,7 +172,85 @@ func ReleaseDisputedOrderHoldIfCleared(tx *gorm.DB, orderID uuid.UUID) error {
 	if res.RowsAffected == 0 {
 		return nil // still disputed for a reason (pending issue / refunded), or not disputed
 	}
-	return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, "order", orderID)
+	return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, aggTypeOrder, orderID)
+}
+
+// ReleaseDisputedHoldsForOrderIfCleared is the #498 fan-out of
+// ReleaseDisputedOrderHoldIfCleared: after clearing the order's own disputed hold, it
+// also drives every meal-plan-day and group-order whose order_id matches out of the
+// `disputed` dead-end. A day/group hold is disputed via the SAME linked order
+// (applyHoldConfirm keys on OrderID / g.OrderID), so a rejected issue on that order
+// clears them too. MUST run in the tx where the issue is already marked rejected, so
+// the NOT EXISTS(pending) guard observes it. Each per-day fulfillment order maps to
+// exactly one day and each consolidated order to one group, so the loops are tiny.
+func ReleaseDisputedHoldsForOrderIfCleared(tx *gorm.DB, orderID uuid.UUID) error {
+	if err := ReleaseDisputedOrderHoldIfCleared(tx, orderID); err != nil {
+		return err
+	}
+	var dayIDs []uuid.UUID
+	if err := tx.Model(&models.MealPlanDay{}).
+		Where("order_id = ? AND payout_hold_status = ?", orderID, models.PayoutHoldDisputed).
+		Pluck("id", &dayIDs).Error; err != nil {
+		return fmt.Errorf("payout-hold: list disputed days for order %s: %w", orderID, err)
+	}
+	for _, id := range dayIDs {
+		if err := releaseDisputedDayHoldIfCleared(tx, id, orderID); err != nil {
+			return err
+		}
+	}
+	var groupIDs []uuid.UUID
+	if err := tx.Model(&models.GroupOrder{}).
+		Where("order_id = ? AND payout_hold_status = ?", orderID, models.PayoutHoldDisputed).
+		Pluck("id", &groupIDs).Error; err != nil {
+		return fmt.Errorf("payout-hold: list disputed groups for order %s: %w", orderID, err)
+	}
+	for _, id := range groupIDs {
+		if err := releaseDisputedGroupHoldIfCleared(tx, id, orderID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// releaseDisputedDayHoldIfCleared drives ONE meal-plan-day disputed → release_eligible
+// with the block predicates folded into the guarded UPDATE: the day itself not
+// refunded (refund_txn_id NULL), the linked order not refunded/cancelled, and no
+// remaining pending issue on that order. Race-safe (correctness lives in the WHERE;
+// the caller's SELECT only enumerates candidates); emits only on a genuine transition.
+func releaseDisputedDayHoldIfCleared(tx *gorm.DB, dayID, orderID uuid.UUID) error {
+	res := tx.Model(&models.MealPlanDay{}).
+		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldDisputed).
+		Where("refund_txn_id IS NULL").
+		Where("NOT EXISTS (?)", refundedOrderSubquery(tx, orderID)).
+		Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, orderID)).
+		Update("payout_hold_status", models.PayoutHoldReleaseEligible)
+	if res.Error != nil {
+		return fmt.Errorf("payout-hold: clear disputed day %s: %w", dayID, res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return nil
+	}
+	return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, aggTypeMealPlanDay, dayID)
+}
+
+// releaseDisputedGroupHoldIfCleared is releaseDisputedDayHoldIfCleared for a group
+// order. Group refunds are per-participant (no group-level refund column), so the
+// day's refund_txn_id guard is replaced by a not-cancelled guard — a fully-refunded
+// group is always `cancelled` (handlers/group_order.go).
+func releaseDisputedGroupHoldIfCleared(tx *gorm.DB, groupID, orderID uuid.UUID) error {
+	res := tx.Model(&models.GroupOrder{}).
+		Where("id = ? AND payout_hold_status = ?", groupID, models.PayoutHoldDisputed).
+		Where("status <> ?", models.GroupOrderCancelled).
+		Where("NOT EXISTS (?)", refundedOrderSubquery(tx, orderID)).
+		Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, orderID)).
+		Update("payout_hold_status", models.PayoutHoldReleaseEligible)
+	if res.Error != nil {
+		return fmt.Errorf("payout-hold: clear disputed group %s: %w", groupID, res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return nil
+	}
+	return emitHoldEvent(tx, models.PayoutHoldReleaseEligible, aggTypeGroupOrder, groupID)
 }
 
 // emitHoldEvent stages the hold-transition event onto the outbox within tx.
@@ -223,7 +301,7 @@ func ConfirmMealPlanDayHold(db *gorm.DB, day *models.MealPlanDay) (models.Payout
 	}
 	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		return applyHoldConfirm(tx, &models.MealPlanDay{}, "meal_plan_day", day.ID, day.OrderID, now)
+		return applyHoldConfirm(tx, &models.MealPlanDay{}, aggTypeMealPlanDay, day.ID, day.OrderID, now)
 	}); err != nil {
 		return "", fmt.Errorf("payout-hold: confirm meal-plan day %s: %w", day.ID, err)
 	}
