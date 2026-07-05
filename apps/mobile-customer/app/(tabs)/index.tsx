@@ -33,6 +33,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
@@ -164,6 +165,10 @@ export default function HomeScreen() {
   // ── Header component ─────────────────────────────────────────────────────
   const renderHeader = () => (
     <>
+      {/* ── Row 0: Active delivery address — drives the discovery coords below.
+          Tapping opens a sheet to view/switch which saved address is active. ── */}
+      <AddressSwitcher />
+
       {/* ── Row 1: Search pill + quick-navigation links ── */}
       <View style={styles.searchPillWrapper}>
         <View style={styles.searchPill}>

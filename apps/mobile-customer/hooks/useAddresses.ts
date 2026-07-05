@@ -78,3 +78,43 @@ export function useCreateAddress() {
     },
   });
 }
+
+// Switches the customer's active delivery/discovery address by PUTting the
+// chosen address back with isDefault: true. PUT /v1/addresses/:id requires
+// the FULL createAddressRequest shape (label/line1/city/state/postalCode are
+// all `binding:"required"` server-side — see apps/api/handlers/address.go
+// UpdateAddress), so we round-trip every existing field, not just isDefault;
+// the server clears the previous default in the same request.
+export function useSetDefaultAddress() {
+  const queryClient = useQueryClient();
+  return useMutation<{ data: Address }, Error, Address>({
+    mutationFn: (address) => {
+      if (!address.id) {
+        return Promise.reject(new Error('Address is missing an id'));
+      }
+      return api
+        .put<ApiAddress>(`/v1/addresses/${address.id}`, {
+          label: address.label?.trim() || 'Home',
+          line1: address.addressLine1,
+          line2: address.addressLine2 ?? '',
+          city: address.city,
+          state: address.state,
+          postalCode: address.pincode,
+          latitude: address.latitude ?? 0,
+          longitude: address.longitude ?? 0,
+          isDefault: true,
+        })
+        .then((r) => ({ data: mapAddress(r.data) }));
+    },
+    onSuccess: () => {
+      // Refresh the address list (new default) AND every chef/discovery query —
+      // useCustomerCoords derives lat/lng from the default address, so the home
+      // feed and chef-detail deliverableToYou checks must re-fetch with the
+      // newly active address's coordinates instead of stale results keyed on
+      // the previous default.
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['chefs'] });
+      queryClient.invalidateQueries({ queryKey: ['chef'] });
+    },
+  });
+}
