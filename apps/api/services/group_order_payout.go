@@ -96,6 +96,38 @@ func ReverseGroupChefPayout(g *models.GroupOrder) error {
 	return nil
 }
 
+// ReverseGroupHoldForCancel drives a CANCELLED group order's chef payout hold to
+// reversed and claws back the held direct transfer (#456 W-A — replaces the old
+// unconditional pre-tx ReverseGroupChefPayout in the cancel handler). Self-guards on
+// status==cancelled, so it is safe to call on BOTH the cancel success path AND the
+// already-cancelled conflict/retry path (crash-window recovery) and NEVER reverses a
+// delivered group. The status transition is a guarded conditional UPDATE (idempotent:
+// a second call no-ops once the hold is terminal), and settleReverse runs the
+// flag-gated reverse seam (ReverseGroupChefPayout, keyed on PayoutTransferID) +
+// stamps payout_settled_at. The group chef transfer is a DIRECT transfer that the
+// participant wallet refunds do NOT auto-reverse, so this explicit reverse is required.
+func ReverseGroupHoldForCancel(db *gorm.DB, groupID uuid.UUID, reason string) error {
+	var g models.GroupOrder
+	if err := db.Select("status", "payout_hold_status").First(&g, "id = ?", groupID).Error; err != nil {
+		return fmt.Errorf("group-order: load %s for cancel reverse: %w", groupID, err)
+	}
+	if g.Status != models.GroupOrderCancelled {
+		return nil // only a cancelled group's payout is clawed back — never a delivered one
+	}
+	ok, err := transitionHold(db, aggTypeGroupOrder, groupID,
+		[]models.PayoutHoldStatus{
+			models.PayoutHoldNone, models.PayoutHoldAwaitingConfirmation,
+			models.PayoutHoldReleaseEligible, models.PayoutHoldReleased, models.PayoutHoldDisputed,
+		}, models.PayoutHoldReversed, false)
+	if err != nil {
+		return fmt.Errorf("group-order: reverse hold %s: %w", groupID, err)
+	}
+	if !ok {
+		return nil // already withheld/reversed — idempotent
+	}
+	return settleReverse(db, aggTypeGroupOrder, groupID)
+}
+
 // RefundGroupParticipant refunds one paid participant to wallet (idempotent on the
 // participant id) and flips them to refunded.
 func RefundGroupParticipant(tx *gorm.DB, p *models.GroupOrderParticipant, reason string) error {
