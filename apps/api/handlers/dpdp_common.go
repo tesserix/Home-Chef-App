@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -87,8 +88,12 @@ func beginSelfDelete(c *gin.Context) (user models.User, proceed bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return user, false
 	}
-	if req.ConfirmEmail != user.Email {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "confirmEmail must exactly match your account email"})
+	// Email match is case-insensitive + trimmed: emails are case-insensitive by
+	// convention, and the mobile confirm gate normalizes the same way — a
+	// case-sensitive server match would let the client enable "Delete" and then
+	// fail the request when the stored casing differs.
+	if !strings.EqualFold(strings.TrimSpace(req.ConfirmEmail), strings.TrimSpace(user.Email)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "confirmEmail must match your account email"})
 		return user, false
 	}
 

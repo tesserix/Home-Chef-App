@@ -117,7 +117,21 @@ func TestCustomerDelete_WrongConfirmEmail_400(t *testing.T) {
 	}, map[string]string{"confirmEmail": "wrong@example.com"})
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "must exactly match")
+	assert.Contains(t, w.Body.String(), "must match")
+}
+
+// The confirm-email match is case-insensitive + trimmed, matching the mobile
+// gate — a different-cased email still deletes.
+func TestCustomerDelete_ConfirmEmailCaseInsensitive(t *testing.T) {
+	db := setupCustomerDPDPDB(t)
+	uid := seedUser(t, db, "MixedCase@Example.com", "customer")
+
+	w := callSelf(t, uid, http.MethodPost, "/customer/me/delete", func(r *gin.Engine) {
+		r.POST("/customer/me/delete", NewCustomerDPDPHandler().DeleteMyAccount)
+	}, map[string]string{"confirmEmail": "  mixedcase@example.com  "})
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "deleted")
 }
 
 func TestCustomerDelete_SoftDeletesWithRetention(t *testing.T) {
