@@ -45,7 +45,21 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 	if order.PaymentStatus != models.PaymentCompleted {
 		return nil
 	}
-	refundAmount := order.Total - order.RefundAmount
+	// #527 race: refresh the money fields from the DB — a concurrent per-line cancel may
+	// have moved Total/RefundAmount/WalletApplied since the caller loaded `order`, and the
+	// refund math (RemainingRefundable + the wallet-capture cap below) must run on the
+	// current committed state, not a stale snapshot, or it can over-refund. Best-effort:
+	// on a read error we keep the caller's snapshot (RemainingRefundable itself re-reads
+	// consistently and fails safe).
+	var money struct{ Total, RefundAmount, WalletApplied float64 }
+	if err := database.DB.Model(&models.Order{}).Select("total", "refund_amount", "wallet_applied").
+		Where("id = ?", order.ID).Scan(&money).Error; err == nil {
+		order.Total, order.RefundAmount, order.WalletApplied = money.Total, money.RefundAmount, money.WalletApplied
+	}
+	// #527: RemainingRefundable (consistent snapshot), NOT Total − RefundAmount — after a
+	// per-line cancel the latter double-subtracts the refunded lines (Total was already
+	// reduced) and strands the remaining live items' money on a full cancel/reject.
+	refundAmount := RemainingRefundable(order)
 	if refundAmount <= 0 {
 		return nil // already fully refunded via prior per-line refunds — nothing left
 	}

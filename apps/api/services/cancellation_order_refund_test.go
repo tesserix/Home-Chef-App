@@ -33,6 +33,8 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT, amount REAL,
 			balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT, idempotency_key TEXT UNIQUE, created_at DATETIME)`,
+		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
+			refund_amount REAL DEFAULT 0, subtotal REAL DEFAULT 0, created_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
