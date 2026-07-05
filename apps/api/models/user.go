@@ -90,6 +90,15 @@ type Address struct {
 	User User `gorm:"foreignKey:UserID" json:"-"`
 }
 
+// BeforeCreate mints the UUID in Go so the model works without the Postgres
+// gen_random_uuid() default (e.g. in sqlite-backed unit tests).
+func (a *Address) BeforeCreate(*gorm.DB) error {
+	if a.ID == uuid.Nil {
+		a.ID = uuid.New()
+	}
+	return nil
+}
+
 type PaymentMethod struct {
 	ID              uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID          uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
