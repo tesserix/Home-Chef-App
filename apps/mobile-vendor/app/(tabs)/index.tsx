@@ -46,6 +46,7 @@ import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import { useChefMealPlanRequests, type MealPlan } from '../../hooks/useMealPlans';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+import { orderSourceLabel } from '../../lib/orderSource';
 import { useDockClearance } from '../../components/navigation/Dock';
 import {
   ActiveOrderCard,
@@ -287,7 +288,14 @@ export default function DashboardScreen() {
     );
   }
 
-  const isSurge = pendingOrders.length > 3;
+  // Which non-à-la-carte sources are among the pending orders (#435) — lets the
+  // persistent reminder distinguish plan/subscription/group arrivals, not just a
+  // raw count. Deduped, order preserved by first appearance.
+  const pendingSourceLabels = Array.from(
+    new Set(
+      pendingOrders.map((o) => orderSourceLabel(o.source)).filter((l): l is string => !!l),
+    ),
+  );
   const isQuiet =
     !isLoading &&
     pendingOrders.length === 0 &&
@@ -661,19 +669,35 @@ export default function DashboardScreen() {
           </View>
         ) : pendingOrders.length > 0 ? (
           <View>
-            {isSurge && (
-              <View style={styles.surgeBanner}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: theme.colors.amber.DEFAULT },
-                  ]}
-                />
+            {/* Persistent new-order reminder (#435) — shows for ANY pending
+                count (not just a surge), covers all order sources (à-la-carte +
+                plan-day + subscription + group), and names the special sources
+                present so the chef can tell a plan/group arrival apart. Tapping
+                opens the full orders tab. The count-increase haptic fires in
+                useVendorPendingOrders. */}
+            <Pressable
+              onPress={() => router.push('/(tabs)/orders')}
+              accessibilityRole="button"
+              accessibilityLabel={t('dashboard.ordersAwaiting', { count: pendingOrders.length })}
+              style={styles.surgeBanner}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: theme.colors.amber.DEFAULT },
+                ]}
+              />
+              <View style={{ flex: 1 }}>
                 <Text style={styles.surgeBannerLabel}>
                   {t('dashboard.ordersAwaiting', { count: pendingOrders.length })}
                 </Text>
+                {pendingSourceLabels.length > 0 && (
+                  <Text style={styles.surgeBannerSub} numberOfLines={1}>
+                    {pendingSourceLabels.join(' · ')}
+                  </Text>
+                )}
               </View>
-            )}
+            </Pressable>
             <View style={styles.actionList}>
               {pendingOrders.slice(0, 3).map((order) => (
                 <PendingOrderCard
@@ -949,6 +973,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
+  },
+  surgeBannerSub: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    marginTop: 2,
   },
   actionList: { gap: theme.spacing[2] },
   seeMoreInline: {

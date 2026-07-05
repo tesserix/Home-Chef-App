@@ -261,6 +261,18 @@ func (r CancelReason) IsValid() bool {
 }
 
 // DTOs
+// OrderSource tags where an order originated so the vendor feed can group it
+// (#435). Derived at response time from the reverse links (meal-plan day,
+// subscription fulfilment, group order) — not a stored column.
+type OrderSource string
+
+const (
+	OrderSourceAlacarte     OrderSource = "alacarte"
+	OrderSourceMealPlan     OrderSource = "meal_plan"
+	OrderSourceSubscription OrderSource = "subscription"
+	OrderSourceGroup        OrderSource = "group"
+)
+
 type OrderResponse struct {
 	ID              uuid.UUID       `json:"id"`
 	OrderNumber     string          `json:"orderNumber"`
@@ -269,6 +281,9 @@ type OrderResponse struct {
 	PaymentStatus   PaymentStatus   `json:"paymentStatus"`
 	PaymentProvider string          `json:"paymentProvider,omitempty"`
 	Currency        string          `json:"currency"`
+	// Source groups the order in the vendor feed (à-la-carte / meal-plan day /
+	// subscription day / group). Set by the chef-orders handler (#435).
+	Source OrderSource `json:"source,omitempty"`
 	// CustomerName and CustomerPhone are populated by handlers that load the
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints

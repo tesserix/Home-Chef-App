@@ -588,8 +588,24 @@ func (h *ChefHandler) GetChefProfile(c *gin.Context) {
 // (whose own list has no payment filter) waited on an order the chef could
 // never see.
 func chefVisibleOrders(chefID uuid.UUID) *gorm.DB {
-	return database.DB.Model(&models.Order{}).Where("chef_id = ? AND payment_status IN ?", chefID,
-		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded})
+	// Paid orders always reach the chef. In ADDITION, meal-plan DAY orders reach
+	// the chef even while PaymentPending: with escrow off (the v1 default)
+	// generateDayOrder stamps them pending, but they're a confirmed plan's day —
+	// real work the chef committed to, not an abandoned checkout (#435). We admit
+	// them via their reverse link (order_id in meal_plan_days).
+	//
+	// Subscription day orders and group orders are always created PaymentCompleted
+	// (the cycle charge / the group's consolidated payment), so the payment filter
+	// already covers them — no extra subquery needed here (the source tag still
+	// classifies them via ClassifyOrderSources).
+	mealPlanDayOrders := database.DB.Model(&models.MealPlanDay{}).
+		Select("order_id").Where("order_id IS NOT NULL")
+	return database.DB.Model(&models.Order{}).Where(
+		"chef_id = ? AND (payment_status IN ? OR id IN (?))",
+		chefID,
+		[]models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded},
+		mealPlanDayOrders,
+	)
 }
 
 // GetChefDashboard returns the chef's dashboard data
@@ -909,10 +925,19 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 		return
 	}
 
+	// Tag each order's source (à-la-carte / meal-plan / subscription / group) in
+	// one batch so the vendor feed can group them (#435).
+	orderIDs := make([]uuid.UUID, len(orders))
+	for i := range orders {
+		orderIDs[i] = orders[i].ID
+	}
+	sources := services.ClassifyOrderSources(database.DB, orderIDs)
+
 	responses := make([]models.OrderResponse, len(orders))
 	for i, order := range orders {
 		// Chef view: area-only address, no phone, first name only (privacy).
 		responses[i] = order.ToChefResponse()
+		responses[i].Source = sources[order.ID]
 	}
 
 	// Mobile (`useVendorPendingOrders`, `useVendorOrderHistory`) consumes the

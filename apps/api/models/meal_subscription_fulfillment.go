@@ -30,7 +30,7 @@ type MealSubscriptionFulfillment struct {
 	DishName           string    `gorm:"" json:"dishName"`
 	Price              float64   `gorm:"default:0" json:"price"`
 	Status             string    `gorm:"type:varchar(12);not null;default:'scheduled';index" json:"status"`
-	OrderID            *uuid.UUID `gorm:"type:uuid" json:"orderId,omitempty"`
+	OrderID            *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
 	CreatedAt          time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt          time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`

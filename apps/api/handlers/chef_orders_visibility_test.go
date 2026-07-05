@@ -60,6 +60,19 @@ func setupChefVisDB(t *testing.T) *gorm.DB {
 		quantity INTEGER DEFAULT 1, price REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
+	// Reverse-link tables that classify an order's source (#435). An order is a
+	// meal-plan / subscription / group order when its id appears as order_id here.
+	// deleted_at is included because the subscription/group models are soft-delete
+	// (GORM adds `deleted_at IS NULL` to their subqueries); prod AutoMigrate has it.
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (
+		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE meal_subscription_fulfillments (
+		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (
+		id TEXT PRIMARY KEY, order_id TEXT, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
+	)`).Error)
 
 	prev := database.DB
 	database.DB = db
@@ -93,6 +106,40 @@ func seedVisOrder(t *testing.T, db *gorm.DB, chefID uuid.UUID, status, payStatus
 		VALUES (?, ?, ?, ?, ?, ?, 100, ?)`,
 		uuid.NewString(), "ORD-"+uuid.NewString()[:6], uuid.NewString(), chefID.String(),
 		status, payStatus, createdAt).Error)
+}
+
+// seedVisOrderID is seedVisOrder but returns the new order id so a source
+// reverse-link can be attached.
+func seedVisOrderID(t *testing.T, db *gorm.DB, chefID uuid.UUID, status, payStatus string) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	createdAt := services.CapacityDay(time.Now()).Add(12 * time.Hour)
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status, total, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, 100, ?)`,
+		id.String(), "ORD-"+uuid.NewString()[:6], uuid.NewString(), chefID.String(),
+		status, payStatus, createdAt).Error)
+	return id
+}
+
+func linkOrderSource(t *testing.T, db *gorm.DB, table string, orderID uuid.UUID) {
+	t.Helper()
+	require.NoError(t, db.Exec(`INSERT INTO `+table+` (id, order_id) VALUES (?, ?)`,
+		uuid.NewString(), orderID.String()).Error)
+}
+
+// orderByNumberSource pulls the `source` field for each order in a /chef/orders
+// response, keyed by order id.
+func sourcesByID(t *testing.T, body map[string]any) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	orders, _ := body["orders"].([]any)
+	for _, o := range orders {
+		m, _ := o.(map[string]any)
+		id, _ := m["id"].(string)
+		src, _ := m["source"].(string)
+		out[id] = src
+	}
+	return out
 }
 
 func chefVisRouter(userID uuid.UUID) *gin.Engine {
@@ -179,4 +226,53 @@ func TestChefOrders_RefundedVisibleFailedInvisible(t *testing.T) {
 	all := chefVisGET(t, r, "/chef/orders")
 	require.Len(t, all["orders"], 1)
 	require.EqualValues(t, 1, all["total"])
+}
+
+// #435: an escrow-off meal-plan/subscription DAY order is PaymentPending but is a
+// confirmed plan's day (linked via the reverse table), not an abandoned checkout
+// — so the chef MUST see it, and it carries a `source` tag. A plain à-la-carte
+// pending row (no link) stays invisible.
+func TestChefOrders_EscrowOffPlanDayVisibleWithSource(t *testing.T) {
+	db := setupChefVisDB(t)
+	userID, chefID := seedVisChef(t, db)
+
+	seedVisOrder(t, db, chefID, "pending", "pending") // abandoned à-la-carte — invisible
+	alacarte := seedVisOrderID(t, db, chefID, "pending", "completed")
+	planDay := seedVisOrderID(t, db, chefID, "pending", "pending") // escrow-off, unpaid
+	linkOrderSource(t, db, "meal_plan_days", planDay)
+
+	r := chefVisRouter(userID)
+	all := chefVisGET(t, r, "/chef/orders")
+	require.Len(t, all["orders"], 2, "the paid à-la-carte + the plan-day order are visible; the abandoned one is not")
+	require.EqualValues(t, 2, all["total"])
+
+	src := sourcesByID(t, all)
+	require.Equal(t, "meal_plan", src[planDay.String()], "escrow-off plan day order tagged meal_plan")
+	require.Equal(t, "alacarte", src[alacarte.String()], "plain order tagged alacarte")
+
+	// The dashboard counters use the same scope, so the plan day order counts too.
+	dash := chefVisGET(t, r, "/chef/dashboard")
+	require.EqualValues(t, 2, dash["pendingOrders"], "both pending orders (à-la-carte paid + plan day) are in the New badge")
+}
+
+// #435: group + subscription orders classify to their source. Group orders are
+// already paid (visible); a subscription day order may be escrow-off pending but
+// visible via its link.
+func TestChefOrders_GroupAndSubscriptionSources(t *testing.T) {
+	db := setupChefVisDB(t)
+	userID, chefID := seedVisChef(t, db)
+
+	// Group + subscription day orders are always created PaymentCompleted (the
+	// group's consolidated payment / the subscription cycle charge), so both are
+	// visible via the payment filter; the reverse link only classifies the source.
+	group := seedVisOrderID(t, db, chefID, "pending", "completed")
+	linkOrderSource(t, db, "group_orders", group)
+	sub := seedVisOrderID(t, db, chefID, "pending", "completed")
+	linkOrderSource(t, db, "meal_subscription_fulfillments", sub)
+
+	r := chefVisRouter(userID)
+	all := chefVisGET(t, r, "/chef/orders")
+	src := sourcesByID(t, all)
+	require.Equal(t, "group", src[group.String()])
+	require.Equal(t, "subscription", src[sub.String()])
 }

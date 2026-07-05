@@ -10,6 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { theme } from "@homechef/mobile-shared/theme";
 import type { Order } from "../../hooks/useVendorOrders";
+import { orderSourceBadge } from "../../lib/orderSource";
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
@@ -109,12 +110,23 @@ export function PendingOrderCard({
         ? theme.colors.ink.DEFAULT
         : theme.colors.ink.soft;
 
+  const sourceBadge = orderSourceBadge(order.source);
+
   const topRowContent = (
     <View style={styles.headerBlock}>
       <View style={styles.topRow}>
-        <Text style={styles.customerName} numberOfLines={1}>
-          {order.customerName}
-        </Text>
+        <View style={styles.nameWithBadge}>
+          <Text style={styles.customerName} numberOfLines={1}>
+            {order.customerName}
+          </Text>
+          {sourceBadge ? (
+            <View style={[styles.sourceBadge, { backgroundColor: sourceBadge.bg }]}>
+              <Text style={[styles.sourceBadgeText, { color: sourceBadge.color }]}>
+                {sourceBadge.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
       </View>
       <View style={styles.metaRow}>
@@ -231,11 +243,26 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: theme.spacing[3],
   },
-  customerName: {
+  nameWithBadge: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  customerName: {
+    flexShrink: 1,
     fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
+  },
+  sourceBadge: {
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+  },
+  sourceBadgeText: {
+    fontFamily: "Inter-SemiBold",
+    fontSize: 11,
   },
   metaRow: {
     flexDirection: "row",
