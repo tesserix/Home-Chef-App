@@ -47,7 +47,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
-			date DATETIME, created_at DATETIME, updated_at DATETIME)`,
+			refund_txn_id TEXT, date DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
 			customer_id TEXT, chef_id TEXT, status TEXT)`,
 		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,

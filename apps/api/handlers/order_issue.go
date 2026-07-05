@@ -354,7 +354,7 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 		}
 		rejected = true
 
-		return services.ReleaseDisputedOrderHoldIfCleared(tx, issue.OrderID)
+		return services.ReleaseDisputedHoldsForOrderIfCleared(tx, issue.OrderID)
 	}); txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not reject the issue"})
 		return
