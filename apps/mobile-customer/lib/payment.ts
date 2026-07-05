@@ -8,6 +8,7 @@
 import RazorpayCheckout from 'react-native-razorpay';
 import { router } from 'expo-router';
 import { api } from './api';
+import { RAZORPAY_DISPLAY_CONFIG } from './razorpay-config';
 import { useCartStore } from '../store/cart-store';
 
 export interface RazorpayPaymentData {
@@ -80,6 +81,8 @@ export async function startOrderPayment(
       email: data.prefill?.email ?? '',
       contact: data.prefill?.phone ?? '',
     },
+    // UPI-first ordering (GPay/PhonePe/BHIM on top), cards/netbanking below.
+    config: RAZORPAY_DISPLAY_CONFIG,
     theme: { color: '#FF385C' },
   };
 

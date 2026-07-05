@@ -57,10 +57,18 @@ const (
 // MealPlanDay.Price (the day's price), or the group order's chef slice
 // (subtotal + tax) — NOT always the gross customer total.
 type PendingPayout struct {
-	AggType             string                  `json:"aggType"` // "order" | "meal-plan-day" | "group-order"
-	ID                  uuid.UUID               `json:"id"`
-	ChefID              uuid.UUID               `json:"chefId"`
-	Amount              float64                 `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
+	AggType string    `json:"aggType"` // "order" | "meal-plan-day" | "group-order"
+	ID      uuid.UUID `json:"id"`
+	ChefID  uuid.UUID `json:"chefId"`
+	Amount  float64   `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
+	// NetPayout is the chef's actual net transfer for this aggregate — what the
+	// held Route transfer carries and what the admin is really releasing (#462):
+	// order = ComputeOrderEarnings.NetPayout, day = perDayNetPayout, group =
+	// GroupChefPayout (subtotal+tax). For orders it is below Amount (gross customer
+	// total). For meal-plan days Amount is the food-only Price, so Net (which adds
+	// the day's food GST) can sit slightly above it — the two just measure different
+	// things, and Net is the figure that moves money.
+	NetPayout           float64                 `json:"netPayout"`
 	HoldStatus          models.PayoutHoldStatus `json:"holdStatus"`
 	DeliveredAt         *time.Time              `json:"deliveredAt,omitempty"`
 	AgeHours            float64                 `json:"ageHours"` // now - DeliveredAt (SLA clock vs 24h)
@@ -114,11 +122,13 @@ func ListPendingPayouts(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	return out, nil
 }
 
-// pendingRow is the flat scan shape for both aggregate queries.
+// pendingRow is the flat scan shape for the aggregate queries. NetPayout is filled
+// per aggregate (in Go for orders/days, in SQL for groups) — see the list funcs.
 type pendingRow struct {
 	ID                  string
 	ChefID              string
 	Amount              float64
+	NetPayout           float64
 	PayoutHoldStatus    string
 	DeliveredAt         *time.Time
 	CustomerConfirmedAt *time.Time
@@ -127,9 +137,28 @@ type pendingRow struct {
 }
 
 func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// NET is computed in Go via ComputeOrderEarnings — the SAME function that sizes
+	// the held Route transfer — so the queue can't drift from what actually moves.
+	// NetPayout ignores the CGST/SGST vs IGST split, so chefState is irrelevant here
+	// (passed ""); the extra money columns feed the pure computation.
+	type orderNetRow struct {
+		ID                  string
+		ChefID              string
+		Amount              float64
+		PayoutHoldStatus    string
+		DeliveredAt         *time.Time
+		CustomerConfirmedAt *time.Time
+		Context             string
+		HasOpenIssue        bool
+		Subtotal            float64
+		Tax                 float64
+		ChefTip             float64
+		ChefFundedDiscount  float64
+		CommissionRate      float64
+	}
 	q := db.Table("orders").
 		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
-			"order_number AS context, "+
+			"order_number AS context, subtotal, tax, chef_tip, chef_funded_discount, commission_rate, "+
 			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
 		Where("payout_hold_status IN ?", f.pendingStatuses()).
 		// Cross-guard (#457): never surface a refunded/cancelled order NOR one with
@@ -143,18 +172,52 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if f.Before != nil {
 		q = q.Where("delivered_at < ?", *f.Before)
 	}
-	var rows []pendingRow
-	if err := q.Scan(&rows).Error; err != nil {
+	var raw []orderNetRow
+	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
+	}
+	rows := make([]pendingRow, 0, len(raw))
+	for _, r := range raw {
+		net := ComputeOrderEarnings(EarningsInput{
+			ItemRevenue:        r.Subtotal,
+			Tax:                r.Tax,
+			ChefTip:            r.ChefTip,
+			ChefFundedDiscount: r.ChefFundedDiscount,
+			CommissionRate:     r.CommissionRate,
+		}, "").NetPayout
+		rows = append(rows, pendingRow{
+			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,
+			PayoutHoldStatus: r.PayoutHoldStatus, DeliveredAt: r.DeliveredAt,
+			CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context, HasOpenIssue: r.HasOpenIssue,
+		})
 	}
 	return toPending(aggTypeOrder, rows), nil
 }
 
 func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// NET per day via perDayNetPayout — the SAME basis HoldChefPayouts uses to size
+	// the held transfer (#518). Unlike orders (which freeze Order.CommissionRate),
+	// meal-plan days don't persist the rate the transfer was held at, so we resolve
+	// the CURRENT flat rate once. If the platform rate changes while pre-change day
+	// holds are still pending, this display can drift a few paise from the amount
+	// actually held — a review DTO, not the money seam (follow-up: persist the rate).
+	type dayNetRow struct {
+		ID                  string
+		ChefID              string
+		Amount              float64
+		PayoutHoldStatus    string
+		DeliveredAt         *time.Time
+		CustomerConfirmedAt *time.Time
+		Context             string
+		Price               float64
+		PlanSubtotal        float64
+		PlanTax             float64
+	}
 	q := db.Table("meal_plan_days").
 		Select("meal_plan_days.id AS id, meal_plans.chef_id AS chef_id, meal_plan_days.price AS amount, "+
 			"meal_plan_days.payout_hold_status AS payout_hold_status, meal_plan_days.delivered_at AS delivered_at, "+
-			"meal_plan_days.customer_confirmed_at AS customer_confirmed_at, meal_plans.meal_plan_number AS context").
+			"meal_plan_days.customer_confirmed_at AS customer_confirmed_at, meal_plans.meal_plan_number AS context, "+
+			"meal_plan_days.price AS price, meal_plans.subtotal AS plan_subtotal, meal_plans.tax AS plan_tax").
 		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
 		Where("meal_plan_days.payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
@@ -163,9 +226,21 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if f.Before != nil {
 		q = q.Where("meal_plan_days.delivered_at < ?", *f.Before)
 	}
-	var rows []pendingRow
-	if err := q.Scan(&rows).Error; err != nil {
+	var raw []dayNetRow
+	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
+	}
+	rate := GetCommissionRate(db)
+	rows := make([]pendingRow, 0, len(raw))
+	for _, r := range raw {
+		net := perDayNetPayout(
+			&models.MealPlan{Subtotal: r.PlanSubtotal, Tax: r.PlanTax},
+			&models.MealPlanDay{Price: r.Price}, rate)
+		rows = append(rows, pendingRow{
+			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,
+			PayoutHoldStatus: r.PayoutHoldStatus, DeliveredAt: r.DeliveredAt,
+			CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
+		})
 	}
 	return toPending(aggTypeMealPlanDay, rows), nil
 }
@@ -174,8 +249,10 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 // amount is the chef slice (subtotal + tax); context is a short human-scannable id
 // (GRP-<8 hex>), never a raw UUID.
 func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// The group chef transfer IS the subtotal+tax slice (GroupChefPayout), so net ==
+	// amount here — surfaced explicitly so the queue is uniform across aggregates.
 	q := db.Table("group_orders").
-		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, "+
+		Select("id, chef_id, subtotal + tax AS amount, subtotal + tax AS net_payout, payout_hold_status, delivered_at, "+
 			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context").
 		Where("payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
@@ -203,7 +280,7 @@ func toPending(aggType string, rows []pendingRow) []PendingPayout {
 			age = now.Sub(*r.DeliveredAt).Hours()
 		}
 		out = append(out, PendingPayout{
-			AggType: aggType, ID: id, ChefID: chef, Amount: r.Amount,
+			AggType: aggType, ID: id, ChefID: chef, Amount: r.Amount, NetPayout: r.NetPayout,
 			HoldStatus: models.PayoutHoldStatus(r.PayoutHoldStatus), DeliveredAt: r.DeliveredAt,
 			AgeHours: age, CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
 			HasOpenIssue: r.HasOpenIssue, // populated only for order rows; day/group default false
@@ -450,23 +527,60 @@ func stampPayoutSettled(db *gorm.DB, aggType string, id uuid.UUID) error {
 	return nil
 }
 
-// settleRelease runs the release seam and, ONLY on success (seam == nil), stamps
-// payout_settled_at. A seam failure returns the error and leaves settled_at NULL —
-// the drift the reconcile re-drives.
-func settleRelease(db *gorm.DB, aggType string, id uuid.UUID) error {
-	if err := releaseMoney(db, aggType, id); err != nil {
+// settlePayout is the single money-seam dispatcher (#508). It RE-READS the hold's
+// CURRENT terminal status and runs the seam that matches THAT status — not the
+// transition the calling goroutine happened to win. This closes the check-then-act
+// window where ReleaseHold committed `released` and dispatched releaseMoney while a
+// concurrent refund had since flipped the row to `reversed` (chef paid after the
+// claw-back). By re-reading, a goroutine that lost the race observes `reversed` and
+// runs reverseMoney instead of releaseMoney — no chef payment survives a claw-back.
+//
+// Idempotent: a row already settled (payout_settled_at set) is skipped, and the
+// underlying seams tolerate an already-applied gateway op, so a residual concurrent
+// double-dispatch is a safe no-op. On seam failure settled_at stays NULL and the
+// error propagates — the drift the payout-reconcile cron re-drives (which now also
+// dispatches through settlePayout, so it too acts on the fresh status).
+func settlePayout(db *gorm.DB, aggType string, id uuid.UUID) error {
+	model, err := holdModel(aggType)
+	if err != nil {
 		return err
 	}
-	return stampPayoutSettled(db, aggType, id)
+	var rows []struct {
+		PayoutHoldStatus models.PayoutHoldStatus
+		PayoutSettledAt  *time.Time
+	}
+	if err := db.Model(model).Select("payout_hold_status", "payout_settled_at").
+		Where("id = ?", id).Scan(&rows).Error; err != nil {
+		return fmt.Errorf("payout-release: settle re-read %s %s: %w", aggType, id, err)
+	}
+	if len(rows) == 0 || rows[0].PayoutSettledAt != nil {
+		return nil // gone, or already settled — nothing to move
+	}
+	switch rows[0].PayoutHoldStatus {
+	case models.PayoutHoldReleased:
+		if err := releaseMoney(db, aggType, id); err != nil {
+			return err
+		}
+		return stampPayoutSettled(db, aggType, id)
+	case models.PayoutHoldReversed:
+		if err := reverseMoney(db, aggType, id); err != nil {
+			return err
+		}
+		return stampPayoutSettled(db, aggType, id)
+	}
+	return nil // not a terminal money state (a concurrent path moved it) — nothing to settle
 }
 
-// settleReverse runs the reverse seam and, ONLY on success (seam == nil), stamps
-// payout_settled_at. Same drift contract as settleRelease over reverseMoney.
+// settleRelease and settleReverse are thin, backward-compatible wrappers over
+// settlePayout so the ReleaseHold / ReverseHold / crossguard / reconcile call sites
+// stay unchanged. Both dispatch by the FRESH status, so which wrapper a caller uses
+// no longer decides which seam runs — the row's current state does (#508).
+func settleRelease(db *gorm.DB, aggType string, id uuid.UUID) error {
+	return settlePayout(db, aggType, id)
+}
+
 func settleReverse(db *gorm.DB, aggType string, id uuid.UUID) error {
-	if err := reverseMoney(db, aggType, id); err != nil {
-		return err
-	}
-	return stampPayoutSettled(db, aggType, id)
+	return settlePayout(db, aggType, id)
 }
 
 // releaseMoney runs the post-commit, flag-gated release seam. Order → the Route
@@ -513,34 +627,104 @@ func releaseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 // real transition; callers invoke this best-effort so a hold-drive failure never
 // fails the refund (the release-side guard is the backstop).
 func WithholdOrReverseOrderHoldForRefund(db *gorm.DB, orderID uuid.UUID, reason string) error {
-	var order models.Order
-	if err := db.Select("payout_hold_status").First(&order, "id = ?", orderID).Error; err != nil {
-		return fmt.Errorf("payout-crossguard: load order %s: %w", orderID, err)
+	// Drive the order aggregate itself, then fan out (#498) to any meal-plan-day /
+	// group-order carrying its hold on the linked order: each per-day fulfillment
+	// order maps to exactly one day and each consolidated order to one group, and a
+	// standalone food order has zero linked rows (no-op). All three key on the SAME
+	// order refund, so the refund must withhold/reverse them together.
+	if err := withholdOrReverseHoldForRefund(db, aggTypeOrder, orderID, reason); err != nil {
+		return err
 	}
-	old := order.PayoutHoldStatus
+	var dayIDs []uuid.UUID
+	if err := db.Model(&models.MealPlanDay{}).Where("order_id = ?", orderID).Pluck("id", &dayIDs).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: list days for order %s: %w", orderID, err)
+	}
+	for _, id := range dayIDs {
+		if err := withholdOrReverseHoldForRefund(db, aggTypeMealPlanDay, id, reason); err != nil {
+			return err
+		}
+	}
+	var groupIDs []uuid.UUID
+	if err := db.Model(&models.GroupOrder{}).Where("order_id = ?", orderID).Pluck("id", &groupIDs).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: list groups for order %s: %w", orderID, err)
+	}
+	for _, id := range groupIDs {
+		if err := withholdOrReverseHoldForRefund(db, aggTypeGroupOrder, id, reason); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withholdOrReverseHoldForRefund drives ONE aggregate's payout hold on refund and is
+// the aggType-generic core shared by the order entry point and its day/group fan-out:
+// release_eligible | awaiting | disputed → withheld; released → reversed (then
+// settleReverse claws the transfer back — state-only while the escrow flag is OFF).
+// none | withheld | reversed → no-op. Idempotent + race-safe via transitionHold's
+// conditional WHERE. Best-effort audit on a genuine transition.
+func withholdOrReverseHoldForRefund(db *gorm.DB, aggType string, id uuid.UUID, reason string) error {
+	model, err := holdModel(aggType)
+	if err != nil {
+		return err
+	}
+	var statuses []models.PayoutHoldStatus
+	if err := db.Model(model).Where("id = ?", id).Pluck("payout_hold_status", &statuses).Error; err != nil {
+		return fmt.Errorf("payout-crossguard: load %s %s: %w", aggType, id, err)
+	}
+	if len(statuses) == 0 {
+		return nil // aggregate gone — nothing to cross-guard
+	}
+	old := statuses[0]
 	var to models.PayoutHoldStatus
 	var ok bool
-	var err error
 	switch old {
 	case models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed:
 		to = models.PayoutHoldWithheld
-		ok, err = transitionHold(db, aggTypeOrder, orderID,
+		ok, err = transitionHold(db, aggType, id,
 			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}, to, false)
 	case models.PayoutHoldReleased:
 		to = models.PayoutHoldReversed
-		if ok, err = transitionHold(db, aggTypeOrder, orderID,
+		if ok, err = transitionHold(db, aggType, id,
 			[]models.PayoutHoldStatus{models.PayoutHoldReleased}, to, false); ok && err == nil {
-			err = settleReverse(db, aggTypeOrder, orderID)
+			err = settleReverse(db, aggType, id)
 		}
 	default:
 		return nil // none / withheld / reversed — nothing to cross-guard
 	}
 	if err != nil {
-		return fmt.Errorf("payout-crossguard: drive order %s refund hold: %w", orderID, err)
+		return fmt.Errorf("payout-crossguard: drive %s %s refund hold: %w", aggType, id, err)
 	}
 	if ok {
-		LogSystemAudit(nil, "payout.hold.refund_crossguard", "order", orderID.String(),
+		LogSystemAudit(nil, "payout.hold.refund_crossguard", aggType, id.String(),
 			string(old), map[string]any{"to": string(to), "reason": reason})
+	}
+	return nil
+}
+
+// markRefundedDayHold drives a meal-plan-day's payout hold out of the releasable set
+// after RefundDay has already refunded the customer AND already reversed any held
+// transfer at the gateway (#498, Part C). STATE-ONLY by design: it must NOT run
+// reverseMoney, or it would double-reverse the transfer RefundDay reversed (and the
+// day reverseMoney branch does not tolerate an already-reversed gateway error). A
+// released day → reversed + payout_settled_at stamped, so the reconcile cron (which
+// re-drives released/reversed-but-unsettled holds) will not reverse it a second time;
+// an eligible/awaiting/disputed day → withheld; none/withheld/reversed → no-op.
+func markRefundedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
+	res := tx.Model(&models.MealPlanDay{}).
+		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldReleased).
+		Update("payout_hold_status", models.PayoutHoldReversed)
+	if res.Error != nil {
+		return fmt.Errorf("payout-release: mark refunded day %s reversed: %w", dayID, res.Error)
+	}
+	if res.RowsAffected > 0 {
+		return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
+	}
+	res = tx.Model(&models.MealPlanDay{}).
+		Where("id = ? AND payout_hold_status IN ?", dayID,
+			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}).
+		Update("payout_hold_status", models.PayoutHoldWithheld)
+	if res.Error != nil {
+		return fmt.Errorf("payout-release: mark refunded day %s withheld: %w", dayID, res.Error)
 	}
 	return nil
 }
@@ -597,7 +781,7 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 			return fmt.Errorf("payout-release: load day %s: %w", id, err)
 		}
 		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpay() != nil {
-			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil {
+			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
 				return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
 			}
 		}
@@ -606,7 +790,9 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 		if err := db.First(&g, "id = ?", id).Error; err != nil {
 			return fmt.Errorf("payout-release: load group order %s: %w", id, err)
 		}
-		ReverseGroupChefPayout(&g) // flag-gated; best-effort claw-back to the platform
+		if err := ReverseGroupChefPayout(&g); err != nil { // flag-gated claw-back
+			return fmt.Errorf("payout-release: reverse group payout %s: %w", id, err)
+		}
 	}
 	return nil
 }

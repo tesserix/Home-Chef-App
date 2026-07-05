@@ -78,6 +78,11 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
+	// #394: InitiateRefund now checks whether the order is refund-managed by a typed
+	// escrow flow (meal-plan day / group order). The COUNT probes need the tables to
+	// exist or every refund would 500; empty in most tests → the guard passes through.
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 
 	prev := database.DB
 	database.DB = db

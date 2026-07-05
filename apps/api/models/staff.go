@@ -41,15 +41,20 @@ type StaffPermission string
 
 const (
 	// Admin portal permissions
-	SPViewDashboard   StaffPermission = "dashboard:view"
-	SPManageUsers     StaffPermission = "users:manage"
-	SPViewUsers       StaffPermission = "users:view"
-	SPManageChefs     StaffPermission = "chefs:manage"
-	SPVerifyChefs     StaffPermission = "chefs:verify"
-	SPViewChefs       StaffPermission = "chefs:view"
-	SPManageOrders    StaffPermission = "orders:manage"
-	SPViewOrders      StaffPermission = "orders:view"
-	SPRefundOrders    StaffPermission = "orders:refund"
+	SPViewDashboard StaffPermission = "dashboard:view"
+	SPManageUsers   StaffPermission = "users:manage"
+	SPViewUsers     StaffPermission = "users:view"
+	SPManageChefs   StaffPermission = "chefs:manage"
+	SPVerifyChefs   StaffPermission = "chefs:verify"
+	SPViewChefs     StaffPermission = "chefs:view"
+	SPManageOrders  StaffPermission = "orders:manage"
+	SPViewOrders    StaffPermission = "orders:view"
+	SPRefundOrders  StaffPermission = "orders:refund"
+	// SPManagePayouts gates the escrow payout-release surface
+	// (/admin/payouts/*: release, withhold, reverse, bulk, pending queue).
+	// Moving vendor payout money is finance-sensitive, so it is granted to
+	// super_admin only — NOT to the general admin role (#515 / #461 step 2).
+	SPManagePayouts   StaffPermission = "payouts:manage"
 	SPViewAnalytics   StaffPermission = "analytics:view"
 	SPManageSettings  StaffPermission = "settings:manage"
 	SPViewSettings    StaffPermission = "settings:view"
@@ -82,6 +87,7 @@ var DefaultStaffPermissions = map[StaffRole][]StaffPermission{
 		SPViewDashboard, SPManageUsers, SPViewUsers,
 		SPManageChefs, SPVerifyChefs, SPViewChefs,
 		SPManageOrders, SPViewOrders, SPRefundOrders,
+		SPManagePayouts,
 		SPViewAnalytics, SPManageSettings, SPViewSettings,
 		SPManageApprovals, SPViewApprovals,
 		SPManageStaff, SPInviteStaff, SPViewStaff,

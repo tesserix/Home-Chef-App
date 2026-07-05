@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
@@ -114,13 +115,30 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("refund: load order %s: %w", orderID, err)
 	}
-	if order.RefundedAt != nil {
-		return nil // already refunded
+	now := time.Now()
+	// #392: atomic refund claim on the SAME two-column mutex every full-refund path
+	// uses (payment_status completed→refunded AND refunded_at IS NULL), replacing the
+	// old bare `RefundedAt != nil` check-then-act. Without this, the saga's async
+	// compensation could double-refund against a concurrent direct cancel / chef
+	// reject / InitiateRefund once ORDER_SAGA_ENABLED is turned on. Only the winner
+	// (RowsAffected==1) proceeds; on a downstream error we revert so temporal retries.
+	claim := database.DB.Model(&models.Order{}).
+		Where("id = ? AND payment_status = ? AND refunded_at IS NULL", orderID, models.PaymentCompleted).
+		Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": &now})
+	if claim.Error != nil {
+		return fmt.Errorf("refund: claim order %s: %w", orderID, claim.Error)
+	}
+	if claim.RowsAffected == 0 {
+		return nil // already refunded by another path (or not in a refundable state)
+	}
+	revertClaim := func() {
+		database.DB.Model(&models.Order{}).Where("id = ?", orderID).
+			Updates(map[string]any{"payment_status": models.PaymentCompleted, "refunded_at": gorm.Expr("NULL")})
 	}
 	// Claw back the chef/rider Route split first (#123) — the platform must not
-	// pay out an order it is refunding. No-op unless live payout movement is on;
-	// guarded by RefundedAt above so it only runs once per order.
+	// pay out an order it is refunding. No-op unless live payout movement is on.
 	if err := ReverseOrderPayouts(orderID); err != nil {
+		revertClaim()
 		return fmt.Errorf("refund: reverse payouts for %s: %w", orderID, err)
 	}
 	if order.Total > 0 {
@@ -128,16 +146,14 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Order %s refunded: %s", order.OrderNumber, reason),
 			"saga-refund:"+order.ID.String(), nil); err != nil {
+			revertClaim()
 			return fmt.Errorf("refund: credit wallet for %s: %w", orderID, err)
 		}
 	}
-	now := time.Now()
 	if err := database.DB.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]any{
-		"status":         models.OrderStatusRefunded,
-		"payment_status": models.PaymentRefunded,
-		"refunded_at":    &now,
-		"refund_amount":  order.Total,
-		"refund_reason":  reason,
+		"status":        models.OrderStatusRefunded,
+		"refund_amount": order.Total,
+		"refund_reason": reason,
 	}).Error; err != nil {
 		return err
 	}

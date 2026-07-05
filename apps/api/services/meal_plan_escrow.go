@@ -66,6 +66,33 @@ func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	return Round2(day.Price + tax + delivery)
 }
 
+// perDayNetPayout is the chef's NET payout for a single day — the amount the held
+// Route transfer must carry (#518). It mirrors ComputeOrderEarnings per-day so the
+// meal-plan escrow pays the chef on the SAME basis as regular orders:
+//
+//	dayFoodGST = plan.Tax × (day.Price / plan.Subtotal)   (proportional food GST)
+//	gross      = day.Price + dayFoodGST                    (chef income; delivery is the driver's, excluded)
+//	commission = rate × day.Price                          (platform commission on the food subtotal only)
+//	tds        = RateTDS × gross                            (§194-O, on gross)
+//	net        = gross − commission − tds
+//
+// A plan with no snapshotted subtotal falls back to food-only gross (no GST). This
+// closes the leak where HoldChefPayouts paid the GROSS food price with no commission
+// or TDS, unlike the order path (#390).
+func perDayNetPayout(plan *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
+	if rate <= 0 || rate >= 1 {
+		rate = DefaultCommissionRate
+	}
+	dayFoodGST := 0.0
+	if plan.Subtotal > 0 {
+		dayFoodGST = plan.Tax * (day.Price / plan.Subtotal)
+	}
+	gross := day.Price + dayFoodGST
+	commission := rate * day.Price
+	tds := RateTDS * gross
+	return Round2(gross - commission - tds)
+}
+
 // CreateMealPlanAdvanceOrder creates the Razorpay order for the full plan total
 // at booking time and stamps RazorpayOrderID. Returns the order id for the
 // client checkout. No-op (empty id) when escrow is off.
@@ -150,6 +177,11 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 	if plan.EscrowPaymentID == "" {
 		return fmt.Errorf("cannot hold payouts: advance payment not captured for plan %s", plan.ID)
 	}
+	// #518: the held transfer must be the chef's NET (food + per-day GST − commission
+	// − TDS), the SAME basis as the order path, NOT the gross food price. Resolve the
+	// commission rate once for the whole plan so every day is held at one consistent
+	// rate.
+	rate := GetCommissionRate(tx)
 	for i := range plan.Days {
 		d := &plan.Days[i]
 		if d.PayoutTransferID != "" {
@@ -160,7 +192,7 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 		}
 		tr, err := rz.CreateTransfer(&DirectTransferRequest{
 			Account:  chefAccount,
-			Amount:   ToPaise(d.Price),
+			Amount:   ToPaise(perDayNetPayout(plan, d, rate)),
 			Currency: plan.Currency,
 			OnHold:   true,
 			Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "day_id": d.ID.String()},
@@ -223,6 +255,22 @@ func isAlreadyReleasedErr(err error) bool {
 		strings.Contains(msg, "not_on_hold")
 }
 
+// isAlreadyReversedErr reports whether a gateway error indicates the transfer was
+// already reversed — the idempotent case the reverse seam tolerates so a residual
+// concurrent double-dispatch (#508) or a reconcile re-drive can't loop/fail on a
+// transfer that's already been clawed back.
+func isAlreadyReversedErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already reversed") ||
+		strings.Contains(msg, "fully reversed") ||
+		strings.Contains(msg, "already refunded") ||
+		strings.Contains(msg, "not_reversible") ||
+		strings.Contains(msg, "not reversible")
+}
+
 // RefundDay refunds a single day to the customer's wallet (idempotent on the
 // day id) and stamps RefundTxnID. If the day's payout was already held, the
 // held transfer is reversed first so the chef isn't paid for a refunded day.
@@ -248,8 +296,14 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 		return fmt.Errorf("refund day %s to wallet: %w", day.ID, err)
 	}
 	day.RefundTxnID = &txn.ID
-	return tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
-		Update("refund_txn_id", txn.ID).Error
+	if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
+		Update("refund_txn_id", txn.ID).Error; err != nil {
+		return err
+	}
+	// #498: drive the day's payout hold out of the releasable set so the admin queue
+	// can't release a refunded day (double-pay). STATE-ONLY — the held transfer is
+	// already reversed above, so this must not re-run the money seam.
+	return markRefundedDayHold(tx, day.ID)
 }
 
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once

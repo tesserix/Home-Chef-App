@@ -209,8 +209,14 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 	}
 	now := time.Now()
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Exclude all terminal day states, not just delivered (#534): a late/duplicate
+		// delivered event must not resurrect a cancelled/skipped/declined/refunded day
+		// and park its hold, defeating the day refund. RowsAffected==0 → no-op.
 		res := tx.Model(&models.MealPlanDay{}).
-			Where("id = ? AND status <> ?", day.ID, models.MealPlanDayDelivered).
+			Where("id = ? AND status NOT IN ?", day.ID, []models.MealPlanDayStatus{
+				models.MealPlanDayDelivered, models.MealPlanDayCancelled,
+				models.MealPlanDaySkipped, models.MealPlanDayDeclined, models.MealPlanDayRefunded,
+			}).
 			Updates(map[string]any{"status": models.MealPlanDayDelivered, "delivered_at": now})
 		if res.Error != nil {
 			return res.Error

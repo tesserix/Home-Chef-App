@@ -40,6 +40,12 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, name TEXT, price REAL, quantity INTEGER,
 			subtotal REAL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, issue_count INTEGER DEFAULT 0, deleted_at DATETIME)`,
+		// #498: AdminRejectIssue now fans the disputed-hold clear out to any meal-plan-day
+		// / group-order linked to the order, so those tables must exist (empty here).
+		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
+			payout_hold_status TEXT DEFAULT '', payout_settled_at DATETIME, refund_txn_id TEXT)`,
+		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, status TEXT,
+			payout_hold_status TEXT DEFAULT '')`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
 			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,

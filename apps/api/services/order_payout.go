@@ -99,15 +99,22 @@ func ReverseOrderPayouts(orderID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("order-payout: fetch transfers for order %s: %w", orderID, err)
 	}
+	// amountPaise 0 = full reversal. An already-reversed transfer errors on Razorpay
+	// and is tolerated (isAlreadyReversedErr) so a re-drive is a no-op. A GENUINE
+	// failure is captured and returned so settlePayout does NOT stamp payout_settled_at
+	// on an incomplete claw-back — the reconcile cron then re-drives it (#508). We still
+	// attempt every transfer so one bad one doesn't block the rest.
+	var firstErr error
 	for _, t := range transfers {
 		if t.ID == "" {
 			continue
 		}
-		// amountPaise 0 = full reversal. A transfer already reversed errors on
-		// Razorpay; logged (not fatal) so one bad transfer doesn't block the rest.
-		if _, err := rz.ReverseTransfer(t.ID, 0); err != nil {
+		if _, err := rz.ReverseTransfer(t.ID, 0); err != nil && !isAlreadyReversedErr(err) {
 			log.Printf("order-payout: reverse transfer %s (order %s) failed: %v", t.ID, orderID, err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("order-payout: reverse transfer %s: %w", t.ID, err)
+			}
 		}
 	}
-	return nil
+	return firstErr
 }

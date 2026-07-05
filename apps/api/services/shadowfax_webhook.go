@@ -38,8 +38,9 @@ func parseShadowfaxCallback(payload []byte) (clientOrderID string, status models
 // handleShadowfaxWebhook applies a Shadowfax Push Callback to the matching
 // delivery + order. It resolves the delivery via the order number (Shadowfax's
 // order_id), maps the status, stamps timestamps, and propagates a terminal
-// `delivered` to the order so the customer timeline + chef screen move. Unknown
-// order/status are acked (return nil) so Shadowfax stops retrying.
+// `delivered` to the order so the customer timeline + chef screen move. An
+// unparseable/unknown-status callback is permanently acked (return nil) so
+// Shadowfax stops retrying; a not-yet-booked order/delivery is transient (see below).
 func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvider, payload []byte) error {
 	clientOrderID, status, ok := parseShadowfaxCallback(payload)
 	if !ok {
@@ -47,15 +48,20 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 		return nil
 	}
 
+	// Order/delivery not-found is TRANSIENT (a booking-vs-callback race), so it
+	// returns a bare error → the webhook layer releases the event-dedup claim and
+	// 500s → Shadowfax retries once the booking lands. Acking (nil) here would let
+	// the claim stick and a redelivery be deduped → lost delivered/escrow-park.
+	// Mirrors the generic 3PL path in provider.go.
 	var order models.Order
 	if err := database.DB.Where("order_number = ?", clientOrderID).First(&order).Error; err != nil {
-		log.Printf("shadowfax webhook: order %q not found — acking", clientOrderID)
-		return nil
+		log.Printf("shadowfax webhook: order %q not found — retrying (booking race)", clientOrderID)
+		return fmt.Errorf("shadowfax webhook: order %q not yet booked: %w", clientOrderID, err)
 	}
 	var delivery models.Delivery
 	if err := database.DB.Where("order_id = ?", order.ID).First(&delivery).Error; err != nil {
-		log.Printf("shadowfax webhook: delivery for order %q not found — acking", clientOrderID)
-		return nil
+		log.Printf("shadowfax webhook: delivery for order %q not found — retrying (booking race)", clientOrderID)
+		return fmt.Errorf("shadowfax webhook: delivery for order %q not yet created: %w", clientOrderID, err)
 	}
 
 	// Idempotent: a repeat of the same status is a no-op write (no harm).

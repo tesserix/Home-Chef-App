@@ -715,6 +715,24 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
+	// #394: refuse orders that are refund-managed by a typed escrow flow. A
+	// meal-plan-day or group order spawns a regular Order reachable here, but its
+	// refund keyspace (mealplan-refund:<dayID> / grouporder-refund:<id>) is disjoint
+	// from this endpoint's refund:<orderID> and bypasses Order.RefundAmount — a
+	// generic refund would credit the customer a second time AND leave the chef's
+	// held direct transfer unreversed. Route the caller to the correct flow.
+	switch kind, kErr := services.TypedRefundOrderKind(database.DB, orderID); {
+	case kErr != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check order type"})
+		return
+	case kind == services.TypedRefundMealPlanDay:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This order is part of a meal plan; refund it through the meal-plan refund flow, not the generic order refund"})
+		return
+	case kind == services.TypedRefundGroupOrder:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This is a group order; refund participants through the group-order cancellation flow, not the generic order refund"})
+		return
+	}
+
 	if order.PaymentStatus != models.PaymentCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Can only refund completed payments"})
 		return
@@ -1046,27 +1064,58 @@ func (h *PaymentHandler) RazorpayWebhook(c *gin.Context) {
 
 	log.Printf("Razorpay webhook received: %s", event.Event)
 
+	// Event-level replay dedup (#462). The signature proves authenticity, not
+	// freshness — a provider retry or a captured+replayed event would re-fire the
+	// handlers' side effects (the chef new-order push, referral grant) that aren't
+	// covered by the per-effect conditional-UPDATE guards. Claim (webhook:razorpay,
+	// event-id) AFTER the signature check so a forged request can't poison the
+	// ledger. Header id when Razorpay sends one, else a body hash.
+	const rzConsumer = "webhook:razorpay"
+	eventID := services.WebhookEventID(c.GetHeader("X-Razorpay-Event-Id"), body)
+	firstTime, err := services.ClaimWebhookEvent(database.DB, rzConsumer, eventID, event.Event)
+	if err != nil {
+		log.Printf("razorpay webhook: claim failed for %s: %v", eventID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "dedup unavailable"})
+		return
+	}
+	if !firstTime {
+		log.Printf("razorpay webhook: duplicate event %s (%s) — skipping", eventID, event.Event)
+		c.JSON(http.StatusOK, gin.H{"status": "duplicate"})
+		return
+	}
+
+	var derr error
 	switch event.Event {
 	case "payment.captured":
-		h.handlePaymentCaptured(event.Payload)
+		derr = h.handlePaymentCaptured(event.Payload)
 	case "payment.failed":
-		h.handlePaymentFailed(event.Payload)
+		derr = h.handlePaymentFailed(event.Payload)
 	case "refund.processed":
-		h.handleRefundProcessed(event.Payload)
+		derr = h.handleRefundProcessed(event.Payload)
 	case "transfer.processed":
 		log.Printf("Transfer processed event received")
 	case "subscription.charged":
-		h.handleSubscriptionCharged(event.Payload)
+		derr = h.handleSubscriptionCharged(event.Payload)
 	case "subscription.halted":
-		h.handleSubscriptionHalted(event.Payload)
+		derr = h.handleSubscriptionHalted(event.Payload)
 	default:
 		log.Printf("Unhandled Razorpay webhook event: %s", event.Event)
+	}
+	if derr != nil {
+		// A transient processing failure releases the claim so a later (re)delivery
+		// of this event id can re-run — otherwise the dedup would strand the event.
+		// We still ACK 200 (Razorpay isn't retried on 5xx here today either).
+		services.ReleaseWebhookEvent(database.DB, rzConsumer, eventID)
+		log.Printf("razorpay webhook: handler error for %s (%s): %v", eventID, event.Event, derr)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
+// handlePaymentCaptured returns a non-nil error only for a TRANSIENT failure (a DB
+// error) so the webhook layer releases the dedup claim and a redelivery re-runs.
+// A parse failure is permanent (nil → keep the claim; a retry won't parse either).
+func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	var data struct {
 		Payment struct {
 			Entity services.PaymentResponse `json:"entity"`
@@ -1074,7 +1123,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse payment.captured payload: %v", err)
-		return
+		return nil
 	}
 
 	payment := data.Payment.Entity
@@ -1092,7 +1141,7 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 		})
 	if res.Error != nil {
 		log.Printf("Failed to apply payment.captured for order %s: %v", payment.OrderID, res.Error)
-		return
+		return res.Error
 	}
 	if res.RowsAffected == 0 {
 		log.Printf("payment.captured already processed for order %s (payment %s) — skipping", payment.OrderID, payment.ID)
@@ -1117,9 +1166,10 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) {
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
 	// (idempotent). Harmless no-op when payment.OrderID isn't a tip charge.
 	markTipPaidByRazorpayOrder(payment.OrderID, payment.ID)
+	return nil
 }
 
-func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
+func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) error {
 	var data struct {
 		Payment struct {
 			Entity services.PaymentResponse `json:"entity"`
@@ -1127,7 +1177,7 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse payment.failed payload: %v", err)
-		return
+		return nil
 	}
 
 	payment := data.Payment.Entity
@@ -1135,16 +1185,16 @@ func (h *PaymentHandler) handlePaymentFailed(payload json.RawMessage) {
 
 	// Idempotent: only transition from a non-terminal state. Avoids
 	// overwriting a completed payment if events arrive out-of-order.
-	database.DB.Model(&models.Order{}).
+	return database.DB.Model(&models.Order{}).
 		Where("razorpay_order_id = ? AND payment_status NOT IN ?", payment.OrderID, []models.PaymentStatus{
 			models.PaymentCompleted,
 			models.PaymentFailed,
 			models.PaymentRefunded,
 		}).
-		Update("payment_status", models.PaymentFailed)
+		Update("payment_status", models.PaymentFailed).Error
 }
 
-func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) {
+func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) error {
 	var data struct {
 		Refund struct {
 			Entity services.RefundResponse `json:"entity"`
@@ -1152,7 +1202,7 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse refund.processed payload: %v", err)
-		return
+		return nil
 	}
 
 	refund := data.Refund.Entity
@@ -1162,15 +1212,17 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) {
 	// (Razorpay retries refund.processed; without this we'd re-write the
 	// refunded_at timestamp on every redelivery).
 	now := time.Now()
-	database.DB.Model(&models.Order{}).
+	return database.DB.Model(&models.Order{}).
 		Where("razorpay_payment_id = ? AND (refund_id IS NULL OR refund_id <> ?)", refund.PaymentID, refund.ID).
 		Updates(map[string]interface{}{
 			"refund_id":   refund.ID,
 			"refunded_at": &now,
-		})
+		}).Error
 }
 
-func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) {
+// handleSubscriptionCharged is best-effort (subscription billing, not escrow) —
+// it returns nil so the dedup claim is kept regardless; failures are logged.
+func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) error {
 	log.Printf("Subscription charged webhook received")
 	// Update subscription invoice status
 	var data struct {
@@ -1187,7 +1239,7 @@ func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse subscription.charged: %v", err)
-		return
+		return nil
 	}
 
 	// Customer meal subscription (#281): activate the cycle + generate the paid
@@ -1196,7 +1248,7 @@ func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) {
 	if inv, mErr := services.ActivateMealSubscriptionOnCharge(database.DB, data.Subscription.Entity.ID, data.Payment.Entity.ID); mErr != nil {
 		log.Printf("meal-subscription charge activation failed: %v", mErr)
 	} else if inv != nil {
-		return
+		return nil
 	}
 
 	// Mark latest pending invoice as paid
@@ -1209,9 +1261,11 @@ func (h *PaymentHandler) handleSubscriptionCharged(payload json.RawMessage) {
 			"gateway_payment_id": data.Payment.Entity.ID,
 			"paid_at":            &now,
 		})
+	return nil
 }
 
-func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) {
+// handleSubscriptionHalted is best-effort (subscription billing) — returns nil.
+func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) error {
 	log.Printf("Subscription halted webhook received")
 	var data struct {
 		Subscription struct {
@@ -1222,25 +1276,26 @@ func (h *PaymentHandler) handleSubscriptionHalted(payload json.RawMessage) {
 	}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		log.Printf("Failed to parse subscription.halted: %v", err)
-		return
+		return nil
 	}
 
 	// Customer meal subscription (#281): a failed recurring charge halts order
 	// generation (past_due). If it matched a meal sub, we're done.
 	if services.HaltMealSubscriptionOnFailure(database.DB, data.Subscription.Entity.ID) {
-		return
+		return nil
 	}
 
 	// Mark subscription as suspended, then win-back (#42): offer a discounted
 	// re-subscription to the suspended (payment-failed) chef/driver. Best-effort.
 	var sub models.Subscription
 	if err := database.DB.Where("gateway_sub_id = ?", data.Subscription.Entity.ID).First(&sub).Error; err != nil {
-		return
+		return nil
 	}
 	database.DB.Model(&models.Subscription{}).Where("id = ?", sub.ID).Update("status", models.SubStatusSuspended)
 	if _, werr := services.OfferWinback(database.DB, sub.UserID, string(sub.SubscriberType), models.WinbackTriggerSubSuspended, &sub.ID); werr != nil {
 		log.Printf("winback: offer on suspend failed for user=%s: %v", sub.UserID, werr)
 	}
+	return nil
 }
 
 // StripeWebhook handles Stripe webhook events.

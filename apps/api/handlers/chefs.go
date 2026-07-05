@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -955,6 +956,10 @@ func (h *ChefHandler) GetChefOrders(c *gin.Context) {
 // (those must go through the refund-aware cancel path) and any jump straight to
 // delivered before the order is ready — otherwise a chef could release the held
 // payout early or mark an order cancelled without refunding the customer.
+// errOrderStatusRaced signals that the order's status changed between the handler's
+// load and its optimistic persist (#534) — the tx aborts and the caller returns 409.
+var errOrderStatusRaced = errors.New("order status changed concurrently")
+
 var chefOrderTransitions = map[models.OrderStatus][]models.OrderStatus{
 	models.OrderStatusPending:    {models.OrderStatusAccepted, models.OrderStatusRejected},
 	models.OrderStatusAccepted:   {models.OrderStatusPreparing, models.OrderStatusReady},
@@ -1124,8 +1129,21 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	// Persist the status change and stage the event atomically (transactional
 	// outbox) so the status update is delivered durably by the relay (#131).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(orderUpdates).Error; err != nil {
-			return err
+		// Optimistic guard on the read status (#534 TOCTOU): only persist if the row is
+		// still at priorStatus. A concurrent cancel/reject/refund/delivery-webhook that
+		// lands in the load→persist window otherwise gets blindly overwritten — a chef's
+		// in-flight `delivered` would resurrect a just-cancelled order and fire the
+		// delivered payout side-effects below. RowsAffected==0 → aborts the tx (rolling
+		// back the event/capacity too) so nothing downstream runs. The same-status
+		// re-stamp still matches (status == priorStatus).
+		res := tx.Model(&models.Order{}).
+			Where("id = ? AND status = ?", order.ID, priorStatus).
+			Updates(orderUpdates)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errOrderStatusRaced
 		}
 		if releaseCap {
 			capDay := services.CapacityDay(order.CreatedAt)
@@ -1151,6 +1169,15 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			Total:       order.Total,
 		})
 	}); err != nil {
+		if errors.Is(err, errOrderStatusRaced) {
+			// The order moved on (cancel/reject/refund/delivery) between load and persist.
+			// Don't resurrect it or fire the delivered side-effects — ask the client to reload.
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   "order_status_changed",
+				"message": "This order's status changed — reload and try again.",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
 		return
 	}
@@ -1185,6 +1212,17 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 			log.Printf("payout-hold: park order %s on chef self-delivery failed: %v", order.ID, err)
 		}
 	case models.OrderStatusCancelled, models.OrderStatusRejected:
+		// #392: a chef rejecting/cancelling a PAID order must refund the customer in
+		// full (chef's fault). Previously this only signalled the Temporal saga, which
+		// is a no-op when ORDER_SAGA_ENABLED is off (the default) → the customer was
+		// charged and got nothing. RefundOrderForCancellation is idempotent + no-ops an
+		// unpaid order. Both it and the saga's CompensateOrderRefund now claim the SAME
+		// atomic refund mutex (payment_status completed→refunded), so even with the saga
+		// enabled exactly one of them refunds. Best-effort: never fail the status change.
+		if rErr := services.RefundOrderForCancellation(&order, "chef", "chef "+string(order.Status)); rErr != nil {
+			log.Printf("cancel-refund: chef %s of order %s failed: %v", order.Status, order.ID, rErr)
+			services.CaptureBackgroundError(rErr)
+		}
 		services.SignalOrderCancelled(order.ID, "cancelled by chef")
 	}
 

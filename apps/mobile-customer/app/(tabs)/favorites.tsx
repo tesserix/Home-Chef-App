@@ -13,6 +13,8 @@ import { Heart, ChefHat } from 'lucide-react-native';
 import { useFavorites, useToggleFavorite, useFavoriteDishes } from '../../hooks/useFavorites';
 import type { FavoriteChefEntry, FavoriteDishEntry } from '../../hooks/useFavorites';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { useDockClearance } from '../../components/navigation/Dock';
+import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
 
@@ -168,11 +170,13 @@ function FavoriteTabs({
             accessibilityState={{ selected: active }}
             accessibilityLabel={`${s.label}${s.count != null ? `, ${s.count}` : ''}`}
           >
+            {/* Dock language: active segment = coral-tint pill + coral text
+                (same DNA as the dock's active tab), not a solid coral block. */}
             <View
-              className={`rounded-full px-4 py-1.5 ${active ? 'bg-coral' : 'bg-surface-soft'}`}
+              className={`rounded-full px-4 py-1.5 ${active ? 'bg-coral-tint' : 'bg-surface-soft'}`}
             >
               <Text
-                className={`text-sm font-semibold ${active ? 'text-canvas' : 'text-charcoal-soft'}`}
+                className={`text-sm font-semibold ${active ? 'text-coral' : 'text-charcoal-soft'}`}
               >
                 {s.label}
                 {s.count != null ? ` ${s.count}` : ''}
@@ -188,6 +192,7 @@ function FavoriteTabs({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function FavoritesScreen() {
+  const dockClearance = useDockClearance();
   const [tab, setTab] = useState<FavTab>('chefs');
 
   const chefs = useFavorites();
@@ -262,7 +267,7 @@ export default function FavoritesScreen() {
             contentContainerStyle={
               visibleEntries.length === 0
                 ? { flexGrow: 1 }
-                : { paddingTop: 8, paddingBottom: 24, gap: 12 }
+                : { paddingTop: 8, paddingBottom: dockClearance, gap: 12 }
             }
             refreshControl={
               <RefreshControl
@@ -288,7 +293,7 @@ export default function FavoritesScreen() {
           contentContainerStyle={
             dishEntries.length === 0
               ? { flexGrow: 1 }
-              : { paddingHorizontal: 16, paddingBottom: 24 }
+              : { paddingHorizontal: 16, paddingBottom: dockClearance }
           }
           refreshControl={
             <RefreshControl
@@ -312,12 +317,7 @@ export default function FavoritesScreen() {
 }
 
 // Shared header — the per-tab counts live on the segment chips below it.
+// Titled "Saved" to match the tab label in the dock.
 function Header() {
-  return (
-    <View className="px-4 pt-3 pb-2 flex-row items-baseline gap-2">
-      <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-        Favorites
-      </Text>
-    </View>
-  );
+  return <ScreenTitle title="Saved" />;
 }

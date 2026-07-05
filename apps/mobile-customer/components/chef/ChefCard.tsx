@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Heart, UtensilsCrossed } from 'lucide-react-native';
+import { Heart } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import type { Chef } from '../../types/customer';
@@ -75,13 +75,16 @@ export function ChefCard({ chef }: ChefCardProps) {
                     accessibilityElementsHidden
                   />
                 ) : (
-                  // Missing image → surface-soft placeholder + utensil glyph
+                  // Missing image → soft placeholder with the chef's initial.
+                  // Reads intentional (a monogram) instead of broken (the old
+                  // flat gray utensil glyph).
                   <View style={styles.photoPlaceholder}>
-                    <UtensilsCrossed
-                      size={28}
-                      color={customerColors.charcoal.soft}
+                    <Text
+                      style={styles.photoPlaceholderInitial}
                       accessibilityElementsHidden
-                    />
+                    >
+                      {(chef.name?.trim()[0] ?? '·').toUpperCase()}
+                    </Text>
                   </View>
                 )}
 
@@ -148,10 +151,19 @@ export function ChefCard({ chef }: ChefCardProps) {
                   </Text>
                 )}
 
-                {/* Delivery time · min-order */}
-                {(chef.deliveryTime != null || chef.minimumOrder != null) && (
+                {/* One meta line: open-state dot + delivery time · min-order.
+                    Open/Closed folds in here instead of its own row — tighter
+                    card, same information. */}
+                <View style={styles.metaRow}>
+                  <View
+                    style={[
+                      styles.openDot,
+                      chef.isOpen ? styles.openDotOpen : styles.openDotClosed,
+                    ]}
+                  />
                   <Text style={styles.meta} numberOfLines={1}>
                     {[
+                      chef.isOpen ? 'Open' : 'Closed',
                       chef.deliveryTime,
                       chef.minimumOrder != null
                         ? `Min ₹${chef.minimumOrder}`
@@ -160,7 +172,7 @@ export function ChefCard({ chef }: ChefCardProps) {
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
-                )}
+                </View>
 
                 {/* Outside this chef's delivery range — they're listed because
                     they offer pickup. Restrained text, matching the card's
@@ -172,15 +184,6 @@ export function ChefCard({ chef }: ChefCardProps) {
                   </Text>
                 )}
 
-                {/* Open / Closed — small text, not a loud badge */}
-                <Text
-                  style={[
-                    styles.openStatus,
-                    chef.isOpen ? styles.openStatusOpen : styles.openStatusClosed,
-                  ]}
-                >
-                  {chef.isOpen ? 'Open' : 'Closed'}
-                </Text>
               </View>
             </View>
           )}
@@ -230,6 +233,13 @@ const styles = StyleSheet.create({
     backgroundColor: customerColors.surface.soft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Monogram initial — quiet, oversized, deliberately low-contrast.
+  photoPlaceholderInitial: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 44,
+    color: customerColors.charcoal.soft,
+    opacity: 0.45,
   },
   // Subtle charcoal scrim — only enough to make the white heart legible.
   photoScrim: {
@@ -316,7 +326,25 @@ const styles = StyleSheet.create({
     color: '#15803D', // calm trust-green; functional (matches the web success badge)
     marginTop: 2,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  openDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  openDotOpen: {
+    backgroundColor: customerColors.success.DEFAULT,
+  },
+  openDotClosed: {
+    backgroundColor: customerColors.charcoal.soft,
+    opacity: 0.4,
+  },
   meta: {
+    flex: 1,
     fontFamily: 'Inter',
     fontSize: 12,
     color: customerColors.charcoal.soft,
@@ -328,18 +356,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: customerColors.charcoal.soft,
     marginTop: 2,
-  },
-
-  // Open/Closed as small text — not a loud badge
-  openStatus: {
-    fontFamily: 'Inter',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  openStatusOpen: {
-    color: customerColors.success.DEFAULT,
-  },
-  openStatusClosed: {
-    color: customerColors.charcoal.soft,
   },
 });

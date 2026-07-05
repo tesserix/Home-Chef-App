@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -870,10 +871,10 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 
 	now := time.Now()
 	// Flag-gated (#456): a no-op while OrderPayoutAutoReleaseEnabled is OFF, so cancel
-	// can't move money ungated at launch — the minimum P0 fix.
-	// TODO(#456-followup): route cancel reverse through ReverseHold / inside the guarded
-	// tx before flags-ON (the reverse currently runs outside the status transition).
-	services.ReverseGroupChefPayout(&g)
+	// can't move money ungated at launch. The chef payout reverse is now routed through
+	// the guarded hold machine AFTER the cancel commits (reverseGroupCancelPayout below,
+	// on both the success and already-cancelled recovery paths) — not the old pre-tx
+	// best-effort ReverseGroupChefPayout that ran outside the status transition (#456 W-A).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&models.GroupOrder{}).
 			Where("id = ? AND status NOT IN ?", g.ID, []models.GroupOrderStatus{models.GroupOrderCancelled, models.GroupOrderDelivered}).
@@ -916,13 +917,32 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 		return nil
 	}); err != nil {
 		if err == errGroupConflict {
+			// Already cancelled/delivered. If it was cancelled but the payout reverse
+			// never ran (e.g. a crash after the first cancel committed), recover it now —
+			// ReverseGroupHoldForCancel self-guards on status==cancelled and is idempotent.
+			reverseGroupCancelPayout(g.ID)
 			c.JSON(http.StatusConflict, gin.H{"error": "This group order can't be cancelled"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel"})
 		return
 	}
+	// #456 W-A: drive the chef payout hold → reversed and claw back the held direct
+	// transfer through the guarded hold machine, only now that the cancel genuinely
+	// committed (was an unconditional pre-tx ReverseGroupChefPayout). Best-effort; the
+	// payout-reconcile cron re-drives a reversed-but-unsettled group hold.
+	reverseGroupCancelPayout(g.ID)
 	c.JSON(http.StatusOK, gin.H{"cancelled": true})
+}
+
+// reverseGroupCancelPayout drives a cancelled group's chef payout hold → reversed and
+// claws back the held direct transfer, best-effort and off the response path. Self-
+// guarding (no-op unless status==cancelled) and idempotent, so it's safe to call on
+// both the cancel success path and the already-cancelled conflict/retry recovery path.
+func reverseGroupCancelPayout(groupID uuid.UUID) {
+	if err := services.ReverseGroupHoldForCancel(database.DB, groupID, "group order cancelled"); err != nil {
+		log.Printf("group-order: reverse chef payout on cancel for %s failed: %v", groupID, err)
+	}
 }
 
 // LeaveGroupOrder — POST /group-orders/:id/leave. A guest leaves an open group
