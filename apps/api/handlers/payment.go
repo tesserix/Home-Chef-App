@@ -751,6 +751,22 @@ func refundWalletIdempotencyKey(prefix string, orderID uuid.UUID, priorRefunded 
 	return fmt.Sprintf("%s:%s:%d", prefix, orderID, services.ToPaise(priorRefunded))
 }
 
+// claimRefundForProcessing atomically claims an order for refund processing by
+// flipping completed→refunded in ONE conditional UPDATE. Returns won=true only for
+// the caller that wins the flip; a concurrent duplicate (double-click / client retry)
+// sees payment_status already flipped and gets won=false → the handler answers 409.
+// This is the single serialization point shared by the to-wallet and gateway refund
+// branches (#567 — the wallet branch previously had no such mutex, so two concurrent
+// submits could lose-update refund_amount and double-claw the chef). The refund path
+// reverts to completed after a PARTIAL refund so sequential partial goodwill refunds
+// can re-claim (#549); a FULL refund keeps it refunded.
+func claimRefundForProcessing(db *gorm.DB, orderID uuid.UUID) (bool, error) {
+	res := db.Model(&models.Order{}).
+		Where("id = ? AND payment_status = ?", orderID, models.PaymentCompleted).
+		Update("payment_status", models.PaymentRefunded)
+	return res.RowsAffected == 1, res.Error
+}
+
 // crossGuardRefundHold drives the payout hold after a refund. A FULL refund
 // withholds/reverses the whole chef hold (#457) and runs UNCONDITIONALLY: its
 // cross-guard is idempotent (transitionHold's conditional WHERE) AND is the safety
@@ -906,6 +922,28 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return nil
 	}
 
+	// SECURITY (#567): atomically claim the refund BEFORE the to-wallet / gateway
+	// split so BOTH paths serialize concurrent double-submits on this order. Flip
+	// completed→refunded in one conditional UPDATE; only the winner (RowsAffected==1)
+	// proceeds, a concurrent duplicate gets 409 — so the wallet branch can no longer
+	// lose-update refund_amount or double-claw the chef (it previously had no mutex,
+	// unlike the gateway branch). A PARTIAL refund reverts to completed once persisted
+	// so sequential partial goodwill refunds still work (#549); a FULL refund stays
+	// refunded. On any downstream failure we revertClaim so the refund can be retried.
+	won, cErr := claimRefundForProcessing(database.DB, order.ID)
+	if cErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+		return
+	}
+	if !won {
+		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
+		return
+	}
+	revertClaim := func() {
+		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+			Update("payment_status", models.PaymentCompleted)
+	}
+
 	// Refund-to-wallet (#33): credit the customer's store credit instead of
 	// reversing the gateway charge. Faster for the customer (no gateway round
 	// trip) and the platform keeps the cash. The idempotency key ties the credit
@@ -919,6 +957,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			refundWalletIdempotencyKey("refund", order.ID, order.RefundAmount), nil)
 		if werr != nil {
 			log.Printf("refund-to-wallet failed for order %s: %v", order.OrderNumber, werr)
+			revertClaim()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
 			return
 		}
@@ -936,6 +975,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			refundUpdates["payment_status"] = models.PaymentRefunded
 			refundUpdates["status"] = models.OrderStatusRefunded
 			refundUpdates["refunded_at"] = &now
+		} else {
+			// PARTIAL (#549/#567): the claim above flipped completed→refunded as the
+			// concurrency mutex; revert it so the payout hold stays releasable and
+			// sequential partial goodwill refunds can proceed. Leave status/refunded_at unset.
+			refundUpdates["payment_status"] = models.PaymentCompleted
 		}
 		persistErr := database.DB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error; err != nil {
@@ -953,6 +997,18 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		if persistErr != nil {
 			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, persistErr)
 			services.CaptureBackgroundError(persistErr)
+			// #567: on a PARTIAL persist failure, revert the claim so the order isn't
+			// stuck at refunded (which would block every future refund + drift from the
+			// wallet credit that DID commit). Safe here because the wallet credit is
+			// idempotent (keyed) — a retry re-credits without double-crediting. A FULL
+			// refund legitimately STAYS refunded even on persist failure: its
+			// crossGuardRefundHold below is the unconditional safety net that must block
+			// the payout. (The gateway branch does NOT revert on partial persist failure
+			// — its CreateRefund carries no idempotency key, so a retry would double-refund;
+			// stuck-then-ops is the safer side there.)
+			if !fullRefund {
+				revertClaim()
+			}
 		}
 		// Cross-guard the payout hold (#457/#549/#568): a FULL refund drives the whole
 		// hold to withheld/reversed (unconditional); a PARTIAL refund claws back only
@@ -1002,28 +1058,10 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}
 	}
 
-	// SECURITY: atomically claim the refund before calling the gateway. The
-	// gateway CreateRefund calls carry no idempotency key, so two concurrent
-	// requests (double-click / client retry) could otherwise both issue a real
-	// refund. Flip completed→refunded in one conditional UPDATE; only the winner
-	// (RowsAffected==1) proceeds. On any downstream failure we revert to
-	// completed so the refund can be retried.
-	claim := database.DB.Model(&models.Order{}).
-		Where("id = ? AND payment_status = ?", order.ID, models.PaymentCompleted).
-		Update("payment_status", models.PaymentRefunded)
-	if claim.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
-		return
-	}
-	if claim.RowsAffected == 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
-		return
-	}
-	revertClaim := func() {
-		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
-			Update("payment_status", models.PaymentCompleted)
-	}
-
+	// The atomic refund claim (completed→refunded) + revertClaim were taken above,
+	// before the to-wallet / gateway split (#567), so both paths serialize concurrent
+	// double-submits. The gateway CreateRefund calls carry no idempotency key, so this
+	// mutex is what stops two concurrent requests both issuing a real gateway refund.
 	var refundID, refundStatus string
 
 	switch provider {
