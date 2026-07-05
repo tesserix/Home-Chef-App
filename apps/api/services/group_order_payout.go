@@ -64,16 +64,21 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
+	heldPaise := ToPaise(amt)
 	tr, err := rz.CreateTransfer(&DirectTransferRequest{
-		Account: chefAccount, Amount: ToPaise(amt), Currency: g.Currency, OnHold: true,
+		Account: chefAccount, Amount: heldPaise, Currency: g.Currency, OnHold: true,
 		Notes: map[string]string{"group_order_id": g.ID.String()},
 	})
 	if err != nil {
 		return fmt.Errorf("hold group payout: %w", err)
 	}
 	g.PayoutTransferID = tr.ID
-	return tx.Model(&models.GroupOrder{}).Where("id = ?", g.ID).
-		Update("payout_transfer_id", tr.ID).Error
+	if err := tx.Model(&models.GroupOrder{}).Where("id = ?", g.ID).
+		Update("payout_transfer_id", tr.ID).Error; err != nil {
+		return err
+	}
+	auditTransferMovement(auditTransferHold, aggTypeGroupOrder, g.ID, tr.ID, heldPaise, "group order confirmed — chef payout held")
+	return nil
 }
 
 // ReleaseGroupChefPayout releases the held transfer. Since #456 no delivery path
@@ -91,9 +96,13 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 	if rz == nil {
 		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
 	}
-	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil && !isAlreadyReleasedErr(err) {
+	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
+		if isAlreadyReleasedErr(err) {
+			return nil // idempotent re-drive — no new money moved, no audit
+		}
 		return fmt.Errorf("release group payout %s: %w", g.PayoutTransferID, err)
 	}
+	auditTransferMovement(auditTransferRelease, aggTypeGroupOrder, g.ID, g.PayoutTransferID, 0, "group order delivered — chef payout released")
 	return nil
 }
 
@@ -113,9 +122,13 @@ func ReverseGroupChefPayout(g *models.GroupOrder) error {
 	if rz == nil {
 		return nil
 	}
-	if _, err := rz.ReverseTransfer(g.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
+	if _, err := rz.ReverseTransfer(g.PayoutTransferID, 0); err != nil {
+		if isAlreadyReversedErr(err) {
+			return nil // idempotent re-drive — no new money moved, no audit
+		}
 		return fmt.Errorf("group-order: reverse payout %s: %w", g.PayoutTransferID, err)
 	}
+	auditTransferMovement(auditTransferReverse, aggTypeGroupOrder, g.ID, g.PayoutTransferID, 0, "group order cancelled/refunded — chef payout clawed back")
 	return nil
 }
 

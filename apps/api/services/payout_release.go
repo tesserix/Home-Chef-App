@@ -827,8 +827,16 @@ func reverseMoney(db *gorm.DB, aggType string, id uuid.UUID) error {
 			return fmt.Errorf("payout-release: load day %s: %w", id, err)
 		}
 		if MealPlanEscrowActive() && day.PayoutTransferID != "" && GetRazorpay() != nil {
-			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
-				return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
+			if _, err := GetRazorpay().ReverseTransfer(day.PayoutTransferID, 0); err != nil {
+				if !isAlreadyReversedErr(err) {
+					return fmt.Errorf("payout-release: reverse day transfer %s: %w", day.PayoutTransferID, err)
+				}
+				// already reversed → idempotent no-op, no new money moved (no audit)
+			} else {
+				// This is the settle-machinery day claw-back (admin ReverseHold or the
+				// reconcile re-drive of a #398 drift row) — the order/group branches audit
+				// via their helpers, so the day branch must too (#397).
+				auditTransferMovement(auditTransferReverse, aggTypeMealPlanDay, id, day.PayoutTransferID, 0, "meal-plan day payout reversed (admin/reconcile-driven)")
 			}
 		}
 	case aggTypeGroupOrder:
