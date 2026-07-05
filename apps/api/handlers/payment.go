@@ -715,6 +715,24 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
+	// #394: refuse orders that are refund-managed by a typed escrow flow. A
+	// meal-plan-day or group order spawns a regular Order reachable here, but its
+	// refund keyspace (mealplan-refund:<dayID> / grouporder-refund:<id>) is disjoint
+	// from this endpoint's refund:<orderID> and bypasses Order.RefundAmount — a
+	// generic refund would credit the customer a second time AND leave the chef's
+	// held direct transfer unreversed. Route the caller to the correct flow.
+	switch kind, kErr := services.TypedRefundOrderKind(database.DB, orderID); {
+	case kErr != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check order type"})
+		return
+	case kind == services.TypedRefundMealPlanDay:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This order is part of a meal plan; refund it through the meal-plan refund flow, not the generic order refund"})
+		return
+	case kind == services.TypedRefundGroupOrder:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This is a group order; refund participants through the group-order cancellation flow, not the generic order refund"})
+		return
+	}
+
 	if order.PaymentStatus != models.PaymentCompleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Can only refund completed payments"})
 		return
