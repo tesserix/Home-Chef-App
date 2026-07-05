@@ -8,7 +8,9 @@ import type { OrderSource } from '../hooks/useVendorOrders';
 
 export interface OrderSourceBadge {
   label: string;
+  /** Text color — near-black ink for a WCAG-AA contrast floor on the tint bg. */
   color: string;
+  /** Tinted background that carries the category hue. */
   bg: string;
 }
 
@@ -26,15 +28,18 @@ export function orderSourceLabel(source?: OrderSource | string): string | null {
   }
 }
 
-/** The badge (label + colors) for a source, or null when no badge should show. */
+/** The badge (label + colors) for a source, or null when no badge should show.
+ *  The hue lives in the tinted background; the text is near-black ink so the
+ *  11px label clears the WCAG AA 4.5:1 floor (the amber/info DEFAULT shades on
+ *  their own tints do not — .impeccable.md mandates AA). */
 export function orderSourceBadge(source?: OrderSource | string): OrderSourceBadge | null {
   const label = orderSourceLabel(source);
   if (!label) return null;
-  const palette =
+  const tint =
     source === 'meal_plan'
-      ? theme.colors.info
+      ? theme.colors.info.tint
       : source === 'subscription'
-        ? theme.colors.amber
-        : theme.colors.paprika; // group
-  return { label, color: palette.DEFAULT, bg: palette.tint };
+        ? theme.colors.amber.tint
+        : theme.colors.paprika.tint; // group
+  return { label, color: theme.colors.ink.DEFAULT, bg: tint };
 }

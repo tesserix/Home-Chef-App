@@ -262,9 +262,12 @@ func TestChefOrders_GroupAndSubscriptionSources(t *testing.T) {
 	db := setupChefVisDB(t)
 	userID, chefID := seedVisChef(t, db)
 
+	// Group + subscription day orders are always created PaymentCompleted (the
+	// group's consolidated payment / the subscription cycle charge), so both are
+	// visible via the payment filter; the reverse link only classifies the source.
 	group := seedVisOrderID(t, db, chefID, "pending", "completed")
 	linkOrderSource(t, db, "group_orders", group)
-	sub := seedVisOrderID(t, db, chefID, "pending", "pending")
+	sub := seedVisOrderID(t, db, chefID, "pending", "completed")
 	linkOrderSource(t, db, "meal_subscription_fulfillments", sub)
 
 	r := chefVisRouter(userID)

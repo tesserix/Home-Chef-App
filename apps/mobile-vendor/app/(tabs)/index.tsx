@@ -286,7 +286,6 @@ export default function DashboardScreen() {
     );
   }
 
-  const isSurge = pendingOrders.length > 3;
   // Which non-à-la-carte sources are among the pending orders (#435) — lets the
   // persistent reminder distinguish plan/subscription/group arrivals, not just a
   // raw count. Deduped, order preserved by first appearance.
@@ -675,7 +674,7 @@ export default function DashboardScreen() {
               onPress={() => router.push('/(tabs)/orders')}
               accessibilityRole="button"
               accessibilityLabel={t('dashboard.ordersAwaiting', { count: pendingOrders.length })}
-              style={[styles.surgeBanner, isSurge && styles.surgeBannerStrong]}
+              style={styles.surgeBanner}
             >
               <View
                 style={[
@@ -969,10 +968,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     letterSpacing: 0.1,
-  },
-  // Stronger emphasis when there's a surge (>3) of unaccepted orders.
-  surgeBannerStrong: {
-    backgroundColor: theme.colors.amber.DEFAULT,
   },
   surgeBannerSub: {
     fontFamily: 'Inter-Medium',
