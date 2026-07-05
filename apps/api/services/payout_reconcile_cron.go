@@ -88,6 +88,9 @@ func runPayoutReconcileScan(_ context.Context) {
 	n += reconcileMealPlanDays(models.PayoutHoldReversed, settleReverse)
 	n += reconcileGroupOrders(models.PayoutHoldReleased, settleRelease)
 	n += reconcileGroupOrders(models.PayoutHoldReversed, settleReverse)
+	// A cancelled group whose reverse never ran sits at a non-terminal hold with a
+	// held transfer — invisible to the status-keyed sweeps above (#534).
+	n += reconcileCancelledGroups()
 	if n > 0 {
 		log.Printf("payout-reconcile: re-drove %d stranded hold(s)", n)
 	}
@@ -174,4 +177,43 @@ func bumpSettleAttempt(aggType string, id uuid.UUID, cause error) {
 		return
 	}
 	log.Printf("payout-reconcile: %s %s settle failed (attempt %d): %v", aggType, id, attempts, cause)
+}
+
+// reconcileCancelledGroups claws back a stranded held transfer on a CANCELLED group
+// whose reverse never ran (#534). The released/reversed sweeps above only catch holds
+// already flipped to a terminal-in-flight status; a cancelled group left at
+// none/awaiting/… with a held transfer (crash after the cancel tx committed, no client
+// retry) is invisible to them, so the chef's held payout is never clawed back.
+//
+// Uses ReverseGroupHoldForCancel (NOT the generic settleReverse): the gap rows haven't
+// transitioned yet, so they need the guarded transition (→ reversed) + settle, not just
+// a seam re-drive. It self-guards on status==cancelled and is idempotent, and stamps
+// hold=reversed + settled_at so a driven row drops out of the next scan on both the
+// `NOT IN (reversed)` and `settled_at IS NULL` predicates.
+func reconcileCancelledGroups() int {
+	var ids []string
+	if err := database.DB.Model(&models.GroupOrder{}).
+		Where(`status = ? AND payout_hold_status NOT IN ? AND payout_settled_at IS NULL
+		       AND payout_transfer_id <> '' AND payout_settle_attempts < ?`,
+			models.GroupOrderCancelled,
+			[]models.PayoutHoldStatus{models.PayoutHoldWithheld, models.PayoutHoldReversed},
+			payoutReconcileMaxAttempts).
+		Limit(sweepBatchLimit).Pluck("id", &ids).Error; err != nil {
+		log.Printf("payout-reconcile: query cancelled group holds failed: %v", err)
+		return 0
+	}
+	driven := 0
+	for _, raw := range ids {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			log.Printf("payout-reconcile: bad group id %q: %v", raw, err)
+			continue
+		}
+		if err := ReverseGroupHoldForCancel(database.DB, id, "reconcile: stranded cancelled group"); err != nil {
+			bumpSettleAttempt(aggTypeGroupOrder, id, err)
+			continue
+		}
+		driven++
+	}
+	return driven
 }
