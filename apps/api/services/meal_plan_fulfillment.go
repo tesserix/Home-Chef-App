@@ -50,6 +50,7 @@ func runMealPlanFulfillment(_ context.Context) {
 		}
 	}()
 	generateDueDayOrders()
+	sweepStuckDays()
 	completeFinishedPlans()
 }
 
@@ -87,6 +88,76 @@ func generateDueDayOrders() {
 			database.DB.Model(&models.MealPlan{}).
 				Where("id = ? AND status = ?", p.ID, models.MealPlanConfirmed).
 				Update("status", models.MealPlanActive)
+		}
+	}
+}
+
+// stuckDaySweepGrace is how long past a day's date it may sit confirmed without a
+// generated order (the address-missing case) before the sweep auto-refunds it — the
+// window in which the customer can still add a default address and have the day
+// generate normally.
+const stuckDaySweepGrace = 24 * time.Hour
+
+// sweepStuckDays auto-refunds confirmed meal-plan days that came due but could never
+// generate an order: generateDueDayOrders silently skips days whose customer has no
+// default address, so they sit confirmed forever, strand their held escrow, and block
+// completeFinishedPlans (allDaysTerminal never true). Past stuckDaySweepGrace beyond
+// the day's date, each such day is refunded to the customer's wallet (RefundDay —
+// escrow-gated) and marked refunded so the plan can finish. #398.
+//
+// MONEY-SAFE ordering: the guarded conditional UPDATE (status=confirmed AND
+// order_id IS NULL → refunded) is CLAIMED FIRST inside the tx. If a concurrent
+// generate/deliver already gave the day an order (RowsAffected==0), we return before
+// RefundDay so NO money moves — the day is being fulfilled, not voided. Only after we
+// own the void does RefundDay run; if it errors (e.g. the gateway is unreachable) the
+// whole tx — including the claim — rolls back, so the day returns to confirmed and is
+// retried next sweep. A day is thus never refunded-and-fulfilled, nor marked refunded
+// without the refund succeeding (or being a no-op because escrow is off).
+func sweepStuckDays() {
+	cutoff := time.Now().Add(-stuckDaySweepGrace)
+	var plans []models.MealPlan
+	if err := database.DB.
+		Where("status IN ?", []models.MealPlanStatus{models.MealPlanConfirmed, models.MealPlanActive}).
+		Preload("Days").Find(&plans).Error; err != nil {
+		log.Printf("meal-plan-fulfillment: load plans for stuck-day sweep failed: %v", err)
+		return
+	}
+	for i := range plans {
+		p := &plans[i]
+		for j := range p.Days {
+			d := &p.Days[j]
+			if d.Status != models.MealPlanDayConfirmed || d.OrderID != nil || d.RefundTxnID != nil || !d.Date.Before(cutoff) {
+				continue
+			}
+			if err := database.DB.Transaction(func(tx *gorm.DB) error {
+				// Claim the void FIRST — the concurrency gate. If a generate/deliver
+				// already gave the day an order, RowsAffected==0 → return before any
+				// money moves (the day is being fulfilled, not voided).
+				res := tx.Model(&models.MealPlanDay{}).
+					Where("id = ? AND status = ? AND order_id IS NULL", d.ID, models.MealPlanDayConfirmed).
+					Update("status", models.MealPlanDayRefunded)
+				if res.Error != nil {
+					return res.Error
+				}
+				if res.RowsAffected == 0 {
+					return nil // raced — a generate/deliver claimed the day first
+				}
+				// Now that we own the void, refund (gated + idempotent). On failure the
+				// whole tx — including the claim above — rolls back and the day returns
+				// to confirmed, retried next sweep. Never refunded without the money.
+				if err := RefundDay(tx, p, d, "meal plan: no delivery address on file — day auto-refunded"); err != nil {
+					return err
+				}
+				// Notify the customer only when money actually moved back (escrow on).
+				if d.RefundTxnID != nil {
+					return EnqueueEvent(tx, SubjectMealPlanDayRefunded, "meal_plan.day_refunded", p.CustomerID, map[string]any{
+						"meal_plan_id": p.ID.String(), "day_id": d.ID.String(), "reason": "no delivery address on file",
+					})
+				}
+				return nil
+			}); err != nil {
+				log.Printf("meal-plan-fulfillment: stuck-day sweep for day %s failed: %v", d.ID, err)
+			}
 		}
 	}
 }
@@ -179,16 +250,23 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 
 // completeFinishedPlans marks an active plan completed once every day is terminal.
 func completeFinishedPlans() {
+	// Include Confirmed as well as Active: a fully address-stuck plan never flips to
+	// Active (generateDueDayOrders only does that when it generates a day), so once
+	// the stuck-day sweep terminates all its days it would otherwise sit Confirmed
+	// forever (#398). allDaysTerminal is false for a not-yet-resolved plan, so a
+	// freshly-confirmed plan with pending days never completes prematurely.
 	var plans []models.MealPlan
-	if err := database.DB.Where("status = ?", models.MealPlanActive).
+	if err := database.DB.
+		Where("status IN ?", []models.MealPlanStatus{models.MealPlanConfirmed, models.MealPlanActive}).
 		Preload("Days").Find(&plans).Error; err != nil {
 		return
 	}
 	for i := range plans {
 		p := &plans[i]
 		if allDaysTerminal(p) {
+			// Guard on the loaded status so a concurrent action (generate → Active) wins.
 			database.DB.Model(&models.MealPlan{}).
-				Where("id = ? AND status = ?", p.ID, models.MealPlanActive).
+				Where("id = ? AND status = ?", p.ID, p.Status).
 				Update("status", models.MealPlanCompleted)
 		}
 	}
