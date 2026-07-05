@@ -1,6 +1,25 @@
 package handlers
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/homechef/api/models"
+)
+
+// maskPartnerDetailPII returns a copy of a delivery-partner detail response with
+// the sensitive contact + document fields redacted, using the same mask helpers
+// as the fleet list view. Applied for fleet-manager callers so the detail
+// endpoint doesn't leak a driver's raw email/phone/licence/vehicle/emergency
+// number — admins and the driver's own self-view still get the full record. The
+// non-PII identity (name) is left intact since it's already shown in the list.
+func maskPartnerDetailPII(resp models.DeliveryPartnerDetailResponse) models.DeliveryPartnerDetailResponse {
+	resp.Email = maskEmail(resp.Email)
+	resp.Phone = maskPhone(resp.Phone)
+	resp.EmergencyPhone = maskPhone(resp.EmergencyPhone)
+	resp.LicenseNumber = maskID(resp.LicenseNumber)
+	resp.VehicleNumber = maskID(resp.VehicleNumber)
+	return resp
+}
 
 // maskPhone masks a phone number, showing only last 4 digits.
 // e.g., "+919876543210" → "****3210"

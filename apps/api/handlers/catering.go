@@ -921,8 +921,10 @@ func (h *CateringHandler) CompleteBooking(c *gin.Context) {
 		return
 	}
 	var quote models.CateringQuote
+	// A booking the chef doesn't own returns the same 404 as a missing one — no
+	// 403-vs-404 existence oracle. (#468 LOW.)
 	if err := database.DB.First(&quote, "id = ?", *request.AcceptedQuoteID).Error; err != nil || quote.ChefID != chef.ID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "This booking isn't yours"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Catering request not found"})
 		return
 	}
 	if request.Status != models.CateringStatusConfirmed {
