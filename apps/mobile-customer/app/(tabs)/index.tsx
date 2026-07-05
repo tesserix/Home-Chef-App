@@ -34,6 +34,8 @@ import { router } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
+import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
+import { useDockClearance } from '../../components/navigation/Dock';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
@@ -108,6 +110,7 @@ export default function HomeScreen() {
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<BottomSheetMethods>(null);
+  const addressSheetRef = useRef<BottomSheetMethods>(null);
 
   // ── Search debounce ─────────────────────────────────────────────────────
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -155,6 +158,10 @@ export default function HomeScreen() {
   // Staggered card entrances (reduced-motion gated). No bounce — ease-out-quart.
   const reduceMotion = useReducedMotion();
 
+  // Floating dock: scenes span the full screen, so scroll content + the
+  // floating active-order card anchor above the dock instead of a tab bar.
+  const dockClearance = useDockClearance();
+
   // ── Derived values ───────────────────────────────────────────────────────
   const activeFilterCount = countActiveFilters({ selectedDiet, maxPrice, sort, isOpenOnly });
 
@@ -168,7 +175,7 @@ export default function HomeScreen() {
     <>
       {/* ── Row 0: Active delivery address — drives the discovery coords below.
           Tapping opens a sheet to view/switch which saved address is active. ── */}
-      <AddressSwitcher />
+      <AddressSwitcher onOpen={() => addressSheetRef.current?.expand()} />
 
       {/* ── Row 1: Search pill + quick-navigation links ── */}
       <View style={styles.searchPillWrapper}>
@@ -371,10 +378,13 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
             styles.listContent,
+            { paddingBottom: dockClearance },
             // Pad the bottom for the floating active-order card. The stack is
             // COLLAPSED by default (~1 card + a peek), so reserve one card's
             // worth; expanding it is a deliberate, temporary overlay.
-            visibleActiveOrders.length > 0 && { paddingBottom: 124 },
+            visibleActiveOrders.length > 0 && {
+              paddingBottom: dockClearance + 112,
+            },
           ]}
           ListHeaderComponent={renderHeader}
           keyboardShouldPersistTaps="handled"
@@ -421,7 +431,10 @@ export default function HomeScreen() {
             card + peeking layers); tap to expand the full list. Absolute
             positioning keeps it out of the scroll flow. */}
         {visibleActiveOrders.length > 0 && (
-          <View style={styles.activeOrderAnchor} pointerEvents="box-none">
+          <View
+            style={[styles.activeOrderAnchor, { bottom: dockClearance - 4 }]}
+            pointerEvents="box-none"
+          >
             <ActiveOrderStack orders={visibleActiveOrders} />
           </View>
         )}
@@ -439,6 +452,12 @@ export default function HomeScreen() {
           isOpenOnly={isOpenOnly}
           onIsOpenOnlyChange={setIsOpenOnly}
         />
+
+        {/* AddressSwitcherSheet — mounted at the screen root (sibling of the
+            FlatList), NOT inside the list header, so @gorhom overlays the whole
+            screen instead of being trapped in the header's layout box. Hidden at
+            index -1 until the address pill is tapped (addressSheetRef.expand). */}
+        <AddressSwitcherSheet ref={addressSheetRef} />
       </View>
     </SafeAreaView>
   );
@@ -462,9 +481,9 @@ const styles = StyleSheet.create({
   },
 
   // Absolute anchor for the floating card — sits just above the tab bar.
+  // `bottom` is set dynamically — anchored just above the floating dock.
   activeOrderAnchor: {
     position: 'absolute',
-    bottom: 8,
     left: 0,
     right: 0,
   },
@@ -657,8 +676,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
   },
+  // Bottom padding is applied dynamically (useDockClearance) so the last
+  // row scrolls clear of the floating dock.
   listContent: {
-    paddingBottom: 100,
     gap: 12,
     paddingTop: 4,
   },
