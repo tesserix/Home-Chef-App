@@ -71,6 +71,27 @@ func TestClientIP_TrustedPeer_RightmostForwardedFor(t *testing.T) {
 	assert.Equal(t, "203.0.113.5", clientIP(req))
 }
 
+// The real multi-hop chain is `client, cf-edge, gateway` where the tail hops are
+// internal. clientIP must skip the trusted (private) tail and return the real
+// client — never the internal hop IP, which would collapse all users into one
+// bucket.
+func TestClientIP_TrustedPeer_SkipsInternalTail(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:8080" // sidecar → trusted
+	// client(public), cf-edge(public), gateway(private)
+	req.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.2, 10.0.0.9")
+	assert.Equal(t, "198.51.100.2", clientIP(req))
+}
+
+// If every forwarded hop is a trusted/internal IP (no public client in the
+// chain), fall back to the peer address rather than keying on an internal hop.
+func TestClientIP_TrustedPeer_AllHopsInternal_FallsBack(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:8080"
+	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+	assert.Equal(t, "127.0.0.1", clientIP(req))
+}
+
 func TestClientIP_FallbackRemoteAddr(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.0.2.4:54321"

@@ -81,10 +81,14 @@ func isTrustedProxy(host string) bool {
 // trusted proxy. A direct public caller could otherwise rotate X-Forwarded-For
 // to mint a fresh token bucket per value and bypass the limiter on
 // unauthenticated surfaces (login/register/reset). When the peer is trusted we
-// prefer Cloudflare's CF-Connecting-IP (authoritative real client), then the
-// RIGHTMOST X-Forwarded-For hop (the value appended by the closest trusted proxy
-// — the leftmost entry is the client-controllable one). Otherwise we key on the
-// peer address itself.
+// prefer Cloudflare's CF-Connecting-IP (the authoritative real client, injected
+// by the CF tunnel and not client-controllable). Failing that we walk the
+// X-Forwarded-For chain from the RIGHT and return the first NON-trusted address —
+// the real client sits just before the trusted proxy hops. Taking the blind
+// rightmost value would return an internal hop IP and collapse every anonymous
+// user into one bucket (a self-inflicted DoS) if the hop count ever changes;
+// skipping trusted hops is robust to the chain length. If every hop is trusted
+// (or there's no header) we key on the peer address.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -98,7 +102,12 @@ func clientIP(r *http.Request) string {
 	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[len(parts)-1])
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := strings.TrimSpace(parts[i])
+			if ip != "" && !isTrustedProxy(ip) {
+				return ip
+			}
+		}
 	}
 	return host
 }

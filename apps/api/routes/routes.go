@@ -377,9 +377,14 @@ func SetupRouter() *gin.Engine {
 			search.GET("/dishes", chefHandler.SearchDishes)
 		}
 
-		// Chef onboarding (authenticated, but no chef role required — user is becoming a chef)
+		// Chef onboarding (authenticated, but no chef role required — user is
+		// becoming a chef). Gated on the business pool for the same reason as
+		// /chef/menu: these routes self-provision a ChefProfile via
+		// getOrCreateChefProfile (document/image uploads, onboarding), so a
+		// customer-pool user must not reach them. RoleChef can't be required
+		// (granted only at approval); the business pool is the signup identity.
 		chefOnboarding := v1.Group("/chef")
-		chefOnboarding.Use(bffAuth(bffKey, bffWindow))
+		chefOnboarding.Use(bffAuth(bffKey, bffWindow), middleware.RequirePool(models.PoolBusiness))
 		{
 			chefOnboarding.GET("/onboarding/status", uploadHandler.GetOnboardingStatus)
 			chefOnboarding.POST("/onboarding", uploadHandler.Onboarding)
