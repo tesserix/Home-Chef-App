@@ -426,6 +426,49 @@ func notifyChefNewOrderTx(tx *gorm.DB, order *models.Order) error {
 	})
 }
 
+// completeRazorpayOrderTx flips a Razorpay order pending→completed exactly ONCE and,
+// only on that single transition, notifies the chef and emits order.paid — mirroring
+// the conditional handlePaymentCaptured webhook (#395). The verify path used to read
+// `wasUnpaid` from the in-memory order and then update unconditionally, so a webhook
+// that completed the order between verify's read and its update left verify still in
+// the notify branch → a duplicate chef "new order" push and a duplicate order.paid
+// event. The guarded UPDATE (WHERE payment_status <> 'completed') makes exactly one of
+// the racing paths perform the transition. Returns whether THIS call did it. The
+// caller's post-tx steps (referral reward, saga, wallet DEBIT) are idempotently keyed;
+// the wallet TOP-UP transfer is NOT (see #395 follow-up) — but this helper does not
+// invoke it, and on a raced (RowsAffected==0) verify the top-up recomputes the same
+// deterministic split, so this change does not add a double-transfer path.
+func completeRazorpayOrderTx(tx *gorm.DB, order *models.Order, method, paymentID string, amountPaise int) (bool, error) {
+	res := tx.Model(&models.Order{}).
+		Where("id = ? AND payment_status <> ?", order.ID, models.PaymentCompleted).
+		Updates(map[string]interface{}{
+			"payment_status":      models.PaymentCompleted,
+			"payment_method":      method,
+			"razorpay_payment_id": paymentID,
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return false, nil // a concurrent webhook/verify already completed it — no re-fire
+	}
+	// Keep the in-memory order consistent for any post-tx idempotent steps.
+	order.PaymentStatus = models.PaymentCompleted
+	if err := notifyChefNewOrderTx(tx, order); err != nil {
+		return false, err
+	}
+	if err := services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
+		"order_id":     order.ID.String(),
+		"order_number": order.OrderNumber,
+		"amount":       services.FromPaise(amountPaise),
+		"method":       method,
+		"provider":     "razorpay",
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // VerifyPayment verifies a payment after checkout on the client. The request
 // body differs by provider — Razorpay sends razorpayPaymentId/OrderId/Signature,
 // Stripe sends stripePaymentIntentId — so we look at the already-stamped
@@ -532,34 +575,13 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		return
 	}
 
-	// Only notify the chef on the first pending→completed transition (a later
-	// webhook for the same order must not re-push).
-	wasUnpaid := order.PaymentStatus != models.PaymentCompleted
-
-	// Mark the order paid and stage the order.paid event atomically (transactional
-	// outbox). Payment already captured at the gateway, so a DB hiccup must not
-	// 500 the client — it's logged + sent to Sentry and the reconciliation cron
-	// catches any drift.
+	// Mark the order paid and stage the chef push + order.paid event atomically
+	// (transactional outbox). Payment already captured at the gateway, so a DB hiccup
+	// must not 500 the client — it's logged + sent to Sentry and the reconciliation
+	// cron catches any drift.
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(order).Updates(map[string]interface{}{
-			"payment_status":      models.PaymentCompleted,
-			"payment_method":      payment.Method,
-			"razorpay_payment_id": paymentID,
-		}).Error; err != nil {
-			return err
-		}
-		if wasUnpaid {
-			if err := notifyChefNewOrderTx(tx, order); err != nil {
-				return err
-			}
-		}
-		return services.EnqueueEvent(tx, "orders.paid", "order.paid", order.CustomerID, map[string]interface{}{
-			"order_id":     order.ID.String(),
-			"order_number": order.OrderNumber,
-			"amount":       services.FromPaise(payment.Amount),
-			"method":       payment.Method,
-			"provider":     "razorpay",
-		})
+		_, err := completeRazorpayOrderTx(tx, order, payment.Method, paymentID, payment.Amount)
+		return err
 	}); err != nil {
 		log.Printf("Failed to persist payment completion + event for order %s: %v", order.ID, err)
 		services.CaptureBackgroundError(err)

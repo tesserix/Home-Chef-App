@@ -83,6 +83,10 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	// exist or every refund would 500; empty in most tests → the guard passes through.
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
+	// #395: the completion helper stages chef.new_order + order.paid via the outbox.
+	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
+		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
+		next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db
