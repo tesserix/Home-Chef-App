@@ -78,6 +78,46 @@ func TestCompleteOrderPaymentTx_Stripe_ReVerifyDoesNotDoubleEmit(t *testing.T) {
 	require.Equal(t, int64(1), countOutbox(t, db, services.SubjectChefNewOrder), "still exactly one chef push")
 }
 
+// #563: a REFUNDED order must never be re-completed — that would silently re-enable the
+// chef payout on money already returned. The guard excludes refunded, so it's a no-op.
+func TestCompleteOrderPaymentTx_RefundedOrderNotReCompleted(t *testing.T) {
+	db := setupPayDB(t)
+	cust := payUser(t, db, "customer")
+	chef := payChef(t, db, payUser(t, db, "chef"))
+	orderID := payOrder(t, db, cust, chef, "refunded", 500, "rzp_ref", "")
+	order := loadPayOrder(t, db, orderID)
+
+	var ok bool
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		ok, err = completeOrderPaymentTx(tx, order, map[string]interface{}{"payment_method": "card"}, stripeEvent(order))
+		return err
+	}))
+	require.False(t, ok, "a refunded order is not re-completed")
+	require.Equal(t, string(models.PaymentRefunded), paymentStatusOf(t, db, orderID))
+	require.Equal(t, int64(0), countOutbox(t, db, "orders.paid"), "no order.paid re-emit on a refunded order")
+}
+
+// #563: a FAILED order (a prior card decline) MUST still complete on retry — `failed` is
+// intentionally NOT in the blocked set. Retry-after-decline is preserved.
+func TestCompleteOrderPaymentTx_FailedOrderCompletesOnRetry(t *testing.T) {
+	db := setupPayDB(t)
+	cust := payUser(t, db, "customer")
+	chef := payChef(t, db, payUser(t, db, "chef"))
+	orderID := payOrder(t, db, cust, chef, "failed", 500, "rzp_retry", "")
+	order := loadPayOrder(t, db, orderID)
+
+	var ok bool
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		ok, err = completeOrderPaymentTx(tx, order, map[string]interface{}{"payment_method": "card"}, stripeEvent(order))
+		return err
+	}))
+	require.True(t, ok, "a failed order completes on retry")
+	require.Equal(t, string(models.PaymentCompleted), paymentStatusOf(t, db, orderID))
+	require.Equal(t, int64(1), countOutbox(t, db, "orders.paid"))
+}
+
 // Wallet (full store-credit order): a retried settle stamps the wallet columns once and
 // never double-emits order.paid.
 func TestCompleteOrderPaymentTx_Wallet_RetryDoesNotDoubleEmit(t *testing.T) {
