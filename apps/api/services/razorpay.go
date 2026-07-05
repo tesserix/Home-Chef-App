@@ -46,7 +46,11 @@ type RazorpayClient struct {
 	keyID         string
 	keySecret     string
 	webhookSecret string
-	fetchedAt     time.Time
+	// baseURL overrides the Razorpay API host. Empty in every production path
+	// (→ razorpayBaseURL); tests point it at an httptest.Server so the transfer
+	// seams (hold/release/reverse) can be driven end-to-end without a live gateway.
+	baseURL   string
+	fetchedAt time.Time
 }
 
 var (
@@ -590,7 +594,11 @@ func ValidateCapturedPayment(paymentStatus, paymentOrderID, expectedOrderID stri
 
 // doRequest executes an authenticated HTTP request to the Razorpay API
 func (c *RazorpayClient) doRequest(method, path string, body []byte) ([]byte, error) {
-	url := razorpayBaseURL + path
+	base := c.baseURL
+	if base == "" {
+		base = razorpayBaseURL
+	}
+	url := base + path
 
 	var req *http.Request
 	var err error

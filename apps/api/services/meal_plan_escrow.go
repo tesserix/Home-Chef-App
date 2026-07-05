@@ -190,9 +190,10 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 		if !isPayableDayStatus(d.Status) {
 			continue
 		}
+		heldPaise := ToPaise(perDayNetPayout(plan, d, rate))
 		tr, err := rz.CreateTransfer(&DirectTransferRequest{
 			Account:  chefAccount,
-			Amount:   ToPaise(perDayNetPayout(plan, d, rate)),
+			Amount:   heldPaise,
 			Currency: plan.Currency,
 			OnHold:   true,
 			Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "day_id": d.ID.String()},
@@ -205,6 +206,7 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 			Update("payout_transfer_id", tr.ID).Error; err != nil {
 			return err
 		}
+		auditTransferMovement(auditTransferHold, aggTypeMealPlanDay, d.ID, tr.ID, heldPaise, "meal-plan day confirmed — chef payout held")
 	}
 	return nil
 }
@@ -238,6 +240,7 @@ func ReleaseDayPayout(tx *gorm.DB, day *models.MealPlanDay) error {
 		}
 		return fmt.Errorf("release payout %s: %w", day.PayoutTransferID, err)
 	}
+	auditTransferMovement(auditTransferRelease, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day delivered — chef payout released")
 	return nil
 }
 
@@ -291,9 +294,14 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 	// success (idempotent), not drift.
 	reverseOK := true
 	if day.PayoutTransferID != "" {
-		if _, err := rz.ReverseTransfer(day.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
-			log.Printf("meal-plan refund: reverse transfer %s failed — leaving day hold as re-drivable drift for the reconcile cron: %v", day.PayoutTransferID, err)
-			reverseOK = false
+		if _, err := rz.ReverseTransfer(day.PayoutTransferID, 0); err != nil {
+			if !isAlreadyReversedErr(err) {
+				log.Printf("meal-plan refund: reverse transfer %s failed — leaving day hold as re-drivable drift for the reconcile cron: %v", day.PayoutTransferID, err)
+				reverseOK = false
+			}
+			// already-reversed → idempotent no-op, no new money moved (no audit row)
+		} else {
+			auditTransferMovement(auditTransferReverse, aggTypeMealPlanDay, day.ID, day.PayoutTransferID, 0, "meal-plan day refunded — chef payout clawed back")
 		}
 	}
 	// Refund the FULL amount the customer paid for the day (food + GST + delivery),

@@ -70,6 +70,7 @@ func ReleaseOrderPayouts(orderID uuid.UUID) error {
 			if _, err := rz.ReleaseTransfer(t.ID); err != nil {
 				return fmt.Errorf("order-payout: release transfer %s (order %s): %w", t.ID, orderID, err)
 			}
+			auditTransferMovement(auditTransferRelease, aggTypeOrder, orderID, t.ID, t.Amount, "order delivered — payout released")
 		}
 	}
 	return nil
@@ -109,12 +110,17 @@ func ReverseOrderPayouts(orderID uuid.UUID) error {
 		if t.ID == "" {
 			continue
 		}
-		if _, err := rz.ReverseTransfer(t.ID, 0); err != nil && !isAlreadyReversedErr(err) {
+		if _, err := rz.ReverseTransfer(t.ID, 0); err != nil {
+			if isAlreadyReversedErr(err) {
+				continue // idempotent re-drive — no new money moved, don't audit
+			}
 			log.Printf("order-payout: reverse transfer %s (order %s) failed: %v", t.ID, orderID, err)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("order-payout: reverse transfer %s: %w", t.ID, err)
 			}
+			continue // failed claw-back moved no money — don't audit it as reversed
 		}
+		auditTransferMovement(auditTransferReverse, aggTypeOrder, orderID, t.ID, t.Amount, "order refunded — payout clawed back")
 	}
 	return firstErr
 }

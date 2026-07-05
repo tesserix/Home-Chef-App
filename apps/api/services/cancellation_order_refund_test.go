@@ -37,7 +37,7 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
-			old_value TEXT, new_value TEXT, ip_address TEXT, correlation_id TEXT, created_at DATETIME)`,
+			old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

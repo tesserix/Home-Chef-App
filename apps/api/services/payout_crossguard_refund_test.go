@@ -71,7 +71,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
 			next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT,
-			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, correlation_id TEXT, created_at DATETIME)`,
+			entity_id TEXT, old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
