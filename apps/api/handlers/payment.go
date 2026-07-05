@@ -798,7 +798,10 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot be negative"})
 		return
 	}
-	remaining := order.Total - order.RefundAmount
+	// #560/#527: RemainingRefundable, NOT Total − RefundAmount — after a per-line cancel
+	// the naive difference double-subtracts the refunded lines (Total was already reduced)
+	// and would wrongly cap this refund at ~0, stranding the remaining live items' money.
+	remaining := services.RemainingRefundable(&order)
 	if remaining <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order has already been fully refunded"})
 		return

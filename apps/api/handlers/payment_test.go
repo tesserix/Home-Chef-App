@@ -82,6 +82,10 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	// #394: InitiateRefund now checks whether the order is refund-managed by a typed
 	// escrow flow (meal-plan day / group order). The COUNT probes need the tables to
 	// exist or every refund would 500; empty in most tests → the guard passes through.
+	// order_items — RemainingRefundable (#560, InitiateRefund) sums cancelled lines; without
+	// the table its raw query errors and silently falls back to the old formula.
+	require.NoError(t, db.Exec(`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT,
+		menu_item_id TEXT, quantity INTEGER DEFAULT 0, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0, created_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	// #395: the completion helper stages chef.new_order + order.paid via the outbox.

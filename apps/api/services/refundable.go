@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -28,8 +29,16 @@ import (
 // orders that never had a per-line cancel. Fails safe (returns 0, i.e. the old
 // under-refunding value) so a query error can never OVER-refund.
 func PerLineRefundedTotal(orderID uuid.UUID) float64 {
+	return PerLineRefundedTotalTx(database.DB, orderID)
+}
+
+// PerLineRefundedTotalTx is PerLineRefundedTotal computed via the provided db/tx — use it
+// INSIDE a transaction so the sum is read on the SAME connection as the enclosing work
+// (a cross-connection read is a separate DB under sqlite :memory: and a separate snapshot
+// under a Postgres tx).
+func PerLineRefundedTotalTx(db *gorm.DB, orderID uuid.UUID) float64 {
 	var sum float64
-	if err := database.DB.Model(&models.OrderItem{}).
+	if err := db.Model(&models.OrderItem{}).
 		Where("order_id = ? AND is_cancelled = ?", orderID, true).
 		Select("COALESCE(SUM(refund_amount), 0)").Scan(&sum).Error; err != nil {
 		log.Printf("refundable: sum per-line refunds for order %s failed (treating as 0): %v", orderID, err)

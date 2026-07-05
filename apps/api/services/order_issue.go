@@ -124,8 +124,13 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		}
 
 		// Cap the credit at what's actually left to refund on the order.
+		// #560/#527: RemainingRefundable = Total − RefundAmount + per-line refunds. The
+		// locked read above serializes concurrent refunds on the order row; the per-line
+		// sum (cancelled order_items, committed + immutable) adds back what recomputeOrder-
+		// Totals removed from Total so a legitimate issue refund isn't short-changed after
+		// a per-line cancel.
 		credit := models.RoundAmount(amount)
-		remaining := models.RoundAmount(order.Total - order.RefundAmount)
+		remaining := models.RoundAmount(order.Total - order.RefundAmount + PerLineRefundedTotalTx(tx, issue.OrderID))
 		if credit > remaining {
 			credit = remaining
 		}
