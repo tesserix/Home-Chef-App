@@ -99,9 +99,11 @@ func (r *Registry) ResolveByTenant(tenantID string) *App {
 // (comma-separated, case-insensitive, space-trimmed).
 //
 // The second return value reports whether an allowlist is actually configured.
-// When configured is false the caller should fail OPEN (allow + log) so an unset
-// env var doesn't lock everyone out; when configured is true the caller MUST
-// fail CLOSED whenever allowed is false.
+// Callers fail CLOSED: admin/internal login is denied whenever allowed is false,
+// INCLUDING when configured is false (unset/empty env). A missing allowlist must
+// never grant admin access — the mesh does not strip inbound X-User-* headers,
+// so this gate is the sole defense. configured is surfaced only so callers can
+// log the unconfigured case distinctly ("set the env") from a real deny.
 func (a *App) IsEmailAllowed(email string) (allowed, configured bool) {
 	if a.AllowedEmailsEnv == "" {
 		return false, false

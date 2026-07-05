@@ -170,18 +170,21 @@ func (h *Handlers) issueSession(c *gin.Context, app *productregistry.App, claims
 	}
 	// Admin allowlist enforcement (security). For internal/admin logins the
 	// verified email must be in the app's HOMECHEF_ADMIN_ALLOWED_EMAILS
-	// allowlist. Backward-compatible: when the allowlist is unconfigured we log
-	// and allow so prod doesn't break if the env isn't set; when it IS set we
-	// enforce strictly. Reject BEFORE the user upsert so a blocked email never
-	// gets an admin row/session.
+	// allowlist. FAIL-CLOSED: an unconfigured/empty allowlist DENIES admin login
+	// (the k8s secret is mounted optional and the mesh does not strip X-User-*
+	// headers, so a missing allowlist must never hand admin to any verified
+	// email). Reject BEFORE the user upsert so a blocked email never gets an
+	// admin row/session.
 	if pool == "internal" || role == "admin" {
 		email := getStr(claims, "email")
-		if allowed, configured := app.IsEmailAllowed(email); configured && !allowed {
-			log.Printf("oidc: rejected admin login for %q — not in %s allowlist", email, app.AllowedEmailsEnv)
+		if allowed, configured := app.IsEmailAllowed(email); !configured || !allowed {
+			if !configured {
+				log.Printf("oidc: admin allowlist %s unconfigured — denying admin login for %q (set the env to enable admin access)", app.AllowedEmailsEnv, email)
+			} else {
+				log.Printf("oidc: rejected admin login for %q — not in %s allowlist", email, app.AllowedEmailsEnv)
+			}
 			c.JSON(http.StatusForbidden, gin.H{"error": "email_not_allowed"})
 			return
-		} else if !configured {
-			log.Printf("oidc: admin allowlist %s unconfigured — allowing admin login for %q (set the env to enforce)", app.AllowedEmailsEnv, email)
 		}
 	}
 	provider := ""
