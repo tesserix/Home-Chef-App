@@ -30,11 +30,13 @@ func (f *fakeVerifier) Verify(ctx context.Context, raw, tenant string) (*gip.Ver
 }
 
 type fakeAPI struct {
-	resp *apiclient.UpsertUserResponse
-	err  error
+	resp     *apiclient.UpsertUserResponse
+	err      error
+	captured bool
 }
 
 func (f *fakeAPI) UpsertUser(ctx context.Context, req apiclient.UpsertUserRequest) (*apiclient.UpsertUserResponse, error) {
+	f.captured = true
 	return f.resp, f.err
 }
 
@@ -102,6 +104,9 @@ func TestLogin_UnknownHost_400(t *testing.T) {
 }
 
 func TestExchange_Happy(t *testing.T) {
+	// Internal-tenant admin login: the allowlist must include the email now that
+	// the gate fails closed on an unconfigured allowlist.
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "x@y.com")
 	ver := &fakeVerifier{
 		tok: &gip.VerifiedToken{
 			UID: "g1", Email: "x@y.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
@@ -149,6 +154,32 @@ func TestExchange_AdminEmailNotInAllowlist_403(t *testing.T) {
 
 	require.Equal(t, http.StatusForbidden, w.Code)
 	assert.Contains(t, w.Body.String(), "email_not_allowed")
+}
+
+func TestExchange_AdminAllowlistUnset_Denied(t *testing.T) {
+	// Fail-closed: an unconfigured allowlist must DENY admin login. The k8s
+	// secret is mounted optional and the mesh does not strip X-User-* headers, so
+	// a missing allowlist would otherwise hand admin to any verified email.
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
+	ver := &fakeVerifier{
+		tok: &gip.VerifiedToken{
+			UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password",
+			Claims: map[string]any{"sub": "g1", "email": "admin@fe3dr.com"},
+		},
+	}
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
+	h := newHandlers(t, ver, api)
+	r := gin.New()
+	h.Register(r)
+
+	req := httptest.NewRequest("POST", "http://admin.fe3dr.com/auth/exchange", strings.NewReader(`{"id_token":"valid"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "email_not_allowed")
+	assert.False(t, api.captured, "a denied admin must never be upserted")
 }
 
 func TestExchange_AdminEmailInAllowlist_OK(t *testing.T) {

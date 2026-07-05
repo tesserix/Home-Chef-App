@@ -187,12 +187,16 @@ func TestAutoLogin_AdminEmailNotInAllowlist_403(t *testing.T) {
 	require.False(t, api.captured)
 }
 
-func TestAutoLogin_AdminAllowlistUnset_AllowsWithWarning(t *testing.T) {
-	// Fail-open: an unconfigured allowlist must not lock admins out.
+func TestAutoLogin_AdminAllowlistUnset_Denied(t *testing.T) {
+	// Fail-closed: an unconfigured allowlist must DENY admin login, not allow it.
+	// With the k8s secret mounted optional and the Istio mesh not stripping
+	// X-User-* headers, a missing allowlist would otherwise grant admin to any
+	// verified email.
 	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
+	api := &fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}}
 	deps := newDeps(t,
 		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "admin@fe3dr.com", TenantID: "HomeChef-Internal-gyofe", Provider: "password", Claims: map[string]any{}}},
-		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
+		api,
 		&fakeSessions{encoded: "sess"},
 	)
 	r := gin.New()
@@ -203,8 +207,29 @@ func TestAutoLogin_AdminAllowlistUnset_AllowsWithWarning(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
+	require.Equal(t, 403, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "email_not_allowed")
+	require.False(t, api.captured, "a denied admin must never be upserted")
+}
+
+// A non-admin (customer/business/delivery) pool must be unaffected by the admin
+// allowlist — the fail-closed rule applies only to internal/admin logins.
+func TestAutoLogin_NonAdminUnaffectedByAllowlist(t *testing.T) {
+	t.Setenv("HOMECHEF_ADMIN_ALLOWED_EMAILS", "")
+	deps := newDeps(t,
+		&fakeGIP{tok: &gip.VerifiedToken{UID: "g1", Email: "cust@fe3dr.com", TenantID: "HomeChef-Customer-rqg8a", Provider: "password", Claims: map[string]any{}}},
+		&fakeAPI{resp: &apiclient.UpsertUserResponse{UserID: "u1"}},
+		&fakeSessions{encoded: "sess"},
+	)
+	r := gin.New()
+	NewHandler(deps).Register(r)
+	body := `{"id_token":"t","expected_tenant_id":"HomeChef-Customer-rqg8a"}`
+	req := httptest.NewRequest("POST", "/auth/auto-login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
 	require.Equal(t, 200, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), `"role":"admin"`)
 }
 
 func TestAutoLogin_InvalidBody_400(t *testing.T) {

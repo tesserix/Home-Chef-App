@@ -75,18 +75,23 @@ func (d *Deps) AutoLogin(ctx context.Context, req Request) (*Response, error) {
 	}
 	// Admin allowlist enforcement (security). Mirror the OIDC web path: for
 	// internal/admin logins the verified email must be in the app's allowlist.
-	// Backward-compatible: fail OPEN + log when the allowlist is unconfigured
-	// (or the tenant has no registered app), fail CLOSED when it IS configured.
+	// FAIL-CLOSED: deny when the allowlist is unconfigured, when the email isn't
+	// on it, or when the tenant has no registered app (no allowlist to check).
+	// A missing allowlist must never grant admin — the mesh does not strip
+	// X-User-* headers, so this gate is the sole defense.
 	if pool == "internal" || role == "admin" {
-		if app := d.Registry.ResolveByTenant(req.ExpectedTenantID); app != nil {
-			if allowed, configured := app.IsEmailAllowed(tok.Email); configured && !allowed {
+		app := d.Registry.ResolveByTenant(req.ExpectedTenantID)
+		if app == nil {
+			log.Printf("autologin: no app registered for tenant %q — denying admin login for %q", req.ExpectedTenantID, tok.Email)
+			return nil, ErrEmailNotAllowed
+		}
+		if allowed, configured := app.IsEmailAllowed(tok.Email); !configured || !allowed {
+			if !configured {
+				log.Printf("autologin: admin allowlist %s unconfigured — denying admin login for %q (set the env to enable admin access)", app.AllowedEmailsEnv, tok.Email)
+			} else {
 				log.Printf("autologin: rejected admin login for %q — not in %s allowlist", tok.Email, app.AllowedEmailsEnv)
-				return nil, ErrEmailNotAllowed
-			} else if !configured {
-				log.Printf("autologin: admin allowlist %s unconfigured — allowing admin login for %q (set the env to enforce)", app.AllowedEmailsEnv, tok.Email)
 			}
-		} else {
-			log.Printf("autologin: no app registered for tenant %q — allowing admin login for %q without allowlist check", req.ExpectedTenantID, tok.Email)
+			return nil, ErrEmailNotAllowed
 		}
 	}
 	upsert, err := d.API.UpsertUser(ctx, apiclient.UpsertUserRequest{
