@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -190,25 +189,14 @@ func verify(r *http.Request, body []byte, key []byte, window time.Duration) (*BF
 		Pool:   r.Header.Get(HdrAuthPool),
 	}
 	// Signature check FIRST (constant time, no timing oracle on ts).
-	// The new format binds the identity headers into the MAC so a signed
-	// request can't be replayed with a swapped X-User-Role / X-Auth-Pool.
+	// The signature binds the identity headers into the MAC so a signed request
+	// can't be replayed with a swapped X-User-Role / X-Auth-Pool. There is no
+	// legacy (identity-unbound) fallback: the auth-bff signs exclusively in this
+	// format, so an OLD-format signature could only come from an attacker who
+	// wants to assert unbound identity headers — reject it.
 	want := compute(r.Method, r.URL.Path, body, ts, key, id)
 	if !hmac.Equal([]byte(sig), []byte(want)) {
-		// BACKWARD-COMPAT FALLBACK: accept the legacy signature that covered
-		// only method/path/body/ts (no identity binding) so a rolling auth-bff
-		// rollout doesn't 401 in-flight requests signed by the OLD BFF.
-		//
-		// SECURITY / MUST REMOVE: while this fallback exists the identity
-		// binding is bypassable — anyone able to produce a valid OLD-format
-		// signature can still swap the X-User-* identity headers. Delete the
-		// computeLegacy path (and this fallback) in a follow-up once auth-bff
-		// is fully rolled out to the identity-bound format; otherwise Fix 1 is
-		// only advisory.
-		legacy := computeLegacy(r.Method, r.URL.Path, body, ts, key)
-		if !hmac.Equal([]byte(sig), []byte(legacy)) {
-			return nil, ErrBFFSignatureMismatch
-		}
-		log.Printf("bff_auth: accepted legacy signature without identity binding — remove OLD-format path after auth-bff rollout")
+		return nil, ErrBFFSignatureMismatch
 	}
 	// Then check freshness window.
 	d := time.Since(time.Unix(tsInt, 0))
@@ -231,17 +219,6 @@ func compute(method, path string, body []byte, ts string, key []byte, id BFFIden
 	fmt.Fprintf(m, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s",
 		method, path, hex.EncodeToString(bodyHash[:]), ts,
 		id.UserID, id.Email, id.Role, id.Pool)
-	return hex.EncodeToString(m.Sum(nil))
-}
-
-// computeLegacy is the pre-identity-binding canonical message
-// (method/path/body/ts only). DEPRECATED: kept solely for the rolling-deploy
-// fallback in verify(). Remove it together with the fallback once auth-bff is
-// fully rolled out to the identity-bound format.
-func computeLegacy(method, path string, body []byte, ts string, key []byte) string {
-	bodyHash := sha256.Sum256(body)
-	m := hmac.New(sha256.New, key)
-	fmt.Fprintf(m, "%s\n%s\n%s\n%s", method, path, hex.EncodeToString(bodyHash[:]), ts)
 	return hex.EncodeToString(m.Sum(nil))
 }
 

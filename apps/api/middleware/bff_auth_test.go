@@ -119,16 +119,18 @@ func TestBFFAuth_TamperedBody_401(t *testing.T) {
 	require.Equal(t, 401, w.Code)
 }
 
-// TestBFFAuth_LegacySignature_Accepted covers the rolling-deploy fallback: a
-// request signed with the OLD format (no identity binding) must still verify so
-// an in-flight old-BFF request isn't 401'd mid-rollout.
-func TestBFFAuth_LegacySignature_Accepted(t *testing.T) {
+// TestBFFAuth_LegacySignature_Rejected proves the legacy (pre-identity-binding)
+// signature path is gone: the auth-bff now signs exclusively in the
+// identity-bound format, so an OLD-format signature — which lets a caller swap
+// the X-User-* headers without breaking the MAC — must be rejected. Keeping the
+// fallback would make the identity binding (and every role/pool check on top of
+// it) only advisory.
+func TestBFFAuth_LegacySignature_Rejected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	key := []byte("test-key-32-bytes-padding-padding!")
 	r := gin.New()
 	r.POST("/x", BFFAuth(BFFAuthConfig{HMACKey: key, Window: time.Minute}), func(c *gin.Context) {
-		role, _ := c.Get("user_role")
-		c.JSON(200, gin.H{"role": role})
+		c.Status(200)
 	})
 
 	body := []byte(`{"hello":"world"}`)
@@ -141,8 +143,30 @@ func TestBFFAuth_LegacySignature_Accepted(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	require.Equal(t, 200, w.Code, "legacy signatures must still be accepted during rollout")
-	assert.Contains(t, w.Body.String(), `"role":"customer"`)
+	require.Equal(t, 401, w.Code, "legacy (identity-unbound) signatures must be rejected")
+}
+
+// TestBFFAuth_LegacySignature_CannotForgeAdmin is the attack the removal closes:
+// an attacker who can mint a valid OLD-format signature sets X-User-Role: admin.
+// With the fallback gone this must 401 — the MAC no longer covers the role header
+// under any accepted format.
+func TestBFFAuth_LegacySignature_CannotForgeAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	key := []byte("test-key-32-bytes-padding-padding!")
+	r := gin.New()
+	r.POST("/x", BFFAuth(BFFAuthConfig{HMACKey: key, Window: time.Minute}), func(c *gin.Context) { c.Status(200) })
+
+	body := []byte(`{}`)
+	req := httptest.NewRequest("POST", "/x", bytes.NewReader(body))
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	req.Header.Set(HdrUserID, "attacker")
+	req.Header.Set(HdrUserRole, "admin")
+	req.Header.Set(HdrAuthTs, ts)
+	req.Header.Set(HdrSignature, signLegacy(req.Method, req.URL.Path, body, ts, key))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, 401, w.Code, "a legacy signature must not be able to assert an unbound admin role")
 }
 
 // TestBFFAuth_TamperedRoleHeader_401 proves the new identity binding: a request
