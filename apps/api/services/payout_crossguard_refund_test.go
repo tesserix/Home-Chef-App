@@ -39,6 +39,8 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
+			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
+			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			refund_amount REAL DEFAULT 0, refund_reason TEXT, refund_initiated_by TEXT,
@@ -49,7 +51,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			refund_txn_id TEXT, date DATETIME, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT DEFAULT '',
-			customer_id TEXT, chef_id TEXT, status TEXT)`,
+			customer_id TEXT, chef_id TEXT, status TEXT, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0)`,
 		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
