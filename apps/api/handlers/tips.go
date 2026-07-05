@@ -160,6 +160,7 @@ func (h *TipHandler) CreateOrderTip(c *gin.Context) {
 type verifyTipRequest struct {
 	RazorpayPaymentID string `json:"razorpayPaymentId"`
 	RazorpayOrderID   string `json:"razorpayOrderId"`
+	RazorpaySignature string `json:"razorpaySignature"`
 }
 
 // VerifyTip — POST /payments/tip/:tipId/verify. Confirms the tip charge captured
@@ -209,6 +210,21 @@ func (h *TipHandler) VerifyTip(c *gin.Context) {
 	}
 	if payment.OrderID != tip.RazorpayOrderID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
+		return
+	}
+	// SECURITY (#395·4): bind the captured amount + Checkout signature to THIS tip,
+	// mirroring the main-order VerifyPayment. Without these a mismatched/under-amount
+	// captured payment on the tip's razorpay order (payment.Amount comes from
+	// Razorpay, unforgeable) could settle the tip in full, and a captured payment
+	// from another order could be reused. Signature enforced when present (the app
+	// always sends it); the amount check is the hard gate and never trusts the client.
+	if payment.Amount < services.ToPaise(tip.Amount) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the tip amount"})
+		return
+	}
+	if req.RazorpaySignature != "" &&
+		!services.VerifyPaymentSignature(tip.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 		return
 	}
 
