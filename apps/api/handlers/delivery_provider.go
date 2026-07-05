@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -655,8 +656,38 @@ func (h *DeliveryProviderHandler) HandleWebhook(c *gin.Context) {
 		return
 	}
 
+	// Event-level replay dedup (#462). HMAC only proves authenticity, not
+	// freshness — a captured+replayed "delivered" callback would re-stamp
+	// timestamps, re-enqueue outbox events, and re-drive the escrow park. Claim
+	// (provider, event-id) AFTER verifying the signature (never let a forged
+	// request write a ledger row). No id header in practice → body hash, so an
+	// exact replay dedups. Genuine status changes carry a distinct body.
+	consumer := "webhook:delivery:" + provider.Code
+	eventID := services.WebhookEventID(c.GetHeader("X-Webhook-Event-Id"), body)
+	firstTime, err := services.ClaimWebhookEvent(database.DB, consumer, eventID, "delivery:"+provider.Code)
+	if err != nil {
+		log.Printf("delivery webhook: claim failed for provider=%s: %v", provider.Code, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
+		return
+	}
+	if !firstTime {
+		log.Printf("delivery webhook: duplicate event provider=%s id=%s — skipping", provider.Code, eventID)
+		c.JSON(http.StatusOK, gin.H{"status": "duplicate"})
+		return
+	}
+
 	providerService := services.NewProviderService()
 	if err := providerService.HandleProviderWebhook(provider.Code, body); err != nil {
+		if errors.Is(err, services.ErrWebhookPermanent) {
+			// Un-processable (bad payload / unmapped status): ACK so the provider
+			// stops retrying, and KEEP the claim so a replay is deduped too.
+			log.Printf("delivery webhook: permanent error provider=%s id=%s: %v", provider.Code, eventID, err)
+			c.JSON(http.StatusOK, gin.H{"status": "ignored"})
+			return
+		}
+		// Transient (booking-vs-callback race, DB blip): release the claim so the
+		// provider retry re-processes rather than being silently deduped.
+		services.ReleaseWebhookEvent(database.DB, consumer, eventID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process webhook"})
 		return
 	}
