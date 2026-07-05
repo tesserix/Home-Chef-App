@@ -35,6 +35,8 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { AddressSwitcher } from '../../components/address/AddressSwitcher';
 import { AddressSwitcherSheet } from '../../components/address/AddressSwitcherSheet';
 import { useDockClearance } from '../../components/navigation/Dock';
+import { CART_FAB_CLEARANCE } from '../../components/navigation/DockCartPill';
+import { useCartStore } from '../../store/cart-store';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
@@ -140,7 +142,12 @@ export default function HomeScreen() {
 
   // Floating dock: scenes span the full screen, so scroll content + the
   // floating active-order card anchor above the dock instead of a tab bar.
+  // With items in the cart, the CartFab hovers above the dock's right end —
+  // lift the order card past it so the two floating layers never overlap.
   const dockClearance = useDockClearance();
+  const cartHasItems = useCartStore((s) => s.items.length > 0);
+  const orderStackBottom =
+    dockClearance - 4 + (cartHasItems ? CART_FAB_CLEARANCE : 0);
 
   // ── Derived values ───────────────────────────────────────────────────────
   const activeFilterCount = countActiveFilters({ selectedDiet, maxPrice, sort, isOpenOnly });
@@ -403,7 +410,7 @@ export default function HomeScreen() {
             positioning keeps it out of the scroll flow. */}
         {visibleActiveOrders.length > 0 && (
           <View
-            style={[styles.activeOrderAnchor, { bottom: dockClearance - 4 }]}
+            style={[styles.activeOrderAnchor, { bottom: orderStackBottom }]}
             pointerEvents="box-none"
           >
             <ActiveOrderStack orders={visibleActiveOrders} />

@@ -42,6 +42,7 @@ import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { useDockClearance } from '../../components/navigation/Dock';
+import { ScreenTitle } from '../../components/shared/ScreenTitle';
 
 // Threat model T-02-05-01: Zod validates profile fields before PATCH
 const profileSchema = z.object({
@@ -155,6 +156,18 @@ export default function ProfileScreen() {
     }
   }, [profile, reset]);
 
+  // Dirty-tracking for the preference sections so their Save buttons only
+  // appear when something actually changed (mirrors the Personal Info form).
+  const sameSet = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((v) => b.includes(v));
+  const cuisineDirty = profile
+    ? !sameSet(cuisinePrefs, profile.cuisinePreferences ?? [])
+    : false;
+  const dietaryDirty = profile
+    ? !sameSet(dietPrefs, profile.dietaryPreferences ?? []) ||
+      !sameSet(allergyPrefs, profile.foodAllergies ?? [])
+    : false;
+
   function toggleCuisine(cuisine: string) {
     setCuisinePrefs((prev) =>
       prev.includes(cuisine)
@@ -243,36 +256,34 @@ export default function ProfileScreen() {
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={{ paddingBottom: dockClearance }}>
 
-        {/* ── Geist-Bold header ── */}
-        <View className="px-4 pt-3 pb-2">
-          <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-            Profile
-          </Text>
-        </View>
+        <ScreenTitle title="Profile" />
 
-        {/* ── Identity block ── */}
-        <View className="items-center pt-4 pb-6 bg-canvas">
-          {/* Avatar circle — coral bg, white initials */}
+        {/* ── Identity block — calm charcoal monogram (accent discipline: the
+            avatar is identity, not a call to action; coral stays reserved for
+            actions/selection). Compact left-aligned row, not a centered hero. ── */}
+        <View className="flex-row items-center gap-4 px-4 pt-2 pb-5 bg-canvas">
+          {/* Inline bg color — `bg-charcoal` isn't in the compiled class set */}
           <View
-            className="w-[72px] h-[72px] rounded-full bg-coral items-center justify-center mb-3"
+            className="w-16 h-16 rounded-full items-center justify-center"
+            style={{ backgroundColor: customerColors.charcoal.DEFAULT }}
           >
             <Text
-              className="text-[28px] font-bold text-canvas font-display"
-              style={{ lineHeight: 34 }}
+              className="text-[22px] font-bold text-canvas font-display"
+              style={{ lineHeight: 28 }}
             >
               {initials}
             </Text>
           </View>
-          {/* Name */}
-          {(profile?.firstName || profile?.lastName) ? (
-            <Text className="text-lg font-semibold text-charcoal font-display mb-1">
-              {[profile?.firstName, profile?.lastName].filter(Boolean).join(' ')}
+          <View className="flex-1">
+            {(profile?.firstName || profile?.lastName) ? (
+              <Text className="text-lg font-semibold text-charcoal font-display">
+                {[profile?.firstName, profile?.lastName].filter(Boolean).join(' ')}
+              </Text>
+            ) : null}
+            <Text className="text-sm text-charcoal-soft mt-0.5">
+              {profile?.email ?? ''}
             </Text>
-          ) : null}
-          {/* Email */}
-          <Text className="text-sm text-charcoal-soft">
-            {profile?.email ?? ''}
-          </Text>
+          </View>
         </View>
 
         {/* ── Hairline under identity block ── */}
@@ -415,10 +426,8 @@ export default function ProfileScreen() {
                   accessibilityState={{ checked: isSelected }}
                 >
                   <View
-                    className={`px-4 py-2 rounded-full border ${
-                      isSelected
-                        ? 'bg-coral-tint border-coral'
-                        : 'bg-canvas border-hairline'
+                    className={`px-4 py-2 rounded-full ${
+                      isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
                     }`}
                   >
                     <Text
@@ -434,7 +443,9 @@ export default function ProfileScreen() {
             })}
           </View>
 
-          {/* Save Preferences CTA */}
+          {/* Save Preferences CTA — only when selections changed (mirrors the
+              Personal Info dirty-gated pattern; no permanent giant coral block) */}
+          {cuisineDirty && (
           <Pressable
             onPress={saveCuisinePrefs}
             disabled={updateProfile.isPending}
@@ -451,6 +462,7 @@ export default function ProfileScreen() {
               </View>
             )}
           </Pressable>
+          )}
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════════
@@ -476,8 +488,8 @@ export default function ProfileScreen() {
                   accessibilityState={{ checked: isSelected }}
                 >
                   <View
-                    className={`px-4 py-2 rounded-full border ${
-                      isSelected ? 'bg-coral-tint border-coral' : 'bg-canvas border-hairline'
+                    className={`px-4 py-2 rounded-full ${
+                      isSelected ? 'bg-coral-tint' : 'bg-surface-soft'
                     }`}
                   >
                     <Text
@@ -506,8 +518,8 @@ export default function ProfileScreen() {
                   accessibilityState={{ checked: isSelected }}
                 >
                   <View
-                    className={`px-4 py-2 rounded-full border ${
-                      isSelected ? 'bg-destructive-tint border-destructive' : 'bg-canvas border-hairline'
+                    className={`px-4 py-2 rounded-full ${
+                      isSelected ? 'bg-destructive-tint' : 'bg-surface-soft'
                     }`}
                   >
                     <Text
@@ -523,6 +535,8 @@ export default function ProfileScreen() {
             })}
           </View>
 
+          {/* Dirty-gated like the other saves — appears only when changed */}
+          {dietaryDirty && (
           <Pressable
             onPress={saveDietaryProfile}
             disabled={updateProfile.isPending}
@@ -537,6 +551,7 @@ export default function ProfileScreen() {
               </View>
             )}
           </Pressable>
+          )}
         </View>
 
         {/* ═══════════════════════════════════════════════════════════════════

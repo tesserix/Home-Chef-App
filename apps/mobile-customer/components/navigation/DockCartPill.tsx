@@ -1,8 +1,12 @@
-// DockCartPill — the dock's dynamic fifth slot. Renders nothing while the
-// cart is empty; when items exist it appears at the dock's right end after a
-// thin divider as a solid-coral pill (bag icon + running total, item count as
-// a mini badge on the bag) and routes to checkout. Replaces the old
-// full-width CartBar that docked flush on the legacy tab bar.
+// CartFab — floating cart button hovering above the dock's right end (owner
+// call: cart ON TOP of the tabs, not inside them — keeps the dock pure
+// navigation with one accent, and the cart reads as an action, not a tab).
+// Renders nothing while the cart is empty; with items it shows a solid-coral
+// pill (bag + count badge + running total) and routes to checkout.
+//
+// Rendered by Dock inside its absolutely-positioned root, so it exists on
+// every tab. Home lifts its active-order card when the cart is non-empty so
+// the two floating layers never overlap (see app/(tabs)/index.tsx).
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -10,10 +14,16 @@ import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanima
 import { ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useCartStore } from '../../store/cart-store';
+import { DOCK_HEIGHT } from './dock-metrics';
 
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
-export function DockCartPill() {
+/** Vertical gap between the dock top edge and the cart FAB. */
+const FAB_GAP = 10;
+/** FAB pill height — used by Home to lift the active-order card clear. */
+export const CART_FAB_CLEARANCE = 44 + FAB_GAP + 6;
+
+export function CartFab() {
   const items = useCartStore((s) => s.items);
   const total = useCartStore((s) => s.total());
   const reduceMotion = useReducedMotion();
@@ -29,9 +39,9 @@ export function DockCartPill() {
       entering={
         reduceMotion ? undefined : FadeIn.duration(250).easing(ENTRANCE_EASING)
       }
-      style={styles.wrapper}
+      style={styles.anchor}
+      pointerEvents="box-none"
     >
-      <View style={styles.divider} />
       <Pressable
         onPress={() => router.push('/checkout')}
         accessibilityRole="button"
@@ -54,25 +64,26 @@ export function DockCartPill() {
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 2,
-  },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    height: 28,
-    backgroundColor: customerColors.hairline,
+  // Anchored above the dock bar's right end (Dock's root is the positioning
+  // context: left/right 16 at bottom inset + gap).
+  anchor: {
+    position: 'absolute',
+    right: 0,
+    bottom: DOCK_HEIGHT + FAB_GAP,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
     backgroundColor: customerColors.coral.DEFAULT,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 10,
   },
   badge: {
     position: 'absolute',

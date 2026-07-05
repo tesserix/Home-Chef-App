@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useDockClearance } from '../../components/navigation/Dock';
+import { ScreenTitle } from '../../components/shared/ScreenTitle';
 import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
 import type { Order } from '../../types/customer';
@@ -292,10 +293,7 @@ export default function OrdersScreen() {
   if (isLoading && page === 1) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Orders</Text>
-        </View>
+        <ScreenTitle title="Orders" />
         {/* Filter bar skeleton */}
         {renderFilterBar()}
         {/* Skeleton cards */}
@@ -311,10 +309,7 @@ export default function OrdersScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      {/* ── Geist-Bold header — matches favorites "Favorites" header ── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Orders</Text>
-      </View>
+      <ScreenTitle title="Orders" />
 
       {/* ── Airbnb-style filter chip row ── */}
       {renderFilterBar()}
@@ -360,18 +355,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Geist-Bold "Orders" header — matches favorites pattern (px-4, pt-3, pb-2)
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  headerTitle: {
-    fontFamily: 'Geist-Bold',
-    fontSize: 27,
-    color: customerColors.charcoal.DEFAULT,
-    letterSpacing: -0.3,
-  },
-
   // ── Airbnb category-bar style filter chips ──
   // No fill, no pill border. Selected = charcoal text + 2px charcoal underline.
   filterRow: {

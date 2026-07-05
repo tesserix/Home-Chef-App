@@ -16,24 +16,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Heart, Home, ShoppingBag, User, type LucideIcon } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { DockCartPill } from './DockCartPill';
+import { CartFab } from './DockCartPill';
+import { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance } from './dock-metrics';
 
-/** Dock bar height. */
-export const DOCK_HEIGHT = 64;
-/** Gap between the dock and the bottom safe-area inset. */
-export const DOCK_BOTTOM_GAP = 12;
+// Geometry lives in ./dock-metrics (shared with CartFab, no import cycle).
+// Screens keep importing useDockClearance from here.
+export { DOCK_BOTTOM_GAP, DOCK_HEIGHT, useDockClearance };
 
 // Entrances use the app-standard ease-out-quart — no bounce, no overshoot.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
-
-/**
- * Bottom padding a screen needs so scrollable content clears the floating
- * dock (dock height + gap + safe-area + a breathing row of space).
- */
-export function useDockClearance(): number {
-  const insets = useSafeAreaInsets();
-  return insets.bottom + DOCK_BOTTOM_GAP + DOCK_HEIGHT + 12;
-}
 
 const TAB_ICONS: Record<string, LucideIcon> = {
   index: Home,
@@ -119,9 +110,11 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
           );
         })}
 
-        {/* Dynamic fifth slot — only when the cart has items. */}
-        <DockCartPill />
       </View>
+
+      {/* Floating cart — hovers above the dock's right end when the cart has
+          items (an action layered over navigation, not a fifth tab). */}
+      <CartFab />
     </View>
   );
 }
