@@ -60,6 +60,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		delivery_address_state TEXT DEFAULT '',
 		currency TEXT DEFAULT 'INR', razorpay_order_id TEXT DEFAULT '', razorpay_payment_id TEXT DEFAULT '',
 		stripe_payment_intent_id TEXT DEFAULT '', refund_id TEXT DEFAULT '', refund_amount REAL DEFAULT 0,
+		wallet_applied REAL DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
 	// PlatformSettings backs services.GetCommissionRate — present so the
