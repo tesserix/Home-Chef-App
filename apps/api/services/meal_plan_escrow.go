@@ -66,6 +66,33 @@ func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	return Round2(day.Price + tax + delivery)
 }
 
+// perDayNetPayout is the chef's NET payout for a single day — the amount the held
+// Route transfer must carry (#518). It mirrors ComputeOrderEarnings per-day so the
+// meal-plan escrow pays the chef on the SAME basis as regular orders:
+//
+//	dayFoodGST = plan.Tax × (day.Price / plan.Subtotal)   (proportional food GST)
+//	gross      = day.Price + dayFoodGST                    (chef income; delivery is the driver's, excluded)
+//	commission = rate × day.Price                          (platform commission on the food subtotal only)
+//	tds        = RateTDS × gross                            (§194-O, on gross)
+//	net        = gross − commission − tds
+//
+// A plan with no snapshotted subtotal falls back to food-only gross (no GST). This
+// closes the leak where HoldChefPayouts paid the GROSS food price with no commission
+// or TDS, unlike the order path (#390).
+func perDayNetPayout(plan *models.MealPlan, day *models.MealPlanDay, rate float64) float64 {
+	if rate <= 0 || rate >= 1 {
+		rate = DefaultCommissionRate
+	}
+	dayFoodGST := 0.0
+	if plan.Subtotal > 0 {
+		dayFoodGST = plan.Tax * (day.Price / plan.Subtotal)
+	}
+	gross := day.Price + dayFoodGST
+	commission := rate * day.Price
+	tds := RateTDS * gross
+	return Round2(gross - commission - tds)
+}
+
 // CreateMealPlanAdvanceOrder creates the Razorpay order for the full plan total
 // at booking time and stamps RazorpayOrderID. Returns the order id for the
 // client checkout. No-op (empty id) when escrow is off.
@@ -150,6 +177,11 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 	if plan.EscrowPaymentID == "" {
 		return fmt.Errorf("cannot hold payouts: advance payment not captured for plan %s", plan.ID)
 	}
+	// #518: the held transfer must be the chef's NET (food + per-day GST − commission
+	// − TDS), the SAME basis as the order path, NOT the gross food price. Resolve the
+	// commission rate once for the whole plan so every day is held at one consistent
+	// rate.
+	rate := GetCommissionRate(tx)
 	for i := range plan.Days {
 		d := &plan.Days[i]
 		if d.PayoutTransferID != "" {
@@ -160,7 +192,7 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 		}
 		tr, err := rz.CreateTransfer(&DirectTransferRequest{
 			Account:  chefAccount,
-			Amount:   ToPaise(d.Price),
+			Amount:   ToPaise(perDayNetPayout(plan, d, rate)),
 			Currency: plan.Currency,
 			OnHold:   true,
 			Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "day_id": d.ID.String()},
