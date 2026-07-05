@@ -815,6 +815,15 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 		chef.PostalCode = *req.PostalCode
 	}
 
+	// A chef offering neither pickup nor self-delivery is unorderable — it can
+	// never be fulfilled, so it must not be active/discoverable. Guard before
+	// the save so this invariant can't regress the discovery gate (customers
+	// sending coords only see chefs that offer pickup or can self-deliver).
+	if chef.IsActive && !chef.OffersPickup && !chef.OffersSelfDelivery {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A chef must offer pickup or delivery to stay active"})
+		return
+	}
+
 	if err := database.DB.Save(&chef).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return

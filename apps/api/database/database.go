@@ -366,6 +366,11 @@ func Migrate() error {
 		// One live meal subscription per (customer, chef) (#280) — backstops the
 		// handler check against concurrent submits so #282 can't double-generate.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_sub_one_live ON meal_subscriptions (customer_id, chef_id) WHERE status <> 'cancelled' AND deleted_at IS NULL`,
+		// At most ONE default address per user — the DB-level backstop behind the
+		// address handlers' clear-then-set tx, so a customer's active discovery
+		// location is never ambiguous. Mirrors migration
+		// 20260705000002 (golang-migrate files don't run here; this is the live copy).
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_addresses_one_default_per_user ON addresses (user_id) WHERE is_default`,
 	}
 	for _, stmt := range postMigrate {
 		if err := DB.Exec(stmt).Error; err != nil {

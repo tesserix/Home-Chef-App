@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
@@ -69,12 +71,19 @@ func (h *AddressHandler) CreateAddress(c *gin.Context) {
 		IsDefault:  req.IsDefault,
 	}
 
-	// If this is the default, unset other defaults
-	if req.IsDefault {
-		database.DB.Model(&models.Address{}).Where("user_id = ?", userID).Update("is_default", false)
-	}
-
-	if err := database.DB.Create(&address).Error; err != nil {
+	// Clearing prior defaults and inserting the new address must happen
+	// atomically — a partial unique index (idx_addresses_one_default_per_user)
+	// guarantees at most one default per user, and an un-transactioned
+	// clear-then-create can be interleaved with a concurrent request to trip it.
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if req.IsDefault {
+			if err := tx.Model(&models.Address{}).Where("user_id = ?", userID).Update("is_default", false).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Create(&address).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create address"})
 		return
 	}
@@ -102,9 +111,10 @@ func (h *AddressHandler) UpdateAddress(c *gin.Context) {
 		return
 	}
 
-	if req.IsDefault && !address.IsDefault {
-		database.DB.Model(&models.Address{}).Where("user_id = ? AND id != ?", userID, addressID).Update("is_default", false)
-	}
+	// Capture the pre-mutation default state before it's overwritten below —
+	// clearing other defaults is only needed when this address is newly being
+	// made the default, not on every save.
+	needsClear := req.IsDefault && !address.IsDefault
 
 	address.Label = req.Label
 	address.Line1 = req.Line1
@@ -119,7 +129,18 @@ func (h *AddressHandler) UpdateAddress(c *gin.Context) {
 	address.Longitude = req.Longitude
 	address.IsDefault = req.IsDefault
 
-	if err := database.DB.Save(&address).Error; err != nil {
+	// Clearing prior defaults and saving this address must happen atomically —
+	// see CreateAddress for why an un-transactioned clear-then-save can trip
+	// the partial unique index under concurrent requests.
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if needsClear {
+			if err := tx.Model(&models.Address{}).Where("user_id = ? AND id != ?", userID, addressID).Update("is_default", false).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Save(&address).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update address"})
 		return
 	}

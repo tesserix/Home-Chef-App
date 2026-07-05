@@ -656,6 +656,20 @@ func (h *AdminHandler) VerifyChef(c *gin.Context) {
 		return
 	}
 
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	// A chef offering neither pickup nor self-delivery is unorderable — refuse
+	// to activate it so verification never produces an active/discoverable
+	// chef with no fulfillment method (mirrors the guard in UpdateChefProfile).
+	if !chef.OffersPickup && !chef.OffersSelfDelivery {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef must offer pickup or delivery before it can be activated"})
+		return
+	}
+
 	now := time.Now()
 	result := database.DB.Model(&models.ChefProfile{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"is_verified": true,
@@ -668,8 +682,6 @@ func (h *AdminHandler) VerifyChef(c *gin.Context) {
 	}
 
 	// Update user role to chef
-	var chef models.ChefProfile
-	database.DB.First(&chef, "id = ?", id)
 	database.DB.Model(&models.User{}).Where("id = ?", chef.UserID).Update("role", "chef")
 
 	services.LogAudit(c, "chef.verify", "chef", id.String(), nil, map[string]any{"isVerified": true})
