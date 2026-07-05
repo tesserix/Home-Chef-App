@@ -29,6 +29,7 @@ jest.mock('../lib/api', () => ({
 
 import { api } from '../lib/api';
 import {
+  mealPlanAdvanceBreakdown,
   useChefWeeklyMenu,
   useMyMealPlans,
   useMealPlan,
@@ -90,5 +91,35 @@ describe('useMealPlans endpoints are versioned (/v1)', () => {
 
     await finalize.mutationFn({ id: 'p1', approve: false });
     expect(mockApi.put).toHaveBeenCalledWith('/v1/meal-plans/p1/reject');
+  });
+});
+
+// #402: the advance shown to the customer must equal the server charge (food + GST +
+// per-day delivery), never the food-only selection sum.
+describe('mealPlanAdvanceBreakdown', () => {
+  it('splits the SERVER total into food / GST / delivery and derives delivery', () => {
+    const b = mealPlanAdvanceBreakdown({ subtotal: 2000, tax: 160, total: 2560 });
+    expect(b).toEqual({
+      food: 2000,
+      gst: 160,
+      delivery: 400, // 2560 − 2000 − 160
+      total: 2560,
+      amountPaise: 256000, // the full advance, not 200000 (food only)
+    });
+  });
+
+  it('escrow-off plan (total == subtotal) charges food only, no GST/delivery', () => {
+    const b = mealPlanAdvanceBreakdown({ subtotal: 1500, total: 1500 });
+    expect(b.gst).toBe(0);
+    expect(b.delivery).toBe(0);
+    expect(b.amountPaise).toBe(150000);
+  });
+
+  it('never yields negative delivery and rounds to paise', () => {
+    const b = mealPlanAdvanceBreakdown({ subtotal: 999.99, tax: 80, total: 1179.99 });
+    expect(b.delivery).toBe(100); // 1179.99 − 999.99 − 80
+    expect(b.amountPaise).toBe(117999);
+    const weird = mealPlanAdvanceBreakdown({ subtotal: 100, tax: 50, total: 120 });
+    expect(weird.delivery).toBe(0); // total below food+gst floors at 0, never negative
   });
 });
