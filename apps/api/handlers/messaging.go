@@ -63,15 +63,18 @@ func orderParticipants(c *gin.Context, orderID, requesterID uuid.UUID, asRole st
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
 		return "", "", false
 	}
+	// Ownership mismatch returns the same 404 as a missing order, so a
+	// non-participant can't use the 403-vs-404 distinction to probe which order
+	// ids exist. (#468 LOW: 403-vs-404 existence oracle.)
 	switch asRole {
 	case services.MsgRoleCustomer:
 		if order.CustomerID != requesterID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Not your order"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 			return "", "", false
 		}
 	case services.MsgRoleChef:
 		if chef.UserID != requesterID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Not your order"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 			return "", "", false
 		}
 	}

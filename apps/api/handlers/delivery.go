@@ -1333,6 +1333,12 @@ func (h *DeliveryHandler) GetPartnerDetail(c *gin.Context) {
 		Count(&activeCount)
 
 	resp := partner.ToDetailResponse()
+	// Fleet managers get a PII-masked view (email/phone/licence/vehicle/emergency
+	// redacted), consistent with the fleet list endpoint. Only a platform admin
+	// sees the full contact record. (#468 LOW: unmasked driver PII to fleet.)
+	if role, _ := middleware.GetUserRole(c); role != models.RoleAdmin {
+		resp = maskPartnerDetailPII(resp)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"partner":          resp,
 		"activeDeliveries": activeCount,
