@@ -130,16 +130,32 @@ jobs:
 
           tag_exists() { crane manifest "${REG}/$1:${NEW_TAG}" >/dev/null 2>&1; }
 
-          # Carry-forward source: the previous deploy commit tagged ALL six
-          # services with the same main-<prev sha7>, so it is a uniform source.
+          # Carry-forward source for an UNCHANGED service is resolved PER SERVICE
+          # from THIS commit's own history (find_carry_source), NOT the deploy
+          # branch tip. Deriving it from `deploy` silently ships a stale image
+          # whenever that branch lags behind main — e.g. several PRs merged in
+          # quick succession, where the concurrency group keeps only the newest
+          # *pending* advance-deploy run (GitHub cancels earlier pending ones even
+          # with cancel-in-progress:false), so `deploy` never caught up. If the
+          # HEAD commit is then frontend-only, an unchanged backend service gets
+          # carried forward from the stale deploy tip and prod runs old code.
+          # Walking HEAD's history instead always finds the newest actually-built
+          # image for the service.
           git fetch origin deploy --quiet 2>/dev/null || true
-          PREV_TAG=""
-          if git rev-parse --verify -q origin/deploy >/dev/null; then
-            PREV_TAG="main-$(git rev-parse --short=7 origin/deploy)"
-            echo "Carry-forward source: ${PREV_TAG} (previous deploy commit)"
-          else
-            echo "No deploy branch yet — bootstrapping carry-forward from tesserix-k8s pins"
-          fi
+
+          find_carry_source() {
+            # Newest commit on HEAD's history whose main-<sha7> image tag already
+            # exists in the registry for this service. Returns 1 (empty) if none
+            # found within the lookback window; caller falls back to bootstrap.
+            local svc="$1" sha tag
+            for sha in $(git rev-list --max-count=50 "${{ github.sha }}"); do
+              tag="main-$(printf '%s' "${sha}" | cut -c1-7)"
+              if crane manifest "${REG}/${svc}:${tag}" >/dev/null 2>&1; then
+                printf '%s' "${tag}"; return 0
+              fi
+            done
+            return 1
+          }
 
           bootstrap_tag() {
             # read image.tag value from a service's ArgoCD app yaml on tesserix-k8s main
@@ -166,7 +182,7 @@ jobs:
               done
               echo "${SVC}:${NEW_TAG} appeared ✓"
             else
-              SRC="${PREV_TAG}"
+              SRC="$(find_carry_source "${SVC}")" || SRC=""
               if [ -z "${SRC}" ]; then
                 SRC="$(bootstrap_tag "${APPFILE[$SVC]}")"
               fi
