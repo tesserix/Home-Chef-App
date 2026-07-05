@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarDays, ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
+  mealPlanAdvanceBreakdown,
   useChefDailyMenu,
   useChefWeeklyMenu,
   useCreateMealPlan,
@@ -214,17 +215,30 @@ export default function BookMealPlanScreen() {
           }
           // Escrow on: collect the FULL advance before the chef is notified.
           if (created.razorpayOrderId) {
-            router.push({
-              pathname: '/payment/checkout',
-              params: {
-                kind: 'mealplan',
-                mealPlanId: created.mealPlan.id,
-                razorpayOrderId: created.razorpayOrderId,
-                razorpayKeyId: created.razorpayKeyId ?? '',
-                amount: String(Math.round(total * 100)), // paise
-                currency: created.mealPlan.currency ?? 'INR',
-              },
-            });
+            // #402: charge the SERVER total (food + GST + per-day delivery), not the
+            // food-only selection sum, and show the exact breakdown before checkout so
+            // the customer never pays more than what's displayed.
+            const b = mealPlanAdvanceBreakdown(created.mealPlan);
+            const goToPay = () =>
+              router.push({
+                pathname: '/payment/checkout',
+                params: {
+                  kind: 'mealplan',
+                  mealPlanId: created.mealPlan.id,
+                  razorpayOrderId: created.razorpayOrderId!,
+                  razorpayKeyId: created.razorpayKeyId ?? '',
+                  amount: String(b.amountPaise), // paise — the actual charge
+                  currency: created.mealPlan.currency ?? 'INR',
+                },
+              });
+            Alert.alert(
+              `Pay ₹${b.total.toFixed(0)} advance`,
+              `Food ₹${b.food.toFixed(2)}\nGST ₹${b.gst.toFixed(2)}\nDelivery ₹${b.delivery.toFixed(2)}\n\nTotal ₹${b.total.toFixed(2)}`,
+              [
+                { text: 'Back', style: 'cancel' },
+                { text: 'Pay now', onPress: goToPay },
+              ],
+            );
             return;
           }
           // Escrow off: unpaid handshake — chef reviews and confirms the days.
@@ -338,9 +352,13 @@ export default function BookMealPlanScreen() {
           <View style={styles.footer}>
             <View style={styles.footerSummary}>
               <Text style={styles.footerCount}>
-                {selected.length} meal{selected.length === 1 ? '' : 's'} selected
+                {selected.length} meal{selected.length === 1 ? '' : 's'} · food
+                subtotal
               </Text>
               <Text style={styles.footerTotal}>₹{total.toFixed(0)}</Text>
+              <Text style={styles.footerNote}>
+                GST &amp; delivery shown before you pay
+              </Text>
             </View>
             <Pressable
               onPress={submit}
@@ -454,6 +472,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: customerColors.charcoal.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  footerNote: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: customerColors.charcoal.soft,
   },
   cta: {
     height: 52,

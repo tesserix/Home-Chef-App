@@ -71,8 +71,9 @@ export interface MealPlan {
   status: string;
   startDate: string;
   endDate: string;
-  subtotal: number;
-  total: number;
+  subtotal: number; // food only
+  tax?: number; // GST on the food (escrow-on advance)
+  total: number; // what the customer is actually charged (food + GST + delivery)
   currency?: string;
   days: MealPlanDay[];
   chef?: { businessName?: string; profileImage?: string } | null;
@@ -170,6 +171,33 @@ export interface CreateMealPlanResponse {
   razorpayOrderId?: string;
   razorpayKeyId?: string;
   paymentError?: string;
+}
+
+export interface MealPlanAdvanceBreakdown {
+  food: number; // food subtotal
+  gst: number; // GST on the food
+  delivery: number; // per-day delivery total
+  total: number; // the charge = food + gst + delivery
+  amountPaise: number; // total in paise, for the checkout amount param
+}
+
+/** The EXACT advance a customer is charged for a created plan, split for display.
+ *  Uses the SERVER `plan.total` (food + GST + per-day delivery) — never the food-only
+ *  selection sum — so the amount shown before checkout equals the Razorpay charge to
+ *  the paise (#402: the booking footer shows food only; the server adds GST + delivery).
+ *  Delivery is derived (total − food − GST) since the server folds it into total.
+ *  When escrow is off the server returns total == subtotal, so gst/delivery are 0. */
+export function mealPlanAdvanceBreakdown(plan: {
+  subtotal: number;
+  tax?: number;
+  total: number;
+}): MealPlanAdvanceBreakdown {
+  const round2 = (x: number) => Math.round(x * 100) / 100;
+  const food = plan.subtotal ?? 0;
+  const gst = plan.tax ?? 0;
+  const total = plan.total ?? food;
+  const delivery = Math.max(0, round2(total - food - gst));
+  return { food, gst, delivery, total, amountPaise: Math.round(total * 100) };
 }
 
 /** Book a calendar of days from one chef. */
