@@ -318,10 +318,98 @@ func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, erro
 	return false, nil
 }
 
+// refundedOrderSubquery builds `SELECT 1 FROM orders WHERE id = ? AND (status IN
+// ('refunded','cancelled') OR refunded_at IS NOT NULL)` for a NOT EXISTS predicate.
+// Built via a NewDB Model session so (a) GORM applies the soft-delete scope
+// (`deleted_at IS NULL`) — matching orderRefundBlocks' First()-based
+// not-found→not-blocked parity, so a soft-deleted order never wrongly blocks — and
+// (b) it can't bleed clauses from the outer UPDATE when that UPDATE is also on
+// orders (the order aggregate). Mirrors openOrderIssueSubquery (#496).
+func refundedOrderSubquery(tx *gorm.DB, orderID uuid.UUID) *gorm.DB {
+	return tx.Session(&gorm.Session{NewDB: true}).
+		Model(&models.Order{}).
+		Select("1").
+		Where("id = ? AND (status IN ? OR refunded_at IS NOT NULL)", orderID,
+			[]models.OrderStatus{models.OrderStatusRefunded, models.OrderStatusCancelled})
+}
+
+// resolveReleaseOrderID returns the order whose refund/dispute state gates a release
+// of the aggregate: the row itself for an order, the linked order_id for a
+// meal-plan-day / group-order (nil when unlinked — nothing to guard against, and a
+// missing aggregate row makes the release UPDATE a no-op anyway).
+func resolveReleaseOrderID(tx *gorm.DB, aggType string, id uuid.UUID) (*uuid.UUID, error) {
+	switch aggType {
+	case aggTypeOrder:
+		return &id, nil
+	case aggTypeMealPlanDay:
+		var day models.MealPlanDay
+		if err := tx.Select("order_id").First(&day, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return day.OrderID, nil
+	case aggTypeGroupOrder:
+		var g models.GroupOrder
+		if err := tx.Select("order_id").First(&g, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return g.OrderID, nil
+	}
+	return nil, nil
+}
+
+// releaseTransition performs release_eligible → released with the refund/dispute
+// block folded INTO the guarded UPDATE (#496): a refund (refunded_at / cancelled /
+// refunded status) or pending OrderIssue filed AFTER ReleaseHold's pre-check but
+// BEFORE this flip is observed by the UPDATE's own NOT EXISTS predicates, closing
+// the check-then-act window that could otherwise commit `released` on a
+// just-refunded/disputed order (double-pay). Same fold-the-predicate approach as
+// applyHoldConfirm (#460). The predicates key on the concrete linked order id
+// (resolved in-tx; a stable FK) so the block is evaluated atomically with the flip.
+func releaseTransition(db *gorm.DB, aggType string, id uuid.UUID) (bool, error) {
+	model, err := holdModel(aggType)
+	if err != nil {
+		return false, err
+	}
+	changed := false
+	err = db.Transaction(func(tx *gorm.DB) error {
+		orderID, err := resolveReleaseOrderID(tx, aggType, id)
+		if err != nil {
+			return err
+		}
+		q := tx.Model(model).
+			Where("id = ? AND payout_hold_status = ?", id, models.PayoutHoldReleaseEligible)
+		if orderID != nil {
+			q = q.Where("NOT EXISTS (?)", refundedOrderSubquery(tx, *orderID)).
+				Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, *orderID))
+		}
+		res := q.Update("payout_hold_status", models.PayoutHoldReleased)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil
+		}
+		changed = true
+		return EnqueueEvent(tx, SubjectHoldReleased, "payout.hold_released", id, map[string]any{
+			"aggregate_type": aggType, "aggregate_id": id.String(),
+			"payout_hold_status": string(models.PayoutHoldReleased),
+		})
+	})
+	if err != nil {
+		return false, err
+	}
+	return changed, nil
+}
+
 func ReleaseHold(db *gorm.DB, aggType string, id uuid.UUID) error {
 	// Cross-guard (#457): refuse to release any aggregate whose underlying order is
-	// refunded/cancelled/refunded_at-set/pending-issue — the belt-and-suspenders
-	// backstop for the five refund paths. Runs before the transition so no state moves.
+	// refunded/cancelled/refunded_at-set/pending-issue — the fast-fail pre-check.
 	blocked, err := releaseBlockedForAgg(db, aggType, id)
 	if err != nil {
 		return err
@@ -329,8 +417,10 @@ func ReleaseHold(db *gorm.DB, aggType string, id uuid.UUID) error {
 	if blocked {
 		return ErrHoldNotEligible
 	}
-	ok, err := transitionHold(db, aggType, id,
-		[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible}, models.PayoutHoldReleased, true)
+	// The block is ALSO folded into the guarded UPDATE (#496), so a refund/issue that
+	// lands after the pre-check above but before the flip cannot slip a `released`
+	// commit through the check-then-act window.
+	ok, err := releaseTransition(db, aggType, id)
 	if err != nil {
 		return fmt.Errorf("payout-release: release %s %s: %w", aggType, id, err)
 	}

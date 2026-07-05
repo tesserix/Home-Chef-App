@@ -355,6 +355,88 @@ func TestCrossguard_ReleaseHold_Group_BlocksRefundedOrder(t *testing.T) {
 	require.NoError(t, ReleaseHold(db, aggTypeGroupOrder, clean))
 }
 
+// ── Release-side atomic race (#496): block folded INTO the guarded UPDATE ─────
+
+// A pending OrderIssue filed AFTER the release pre-check but BEFORE the flip must
+// block the release — the fold's NOT EXISTS catches it. Injected via a one-shot
+// Before-update callback (the pre-check is SELECT-only, so it fires on the release
+// UPDATE). Fails on the old transitionHold (flips release_eligible→released).
+func TestReleaseHold_IssueRacingRelease_Blocked(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+
+	injected := false
+	require.NoError(t, db.Callback().Update().Before("gorm:update").Register("inject_issue_release", func(tx *gorm.DB) {
+		if injected {
+			return
+		}
+		injected = true
+		tx.Session(&gorm.Session{NewDB: true}).Exec(
+			`INSERT INTO order_issues (id, order_id, status) VALUES (?,?,?)`,
+			uuid.NewString(), id.String(), string(models.IssuePending))
+	}))
+
+	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, id), "stays release_eligible, not released")
+	require.Equal(t, 0, countOutbox(t, db, SubjectHoldReleased), "must not emit hold_released")
+}
+
+// A refund (refunded_at) stamped in the same window is likewise caught by the fold.
+func TestReleaseHold_RefundRacingRelease_Blocked(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+
+	injected := false
+	require.NoError(t, db.Callback().Update().Before("gorm:update").Register("inject_refund_release", func(tx *gorm.DB) {
+		if injected {
+			return
+		}
+		injected = true
+		tx.Session(&gorm.Session{NewDB: true}).Exec(
+			`UPDATE orders SET refunded_at = ? WHERE id = ?`, time.Now(), id.String())
+	}))
+
+	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, id))
+}
+
+// The day fold on a NON-NULL, CLEAN linked order must still release (guards against
+// the fold wrongly blocking a legitimate day/group payout).
+func TestReleaseHold_Day_CleanLinkedOrder_Releases(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	cleanOrder, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+	day := seedCrossDay(t, db, models.PayoutHoldReleaseEligible, &cleanOrder)
+
+	require.NoError(t, ReleaseHold(db, aggTypeMealPlanDay, day))
+	require.Equal(t, models.PayoutHoldReleased, loadDayHold(t, db, day))
+}
+
+// The day fold blocks an issue racing the release on the LINKED order (proves the
+// resolved-order subquery is atomic for day/group, not just the order aggregate).
+func TestReleaseHold_Day_IssueRacingRelease_Blocked(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	linked, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+	day := seedCrossDay(t, db, models.PayoutHoldReleaseEligible, &linked)
+
+	injected := false
+	require.NoError(t, db.Callback().Update().Before("gorm:update").Register("inject_issue_day", func(tx *gorm.DB) {
+		if injected {
+			return
+		}
+		injected = true
+		tx.Session(&gorm.Session{NewDB: true}).Exec(
+			`INSERT INTO order_issues (id, order_id, status) VALUES (?,?,?)`,
+			uuid.NewString(), linked.String(), string(models.IssuePending))
+	}))
+
+	require.ErrorIs(t, ReleaseHold(db, aggTypeMealPlanDay, day), ErrHoldNotEligible)
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadDayHold(t, db, day), "day stays release_eligible")
+}
+
 // ── Queue ──────────────────────────────────────────────────────────────────
 
 func TestCrossguard_ListPendingOrders_ExcludesRefunded(t *testing.T) {
