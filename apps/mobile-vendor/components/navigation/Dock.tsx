@@ -90,7 +90,7 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={label}
-              style={styles.slot}
+              style={isActive ? styles.slotActive : styles.slot}
             >
               {isActive ? (
                 <Animated.View
@@ -139,12 +139,24 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  // Each slot flexes equally; ≥44px touch target comes from the bar height.
+  // Inactive slots share the space left by the active pill equally, so the
+  // icon-only tabs stay evenly distributed. ≥44px touch target comes from the
+  // bar height.
   slot: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // The active slot sizes to its pill's content (icon + full label) instead of
+  // being forced into an equal quarter — long labels like "Dashboard" no
+  // longer truncate. The three inactive slots absorb the remaining width.
+  slotActive: {
+    flexShrink: 0,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   activePill: {
     flexDirection: 'row',
