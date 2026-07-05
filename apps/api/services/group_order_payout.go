@@ -68,28 +68,32 @@ func ReleaseGroupChefPayout(g *models.GroupOrder) error {
 	if rz == nil {
 		return nil // gateway unconfigured — no-op like ReleaseOrderPayouts
 	}
-	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil {
+	if _, err := rz.ReleaseTransfer(g.PayoutTransferID); err != nil && !isAlreadyReleasedErr(err) {
 		return fmt.Errorf("release group payout %s: %w", g.PayoutTransferID, err)
 	}
 	return nil
 }
 
 // ReverseGroupChefPayout claws the held transfer back to the platform on cancel.
-// Flag-gated on payoutMovementEnabled() (#456) — OFF ⇒ no money moves.
-func ReverseGroupChefPayout(g *models.GroupOrder) {
+// Flag-gated on payoutMovementEnabled() (#456) — OFF ⇒ no money moves. Returns a real
+// gateway error (tolerating an already-reversed transfer) so settlePayout does NOT
+// stamp payout_settled_at on a failed claw-back — the reconcile cron then re-drives it
+// (#508). Previously it swallowed the error, silently stranding a chef net-paid.
+func ReverseGroupChefPayout(g *models.GroupOrder) error {
 	if !payoutMovementEnabled() {
-		return
+		return nil
 	}
 	if g.PayoutTransferID == "" {
-		return
+		return nil
 	}
 	rz := GetRazorpay()
 	if rz == nil {
-		return
+		return nil
 	}
-	if _, err := rz.ReverseTransfer(g.PayoutTransferID, 0); err != nil {
-		log.Printf("group-order: reverse payout %s failed: %v", g.PayoutTransferID, err)
+	if _, err := rz.ReverseTransfer(g.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
+		return fmt.Errorf("group-order: reverse payout %s: %w", g.PayoutTransferID, err)
 	}
+	return nil
 }
 
 // RefundGroupParticipant refunds one paid participant to wallet (idempotent on the
