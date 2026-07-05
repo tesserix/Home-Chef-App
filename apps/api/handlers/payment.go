@@ -293,6 +293,36 @@ func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []serv
 	}
 }
 
+// settleOrderWallet settles the wallet-at-checkout slice once a gateway capture is
+// confirmed: debit the applied store credit and issue the platform-funded chef/driver
+// top-ups the capture couldn't cover (#141). Both are idempotent (DebitWallet keyed
+// per order; each top-up claimed per (order, account) — #554), so it runs safely from
+// BOTH the client verify path AND the payment.captured webhook (#395·3): whichever
+// confirms the capture first settles, a duplicate is a no-op, and a retried webhook
+// re-attempts a settlement whose first delivery crashed mid-way. No-op when there is no
+// applied credit. REQUIRES order.Chef + order.Delivery.DeliveryPartner preloaded — the
+// top-up split reads their Route accounts (an un-preloaded order would top up "").
+func settleOrderWallet(order *models.Order) {
+	if order.WalletApplied <= 0 {
+		return
+	}
+	if err := debitOrderWallet(order); err != nil {
+		// A GENUINE debit failure (e.g. ErrInsufficientWalletBalance if the balance
+		// was drained between checkout and this now-delayed settlement) must NOT go on
+		// to fund the chef/driver top-up — that would pay them the wallet-covered slice
+		// off store credit the platform never collected. Leave the slice unsettled for
+		// the reconcile/ops path. debitOrderWallet returns nil on the idempotent
+		// already-debited case, so this only bites a true first-time failure and never
+		// blocks a legitimate re-settlement.
+		log.Printf("wallet-debit failed order=%s: %v", order.OrderNumber, err)
+		services.CaptureBackgroundError(err)
+		return
+	}
+	appliedPaise := services.ToPaise(order.WalletApplied)
+	plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(order))
+	settleWalletTopUps(order, plan.DirectTopUps)
+}
+
 // settleFullWalletOrder handles an order fully covered by store credit: there is no
 // gateway payment, so the chef/driver are paid entirely from the platform balance,
 // the wallet is debited, and the order is marked paid (#141).
@@ -629,23 +659,12 @@ func (h *PaymentHandler) verifyRazorpayPayment(c *gin.Context, order *models.Ord
 		services.StartOrderSaga(order.ID)
 	}
 
-	// Wallet-at-checkout settlement (#141): now that the gateway capture is
-	// confirmed, debit the applied store credit (idempotent) and top up the
-	// chef/driver portion the capture couldn't cover, from the platform balance.
-	// Recomputes the same split planned at create time (deterministic per order).
-	if order.WalletApplied > 0 {
-		if err := debitOrderWallet(order); err != nil {
-			log.Printf("wallet-debit failed order=%s: %v", order.OrderNumber, err)
-			services.CaptureBackgroundError(err)
-		}
-		// orderSettlements recomputes the IDENTICAL split here: the order was
-		// reloaded with its persisted commission_rate, and chefNetPayout reads that
-		// frozen rate — so create and verify are deterministic, never re-resolving
-		// the live rate (#390).
-		appliedPaise := services.ToPaise(order.WalletApplied)
-		plan := services.PlanWalletFunding(services.ToPaise(order.Total), appliedPaise, appliedPaise, orderSettlements(order))
-		settleWalletTopUps(order, plan.DirectTopUps)
-	}
+	// Wallet-at-checkout settlement (#141): now that the gateway capture is confirmed,
+	// debit the applied store credit and top up the chef/driver portion the capture
+	// couldn't cover, from the platform balance. orderSettlements recomputes the
+	// IDENTICAL split (the order was reloaded with its persisted commission_rate; the
+	// webhook path shares the same seam — #395·3). Idempotent; a no-op without credit.
+	settleOrderWallet(order)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment verified", "status": "completed"})
 }
@@ -1266,6 +1285,21 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 			}
 		}
 	}
+	// #395·3: settle the wallet-at-checkout slice for a WEBHOOK-driven completion (the
+	// client dropped before calling verify, so the verify-path settlement never ran).
+	// Reload with the Chef + Delivery accounts the top-up split needs, and ONLY for a
+	// currently-completed wallet order (the `wallet_applied > 0` filter also skips this
+	// for non-wallet orders and tip charges). settleOrderWallet is idempotent, so this
+	// is a no-op when the verify path already settled and re-attempts a settlement a
+	// crashed earlier webhook delivery left partial (why it runs on every delivery, not
+	// just the winning RowsAffected>0 one).
+	var walletOrd models.Order
+	if err := database.DB.Preload("Chef").Preload("Delivery.DeliveryPartner").
+		Where("razorpay_order_id = ? AND payment_status = ? AND wallet_applied > 0",
+			payment.OrderID, models.PaymentCompleted).First(&walletOrd).Error; err == nil {
+		settleOrderWallet(&walletOrd)
+	}
+
 	// A post-delivery tip is a separate Razorpay order (#45); confirm it here too
 	// (idempotent). Harmless no-op when payment.OrderID isn't a tip charge.
 	markTipPaidByRazorpayOrder(payment.OrderID, payment.ID)
