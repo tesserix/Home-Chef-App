@@ -36,6 +36,17 @@ const TAB_ICONS: Record<string, LucideIcon> = {
   more: MoreHorizontal,
 };
 
+// Short display labels for the active pill. Slots are equal-width, so the
+// label must fit an even quarter of the bar — "Dashboard" (the screen title)
+// is too long and would truncate, so the dock shows "Home". The full title is
+// still used for the accessibility label.
+const TAB_LABELS: Record<string, string> = {
+  index: 'Home',
+  orders: 'Orders',
+  menu: 'Menu',
+  more: 'More',
+};
+
 // Minimal structural types for the react-navigation tabBar props — the
 // package isn't a direct dependency (expo-router wraps it), so we type the
 // slice we consume.
@@ -69,6 +80,7 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key] ?? { options: {} };
           const label = options?.title ?? route.name;
+          const pillLabel = TAB_LABELS[route.name] ?? label;
           const isActive = state.index === index;
           const Icon = TAB_ICONS[route.name] ?? LayoutDashboard;
 
@@ -90,7 +102,7 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={label}
-              style={isActive ? styles.slotActive : styles.slot}
+              style={styles.slot}
             >
               {isActive ? (
                 <Animated.View
@@ -103,7 +115,7 @@ export function Dock({ state, descriptors, navigation }: DockProps) {
                 >
                   <Icon size={20} color={colors.paper} />
                   <Text style={styles.activeLabel} numberOfLines={1}>
-                    {label}
+                    {pillLabel}
                   </Text>
                 </Animated.View>
               ) : (
@@ -139,24 +151,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  // Inactive slots share the space left by the active pill equally, so the
-  // icon-only tabs stay evenly distributed. ≥44px touch target comes from the
-  // bar height.
+  // Every slot is an equal quarter of the bar — icons never move when the
+  // active tab changes. ≥44px touch target comes from the bar height.
   slot: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // The active slot sizes to its pill's content (icon + full label) instead of
-  // being forced into an equal quarter — long labels like "Dashboard" no
-  // longer truncate. The three inactive slots absorb the remaining width.
-  slotActive: {
-    flexShrink: 0,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
   },
   activePill: {
     flexDirection: 'row',
