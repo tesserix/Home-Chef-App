@@ -48,12 +48,19 @@ export interface OrderItem {
   notes?: string;
 }
 
+/** Where an order originated, tagged by the API (#435) so the vendor feed can
+ *  group à-la-carte, weekly meal-plan days, subscription days, and group orders.
+ *  Absent on legacy payloads → treated as à-la-carte. */
+export type OrderSource = 'alacarte' | 'meal_plan' | 'subscription' | 'group';
+
 export interface Order {
   id: string;
   customerName: string;
   items: OrderItem[];
   total: number;
   status: 'pending' | 'accepted' | 'rejected' | 'preparing' | 'ready' | 'picked_up' | 'delivered' | 'cancelled';
+  /** Order origin for the unified feed badge (#435). */
+  source?: OrderSource;
   // How the order reaches the customer. 'pickup' → customer collects; the chef
   // confirms handover (ready → delivered). Legacy orders default to delivery.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
