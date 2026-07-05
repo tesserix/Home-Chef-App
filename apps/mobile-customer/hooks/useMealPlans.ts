@@ -128,12 +128,20 @@ export function useChefDailyMenu(
   });
 }
 
-/** The customer's own meal plans (any status). */
+/** The customer's own meal plans (any status). Polls every 20s while a plan is
+ *  confirmed/active so the "Show my plan" chip + sheet show near-real-time
+ *  per-day cooking/delivery status (#50/#434) from a single source. */
 export function useMyMealPlans() {
   return useQuery<{ data: MealPlan[] }>({
     queryKey: ['meal-plans'],
     queryFn: () =>
       api.get<{ data: MealPlan[] }>('/v1/meal-plans').then((r) => r.data),
+    refetchInterval: (query) => {
+      const plans = query.state.data?.data ?? [];
+      return plans.some((p) => p.status === 'confirmed' || p.status === 'active')
+        ? 20000
+        : false;
+    },
   });
 }
 

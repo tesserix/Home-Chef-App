@@ -36,6 +36,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { ActiveOrderStack } from '../../components/orders/ActiveOrderStack';
 import { WinbackBanner } from '../../components/home/WinbackBanner';
+import { ActivePlanChip } from '../../components/meal-plan/ActivePlanChip';
 import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
@@ -209,6 +210,10 @@ export default function HomeScreen() {
 
       {/* Win-back offer (#42) — surfaces an active offer; auto-prefills checkout. */}
       <WinbackBanner />
+
+      {/* Glanceable "your tiffin plan" entry (#434) — only renders when the
+          customer has a live plan; taps open the per-day fulfilment sheet. */}
+      <ActivePlanChip />
 
       {/* ── Row 2: Cuisine category scroller (primary browse axis) ── */}
       {/* Airbnb-style: selected = charcoal text + 2px charcoal underline;

@@ -1,44 +1,24 @@
 // MyPlanChip — a compact "Show my plan" pill shown on a chef page when the
-// customer has a reserved/active tiffin plan with THAT chef (#434). Tapping opens
-// a closeable sheet listing each day with its scheduled / being-prepared /
-// delivered status. Reuses the shared Sheet + the day-status presentation from
-// lib/meal-plan, so it stays consistent with the full plan-detail screen and adds
-// no duplicate status logic.
+// customer has a live tiffin plan with THAT chef (#434). Tapping opens the
+// shared MealPlanSheet listing each day's scheduled / being-prepared / delivered
+// status. All the day-row + status logic lives in the shared MealPlanDayList /
+// MealPlanSheet, so this file is just the chef-scoped chip.
 
-import { useMemo, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarCheck } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { Sheet, type SheetHandle } from '@homechef/mobile-shared/ui';
-import { useMyMealPlans, type MealPlan } from '../hooks/useMealPlans';
-import {
-  formatDateRange,
-  mealPlanDayStatusMeta,
-  mealPlanStatusMeta,
-} from '../lib/meal-plan';
+import { type SheetHandle } from '@homechef/mobile-shared/ui';
 
-// Statuses worth surfacing on the chef page — a plan still in flight or running.
-const LIVE_STATUSES = new Set([
-  'pending_chef',
-  'awaiting_customer',
-  'chef_modified',
-  'chef_accepted_full',
-  'confirmed',
-  'active',
-]);
+import { useMyMealPlans } from '../hooks/useMealPlans';
+import { pickLiveMealPlan, mealPlanStatusMeta } from '../lib/meal-plan';
+import { MealPlanSheet } from './meal-plan/MealPlanSheet';
 
 export function MyPlanChip({ chefId }: { chefId: string }) {
   const { data } = useMyMealPlans();
   const sheetRef = useRef<SheetHandle>(null);
 
-  const plan = useMemo<MealPlan | undefined>(() => {
-    const mine = (data?.data ?? []).filter(
-      (p) => p.chefId === chefId && LIVE_STATUSES.has(p.status),
-    );
-    // Most recent live plan first.
-    return mine.sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''))[0];
-  }, [data, chefId]);
-
+  const plan = pickLiveMealPlan(data?.data, chefId);
   if (!plan) return null;
   const meta = mealPlanStatusMeta(plan.status);
 
@@ -57,38 +37,7 @@ export function MyPlanChip({ chefId }: { chefId: string }) {
         </View>
       </Pressable>
 
-      <Sheet
-        ref={sheetRef}
-        title={`My plan · ${formatDateRange(plan.startDate, plan.endDate)}`}
-        cancelLabel="Close"
-        snapPoints={['70%']}
-      >
-        <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent}>
-          {(plan.days ?? []).map((d) => {
-            const dm = mealPlanDayStatusMeta(d.status);
-            return (
-              <View key={d.id} style={styles.dayRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dayDate}>
-                    {new Date(d.date).toLocaleDateString(undefined, {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </Text>
-                  <Text style={styles.dayDish} numberOfLines={1}>
-                    {d.dishName ??
-                      `${d.slot === 'lunch' ? 'Lunch' : 'Dinner'} · ${d.variant === 'veg' ? 'Veg' : 'Non-veg'}`}
-                  </Text>
-                </View>
-                <View style={[styles.dayPill, { backgroundColor: dm.bg }]}>
-                  <Text style={[styles.dayPillText, { color: dm.color }]}>{dm.label}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-      </Sheet>
+      <MealPlanSheet ref={sheetRef} summary={plan} />
     </>
   );
 }
@@ -111,23 +60,4 @@ const styles = StyleSheet.create({
   },
   statusPill: { borderRadius: 999, paddingVertical: 2, paddingHorizontal: 8 },
   statusPillText: { fontFamily: 'Inter-SemiBold', fontSize: 11 },
-  sheetScroll: { marginTop: 4 },
-  sheetContent: { paddingBottom: 24, gap: 4 },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: customerColors.surface.soft,
-  },
-  dayDate: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: customerColors.charcoal.DEFAULT,
-  },
-  dayDish: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2 },
-  dayPill: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  dayPillText: { fontFamily: 'Inter-SemiBold', fontSize: 12 },
 });

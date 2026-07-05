@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, ChevronLeft, X } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   canCancelMealPlan,
@@ -17,20 +17,9 @@ import {
   useFinalizeMealPlan,
   useMealPlan,
   useSkipMealPlanDay,
-  type MealPlanDay,
 } from '../../hooks/useMealPlans';
-import { mealPlanStatusMeta, mealPlanDayStatusMeta } from '../../lib/meal-plan';
-import { CookingIndicator } from '../../components/status/CookingIndicator';
-
-const DECLINED = new Set(['declined', 'skipped', 'cancelled', 'refunded']);
-
-function dayLabel(d: MealPlanDay): string {
-  return new Date(d.date).toLocaleDateString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-}
+import { mealPlanStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
+import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
 
 // Plan detail (#196): the booked days with per-day status. When the chef has
 // cherry-picked (status awaiting_customer), the customer approves the revised
@@ -89,7 +78,7 @@ export default function MealPlanDetailScreen() {
 
   const meta = mealPlanStatusMeta(plan.status);
   const days = plan.days ?? [];
-  const acceptedDays = days.filter((d) => !DECLINED.has(d.status));
+  const acceptedDays = days.filter((d) => !isDeclinedDayStatus(d.status));
   const acceptedTotal = acceptedDays.reduce((s, d) => s + (d.price ?? 0), 0);
 
   function act(approve: boolean) {
@@ -179,71 +168,11 @@ export default function MealPlanDetailScreen() {
           </View>
         ) : null}
 
-        <View style={styles.card}>
-          {days.map((d, i) => {
-            const declined = DECLINED.has(d.status);
-            const accent =
-              d.variant === 'veg'
-                ? customerColors.success.DEFAULT
-                : customerColors.destructive.DEFAULT;
-            return (
-              <View
-                key={d.id}
-                style={[styles.dayRow, i < days.length - 1 && styles.divider]}
-              >
-                <View style={[styles.statusIcon, declined ? styles.statusBad : styles.statusOk]}>
-                  {declined ? (
-                    <X size={14} color={customerColors.destructive.DEFAULT} strokeWidth={2.5} />
-                  ) : (
-                    <Check size={14} color={customerColors.success.DEFAULT} strokeWidth={2.5} />
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.dayDate, declined && styles.dim]}>{dayLabel(d)}</Text>
-                  <View style={styles.dayMeta}>
-                    <View style={[styles.dot, { backgroundColor: accent }]} />
-                    <Text style={[styles.daySub, declined && styles.dim]} numberOfLines={1}>
-                      {d.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {d.dishName ?? '—'}
-                    </Text>
-                  </View>
-                  {/* Live per-day status (#50) — animated while being cooked */}
-                  {d.status === 'prepared' || d.status === 'delivered' ? (
-                    (() => {
-                      const meta = mealPlanDayStatusMeta(d.status);
-                      return (
-                        <View style={styles.dayStatusRow}>
-                          {meta.cooking ? (
-                            <CookingIndicator size={14} color={customerColors.coral.DEFAULT} />
-                          ) : null}
-                          <View style={[styles.dayStatusPill, { backgroundColor: meta.bg }]}>
-                            <Text style={[styles.dayStatusText, { color: meta.color }]}>
-                              {meta.label}
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    })()
-                  ) : null}
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.price, declined && styles.dim]}>
-                    ₹{(d.price ?? 0).toFixed(0)}
-                  </Text>
-                  {canSkip && d.status === 'confirmed' ? (
-                    <Pressable
-                      onPress={() => confirmSkip(d.id)}
-                      hitSlop={8}
-                      disabled={skipDay.isPending}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.skipLink}>Skip</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
+        <MealPlanDayList
+          days={days}
+          onSkip={canSkip ? confirmSkip : undefined}
+          skipping={skipDay.isPending}
+        />
 
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>
@@ -359,60 +288,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: customerColors.charcoal.DEFAULT,
     lineHeight: 19,
-  },
-  card: {
-    backgroundColor: customerColors.surface.DEFAULT,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: customerColors.hairline,
-    paddingHorizontal: 16,
-  },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: customerColors.hairline,
-  },
-  statusIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusOk: { backgroundColor: customerColors.success.tint },
-  statusBad: { backgroundColor: customerColors.destructive.tint },
-  dayDate: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
-    color: customerColors.charcoal.DEFAULT,
-  },
-  dayMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  dayStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
-  dayStatusPill: {
-    borderRadius: 9999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
-  },
-  dayStatusText: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.2 },
-  dot: { width: 8, height: 8, borderRadius: 2 },
-  daySub: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  price: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
-    color: customerColors.charcoal.DEFAULT,
-  },
-  dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
-  skipLink: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: customerColors.coral.DEFAULT,
-    marginTop: 4,
   },
   totalRow: {
     flexDirection: 'row',
