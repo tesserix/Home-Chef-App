@@ -24,7 +24,37 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 	refund := float64(cr.RefundTotalPaise) / 100.0
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
 		if refund > 0 {
+			// #392: shared refund claim — the SAME two-column mutex every full-refund
+			// path uses (payment_status completed→refunded AND refunded_at IS NULL).
+			// Claiming payment_status (not just refunded_at) is what mutually excludes
+			// InitiateRefund, which stamps refunded_at only AFTER its gateway call.
+			claim := tx.Model(&models.Order{}).
+				Where("id = ? AND payment_status = ? AND refunded_at IS NULL", order.ID, models.PaymentCompleted).
+				Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": now})
+			if claim.Error != nil {
+				return claim.Error
+			}
+			if claim.RowsAffected == 0 {
+				// A sibling path holds/completed the claim. Only mark THIS request done
+				// if the customer has actually been refunded at least what it owed
+				// (refund_amount is stamped only after a sibling's gateway SUCCESS). If
+				// the sibling is still mid-flight or later reverts, leave it for the
+				// sweep to retry — never permanently strand an owed refund on a
+				// transient claim loss.
+				var fresh models.Order
+				if err := tx.Select("refund_amount").First(&fresh, "id = ?", order.ID).Error; err != nil {
+					return err
+				}
+				if fresh.RefundAmount+0.001 < refund {
+					return nil // not yet refunded — sweep retries (refund_executed stays false)
+				}
+				cr.RefundExecuted = true
+				cr.RefundRef = "already-refunded"
+				return tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
+					Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error
+			}
 			if cr.RefundDestination == "original" {
 				if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
 					return fmt.Errorf("original-method refund needs a razorpay payment")
@@ -49,7 +79,6 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				cr.RefundRef = "wallet:cancel:" + cr.ID.String()
 			}
 		}
-		now := time.Now()
 		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
 			"status":        models.OrderStatusCancelled,
 			"refund_amount": order.RefundAmount + refund,

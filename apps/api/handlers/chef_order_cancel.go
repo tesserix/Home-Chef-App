@@ -103,8 +103,31 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 	var refundID string
 	var refundedAt time.Time
 	if amountPaise > 0 {
+		// #392: shared refund claim. The mutex is the SAME two-column predicate every
+		// full-refund path uses (payment.go InitiateRefund, RefundOrderForCancellation,
+		// ExecuteCancellationRefund): claim payment_status completed→refunded AND stamp
+		// refunded_at in one conditional UPDATE. Claiming payment_status (not just
+		// refunded_at) is what mutually excludes InitiateRefund, which sets refunded_at
+		// only AFTER its gateway call. RowsAffected==0 ⇒ a sibling already refunded.
+		claim := database.DB.Model(&models.Order{}).
+			Where("id = ? AND payment_status = ? AND refunded_at IS NULL", order.ID, models.PaymentCompleted).
+			Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": time.Now().UTC()})
+		if claim.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process cancellation"})
+			return
+		}
+		if claim.RowsAffected == 0 {
+			amountPaise = 0 // already refunded elsewhere
+		}
+	}
+	revertRefundClaim := func() {
+		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+			Updates(map[string]any{"payment_status": models.PaymentCompleted, "refunded_at": gorm.Expr("NULL")})
+	}
+	if amountPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
+			revertRefundClaim() // let a retry refund once the gateway is back
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 			return
 		}
@@ -120,6 +143,7 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 			},
 		})
 		if err != nil {
+			revertRefundClaim()
 			services.CaptureSentryError(c, err)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
 			return
@@ -133,13 +157,16 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		"status":              models.OrderStatusCancelled,
 		"cancelled_at":        now,
 		"cancel_reason":       string(reason),
-		"refund_amount":       order.Total,
 		"refund_reason":       string(reason),
 		"refund_initiated_by": "chef",
 	}
+	// #392: stamp refund_amount only when a refund was actually issued, and stamp the
+	// cumulative (RefundAmount + refundable), not an unconditional Total — otherwise a
+	// skipped/partial refund over-states the ledger and trips reconciliation.
 	if refundID != "" {
 		updates["refund_id"] = refundID
 		updates["refunded_at"] = refundedAt
+		updates["refund_amount"] = order.RefundAmount + refundable
 	}
 	if err := database.DB.Model(&order).Updates(updates).Error; err != nil {
 		services.CaptureSentryError(c, err)
