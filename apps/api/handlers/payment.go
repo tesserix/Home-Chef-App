@@ -751,13 +751,22 @@ func refundWalletIdempotencyKey(prefix string, orderID uuid.UUID, priorRefunded 
 	return fmt.Sprintf("%s:%s:%d", prefix, orderID, services.ToPaise(priorRefunded))
 }
 
-// crossGuardRefundHold drives the payout hold after a refund: a FULL refund
-// withholds/reverses the whole chef hold (#457); a PARTIAL refund claws back only
-// refundAmount from the chef's transfer and leaves the hold releasable (#549 — the
-// chef eats the refunded amount, keeps the remainder).
-func crossGuardRefundHold(orderID uuid.UUID, refundAmount float64, reason string, fullRefund bool) error {
+// crossGuardRefundHold drives the payout hold after a refund. A FULL refund
+// withholds/reverses the whole chef hold (#457) and runs UNCONDITIONALLY: its
+// cross-guard is idempotent (transitionHold's conditional WHERE) AND is the safety
+// net that must block the hold even when the persist that stamps refunded_at failed.
+// A PARTIAL refund claws back only refundAmount from the chef's transfer and leaves
+// the hold releasable (#549 — the chef eats the refunded amount, keeps the
+// remainder); that claw-back is NOT re-fire idempotent (it only caps at the transfer
+// total, not per refund instance), so it runs ONLY when the refund actually persisted
+// (persistOK). Otherwise a retry after a swallowed persist failure would reverse the
+// chef twice for one customer refund (#568).
+func crossGuardRefundHold(orderID uuid.UUID, refundAmount float64, reason string, fullRefund, persistOK bool) error {
 	if fullRefund {
 		return services.WithholdOrReverseOrderHoldForRefund(database.DB, orderID, reason)
+	}
+	if !persistOK {
+		return nil // #568: don't claw a partial that didn't persist — a retry would double-claw
 	}
 	return services.WithholdOrReverseOrderHoldForPartialRefund(database.DB, orderID, services.ToPaise(refundAmount), reason)
 }
@@ -928,7 +937,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			refundUpdates["status"] = models.OrderStatusRefunded
 			refundUpdates["refunded_at"] = &now
 		}
-		if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		persistErr := database.DB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error; err != nil {
 				return err
 			}
@@ -940,15 +949,17 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				"refund_amount": refundAmount, "reason": req.Reason, "initiated_by": initiatedBy,
 				"refund_id": "wallet:" + txn.ID.String(), "provider": "wallet",
 			})
-		}); err != nil {
-			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, err)
-			services.CaptureBackgroundError(err)
+		})
+		if persistErr != nil {
+			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, persistErr)
+			services.CaptureBackgroundError(persistErr)
 		}
-		// Cross-guard the payout hold (#457/#549): a FULL refund drives the whole hold
-		// to withheld/reversed; a PARTIAL refund claws back only the refunded portion
-		// from the chef's transfer and leaves the hold releasable for the remainder.
+		// Cross-guard the payout hold (#457/#549/#568): a FULL refund drives the whole
+		// hold to withheld/reversed (unconditional); a PARTIAL refund claws back only
+		// the refunded portion from the chef's transfer and leaves the hold releasable,
+		// gated on the refund having persisted so a retry can't double-claw.
 		// Best-effort — never change the HTTP response.
-		if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund); hErr != nil {
+		if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund, persistErr == nil); hErr != nil {
 			log.Printf("payout cross-guard failed for wallet-refunded order %s: %v", order.ID, hErr)
 			services.CaptureBackgroundError(hErr)
 		}
@@ -1121,7 +1132,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		// untouched so the chef's hold stays releasable for the remainder.
 		refundUpdates["payment_status"] = models.PaymentCompleted
 	}
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+	persistErr := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error; err != nil {
 			return err
 		}
@@ -1137,14 +1148,16 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			"refund_id":     refundID,
 			"provider":      provider,
 		})
-	}); err != nil {
-		log.Printf("Failed to persist refund + event for order %s: %v", order.ID, err)
-		services.CaptureBackgroundError(err)
+	})
+	if persistErr != nil {
+		log.Printf("Failed to persist refund + event for order %s: %v", order.ID, persistErr)
+		services.CaptureBackgroundError(persistErr)
 	}
-	// Cross-guard the payout hold (#457/#549): FULL → withhold/reverse the whole hold;
-	// PARTIAL → claw back only the refunded portion, leave the hold releasable.
+	// Cross-guard the payout hold (#457/#549/#568): FULL → withhold/reverse the whole
+	// hold (unconditional); PARTIAL → claw back only the refunded portion, leave the
+	// hold releasable, gated on the refund having persisted so a retry can't double-claw.
 	// Best-effort — never change the HTTP response.
-	if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund); hErr != nil {
+	if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund, persistErr == nil); hErr != nil {
 		log.Printf("payout cross-guard failed for refunded order %s: %v", order.ID, hErr)
 		services.CaptureBackgroundError(hErr)
 	}
