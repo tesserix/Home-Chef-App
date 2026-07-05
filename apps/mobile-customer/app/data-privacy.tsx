@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { Download, ShieldAlert } from 'lucide-react-native';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useProfile } from '../hooks/useProfile';
 import { useExportMyData, useDeleteAccount } from '../hooks/useDataPrivacy';
 import { friendlyErrorMessage } from '../lib/errors';
@@ -93,12 +94,12 @@ export default function DataPrivacyScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
+      {/* Pushed screen — headerShown is false app-wide, so draw the back
+          affordance ourselves (this screen shipped without one). */}
+      <ScreenHeader title="Your Data" />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View className="px-4 pt-3 pb-2">
-          <Text className="text-2xl font-bold text-charcoal tracking-tight font-display">
-            Your Data
-          </Text>
-          <Text className="text-sm text-charcoal-soft mt-1">
+          <Text className="text-sm text-charcoal-soft">
             Access or delete the personal data we hold, per India's DPDP Act 2023.
           </Text>
         </View>

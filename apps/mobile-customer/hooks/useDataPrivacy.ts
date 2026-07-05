@@ -5,8 +5,10 @@ import { api } from '../lib/api';
 // useDataPrivacy — DPDP Act 2023 data-subject actions for the customer:
 //   - exportMyData: pulls the full personal-data bundle (Right to Access)
 //   - deleteAccount: confirm-email-gated soft-delete (Right to Erasure)
-// Both hit the backend endpoints added in the customer DPDP handler
-// (/customer/me/export, /customer/me/delete).
+// Both hit the backend endpoints added in the customer DPDP handler,
+// registered under the v1 customer group: /api/v1/customer/me/{export,delete}.
+// The api client's baseURL already ends in /api, so hooks must supply the
+// /v1 prefix — omitting it (as this hook originally did) 404s the request.
 
 export interface DeleteAccountResult {
   status: 'deleted' | 'already_deleted';
@@ -18,7 +20,7 @@ export interface DeleteAccountResult {
 export function useExportMyData() {
   return useMutation<unknown, unknown, void>({
     mutationFn: async () => {
-      const res = await api.get('/customer/me/export');
+      const res = await api.get('/v1/customer/me/export');
       return res.data;
     },
   });
@@ -27,7 +29,7 @@ export function useExportMyData() {
 export function useDeleteAccount() {
   return useMutation<DeleteAccountResult, unknown, string>({
     mutationFn: async (confirmEmail: string) => {
-      const res = await api.post('/customer/me/delete', { confirmEmail });
+      const res = await api.post('/v1/customer/me/delete', { confirmEmail });
       return res.data as DeleteAccountResult;
     },
   });
