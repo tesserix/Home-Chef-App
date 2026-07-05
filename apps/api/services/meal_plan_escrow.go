@@ -283,9 +283,17 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 	if rz == nil {
 		return fmt.Errorf("razorpay not configured")
 	}
+	// Attempt the gateway claw-back of the held transfer. The customer refund below
+	// MUST proceed even if this fails, so we DON'T abort — but we record whether it
+	// landed (reverseOK) so reverseRefundedDayHold can leave a failed claw-back as
+	// re-drivable drift for the reconcile cron rather than stamping it settled and
+	// stranding the chef's transfer (#398). An already-reversed transfer counts as
+	// success (idempotent), not drift.
+	reverseOK := true
 	if day.PayoutTransferID != "" {
-		if _, err := rz.ReverseTransfer(day.PayoutTransferID, 0); err != nil {
-			log.Printf("meal-plan refund: reverse transfer %s failed (continuing to refund): %v", day.PayoutTransferID, err)
+		if _, err := rz.ReverseTransfer(day.PayoutTransferID, 0); err != nil && !isAlreadyReversedErr(err) {
+			log.Printf("meal-plan refund: reverse transfer %s failed — leaving day hold as re-drivable drift for the reconcile cron: %v", day.PayoutTransferID, err)
+			reverseOK = false
 		}
 	}
 	// Refund the FULL amount the customer paid for the day (food + GST + delivery),
@@ -300,10 +308,11 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 		Update("refund_txn_id", txn.ID).Error; err != nil {
 		return err
 	}
-	// #498: drive the day's payout hold out of the releasable set so the admin queue
-	// can't release a refunded day (double-pay). STATE-ONLY — the held transfer is
-	// already reversed above, so this must not re-run the money seam.
-	return markRefundedDayHold(tx, day.ID)
+	// #498/#398: drive the day's payout hold out of the releasable set so the admin
+	// queue can't release a refunded day (double-pay). STATE-ONLY — the claw-back was
+	// attempted above; reverseOK tells it whether to stamp terminal-settled or leave
+	// re-drivable drift for the reconcile cron on a failed reverse.
+	return reverseRefundedDayHold(tx, day.ID, reverseOK)
 }
 
 // RefundDeclinedDays refunds the days the chef declined (cherry-picked out) once

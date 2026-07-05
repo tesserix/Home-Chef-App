@@ -722,15 +722,31 @@ func withholdOrReverseHoldForRefund(db *gorm.DB, aggType string, id uuid.UUID, r
 	return nil
 }
 
-// markRefundedDayHold drives a meal-plan-day's payout hold out of the releasable set
-// after RefundDay has already refunded the customer AND already reversed any held
-// transfer at the gateway (#498, Part C). STATE-ONLY by design: it must NOT run
-// reverseMoney, or it would double-reverse the transfer RefundDay reversed (and the
-// day reverseMoney branch does not tolerate an already-reversed gateway error). A
-// released day → reversed + payout_settled_at stamped, so the reconcile cron (which
-// re-drives released/reversed-but-unsettled holds) will not reverse it a second time;
-// an eligible/awaiting/disputed day → withheld; none/withheld/reversed → no-op.
-func markRefundedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
+// parkedDayHolds is the set of not-yet-released day holds RefundDay may act on: the
+// on-hold transfer exists but the chef hasn't been paid out yet.
+var parkedDayHolds = []models.PayoutHoldStatus{
+	models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed,
+}
+
+// reverseRefundedDayHold drives a meal-plan-day's payout hold out of the releasable
+// set after RefundDay has refunded the customer AND attempted the gateway claw-back
+// of any held transfer (#498 Part C; #398). STATE-ONLY: it never runs reverseMoney
+// itself — RefundDay already issued the ReverseTransfer — it only records the terminal
+// state that matches whether that claw-back LANDED (reverseOK).
+//
+//   - reverseOK (claw-back succeeded, or there was no transfer): released → reversed
+//     + payout_settled_at stamped (terminal — the reconcile cron won't re-reverse an
+//     already-clawed-back transfer); eligible/awaiting/disputed → withheld (the
+//     on-hold transfer was freed).
+//   - !reverseOK (claw-back FAILED — the transfer is still live at the gateway): the
+//     day is left as RE-DRIVABLE DRIFT — released AND parked both → reversed with
+//     settled_at LEFT NULL — so reconcileMealPlanDays(reversed, settleReverse) retries
+//     the ReverseTransfer (attempt-capped + ALERT) instead of silently stranding the
+//     chef's held payout for a refunded day (#398 core defect: the old code stamped
+//     settled regardless of gateway success and hid the strand from every sweep).
+//
+// none/withheld/reversed → no-op.
+func reverseRefundedDayHold(tx *gorm.DB, dayID uuid.UUID, reverseOK bool) error {
 	res := tx.Model(&models.MealPlanDay{}).
 		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldReleased).
 		Update("payout_hold_status", models.PayoutHoldReversed)
@@ -738,14 +754,23 @@ func markRefundedDayHold(tx *gorm.DB, dayID uuid.UUID) error {
 		return fmt.Errorf("payout-release: mark refunded day %s reversed: %w", dayID, res.Error)
 	}
 	if res.RowsAffected > 0 {
-		return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
+		if reverseOK {
+			return stampPayoutSettled(tx, aggTypeMealPlanDay, dayID)
+		}
+		return nil // failed claw-back → reversed + unsettled drift; reconcile re-drives
+	}
+	// Parked (not yet released): a successful reverse freed the on-hold transfer →
+	// withheld; a failed reverse leaves the transfer live → reversed drift so the
+	// reconcile retries the claw-back (never withheld, which would hide it).
+	to := models.PayoutHoldWithheld
+	if !reverseOK {
+		to = models.PayoutHoldReversed
 	}
 	res = tx.Model(&models.MealPlanDay{}).
-		Where("id = ? AND payout_hold_status IN ?", dayID,
-			[]models.PayoutHoldStatus{models.PayoutHoldReleaseEligible, models.PayoutHoldAwaitingConfirmation, models.PayoutHoldDisputed}).
-		Update("payout_hold_status", models.PayoutHoldWithheld)
+		Where("id = ? AND payout_hold_status IN ?", dayID, parkedDayHolds).
+		Update("payout_hold_status", to)
 	if res.Error != nil {
-		return fmt.Errorf("payout-release: mark refunded day %s withheld: %w", dayID, res.Error)
+		return fmt.Errorf("payout-release: mark refunded day %s %s: %w", dayID, to, res.Error)
 	}
 	return nil
 }
