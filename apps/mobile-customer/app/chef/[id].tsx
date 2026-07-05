@@ -13,21 +13,26 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CalendarDays, ChevronLeft, Heart, Share2, UtensilsCrossed, Users } from 'lucide-react-native';
+import { ChevronLeft, Heart, Share2, UtensilsCrossed } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { customerColors, customerTheme } from '@homechef/mobile-shared/theme';
 import { useChef, useChefMenu } from '../../hooks/useChefs';
-import { MyPlanChip } from '../../components/MyPlanChip';
 import { useCustomerCoords } from '../../hooks/useCustomerCoords';
 import { useChefWeeklyMenu } from '../../hooks/useMealPlans';
 import { useMealChefOffer } from '../../hooks/useMealSubscription';
 import { useCreateGroupOrder, type GroupType } from '../../hooks/useGroupOrder';
 import { useFavorites, useToggleFavorite } from '../../hooks/useFavorites';
 import { useCartStore } from '../../store/cart-store';
-import { MenuItemCard } from '../../components/chef/MenuItemCard';
-import { WeeklyMenuPreview } from '../../components/chef/WeeklyMenuPreview';
-import { TIFFIN_ENABLED, GROUP_ORDERS_ENABLED } from '../../lib/features';
+import {
+  ChefDetailTabs,
+  type ChefDetailTab,
+  type ChefDetailTabKey,
+} from '../../components/chef/ChefDetailTabs';
+import { ChefMenuTab } from '../../components/chef/ChefMenuTab';
+import { ChefWeeklyPlanTab } from '../../components/chef/ChefWeeklyPlanTab';
+import { ChefReviewList } from '../../components/chef/ChefReviewList';
+import { TIFFIN_ENABLED } from '../../lib/features';
 import { CartSheet } from '../../components/cart/CartSheet';
 
 // Compact photo header — ~28% of viewport (capped at 260) so the menu shows
@@ -37,8 +42,34 @@ const HEADER_HEIGHT = Math.min(
   260,
 );
 
+// In-page tabs under the identity block. Weekly plan only exists while the
+// tiffin flows are enabled (TIFFIN_ENABLED) — same gating as before, the
+// content just lives in a tab now.
+const DETAIL_TABS: ChefDetailTab[] = TIFFIN_ENABLED
+  ? [
+      { key: 'menu', label: 'Menu' },
+      { key: 'weekly', label: 'Weekly plan' },
+      { key: 'reviews', label: 'Reviews' },
+    ]
+  : [
+      { key: 'menu', label: 'Menu' },
+      { key: 'reviews', label: 'Reviews' },
+    ];
+
+// Truncate the cuisine list to one line: first couple of cuisines + "+N"
+// (e.g. "North Indian, South Indian +6"). The full list added 2-3 wrapped
+// lines of noise to the header.
+function formatCuisines(cuisine?: string): string {
+  const parts = (cuisine ?? '')
+    .split('·')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 3) return parts.join(', ');
+  return `${parts.slice(0, 2).join(', ')} +${parts.length - 2}`;
+}
+
 export default function ChefDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const insets = useSafeAreaInsets();
   const cartSheetRef = useRef<BottomSheet>(null);
 
@@ -99,6 +130,13 @@ export default function ChefDetailScreen() {
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const activeCategory = selectedCategory ?? categories[0] ?? null;
+
+  // Which in-page tab is showing — Menu is the landing view.
+  // Initial tab is deep-linkable via ?tab= (e.g. a "see reviews" link); defaults
+  // to the à-la-carte menu. Only honour tabs that exist for this chef.
+  const initialTab: ChefDetailTabKey =
+    (tab === 'weekly' && TIFFIN_ENABLED) || tab === 'reviews' ? tab : 'menu';
+  const [activeTab, setActiveTab] = useState<ChefDetailTabKey>(initialTab);
 
   const filteredItems = activeCategory
     ? menuItems.filter((item) => (item.category ?? 'Other') === activeCategory)
@@ -335,9 +373,10 @@ export default function ChefDetailScreen() {
 
             {/* Rating row — star + count (charcoal star, NOT gold, per spec §2 item 3) */}
             <View style={styles.ratingRow}>
-              {/* Tap the rating to view this chef's reviews. */}
+              {/* Tap the rating to jump to the in-page Reviews tab (the
+                  /chef/reviews/[id] route still exists for deep links). */}
               <Pressable
-                onPress={() => router.push(`/chef/reviews/${chef.id}`)}
+                onPress={() => setActiveTab('reviews')}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={`See ${chef.reviewCount} reviews, rated ${chef.rating.toFixed(1)} out of 5`}
@@ -379,8 +418,10 @@ export default function ChefDetailScreen() {
               ) : null}
             </View>
 
-            {/* Cuisine */}
-            <Text style={styles.cuisine}>{chef.cuisine}</Text>
+            {/* Cuisine — truncated to a single line ("A, B +N") */}
+            <Text style={styles.cuisine} numberOfLines={1}>
+              {formatCuisines(chef.cuisine)}
+            </Text>
 
             {/* Hygiene / food-safety badge (#35): verified, non-expired FSSAI.
                 Restrained text — trust signal at the point of ordering. */}
@@ -397,157 +438,50 @@ export default function ChefDetailScreen() {
                 Outside delivery area · pickup only
               </Text>
             ) : null}
-
-            {/* Tiffin pre-booking + daily subscription (#196/#283) — DEFERRED for
-                v1 (escrow/UPI-Autopay not live yet). Hidden behind TIFFIN_ENABLED
-                so no unfulfillable money flow is surfaced; flip when it ships. */}
-            {TIFFIN_ENABLED ? (
-              <>
-                <Pressable
-                  onPress={() => router.push(`/book-meal-plan?chefId=${chef.id}` as never)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Plan a week of meals"
-                  style={mealPlanCtaStyles.cta}
-                >
-                  <CalendarDays
-                    size={18}
-                    color={customerColors.coral.DEFAULT}
-                    strokeWidth={2}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={mealPlanCtaStyles.title}>Plan a week of meals</Text>
-                    <Text style={mealPlanCtaStyles.caption}>
-                      Pre-book tiffin from this chef
-                    </Text>
-                  </View>
-                  <Text style={mealPlanCtaStyles.chevron}>›</Text>
-                </Pressable>
-
-                {/* Compact entry to an existing reserved/active plan with this
-                    chef — opens a sheet with each day's fulfilment status (#434). */}
-                <MyPlanChip chefId={chef.id} />
-
-                {/* Only shown when the chef has an active subscription offer. */}
-                {mealOffer?.available ? (
-                  <Pressable
-                    onPress={() => router.push(`/meal-subscription/${chef.id}` as never)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Subscribe to a daily tiffin"
-                    style={mealPlanCtaStyles.cta}
-                  >
-                    <CalendarDays size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={mealPlanCtaStyles.title}>Subscribe to daily tiffin</Text>
-                      <Text style={mealPlanCtaStyles.caption}>
-                        Recurring meals, delivered automatically
-                      </Text>
-                    </View>
-                    <Text style={mealPlanCtaStyles.chevron}>›</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            ) : null}
-
-            {/* Group / office order (#46) — DEFERRED for v1 (GROUP_ORDERS_ENABLED
-                off on the backend). Hidden until the split-pay flow is live. */}
-            {GROUP_ORDERS_ENABLED ? (
-              <Pressable
-                onPress={() => startGroupOrder(chef.id)}
-                accessibilityRole="button"
-                accessibilityLabel="Start a group or office order"
-                style={mealPlanCtaStyles.cta}
-              >
-                <Users size={18} color={customerColors.coral.DEFAULT} strokeWidth={2} />
-                <View style={{ flex: 1 }}>
-                  <Text style={mealPlanCtaStyles.title}>Start a group / office order</Text>
-                  <Text style={mealPlanCtaStyles.caption}>
-                    Everyone adds their own items, split the bill
-                  </Text>
-                </View>
-                <Text style={mealPlanCtaStyles.chevron}>›</Text>
-              </Pressable>
-            ) : null}
           </View>
 
-          {/* Hairline divider */}
-          <View style={styles.hairline} />
+          {/* ── IN-PAGE TABS: Menu · Weekly plan · Reviews ── */}
+          <ChefDetailTabs
+            tabs={DETAIL_TABS}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
 
-          {/* Tiffin weekly-menu grid (#1) — part of the DEFERRED tiffin
-              subscription, hidden for v1. (Distinct from the à-la-carte weekly
-              scheduling, which drives the normal menu below.) */}
-          {TIFFIN_ENABLED &&
-          weeklyMenu?.isPublished &&
-          (weeklyMenu.items?.length ?? 0) > 0 ? (
-            <>
-              <WeeklyMenuPreview items={weeklyMenu.items} />
-              <View style={styles.hairline} />
-            </>
+          {/* ── MENU TAB (default) ── */}
+          {/* Category chips + à-la-carte items + the small group-order row
+              (GROUP_ORDERS_ENABLED gating lives inside ChefMenuTab). */}
+          {activeTab === 'menu' ? (
+            <ChefMenuTab
+              chefId={chef.id}
+              chefName={chef.name}
+              categories={categories}
+              activeCategory={activeCategory}
+              onSelectCategory={setSelectedCategory}
+              filteredItems={filteredItems}
+              menuIsEmpty={menuItems.length === 0}
+              onStartGroupOrder={() => startGroupOrder(chef.id)}
+            />
           ) : null}
 
-          {/* ── CATEGORY CHIP ROW (Airbnb underline style, spec §2 item 2) ── */}
-          {categories.length > 1 ? (
-            <>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryRow}
-              >
-                {categories.map((cat) => (
-                  <Pressable
-                    key={cat}
-                    onPress={() => setSelectedCategory(cat)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Filter by ${cat}`}
-                    accessibilityState={{ selected: activeCategory === cat }}
-                  >
-                    {/* Inner View: visual styles here to dodge iOS Pressable bug */}
-                    <View
-                      style={[
-                        styles.categoryChip,
-                        activeCategory === cat && styles.categoryChipActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.categoryChipLabel,
-                          activeCategory === cat && styles.categoryChipLabelActive,
-                        ]}
-                      >
-                        {cat}
-                      </Text>
-                      {/* 2px underline for selected (Airbnb category bar) */}
-                      {activeCategory === cat ? (
-                        <View style={styles.categoryChipUnderline} />
-                      ) : null}
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <View style={styles.hairline} />
-            </>
+          {/* ── WEEKLY PLAN TAB ── */}
+          {/* Tiffin pre-booking + subscription + weekly menu (#196/#283/#1) —
+              DEFERRED flows stay gated: the tab itself only exists while
+              TIFFIN_ENABLED (see DETAIL_TABS). */}
+          {activeTab === 'weekly' && TIFFIN_ENABLED ? (
+            <ChefWeeklyPlanTab
+              chefId={chef.id}
+              mealOfferAvailable={mealOffer?.available === true}
+              weeklyMenuItems={weeklyMenu?.items ?? []}
+              weeklyMenuPublished={weeklyMenu?.isPublished === true}
+            />
           ) : null}
 
-          {/* ── MENU ITEMS ── */}
-          {filteredItems.length === 0 ? (
-            <View style={styles.emptyMenu}>
-              <Text style={styles.emptyMenuText}>
-                {menuItems.length === 0
-                  ? "This kitchen hasn't published a menu right now — check back soon."
-                  : 'No items in this category'}
-              </Text>
+          {/* ── REVIEWS TAB ── */}
+          {activeTab === 'reviews' ? (
+            <View style={styles.reviewsPane}>
+              <ChefReviewList chefId={chef.id} />
             </View>
-          ) : (
-            <View style={styles.menuList}>
-              {filteredItems.map((item) => (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  chefId={chef.id}
-                  chefName={chef.name}
-                />
-              ))}
-            </View>
-          )}
+          ) : null}
         </View>
       </ScrollView>
 
@@ -796,64 +730,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  // ── Hairline divider ──────────────────────────────────────────────────────
-  hairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: customerColors.hairline,
-    marginHorizontal: 20,
-  },
-
-  // ── Category chip row (Airbnb underline style, spec §2 item 2) ───────────
-  categoryRow: {
+  // ── Reviews tab pane (embedded ChefReviewList) ────────────────────────────
+  reviewsPane: {
     paddingHorizontal: 20,
-    paddingVertical: 0,
-    gap: 0,
-  },
-  categoryChip: {
-    paddingHorizontal: 4,
-    paddingTop: 14,
-    paddingBottom: 10,
-    marginRight: 20,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  categoryChipActive: {
-    // Underline drawn as a child View (see below)
-  },
-  categoryChipLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: customerColors.charcoal.soft,
-    letterSpacing: 0.1,
-  },
-  categoryChipLabelActive: {
-    // Selected = charcoal text (spec §2 item 2).
-    color: customerColors.charcoal.DEFAULT,
-  },
-  // 2px charcoal underline for selected chip (Airbnb category-bar style).
-  categoryChipUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: customerColors.charcoal.DEFAULT,
-  },
-
-  // ── Menu list ─────────────────────────────────────────────────────────────
-  menuList: {
-    paddingHorizontal: 20,
-    // Last item has a hairline bottom — that is sufficient; no extra padding needed.
-  },
-  emptyMenu: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  emptyMenuText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: customerColors.charcoal.soft,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
 
   // ── Sticky CTA bar ────────────────────────────────────────────────────────
@@ -902,38 +783,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: customerColors.canvas,
     fontVariant: ['tabular-nums'],
-  },
-});
-
-// Tiffin pre-booking CTA on the chef profile (#196) — kept in its own sheet so
-// the addition doesn't churn the main styles block.
-const mealPlanCtaStyles = StyleSheet.create({
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: customerColors.coral.tint,
-    backgroundColor: customerColors.coral.tint,
-  },
-  title: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 15,
-    color: customerColors.charcoal.DEFAULT,
-  },
-  caption: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    color: customerColors.charcoal.soft,
-    marginTop: 1,
-  },
-  chevron: {
-    fontFamily: 'Inter',
-    fontSize: 22,
-    color: customerColors.coral.DEFAULT,
   },
 });
