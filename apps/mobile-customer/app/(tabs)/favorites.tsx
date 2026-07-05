@@ -13,6 +13,7 @@ import { Heart, ChefHat } from 'lucide-react-native';
 import { useFavorites, useToggleFavorite, useFavoriteDishes } from '../../hooks/useFavorites';
 import type { FavoriteChefEntry, FavoriteDishEntry } from '../../hooks/useFavorites';
 import { friendlyErrorMessage } from '../../lib/errors';
+import { useDockClearance } from '../../components/navigation/Dock';
 import { ChefCard } from '../../components/chef/ChefCard';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
 
@@ -188,6 +189,7 @@ function FavoriteTabs({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function FavoritesScreen() {
+  const dockClearance = useDockClearance();
   const [tab, setTab] = useState<FavTab>('chefs');
 
   const chefs = useFavorites();
@@ -262,7 +264,7 @@ export default function FavoritesScreen() {
             contentContainerStyle={
               visibleEntries.length === 0
                 ? { flexGrow: 1 }
-                : { paddingTop: 8, paddingBottom: 24, gap: 12 }
+                : { paddingTop: 8, paddingBottom: dockClearance, gap: 12 }
             }
             refreshControl={
               <RefreshControl
@@ -288,7 +290,7 @@ export default function FavoritesScreen() {
           contentContainerStyle={
             dishEntries.length === 0
               ? { flexGrow: 1 }
-              : { paddingHorizontal: 16, paddingBottom: 24 }
+              : { paddingHorizontal: 16, paddingBottom: dockClearance }
           }
           refreshControl={
             <RefreshControl

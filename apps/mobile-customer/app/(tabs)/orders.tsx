@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ShoppingBag } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { useDockClearance } from '../../components/navigation/Dock';
 import { useOrders } from '../../hooks/useOrderHistory';
 import { OrderCard } from '../../components/orders/OrderCard';
 import type { Order } from '../../types/customer';
@@ -199,6 +200,7 @@ const emptyStyles = StyleSheet.create({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
+  const dockClearance = useDockClearance();
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -334,7 +336,7 @@ export default function OrdersScreen() {
         contentContainerStyle={
           allOrders.length === 0
             ? styles.emptyContent
-            : styles.listContent
+            : [styles.listContent, { paddingBottom: dockClearance }]
         }
         ListEmptyComponent={<EmptyState filter={activeFilter} />}
         ListFooterComponent={

@@ -41,6 +41,7 @@ import {
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
+import { useDockClearance } from '../../components/navigation/Dock';
 
 // Threat model T-02-05-01: Zod validates profile fields before PATCH
 const profileSchema = z.object({
@@ -118,6 +119,7 @@ function NavRowDivider() {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const dockClearance = useDockClearance();
   const { data, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
 
@@ -239,7 +241,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: dockClearance }}>
 
         {/* ── Geist-Bold header ── */}
         <View className="px-4 pt-3 pb-2">
