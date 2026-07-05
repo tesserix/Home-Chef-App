@@ -270,8 +270,10 @@ func reconcileCancelledOrders() int {
 
 // reconcileRefundedDays is reconcileCancelledOrders for the meal-plan-day aggregate:
 // a day refunded/cancelled but left at a parked hold with a held transfer (its
-// RefundDay cross-guard crashed before markRefundedDayHold). Scoped to days that
-// actually hold a transfer (payout_transfer_id <> ”).
+// RefundDay cross-guard crashed before reverseRefundedDayHold). Scoped to days that
+// actually hold a transfer (payout_transfer_id <> ”). NOTE: a day whose reverse
+// FAILED (not crashed) is left at hold=reversed+unsettled by reverseRefundedDayHold
+// (#398) — that drift is re-driven by reconcileMealPlanDays(reversed), not here.
 func reconcileRefundedDays() int {
 	var ids []string
 	if err := database.DB.Model(&models.MealPlanDay{}).
