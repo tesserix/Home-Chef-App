@@ -675,6 +675,7 @@ func (h *GroupOrderHandler) PayGroupShare(c *gin.Context) {
 type verifyGroupShareRequest struct {
 	RazorpayPaymentID string `json:"razorpayPaymentId"`
 	RazorpayOrderID   string `json:"razorpayOrderId"`
+	RazorpaySignature string `json:"razorpaySignature"`
 }
 
 // VerifyGroupShare — POST /group-orders/:id/pay/verify. Confirms the caller's
@@ -713,6 +714,20 @@ func (h *GroupOrderHandler) VerifyGroupShare(c *gin.Context) {
 		}
 		if payment.OrderID != me.RazorpayOrderID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Order ID mismatch"})
+			return
+		}
+		// SECURITY (#395·4): bind the captured amount + Checkout signature to THIS
+		// participant's share, mirroring the main-order VerifyPayment — otherwise an
+		// under-amount captured payment on the share's razorpay order (payment.Amount
+		// is unforgeable, from Razorpay) could mark the share paid in full, and a
+		// captured payment from another order could be reused. Amount is the hard gate.
+		if payment.Amount < services.ToPaise(me.ShareAmount) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount does not match the share amount"})
+			return
+		}
+		if req.RazorpaySignature != "" &&
+			!services.VerifyPaymentSignature(me.RazorpayOrderID, req.RazorpayPaymentID, req.RazorpaySignature) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Payment signature verification failed"})
 			return
 		}
 		if err := database.DB.Model(&models.GroupOrderParticipant{}).
