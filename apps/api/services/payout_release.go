@@ -57,10 +57,18 @@ const (
 // MealPlanDay.Price (the day's price), or the group order's chef slice
 // (subtotal + tax) — NOT always the gross customer total.
 type PendingPayout struct {
-	AggType             string                  `json:"aggType"` // "order" | "meal-plan-day" | "group-order"
-	ID                  uuid.UUID               `json:"id"`
-	ChefID              uuid.UUID               `json:"chefId"`
-	Amount              float64                 `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
+	AggType string    `json:"aggType"` // "order" | "meal-plan-day" | "group-order"
+	ID      uuid.UUID `json:"id"`
+	ChefID  uuid.UUID `json:"chefId"`
+	Amount  float64   `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
+	// NetPayout is the chef's actual net transfer for this aggregate — what the
+	// held Route transfer carries and what the admin is really releasing (#462):
+	// order = ComputeOrderEarnings.NetPayout, day = perDayNetPayout, group =
+	// GroupChefPayout (subtotal+tax). For orders it is below Amount (gross customer
+	// total). For meal-plan days Amount is the food-only Price, so Net (which adds
+	// the day's food GST) can sit slightly above it — the two just measure different
+	// things, and Net is the figure that moves money.
+	NetPayout           float64                 `json:"netPayout"`
 	HoldStatus          models.PayoutHoldStatus `json:"holdStatus"`
 	DeliveredAt         *time.Time              `json:"deliveredAt,omitempty"`
 	AgeHours            float64                 `json:"ageHours"` // now - DeliveredAt (SLA clock vs 24h)
@@ -114,11 +122,13 @@ func ListPendingPayouts(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	return out, nil
 }
 
-// pendingRow is the flat scan shape for both aggregate queries.
+// pendingRow is the flat scan shape for the aggregate queries. NetPayout is filled
+// per aggregate (in Go for orders/days, in SQL for groups) — see the list funcs.
 type pendingRow struct {
 	ID                  string
 	ChefID              string
 	Amount              float64
+	NetPayout           float64
 	PayoutHoldStatus    string
 	DeliveredAt         *time.Time
 	CustomerConfirmedAt *time.Time
@@ -127,9 +137,28 @@ type pendingRow struct {
 }
 
 func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// NET is computed in Go via ComputeOrderEarnings — the SAME function that sizes
+	// the held Route transfer — so the queue can't drift from what actually moves.
+	// NetPayout ignores the CGST/SGST vs IGST split, so chefState is irrelevant here
+	// (passed ""); the extra money columns feed the pure computation.
+	type orderNetRow struct {
+		ID                  string
+		ChefID              string
+		Amount              float64
+		PayoutHoldStatus    string
+		DeliveredAt         *time.Time
+		CustomerConfirmedAt *time.Time
+		Context             string
+		HasOpenIssue        bool
+		Subtotal            float64
+		Tax                 float64
+		ChefTip             float64
+		ChefFundedDiscount  float64
+		CommissionRate      float64
+	}
 	q := db.Table("orders").
 		Select("id, chef_id, total AS amount, payout_hold_status, delivered_at, customer_confirmed_at, "+
-			"order_number AS context, "+
+			"order_number AS context, subtotal, tax, chef_tip, chef_funded_discount, commission_rate, "+
 			"EXISTS(SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.status = 'pending') AS has_open_issue").
 		Where("payout_hold_status IN ?", f.pendingStatuses()).
 		// Cross-guard (#457): never surface a refunded/cancelled order NOR one with
@@ -143,18 +172,52 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if f.Before != nil {
 		q = q.Where("delivered_at < ?", *f.Before)
 	}
-	var rows []pendingRow
-	if err := q.Scan(&rows).Error; err != nil {
+	var raw []orderNetRow
+	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
+	}
+	rows := make([]pendingRow, 0, len(raw))
+	for _, r := range raw {
+		net := ComputeOrderEarnings(EarningsInput{
+			ItemRevenue:        r.Subtotal,
+			Tax:                r.Tax,
+			ChefTip:            r.ChefTip,
+			ChefFundedDiscount: r.ChefFundedDiscount,
+			CommissionRate:     r.CommissionRate,
+		}, "").NetPayout
+		rows = append(rows, pendingRow{
+			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,
+			PayoutHoldStatus: r.PayoutHoldStatus, DeliveredAt: r.DeliveredAt,
+			CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context, HasOpenIssue: r.HasOpenIssue,
+		})
 	}
 	return toPending(aggTypeOrder, rows), nil
 }
 
 func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// NET per day via perDayNetPayout — the SAME basis HoldChefPayouts uses to size
+	// the held transfer (#518). Unlike orders (which freeze Order.CommissionRate),
+	// meal-plan days don't persist the rate the transfer was held at, so we resolve
+	// the CURRENT flat rate once. If the platform rate changes while pre-change day
+	// holds are still pending, this display can drift a few paise from the amount
+	// actually held — a review DTO, not the money seam (follow-up: persist the rate).
+	type dayNetRow struct {
+		ID                  string
+		ChefID              string
+		Amount              float64
+		PayoutHoldStatus    string
+		DeliveredAt         *time.Time
+		CustomerConfirmedAt *time.Time
+		Context             string
+		Price               float64
+		PlanSubtotal        float64
+		PlanTax             float64
+	}
 	q := db.Table("meal_plan_days").
 		Select("meal_plan_days.id AS id, meal_plans.chef_id AS chef_id, meal_plan_days.price AS amount, "+
 			"meal_plan_days.payout_hold_status AS payout_hold_status, meal_plan_days.delivered_at AS delivered_at, "+
-			"meal_plan_days.customer_confirmed_at AS customer_confirmed_at, meal_plans.meal_plan_number AS context").
+			"meal_plan_days.customer_confirmed_at AS customer_confirmed_at, meal_plans.meal_plan_number AS context, "+
+			"meal_plan_days.price AS price, meal_plans.subtotal AS plan_subtotal, meal_plans.tax AS plan_tax").
 		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
 		Where("meal_plan_days.payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
@@ -163,9 +226,21 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if f.Before != nil {
 		q = q.Where("meal_plan_days.delivered_at < ?", *f.Before)
 	}
-	var rows []pendingRow
-	if err := q.Scan(&rows).Error; err != nil {
+	var raw []dayNetRow
+	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
+	}
+	rate := GetCommissionRate(db)
+	rows := make([]pendingRow, 0, len(raw))
+	for _, r := range raw {
+		net := perDayNetPayout(
+			&models.MealPlan{Subtotal: r.PlanSubtotal, Tax: r.PlanTax},
+			&models.MealPlanDay{Price: r.Price}, rate)
+		rows = append(rows, pendingRow{
+			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,
+			PayoutHoldStatus: r.PayoutHoldStatus, DeliveredAt: r.DeliveredAt,
+			CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
+		})
 	}
 	return toPending(aggTypeMealPlanDay, rows), nil
 }
@@ -174,8 +249,10 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 // amount is the chef slice (subtotal + tax); context is a short human-scannable id
 // (GRP-<8 hex>), never a raw UUID.
 func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
+	// The group chef transfer IS the subtotal+tax slice (GroupChefPayout), so net ==
+	// amount here — surfaced explicitly so the queue is uniform across aggregates.
 	q := db.Table("group_orders").
-		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, "+
+		Select("id, chef_id, subtotal + tax AS amount, subtotal + tax AS net_payout, payout_hold_status, delivered_at, "+
 			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context").
 		Where("payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
@@ -203,7 +280,7 @@ func toPending(aggType string, rows []pendingRow) []PendingPayout {
 			age = now.Sub(*r.DeliveredAt).Hours()
 		}
 		out = append(out, PendingPayout{
-			AggType: aggType, ID: id, ChefID: chef, Amount: r.Amount,
+			AggType: aggType, ID: id, ChefID: chef, Amount: r.Amount, NetPayout: r.NetPayout,
 			HoldStatus: models.PayoutHoldStatus(r.PayoutHoldStatus), DeliveredAt: r.DeliveredAt,
 			AgeHours: age, CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
 			HasOpenIssue: r.HasOpenIssue, // populated only for order rows; day/group default false
