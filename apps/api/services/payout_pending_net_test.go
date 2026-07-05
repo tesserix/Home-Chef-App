@@ -89,7 +89,8 @@ func TestListPendingPayouts_SurfacesChefNetPayout(t *testing.T) {
 	rate := GetCommissionRate(db)
 	wantDayNet := perDayNetPayout(&models.MealPlan{Subtotal: 240.0, Tax: 24.0},
 		&models.MealPlanDay{Price: 120.0}, rate)
-	wantGroupNet := 330.0 // subtotal + tax (GroupChefPayout)
+	// #546: group net is now commission+TDS-deducted (was the gross subtotal+tax slice).
+	wantGroupNet := groupNetPayout(&models.GroupOrder{Subtotal: 300.0, Tax: 30.0}, rate)
 
 	require.InDelta(t, wantOrderNet, got[ordID].NetPayout, 0.001, "order net = ComputeOrderEarnings.NetPayout")
 	require.Less(t, got[ordID].NetPayout, got[ordID].Amount, "order net is below the gross customer total")
@@ -97,5 +98,6 @@ func TestListPendingPayouts_SurfacesChefNetPayout(t *testing.T) {
 
 	require.InDelta(t, wantDayNet, got[dayID].NetPayout, 0.001, "day net = perDayNetPayout")
 
-	require.InDelta(t, wantGroupNet, got[grpID].NetPayout, 0.001, "group net = subtotal + tax")
+	require.InDelta(t, wantGroupNet, got[grpID].NetPayout, 0.001, "group net = groupNetPayout (net of commission+TDS)")
+	require.Less(t, got[grpID].NetPayout, got[grpID].Amount, "group net is below the gross chef slice")
 }

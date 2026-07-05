@@ -18,8 +18,29 @@ import (
 // the normal delivery flow) is paid as ONE on-hold Route transfer, released on
 // delivery and reversed on cancellation. Mirrors the meal-plan escrow primitives.
 
-// GroupChefPayout is the chef's slice of a group order (subtotal + tax).
+// GroupChefPayout is the chef's GROSS slice of a group order (subtotal + tax) — the
+// customer-facing food value, used as the queue's context Amount. The chef is paid
+// groupNetPayout, NOT this.
 func GroupChefPayout(g *models.GroupOrder) float64 { return g.Subtotal + g.Tax }
+
+// groupNetPayout is the chef's NET payout for a group order — the amount the held
+// Route transfer must carry (#546). It mirrors ComputeOrderEarnings / perDayNetPayout
+// so group orders settle the chef on the SAME basis as regular orders and meal-plan
+// days, instead of paying the gross slice with no platform commission or TDS:
+//
+//	gross      = subtotal + tax          (chef food income; delivery/service fee are the platform's, excluded)
+//	commission = rate × subtotal         (platform commission on the food subtotal only)
+//	tds        = RateTDS × gross          (§194-O, on gross)
+//	net        = gross − commission − tds
+func groupNetPayout(g *models.GroupOrder, rate float64) float64 {
+	if rate <= 0 || rate >= 1 {
+		rate = DefaultCommissionRate
+	}
+	gross := g.Subtotal + g.Tax
+	commission := rate * g.Subtotal
+	tds := RateTDS * gross
+	return Round2(gross - commission - tds)
+}
 
 // HoldGroupChefPayout creates the single on-hold Route transfer to the chef and
 // stamps PayoutTransferID. Idempotent (skips when already held or no account).
@@ -33,7 +54,9 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 	if g.PayoutTransferID != "" || chefAccount == "" {
 		return nil
 	}
-	amt := GroupChefPayout(g)
+	// NET (food + tax − commission − TDS), the same basis as the order/day paths —
+	// NOT the gross chef slice (#546). Rate resolved once, like HoldChefPayouts.
+	amt := groupNetPayout(g, GetCommissionRate(tx))
 	if amt <= 0 {
 		return nil
 	}
