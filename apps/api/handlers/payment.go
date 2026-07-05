@@ -445,6 +445,13 @@ func notifyChefNewOrderTx(tx *gorm.DB, order *models.Order) error {
 	})
 }
 
+// completionBlockedStatuses are the payment states a success/capture/verify must NOT
+// re-complete from: already `completed` (idempotent — no duplicate side effects) and
+// `refunded` (a refund is terminal; re-stamping it `completed` would silently re-enable
+// the chef payout on money already returned to the customer — #563). `failed` is
+// deliberately NOT here, so a retry-after-decline can still complete the order.
+var completionBlockedStatuses = []models.PaymentStatus{models.PaymentCompleted, models.PaymentRefunded}
+
 // completeOrderPaymentTx flips an order pending→completed exactly ONCE and, only on
 // that single transition, notifies the chef and emits order.paid — the provider-generic
 // core shared by the Razorpay / Stripe / wallet verify+settle paths (#395 item 2, #555).
@@ -462,7 +469,7 @@ func completeOrderPaymentTx(tx *gorm.DB, order *models.Order, updates, event map
 		cols[k] = v
 	}
 	res := tx.Model(&models.Order{}).
-		Where("id = ? AND payment_status <> ?", order.ID, models.PaymentCompleted).
+		Where("id = ? AND payment_status NOT IN ?", order.ID, completionBlockedStatuses).
 		Updates(cols)
 	if res.Error != nil {
 		return false, res.Error
@@ -1172,11 +1179,12 @@ func (h *PaymentHandler) handlePaymentCaptured(payload json.RawMessage) error {
 	payment := data.Payment.Entity
 	log.Printf("Payment captured: %s (order: %s, amount: %d)", payment.ID, payment.OrderID, payment.Amount)
 
-	// Idempotent update: only flip orders that are not already marked
-	// completed. Razorpay retries webhooks; without this guard repeated
-	// deliveries would re-emit downstream effects.
+	// Idempotent update: only flip orders that aren't already completed OR refunded.
+	// Razorpay retries webhooks; without the `completed` guard repeated deliveries would
+	// re-emit downstream effects, and without the `refunded` guard a late/duplicate
+	// capture could re-stamp a refunded order back to completed (#563).
 	res := database.DB.Model(&models.Order{}).
-		Where("razorpay_order_id = ? AND payment_status <> ?", payment.OrderID, models.PaymentCompleted).
+		Where("razorpay_order_id = ? AND payment_status NOT IN ?", payment.OrderID, completionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status":      models.PaymentCompleted,
 			"payment_method":      payment.Method,
@@ -1401,12 +1409,38 @@ func (h *PaymentHandler) handleStripePaymentSucceeded(obj json.RawMessage) {
 	}
 	log.Printf("Stripe payment succeeded: %s (amount: %d %s)", pi.ID, pi.Amount, pi.Currency)
 
-	database.DB.Model(&models.Order{}).
-		Where("stripe_payment_intent_id = ?", pi.ID).
+	// Guarded completion mirroring handlePaymentCaptured (#563 — this was an
+	// UNCONDITIONAL update that would re-stamp a refunded/failed order back to completed
+	// on a webhook replay). Only flip an order that isn't already completed/refunded; the
+	// chef notify + reward + saga fire on the single transition (RowsAffected > 0), so the
+	// client verify path (verifyStripePayment) and this webhook can't both re-fire them.
+	res := database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, completionBlockedStatuses).
 		Updates(map[string]interface{}{
 			"payment_status": models.PaymentCompleted,
 			"payment_method": "card",
 		})
+	if res.Error != nil {
+		log.Printf("Failed to apply stripe payment_intent.succeeded for %s: %v", pi.ID, res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		return // already completed/refunded — dup delivery or raced with verify
+	}
+	var ord models.Order
+	if err := database.DB.Where("stripe_payment_intent_id = ?", pi.ID).First(&ord).Error; err != nil {
+		// Order was just marked completed but we can't re-read it — the chef notify +
+		// saga won't fire. Surface it (reconciliation is the backstop) rather than drop silently.
+		log.Printf("stripe succeeded: completed order for intent %s but re-read failed: %v", pi.ID, err)
+		services.CaptureBackgroundError(err)
+		return
+	}
+	services.MaybeGrantReward(database.DB, ord.ID)
+	services.StartOrderSaga(ord.ID)
+	if err := notifyChefNewOrderTx(database.DB, &ord); err != nil {
+		log.Printf("Failed to enqueue chef new-order push for order %s: %v", ord.ID, err)
+		services.CaptureBackgroundError(err)
+	}
 }
 
 func (h *PaymentHandler) handleStripePaymentFailed(obj json.RawMessage) {
@@ -1417,9 +1451,15 @@ func (h *PaymentHandler) handleStripePaymentFailed(obj json.RawMessage) {
 	}
 	log.Printf("Stripe payment failed: %s", pi.ID)
 
-	database.DB.Model(&models.Order{}).
-		Where("stripe_payment_intent_id = ?", pi.ID).
-		Update("payment_status", models.PaymentFailed)
+	// Guarded: only transition from a non-terminal state (#563 — was UNCONDITIONAL and
+	// could overwrite a completed/refunded order on an out-of-order/duplicate delivery).
+	if err := database.DB.Model(&models.Order{}).
+		Where("stripe_payment_intent_id = ? AND payment_status NOT IN ?", pi.ID, []models.PaymentStatus{
+			models.PaymentCompleted, models.PaymentFailed, models.PaymentRefunded,
+		}).
+		Update("payment_status", models.PaymentFailed).Error; err != nil {
+		log.Printf("Failed to apply stripe payment_intent.payment_failed for %s: %v", pi.ID, err)
+	}
 }
 
 // handleStripeAccountUpdated syncs the cached capability flags on the chef
