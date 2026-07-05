@@ -26,6 +26,7 @@ import {
   Wallet,
   Gift,
   Award,
+  DatabaseZap,
 } from 'lucide-react-native';
 import { useProfile, useUpdateProfile } from '../../hooks/useProfile';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -638,6 +639,12 @@ export default function ProfileScreen() {
               icon={<Shield size={18} color={customerColors.charcoal.soft} />}
               label="Privacy Policy"
               onPress={() => router.push('/privacy')}
+            />
+            <NavRowDivider />
+            <NavRow
+              icon={<DatabaseZap size={18} color={customerColors.charcoal.soft} />}
+              label="Your Data"
+              onPress={() => router.push('/data-privacy')}
             />
             <NavRowDivider />
             <NavRow
