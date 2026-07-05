@@ -25,6 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
+import { useDockClearance } from '../../components/navigation/Dock';
 
 interface NavRow {
   /** i18n key under the "more" namespace for the row label. */
@@ -95,6 +96,7 @@ export default function MoreScreen() {
   );
   const initials = deriveInitials(displayName);
   const email = user?.email ?? '';
+  const dockClearance = useDockClearance();
 
   function handleLogout() {
     Alert.alert('Log out?', 'You can sign back in any time.', [
@@ -113,7 +115,10 @@ export default function MoreScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: dockClearance },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Zone A — Command bar (matches dashboard/orders/menu) */}

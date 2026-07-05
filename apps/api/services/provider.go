@@ -256,7 +256,8 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	// Parse the webhook payload — generic structure
 	var webhookData map[string]interface{}
 	if err := json.Unmarshal(payload, &webhookData); err != nil {
-		return fmt.Errorf("failed to parse webhook payload: %w", err)
+		// A malformed body will never parse on retry — permanent.
+		return fmt.Errorf("failed to parse webhook payload (%v): %w", err, ErrWebhookPermanent)
 	}
 
 	// Extract external delivery ID from payload
@@ -271,7 +272,7 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	}
 
 	if externalID == "" {
-		return fmt.Errorf("no delivery ID found in webhook payload")
+		return fmt.Errorf("no delivery ID found in webhook payload: %w", ErrWebhookPermanent)
 	}
 
 	// Look up the delivery by external ID
@@ -284,19 +285,20 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 	// Extract provider status
 	providerStatus, _ := webhookData["status"].(string)
 	if providerStatus == "" {
-		return fmt.Errorf("no status found in webhook payload")
+		return fmt.Errorf("no status found in webhook payload: %w", ErrWebhookPermanent)
 	}
 
 	// Map provider status to Fe3dr status using StatusMapping
 	var statusMap map[string]string
 	if err := json.Unmarshal([]byte(provider.StatusMapping), &statusMap); err != nil {
-		return fmt.Errorf("failed to parse provider status mapping: %w", err)
+		return fmt.Errorf("failed to parse provider status mapping (%v): %w", err, ErrWebhookPermanent)
 	}
 
 	fe3drStatus, mapped := statusMap[providerStatus]
 	if !mapped {
 		log.Printf("Unmapped provider status: provider=%s status=%s", providerCode, providerStatus)
-		return fmt.Errorf("unmapped provider status: %s", providerStatus)
+		// An unmapped status won't map on retry — permanent, ACK and stop retries.
+		return fmt.Errorf("unmapped provider status %q: %w", providerStatus, ErrWebhookPermanent)
 	}
 
 	// Update delivery status

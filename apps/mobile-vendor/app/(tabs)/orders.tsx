@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Skeleton } from '@homechef/mobile-shared/ui';
+import { useDockClearance } from '../../components/navigation/Dock';
 import {
   useVendorPendingOrders,
   useVendorOrderHistory,
@@ -115,6 +116,7 @@ function NewTab() {
     useOrderAction();
   const orders = data?.orders ?? [];
   const isSurge = orders.length > 3;
+  const dockClearance = useDockClearance();
 
   // Pull-to-refresh gated to user action only. See QueueTab rationale.
   const [isPulling, setIsPulling] = useState(false);
@@ -147,7 +149,7 @@ function NewTab() {
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.tabList}
+        contentContainerStyle={[styles.tabList, { paddingBottom: dockClearance }]}
         ListHeaderComponent={
           isSurge ? (
             <View style={styles.surgeBanner}>
@@ -221,6 +223,7 @@ function HistoryTab() {
     [data?.orders],
   );
   const hasMore = data ? page * (data.limit ?? 20) < data.total : false;
+  const dockClearance = useDockClearance();
 
   const [isPulling, setIsPulling] = useState(false);
   async function onPullRefresh(): Promise<void> {
@@ -271,7 +274,7 @@ function HistoryTab() {
     <FlatList
       data={listItems}
       keyExtractor={(item) => item.key}
-      contentContainerStyle={styles.historyList}
+      contentContainerStyle={[styles.historyList, { paddingBottom: dockClearance }]}
       refreshControl={
         <RefreshControl
           refreshing={isPulling}
