@@ -136,6 +136,18 @@ func GetRazorpay() *RazorpayClient {
 	return razorpayClient
 }
 
+// snapshotRazorpayClient returns the current client pointer read under razorpayMu.
+// A RazorpayClient's fields are immutable after construction (GetRazorpay/
+// SetRazorpayClient assign a whole new client, never mutate in place), so callers
+// may read the returned client's fields without further locking. Used by the
+// signature verifiers so a payment/webhook verify can't race a credential refresh
+// (GetRazorpay post-TTL) or invalidation (#395·5).
+func snapshotRazorpayClient() *RazorpayClient {
+	razorpayMu.Lock()
+	defer razorpayMu.Unlock()
+	return razorpayClient
+}
+
 // InvalidateRazorpay clears the cached client so the next GetRazorpay() call
 // re-reads credentials from GCP Secret Manager. Call this after updating
 // secrets via the admin API.
@@ -508,12 +520,13 @@ func (c *RazorpayClient) FetchPayment(paymentID string) (*PaymentResponse, error
 // VerifyWebhookSignature validates that a webhook payload came from Razorpay.
 // The webhook secret is held inside the RazorpayClient, not in global config.
 func VerifyWebhookSignature(payload []byte, signature string) bool {
-	if razorpayClient == nil || razorpayClient.webhookSecret == "" {
+	c := snapshotRazorpayClient() // #395·5: read the client under the cache mutex
+	if c == nil || c.webhookSecret == "" {
 		log.Println("Warning: Razorpay webhook secret not configured")
 		return false
 	}
 
-	mac := hmac.New(sha256.New, []byte(razorpayClient.webhookSecret))
+	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
 	mac.Write(payload)
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
@@ -525,11 +538,12 @@ func VerifyWebhookSignature(payload []byte, signature string) bool {
 // (order, payment) pair for our merchant, so a captured payment from a
 // different order can't be reused to settle this one. Constant-time compare.
 func VerifyPaymentSignature(razorpayOrderID, razorpayPaymentID, signature string) bool {
-	if razorpayClient == nil || razorpayClient.keySecret == "" {
+	c := snapshotRazorpayClient() // #395·5: read the client under the cache mutex
+	if c == nil || c.keySecret == "" {
 		log.Println("Warning: Razorpay key secret not configured")
 		return false
 	}
-	mac := hmac.New(sha256.New, []byte(razorpayClient.keySecret))
+	mac := hmac.New(sha256.New, []byte(c.keySecret))
 	mac.Write([]byte(razorpayOrderID + "|" + razorpayPaymentID))
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
