@@ -754,6 +754,17 @@ func SetupRouter() *gin.Engine {
 			deliveryStaff.GET("/fleet/partners/:id", middleware.RequireStaffPermission(models.SPViewDeliveryPartners), deliveryHandler.GetPartnerDetail)
 		}
 
+		// Individual delivery-driver self-service group (distinct from the
+		// fleet/staff group above). Currently hosts the DPDP Act 2023
+		// data-subject endpoints; future per-driver self endpoints attach here.
+		driver := v1.Group("/driver")
+		driver.Use(bffAuth(bffKey, bffWindow), middleware.RequireDelivery())
+		{
+			driverDPDPHandler := handlers.NewDriverDPDPHandler()
+			driver.GET("/me/export", driverDPDPHandler.ExportMyData)
+			driver.POST("/me/delete", driverDPDPHandler.DeleteMyAccount)
+		}
+
 		// Chef promotion routes (featured ads)
 		chefPromotion := v1.Group("/chef/promotion")
 		chefPromotion.Use(bffAuth(bffKey, bffWindow), middleware.RequireChef())
@@ -1035,6 +1046,13 @@ func SetupRouter() *gin.Engine {
 			customer.GET("/onboarding/status", customerHandler.GetOnboardingStatus)
 			customer.POST("/onboarding/complete", customerHandler.CompleteOnboarding)
 			customer.POST("/onboarding/skip", customerHandler.SkipOnboarding)
+
+			// DPDP Act 2023 data-subject endpoints (parity with the chef flow):
+			// /me/export dumps all rows tied to the customer; /me/delete
+			// soft-deletes with a 30-day retention window.
+			customerDPDPHandler := handlers.NewCustomerDPDPHandler()
+			customer.GET("/me/export", customerDPDPHandler.ExportMyData)
+			customer.POST("/me/delete", customerDPDPHandler.DeleteMyAccount)
 
 			// Store-credit wallet (#33)
 			customer.GET("/wallet", walletHandler.GetWallet)
