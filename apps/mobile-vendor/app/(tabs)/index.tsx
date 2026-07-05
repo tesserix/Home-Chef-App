@@ -46,6 +46,7 @@ import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import { useChefMealPlanRequests, type MealPlan } from '../../hooks/useMealPlans';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+import { useDockClearance } from '../../components/navigation/Dock';
 import {
   ActiveOrderCard,
   type ActiveOrderCardOrder,
@@ -114,6 +115,7 @@ const IN_FLIGHT_STATUSES = new Set<Order['status']>([
 export default function DashboardScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
+  const dockClearance = useDockClearance();
   const {
     data: dashboard,
     isLoading,
@@ -306,7 +308,10 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: dockClearance },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isPulling}

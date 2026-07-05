@@ -12,10 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton } from '@homechef/mobile-shared/ui';
+import { Skeleton, EmptyState } from '@homechef/mobile-shared/ui';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
 import type { MenuItem } from '../../hooks/useVendorMenu';
 import { MenuItemRow } from '../../components/vendor/MenuItemRow';
+import { useDockClearance } from '../../components/navigation/Dock';
 
 const ALL_CATEGORIES = '__all__';
 
@@ -38,6 +39,7 @@ export default function MenuScreen() {
   const [selectedCategoryId, setSelectedCategoryId] =
     useState<string>(ALL_CATEGORIES);
   const [searchQuery, setSearchQuery] = useState('');
+  const dockClearance = useDockClearance();
 
   // Pull-to-refresh spinner gated to USER action only; React Query's
   // `isRefetching` would also fire for background refetches (window focus,
@@ -209,7 +211,12 @@ export default function MenuScreen() {
           <Skeleton height={64} style={{ marginBottom: 1 }} />
         </View>
       ) : !hasItems ? (
-        <EmptyMenu onAdd={() => router.push('/menu/new' as never)} />
+        <EmptyState
+          title="Your menu is empty"
+          body="Add your first dish so customers can start ordering."
+          ctaLabel="Add first item"
+          onCtaPress={() => router.push('/menu/new' as never)}
+        />
       ) : filteredItems.length === 0 ? (
         <View style={styles.filterEmptyBlock}>
           <Text style={styles.filterEmptyText}>
@@ -226,7 +233,7 @@ export default function MenuScreen() {
         <FlatList
           data={listEntries}
           keyExtractor={(entry) => entry.key}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: dockClearance }]}
           refreshControl={
             <RefreshControl
               refreshing={isPulling}
@@ -301,38 +308,6 @@ function CategoryTab({ label, active, onPress }: CategoryTabProps) {
         </Text>
       </View>
     </Pressable>
-  );
-}
-
-interface EmptyMenuProps {
-  onAdd: () => void;
-}
-
-function EmptyMenu({ onAdd }: EmptyMenuProps) {
-  // Outer Pressable carries only the pressed opacity; inner View owns
-  // backgroundColor/padding/alignSelf. iOS drops those styles when
-  // applied via the Pressable's function-style prop — see
-  // policies.tsx and the project handoff notes.
-  return (
-    <View style={styles.emptyMenu}>
-      <Text style={styles.emptyHeadline}>Your menu is empty</Text>
-      <Text style={styles.emptyBody}>
-        Add your first dish so customers can start ordering.
-      </Text>
-      <Pressable
-        onPress={onAdd}
-        style={({ pressed }) => ({
-          opacity: pressed ? 0.85 : 1,
-          alignSelf: 'stretch',
-        })}
-        accessibilityRole="button"
-        accessibilityLabel="Add first menu item"
-      >
-        <View style={styles.emptyCta}>
-          <Text style={styles.emptyCtaLabel}>Add first item</Text>
-        </View>
-      </Pressable>
-    </View>
   );
 }
 
@@ -449,43 +424,6 @@ const styles = StyleSheet.create({
   filterEmptyAccent: {
     fontFamily: 'Inter-SemiBold',
     color: theme.colors.ink.DEFAULT,
-  },
-
-  // 0-item empty
-  emptyMenu: {
-    flex: 1,
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[16],
-    alignItems: 'flex-start',
-  },
-  emptyHeadline: {
-    fontFamily: 'Geist-Bold',
-    fontSize: theme.typography.size.h2.size,
-    color: theme.colors.ink.DEFAULT,
-    letterSpacing: -0.2,
-    marginBottom: theme.spacing[2],
-  },
-  emptyBody: {
-    fontFamily: 'Inter',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.ink.soft,
-    lineHeight: 22,
-    marginBottom: theme.spacing[6],
-    maxWidth: 340,
-  },
-  emptyCta: {
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[6],
-    alignItems: 'center',
-    alignSelf: 'stretch',
-  },
-  emptyCtaLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: theme.typography.size.body.size,
-    color: theme.colors.paper,
-    letterSpacing: 0.2,
   },
 
   // Error
