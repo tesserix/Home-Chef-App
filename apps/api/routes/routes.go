@@ -397,9 +397,15 @@ func SetupRouter() *gin.Engine {
 			chefOnboarding.DELETE("/kitchen-photos", uploadHandler.DeleteKitchenPhoto)
 		}
 
-		// Menu management routes (authenticated — accessible during onboarding and after)
+		// Menu management routes. Accessible during onboarding and after, so it
+		// can't require RoleChef (the DB role is granted only at approval —
+		// services.ActivateChefOnboarding). Gate on the BUSINESS identity pool
+		// instead: chefs authenticate through the business pool from signup, so
+		// this blocks customer-pool users from the menu-management surface (which
+		// would otherwise self-provision a chef profile via getOrCreateChefProfile)
+		// without breaking pre-approval onboarding. (#468 LOW: /chef/menu gate.)
 		chefMenu := v1.Group("/chef/menu")
-		chefMenu.Use(bffAuth(bffKey, bffWindow))
+		chefMenu.Use(bffAuth(bffKey, bffWindow), middleware.RequirePool(models.PoolBusiness))
 		{
 			chefMenu.GET("", menuHandler.GetChefMenuItems)
 			chefMenu.GET("/categories", menuHandler.GetCategories)
@@ -795,9 +801,13 @@ func SetupRouter() *gin.Engine {
 			orderPayments.POST("/tip/:tipId/verify", tipHandler.VerifyTip)
 		}
 
-		// Admin routes
+		// Admin routes. Gated on BOTH the admin role AND the internal identity
+		// pool (defense-in-depth): the role is a DB column, but the pool is bound
+		// into the BFF signature, so an admin-role user who authenticated through
+		// the customer/business pool cannot reach admin endpoints — only the
+		// internal Keycloak realm can. (#468 LOW: RequirePool on /admin.)
 		admin := v1.Group("/admin")
-		admin.Use(bffAuth(bffKey, bffWindow), middleware.RequireAdmin())
+		admin.Use(bffAuth(bffKey, bffWindow), middleware.RequirePool(models.PoolInternal), middleware.RequireAdmin())
 		{
 			// Dashboard
 			admin.GET("/stats", adminHandler.GetStats)
