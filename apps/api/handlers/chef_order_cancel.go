@@ -431,8 +431,11 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 
 	// Cap by what's left on the order. A goodwill refund covering the
 	// full amount that's already been partially refunded just no-ops
-	// the gateway call and returns the current state.
-	remaining := order.Total - order.RefundAmount
+	// the gateway call and returns the current state. Use RemainingRefundable
+	// (#527/#560), NOT Total − RefundAmount: after a per-line cancel the naive
+	// difference under-states the remaining, so a genuinely-partial refund could be
+	// misread as FULL and forfeit the chef's entire hold (the exact #549 bug).
+	remaining := services.RemainingRefundable(&order)
 	if remaining <= 0 {
 		c.JSON(http.StatusOK, order.ToChefResponse())
 		return
@@ -473,22 +476,38 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
-	now := time.Now().UTC()
-	if err := database.DB.Model(&order).Updates(map[string]interface{}{
+	// #549: only a FULL goodwill refund (exhausting the remaining balance) is
+	// terminal. A PARTIAL refund must NOT stamp refunded_at — the release-side
+	// payout guards block the WHOLE chef hold on `refunded_at IS NOT NULL`, so a
+	// partial that stamped it would forfeit the chef's entire payout, not just the
+	// refunded slice. Target the row by id (not the preloaded &order) so a refund
+	// doesn't spuriously upsert the belongs-to Chef association.
+	fullRefund := req.Amount >= remaining
+	refundUpdates := map[string]interface{}{
 		"refund_id":           refundResp.ID,
 		"refund_amount":       order.RefundAmount + req.Amount,
 		"refund_reason":       req.Reason,
 		"refund_initiated_by": "chef",
-		"refunded_at":         now,
-	}).Error; err != nil {
+	}
+	if fullRefund {
+		refundUpdates["refunded_at"] = time.Now().UTC()
+	}
+	if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error; err != nil {
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}
-	// Cross-guard the payout hold (#457) — a goodwill refund on a delivered order
-	// must withhold/reverse the chef payout. Best-effort; never fail the 200.
-	if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
-		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
+	// Cross-guard the payout hold (#457/#549) — a FULL goodwill refund withholds/
+	// reverses the whole chef payout; a PARTIAL claws back only the refunded portion
+	// and leaves the hold releasable. Best-effort; never fail the 200.
+	if fullRefund {
+		if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
+			log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
+		}
+	} else {
+		if hErr := services.WithholdOrReverseOrderHoldForPartialRefund(database.DB, order.ID, amountPaise, req.Reason); hErr != nil {
+			log.Printf("partial payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
+		}
 	}
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
