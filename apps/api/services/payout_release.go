@@ -62,12 +62,12 @@ type PendingPayout struct {
 	ChefID  uuid.UUID `json:"chefId"`
 	Amount  float64   `json:"amount"` // Order.Total / MealPlanDay.Price / group chef slice (subtotal+tax)
 	// NetPayout is the chef's actual net transfer for this aggregate — what the
-	// held Route transfer carries and what the admin is really releasing (#462):
+	// held Route transfer carries and what the admin is really releasing (#462/#546):
 	// order = ComputeOrderEarnings.NetPayout, day = perDayNetPayout, group =
-	// GroupChefPayout (subtotal+tax). For orders it is below Amount (gross customer
-	// total). For meal-plan days Amount is the food-only Price, so Net (which adds
-	// the day's food GST) can sit slightly above it — the two just measure different
-	// things, and Net is the figure that moves money.
+	// groupNetPayout — all net of commission + TDS. For orders and groups it is below
+	// Amount (the gross customer/chef-slice value). For meal-plan days Amount is the
+	// food-only Price, so Net (which adds the day's food GST) can sit slightly above
+	// it — the two just measure different things, and Net is the figure that moves money.
 	NetPayout           float64                 `json:"netPayout"`
 	HoldStatus          models.PayoutHoldStatus `json:"holdStatus"`
 	DeliveredAt         *time.Time              `json:"deliveredAt,omitempty"`
@@ -245,15 +245,26 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	return toPending(aggTypeMealPlanDay, rows), nil
 }
 
-// listPendingGroupOrders lists group/office order holds in the pending states. The
-// amount is the chef slice (subtotal + tax); context is a short human-scannable id
-// (GRP-<8 hex>), never a raw UUID.
+// listPendingGroupOrders lists group/office order holds in the pending states. Amount
+// is the gross chef slice (subtotal + tax); NetPayout is the chef's actual transfer,
+// net of commission + TDS (#546) — computed in Go via groupNetPayout, the SAME basis
+// HoldGroupChefPayout uses to size the held transfer. Context is a short
+// human-scannable id (GRP-<8 hex>), never a raw UUID.
 func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
-	// The group chef transfer IS the subtotal+tax slice (GroupChefPayout), so net ==
-	// amount here — surfaced explicitly so the queue is uniform across aggregates.
+	type groupNetRow struct {
+		ID                  string
+		ChefID              string
+		Amount              float64
+		PayoutHoldStatus    string
+		DeliveredAt         *time.Time
+		CustomerConfirmedAt *time.Time
+		Context             string
+		Subtotal            float64
+		Tax                 float64
+	}
 	q := db.Table("group_orders").
-		Select("id, chef_id, subtotal + tax AS amount, subtotal + tax AS net_payout, payout_hold_status, delivered_at, "+
-			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context").
+		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, "+
+			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context, subtotal, tax").
 		Where("payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
 		q = q.Where("chef_id = ?", f.ChefID)
@@ -261,9 +272,19 @@ func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, erro
 	if f.Before != nil {
 		q = q.Where("delivered_at < ?", *f.Before)
 	}
-	var rows []pendingRow
-	if err := q.Scan(&rows).Error; err != nil {
+	var raw []groupNetRow
+	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
+	}
+	rate := GetCommissionRate(db)
+	rows := make([]pendingRow, 0, len(raw))
+	for _, r := range raw {
+		net := groupNetPayout(&models.GroupOrder{Subtotal: r.Subtotal, Tax: r.Tax}, rate)
+		rows = append(rows, pendingRow{
+			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,
+			PayoutHoldStatus: r.PayoutHoldStatus, DeliveredAt: r.DeliveredAt,
+			CustomerConfirmedAt: r.CustomerConfirmedAt, Context: r.Context,
+		})
 	}
 	return toPending(aggTypeGroupOrder, rows), nil
 }
