@@ -257,12 +257,38 @@ func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
 	if rz == nil {
 		return
 	}
-	for _, t := range topUps {
-		if _, err := rz.CreateTransfer(&services.DirectTransferRequest{
+	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(t services.TransferSpec) error {
+		_, err := rz.CreateTransfer(&services.DirectTransferRequest{
 			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
-		}); err != nil {
+		})
+		return err
+	})
+}
+
+// settleWalletTopUpsWith issues each platform-funded top-up transfer AT MOST ONCE per
+// (order, account), idempotently (#554). A retried VerifyPayment used to re-issue the
+// same real money transfer because CreateTransfer had no dedup. Now each (order,
+// account) is claimed in the processed_events ledger before the transfer; a repeat
+// settlement finds the claim and skips. On a transfer failure the claim is released so
+// the NEXT settlement re-attempts it — so a gateway blip retries without ever
+// double-paying. doTransfer is the gateway seam (real in prod, a fake in tests). A
+// crash between claim and a successful transfer strands that one top-up (recoverable
+// by the settlement reconcile — #398/#3), which is the safe side of the trade-off:
+// never a double transfer.
+func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []services.TransferSpec, doTransfer func(services.TransferSpec) error) {
+	for _, t := range topUps {
+		firstTime, err := services.ClaimWalletTopUp(database.DB, orderID, t.Account)
+		if err != nil {
+			log.Printf("wallet-topup: claim failed order=%s account=%s: %v", orderNumber, t.Account, err)
+			continue
+		}
+		if !firstTime {
+			continue // already transferred for this (order, account) — no double
+		}
+		if err := doTransfer(t); err != nil {
+			services.ReleaseWalletTopUp(database.DB, orderID, t.Account) // let a retry re-attempt
 			log.Printf("wallet-topup: direct transfer failed order=%s account=%s amount=%d: %v",
-				order.OrderNumber, t.Account, t.Amount, err)
+				orderNumber, t.Account, t.Amount, err)
 		}
 	}
 }

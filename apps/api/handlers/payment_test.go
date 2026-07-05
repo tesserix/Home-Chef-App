@@ -87,6 +87,8 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
 		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
 		next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)
+	// processed_events (the wallet top-up + webhook dedup ledger) is added on demand by
+	// tests that need it via addProcessedEventsTable, to avoid a double-create collision.
 
 	prev := database.DB
 	database.DB = db
