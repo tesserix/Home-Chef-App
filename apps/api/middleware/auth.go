@@ -54,6 +54,26 @@ func GetUserRole(c *gin.Context) (models.UserRole, bool) {
 	return "", false
 }
 
+// GetAuthPool pulls the caller's GIP identity pool (customer/business/internal)
+// off the Gin context. BFFAuth seeds it from the signed X-Auth-Pool header.
+// Returns ("", false) when no pool is attached.
+func GetAuthPool(c *gin.Context) (models.AuthPool, bool) {
+	pool, exists := c.Get(CtxAuthPool)
+	if !exists {
+		return "", false
+	}
+	switch v := pool.(type) {
+	case models.AuthPool:
+		return v, true
+	case string:
+		if v == "" {
+			return "", false
+		}
+		return models.AuthPool(v), true
+	}
+	return "", false
+}
+
 // GetUser returns the hydrated *models.User attached by BFFAuth, or
 // (nil, false) when the user row could not be loaded.
 func GetUser(c *gin.Context) (*models.User, bool) {

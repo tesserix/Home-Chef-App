@@ -61,21 +61,53 @@ func (s *rateLimiterStore) get(key string) *rate.Limiter {
 	return e.limiter
 }
 
-// clientIP returns the best-effort client IP. Trusts the leftmost X-Forwarded-For
-// when present (Cloudflare/Istio sets this) and falls back to RemoteAddr.
+// isTrustedProxy reports whether host (a bare IP) is an in-cluster/loopback
+// address we accept forwarding headers from. In production the immediate peer is
+// always the Istio sidecar (loopback) or ingress (private range); a direct
+// public client is never a trusted proxy. This is the same trust set Gin uses by
+// default for its own forwarded-IP resolution.
+func isTrustedProxy(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
+// clientIP returns the best-effort client IP for rate-limit keying.
+//
+// SECURITY: client-supplied forwarding headers (X-Forwarded-For,
+// CF-Connecting-IP) are honored ONLY when the immediate peer (RemoteAddr) is a
+// trusted proxy. A direct public caller could otherwise rotate X-Forwarded-For
+// to mint a fresh token bucket per value and bypass the limiter on
+// unauthenticated surfaces (login/register/reset). When the peer is trusted we
+// prefer Cloudflare's CF-Connecting-IP (the authoritative real client, injected
+// by the CF tunnel and not client-controllable). Failing that we walk the
+// X-Forwarded-For chain from the RIGHT and return the first NON-trusted address —
+// the real client sits just before the trusted proxy hops. Taking the blind
+// rightmost value would return an internal hop IP and collapse every anonymous
+// user into one bucket (a self-inflicted DoS) if the hop count ever changes;
+// skipping trusted hops is robust to the chain length. If every hop is trusted
+// (or there's no header) we key on the peer address.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	if cf := r.Header.Get("CF-Connecting-IP"); cf != "" {
-		return cf
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if !isTrustedProxy(host) {
+		return host
+	}
+	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
+		return cf
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := strings.TrimSpace(parts[i])
+			if ip != "" && !isTrustedProxy(ip) {
+				return ip
+			}
+		}
 	}
 	return host
 }

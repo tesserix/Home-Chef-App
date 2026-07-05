@@ -239,6 +239,34 @@ func RequireStaffPermission(permission models.StaffPermission) gin.HandlerFunc {
 	}
 }
 
+// RequirePool ensures the caller's GIP identity pool is one of the allowed
+// pools. This is defense-in-depth on top of role checks: the admin surface is
+// gated on RoleAdmin, but a role is a DB column while the pool is bound into the
+// BFF signature (X-Auth-Pool). Requiring PoolInternal on /admin means an
+// admin-role user who authenticated through the customer/business pool cannot
+// reach admin endpoints — the internal Keycloak realm is the only way in.
+//
+// Fails closed: an absent/empty pool is rejected (an unsigned or pre-GIP request
+// would have no pool, and admin is too sensitive to allow that through).
+func RequirePool(pools ...models.AuthPool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		pool, ok := GetAuthPool(c)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+			c.Abort()
+			return
+		}
+		for _, p := range pools {
+			if pool == p {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+		c.Abort()
+	}
+}
+
 // RequireAdmin is a shorthand for RequireRole(RoleAdmin)
 func RequireAdmin() gin.HandlerFunc {
 	return RequireRole(models.RoleAdmin)
