@@ -169,8 +169,13 @@ func MarkGroupOrderDelivered(orderID uuid.UUID) {
 // genuinely advances the row, stamps delivered_at + parks the payout hold in the
 // same tx. The WHERE guard makes a replayed delivered event a no-op.
 func parkGroupOrderOnDelivery(tx *gorm.DB, groupID uuid.UUID) error {
+	// Exclude cancelled too (#534): a late/duplicate delivered event must not flip a
+	// just-cancelled group back to delivered and park its hold to awaiting, which
+	// would defeat ReverseGroupHoldForCancel's status==cancelled self-guard and
+	// abandon the claw-back. RowsAffected==0 on a cancelled group → no-op.
 	res := tx.Model(&models.GroupOrder{}).
-		Where("id = ? AND status <> ?", groupID, models.GroupOrderDelivered).
+		Where("id = ? AND status NOT IN ?", groupID,
+			[]models.GroupOrderStatus{models.GroupOrderDelivered, models.GroupOrderCancelled}).
 		Updates(map[string]any{"status": models.GroupOrderDelivered, "delivered_at": time.Now()})
 	if res.Error != nil {
 		return res.Error
