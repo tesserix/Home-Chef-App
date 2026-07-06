@@ -77,8 +77,15 @@ func runPayoutReconcileScan(_ context.Context) {
 		}
 	}()
 
+	// The delivery-failure FREEZE safety net runs FIRST and UNCONDITIONALLY: disputing a
+	// hold is plain DB state (no money moves), so a stranded failed/returned order must be
+	// frozen even with both escrow flags OFF (the pre-launch money-safety invariant).
+	if df := reconcileStrandedDeliveryFailures(); df > 0 {
+		log.Printf("payout-reconcile: froze %d stranded delivery-failure order(s)", df)
+	}
+
 	if !payoutMovementEnabled() && !MealPlanEscrowActive() {
-		return // both escrow flags off → the seam is a no-op, nothing to reconcile
+		return // both escrow flags off → the money seam is a no-op, nothing to settle
 	}
 
 	n := 0

@@ -758,6 +758,16 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		// disputed). The re-dispatch reuses the same row because Delivery.OrderID is a hard
 		// uniqueIndex (no second row per order).
 		delivery.FailureReason = string(req.FailureReason)
+		// Persist the failed/returned status FIRST (before the freeze), so if the freeze
+		// below errors and returns 500, the delivery row is still DURABLY failed/returned —
+		// the #594 delivery-failure reconcile can then re-drive the freeze instead of the
+		// order stranding invisibly. On the retry path the service harmlessly resets this
+		// row back to pending.
+		if err := database.DB.Model(&models.Delivery{}).Where("id = ?", delivery.ID).
+			Updates(map[string]any{"status": req.Status, "failure_reason": delivery.FailureReason}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record delivery failure"})
+			return
+		}
 		retried, err := services.RetryOrTerminalizeFailedDelivery(database.DB, &delivery, req.FailureReason, "courier")
 		if err != nil {
 			log.Printf("delivery-failure: handle order %s: %v", delivery.OrderID, err)
