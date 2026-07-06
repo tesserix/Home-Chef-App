@@ -230,3 +230,42 @@ func TestHandleShadowfaxWebhook_DeliveredStillParks(t *testing.T) {
 	require.NoError(t, NewProviderService().HandleProviderWebhook("shadowfax", []byte(`{"order_id":"HCSF-3","status":"delivered"}`)))
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadHold(t, db, orderID))
 }
+
+// #594: Shadowfax parity for the post-pickup cancelled freeze (mirrors the generic path).
+func TestHandleShadowfaxWebhook_CancelledAfterPickupFreezes(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "shadowfax", `{}`)
+	orderID, delID := seed3PLOrderAndDelivery(t, db, pid, "SFX-C1", "HCSF-C1")
+	require.NoError(t, db.Exec(`UPDATE deliveries SET picked_up_at = ? WHERE id = ?`, time.Now(), delID.String()).Error)
+
+	require.NoError(t, NewProviderService().HandleProviderWebhook("shadowfax",
+		[]byte(`{"order_id":"HCSF-C1","status":"cancelled_by_customer"}`)))
+	require.Equal(t, models.PayoutHoldDisputed, loadHold(t, db, orderID), "post-pickup cancel freezes like a failure")
+	require.Equal(t, 1, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+}
+
+func TestHandleShadowfaxWebhook_CancelledBeforePickupNoFreeze(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "shadowfax", `{}`)
+	orderID, _ := seed3PLOrderAndDelivery(t, db, pid, "SFX-C2", "HCSF-C2") // picked_up_at NULL
+
+	require.NoError(t, NewProviderService().HandleProviderWebhook("shadowfax",
+		[]byte(`{"order_id":"HCSF-C2","status":"cancelled_by_seller"}`)))
+	require.NotEqual(t, models.PayoutHoldDisputed, loadHold(t, db, orderID), "pre-pickup cancel is a normal cancellation")
+	require.Equal(t, 0, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+}
+
+func TestHandleShadowfaxWebhook_CancelledAfterDeliveredNoFreeze(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "shadowfax", `{}`)
+	orderID, delID := seed3PLOrderAndDelivery(t, db, pid, "SFX-C3", "HCSF-C3")
+	require.NoError(t, db.Exec(`UPDATE deliveries SET picked_up_at = ?, delivered_at = ? WHERE id = ?`,
+		time.Now(), time.Now(), delID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldAwaitingConfirmation), orderID.String()).Error)
+
+	require.NoError(t, NewProviderService().HandleProviderWebhook("shadowfax",
+		[]byte(`{"order_id":"HCSF-C3","status":"cancelled_by_customer"}`)))
+	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadHold(t, db, orderID), "a delivered order isn't disputed by a late cancel")
+	require.Equal(t, 0, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+}

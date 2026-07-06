@@ -99,6 +99,17 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 		}
 	}
 
+	// A `cancelled` (cancelled_by_seller/customer) AFTER pickup but BEFORE delivery is
+	// effectively a failed delivery — freeze like failed/returned (#594; mirrors the generic
+	// path in provider.go). Guards on the loaded (pre-update) row: PickedUpAt != nil (a
+	// pre-pickup cancel is a normal cancellation) AND DeliveredAt == nil (a late/replayed
+	// cancel after delivery must not dispute a correctly-delivered, hold-parked order).
+	if status == models.DeliveryCancelled && delivery.PickedUpAt != nil && delivery.DeliveredAt == nil {
+		if err := terminalize3PLDeliveryFailure(order.ID, provider.Code, delivery.ID.String()); err != nil {
+			return err
+		}
+	}
+
 	log.Printf("shadowfax webhook: order=%s delivery=%s -> %s", clientOrderID, delivery.ID, status)
 	return nil
 }
