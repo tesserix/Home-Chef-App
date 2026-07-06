@@ -410,6 +410,21 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		}
 	}
 
+	// A 3PL `cancelled` AFTER pickup (food already collected by the rider) but BEFORE
+	// delivery is effectively a failed delivery — the customer won't get the food, so freeze
+	// the money for admin fault resolution exactly like failed/returned (#594). Two guards on
+	// the loaded (pre-update) row: PickedUpAt != nil (the rider has the food; a PRE-pickup
+	// cancel is a normal cancellation, no freeze) AND DeliveredAt == nil (a late/replayed
+	// `cancelled` after a `delivered` webhook must NOT dispute a correctly-delivered order —
+	// delivered parks the hold at awaiting_confirmation, which SetOrderHoldDisputed would
+	// otherwise flip). Idempotent via terminalize's existing-issue check.
+	if models.DeliveryStatus(fe3drStatus) == models.DeliveryCancelled &&
+		delivery.PickedUpAt != nil && delivery.DeliveredAt == nil && delivery.OrderID != uuid.Nil {
+		if err := terminalize3PLDeliveryFailure(delivery.OrderID, provider.Code, delivery.ID.String()); err != nil {
+			return err
+		}
+	}
+
 	// Durable event publication via the transactional outbox.
 	if err := EnqueueEvent(database.DB, SubjectProviderDeliveryUpdated, "provider.delivery.updated", uuid.Nil, map[string]interface{}{
 		"provider_id":          provider.ID.String(),
