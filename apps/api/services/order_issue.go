@@ -138,38 +138,42 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 			return ErrNothingToRefund
 		}
 
-		// Credit the wallet inside this txn (nested savepoint) — idempotent on
-		// the key, so at most one real credit per issue ever.
-		txn, err := CreditWallet(tx, issue.CustomerID, credit, models.WalletSourceRefund, &issue.OrderID,
-			"Refund for reported order issue", "issue:"+issue.ID.String(), resolvedBy)
-		if err != nil {
-			return err
-		}
-
-		// Claim the resolution exactly once.
+		// CLAIM the resolution BEFORE crediting (#581). The order-row lock above serializes
+		// concurrent refunds on this order; this conditional UPDATE is the single authority
+		// on "who credits". A lost claim (RowsAffected != 1) means the issue is no longer
+		// pending — either a prior RefundIssueToWallet already refunded it, OR a NON-wallet
+		// path (AdminRejectIssue / the #393 delivery-failure customer-fault resolver)
+		// resolved it. In BOTH cases NO wallet credit must happen here, so we return before
+		// CreditWallet. (Previously the credit ran first and a lost claim silently kept it,
+		// committing a real credit with order.refund_amount left un-incremented → a later
+		// double-refund window.)
 		res := tx.Model(&models.OrderIssue{}).
 			Where("id = ? AND status = ?", issue.ID, models.IssuePending).
 			Updates(map[string]any{
-				"status":        status,
-				"refund_amount": credit,
-				"resolved_at":   now,
-				"resolved_by":   resolvedBy,
-				"refund_txn_id": txn.ID,
+				"status":      status,
+				"resolved_at": now,
+				"resolved_by": resolvedBy,
 			})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
-			// Already resolved (idempotent retry / race on the same issue). Because
-			// the wallet credit keys on issue:<id>, the winner already used that key,
-			// so our CreditWallet above was a guaranteed no-op — committing here
-			// without bumping the order total is safe and never double-refunds.
-			return nil
+			return nil // lost the claim → do NOT credit
 		}
 
-		// Winner applies the order-level refund increment. Under the lock with a
-		// freshly-read RefundAmount and a credit capped at remaining, this can
-		// never push refund_amount past total.
+		// Winner: credit the wallet (idempotent on the key — defence in depth), record the
+		// money fields on the issue, and apply the order-level increment. Under the lock
+		// with a freshly-read RefundAmount and a credit capped at remaining, this can never
+		// push refund_amount past total.
+		txn, err := CreditWallet(tx, issue.CustomerID, credit, models.WalletSourceRefund, &issue.OrderID,
+			"Refund for reported order issue", "issue:"+issue.ID.String(), resolvedBy)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&models.OrderIssue{}).Where("id = ?", issue.ID).
+			Updates(map[string]any{"refund_amount": credit, "refund_txn_id": txn.ID}).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&models.Order{}).Where("id = ?", issue.OrderID).Updates(map[string]any{
 			"refund_amount":       gorm.Expr("refund_amount + ?", credit),
 			"refund_reason":       "Order issue: " + string(issue.Reason),
