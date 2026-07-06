@@ -18,6 +18,7 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"golang.org/x/time/rate"
+	"gorm.io/gorm"
 )
 
 type DeliveryHandler struct {
@@ -553,12 +554,22 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status       models.DeliveryStatus `json:"status" binding:"required"`
-		CancelReason string                `json:"cancelReason"`
+		Status        models.DeliveryStatus        `json:"status" binding:"required"`
+		CancelReason  string                       `json:"cancelReason"`
+		FailureReason models.DeliveryFailureReason `json:"failureReason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// A failed/returned delivery MUST carry a structured reason — it drives the suggested
+	// fault class the admin confirms before any money moves (#393). Reject free-form only.
+	if req.Status == models.DeliveryFailed || req.Status == models.DeliveryReturned {
+		if !models.ValidDeliveryFailureReason(req.FailureReason) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a valid failureReason is required for a failed/returned delivery"})
+			return
+		}
 	}
 
 	// Validate status transitions
@@ -737,6 +748,21 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 			"status":      models.OrderStatusReady,
 			"delivery_id": nil,
 		})
+
+	case models.DeliveryFailed, models.DeliveryReturned:
+		// A delivery that failed/was returned is terminalized into admin fault resolution:
+		// open a pending delivery_failed issue and FREEZE the payout hold to disputed. NO
+		// money moves here — the refund/release outcome executes later, only after an admin
+		// confirms fault. (Re-dispatch/retry — owner's 2-attempt cap — is a follow-up: the
+		// current schema allows only one Delivery per order (unique order_id), so re-attempt
+		// needs a re-dispatch redesign; until then every failure terminalizes so no order
+		// strands unfrozen.)
+		delivery.FailureReason = string(req.FailureReason)
+		if err := terminalizeFailedDelivery(&delivery, req.FailureReason); err != nil {
+			log.Printf("delivery-failure: terminalize order %s: %v", delivery.OrderID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record delivery failure"})
+			return
+		}
 	}
 
 	if err := database.DB.Save(&delivery).Error; err != nil {
@@ -745,6 +771,33 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, delivery.ToResponse())
+}
+
+// terminalizeFailedDelivery freezes a terminally-failed delivery's money state for admin
+// fault resolution WITHOUT moving money (#393 slice 1): it opens a pending
+// `delivery_failed` OrderIssue and disputes the order's payout hold (both atomic in tx),
+// then stages the delivery.failed notification event. The actual refund/release outcome
+// is executed later, only after an admin confirms the fault class. The event is emitted
+// only when this call did the FIRST terminalization (RecordDeliveryFailure reports
+// froze==true) — so a retried request and non-gateway (meal-plan/group) orders don't
+// emit a misleading "resolution pending" notification. delivery.Order must be preloaded.
+func terminalizeFailedDelivery(delivery *models.Delivery, reason models.DeliveryFailureReason) error {
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		froze, err := services.RecordDeliveryFailure(tx, &delivery.Order, reason)
+		if err != nil {
+			return err
+		}
+		if !froze {
+			return nil // already terminalized, or non-gateway order (handled by a later slice)
+		}
+		return services.EnqueueEvent(tx, services.SubjectDeliveryFailed, "delivery.failed", delivery.OrderID,
+			map[string]any{
+				"delivery_id":     delivery.ID.String(),
+				"order_id":        delivery.OrderID.String(),
+				"failure_reason":  string(reason),
+				"suggested_fault": string(models.SuggestedFaultClass(reason)),
+			})
+	})
 }
 
 // GetDeliveryHistory returns past deliveries for the partner
