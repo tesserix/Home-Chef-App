@@ -119,6 +119,12 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 	// so would flip a hold the winner legitimately released/left alone to `withheld` with
 	// no refund behind it (#582 cross-path race).
 	won := false
+	// #586: is this refund FULL (exhausts the remaining refundable) or PARTIAL? Decided
+	// under the SAME locked read that caps the credit, and read post-tx to pick the
+	// terminal marker + the cross-guard flavour. Mirrors chef_order_cancel RefundOrder /
+	// crossGuardRefundHold (#549) — the one refund path that split #549 never covered.
+	var fullRefund bool
+	var creditApplied float64
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// Lock + re-read the order so the cap reflects any concurrent refund.
 		readTx := tx
@@ -144,6 +150,8 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		if credit <= 0 {
 			return ErrNothingToRefund
 		}
+		fullRefund = credit >= remaining
+		creditApplied = credit
 
 		// CLAIM the resolution BEFORE crediting (#581). The order-row lock above serializes
 		// concurrent refunds on this order; this conditional UPDATE is the single authority
@@ -182,12 +190,20 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 			Updates(map[string]any{"refund_amount": credit, "refund_txn_id": txn.ID}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Order{}).Where("id = ?", issue.OrderID).Updates(map[string]any{
+		orderUpdates := map[string]any{
 			"refund_amount":       gorm.Expr("refund_amount + ?", credit),
 			"refund_reason":       "Order issue: " + string(issue.Reason),
 			"refund_initiated_by": by,
-			"refunded_at":         now,
-		}).Error; err != nil {
+		}
+		// #586: only a FULL refund stamps refunded_at (the terminal never-pay marker). A
+		// PARTIAL must leave it NULL — every release-side guard blocks the WHOLE chef
+		// payout on `refunded_at IS NOT NULL`, so stamping it on a partial would forfeit
+		// the chef's remaining payout and silently strand a later customer-fault delivery
+		// ruling (#549 over-withholding, for this path).
+		if fullRefund {
+			orderUpdates["refunded_at"] = now
+		}
+		if err := tx.Model(&models.Order{}).Where("id = ?", issue.OrderID).Updates(orderUpdates).Error; err != nil {
 			return err
 		}
 
@@ -201,12 +217,49 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 	if !won {
 		return nil // lost the claim → no credit happened → must not touch the payout hold
 	}
-	// Cross-guard the payout hold (#457): the customer just got money back, so the
-	// chef must not keep it. Best-effort — a hold-drive failure must never fail the
-	// refund (the release-side guard + reconcile are the backstop). This single
-	// choke point covers both the auto handler and the admin path.
-	if hErr := WithholdOrReverseOrderHoldForRefund(db, issue.OrderID, "order issue refund: "+string(issue.Reason)); hErr != nil {
-		log.Printf("payout cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, hErr)
+	// Cross-guard the payout hold (#457/#549/#586): the customer just got money back, so the
+	// chef must not keep it. A FULL refund drives the WHOLE hold to withheld/reversed; a
+	// PARTIAL claws back ONLY the refunded portion from the chef's transfer and LEAVES the
+	// hold releasable (the chef keeps the remainder — the food was made). Best-effort — a
+	// hold-drive failure must never fail the committed refund (the release-side guard +
+	// reconcile are the backstop). Single choke point for both the auto handler and admin path.
+	//
+	// Reaching here means the refund tx COMMITTED, and the issue-claim above guarantees a
+	// retry loses the claim (won=false) and never re-reaches this point — so the partial
+	// claw, which is NOT re-fire idempotent (#568), runs at most once per real refund.
+	reason := "order issue refund: " + string(issue.Reason)
+	if fullRefund {
+		if hErr := WithholdOrReverseOrderHoldForRefund(db, issue.OrderID, reason); hErr != nil {
+			log.Printf("payout cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, hErr)
+		}
+		return nil
+	}
+	// Partial: claw back only the refunded portion; the hold stays releasable.
+	clawErr := WithholdOrReverseOrderHoldForPartialRefund(db, issue.OrderID, ToPaise(creditApplied), reason)
+	if clawErr != nil {
+		log.Printf("payout partial cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, clawErr)
+	}
+	// #586: a partial refund RESOLVES the dispute without terminally blocking the payout. If
+	// this now-resolved issue had frozen the hold to `disputed` (the customer confirmed
+	// delivery while it was still pending — applyHoldConfirm), the dispute is settled and the
+	// chef's REMAINDER must become releasable. Mirror AdminRejectIssue: advance
+	// disputed → release_eligible once no pending issue remains. The just-resolved issue is
+	// committed above, so the guard's NOT EXISTS(pending) observes it. Guarded (a no-op for a
+	// non-disputed hold or while another issue is pending).
+	//
+	// GATED ON THE CLAW SUCCEEDING: this is the only path that moves a hold disputed →
+	// release_eligible off the back of a best-effort claw. If the claw genuinely failed (a
+	// real gateway error — the benign flags-OFF / no-transfer / already-reversed cases all
+	// return nil), the refunded portion may still be un-clawed on the chef's transfer, so we
+	// must NOT make the remainder releasable (once flags are ON that would over-pay the chef
+	// by the un-clawed portion). Leaving it `disputed` fails safe (chef under-paid, never
+	// over-paid; recoverable). No-op today since the claw always returns nil while flags OFF.
+	if clawErr == nil {
+		if cErr := db.Transaction(func(tx *gorm.DB) error {
+			return ReleaseDisputedHoldsForOrderIfCleared(tx, issue.OrderID)
+		}); cErr != nil {
+			log.Printf("payout dispute-clear after partial refund failed for order %s (issue %s): %v", issue.OrderID, issue.ID, cErr)
+		}
 	}
 	return nil
 }
