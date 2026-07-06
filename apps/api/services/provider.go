@@ -3,12 +3,15 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
@@ -238,6 +241,41 @@ func (s *ProviderService) CancelProviderDelivery(provider *models.DeliveryProvid
 }
 
 // HandleProviderWebhook processes an inbound webhook from a provider
+// terminalize3PLDeliveryFailure freezes a 3PL delivery's money state for admin fault
+// resolution when the provider reports a terminal non-delivery (failed / returned-RTO):
+// it opens a pending delivery_failed OrderIssue and disputes the order's payout hold, so
+// the chef is not paid until an admin confirms fault (#393). No money moves here. A raw
+// provider status carries no reliable fault signal, so the freeze uses FailureOther →
+// FaultAmbiguous: the admin picks the concrete outcome (refund vs release). Idempotent —
+// TerminalizeDeliveryFailure no-ops on a re-fired failure. Returns a (transient) error on
+// a genuine failure so the webhook layer retries and the money is eventually frozen.
+func terminalize3PLDeliveryFailure(orderID uuid.UUID, providerCode, deliveryID string) error {
+	var order models.Order
+	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// A genuinely-missing order won't appear on retry — PERMANENT, so the webhook
+			// layer acks and stops (no infinite retry-storm). The delivery still references
+			// this order id, so this is effectively unreachable, but fail closed to permanent.
+			return fmt.Errorf("delivery-failure: 3PL order %s not found: %w", orderID, ErrWebhookPermanent)
+		}
+		return fmt.Errorf("delivery-failure: load 3PL order %s: %w", orderID, err)
+	}
+	froze, err := TerminalizeDeliveryFailure(database.DB, &order, models.FailureOther, "3pl:"+providerCode,
+		map[string]any{"delivery_id": deliveryID})
+	if err != nil {
+		return fmt.Errorf("delivery-failure: terminalize 3PL order %s: %w", orderID, err)
+	}
+	if !froze {
+		// froze=false with no error means the order shape has no freeze handler yet —
+		// today that's a consolidated GROUP order (no razorpay_order_id, not a meal-plan
+		// day): RecordDeliveryFailure skips it and no group-failure mirror exists. Surface
+		// it loudly rather than silently 200-ack so the order isn't invisibly stranded
+		// (group-order failure freeze is a tracked follow-up).
+		log.Printf("delivery-failure: 3PL order %s failed/returned but was NOT frozen (unsupported order shape, e.g. group order) — needs manual admin resolution", orderID)
+	}
+	return nil
+}
+
 func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []byte) error {
 	log.Printf("Processing webhook from provider: %s", providerCode)
 
@@ -359,6 +397,16 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		MarkGroupOrderDelivered(delivery.OrderID)
 		if err := SetOrderHoldAwaitingConfirmation(database.DB, delivery.OrderID); err != nil {
 			log.Printf("payout-hold: park order %s on 3PL delivery failed: %v", delivery.OrderID, err)
+		}
+	}
+
+	// A 3PL delivery that terminally failed or was returned (RTO) freezes the order's
+	// money for admin fault resolution — never leave it stranded unfrozen (#393). Placed
+	// before the event enqueue so a transient freeze error returns for a webhook retry
+	// (idempotent) without double-emitting the informational update event.
+	if st := models.DeliveryStatus(fe3drStatus); (st == models.DeliveryFailed || st == models.DeliveryReturned) && delivery.OrderID != uuid.Nil {
+		if err := terminalize3PLDeliveryFailure(delivery.OrderID, provider.Code, delivery.ID.String()); err != nil {
+			return err
 		}
 	}
 
