@@ -91,6 +91,11 @@ func runPayoutReconcileScan(_ context.Context) {
 	if g := reconcileStrandedGroupFailures(); g > 0 {
 		log.Printf("payout-reconcile: froze %d stranded group delivery-failure(s)", g)
 	}
+	// An own-fleet retry (#579) that was re-dispatched but never re-accepted never fires a
+	// second failure, so it needs a timeout backstop to terminalize (#592).
+	if rt := reconcileStrandedRetryTimeouts(); rt > 0 {
+		log.Printf("payout-reconcile: froze %d stranded retry-timeout delivery(ies)", rt)
+	}
 
 	if !payoutMovementEnabled() && !MealPlanEscrowActive() {
 		return // both escrow flags off → the money seam is a no-op, nothing to settle

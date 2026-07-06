@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -139,6 +140,112 @@ func reconcileStrandedGroupFailures() int {
 		return 0
 	}
 	return driveStrandedFreeze(rows, "group-order")
+}
+
+// retryTimeoutGrace is how long a re-dispatched (retry) delivery may sit unaccepted on a
+// `ready` order before the sweep terminalizes it. Longer than deliveryFailureReconcileGrace
+// so a genuinely available re-dispatched order gets a fair re-acceptance window before the
+// backstop fires.
+const retryTimeoutGrace = 30 * time.Minute
+
+// reconcileStrandedRetryTimeouts freezes an own-fleet delivery that was re-dispatched after
+// its first failure (#579: reset to pending, attempt bumped to the cap, order re-opened to
+// `ready`) but then NEVER re-accepted by a driver — so no second failure ever fires and it
+// would otherwise strand forever (customer paid, escrow held, chef unpayable, nobody
+// alerted). #592. The durable signal is unambiguous: a `pending` Delivery row whose
+// attempt_number has reached the cap (a re-accepted retry moves off `pending`; a
+// cap-reached failure goes `failed`), on an order still `ready`, stale past the grace
+// window. Scoped to gateway orders (a razorpay_order_id, so the freeze can dispute the
+// hold); not-frozen + not-resolved guards mirror the gateway sweep so it self-terminates.
+// Returns the number freshly frozen.
+//
+// CONCURRENCY: unlike the failed/returned sweeps (whose targets are NOT re-acceptable), a
+// `pending`/`ready` retry is still a live, valid target for AcceptDelivery. So the freeze
+// canNOT reuse the plain driveStrandedFreeze — a driver accepting the retry between this
+// SELECT and the freeze would otherwise be falsely disputed. driveStrandedRetryFreeze takes
+// an atomic guarded claim on the ORDER (ready→delivering, delivery_id IS NULL) — the exact
+// row+predicate AcceptDelivery/ManualAssignDelivery lock (delivery.go:454 FOR UPDATE) — so
+// a concurrent accept and the freeze are mutually exclusive: whoever flips the order first
+// wins, and a lost claim skips the freeze.
+func reconcileStrandedRetryTimeouts() int {
+	var rows []strandRow
+	cutoff := time.Now().Add(-retryTimeoutGrace)
+	err := database.DB.Table("deliveries").
+		Select("deliveries.id AS delivery_id, deliveries.order_id AS order_id").
+		Joins("JOIN orders ON orders.id = deliveries.order_id AND orders.deleted_at IS NULL").
+		Where("deliveries.status = ?", models.DeliveryPending).
+		Where("deliveries.attempt_number >= ?", MaxDeliveryAttempts).
+		Where("deliveries.updated_at < ?", cutoff).
+		Where("orders.status = ?", models.OrderStatusReady).
+		Where("orders.razorpay_order_id <> ''").
+		Where("orders.payout_hold_status IN ?", []models.PayoutHoldStatus{models.PayoutHoldNone, models.PayoutHoldAwaitingConfirmation}).
+		Where("NOT EXISTS (SELECT 1 FROM order_issues oi WHERE oi.order_id = orders.id AND oi.reason = ? AND oi.status = ?)",
+			models.IssueDeliveryFailed, models.IssuePending).
+		Order("deliveries.updated_at ASC").
+		Limit(sweepBatchLimit).Scan(&rows).Error
+	if err != nil {
+		log.Printf("delivery-failure-reconcile: query stranded retry timeouts failed: %v", err)
+		return 0
+	}
+	return driveStrandedRetryFreeze(rows)
+}
+
+// driveStrandedRetryFreeze terminalizes each stranded retry, guarding against a concurrent
+// re-accept. Per row: atomically claim the order (ready→delivering, guarded on delivery_id
+// IS NULL — mutually exclusive with AcceptDelivery's FOR-UPDATE lock) and mark the delivery
+// `failed` (the timeout IS a terminal failure; also makes the order non-re-acceptable), then
+// freeze the money via TerminalizeDeliveryFailure. A lost claim (RowsAffected==0 → a driver
+// accepted it, or it already moved) skips the freeze — never disputes an in-flight delivery.
+func driveStrandedRetryFreeze(rows []strandRow) int {
+	driven := 0
+	for _, r := range rows {
+		orderID, err := uuid.Parse(r.OrderID)
+		if err != nil {
+			log.Printf("delivery-failure-reconcile: bad order id %q: %v", r.OrderID, err)
+			continue
+		}
+		claimed := false
+		err = database.DB.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.Order{}).
+				Where("id = ? AND status = ? AND delivery_id IS NULL", orderID, models.OrderStatusReady).
+				Update("status", models.OrderStatusDelivering)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return nil // a concurrent accept won, or the order already moved — skip the freeze
+			}
+			claimed = true
+			return tx.Model(&models.Delivery{}).Where("id = ?", r.DeliveryID).
+				Updates(map[string]any{"status": models.DeliveryFailed, "failure_reason": "retry_timeout"}).Error
+		})
+		if err != nil {
+			log.Printf("delivery-failure-reconcile: claim stranded retry order %s: %v", orderID, err)
+			continue
+		}
+		if !claimed {
+			continue
+		}
+		var order models.Order
+		if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
+			log.Printf("delivery-failure-reconcile: load claimed retry order %s: %v", orderID, err)
+			continue
+		}
+		froze, err := TerminalizeDeliveryFailure(database.DB, &order, models.FailureOther, "retry-timeout",
+			map[string]any{"delivery_id": r.DeliveryID, "source": "retry-timeout"})
+		if err != nil {
+			log.Printf("delivery-failure-reconcile: terminalize stranded retry order %s: %v", orderID, err)
+			continue
+		}
+		if froze {
+			driven++
+			log.Printf("delivery-failure-reconcile: froze stranded retry-timeout order %s (delivery %s)", orderID, r.DeliveryID)
+		}
+	}
+	if driven > 0 {
+		log.Printf("delivery-failure-reconcile: froze %d stranded retry-timeout delivery(ies)", driven)
+	}
+	return driven
 }
 
 // driveStrandedFreeze re-drives TerminalizeDeliveryFailure for each stranded row,
