@@ -122,6 +122,13 @@ func TerminalizeDeliveryFailure(db *gorm.DB, order *models.Order, reason models.
 				return err
 			}
 		}
+		if !f {
+			// Still not frozen: a consolidated GROUP order shell freezes the GROUP.
+			f, err = MarkGroupOrderFailed(tx, order.ID)
+			if err != nil {
+				return err
+			}
+		}
 		froze = f
 		if !f {
 			return nil

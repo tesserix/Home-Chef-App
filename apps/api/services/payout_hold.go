@@ -245,6 +245,7 @@ func releaseDisputedGroupHoldIfCleared(tx *gorm.DB, groupID, orderID uuid.UUID) 
 	res := tx.Model(&models.GroupOrder{}).
 		Where("id = ? AND payout_hold_status = ?", groupID, models.PayoutHoldDisputed).
 		Where("status <> ?", models.GroupOrderCancelled).
+		Where("status <> ?", models.GroupOrderFailed). // #594: a delivery-FAILED group's dispute is only resolvable by the admin group-resolution path, never auto-cleared by an unrelated issue on the shared consolidated order
 		Where("NOT EXISTS (?)", refundedOrderSubquery(tx, orderID)).
 		Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, orderID)).
 		Update("payout_hold_status", models.PayoutHoldReleaseEligible)

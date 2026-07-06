@@ -37,6 +37,10 @@ const (
 	GroupOrderDelivered GroupOrderStatus = "delivered"
 	GroupOrderCancelled GroupOrderStatus = "cancelled"
 	GroupOrderExpired   GroupOrderStatus = "expired"
+	// GroupOrderFailed marks a group whose delivery terminally failed (#393/#594). NON-
+	// terminal: the payout hold is frozen `disputed` and it stays open until an admin
+	// resolves the money outcome (refund participants vs release). Fits varchar(12).
+	GroupOrderFailed GroupOrderStatus = "failed"
 )
 
 type GroupParticipantRole string

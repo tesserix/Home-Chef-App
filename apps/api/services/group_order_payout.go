@@ -214,7 +214,11 @@ func parkGroupOrderOnDelivery(tx *gorm.DB, groupID uuid.UUID) error {
 	// abandon the claw-back. RowsAffected==0 on a cancelled group → no-op.
 	res := tx.Model(&models.GroupOrder{}).
 		Where("id = ? AND status NOT IN ?", groupID,
-			[]models.GroupOrderStatus{models.GroupOrderDelivered, models.GroupOrderCancelled}).
+			// Exclude `failed` too (#594): a late/duplicate delivered event must not flip a
+			// delivery-FAILED group (hold frozen disputed) back to delivered and park its
+			// hold to awaiting — that would orphan the disputed hold and hide the group from
+			// admin resolution. A failed group is resolved only by the group-resolution path.
+			[]models.GroupOrderStatus{models.GroupOrderDelivered, models.GroupOrderCancelled, models.GroupOrderFailed}).
 		Updates(map[string]any{"status": models.GroupOrderDelivered, "delivered_at": time.Now()})
 	if res.Error != nil {
 		return res.Error

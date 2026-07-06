@@ -414,8 +414,15 @@ func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, erro
 		return orderRefundBlocks(db, *day.OrderID)
 	case aggTypeGroupOrder:
 		var g models.GroupOrder
-		if err := db.Select("order_id").First(&g, "id = ?", id).Error; err != nil {
+		if err := db.Select("order_id", "status").First(&g, "id = ?", id).Error; err != nil {
 			return false, fmt.Errorf("payout-release: load group order %s for release guard: %w", id, err)
+		}
+		// A delivery-FAILED group is frozen pending admin resolution (#594): it must never
+		// pay the chef until the group-resolution path terminalizes it. Definitive
+		// status-based backstop, independent of the hold state machine (mirrors the failed-
+		// day block + orderRefundBlocks re-checking order.Status).
+		if g.Status == models.GroupOrderFailed {
+			return true, nil
 		}
 		if g.OrderID == nil {
 			return false, nil

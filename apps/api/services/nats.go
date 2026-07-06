@@ -32,6 +32,7 @@ const (
 	SubjectGroupOrderLocked    = "group_orders.locked"    // → participants: pay your share
 	SubjectGroupOrderPlaced    = "group_orders.placed"    // → host: order placed
 	SubjectGroupOrderCancelled = "group_orders.cancelled" // → participants: cancelled/refunded
+	SubjectGroupOrderFailed    = "group_orders.failed"    // → host: delivery failed, resolution pending (#393/#594)
 	SubjectDeliveryAssigned    = "delivery.assigned"
 	SubjectDeliveryPickedUp    = "delivery.picked_up"
 	SubjectDeliveryFailed      = "delivery.failed"   // → customer/chef: delivery failed, resolution pending (#393)
