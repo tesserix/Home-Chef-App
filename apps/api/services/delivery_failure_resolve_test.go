@@ -127,6 +127,57 @@ func TestResolveDeliveryFailure_CrossPathRace_NoDoubleRefund(t *testing.T) {
 	require.NotContains(t, desc, "admin_confirmed_fault=platform")
 }
 
+// #586 — the customer-fault resolution must STILL pay the chef when the order had a PRIOR
+// partial issue refund. Faithful repro of the whole flow: a prep-time issue is PARTIALLY
+// refunded (hold still `none`), the order is delivered (→ awaiting) then FAILS (→ disputed),
+// and the admin confirms customer-fault. Before the fix, the partial RefundIssueToWallet
+// stamped refunded_at → ReleaseDisputedOrderHoldIfCleared's `refunded_at IS NULL` guard
+// no-op'd → the chef was silently stranded at disputed (and reconcile then withheld it).
+func TestResolveDeliveryFailure_CustomerFault_AfterPartialIssueRefund_StillReleases(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	orderID, customerID := seedCrossOrder(t, db, models.PayoutHoldNone, "delivering", nil) // total 250
+
+	// Prep-time issue, PARTIALLY refunded (₹50 of ₹250). Post-fix: refunded_at stays NULL,
+	// the hold is untouched (partial claw only), and the issue resolves.
+	prep := seedPendingIssue(t, db, orderID, customerID)
+	require.NoError(t, RefundIssueToWallet(db, prep, 50, "admin", nil))
+
+	// Deliver → awaiting; delivery then fails → the freeze disputes the hold.
+	require.NoError(t, SetOrderHoldAwaitingConfirmation(db, orderID))
+	require.NoError(t, SetOrderHoldDisputed(db, orderID))
+	require.Equal(t, models.PayoutHoldDisputed, loadOrderHold(t, db, orderID))
+
+	// Admin confirms customer-fault → chef PAID (released), not stranded.
+	dfIssue := seedDeliveryFailedIssue(t, db, orderID, customerID)
+	require.NoError(t, ResolveDeliveryFailure(db, loadIssueRow(t, db, dfIssue), models.FaultCustomer, uuid.New()))
+
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, orderID),
+		"customer-fault after a prior PARTIAL refund still releases the chef (#586)")
+	require.Equal(t, 50.0, loadOrderRefundAmount(t, db, orderID), "the prior partial refund stands; no new refund")
+	require.Equal(t, 50.0, walletBalance(t, db, customerID), "no additional customer money moved")
+}
+
+// #586 (reconcile side) — a partially-refunded order (refunded_at NULL after the fix) must NOT
+// be a reconcile target: reconcileCancelledOrders keyed on `refunded_at IS NOT NULL` would
+// otherwise drive a still-releasable hold to `withheld`, forfeiting the chef's remainder.
+// Seed a delivered+confirmed order (release_eligible, no dispute), partially refund it, and
+// assert the reconcile leaves it alone. (Before the fix the partial stamped refunded_at AND
+// the full cross-guard drove release_eligible → withheld outright.)
+func TestReconcileCancelledOrders_IgnoresPartialIssueRefund(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	orderID, customerID := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+	iss := seedPendingIssue(t, db, orderID, customerID)
+	require.NoError(t, RefundIssueToWallet(db, iss, 50, "admin", nil)) // partial → refunded_at stays NULL, hold releasable
+
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, orderID),
+		"a partial refund leaves the hold releasable (not withheld)")
+	require.Equal(t, 0, reconcileCancelledOrders(), "a partially-refunded order is not a reconcile target")
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, orderID),
+		"the hold is NOT withheld by the reconcile (#586)")
+}
+
 func TestResolveDeliveryFailure_RejectsNonDeliveryIssue(t *testing.T) {
 	db := setupCrossguardDB(t)
 	orderID, customerID := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivering", nil)

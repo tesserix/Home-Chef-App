@@ -198,6 +198,55 @@ func TestRefundIssueToWallet(t *testing.T) {
 	})
 }
 
+// #586: RefundIssueToWallet must stamp refunded_at ONLY on a FULL refund (one that
+// exhausts the remaining refundable). A PARTIAL issue refund that stamped it would
+// forfeit the chef's WHOLE remaining payout and silently strand a later customer-fault
+// delivery ruling — every release-side guard blocks on `refunded_at IS NOT NULL`. This
+// mirrors the #549 full-vs-partial split already applied to the goodwill/per-line paths.
+func TestRefundIssueToWallet_RefundedAtOnlyOnFullRefund(t *testing.T) {
+	refundedAtSet := func(t *testing.T, db *gorm.DB, orderID uuid.UUID) bool {
+		var n int64
+		require.NoError(t, db.Raw(`SELECT COUNT(*) FROM orders WHERE id = ? AND refunded_at IS NOT NULL`, orderID.String()).Scan(&n).Error)
+		return n == 1
+	}
+
+	t.Run("partial refund leaves refunded_at NULL", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 500, 0)`, orderID.String()).Error)
+		iss := seedIssue(t, db, customer, orderID)
+
+		require.NoError(t, RefundIssueToWallet(db, iss, 120, "system", nil)) // 120 of 500 = partial
+		assert.False(t, refundedAtSet(t, db, orderID), "a partial issue refund must NOT stamp refunded_at (#586)")
+	})
+
+	t.Run("full refund stamps refunded_at", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 500, 0)`, orderID.String()).Error)
+		iss := seedIssue(t, db, customer, orderID)
+
+		require.NoError(t, RefundIssueToWallet(db, iss, 500, "admin", nil)) // 500 of 500 = full
+		assert.True(t, refundedAtSet(t, db, orderID), "a full issue refund stamps refunded_at (terminal)")
+	})
+
+	// Sequential refunds: a later refund that exhausts the remainder is the one that
+	// terminalizes. This also proves a partial no longer BLOCKS the remainder from being
+	// refunded (the old refunded_at stamp on the first would have been a spurious terminal).
+	t.Run("partial then exhausting-remainder stamps refunded_at only on the second", func(t *testing.T) {
+		db := setupIssueDB(t)
+		customer, orderID := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO orders (id, total, refund_amount) VALUES (?, 500, 0)`, orderID.String()).Error)
+		iss1 := seedIssue(t, db, customer, orderID)
+		iss2 := seedIssue(t, db, customer, orderID)
+
+		require.NoError(t, RefundIssueToWallet(db, iss1, 200, "admin", nil)) // partial
+		assert.False(t, refundedAtSet(t, db, orderID), "still partial after 200/500")
+		require.NoError(t, RefundIssueToWallet(db, iss2, 300, "admin", nil)) // exhausts remaining → full
+		assert.True(t, refundedAtSet(t, db, orderID), "the refund that exhausts the remainder is terminal")
+	})
+}
+
 func TestGetIssueConfig(t *testing.T) {
 	db := setupIssueDB(t)
 	// Defaults.

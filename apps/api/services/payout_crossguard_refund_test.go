@@ -292,18 +292,76 @@ func TestCrossguard_Idempotent(t *testing.T) {
 
 // ── Wiring / issue path ────────────────────────────────────────────────────
 
-func TestCrossguard_AutoRefundDrivesHold(t *testing.T) {
+// #586: a PARTIAL issue refund must NOT forfeit the chef's whole payout. It claws only the
+// refunded portion from the chef transfer (a no-op while flags are OFF) and LEAVES the hold
+// releasable — the chef keeps the remainder (the food was made). Previously this asserted the
+// whole hold was withheld, which was the bug (the #549 over-withholding, for the one refund
+// path #549 didn't cover).
+func TestCrossguard_PartialAutoRefundLeavesHoldReleasable(t *testing.T) {
 	flagsOff(t)
 	db := setupCrossguardDB(t)
-	orderID, customer := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil)
+	orderID, customer := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil) // total 250
 	iss := seedPendingIssue(t, db, orderID, customer)
 
-	// Auto-refund the issue (by="system"). This ACTUALLY credits the wallet and
-	// then must drive the hold to withheld via the best-effort wiring.
-	require.NoError(t, RefundIssueToWallet(db, iss, 120, "system", nil))
+	require.NoError(t, RefundIssueToWallet(db, iss, 120, "system", nil)) // 120 of 250 = partial
+
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, orderID),
+		"a partial issue refund leaves the chef payout releasable (#586)")
+	require.False(t, loadOrder(t, db, orderID).RefundedAt != nil, "partial refund does not stamp refunded_at")
+	require.NoError(t, ReleaseHold(db, aggTypeOrder, orderID), "the remainder is still releasable to the chef")
+	require.Equal(t, models.PayoutHoldReleased, loadOrderHold(t, db, orderID))
+}
+
+// #586 — a PARTIAL refund that RESOLVES the dispute must CLEAR the frozen hold so the chef's
+// remainder can still be paid. A hold reaches `disputed` when the customer confirms delivery
+// while an issue is still pending (applyHoldConfirm). Approving a partial refund resolves that
+// issue; with no pending issue left the dispute is settled → the hold must advance
+// disputed → release_eligible (chef keeps the remainder, minus the clawed portion). Without
+// this, the partial cross-guard (which never touches hold status) leaves it stuck at
+// `disputed` forever — no code path but AdminRejectIssue ever clears it, and reconcile skips
+// partially-refunded orders.
+func TestCrossguard_PartialAutoRefundClearsResolvedDispute(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	orderID, customer := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", nil) // total 250, frozen by the issue below
+	iss := seedPendingIssue(t, db, orderID, customer)
+
+	require.NoError(t, RefundIssueToWallet(db, iss, 120, "admin", nil)) // partial → resolves the issue
+
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, orderID),
+		"a partial refund that resolves the dispute clears the frozen hold (#586)")
+	require.False(t, loadOrder(t, db, orderID).RefundedAt != nil, "partial refund does not stamp refunded_at")
+	require.NoError(t, ReleaseHold(db, aggTypeOrder, orderID), "the chef's remainder is releasable")
+}
+
+// A partial refund that leaves ANOTHER issue pending must NOT clear the dispute — the hold
+// stays `disputed` until every issue is resolved (the dispute isn't settled yet).
+func TestCrossguard_PartialAutoRefundKeepsDisputedWhenSiblingPending(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	orderID, customer := seedCrossOrder(t, db, models.PayoutHoldDisputed, "delivered", nil)
+	iss := seedPendingIssue(t, db, orderID, customer)
+	_ = seedPendingIssue(t, db, orderID, customer) // a second, still-pending issue
+
+	require.NoError(t, RefundIssueToWallet(db, iss, 60, "admin", nil)) // partial, resolves only the first
+
+	require.Equal(t, models.PayoutHoldDisputed, loadOrderHold(t, db, orderID),
+		"still disputed while another issue is pending")
+}
+
+// A FULL auto-refund (exhausting the remaining refundable) DOES withhold the whole hold and
+// stamps refunded_at — the terminal never-pay outcome (unchanged behavior).
+func TestCrossguard_FullAutoRefundWithholdsHold(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	orderID, customer := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil) // total 250
+	iss := seedPendingIssue(t, db, orderID, customer)
+
+	require.NoError(t, RefundIssueToWallet(db, iss, 250, "system", nil)) // 250 of 250 = full
 
 	require.Equal(t, models.PayoutHoldWithheld, loadOrderHold(t, db, orderID),
-		"auto-refund drove the hold to withheld")
+		"a full refund withholds the whole payout")
+	require.True(t, loadOrder(t, db, orderID).RefundedAt != nil, "a full refund stamps refunded_at (terminal)")
 	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, orderID), ErrHoldNotEligible)
 }
 
