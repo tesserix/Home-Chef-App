@@ -96,18 +96,31 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 }
 
 // TerminalizeDeliveryFailure is the shared entry point for a terminally-failed delivery
-// (courier pipeline AND chef self-delivery). It freezes the order's money state
-// (RecordDeliveryFailure — opens the delivery_failed issue + disputes the hold) and, ONLY
-// on the FIRST terminalization (froze==true), stages one delivery.failed notification
-// event. No money moves. meta is merged into the event payload (e.g. delivery_id for the
-// courier path, self_delivery for the chef path). A re-fired failure and non-gateway
-// (meal-plan/group) orders return froze=false and emit nothing.
+// (courier pipeline AND chef self-delivery). It freezes the money state and, ONLY on the
+// FIRST terminalization (froze==true), stages one delivery.failed notification event. No
+// money moves. Two freeze paths, tried in order for the two order shapes:
+//   - a regular gateway order → RecordDeliveryFailure opens the delivery_failed issue +
+//     disputes the ORDER hold;
+//   - a meal-plan per-day shell (no razorpay_order_id, money on the meal_plan_days row) →
+//     MarkMealPlanDayFailed marks the DAY failed + disputes the DAY hold.
+//
+// meta is merged into the notification payload (e.g. delivery_id for the courier path,
+// self_delivery for the chef path). A re-fired failure, and orders matching neither shape
+// (e.g. a group consolidated order), return froze=false and emit nothing.
 func TerminalizeDeliveryFailure(db *gorm.DB, order *models.Order, reason models.DeliveryFailureReason, reportedBy string, meta map[string]any) (bool, error) {
 	var froze bool
 	err := db.Transaction(func(tx *gorm.DB) error {
 		f, err := RecordDeliveryFailure(tx, order, reason, reportedBy)
 		if err != nil {
 			return err
+		}
+		if !f {
+			// The gateway-order path skipped (non-gateway shell): try the meal-plan-day
+			// path — a per-day shell freezes the DAY instead of the order.
+			f, err = MarkMealPlanDayFailed(tx, order.ID)
+			if err != nil {
+				return err
+			}
 		}
 		froze = f
 		if !f {

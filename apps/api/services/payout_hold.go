@@ -214,12 +214,16 @@ func ReleaseDisputedHoldsForOrderIfCleared(tx *gorm.DB, orderID uuid.UUID) error
 
 // releaseDisputedDayHoldIfCleared drives ONE meal-plan-day disputed → release_eligible
 // with the block predicates folded into the guarded UPDATE: the day itself not
-// refunded (refund_txn_id NULL), the linked order not refunded/cancelled, and no
-// remaining pending issue on that order. Race-safe (correctness lives in the WHERE;
-// the caller's SELECT only enumerates candidates); emits only on a genuine transition.
+// refunded (refund_txn_id NULL), not delivery-failed (#393 — a failed day's dispute is
+// only resolvable by the admin day-resolution path, never auto-cleared by an unrelated
+// order-issue rejection on the shared shell order), the linked order not
+// refunded/cancelled, and no remaining pending issue on that order. Race-safe
+// (correctness lives in the WHERE; the caller's SELECT only enumerates candidates);
+// emits only on a genuine transition.
 func releaseDisputedDayHoldIfCleared(tx *gorm.DB, dayID, orderID uuid.UUID) error {
 	res := tx.Model(&models.MealPlanDay{}).
 		Where("id = ? AND payout_hold_status = ?", dayID, models.PayoutHoldDisputed).
+		Where("status <> ?", models.MealPlanDayFailed).
 		Where("refund_txn_id IS NULL").
 		Where("NOT EXISTS (?)", refundedOrderSubquery(tx, orderID)).
 		Where("NOT EXISTS (?)", openOrderIssueSubquery(tx, orderID)).
