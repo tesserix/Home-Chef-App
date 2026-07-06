@@ -34,6 +34,7 @@ const (
 	SubjectGroupOrderCancelled = "group_orders.cancelled" // → participants: cancelled/refunded
 	SubjectDeliveryAssigned    = "delivery.assigned"
 	SubjectDeliveryPickedUp    = "delivery.picked_up"
+	SubjectDeliveryFailed      = "delivery.failed" // → customer/chef: delivery failed, resolution pending (#393)
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
 	SubjectPaymentSuccess      = "payments.success"
 	SubjectPaymentFailed       = "payments.failed"

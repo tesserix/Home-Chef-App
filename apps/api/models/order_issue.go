@@ -22,9 +22,16 @@ const (
 	IssueWrongItem    IssueReason = "wrong_item"
 	IssueDamaged      IssueReason = "damaged"
 	IssueOther        IssueReason = "other"
+	// IssueDeliveryFailed is a SYSTEM-opened issue (not customer-reported) marking a
+	// terminally-failed delivery that needs admin fault resolution (#393). It is the
+	// dispute signal that freezes the order's payout hold and surfaces it in the admin
+	// payout/dispute queue; the reported reason + suggested fault ride in Description.
+	IssueDeliveryFailed IssueReason = "delivery_failed"
 )
 
-// ValidIssueReason reports whether r is a known reason.
+// ValidIssueReason reports whether r is a customer-reportable reason. Note:
+// IssueDeliveryFailed is deliberately excluded — it is system-opened only, so the
+// customer issue-report endpoint cannot forge one.
 func ValidIssueReason(r IssueReason) bool {
 	switch r {
 	case IssueMissingItem, IssueQualityIssue, IssueWrongItem, IssueDamaged, IssueOther:
