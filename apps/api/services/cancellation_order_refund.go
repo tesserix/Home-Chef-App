@@ -26,9 +26,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
-
-	"gorm.io/gorm"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
@@ -45,39 +42,32 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 	if order.PaymentStatus != models.PaymentCompleted {
 		return nil
 	}
-	// #527 race: refresh the money fields from the DB — a concurrent per-line cancel may
-	// have moved Total/RefundAmount/WalletApplied since the caller loaded `order`, and the
-	// refund math (RemainingRefundable + the wallet-capture cap below) must run on the
-	// current committed state, not a stale snapshot, or it can over-refund. Best-effort:
-	// on a read error we keep the caller's snapshot (RemainingRefundable itself re-reads
-	// consistently and fails safe).
-	var money struct{ Total, RefundAmount, WalletApplied float64 }
-	if err := database.DB.Model(&models.Order{}).Select("total", "refund_amount", "wallet_applied").
+	// #609: claim + RESERVE the remaining refundable under a row lock via the shared helper —
+	// the SAME atomic discipline the partial path (RefundIssueToWallet) uses. This replaces the
+	// old unlocked read-then-claim (a partial racing this full could over-refund) AND the later
+	// stale `order.RefundAmount + refundAmount` write (which clobbered a concurrent partial's
+	// increment). refundAmount is the total owed back to the customer (#527 RemainingRefundable,
+	// computed under the lock so a per-line cancel doesn't strand the live items' money).
+	reserved, won, rErr := ReserveFullRefund(database.DB, order.ID)
+	if rErr != nil {
+		return fmt.Errorf("cancel-refund: reserve order %s: %w", order.ID, rErr)
+	}
+	if !won {
+		return nil // a sibling refund path already claimed/refunded, or nothing left to refund
+	}
+	// `reserved` is the total owed back to the customer (locked into refund_amount by the
+	// reservation). The wallet-capture split below may lower the GATEWAY share (refundAmount),
+	// but the ledger — and any release-on-failure — must always use the full `reserved`.
+	refundAmount := reserved
+	// Refresh Total/WalletApplied for the wallet-capture split (these don't change the total,
+	// only how it's paid: gateway vs re-credited store credit).
+	var money struct{ Total, WalletApplied float64 }
+	if err := database.DB.Model(&models.Order{}).Select("total", "wallet_applied").
 		Where("id = ?", order.ID).Scan(&money).Error; err == nil {
-		order.Total, order.RefundAmount, order.WalletApplied = money.Total, money.RefundAmount, money.WalletApplied
-	}
-	// #527: RemainingRefundable (consistent snapshot), NOT Total − RefundAmount — after a
-	// per-line cancel the latter double-subtracts the refunded lines (Total was already
-	// reduced) and strands the remaining live items' money on a full cancel/reject.
-	refundAmount := RemainingRefundable(order)
-	if refundAmount <= 0 {
-		return nil // already fully refunded via prior per-line refunds — nothing left
-	}
-	now := time.Now()
-
-	// Unified atomic claim — the single guard against a cross-path double refund.
-	claim := database.DB.Model(&models.Order{}).
-		Where("id = ? AND payment_status = ? AND refunded_at IS NULL", order.ID, models.PaymentCompleted).
-		Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": now})
-	if claim.Error != nil {
-		return fmt.Errorf("cancel-refund: claim order %s: %w", order.ID, claim.Error)
-	}
-	if claim.RowsAffected == 0 {
-		return nil // a sibling refund path already claimed/refunded this order
+		order.Total, order.WalletApplied = money.Total, money.WalletApplied
 	}
 	revertClaim := func() {
-		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
-			Updates(map[string]any{"payment_status": models.PaymentCompleted, "refunded_at": gorm.Expr("NULL")})
+		ReleaseFullRefundReservation(database.DB, order.ID, reserved)
 	}
 
 	provider := strings.ToLower(order.PaymentProvider)
@@ -110,11 +100,12 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 		return fmt.Errorf("cancel-refund: gateway refund order %s: %w", order.ID, gerr)
 	}
 
-	// Persist the refund columns. payment_status + refunded_at were set by the claim;
-	// status is intentionally left to the caller (cancelled / rejected).
+	// Persist the refund columns. payment_status + refunded_at + refund_amount were set
+	// atomically by the reservation; status is intentionally left to the caller (cancelled /
+	// rejected). Do NOT re-write refund_amount here (the old `order.RefundAmount + refundAmount`
+	// was a stale read-modify-write that clobbered a concurrent partial's increment — #609).
 	if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
 		"refund_id":           refundID,
-		"refund_amount":       order.RefundAmount + refundAmount,
 		"refund_reason":       reason,
 		"refund_initiated_by": initiatedBy,
 	}).Error; err != nil {
