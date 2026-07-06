@@ -967,6 +967,10 @@ func SetupRouter() *gin.Engine {
 
 			// Referral program config (#38) — reward amounts + monthly spend cap.
 			// Order issues (#37) — review queue + assisted refund approval + config.
+			// #613 — read-only delivery-failure resolution queue: pending delivery_failed
+			// OrderIssues + failed meal-plan days + failed group orders, for the admin surface
+			// that drives the resolve-delivery-failure endpoints below.
+			admin.GET("/delivery-failures", orderIssueHandler.AdminListDeliveryFailures)
 			admin.GET("/order-issues", orderIssueHandler.AdminListIssues)
 			admin.POST("/order-issues/:issueId/resolve", orderIssueHandler.AdminResolveIssue)
 			admin.POST("/order-issues/:issueId/reject", orderIssueHandler.AdminRejectIssue)
