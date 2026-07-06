@@ -880,6 +880,9 @@ func SetupRouter() *gin.Engine {
 			// Tiffin meal-plan oversight (#199) — read-only, platform-wide
 			admin.GET("/meal-plans", mealPlanHandler.AdminListMealPlans)
 			admin.GET("/meal-plans/:id", mealPlanHandler.AdminGetMealPlan)
+			// Delivery-failed meal-plan day resolution (#393 slice B) — admin confirms
+			// fault; money executes (chef paid vs full day refund) + plan completes.
+			admin.POST("/meal-plan-days/:dayId/resolve-delivery-failure", mealPlanHandler.AdminResolveDayDeliveryFailure)
 
 			// Promotions (featured ads)
 			admin.GET("/promotions", promotionHandler.AdminListPromotions)

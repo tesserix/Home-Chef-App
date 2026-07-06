@@ -914,6 +914,55 @@ func (h *MealPlanHandler) AdminGetMealPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mealPlan": plan})
 }
 
+// AdminResolveDayDeliveryFailure executes the admin-confirmed money policy for a
+// delivery-FAILED meal-plan day (#393 slice B). The failed day is frozen `disputed` by
+// the slice-A freeze; the admin confirms a concrete fault (customer / platform / chef)
+// and the matching outcome runs — customer-fault → chef paid + day terminalized;
+// platform/chef-fault → full day refund + day → refunded — then the plan completes if
+// every day is terminal. Mirrors the gateway-order resolver (AdminResolveDeliveryFailure)
+// for the meal-plan-day aggregate.
+func (h *MealPlanHandler) AdminResolveDayDeliveryFailure(c *gin.Context) {
+	adminID, _ := middleware.GetUserID(c)
+	dayID, err := uuid.Parse(c.Param("dayId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid day id"})
+		return
+	}
+	var req struct {
+		Fault models.DeliveryFaultClass `json:"fault" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A fault class (customer, platform, or chef) is required"})
+		return
+	}
+
+	var day models.MealPlanDay
+	if err := database.DB.First(&day, "id = ?", dayID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal-plan day not found"})
+		return
+	}
+	// Load the plan WITH its days + snapshotted totals — RefundDay derives the per-day
+	// gross refund from the plan's Subtotal/Tax/Total and day count.
+	var plan models.MealPlan
+	if err := database.DB.Preload("Days").First(&plan, "id = ?", day.MealPlanID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Meal plan not found"})
+		return
+	}
+
+	switch err := services.ResolveMealPlanDayFailure(database.DB, &plan, &day, req.Fault, adminID); {
+	case errors.Is(err, services.ErrAmbiguousFault):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Confirm a concrete fault: customer, platform, or chef"})
+	case errors.Is(err, services.ErrNotDeliveryFailure):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This day is not in a delivery-failed state"})
+	case errors.Is(err, services.ErrIssueAlreadyHandled):
+		c.JSON(http.StatusConflict, gin.H{"error": "This day has already been resolved"})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the delivery failure"})
+	default:
+		c.JSON(http.StatusOK, gin.H{"status": "resolved", "fault": string(req.Fault)})
+	}
+}
+
 // ───────────────────────── helpers ─────────────────────────
 
 // loadScopedPlan loads a plan by id ONLY if it belongs to the given owner column
