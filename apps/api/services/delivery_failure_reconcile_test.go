@@ -42,6 +42,9 @@ func setupDeliveryReconcileDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT, status TEXT,
 			payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '',
 			delivered_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT, status TEXT,
+			payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
+			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
 			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
 			next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
@@ -139,4 +142,173 @@ func TestReconcileDeliveryFailures_DeliveredNotTouched(t *testing.T) {
 	orderID, _ := seedStranded(t, db, models.OrderStatusDelivered, models.PayoutHoldAwaitingConfirmation, true, models.DeliveryDelivered, time.Hour)
 	require.Equal(t, 0, reconcileStrandedDeliveryFailures())
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, holdOf(t, db, orderID))
+}
+
+// ── shell-order reconcile (#594): meal-plan-day + group shells have no
+// razorpay_order_id, so the gateway reconcile above excludes them. These sweeps key
+// off the shell aggregate (meal_plan_days.status / group_orders.status) instead. ──
+
+// seedStrandedDay inserts a meal-plan-day SHELL order (no razorpay_order_id) with a
+// failed/returned delivery aged `age` ago and a meal_plan_days row in `dayStatus`.
+func seedStrandedDay(t *testing.T, db *gorm.DB, dayStatus models.MealPlanDayStatus, hold models.PayoutHoldStatus, delStatus models.DeliveryStatus, age time.Duration) (orderID, dayID uuid.UUID) {
+	t.Helper()
+	orderID, dayID, delID := uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+		VALUES (?,?,?,?,?,?)`, orderID.String(), string(models.OrderStatusDelivering), "", uuid.NewString(), uuid.NewString(), string(models.PayoutHoldNone)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, order_id, status, payout_hold_status)
+		VALUES (?,?,?,?,?)`, dayID.String(), uuid.NewString(), orderID.String(), string(dayStatus), string(hold)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO deliveries (id, order_id, status, updated_at) VALUES (?,?,?,?)`,
+		delID.String(), orderID.String(), string(delStatus), time.Now().Add(-age)).Error)
+	return orderID, dayID
+}
+
+// seedStrandedGroup inserts a consolidated GROUP SHELL order (no razorpay_order_id) with
+// a failed/returned delivery aged `age` ago and a group_orders row in `groupStatus`.
+func seedStrandedGroup(t *testing.T, db *gorm.DB, groupStatus models.GroupOrderStatus, hold models.PayoutHoldStatus, delStatus models.DeliveryStatus, age time.Duration) (orderID, groupID uuid.UUID) {
+	t.Helper()
+	orderID, groupID, delID := uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+		VALUES (?,?,?,?,?,?)`, orderID.String(), string(models.OrderStatusDelivering), "", uuid.NewString(), uuid.NewString(), string(models.PayoutHoldNone)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO group_orders (id, host_id, chef_id, order_id, status, payout_hold_status)
+		VALUES (?,?,?,?,?,?)`, groupID.String(), uuid.NewString(), uuid.NewString(), orderID.String(), string(groupStatus), string(hold)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO deliveries (id, order_id, status, updated_at) VALUES (?,?,?,?)`,
+		delID.String(), orderID.String(), string(delStatus), time.Now().Add(-age)).Error)
+	return orderID, groupID
+}
+
+func dayHoldOf(t *testing.T, db *gorm.DB, dayID uuid.UUID) models.PayoutHoldStatus {
+	t.Helper()
+	var s string
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM meal_plan_days WHERE id = ?`, dayID.String()).Scan(&s).Error)
+	return models.PayoutHoldStatus(s)
+}
+
+func groupHoldOf(t *testing.T, db *gorm.DB, groupID uuid.UUID) models.PayoutHoldStatus {
+	t.Helper()
+	var s string
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM group_orders WHERE id = ?`, groupID.String()).Scan(&s).Error)
+	return models.PayoutHoldStatus(s)
+}
+
+// ── meal-plan-day shell reconcile ──
+
+func TestReconcileMealPlanDayFailures_FreezesStrandedDay(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	orderID, dayID := seedStrandedDay(t, db, models.MealPlanDayPrepared, models.PayoutHoldNone, models.DeliveryFailed, time.Hour)
+
+	require.Equal(t, 1, reconcileStrandedMealPlanDayFailures())
+	require.Equal(t, models.MealPlanDayFailed, loadDayStatus(t, db, dayID), "day marked failed")
+	require.Equal(t, models.PayoutHoldDisputed, dayHoldOf(t, db, dayID), "day hold frozen")
+	require.Equal(t, 1, countOutbox(t, db, SubjectMealPlanDayFailed))
+	// The gateway sweep must leave the shell alone (its hold stays none, no order issue).
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID), "shell order hold untouched by gateway sweep")
+}
+
+func TestReconcileMealPlanDayFailures_ReturnedAlsoFrozen(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	_, dayID := seedStrandedDay(t, db, models.MealPlanDayConfirmed, models.PayoutHoldNone, models.DeliveryReturned, time.Hour)
+	require.Equal(t, 1, reconcileStrandedMealPlanDayFailures())
+	require.Equal(t, models.MealPlanDayFailed, loadDayStatus(t, db, dayID))
+}
+
+func TestReconcileMealPlanDayFailures_AlreadyFailedSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	seedStrandedDay(t, db, models.MealPlanDayFailed, models.PayoutHoldDisputed, models.DeliveryFailed, time.Hour)
+	require.Equal(t, 0, reconcileStrandedMealPlanDayFailures(), "already frozen day skipped")
+	require.Equal(t, 0, countOutbox(t, db, SubjectMealPlanDayFailed), "no re-emit")
+}
+
+func TestReconcileMealPlanDayFailures_TerminalDaySkipped(t *testing.T) {
+	// A day already resolved (delivered/refunded/cancelled) is not a strand — the freeze
+	// would no-op on it, so the sweep must not select it and loop forever.
+	for _, st := range []models.MealPlanDayStatus{
+		models.MealPlanDayDelivered, models.MealPlanDayRefunded, models.MealPlanDayCancelled,
+		models.MealPlanDaySkipped, models.MealPlanDayDeclined,
+	} {
+		t.Run(string(st), func(t *testing.T) {
+			db := setupDeliveryReconcileDB(t)
+			_, dayID := seedStrandedDay(t, db, st, models.PayoutHoldReleased, models.DeliveryFailed, time.Hour)
+			require.Equal(t, 0, reconcileStrandedMealPlanDayFailures())
+			require.Equal(t, st, loadDayStatus(t, db, dayID), "terminal day untouched")
+		})
+	}
+}
+
+func TestReconcileMealPlanDayFailures_WithinGraceSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	_, dayID := seedStrandedDay(t, db, models.MealPlanDayPrepared, models.PayoutHoldNone, models.DeliveryFailed, time.Minute)
+	require.Equal(t, 0, reconcileStrandedMealPlanDayFailures(), "inside grace window")
+	require.Equal(t, models.MealPlanDayPrepared, loadDayStatus(t, db, dayID))
+}
+
+func TestReconcileMealPlanDayFailures_IgnoresGatewayOrder(t *testing.T) {
+	// A gateway order (razorpay_order_id set, no meal_plan_days row) is the gateway
+	// sweep's job — the day sweep must not touch it.
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStranded(t, db, models.OrderStatusDelivering, models.PayoutHoldNone, true, models.DeliveryFailed, time.Hour)
+	require.Equal(t, 0, reconcileStrandedMealPlanDayFailures())
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID))
+}
+
+// ── group shell reconcile ──
+
+func TestReconcileGroupFailures_FreezesStrandedGroup(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	orderID, groupID := seedStrandedGroup(t, db, models.GroupOrderConfirmed, models.PayoutHoldNone, models.DeliveryFailed, time.Hour)
+
+	require.Equal(t, 1, reconcileStrandedGroupFailures())
+	require.Equal(t, models.GroupOrderFailed, groupStatusOf(t, db, groupID), "group marked failed")
+	require.Equal(t, models.PayoutHoldDisputed, groupHoldOf(t, db, groupID), "group hold frozen")
+	require.Equal(t, 1, countOutbox(t, db, SubjectGroupOrderFailed))
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID), "shell order hold untouched")
+}
+
+func TestReconcileGroupFailures_ReturnedAlsoFrozen(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	_, groupID := seedStrandedGroup(t, db, models.GroupOrderPlaced, models.PayoutHoldNone, models.DeliveryReturned, time.Hour)
+	require.Equal(t, 1, reconcileStrandedGroupFailures())
+	require.Equal(t, models.GroupOrderFailed, groupStatusOf(t, db, groupID))
+}
+
+func TestReconcileGroupFailures_AlreadyFailedSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	seedStrandedGroup(t, db, models.GroupOrderFailed, models.PayoutHoldDisputed, models.DeliveryFailed, time.Hour)
+	require.Equal(t, 0, reconcileStrandedGroupFailures())
+	require.Equal(t, 0, countOutbox(t, db, SubjectGroupOrderFailed))
+}
+
+func TestReconcileGroupFailures_TerminalGroupSkipped(t *testing.T) {
+	for _, st := range []models.GroupOrderStatus{
+		models.GroupOrderDelivered, models.GroupOrderCancelled, models.GroupOrderExpired,
+	} {
+		t.Run(string(st), func(t *testing.T) {
+			db := setupDeliveryReconcileDB(t)
+			_, groupID := seedStrandedGroup(t, db, st, models.PayoutHoldReleased, models.DeliveryFailed, time.Hour)
+			require.Equal(t, 0, reconcileStrandedGroupFailures())
+			require.Equal(t, st, groupStatusOf(t, db, groupID))
+		})
+	}
+}
+
+func TestReconcileGroupFailures_WithinGraceSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	_, groupID := seedStrandedGroup(t, db, models.GroupOrderConfirmed, models.PayoutHoldNone, models.DeliveryFailed, time.Minute)
+	require.Equal(t, 0, reconcileStrandedGroupFailures())
+	require.Equal(t, models.GroupOrderConfirmed, groupStatusOf(t, db, groupID))
+}
+
+func TestReconcileShellFailures_DayAndGroupSweepsAreIsolated(t *testing.T) {
+	// A stranded day and a stranded group in the same DB: each sweep freezes ONLY its own
+	// shape (the JOIN scopes it), and neither touches the other. Guards against a future
+	// query change that would let one sweep pick up the wrong shell shape.
+	db := setupDeliveryReconcileDB(t)
+	_, dayID := seedStrandedDay(t, db, models.MealPlanDayPrepared, models.PayoutHoldNone, models.DeliveryFailed, time.Hour)
+	_, groupID := seedStrandedGroup(t, db, models.GroupOrderConfirmed, models.PayoutHoldNone, models.DeliveryFailed, time.Hour)
+
+	require.Equal(t, 1, reconcileStrandedMealPlanDayFailures(), "day sweep freezes only the day")
+	require.Equal(t, models.MealPlanDayFailed, loadDayStatus(t, db, dayID))
+	require.Equal(t, models.GroupOrderConfirmed, groupStatusOf(t, db, groupID), "group untouched by day sweep")
+
+	require.Equal(t, 1, reconcileStrandedGroupFailures(), "group sweep freezes only the group")
+	require.Equal(t, models.GroupOrderFailed, groupStatusOf(t, db, groupID))
 }

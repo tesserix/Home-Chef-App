@@ -48,16 +48,25 @@ import (
 // strands and doesn't race an in-flight freeze into a duplicate issue.
 const deliveryFailureReconcileGrace = 15 * time.Minute
 
-// reconcileStrandedDeliveryFailures freezes any gateway order left stranded by a
+// strandRow identifies a stranded failed/returned delivery and the order it belongs to.
+type strandRow struct {
+	DeliveryID string
+	OrderID    string
+}
+
+// The shell sweeps below key their "still a strand" predicate off the SAME status guard
+// the freeze uses (terminalOrFailedDayStatuses / terminalOrFailedGroupStatuses, defined
+// alongside MarkMealPlanDayFailed / MarkGroupOrderFailed). Selecting a shell OUTSIDE that
+// set means the freeze is guaranteed to fire on it (never a froze=false no-op that would
+// re-drive forever); sharing the one list is what keeps selection and freeze-ability from
+// drifting apart.
+
+// reconcileStrandedDeliveryFailures freezes any GATEWAY order left stranded by a
 // delivery-failure freeze that never completed. Idempotent (TerminalizeDeliveryFailure
 // no-ops on an already-frozen order); once frozen the order carries a pending
 // delivery_failed issue and is excluded next sweep, so the sweep self-terminates. Returns
 // the number of orders freshly frozen.
 func reconcileStrandedDeliveryFailures() int {
-	type strandRow struct {
-		DeliveryID string
-		OrderID    string
-	}
 	var rows []strandRow
 	cutoff := time.Now().Add(-deliveryFailureReconcileGrace)
 	err := database.DB.Table("deliveries").
@@ -76,7 +85,68 @@ func reconcileStrandedDeliveryFailures() int {
 		log.Printf("delivery-failure-reconcile: query stranded orders failed: %v", err)
 		return 0
 	}
+	return driveStrandedFreeze(rows, "order")
+}
 
+// reconcileStrandedMealPlanDayFailures freezes any meal-plan per-DAY shell order left
+// stranded by a freeze that never completed. The gateway sweep above excludes shells (no
+// razorpay_order_id); this one keys off the meal_plan_days row instead — a failed/returned
+// delivery whose day is not yet `failed` (nor terminally resolved) is a strand.
+// TerminalizeDeliveryFailure's fall-through freezes the DAY (MarkMealPlanDayFailed); once
+// `failed` the day drops out of terminalOrFailedDayStatuses next sweep, so it
+// self-terminates. Returns the number of days freshly frozen.
+func reconcileStrandedMealPlanDayFailures() int {
+	var rows []strandRow
+	cutoff := time.Now().Add(-deliveryFailureReconcileGrace)
+	err := database.DB.Table("deliveries").
+		Select("deliveries.id AS delivery_id, deliveries.order_id AS order_id").
+		Joins("JOIN orders ON orders.id = deliveries.order_id AND orders.deleted_at IS NULL").
+		Joins("JOIN meal_plan_days ON meal_plan_days.order_id = orders.id").
+		Where("deliveries.status IN ?", []models.DeliveryStatus{models.DeliveryFailed, models.DeliveryReturned}).
+		Where("deliveries.updated_at < ?", cutoff).
+		Where("orders.razorpay_order_id = ''").
+		Where("meal_plan_days.status NOT IN ?", terminalOrFailedDayStatuses).
+		Order("deliveries.updated_at ASC").
+		Limit(sweepBatchLimit).Scan(&rows).Error
+	if err != nil {
+		log.Printf("delivery-failure-reconcile: query stranded meal-plan-day orders failed: %v", err)
+		return 0
+	}
+	return driveStrandedFreeze(rows, "meal-plan-day")
+}
+
+// reconcileStrandedGroupFailures freezes any consolidated GROUP shell order left stranded
+// by a freeze that never completed — the group analog of the meal-plan-day sweep. Keys off
+// the group_orders row (a failed/returned delivery on a group not yet `failed` nor
+// terminal). TerminalizeDeliveryFailure's fall-through freezes the GROUP
+// (MarkGroupOrderFailed); self-terminates once the group is `failed`. Returns the number
+// of groups freshly frozen.
+func reconcileStrandedGroupFailures() int {
+	var rows []strandRow
+	cutoff := time.Now().Add(-deliveryFailureReconcileGrace)
+	err := database.DB.Table("deliveries").
+		Select("deliveries.id AS delivery_id, deliveries.order_id AS order_id").
+		Joins("JOIN orders ON orders.id = deliveries.order_id AND orders.deleted_at IS NULL").
+		Joins("JOIN group_orders ON group_orders.order_id = orders.id").
+		Where("deliveries.status IN ?", []models.DeliveryStatus{models.DeliveryFailed, models.DeliveryReturned}).
+		Where("deliveries.updated_at < ?", cutoff).
+		Where("orders.razorpay_order_id = ''").
+		Where("group_orders.status NOT IN ?", terminalOrFailedGroupStatuses).
+		Order("deliveries.updated_at ASC").
+		Limit(sweepBatchLimit).Scan(&rows).Error
+	if err != nil {
+		log.Printf("delivery-failure-reconcile: query stranded group orders failed: %v", err)
+		return 0
+	}
+	return driveStrandedFreeze(rows, "group-order")
+}
+
+// driveStrandedFreeze re-drives TerminalizeDeliveryFailure for each stranded row,
+// log-and-continue per row so one bad row can't abort the batch, and returns how many were
+// freshly frozen. Shared by the gateway + shell (meal-plan-day, group) sweeps; the shell
+// shape is resolved inside TerminalizeDeliveryFailure's fall-through, so the shape label is
+// for logging only.
+func driveStrandedFreeze(rows []strandRow, shape string) int {
 	driven := 0
 	for _, r := range rows {
 		orderID, err := uuid.Parse(r.OrderID)
@@ -97,11 +167,11 @@ func reconcileStrandedDeliveryFailures() int {
 		}
 		if froze {
 			driven++
-			log.Printf("delivery-failure-reconcile: froze stranded order %s (delivery %s)", orderID, r.DeliveryID)
+			log.Printf("delivery-failure-reconcile: froze stranded %s %s (delivery %s)", shape, orderID, r.DeliveryID)
 		}
 	}
 	if driven > 0 {
-		log.Printf("delivery-failure-reconcile: froze %d stranded delivery-failure order(s)", driven)
+		log.Printf("delivery-failure-reconcile: froze %d stranded %s delivery-failure(s)", driven, shape)
 	}
 	return driven
 }
