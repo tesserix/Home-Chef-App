@@ -61,6 +61,8 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT,
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
+		// order_items — RefundIssueToWallet's PerLineRefundedTotalTx sums per-line refunds.
+		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE wallet_txns (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, type TEXT, source TEXT,

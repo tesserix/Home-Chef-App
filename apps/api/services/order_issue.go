@@ -112,6 +112,13 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 	}
 	now := time.Now()
 
+	// won is set true only when THIS call wins the pending-issue claim and actually
+	// credits — so the payout cross-guard below runs ONLY for the real refunder. A lost
+	// claim (idempotent retry, or a non-wallet path like AdminRejectIssue / the #393
+	// customer-fault resolver already resolved the issue) must NOT drive the hold: doing
+	// so would flip a hold the winner legitimately released/left alone to `withheld` with
+	// no refund behind it (#582 cross-path race).
+	won := false
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// Lock + re-read the order so the cap reflects any concurrent refund.
 		readTx := tx
@@ -158,8 +165,9 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
-			return nil // lost the claim → do NOT credit
+			return nil // lost the claim → do NOT credit (and do NOT drive the hold below)
 		}
+		won = true
 
 		// Winner: credit the wallet (idempotent on the key — defence in depth), record the
 		// money fields on the issue, and apply the order-level increment. Under the lock
@@ -189,6 +197,9 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 	})
 	if err != nil {
 		return err
+	}
+	if !won {
+		return nil // lost the claim → no credit happened → must not touch the payout hold
 	}
 	// Cross-guard the payout hold (#457): the customer just got money back, so the
 	// chef must not keep it. Best-effort — a hold-drive failure must never fail the

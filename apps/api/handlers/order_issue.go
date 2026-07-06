@@ -369,3 +369,49 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": string(models.IssueRejected)})
 }
+
+// AdminResolveDeliveryFailure executes the admin-confirmed money policy for a
+// `delivery_failed` issue (#393 slice 3, hybrid model). The driver's reason only
+// SUGGESTED a fault; the admin confirms a concrete class and the matching outcome runs:
+// customer-fault → no refund + release the vendor hold; platform/chef-fault → full
+// customer refund + block the chef payout. Ambiguous is rejected — the admin must decide.
+func (h *OrderIssueHandler) AdminResolveDeliveryFailure(c *gin.Context) {
+	adminID, _ := middleware.GetUserID(c)
+	issueID, err := uuid.Parse(c.Param("issueId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid issue id"})
+		return
+	}
+	var req struct {
+		Fault models.DeliveryFaultClass `json:"fault" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A fault class (customer, platform, or chef) is required"})
+		return
+	}
+
+	var issue models.OrderIssue
+	if err := database.DB.First(&issue, "id = ?", issueID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
+		return
+	}
+	if issue.Status != models.IssuePending {
+		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
+		return
+	}
+
+	switch err := services.ResolveDeliveryFailure(database.DB, &issue, req.Fault, adminID); {
+	case errors.Is(err, services.ErrAmbiguousFault):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Confirm a concrete fault: customer, platform, or chef"})
+	case errors.Is(err, services.ErrNotDeliveryFailure):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This endpoint only resolves delivery-failure issues"})
+	case errors.Is(err, services.ErrIssueAlreadyHandled):
+		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
+	case errors.Is(err, services.ErrNothingToRefund):
+		c.JSON(http.StatusConflict, gin.H{"error": "This order has already been fully refunded"})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the delivery failure"})
+	default:
+		c.JSON(http.StatusOK, gin.H{"status": "resolved", "fault": string(req.Fault)})
+	}
+}
