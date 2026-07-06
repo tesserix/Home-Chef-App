@@ -30,10 +30,10 @@ func setupDeliveryReconcileDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE deliveries (id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending',
-			failure_reason TEXT DEFAULT '', updated_at DATETIME, created_at DATETIME)`,
+			failure_reason TEXT DEFAULT '', attempt_number INTEGER DEFAULT 1, updated_at DATETIME, created_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
 			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
-			payout_hold_status TEXT DEFAULT '', refund_amount REAL DEFAULT 0,
+			payout_hold_status TEXT DEFAULT '', refund_amount REAL DEFAULT 0, delivery_id TEXT,
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT, requested_amount REAL DEFAULT 0,
@@ -295,6 +295,90 @@ func TestReconcileGroupFailures_WithinGraceSkipped(t *testing.T) {
 	_, groupID := seedStrandedGroup(t, db, models.GroupOrderConfirmed, models.PayoutHoldNone, models.DeliveryFailed, time.Minute)
 	require.Equal(t, 0, reconcileStrandedGroupFailures())
 	require.Equal(t, models.GroupOrderConfirmed, groupStatusOf(t, db, groupID))
+}
+
+// ── retry-timeout sweep (#592): a re-dispatched own-fleet delivery (attempt 2, order
+// re-opened to ready) that is never re-accepted must terminalize after a grace window,
+// else it strands forever (no 2nd failure ever fires). ──
+
+// seedStrandedRetry inserts a gateway order re-opened to `ready` by a retry plus its
+// re-dispatched Delivery row (status=pending, attempt_number=attempt) updated `age` ago.
+func seedStrandedRetry(t *testing.T, db *gorm.DB, orderStatus models.OrderStatus, hold models.PayoutHoldStatus, delStatus models.DeliveryStatus, attempt int, gateway bool, age time.Duration) (orderID, delID uuid.UUID) {
+	t.Helper()
+	orderID, delID = uuid.New(), uuid.New()
+	rzp := ""
+	if gateway {
+		rzp = "order_rzp_" + orderID.String()[:8]
+	}
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, status, razorpay_order_id, chef_id, customer_id, payout_hold_status)
+		VALUES (?,?,?,?,?,?)`, orderID.String(), string(orderStatus), rzp, uuid.NewString(), uuid.NewString(), string(hold)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO deliveries (id, order_id, status, attempt_number, updated_at) VALUES (?,?,?,?,?)`,
+		delID.String(), orderID.String(), string(delStatus), attempt, time.Now().Add(-age)).Error)
+	return orderID, delID
+}
+
+func TestReconcileRetryTimeout_FreezesUnacceptedRetry(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	orderID, delID := seedStrandedRetry(t, db, models.OrderStatusReady, models.PayoutHoldNone, models.DeliveryPending, MaxDeliveryAttempts, true, time.Hour)
+
+	require.Equal(t, 1, reconcileStrandedRetryTimeouts())
+	require.Equal(t, models.PayoutHoldDisputed, holdOf(t, db, orderID), "stranded retry frozen for admin resolution")
+	require.Equal(t, 1, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+	require.Equal(t, 1, countOutbox(t, db, SubjectDeliveryFailed))
+	// The claim flips the order off `ready` (no longer re-acceptable) and marks the delivery failed.
+	var oStatus, dStatus string
+	require.NoError(t, db.Raw(`SELECT status FROM orders WHERE id = ?`, orderID.String()).Scan(&oStatus).Error)
+	require.NoError(t, db.Raw(`SELECT status FROM deliveries WHERE id = ?`, delID.String()).Scan(&dStatus).Error)
+	require.Equal(t, string(models.OrderStatusDelivering), oStatus, "order claimed off ready so a driver can't re-accept a disputed order")
+	require.Equal(t, string(models.DeliveryFailed), dStatus, "the timed-out retry delivery is marked failed")
+}
+
+func TestReconcileRetryTimeout_ClaimSkipsWhenOrderHasDelivery(t *testing.T) {
+	// The SELECT matches on order.status='ready', but the atomic claim additionally requires
+	// delivery_id IS NULL — the exact predicate AcceptDelivery locks. An order that a driver
+	// already claimed (delivery_id set) fails the claim and is NOT frozen (models the
+	// accept-lands-between-select-and-freeze race, deterministically).
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStrandedRetry(t, db, models.OrderStatusReady, models.PayoutHoldNone, models.DeliveryPending, MaxDeliveryAttempts, true, time.Hour)
+	require.NoError(t, db.Exec(`UPDATE orders SET delivery_id = ? WHERE id = ?`, uuid.NewString(), orderID.String()).Error)
+
+	require.Equal(t, 0, reconcileStrandedRetryTimeouts(), "a concurrently-accepted order (delivery_id set) is not frozen")
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID), "hold untouched")
+}
+
+func TestReconcileRetryTimeout_FirstAttemptNotSwept(t *testing.T) {
+	// attempt_number 1 = the first dispatch, not a retry — a normal unaccepted delivery
+	// isn't stranded (it can still fail once and retry). Only a re-dispatched (attempt>=cap)
+	// pending delivery is terminal-if-unaccepted.
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStrandedRetry(t, db, models.OrderStatusReady, models.PayoutHoldNone, models.DeliveryPending, 1, true, time.Hour)
+	require.Equal(t, 0, reconcileStrandedRetryTimeouts())
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID))
+}
+
+func TestReconcileRetryTimeout_WithinGraceSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStrandedRetry(t, db, models.OrderStatusReady, models.PayoutHoldNone, models.DeliveryPending, MaxDeliveryAttempts, true, time.Minute)
+	require.Equal(t, 0, reconcileStrandedRetryTimeouts(), "inside grace — may still be re-offered")
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID))
+}
+
+func TestReconcileRetryTimeout_ReacceptedNotSwept(t *testing.T) {
+	// A re-accepted retry has moved off `pending` (assigned/out-for-delivery) and the order
+	// is no longer `ready` — it must not be frozen.
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStrandedRetry(t, db, models.OrderStatusDelivering, models.PayoutHoldNone, models.DeliveryAssigned, MaxDeliveryAttempts, true, time.Hour)
+	require.Equal(t, 0, reconcileStrandedRetryTimeouts())
+	require.Equal(t, models.PayoutHoldNone, holdOf(t, db, orderID))
+}
+
+func TestReconcileRetryTimeout_AlreadyFrozenSkipped(t *testing.T) {
+	db := setupDeliveryReconcileDB(t)
+	orderID, _ := seedStrandedRetry(t, db, models.OrderStatusReady, models.PayoutHoldDisputed, models.DeliveryPending, MaxDeliveryAttempts, true, time.Hour)
+	require.NoError(t, db.Exec(`INSERT INTO order_issues (id, order_id, reason, status) VALUES (?,?,?,?)`,
+		uuid.NewString(), orderID.String(), string(models.IssueDeliveryFailed), string(models.IssuePending)).Error)
+	require.Equal(t, 0, reconcileStrandedRetryTimeouts(), "already frozen → skipped")
+	require.Equal(t, 1, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending), "no duplicate issue")
 }
 
 func TestReconcileShellFailures_DayAndGroupSweepsAreIsolated(t *testing.T) {
