@@ -401,8 +401,11 @@ func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, erro
 		}
 		// A delivery-failed day is frozen pending admin resolution (#393): it must never
 		// pay the chef until the day-resolution path terminalizes it (release vs refund).
-		// This is the definitive backstop — no release path can pay a `failed` day.
-		if day.Status == models.MealPlanDayFailed {
+		// A refunded day must never pay either — the customer already got the money back.
+		// These are the definitive status-based backstop, independent of the hold state
+		// machine (mirrors orderRefundBlocks re-checking order.Status): even if a future
+		// change ever left such a day's hold at release_eligible, this blocks the payout.
+		if day.Status == models.MealPlanDayFailed || day.Status == models.MealPlanDayRefunded {
 			return true, nil
 		}
 		if day.OrderID == nil {
