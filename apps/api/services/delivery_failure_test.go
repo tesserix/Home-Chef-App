@@ -81,7 +81,7 @@ func TestRecordDeliveryFailure_OpensIssueAndFreezesNoMoney(t *testing.T) {
 	var froze bool
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		froze, err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable)
+		froze, err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable, "courier")
 		return err
 	}))
 	require.True(t, froze, "first terminalization reports froze=true so the caller notifies once")
@@ -99,7 +99,7 @@ func TestRecordDeliveryFailure_Idempotent(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 			var err error
-			froze[i], err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable)
+			froze[i], err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable, "courier")
 			return err
 		}))
 	}
@@ -118,7 +118,7 @@ func TestRecordDeliveryFailure_SkipsNonGatewayOrder(t *testing.T) {
 	var froze bool
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		var err error
-		froze, err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable)
+		froze, err = RecordDeliveryFailure(tx, order, models.FailureCustomerUnavailable, "courier")
 		return err
 	}))
 	require.False(t, froze, "non-gateway order is not frozen here (no misleading notification)")

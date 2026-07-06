@@ -993,6 +993,66 @@ func chefMayMarkDelivered(to models.OrderStatus, ft models.FulfillmentType) bool
 	return ft == models.FulfillmentChefDelivery || ft == models.FulfillmentPickup
 }
 
+// chefMayReportDeliveryFailure reports whether a chef may report a self-delivery failure
+// on this order (#393 chef parity). Only self-delivery (`chef_delivery`) orders — a 3PL
+// `delivery` order fails via the courier pipeline (handlers/delivery.go), and pickup is
+// customer-collected — and only while the order is out for delivery (ready → delivering),
+// not already delivered/terminal.
+func chefMayReportDeliveryFailure(status models.OrderStatus, ft models.FulfillmentType) bool {
+	if ft != models.FulfillmentChefDelivery {
+		return false
+	}
+	switch status {
+	case models.OrderStatusReady, models.OrderStatusPickedUp, models.OrderStatusDelivering:
+		return true
+	}
+	return false
+}
+
+// ReportChefDeliveryFailure lets a self-delivery chef report that they could not deliver
+// an order (#393 chef parity). It terminalizes the order's money into admin fault
+// resolution WITHOUT moving money — mirroring the courier failed/returned path: a pending
+// delivery_failed issue is opened and the payout hold is frozen to disputed, so the chef
+// is not paid until an admin confirms fault (customer-fault → paid; platform/chef-fault →
+// refunded). The refund/release outcome is executed by the admin-confirm resolver.
+func (h *ChefHandler) ReportChefDeliveryFailure(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	orderID := c.Param("orderId")
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef profile not found"})
+		return
+	}
+	var order models.Order
+	if err := database.DB.Where("id = ? AND chef_id = ?", orderID, chef.ID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+	if !chefMayReportDeliveryFailure(order.Status, order.FulfillmentType) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "Only a self-delivery order that is out for delivery can be reported as a delivery failure here",
+		})
+		return
+	}
+
+	var req struct {
+		FailureReason models.DeliveryFailureReason `json:"failureReason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !models.ValidDeliveryFailureReason(req.FailureReason) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A valid failureReason is required"})
+		return
+	}
+
+	if _, err := services.TerminalizeDeliveryFailure(database.DB, &order, req.FailureReason, "chef_self_delivery",
+		map[string]any{"self_delivery": true}); err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record the delivery failure"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "delivery_failure_recorded"})
+}
+
 // UpdateOrderStatus updates an order's status
 func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)

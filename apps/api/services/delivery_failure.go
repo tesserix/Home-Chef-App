@@ -60,7 +60,7 @@ func SetOrderHoldDisputed(tx *gorm.DB, orderID uuid.UUID) error {
 // froze=false without opening a second issue or re-disputing. Regular gateway orders
 // only; meal-plan/group consolidated orders (no razorpay_order_id) settle through their
 // own paths and are terminalized by a later slice (returns froze=false).
-func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.DeliveryFailureReason) (bool, error) {
+func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.DeliveryFailureReason, reportedBy string) (bool, error) {
 	if order.RazorpayOrderID == "" {
 		return false, nil
 	}
@@ -74,13 +74,17 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 		return false, nil // already terminalized — idempotent no-op
 	}
 	fault := models.SuggestedFaultClass(reason)
+	// reported_by lets the admin resolver distinguish a courier report from a chef's OWN
+	// self-report (a self-interested party): a chef self-reporting `customer_unavailable`
+	// suggests customer-fault (chef paid, no refund), so the admin must scrutinize a
+	// chef-reported failure more carefully before confirming that outcome.
 	issue := models.OrderIssue{
 		OrderID:     order.ID,
 		ChefID:      order.ChefID,
 		CustomerID:  order.CustomerID,
 		Reason:      models.IssueDeliveryFailed,
 		Status:      models.IssuePending,
-		Description: fmt.Sprintf("delivery failed: reason=%s suggested_fault=%s", reason, fault),
+		Description: fmt.Sprintf("delivery failed: reason=%s suggested_fault=%s reported_by=%s", reason, fault, reportedBy),
 	}
 	if err := tx.Create(&issue).Error; err != nil {
 		return false, fmt.Errorf("delivery-failure: open issue for order %s: %w", order.ID, err)
@@ -89,6 +93,37 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 		return false, err
 	}
 	return true, nil
+}
+
+// TerminalizeDeliveryFailure is the shared entry point for a terminally-failed delivery
+// (courier pipeline AND chef self-delivery). It freezes the order's money state
+// (RecordDeliveryFailure — opens the delivery_failed issue + disputes the hold) and, ONLY
+// on the FIRST terminalization (froze==true), stages one delivery.failed notification
+// event. No money moves. meta is merged into the event payload (e.g. delivery_id for the
+// courier path, self_delivery for the chef path). A re-fired failure and non-gateway
+// (meal-plan/group) orders return froze=false and emit nothing.
+func TerminalizeDeliveryFailure(db *gorm.DB, order *models.Order, reason models.DeliveryFailureReason, reportedBy string, meta map[string]any) (bool, error) {
+	var froze bool
+	err := db.Transaction(func(tx *gorm.DB) error {
+		f, err := RecordDeliveryFailure(tx, order, reason, reportedBy)
+		if err != nil {
+			return err
+		}
+		froze = f
+		if !f {
+			return nil
+		}
+		payload := map[string]any{
+			"order_id":        order.ID.String(),
+			"failure_reason":  string(reason),
+			"suggested_fault": string(models.SuggestedFaultClass(reason)),
+		}
+		for k, v := range meta {
+			payload[k] = v
+		}
+		return EnqueueEvent(tx, SubjectDeliveryFailed, "delivery.failed", order.ID, payload)
+	})
+	return froze, err
 }
 
 // ResolveDeliveryFailure executes the admin-confirmed money policy for a pending

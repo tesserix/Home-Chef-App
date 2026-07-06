@@ -18,7 +18,6 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"golang.org/x/time/rate"
-	"gorm.io/gorm"
 )
 
 type DeliveryHandler struct {
@@ -782,22 +781,9 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 // froze==true) — so a retried request and non-gateway (meal-plan/group) orders don't
 // emit a misleading "resolution pending" notification. delivery.Order must be preloaded.
 func terminalizeFailedDelivery(delivery *models.Delivery, reason models.DeliveryFailureReason) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
-		froze, err := services.RecordDeliveryFailure(tx, &delivery.Order, reason)
-		if err != nil {
-			return err
-		}
-		if !froze {
-			return nil // already terminalized, or non-gateway order (handled by a later slice)
-		}
-		return services.EnqueueEvent(tx, services.SubjectDeliveryFailed, "delivery.failed", delivery.OrderID,
-			map[string]any{
-				"delivery_id":     delivery.ID.String(),
-				"order_id":        delivery.OrderID.String(),
-				"failure_reason":  string(reason),
-				"suggested_fault": string(models.SuggestedFaultClass(reason)),
-			})
-	})
+	_, err := services.TerminalizeDeliveryFailure(database.DB, &delivery.Order, reason, "courier",
+		map[string]any{"delivery_id": delivery.ID.String()})
+	return err
 }
 
 // GetDeliveryHistory returns past deliveries for the partner
