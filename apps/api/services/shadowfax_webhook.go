@@ -91,6 +91,14 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 		}
 	}
 
+	// A failed / returned (RTO) Shadowfax delivery freezes the money for admin fault
+	// resolution — mirror the generic 3PL path (#393). Transient error → webhook retries.
+	if status == models.DeliveryFailed || status == models.DeliveryReturned {
+		if err := terminalize3PLDeliveryFailure(order.ID, provider.Code, delivery.ID.String()); err != nil {
+			return err
+		}
+	}
+
 	log.Printf("shadowfax webhook: order=%s delivery=%s -> %s", clientOrderID, delivery.ID, status)
 	return nil
 }
