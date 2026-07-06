@@ -188,6 +188,8 @@ func runCancellationGatewayRefund(order *models.Order, provider string, refundAm
 				"reason": reason, "initiated_by": initiatedBy,
 			},
 			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
+			// Full cancellation refund, issued once per order. #574.
+			IdempotencyKey: RefundFullIdempotencyKey(order.ID),
 		})
 		if err != nil {
 			return "", err

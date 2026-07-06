@@ -260,6 +260,10 @@ func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
 	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(t services.TransferSpec) error {
 		_, err := rz.CreateTransfer(&services.DirectTransferRequest{
 			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
+			// Per (order, account) — the same identity as the processed_events claim
+			// (#554); a retried settlement re-derives the same key so Razorpay dedups
+			// each chef/driver top-up. #574.
+			IdempotencyKey: services.TopupIdempotencyKey(order.ID, t.Account),
 		})
 		return err
 	})
@@ -1139,6 +1143,10 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				"initiated_by": initiatedBy,
 			},
 			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
+			// Same prior-refunded basis as the wallet branch above; the atomic refund
+			// claim (#567) serializes concurrent submits, and a retry re-derives the
+			// same key so Razorpay dedups it. #574.
+			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(order.RefundAmount)),
 		})
 		if err != nil {
 			log.Printf("Failed to create Razorpay refund for order %s: %v", order.OrderNumber, err)

@@ -342,6 +342,11 @@ type RefundRequest struct {
 	Speed   string            `json:"speed"`  // "normal" or "optimum"
 	Notes   map[string]string `json:"notes,omitempty"`
 	Receipt string            `json:"receipt,omitempty"`
+	// IdempotencyKey is a LOGICAL operation id (see gateway_idempotency.go builders).
+	// When set, CreateRefund normalizes it into the X-Refund-Idempotency header so a
+	// timeout-after-success retry is deduped by Razorpay (#574). json:"-" — never part
+	// of the request body (the body must be byte-identical across retries for dedup).
+	IdempotencyKey string `json:"-"`
 }
 
 // RefundResponse from Razorpay
@@ -364,7 +369,11 @@ func (c *RazorpayClient) CreateRefund(paymentID string, req *RefundRequest) (*Re
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := c.doRequest("POST", fmt.Sprintf("/payments/%s/refund", paymentID), body)
+	var headers map[string]string
+	if req.IdempotencyKey != "" {
+		headers = map[string]string{headerRefundIdempotency: normalizeIdempotencyKey(req.IdempotencyKey)}
+	}
+	resp, err := c.doRequestWithHeaders("POST", fmt.Sprintf("/payments/%s/refund", paymentID), body, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -389,6 +398,11 @@ type DirectTransferRequest struct {
 	Currency string            `json:"currency"`          // "INR"
 	OnHold   bool              `json:"on_hold,omitempty"` // hold until delivery confirmation
 	Notes    map[string]string `json:"notes,omitempty"`
+	// IdempotencyKey is a LOGICAL operation id (see gateway_idempotency.go builders).
+	// When set, CreateTransfer normalizes it into the X-Transfer-Idempotency header so a
+	// timeout-after-success retry is deduped by Razorpay (#574). json:"-" — never part of
+	// the request body (the body must be byte-identical across retries for dedup).
+	IdempotencyKey string `json:"-"`
 }
 
 // TransferResponse from Razorpay's /transfers endpoint.
@@ -416,7 +430,11 @@ func (c *RazorpayClient) CreateTransfer(req *DirectTransferRequest) (*TransferRe
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := c.doRequest("POST", "/transfers", body)
+	var headers map[string]string
+	if req.IdempotencyKey != "" {
+		headers = map[string]string{headerTransferIdempotency: normalizeIdempotencyKey(req.IdempotencyKey)}
+	}
+	resp, err := c.doRequestWithHeaders("POST", "/transfers", body, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -610,8 +628,21 @@ func ValidateCapturedPayment(paymentStatus, paymentOrderID, expectedOrderID stri
 	return true, ""
 }
 
-// doRequest executes an authenticated HTTP request to the Razorpay API
+// Razorpay's endpoint-specific idempotency header names (#574). Razorpay does NOT
+// expose a single Idempotency-Key header — each money-moving endpoint has its own.
+const (
+	headerRefundIdempotency   = "X-Refund-Idempotency"
+	headerTransferIdempotency = "X-Transfer-Idempotency"
+)
+
+// doRequest executes an authenticated HTTP request to the Razorpay API.
 func (c *RazorpayClient) doRequest(method, path string, body []byte) ([]byte, error) {
+	return c.doRequestWithHeaders(method, path, body, nil)
+}
+
+// doRequestWithHeaders is doRequest plus caller-supplied headers (an empty value is
+// skipped) — used to attach the per-endpoint idempotency header (#574).
+func (c *RazorpayClient) doRequestWithHeaders(method, path string, body []byte, extraHeaders map[string]string) ([]byte, error) {
 	base := c.baseURL
 	if base == "" {
 		base = razorpayBaseURL
@@ -631,6 +662,11 @@ func (c *RazorpayClient) doRequest(method, path string, body []byte) ([]byte, er
 
 	req.SetBasicAuth(c.keyID, c.keySecret)
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range extraHeaders {
+		if v != "" {
+			req.Header.Set(k, v)
+		}
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)

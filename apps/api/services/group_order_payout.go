@@ -68,6 +68,9 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 	tr, err := rz.CreateTransfer(&DirectTransferRequest{
 		Account: chefAccount, Amount: heldPaise, Currency: g.Currency, OnHold: true,
 		Notes: map[string]string{"group_order_id": g.ID.String()},
+		// One hold per group (DB-guarded by PayoutTransferID); a retry re-derives the
+		// same per-group key so Razorpay dedups it. #574.
+		IdempotencyKey: HoldPayoutIdempotencyKey("group", g.ID),
 	})
 	if err != nil {
 		return fmt.Errorf("hold group payout: %w", err)
