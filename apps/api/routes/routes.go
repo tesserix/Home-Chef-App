@@ -451,6 +451,8 @@ func SetupRouter() *gin.Engine {
 			// GET /chef/orders/:orderId — full order detail for the vendor
 			chefDashboard.GET("/orders/:orderId", chefHandler.GetOrderDetail)
 			chefDashboard.PUT("/orders/:orderId/status", chefHandler.UpdateOrderStatus)
+			// #393 chef parity — a self-delivery chef reports they could not deliver.
+			chefDashboard.POST("/orders/:orderId/delivery-failed", chefHandler.ReportChefDeliveryFailure)
 			// Lifecycle photos (food-ready, proof-of-handover) — required by the
 			// vendor app before the matching status transition.
 			chefDashboard.POST("/orders/:orderId/photos", chefHandler.UploadOrderPhoto)
