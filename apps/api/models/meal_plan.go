@@ -57,6 +57,11 @@ const (
 	MealPlanDaySkipped   MealPlanDayStatus = "skipped"   // customer skipped before cutoff → refunded
 	MealPlanDayCancelled MealPlanDayStatus = "cancelled"
 	MealPlanDayRefunded  MealPlanDayStatus = "refunded"
+	// MealPlanDayFailed marks a day whose delivery terminally failed (#393). It is
+	// deliberately NON-terminal (excluded from allDaysTerminal): the day's payout hold
+	// is frozen to disputed and the plan stays open until an admin resolves the day's
+	// money outcome (refund vs release).
+	MealPlanDayFailed MealPlanDayStatus = "failed"
 )
 
 // MealPlan is one customer's advance booking from one chef.

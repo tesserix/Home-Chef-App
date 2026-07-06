@@ -396,8 +396,14 @@ func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, erro
 		return orderRefundBlocks(db, id)
 	case aggTypeMealPlanDay:
 		var day models.MealPlanDay
-		if err := db.Select("order_id").First(&day, "id = ?", id).Error; err != nil {
+		if err := db.Select("order_id", "status").First(&day, "id = ?", id).Error; err != nil {
 			return false, fmt.Errorf("payout-release: load day %s for release guard: %w", id, err)
+		}
+		// A delivery-failed day is frozen pending admin resolution (#393): it must never
+		// pay the chef until the day-resolution path terminalizes it (release vs refund).
+		// This is the definitive backstop — no release path can pay a `failed` day.
+		if day.Status == models.MealPlanDayFailed {
+			return true, nil
 		}
 		if day.OrderID == nil {
 			return false, nil
@@ -735,7 +741,7 @@ var parkedDayHolds = []models.PayoutHoldStatus{
 // state that matches whether that claw-back LANDED (reverseOK).
 //
 //   - reverseOK (claw-back succeeded, or there was no transfer): released → reversed
-//     + payout_settled_at stamped (terminal — the reconcile cron won't re-reverse an
+//   - payout_settled_at stamped (terminal — the reconcile cron won't re-reverse an
 //     already-clawed-back transfer); eligible/awaiting/disputed → withheld (the
 //     on-hold transfer was freed).
 //   - !reverseOK (claw-back FAILED — the transfer is still live at the gateway): the

@@ -34,7 +34,7 @@ const (
 	SubjectGroupOrderCancelled = "group_orders.cancelled" // → participants: cancelled/refunded
 	SubjectDeliveryAssigned    = "delivery.assigned"
 	SubjectDeliveryPickedUp    = "delivery.picked_up"
-	SubjectDeliveryFailed      = "delivery.failed" // → customer/chef: delivery failed, resolution pending (#393)
+	SubjectDeliveryFailed      = "delivery.failed"   // → customer/chef: delivery failed, resolution pending (#393)
 	SubjectDeliveryLocation    = "delivery.location" // Base subject; full subject: delivery.location.{deliveryID}
 	SubjectPaymentSuccess      = "payments.success"
 	SubjectPaymentFailed       = "payments.failed"
@@ -71,6 +71,7 @@ const (
 	SubjectMealPlanCancelled      = "meal_plans.cancelled"
 	SubjectMealPlanDayPrepared    = "meal_plans.day_prepared" // → customer: dish is being cooked (#50)
 	SubjectMealPlanDayDelivered   = "meal_plans.day_delivered"
+	SubjectMealPlanDayFailed      = "meal_plans.day_failed" // → customer/chef: day delivery failed, resolution pending (#393)
 	SubjectMealPlanDayRefunded    = "meal_plans.day_refunded"
 	SubjectMealPlanDaySkippedChef = "meal_plans.day_skipped_chef" // → chef: customer skipped a day (#422)
 
