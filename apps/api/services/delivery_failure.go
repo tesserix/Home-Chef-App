@@ -8,12 +8,25 @@ package services
 // later slice — this slice only freezes.
 
 import (
+	"errors"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/homechef/api/models"
+)
+
+// ErrAmbiguousFault is returned when the admin has not confirmed a concrete fault class
+// for a delivery-failure resolution — an ambiguous case must not auto-execute a money
+// outcome. ErrNotDeliveryFailure guards the resolver to delivery_failed issues only.
+// ErrIssueAlreadyHandled signals the pending claim was lost to a concurrent resolution.
+var (
+	ErrAmbiguousFault      = errors.New("ambiguous fault requires a concrete admin decision")
+	ErrNotDeliveryFailure  = errors.New("issue is not a delivery-failure issue")
+	ErrIssueAlreadyHandled = errors.New("issue has already been handled")
 )
 
 // SetOrderHoldDisputed freezes a regular (gateway) order's payout hold at `disputed`
@@ -76,4 +89,80 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 		return false, err
 	}
 	return true, nil
+}
+
+// ResolveDeliveryFailure executes the admin-confirmed money policy for a pending
+// `delivery_failed` OrderIssue (#393 slice 3, hybrid model). The driver's reported reason
+// only SUGGESTED a fault; the admin CONFIRMS a concrete class here and the matching
+// outcome executes, reusing the existing money seams:
+//   - customer-fault → NO customer refund; the chef is paid (food was made): the issue is
+//     rejected and the disputed hold driven back to release_eligible. The delivery fee is
+//     retained automatically (no refund happens).
+//   - platform-fault / chef-fault → FULL customer refund + reverse the chef's hold:
+//     RefundIssueToWallet credits the order's remaining refundable to the wallet and
+//     cross-guards the hold to reversed (WithholdOrReverseOrderHoldForRefund).
+//   - ambiguous / unknown → ErrAmbiguousFault; the admin must confirm a concrete fault.
+//
+// Idempotent via the pending-issue claim (a concurrent resolution loses with
+// ErrIssueAlreadyHandled). The confirmed fault is appended to the issue description for
+// audit.
+func ResolveDeliveryFailure(db *gorm.DB, issue *models.OrderIssue, fault models.DeliveryFaultClass, adminID uuid.UUID) error {
+	if issue.Reason != models.IssueDeliveryFailed {
+		return ErrNotDeliveryFailure
+	}
+	switch fault {
+	case models.FaultCustomer:
+		now := time.Now()
+		return db.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.OrderIssue{}).
+				Where("id = ? AND status = ?", issue.ID, models.IssuePending).
+				Updates(map[string]any{
+					"status":      models.IssueRejected,
+					"resolved_at": now,
+					"resolved_by": adminID,
+					"description": confirmedFaultDescription(issue.Description, fault),
+				})
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return ErrIssueAlreadyHandled
+			}
+			// No refund; the chef legitimately earned the payout → clear the disputed hold.
+			return ReleaseDisputedHoldsForOrderIfCleared(tx, issue.OrderID)
+		})
+	case models.FaultPlatform, models.FaultChef:
+		// Full customer refund + reverse the chef's hold. RefundIssueToWallet caps the
+		// credit at the order's remaining refundable, so passing the order total yields a
+		// full refund, and its built-in cross-guard reverses the hold. Record the fault.
+		var order models.Order
+		if err := db.Select("total", "refund_amount").First(&order, "id = ?", issue.OrderID).Error; err != nil {
+			return fmt.Errorf("delivery-failure resolve: load order %s: %w", issue.OrderID, err)
+		}
+		if err := RefundIssueToWallet(db, issue, order.Total, "admin", &adminID); err != nil {
+			return err
+		}
+		// Stamp the confirmed fault ONLY if THIS call actually resolved the issue.
+		// RefundIssueToWallet sets issue.Status on the winning claim; a lost cross-path race
+		// (a concurrent resolution already handled it) leaves issue.Status unchanged, so we
+		// must not clobber the winner's audit trail with our (losing) fault decision.
+		if issue.Status != models.IssueResolved {
+			return nil
+		}
+		// Best-effort audit stamp — the refund + hold change already committed, so a failed
+		// description write must NOT surface as a failure (which would 500 a succeeded refund).
+		if err := db.Model(&models.OrderIssue{}).Where("id = ?", issue.ID).
+			Update("description", confirmedFaultDescription(issue.Description, fault)).Error; err != nil {
+			log.Printf("delivery-failure resolve: audit-stamp fault for issue %s: %v", issue.ID, err)
+		}
+		return nil
+	default: // FaultAmbiguous or anything unrecognized
+		return ErrAmbiguousFault
+	}
+}
+
+// confirmedFaultDescription appends the admin-confirmed fault class to the issue
+// description (audit trail alongside the driver's originally-suggested fault).
+func confirmedFaultDescription(existing string, fault models.DeliveryFaultClass) string {
+	return existing + " | admin_confirmed_fault=" + string(fault)
 }
