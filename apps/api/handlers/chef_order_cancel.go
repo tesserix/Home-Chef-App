@@ -300,6 +300,31 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 		return
 	}
+
+	now := time.Now().UTC()
+	// #576: CLAIM the line BEFORE the gateway call — the same order the other refund paths
+	// use (CancelOrder, InitiateRefund). A guarded is_cancelled=false→true CAS: two concurrent
+	// cancels of the SAME line both passed the stale preloaded IsCancelled check above, but
+	// only the winner flips the row and only the winner reaches CreateRefund. The loser never
+	// issues a second real refund — closing the double-refund at the source, not relying on
+	// gateway-side dedup of concurrent identical-key requests.
+	var won bool
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		w, err := claimOrderItemForCancel(tx, target.ID, string(reason), now)
+		won = w
+		return err
+	}); err != nil {
+		services.CaptureSentryError(c, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not cancel item"})
+		return
+	}
+	if !won {
+		// A concurrent cancel already claimed this line — respond idempotently, no refund.
+		_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
+		c.JSON(http.StatusOK, order.ToChefResponse())
+		return
+	}
+
 	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
 		Amount: amountPaise,
 		Speed:  "normal",
@@ -311,35 +336,33 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 			"initiator":     "chef",
 			"scope":         "line",
 		},
-		// NOTE: no gateway idempotency key here yet. This per-line path issues the
-		// gateway refund BEFORE any atomic claim and increments order.RefundAmount in
-		// the txn without a `is_cancelled=false` guard, so a stable key would let the
-		// gateway dedup a same-line double-submit while both txns still double-count the
-		// ledger — shorting a later refund. Needs an atomic line claim first (#576).
+		// #574: keyed by the immutable line id — a lost-response retry dedups to one refund.
+		IdempotencyKey: services.RefundLineIdempotencyKey(order.ID, target.ID),
 	})
 	if err != nil {
+		// The gateway refused — revert the claim so a retry can cancel this line (no money moved).
+		if rErr := database.DB.Model(&models.OrderItem{}).Where("id = ?", target.ID).
+			Updates(map[string]interface{}{"is_cancelled": false, "cancelled_reason": "", "cancelled_at": nil}).Error; rErr != nil {
+			log.Printf("failed to revert per-line cancel claim for item %s after gateway error: %v", target.ID, rErr)
+		}
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
 		return
 	}
 
-	now := time.Now().UTC()
-	// Single transaction so the item flip + order recompute land or
-	// roll back together. The chef cannot end up with a refund that
-	// the order totals don't reflect.
+	// Persist the line refund + recompute the order totals atomically. On failure the line
+	// stays cancelled (a retry answers idempotently) but the order ledger isn't updated — the
+	// standard gateway-succeeded-persist-failed edge; the line key makes a retry's refund dedup.
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(target).Updates(map[string]interface{}{
-			"is_cancelled":     true,
-			"cancelled_reason": string(reason),
-			"cancelled_at":     now,
-			"refund_id":        refundResp.ID,
-			"refund_amount":    lineRefund,
+		if err := tx.Model(&models.OrderItem{}).Where("id = ?", target.ID).Updates(map[string]interface{}{
+			"refund_id":     refundResp.ID,
+			"refund_amount": lineRefund,
 		}).Error; err != nil {
 			return err
 		}
 
-		// Release this line's reserved daily capacity (#48). Guarded by the
-		// IsCancelled idempotency check above so it runs once.
+		// Release this line's reserved daily capacity (#48). Runs once — the CAS above
+		// gates it to the winning cancel.
 		if err := services.ReleaseCapacity(tx, target.MenuItemID, target.Quantity, services.CapacityDay(order.CreatedAt)); err != nil {
 			return err
 		}
@@ -364,6 +387,20 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		}).Error
 	})
 	if err != nil {
+		// The ledger persist failed after a successful gateway refund. REVERT the claim
+		// (is_cancelled=false) — mirroring the gateway-error revert above — so this line is
+		// retriable and doesn't drift PERMANENTLY: if it stayed is_cancelled=true with
+		// refund_amount=0 and the order totals un-recomputed, the early IsCancelled
+		// short-circuit would 200 every retry (never re-running this persist), leaving the
+		// line's money still counted as refundable by RemainingRefundable — a later full
+		// CancelOrder would then issue a SECOND real refund (its RefundFullIdempotencyKey
+		// differs from the line key, so the gateway wouldn't dedup it). With the revert a
+		// retry re-claims and re-refunds under the SAME line key (deduped, no double refund)
+		// and re-records the ledger, healing the row.
+		if rErr := database.DB.Model(&models.OrderItem{}).Where("id = ?", target.ID).
+			Updates(map[string]interface{}{"is_cancelled": false, "cancelled_reason": "", "cancelled_at": nil}).Error; rErr != nil {
+			log.Printf("failed to revert per-line cancel claim for item %s after persist error: %v", target.ID, rErr)
+		}
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
@@ -466,6 +503,30 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 		return
 	}
+
+	// #549: only a FULL goodwill refund (exhausting the remaining balance) is terminal.
+	fullRefund := req.Amount >= remaining
+
+	// #576: atomically claim the order for refund (completed→refunded) BEFORE the gateway
+	// call — the same mutex InitiateRefund uses (claimRefundForProcessing). This serializes
+	// a concurrent goodwill + customer refund on order.RefundAmount; the loser gets 409
+	// instead of issuing a second real refund and double-counting the ledger. It also makes
+	// the gateway idempotency key below safe (a stable key with no local mutex would let the
+	// gateway dedup one real refund while both ledgers still added their amount).
+	won, cErr := claimRefundForProcessing(database.DB, order.ID)
+	if cErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process refund"})
+		return
+	}
+	if !won {
+		c.JSON(http.StatusConflict, gin.H{"error": "a refund for this order is already in progress or has completed"})
+		return
+	}
+	revertClaim := func() {
+		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+			Update("payment_status", models.PaymentCompleted)
+	}
+
 	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
 		Amount: amountPaise,
 		Speed:  "normal",
@@ -477,25 +538,24 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 			"initiator": "chef",
 			"scope":     "post_delivery_goodwill",
 		},
-		// NOTE: no gateway idempotency key here yet. This goodwill path has NO atomic
-		// refund claim (unlike InitiateRefund), so a prior-refunded key would collide
-		// with a concurrent InitiateRefund reading the same order.RefundAmount, letting
-		// the gateway dedup one real refund while both ledgers add their amount —
-		// shorting the customer. Needs an atomic claim first (#576).
+		// #574/#576: keyed by prior cumulative refunded paise (stable on retry, distinct
+		// across sequential partials) — safe now that the claim above serializes a
+		// same-order double-submit so the ledger can't double-count.
+		IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(order.RefundAmount)),
 	})
 	if err != nil {
+		revertClaim()
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
 		return
 	}
 
-	// #549: only a FULL goodwill refund (exhausting the remaining balance) is
-	// terminal. A PARTIAL refund must NOT stamp refunded_at — the release-side
-	// payout guards block the WHOLE chef hold on `refunded_at IS NOT NULL`, so a
-	// partial that stamped it would forfeit the chef's entire payout, not just the
-	// refunded slice. Target the row by id (not the preloaded &order) so a refund
-	// doesn't spuriously upsert the belongs-to Chef association.
-	fullRefund := req.Amount >= remaining
+	// Persist the refund. Target the row by id (not the preloaded &order) so a refund
+	// doesn't spuriously upsert the belongs-to Chef association. #549: a PARTIAL refund
+	// must NOT stamp refunded_at (the release-side guards block the WHOLE chef hold on
+	// refunded_at IS NOT NULL) and reverts payment_status→completed so the hold stays
+	// releasable + sequential partials re-claim; a FULL refund keeps refunded + stamps
+	// refunded_at (terminal).
 	refundUpdates := map[string]interface{}{
 		"refund_id":           refundResp.ID,
 		"refund_amount":       order.RefundAmount + req.Amount,
@@ -504,23 +564,35 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	}
 	if fullRefund {
 		refundUpdates["refunded_at"] = time.Now().UTC()
+	} else {
+		refundUpdates["payment_status"] = models.PaymentCompleted
 	}
-	if err := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error; err != nil {
-		services.CaptureSentryError(c, err)
+	persistErr := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error
+	if persistErr != nil {
+		// The gateway refund already succeeded but the ledger write failed. Revert the claim
+		// (payment_status→completed) UNCONDITIONALLY — for BOTH partial AND full — so the
+		// order isn't stuck at `refunded`, which would block every future refund path
+		// (claimRefundForProcessing gates on completed) and strand this order needing a
+		// manual DB fix. Reverting is safe here because the gateway idempotency key above
+		// makes a client retry dedup to the SAME refund rather than issue a second one
+		// (this is why RefundOrder can revert full where InitiateRefund's un-keyed gateway
+		// branch cannot). The cross-guard still runs below so the payout stays blocked.
+		log.Printf("goodwill refund persist failed for order %s: %v", order.ID, persistErr)
+		services.CaptureBackgroundError(persistErr)
+		revertClaim()
+	}
+	// Cross-guard the payout hold (#457/#549/#568) — a FULL refund drives the whole hold to
+	// withheld/reversed (unconditional safety net, runs even on persist failure so the chef
+	// is never paid for a refunded order); a PARTIAL claws back only the refunded portion
+	// and only when the refund persisted (a retry can't double-claw). Best-effort.
+	if hErr := crossGuardRefundHold(order.ID, req.Amount, req.Reason, fullRefund, persistErr == nil); hErr != nil {
+		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
+	}
+	if persistErr != nil {
+		// Honest retry signal: the gateway refunded but state didn't save. The claim is
+		// reverted + the key makes a retry dedup, so a re-submit heals the ledger.
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
-	}
-	// Cross-guard the payout hold (#457/#549) — a FULL goodwill refund withholds/
-	// reverses the whole chef payout; a PARTIAL claws back only the refunded portion
-	// and leaves the hold releasable. Best-effort; never fail the 200.
-	if fullRefund {
-		if hErr := services.WithholdOrReverseOrderHoldForRefund(database.DB, order.ID, req.Reason); hErr != nil {
-			log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
-		}
-	} else {
-		if hErr := services.WithholdOrReverseOrderHoldForPartialRefund(database.DB, order.ID, amountPaise, req.Reason); hErr != nil {
-			log.Printf("partial payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
-		}
 	}
 	_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
 
@@ -576,6 +648,23 @@ func (h *ChefOrderCancelHandler) GetOrderInvoicePDF(c *gin.Context) {
 
 // loadChefForUser returns the ChefProfile owned by the given user.
 // Wrapped so both cancel handlers can share the same not-found path.
+// claimOrderItemForCancel atomically flips one order line to cancelled, guarded on
+// is_cancelled=false, so exactly one of two concurrent per-line cancels wins (#576). It
+// claims the line BEFORE the gateway refund (like claimRefundForProcessing / the CancelOrder
+// CAS): the loser (won=false, RowsAffected==0) never reaches CreateRefund, so no second real
+// refund is issued. The refund_id / refund_amount are written afterward, once the gateway
+// call for the winning claim succeeds.
+func claimOrderItemForCancel(tx *gorm.DB, itemID uuid.UUID, reason string, at time.Time) (bool, error) {
+	res := tx.Model(&models.OrderItem{}).
+		Where("id = ? AND is_cancelled = ?", itemID, false).
+		Updates(map[string]interface{}{
+			"is_cancelled":     true,
+			"cancelled_reason": reason,
+			"cancelled_at":     at,
+		})
+	return res.RowsAffected == 1, res.Error
+}
+
 func loadChefForUser(userID uuid.UUID) (models.ChefProfile, error) {
 	var chef models.ChefProfile
 	err := database.DB.Where("user_id = ?", userID).First(&chef).Error
