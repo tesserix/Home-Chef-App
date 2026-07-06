@@ -79,6 +79,9 @@ type GroupOrder struct {
 	// chef's held Route transfer (released on delivery).
 	OrderID          *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
 	PayoutTransferID string     `gorm:"" json:"-"`
+	// CommissionRate freezes the platform commission rate the held transfer was sized at
+	// (#547; mirrors Order.CommissionRate). 0 for groups held before this column existed.
+	CommissionRate float64 `gorm:"default:0" json:"-"`
 
 	// Payout hold (#456). The group order is a first-class payout-hold aggregate,
 	// mirroring Order/MealPlanDay: on delivery the hold parks at

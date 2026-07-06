@@ -196,11 +196,10 @@ func listPendingOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 
 func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	// NET per day via perDayNetPayout — the SAME basis HoldChefPayouts uses to size
-	// the held transfer (#518). Unlike orders (which freeze Order.CommissionRate),
-	// meal-plan days don't persist the rate the transfer was held at, so we resolve
-	// the CURRENT flat rate once. If the platform rate changes while pre-change day
-	// holds are still pending, this display can drift a few paise from the amount
-	// actually held — a review DTO, not the money seam (follow-up: persist the rate).
+	// the held transfer (#518). #547: use the rate FROZEN on the day when the transfer was
+	// held (meal_plan_days.commission_rate), so the display is exact even if the platform
+	// flat rate changed while the hold was pending. Days held before the freeze column
+	// existed carry 0 → fall back to the current flat rate (the prior behaviour).
 	type dayNetRow struct {
 		ID                  string
 		ChefID              string
@@ -212,12 +211,14 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 		Price               float64
 		PlanSubtotal        float64
 		PlanTax             float64
+		CommissionRate      float64
 	}
 	q := db.Table("meal_plan_days").
 		Select("meal_plan_days.id AS id, meal_plans.chef_id AS chef_id, meal_plan_days.price AS amount, "+
 			"meal_plan_days.payout_hold_status AS payout_hold_status, meal_plan_days.delivered_at AS delivered_at, "+
 			"meal_plan_days.customer_confirmed_at AS customer_confirmed_at, meal_plans.meal_plan_number AS context, "+
-			"meal_plan_days.price AS price, meal_plans.subtotal AS plan_subtotal, meal_plans.tax AS plan_tax").
+			"meal_plan_days.price AS price, meal_plans.subtotal AS plan_subtotal, meal_plans.tax AS plan_tax, "+
+			"meal_plan_days.commission_rate AS commission_rate").
 		Joins("JOIN meal_plans ON meal_plans.id = meal_plan_days.meal_plan_id").
 		Where("meal_plan_days.payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
@@ -230,9 +231,13 @@ func listPendingDays(db *gorm.DB, f PendingFilter) ([]PendingPayout, error) {
 	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
 	}
-	rate := GetCommissionRate(db)
+	current := GetCommissionRate(db)
 	rows := make([]pendingRow, 0, len(raw))
 	for _, r := range raw {
+		rate := r.CommissionRate // #547: frozen rate; pre-freeze days (0) use the current rate
+		if rate <= 0 {
+			rate = current
+		}
 		net := perDayNetPayout(
 			&models.MealPlan{Subtotal: r.PlanSubtotal, Tax: r.PlanTax},
 			&models.MealPlanDay{Price: r.Price}, rate)
@@ -261,10 +266,11 @@ func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, erro
 		Context             string
 		Subtotal            float64
 		Tax                 float64
+		CommissionRate      float64
 	}
 	q := db.Table("group_orders").
 		Select("id, chef_id, subtotal + tax AS amount, payout_hold_status, delivered_at, "+
-			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context, subtotal, tax").
+			"customer_confirmed_at, 'GRP-' || substr(id, 1, 8) AS context, subtotal, tax, commission_rate").
 		Where("payout_hold_status IN ?", f.pendingStatuses())
 	if f.ChefID != uuid.Nil {
 		q = q.Where("chef_id = ?", f.ChefID)
@@ -276,9 +282,13 @@ func listPendingGroupOrders(db *gorm.DB, f PendingFilter) ([]PendingPayout, erro
 	if err := q.Scan(&raw).Error; err != nil {
 		return nil, err
 	}
-	rate := GetCommissionRate(db)
+	current := GetCommissionRate(db)
 	rows := make([]pendingRow, 0, len(raw))
 	for _, r := range raw {
+		rate := r.CommissionRate // #547: frozen rate; pre-freeze groups (0) use the current rate
+		if rate <= 0 {
+			rate = current
+		}
 		net := groupNetPayout(&models.GroupOrder{Subtotal: r.Subtotal, Tax: r.Tax}, rate)
 		rows = append(rows, pendingRow{
 			ID: r.ID, ChefID: r.ChefID, Amount: r.Amount, NetPayout: net,

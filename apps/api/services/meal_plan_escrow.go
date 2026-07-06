@@ -205,8 +205,9 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 			return fmt.Errorf("hold payout for day %s: %w", d.ID, err)
 		}
 		d.PayoutTransferID = tr.ID
+		d.CommissionRate = rate // #547: freeze the rate this transfer was sized at
 		if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", d.ID).
-			Update("payout_transfer_id", tr.ID).Error; err != nil {
+			Updates(map[string]any{"payout_transfer_id": tr.ID, "commission_rate": rate}).Error; err != nil {
 			return err
 		}
 		auditTransferMovement(auditTransferHold, aggTypeMealPlanDay, d.ID, tr.ID, heldPaise, "meal-plan day confirmed — chef payout held")
