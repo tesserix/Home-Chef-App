@@ -69,6 +69,28 @@ func TestCompensateOrderRefund_IdempotentOnRetry(t *testing.T) {
 	require.Equal(t, 300.0, w.Balance)
 }
 
+// #609: CompensateOrderRefund must refund only the REMAINING refundable, not the full
+// order.Total, when a prior partial refund already returned part of the money — else it
+// double-refunds the partial amount. It must also INCREMENT refund_amount, not overwrite it.
+func TestCompensateOrderRefund_PriorPartial_RefundsRemainderOnly(t *testing.T) {
+	db := setupWalletDB(t)
+	addOrdersTable(t, db)
+	oid, cid := uuid.New(), uuid.New()
+	// Total ₹1000, ₹400 already refunded via a partial (refunded_at NULL per #549/#586).
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, total, status, payment_status, refund_amount)
+		VALUES (?,?,?,?,?,?,?)`, oid.String(), "ORD-P", cid.String(), 1000.0,
+		string(models.OrderStatusAccepted), string(models.PaymentCompleted), 400.0).Error)
+
+	require.NoError(t, CompensateOrderRefund(context.Background(), oid, "chef rejected"))
+
+	w, _ := WalletBalance(db, cid)
+	require.Equal(t, 600.0, w.Balance, "only the remaining ₹600 is refunded, not the full ₹1000")
+	var o models.Order
+	require.NoError(t, db.First(&o, "id = ?", oid).Error)
+	require.Equal(t, 1000.0, o.RefundAmount, "refund_amount is the cumulative 400 + 600, not an overwrite")
+	require.Equal(t, models.OrderStatusRefunded, o.Status)
+}
+
 func TestCompensateOrderRefund_SkipsAlreadyRefunded(t *testing.T) {
 	db := setupWalletDB(t)
 	addOrdersTable(t, db)

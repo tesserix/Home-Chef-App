@@ -94,43 +94,27 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	// Already-refunded amount (e.g. per-line cancels) reduces what we
-	// can refund now. amountToRefund is in paise — Razorpay's native
-	// unit. Floor + min 1 paise; if there's nothing left to refund we
-	// flip the status and skip the gateway call.
-	// #527: RemainingRefundable, NOT Total − RefundAmount — a prior per-line cancel
-	// reduced Total AND bumped RefundAmount, so the naive difference double-subtracts
-	// the refunded lines and strands the remaining live items' money on this full cancel.
-	refundable := services.RemainingRefundable(&order)
-	amountPaise := int(roundPaise(refundable))
+	// #609: claim + RESERVE the remaining refundable under a row lock via the shared helper —
+	// the SAME atomic discipline the partial path uses. This replaces the old unlocked
+	// read-then-claim (a concurrent partial could over-refund) AND the stale
+	// `order.RefundAmount + refundable` write below. The reservation stamps
+	// payment_status/refunded_at/refund_amount together; won=false ⇒ a sibling already refunded
+	// or nothing is left, so we skip the gateway and just cancel. models.RoundAmount guarantees
+	// a winning reservation is ≥ 1 paise, so amountPaise>0 whenever won.
+	reserved, won, rErr := services.ReserveFullRefund(database.DB, order.ID)
+	if rErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process cancellation"})
+		return
+	}
+	amountPaise := 0
+	if won {
+		amountPaise = int(roundPaise(reserved))
+	}
 	var refundID string
-	var refundedAt time.Time
-	if amountPaise > 0 {
-		// #392: shared refund claim. The mutex is the SAME two-column predicate every
-		// full-refund path uses (payment.go InitiateRefund, RefundOrderForCancellation,
-		// ExecuteCancellationRefund): claim payment_status completed→refunded AND stamp
-		// refunded_at in one conditional UPDATE. Claiming payment_status (not just
-		// refunded_at) is what mutually excludes InitiateRefund, which sets refunded_at
-		// only AFTER its gateway call. RowsAffected==0 ⇒ a sibling already refunded.
-		claim := database.DB.Model(&models.Order{}).
-			Where("id = ? AND payment_status = ? AND refunded_at IS NULL", order.ID, models.PaymentCompleted).
-			Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": time.Now().UTC()})
-		if claim.Error != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process cancellation"})
-			return
-		}
-		if claim.RowsAffected == 0 {
-			amountPaise = 0 // already refunded elsewhere
-		}
-	}
-	revertRefundClaim := func() {
-		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
-			Updates(map[string]any{"payment_status": models.PaymentCompleted, "refunded_at": gorm.Expr("NULL")})
-	}
 	if amountPaise > 0 {
 		rzp := services.GetRazorpay()
 		if rzp == nil {
-			revertRefundClaim() // let a retry refund once the gateway is back
+			services.ReleaseFullRefundReservation(database.DB, order.ID, reserved) // let a retry refund once the gateway is back
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "razorpay client unavailable; refund deferred"})
 			return
 		}
@@ -145,17 +129,16 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 				"initiator": "chef",
 			},
 			// Full-order cancel refund is issued once (order goes terminal-cancelled);
-			// the claim above serializes concurrent attempts. #574.
+			// the reservation above serializes concurrent attempts. #574.
 			IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
 		})
 		if err != nil {
-			revertRefundClaim()
+			services.ReleaseFullRefundReservation(database.DB, order.ID, reserved)
 			services.CaptureSentryError(c, err)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
 			return
 		}
 		refundID = refundResp.ID
-		refundedAt = time.Now().UTC()
 	}
 
 	now := time.Now().UTC()
@@ -166,13 +149,11 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 		"refund_reason":       string(reason),
 		"refund_initiated_by": "chef",
 	}
-	// #392: stamp refund_amount only when a refund was actually issued, and stamp the
-	// cumulative (RefundAmount + refundable), not an unconditional Total — otherwise a
-	// skipped/partial refund over-states the ledger and trips reconciliation.
+	// #609: refund_amount + refunded_at were stamped atomically by the reservation; only record
+	// the gateway refund reference here (never re-write refund_amount — that was the stale
+	// read-modify-write that clobbered a concurrent partial's increment).
 	if refundID != "" {
 		updates["refund_id"] = refundID
-		updates["refunded_at"] = refundedAt
-		updates["refund_amount"] = order.RefundAmount + refundable
 	}
 	if err := database.DB.Model(&order).Updates(updates).Error; err != nil {
 		services.CaptureSentryError(c, err)

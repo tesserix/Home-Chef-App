@@ -6,6 +6,9 @@ package services
 // exercises the whole flow with no external gateway (CreditWallet is DB-only).
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -18,6 +21,76 @@ import (
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
 )
+
+// seedRazorpayWalletOrder is a gateway-charged order that ALSO consumed store credit at
+// checkout (wallet_applied), so only (Total − WalletApplied) was captured at the gateway.
+func seedRazorpayWalletOrder(t *testing.T, db *gorm.DB, total, walletApplied float64) *models.Order {
+	t.Helper()
+	o := &models.Order{
+		ID: uuid.New(), OrderNumber: "ORD-W", CustomerID: uuid.New(), ChefID: uuid.New(),
+		Status: models.OrderStatusCancelled, PaymentStatus: models.PaymentCompleted,
+		PaymentProvider: "razorpay", RazorpayPaymentID: "pay_123", Total: total, WalletApplied: walletApplied,
+	}
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, chef_id, status, payment_status,
+		payment_provider, razorpay_payment_id, total, wallet_applied, refund_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		o.ID.String(), o.OrderNumber, o.CustomerID.String(), o.ChefID.String(), string(o.Status),
+		string(models.PaymentCompleted), "razorpay", "pay_123", total, walletApplied, 0.0).Error)
+	return o
+}
+
+// #609: the wallet-capture split re-credits the wallet-funded slice and refunds only the
+// captured slice at the gateway, but the RESERVED ledger amount is the FULL remaining. Total
+// money out (wallet re-credit + gateway) must equal the reserved refund_amount.
+func TestRefundOrderForCancellation_WalletApplied_SplitConservesReservedTotal(t *testing.T) {
+	db := setupCancelRefundDB(t)
+	o := seedRazorpayWalletOrder(t, db, 300, 120) // ₹300 total, ₹120 from wallet → ₹180 captured
+
+	var gatewayAmt int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Amount int `json:"amount"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gatewayAmt = body.Amount
+		_, _ = w.Write([]byte(`{"id":"rfnd_test","status":"processed"}`))
+	}))
+	defer srv.Close()
+	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
+	t.Cleanup(func() { SetRazorpayClient(nil) })
+
+	require.NoError(t, RefundOrderForCancellation(o, "customer", "cancel"))
+
+	require.Equal(t, 18000, gatewayAmt, "gateway refunds only the captured ₹180 (paise)")
+	ps, amt, rid, _ := loadRefund(t, db, o.ID)
+	require.Equal(t, string(models.PaymentRefunded), ps)
+	require.Equal(t, 300.0, amt, "refund_amount = the full reserved ₹300 (wallet 120 + gateway 180) — conserved")
+	require.NotEmpty(t, rid)
+	var bal float64
+	db.Raw(`SELECT balance FROM wallets WHERE user_id = ?`, o.CustomerID.String()).Scan(&bal)
+	require.Equal(t, 120.0, bal, "the wallet-funded portion is re-credited as store credit")
+}
+
+// #609: on a gateway failure the reservation must release the FULL reserved amount, not the
+// reduced gateway share — else refund_amount would be left inflated by the wallet portion.
+func TestRefundOrderForCancellation_WalletApplied_GatewayFailure_ReleasesFullReservation(t *testing.T) {
+	db := setupCancelRefundDB(t)
+	o := seedRazorpayWalletOrder(t, db, 300, 120)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"description":"boom"}}`))
+	}))
+	defer srv.Close()
+	SetRazorpayClient(NewRazorpayTestClient(srv.URL, "key", "secret", "whsec"))
+	t.Cleanup(func() { SetRazorpayClient(nil) })
+
+	require.Error(t, RefundOrderForCancellation(o, "customer", "cancel"), "gateway failure surfaces")
+
+	ps, amt, _, at := loadRefund(t, db, o.ID)
+	require.Equal(t, string(models.PaymentCompleted), ps, "claim reverted so a retry can re-refund")
+	require.Nil(t, at, "refunded_at cleared")
+	require.Equal(t, 0.0, amt, "the FULL reserved ₹300 is released, not just the ₹180 gateway share (#609)")
+}
 
 func setupCancelRefundDB(t *testing.T) *gorm.DB {
 	t.Helper()

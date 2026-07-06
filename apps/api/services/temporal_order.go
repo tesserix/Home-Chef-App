@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
@@ -115,44 +113,39 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("refund: load order %s: %w", orderID, err)
 	}
-	now := time.Now()
-	// #392: atomic refund claim on the SAME two-column mutex every full-refund path
-	// uses (payment_status completed→refunded AND refunded_at IS NULL), replacing the
-	// old bare `RefundedAt != nil` check-then-act. Without this, the saga's async
-	// compensation could double-refund against a concurrent direct cancel / chef
-	// reject / InitiateRefund once ORDER_SAGA_ENABLED is turned on. Only the winner
-	// (RowsAffected==1) proceeds; on a downstream error we revert so temporal retries.
-	claim := database.DB.Model(&models.Order{}).
-		Where("id = ? AND payment_status = ? AND refunded_at IS NULL", orderID, models.PaymentCompleted).
-		Updates(map[string]any{"payment_status": models.PaymentRefunded, "refunded_at": &now})
-	if claim.Error != nil {
-		return fmt.Errorf("refund: claim order %s: %w", orderID, claim.Error)
+	// #609/#392: atomically claim + RESERVE the REMAINING refundable under a row lock via the
+	// shared helper (the SAME two-column mutex every full-refund path uses). This replaces both
+	// the old bare claim AND the old `CreditWallet(order.Total)` / `refund_amount = order.Total`
+	// overwrite, which double-refunded and clobbered the ledger when the order already carried a
+	// prior partial refund (refunded_at NULL since #549/#586). Only the winner proceeds; a
+	// retried activity / racing direct-cancel loses the claim (won=false → no-op).
+	amount, won, err := ReserveFullRefund(database.DB, orderID)
+	if err != nil {
+		return fmt.Errorf("refund: reserve order %s: %w", orderID, err)
 	}
-	if claim.RowsAffected == 0 {
-		return nil // already refunded by another path (or not in a refundable state)
+	if !won {
+		return nil // already refunded by another path, retried, or nothing left to refund
 	}
-	revertClaim := func() {
-		database.DB.Model(&models.Order{}).Where("id = ?", orderID).
-			Updates(map[string]any{"payment_status": models.PaymentCompleted, "refunded_at": gorm.Expr("NULL")})
+	// Claw back the chef/rider Route split first (#123) — the platform must not pay out an order
+	// it is refunding. No-op unless live payout movement is on. On failure release the
+	// reservation so temporal retries the whole compensation.
+	if rErr := ReverseOrderPayouts(orderID); rErr != nil {
+		ReleaseFullRefundReservation(database.DB, orderID, amount)
+		return fmt.Errorf("refund: reverse payouts for %s: %w", orderID, rErr)
 	}
-	// Claw back the chef/rider Route split first (#123) — the platform must not
-	// pay out an order it is refunding. No-op unless live payout movement is on.
-	if err := ReverseOrderPayouts(orderID); err != nil {
-		revertClaim()
-		return fmt.Errorf("refund: reverse payouts for %s: %w", orderID, err)
-	}
-	if order.Total > 0 {
-		if _, err := CreditWallet(database.DB, order.CustomerID, order.Total,
+	if amount > 0 {
+		if _, cErr := CreditWallet(database.DB, order.CustomerID, amount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Order %s refunded: %s", order.OrderNumber, reason),
-			"saga-refund:"+order.ID.String(), nil); err != nil {
-			revertClaim()
-			return fmt.Errorf("refund: credit wallet for %s: %w", orderID, err)
+			"saga-refund:"+order.ID.String(), nil); cErr != nil {
+			ReleaseFullRefundReservation(database.DB, orderID, amount)
+			return fmt.Errorf("refund: credit wallet for %s: %w", orderID, cErr)
 		}
 	}
+	// Status → refunded. refund_amount + refunded_at were set atomically by the reservation;
+	// do NOT overwrite refund_amount with order.Total (that was the double-count bug).
 	if err := database.DB.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]any{
 		"status":        models.OrderStatusRefunded,
-		"refund_amount": order.Total,
 		"refund_reason": reason,
 	}).Error; err != nil {
 		return err
