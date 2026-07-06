@@ -56,7 +56,8 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 	}
 	// NET (food + tax − commission − TDS), the same basis as the order/day paths —
 	// NOT the gross chef slice (#546). Rate resolved once, like HoldChefPayouts.
-	amt := groupNetPayout(g, GetCommissionRate(tx))
+	rate := GetCommissionRate(tx)
+	amt := groupNetPayout(g, rate)
 	if amt <= 0 {
 		return nil
 	}
@@ -76,8 +77,9 @@ func HoldGroupChefPayout(tx *gorm.DB, g *models.GroupOrder, chefAccount string) 
 		return fmt.Errorf("hold group payout: %w", err)
 	}
 	g.PayoutTransferID = tr.ID
+	g.CommissionRate = rate // #547: freeze the rate this transfer was sized at
 	if err := tx.Model(&models.GroupOrder{}).Where("id = ?", g.ID).
-		Update("payout_transfer_id", tr.ID).Error; err != nil {
+		Updates(map[string]any{"payout_transfer_id": tr.ID, "commission_rate": rate}).Error; err != nil {
 		return err
 	}
 	auditTransferMovement(auditTransferHold, aggTypeGroupOrder, g.ID, tr.ID, heldPaise, "group order confirmed — chef payout held")

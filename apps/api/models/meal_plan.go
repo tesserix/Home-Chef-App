@@ -173,6 +173,11 @@ type MealPlanDay struct {
 	// Fulfilment + money links (#194/#197).
 	OrderID          *uuid.UUID `gorm:"type:uuid;index" json:"orderId,omitempty"`
 	PayoutTransferID string     `gorm:"" json:"payoutTransferId,omitempty"`
+	// CommissionRate freezes the platform commission rate the held transfer was sized at
+	// (#547), mirroring Order.CommissionRate — so any later recompute (admin queue net,
+	// reconciliation) is exact even if the platform flat rate changed while the hold was
+	// pending. 0 for days held before this column existed (readers fall back to current).
+	CommissionRate float64 `gorm:"default:0" json:"commissionRate,omitempty"`
 	// PreparedAt is stamped when the chef marks the dish prepared from the prep
 	// view (#50) — the "being cooked" signal the customer sees live.
 	PreparedAt  *time.Time `gorm:"" json:"preparedAt,omitempty"`

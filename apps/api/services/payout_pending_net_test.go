@@ -101,3 +101,45 @@ func TestListPendingPayouts_SurfacesChefNetPayout(t *testing.T) {
 	require.InDelta(t, wantGroupNet, got[grpID].NetPayout, 0.001, "group net = groupNetPayout (net of commission+TDS)")
 	require.Less(t, got[grpID].NetPayout, got[grpID].Amount, "group net is below the gross chef slice")
 }
+
+// #547: the queue net must use the rate FROZEN on the aggregate when the transfer was held
+// (meal_plan_days.commission_rate / group_orders.commission_rate), not the current platform
+// rate — so the display doesn't drift if the flat rate changed while the hold was pending.
+func TestListPendingPayouts_UsesFrozenCommissionRate(t *testing.T) {
+	db := setupReleaseDB(t)
+	now := time.Now()
+	current := GetCommissionRate(db) // default flat rate (≈0.06)
+	const frozen = 0.20              // deliberately far from the current rate
+	require.Greater(t, frozen-current, 0.05, "precondition: frozen rate differs from current")
+
+	dayID, planID := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO meal_plans (id, meal_plan_number, customer_id, chef_id, status, subtotal, tax)
+		VALUES (?,?,?,?,?,?,?)`, planID.String(), "MP-frz", uuid.NewString(), uuid.NewString(), "active", 240.0, 24.0).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days
+		(id, meal_plan_id, status, payout_transfer_id, price, payout_hold_status, delivered_at, commission_rate)
+		VALUES (?,?,?,?,?,?,?,?)`,
+		dayID.String(), planID.String(), "delivered", "trf_frz", 120.0,
+		string(models.PayoutHoldReleaseEligible), now.Add(-5*time.Hour), frozen).Error)
+
+	grpID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO group_orders
+		(id, host_id, chef_id, status, payout_transfer_id, payout_hold_status, delivered_at, subtotal, tax, commission_rate)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		grpID.String(), uuid.NewString(), uuid.NewString(), "delivered", "trf_grpfrz",
+		string(models.PayoutHoldReleaseEligible), now.Add(-5*time.Hour), 300.0, 30.0, frozen).Error)
+
+	rows, err := ListPendingPayouts(db, PendingFilter{})
+	require.NoError(t, err)
+	got := map[uuid.UUID]PendingPayout{}
+	for _, r := range rows {
+		got[r.ID] = r
+	}
+
+	wantDay := perDayNetPayout(&models.MealPlan{Subtotal: 240.0, Tax: 24.0}, &models.MealPlanDay{Price: 120.0}, frozen)
+	currentDay := perDayNetPayout(&models.MealPlan{Subtotal: 240.0, Tax: 24.0}, &models.MealPlanDay{Price: 120.0}, current)
+	require.InDelta(t, wantDay, got[dayID].NetPayout, 0.001, "day net uses the FROZEN rate")
+	require.Greater(t, currentDay-wantDay, 0.5, "sanity: the current-rate net differs materially (a wrong impl would show this)")
+
+	wantGrp := groupNetPayout(&models.GroupOrder{Subtotal: 300.0, Tax: 30.0}, frozen)
+	require.InDelta(t, wantGrp, got[grpID].NetPayout, 0.001, "group net uses the FROZEN rate")
+}

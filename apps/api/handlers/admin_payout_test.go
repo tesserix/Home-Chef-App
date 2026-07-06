@@ -37,7 +37,7 @@ const payoutOrdersDDL = `CREATE TABLE orders (id TEXT PRIMARY KEY, order_number 
 	refunded_at DATETIME, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`
 
 const payoutDaysDDL = `CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
-	status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0,
+	status TEXT, payout_transfer_id TEXT DEFAULT '', price REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 	payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
 	payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 	date DATETIME, created_at DATETIME, updated_at DATETIME)`
@@ -48,7 +48,7 @@ const payoutPlansDDL = `CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_
 const payoutGroupOrdersDDL = `CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT,
 	order_id TEXT, status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 	customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
-	payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
+	payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 	currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`
 
 const payoutOutboxDDL = `CREATE TABLE outbox_events (id TEXT DEFAULT '00000000-0000-0000-0000-000000000000',
