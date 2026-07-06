@@ -18,6 +18,7 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"golang.org/x/time/rate"
+	"gorm.io/gorm/clause"
 )
 
 type DeliveryHandler struct {
@@ -449,7 +450,7 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 
 	// Get the order and lock it
 	var order models.Order
-	if err := tx.Preload("Chef").
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Chef").
 		Where("id = ? AND status = ? AND delivery_id IS NULL", orderUUID, models.OrderStatusReady).
 		First(&order).Error; err != nil {
 		tx.Rollback()
@@ -487,7 +488,9 @@ func (h *DeliveryHandler) AcceptDelivery(c *gin.Context) {
 		TotalPayout:         order.DeliveryFee + order.Tip, // 100% to driver — subscription model
 	}
 
-	if err := tx.Create(&delivery).Error; err != nil {
+	// Reuse any existing Delivery row for this order (a retry-reset or cancelled row) —
+	// Delivery.OrderID is a hard uniqueIndex, so a second insert would 500 (#579).
+	if err := services.AssignDeliveryForOrder(tx, &delivery); err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create delivery"})
 		return
@@ -749,19 +752,30 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		})
 
 	case models.DeliveryFailed, models.DeliveryReturned:
-		// A delivery that failed/was returned is terminalized into admin fault resolution:
-		// open a pending delivery_failed issue and FREEZE the payout hold to disputed. NO
-		// money moves here — the refund/release outcome executes later, only after an admin
-		// confirms fault. (Re-dispatch/retry — owner's 2-attempt cap — is a follow-up: the
-		// current schema allows only one Delivery per order (unique order_id), so re-attempt
-		// needs a re-dispatch redesign; until then every failure terminalizes so no order
-		// strands unfrozen.)
+		// Owner's 2-attempt cap (#579): the FIRST failure re-dispatches (reset the same
+		// Delivery row + re-open the order — no money moves); a further failure terminalizes
+		// into admin fault resolution (open a delivery_failed issue + FREEZE the hold to
+		// disputed). The re-dispatch reuses the same row because Delivery.OrderID is a hard
+		// uniqueIndex (no second row per order).
 		delivery.FailureReason = string(req.FailureReason)
-		if err := terminalizeFailedDelivery(&delivery, req.FailureReason); err != nil {
-			log.Printf("delivery-failure: terminalize order %s: %v", delivery.OrderID, err)
+		retried, err := services.RetryOrTerminalizeFailedDelivery(database.DB, &delivery, req.FailureReason, "courier")
+		if err != nil {
+			log.Printf("delivery-failure: handle order %s: %v", delivery.OrderID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record delivery failure"})
 			return
 		}
+		if retried {
+			// The service already reset the delivery row + re-opened the order — do NOT
+			// Save the stale (failed) struct over it. Return the re-dispatched row.
+			var fresh models.Delivery
+			if err := database.DB.First(&fresh, "id = ?", delivery.ID).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load delivery"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"delivery": fresh.ToResponse(), "status": "redispatched", "attempt": fresh.AttemptNumber})
+			return
+		}
+		// Cap reached: money frozen. Persist the failed status via the Save below.
 	}
 
 	if err := database.DB.Save(&delivery).Error; err != nil {
@@ -770,20 +784,6 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, delivery.ToResponse())
-}
-
-// terminalizeFailedDelivery freezes a terminally-failed delivery's money state for admin
-// fault resolution WITHOUT moving money (#393 slice 1): it opens a pending
-// `delivery_failed` OrderIssue and disputes the order's payout hold (both atomic in tx),
-// then stages the delivery.failed notification event. The actual refund/release outcome
-// is executed later, only after an admin confirms the fault class. The event is emitted
-// only when this call did the FIRST terminalization (RecordDeliveryFailure reports
-// froze==true) — so a retried request and non-gateway (meal-plan/group) orders don't
-// emit a misleading "resolution pending" notification. delivery.Order must be preloaded.
-func terminalizeFailedDelivery(delivery *models.Delivery, reason models.DeliveryFailureReason) error {
-	_, err := services.TerminalizeDeliveryFailure(database.DB, &delivery.Order, reason, "courier",
-		map[string]any{"delivery_id": delivery.ID.String()})
-	return err
 }
 
 // GetDeliveryHistory returns past deliveries for the partner
@@ -1429,7 +1429,7 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 	tx := database.DB.Begin()
 
 	var order models.Order
-	if err := tx.Preload("Chef").
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Chef").
 		Where("id = ? AND status = ? AND delivery_id IS NULL", orderUUID, models.OrderStatusReady).
 		First(&order).Error; err != nil {
 		tx.Rollback()
@@ -1467,7 +1467,9 @@ func (h *DeliveryHandler) ManualAssignDelivery(c *gin.Context) {
 		TotalPayout:         order.DeliveryFee + order.Tip, // 100% to driver — subscription model
 	}
 
-	if err := tx.Create(&delivery).Error; err != nil {
+	// Reuse any existing Delivery row for this order (retry-reset / cancelled) — the
+	// order_id uniqueIndex forbids a second row (#579).
+	if err := services.AssignDeliveryForOrder(tx, &delivery); err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create delivery"})
 		return
