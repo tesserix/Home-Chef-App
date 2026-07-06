@@ -144,6 +144,9 @@ func (h *ChefOrderCancelHandler) CancelOrder(c *gin.Context) {
 				"reason":    string(reason),
 				"initiator": "chef",
 			},
+			// Full-order cancel refund is issued once (order goes terminal-cancelled);
+			// the claim above serializes concurrent attempts. #574.
+			IdempotencyKey: services.RefundFullIdempotencyKey(order.ID),
 		})
 		if err != nil {
 			revertRefundClaim()
@@ -308,6 +311,11 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 			"initiator":     "chef",
 			"scope":         "line",
 		},
+		// NOTE: no gateway idempotency key here yet. This per-line path issues the
+		// gateway refund BEFORE any atomic claim and increments order.RefundAmount in
+		// the txn without a `is_cancelled=false` guard, so a stable key would let the
+		// gateway dedup a same-line double-submit while both txns still double-count the
+		// ledger — shorting a later refund. Needs an atomic line claim first (#576).
 	})
 	if err != nil {
 		services.CaptureSentryError(c, err)
@@ -469,6 +477,11 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 			"initiator": "chef",
 			"scope":     "post_delivery_goodwill",
 		},
+		// NOTE: no gateway idempotency key here yet. This goodwill path has NO atomic
+		// refund claim (unlike InitiateRefund), so a prior-refunded key would collide
+		// with a concurrent InitiateRefund reading the same order.RefundAmount, letting
+		// the gateway dedup one real refund while both ledgers add their amount —
+		// shorting the customer. Needs an atomic claim first (#576).
 	})
 	if err != nil {
 		services.CaptureSentryError(c, err)

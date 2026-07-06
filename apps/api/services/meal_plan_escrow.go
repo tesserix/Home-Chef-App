@@ -197,6 +197,9 @@ func HoldChefPayouts(tx *gorm.DB, plan *models.MealPlan, chefAccount string) err
 			Currency: plan.Currency,
 			OnHold:   true,
 			Notes:    map[string]string{"meal_plan_id": plan.ID.String(), "day_id": d.ID.String()},
+			// One hold per day (DB-guarded by PayoutTransferID); a retry re-derives the
+			// same per-day key so Razorpay dedups it. #574.
+			IdempotencyKey: HoldPayoutIdempotencyKey("mealplanday", d.ID),
 		})
 		if err != nil {
 			return fmt.Errorf("hold payout for day %s: %w", d.ID, err)

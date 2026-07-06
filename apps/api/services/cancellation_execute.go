@@ -65,7 +65,8 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				}
 				resp, rErr := rzp.CreateRefund(order.RazorpayPaymentID, &RefundRequest{
 					Amount: cr.RefundTotalPaise, Speed: "normal",
-					Notes: map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
+					Notes:          map[string]string{"order_id": order.ID.String(), "scope": "cancellation", "reason": cr.VendorReason},
+					IdempotencyKey: RefundFullIdempotencyKey(order.ID), // one cancellation refund per order; claim + sweep re-drive with the same key. #574
 				})
 				if rErr != nil {
 					return rErr
