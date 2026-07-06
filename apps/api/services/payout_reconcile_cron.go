@@ -79,9 +79,17 @@ func runPayoutReconcileScan(_ context.Context) {
 
 	// The delivery-failure FREEZE safety net runs FIRST and UNCONDITIONALLY: disputing a
 	// hold is plain DB state (no money moves), so a stranded failed/returned order must be
-	// frozen even with both escrow flags OFF (the pre-launch money-safety invariant).
+	// frozen even with both escrow flags OFF (the pre-launch money-safety invariant). One
+	// sweep per order shape — the gateway sweep excludes shells, so meal-plan-day and group
+	// shells each need their own aggregate-keyed sweep (#594).
 	if df := reconcileStrandedDeliveryFailures(); df > 0 {
 		log.Printf("payout-reconcile: froze %d stranded delivery-failure order(s)", df)
+	}
+	if mp := reconcileStrandedMealPlanDayFailures(); mp > 0 {
+		log.Printf("payout-reconcile: froze %d stranded meal-plan-day delivery-failure(s)", mp)
+	}
+	if g := reconcileStrandedGroupFailures(); g > 0 {
+		log.Printf("payout-reconcile: froze %d stranded group delivery-failure(s)", g)
 	}
 
 	if !payoutMovementEnabled() && !MealPlanEscrowActive() {

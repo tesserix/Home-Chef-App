@@ -39,6 +39,17 @@ func SetGroupOrderHoldDisputed(tx *gorm.DB, groupID uuid.UUID) error {
 	return emitHoldEvent(tx, models.PayoutHoldDisputed, aggTypeGroupOrder, groupID)
 }
 
+// terminalOrFailedGroupStatuses is the set of group statuses on which MarkGroupOrderFailed
+// is a no-op: either already frozen (`failed`) or terminally resolved. Single source of
+// truth shared with the delivery-failure reconcile sweep (mirrors
+// terminalOrFailedDayStatuses) — the sweep selects only groups OUTSIDE this set so a
+// selected strand is guaranteed to freeze. Keep freeze guard + sweep predicate on this one
+// list so they cannot drift apart.
+var terminalOrFailedGroupStatuses = []models.GroupOrderStatus{
+	models.GroupOrderFailed, models.GroupOrderDelivered,
+	models.GroupOrderCancelled, models.GroupOrderExpired,
+}
+
 // MarkGroupOrderFailed is the failure-path mirror of MarkGroupOrderDelivered: when a
 // terminally-failed delivery's order is a consolidated group shell, find the group by its
 // consolidated order id, mark it `failed` (NON-terminal — awaits admin resolution) and
@@ -56,10 +67,7 @@ func MarkGroupOrderFailed(tx *gorm.DB, orderID uuid.UUID) (bool, error) {
 		return false, fmt.Errorf("group-order failure: load group for order %s: %w", orderID, err)
 	}
 	res := tx.Model(&models.GroupOrder{}).
-		Where("id = ? AND status NOT IN ?", g.ID, []models.GroupOrderStatus{
-			models.GroupOrderFailed, models.GroupOrderDelivered,
-			models.GroupOrderCancelled, models.GroupOrderExpired,
-		}).
+		Where("id = ? AND status NOT IN ?", g.ID, terminalOrFailedGroupStatuses).
 		Update("status", models.GroupOrderFailed)
 	if res.Error != nil {
 		return false, fmt.Errorf("group-order failure: mark group %s failed: %w", g.ID, res.Error)

@@ -40,6 +40,17 @@ func SetMealPlanDayHoldDisputed(tx *gorm.DB, dayID uuid.UUID) error {
 	return emitHoldEvent(tx, models.PayoutHoldDisputed, aggTypeMealPlanDay, dayID)
 }
 
+// terminalOrFailedDayStatuses is the set of day statuses on which MarkMealPlanDayFailed is
+// a no-op: either already frozen (`failed`) or terminally resolved. It is the single source
+// of truth shared with the delivery-failure reconcile sweep — the sweep selects only days
+// OUTSIDE this set, so a selected strand is guaranteed to freeze (never a re-driven
+// froze=false no-op). Keep the freeze guard and the sweep predicate on this one list so
+// they cannot drift apart.
+var terminalOrFailedDayStatuses = []models.MealPlanDayStatus{
+	models.MealPlanDayFailed, models.MealPlanDayDelivered, models.MealPlanDayCancelled,
+	models.MealPlanDaySkipped, models.MealPlanDayDeclined, models.MealPlanDayRefunded,
+}
+
 // MarkMealPlanDayFailed is the failure-path mirror of MarkMealPlanDayDelivered: when a
 // terminally-failed delivery's order is a meal-plan per-day shell, find the day by its
 // fulfilment order id, mark it `failed` (NON-terminal — the plan waits for admin
@@ -58,10 +69,7 @@ func MarkMealPlanDayFailed(tx *gorm.DB, orderID uuid.UUID) (bool, error) {
 		return false, fmt.Errorf("meal-plan day failure: load day for order %s: %w", orderID, err)
 	}
 	res := tx.Model(&models.MealPlanDay{}).
-		Where("id = ? AND status NOT IN ?", day.ID, []models.MealPlanDayStatus{
-			models.MealPlanDayFailed, models.MealPlanDayDelivered, models.MealPlanDayCancelled,
-			models.MealPlanDaySkipped, models.MealPlanDayDeclined, models.MealPlanDayRefunded,
-		}).
+		Where("id = ? AND status NOT IN ?", day.ID, terminalOrFailedDayStatuses).
 		Update("status", models.MealPlanDayFailed)
 	if res.Error != nil {
 		return false, fmt.Errorf("meal-plan day failure: mark day %s failed: %w", day.ID, res.Error)
