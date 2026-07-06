@@ -65,6 +65,19 @@ func RecordDeliveryFailure(tx *gorm.DB, order *models.Order, reason models.Deliv
 	if order.RazorpayOrderID == "" {
 		return false, nil
 	}
+	// #594: serialize concurrent freezes on the same order — two distinct terminal webhooks
+	// (e.g. a 3PL failed + a returned for one order) could otherwise both pass the
+	// count-then-insert check below and open TWO pending delivery_failed issues (admin-queue
+	// duplicate; money-safe since RefundIssueToWallet caps + row-locks, but a nuisance). Lock
+	// the order row FOR UPDATE so a concurrent RecordDeliveryFailure blocks until the first
+	// commits and then sees its issue. Postgres-only (sqlite has no row locks; its tests are
+	// single-threaded). Order-first ordering (matches RefundIssueToWallet / #585) → no deadlock.
+	if tx.Dialector.Name() == "postgres" {
+		var locked models.Order
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&locked, "id = ?", order.ID).Error; err != nil {
+			return false, fmt.Errorf("delivery-failure: lock order %s: %w", order.ID, err)
+		}
+	}
 	var pending int64
 	if err := tx.Model(&models.OrderIssue{}).
 		Where("order_id = ? AND reason = ? AND status = ?", order.ID, models.IssueDeliveryFailed, models.IssuePending).
