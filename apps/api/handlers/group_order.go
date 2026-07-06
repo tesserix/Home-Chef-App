@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -879,7 +880,10 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only the host can cancel"})
 		return
 	}
-	if g.Status == models.GroupOrderCancelled || g.Status == models.GroupOrderDelivered {
+	// A delivery-FAILED group is frozen pending admin fault resolution (#594) — the host
+	// must not self-cancel it (that would force an unadjudicated refund + chef clawback and
+	// lock out the admin resolver, whose claim requires status='failed').
+	if g.Status == models.GroupOrderCancelled || g.Status == models.GroupOrderDelivered || g.Status == models.GroupOrderFailed {
 		c.JSON(http.StatusConflict, gin.H{"error": "This group order can't be cancelled"})
 		return
 	}
@@ -892,7 +896,7 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 	// best-effort ReverseGroupChefPayout that ran outside the status transition (#456 W-A).
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&models.GroupOrder{}).
-			Where("id = ? AND status NOT IN ?", g.ID, []models.GroupOrderStatus{models.GroupOrderCancelled, models.GroupOrderDelivered}).
+			Where("id = ? AND status NOT IN ?", g.ID, []models.GroupOrderStatus{models.GroupOrderCancelled, models.GroupOrderDelivered, models.GroupOrderFailed}).
 			Updates(map[string]any{"status": models.GroupOrderCancelled, "cancelled_at": now, "cancel_reason": "cancelled by host"})
 		if res.Error != nil {
 			return res.Error
@@ -957,6 +961,47 @@ func (h *GroupOrderHandler) CancelGroupOrder(c *gin.Context) {
 func reverseGroupCancelPayout(groupID uuid.UUID) {
 	if err := services.ReverseGroupHoldForCancel(database.DB, groupID, "group order cancelled"); err != nil {
 		log.Printf("group-order: reverse chef payout on cancel for %s failed: %v", groupID, err)
+	}
+}
+
+// AdminResolveGroupDeliveryFailure executes the admin-confirmed money policy for a
+// delivery-FAILED group order (#594 slice B). The group is frozen `disputed` by the freeze;
+// the admin confirms fault — customer-fault → chef paid + group→delivered;
+// platform/chef-fault → refund all participants + reverse the chef transfer + group→
+// cancelled. Mirrors AdminResolveDayDeliveryFailure for the group aggregate.
+func (h *GroupOrderHandler) AdminResolveGroupDeliveryFailure(c *gin.Context) {
+	adminID, _ := middleware.GetUserID(c)
+	groupID, err := uuid.Parse(c.Param("groupId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group id"})
+		return
+	}
+	var req struct {
+		Fault models.DeliveryFaultClass `json:"fault" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A fault class (customer, platform, or chef) is required"})
+		return
+	}
+
+	// Load the group WITH participants — the refund targets on the platform/chef-fault path.
+	var g models.GroupOrder
+	if err := database.DB.Preload("Participants").First(&g, "id = ?", groupID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Group order not found"})
+		return
+	}
+
+	switch err := services.ResolveGroupOrderFailure(database.DB, &g, req.Fault, adminID); {
+	case errors.Is(err, services.ErrAmbiguousFault):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Confirm a concrete fault: customer, platform, or chef"})
+	case errors.Is(err, services.ErrNotDeliveryFailure):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This group is not in a delivery-failed state"})
+	case errors.Is(err, services.ErrIssueAlreadyHandled):
+		c.JSON(http.StatusConflict, gin.H{"error": "This group has already been resolved"})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not resolve the delivery failure"})
+	default:
+		c.JSON(http.StatusOK, gin.H{"status": "resolved", "fault": string(req.Fault)})
 	}
 }
 

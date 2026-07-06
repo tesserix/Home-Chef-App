@@ -972,6 +972,9 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/order-issues/:issueId/reject", orderIssueHandler.AdminRejectIssue)
 			// #393 slice 3 — admin confirms fault on a delivery-failure issue → execute policy.
 			admin.POST("/order-issues/:issueId/resolve-delivery-failure", orderIssueHandler.AdminResolveDeliveryFailure)
+			// #594 slice B — admin confirms fault on a delivery-FAILED group order → refund
+			// participants + reverse chef payout, or pay the chef, per fault.
+			admin.POST("/group-orders/:groupId/resolve-delivery-failure", groupOrderHandler.AdminResolveGroupDeliveryFailure)
 			admin.GET("/order-issue/config", adminHandler.GetOrderIssueConfig)
 			admin.PUT("/order-issue/config", adminHandler.UpdateOrderIssueConfig)
 
