@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/models"
 )
@@ -169,6 +170,19 @@ func ResolveDeliveryFailure(db *gorm.DB, issue *models.OrderIssue, fault models.
 	case models.FaultCustomer:
 		now := time.Now()
 		return db.Transaction(func(tx *gorm.DB) error {
+			// #585: order-row lock BEFORE the issue-row UPDATE (order-first ordering,
+			// matching RefundIssueToWallet) so a concurrent refund + this customer-fault
+			// resolve on the same order can't deadlock. Postgres-only; tolerate a missing order.
+			if issue.OrderID != uuid.Nil {
+				lockTx := tx
+				if tx.Dialector.Name() == "postgres" {
+					lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+				}
+				var o models.Order
+				if err := lockTx.Select("id").First(&o, "id = ?", issue.OrderID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+			}
 			res := tx.Model(&models.OrderIssue{}).
 				Where("id = ? AND status = ?", issue.ID, models.IssuePending).
 				Updates(map[string]any{

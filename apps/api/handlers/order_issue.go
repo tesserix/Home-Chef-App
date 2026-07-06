@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
@@ -342,6 +343,24 @@ func (h *OrderIssueHandler) AdminRejectIssue(c *gin.Context) {
 			return err
 		}
 		found = true
+
+		// #585: acquire the ORDER-row lock BEFORE the issue-row UPDATE, matching
+		// RefundIssueToWallet's order-first ordering. Rejecting an issue then drives the
+		// order hold (ReleaseDisputedHoldsForOrderIfCleared) — i.e. issue-then-order lock
+		// order — while a concurrent RefundIssueToWallet locks order-then-issue; taking the
+		// order lock first here makes both paths acquire (order, issue) in the same order,
+		// so a concurrent reject + refund on the same order can't deadlock. Postgres-only
+		// (sqlite has no row locks); a missing order has no hold to drive, so tolerate it.
+		if issue.OrderID != uuid.Nil {
+			lockTx := tx
+			if tx.Dialector.Name() == "postgres" {
+				lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+			}
+			var o models.Order
+			if err := lockTx.Select("id").First(&o, "id = ?", issue.OrderID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
 
 		res := tx.Model(&models.OrderIssue{}).
 			Where("id = ? AND status = ?", issueID, models.IssuePending).
