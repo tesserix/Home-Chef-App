@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/services/money"
 )
 
 const razorpayBaseURL = "https://api.razorpay.com/v1"
@@ -594,13 +594,17 @@ func (c *RazorpayClient) HealthCheck() error {
 // Route money now that Round2-ed NET payouts feed straight in (#518). Rounds
 // identically to ToMinor(amount, "INR") so both gateway paths mint the same
 // minor-unit value (#524/#396).
+//
+// #396 Phase 2: delegates to money.FromRupees — the single paise-conversion the
+// integer-paise migration standardises on (behaviour-identical to the prior
+// math.Round). New code should prefer the money package's Paise type directly.
 func ToPaise(amount float64) int {
-	return int(math.Round(amount * 100))
+	return int(money.FromRupees(amount))
 }
 
-// FromPaise converts paise to float amount
+// FromPaise converts paise to float amount.
 func FromPaise(paise int) float64 {
-	return float64(paise) / 100.0
+	return money.Paise(paise).Rupees()
 }
 
 // ValidateCapturedPayment is the single hard gate every payment "verify" leg
