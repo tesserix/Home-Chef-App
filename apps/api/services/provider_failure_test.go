@@ -10,6 +10,7 @@ package services
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -133,6 +134,67 @@ func TestHandleProviderWebhook_DeliveredStillParks(t *testing.T) {
 
 	require.NoError(t, NewProviderService().HandleProviderWebhook("borzo", []byte(`{"delivery_id":"BRZ-3","status":"delivered"}`)))
 	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadHold(t, db, orderID))
+	require.Equal(t, 0, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+}
+
+// #594: a 3PL `cancelled` AFTER pickup (food already collected by the rider) is
+// effectively a failed delivery and must freeze the money for admin resolution; a
+// PRE-pickup cancel is a normal cancellation and must NOT freeze.
+func TestHandleProviderWebhook_CancelledAfterPickupFreezes(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "borzo", `{"cancelled":"cancelled"}`)
+	orderID, delID := seed3PLOrderAndDelivery(t, db, pid, "BRZ-C1", "HC-C1")
+	require.NoError(t, db.Exec(`UPDATE deliveries SET picked_up_at = ? WHERE id = ?`, time.Now(), delID.String()).Error)
+
+	err := NewProviderService().HandleProviderWebhook("borzo",
+		[]byte(`{"delivery_id":"BRZ-C1","status":"cancelled","reason":"rider cancelled after pickup"}`))
+	require.NoError(t, err)
+	require.Equal(t, models.PayoutHoldDisputed, loadHold(t, db, orderID), "post-pickup cancel freezes like a failure")
+	require.Equal(t, 1, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+	require.Equal(t, 1, countOutbox(t, db, SubjectDeliveryFailed))
+}
+
+func TestHandleProviderWebhook_CancelledBeforePickupNoFreeze(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "borzo", `{"cancelled":"cancelled"}`)
+	orderID, _ := seed3PLOrderAndDelivery(t, db, pid, "BRZ-C2", "HC-C2") // picked_up_at NULL
+
+	err := NewProviderService().HandleProviderWebhook("borzo",
+		[]byte(`{"delivery_id":"BRZ-C2","status":"cancelled","reason":"cancelled before pickup"}`))
+	require.NoError(t, err)
+	require.NotEqual(t, models.PayoutHoldDisputed, loadHold(t, db, orderID), "pre-pickup cancel is a normal cancellation, not a freeze")
+	require.Equal(t, 0, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
+	require.Equal(t, 0, countOutbox(t, db, SubjectDeliveryFailed))
+}
+
+func TestHandleProviderWebhook_CancelledAfterPickupIdempotent(t *testing.T) {
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "borzo", `{"cancelled":"cancelled"}`)
+	orderID, delID := seed3PLOrderAndDelivery(t, db, pid, "BRZ-C3", "HC-C3")
+	require.NoError(t, db.Exec(`UPDATE deliveries SET picked_up_at = ? WHERE id = ?`, time.Now(), delID.String()).Error)
+
+	for i := 0; i < 2; i++ {
+		require.NoError(t, NewProviderService().HandleProviderWebhook("borzo",
+			[]byte(`{"delivery_id":"BRZ-C3","status":"cancelled"}`)))
+	}
+	require.Equal(t, 1, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending), "no duplicate dispute on re-fire")
+}
+
+func TestHandleProviderWebhook_CancelledAfterDeliveredDoesNotFreeze(t *testing.T) {
+	// A late/replayed `cancelled` webhook AFTER the delivery already delivered (hold parked
+	// at awaiting_confirmation) must NOT dispute a correctly-delivered order.
+	db := setupProviderFailureDB(t)
+	pid := seedProvider(t, db, "borzo", `{"cancelled":"cancelled"}`)
+	orderID, delID := seed3PLOrderAndDelivery(t, db, pid, "BRZ-C4", "HC-C4")
+	require.NoError(t, db.Exec(`UPDATE deliveries SET picked_up_at = ?, delivered_at = ?, status = 'delivered' WHERE id = ?`,
+		time.Now(), time.Now(), delID.String()).Error)
+	require.NoError(t, db.Exec(`UPDATE orders SET payout_hold_status = ? WHERE id = ?`,
+		string(models.PayoutHoldAwaitingConfirmation), orderID.String()).Error)
+
+	err := NewProviderService().HandleProviderWebhook("borzo",
+		[]byte(`{"delivery_id":"BRZ-C4","status":"cancelled","reason":"stale webhook after delivery"}`))
+	require.NoError(t, err)
+	require.Equal(t, models.PayoutHoldAwaitingConfirmation, loadHold(t, db, orderID), "a delivered order's parked hold is not disputed by a late cancel")
 	require.Equal(t, 0, countOrderIssues(t, db, orderID, models.IssueDeliveryFailed, models.IssuePending))
 }
 
