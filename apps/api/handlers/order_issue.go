@@ -306,12 +306,16 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "This issue has already been handled"})
 		return
 	}
-	// Cap the assisted refund at the order's remaining refundable amount.
-	var order models.Order
-	if err := database.DB.Select("total, refund_amount").First(&order, "id = ?", issue.OrderID).Error; err == nil {
-		if remaining := order.Total - order.RefundAmount; req.Amount > remaining {
-			req.Amount = remaining
-		}
+	// Cap the assisted refund at the order's remaining refundable amount. Use
+	// services.RemainingRefundable (#527/#560), NOT the naive Total − RefundAmount, which
+	// under-states after a per-line cancel (the reduced Total minus the bumped RefundAmount
+	// double-counts the cancelled line) and could falsely reject a legitimate refund on the
+	// still-live items. RefundIssueToWallet re-caps authoritatively under the order lock —
+	// including the #624 exclusion of affected lines cancelled between report and resolve — so
+	// this is just the early "nothing left" guard.
+	remaining := services.RemainingRefundable(&models.Order{ID: issue.OrderID})
+	if req.Amount > remaining {
+		req.Amount = remaining
 	}
 	if req.Amount <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Nothing left to refund on this order"})
@@ -319,6 +323,12 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 	}
 
 	if err := services.RefundIssueToWallet(database.DB, &issue, req.Amount, "admin", &adminID); err != nil {
+		if errors.Is(err, services.ErrNothingToRefund) {
+			// #624: every affected line named on this issue was already refunded via a per-line
+			// cancel between the report and this resolve → the lock-time cap zeroed the credit.
+			c.JSON(http.StatusConflict, gin.H{"error": "The items on this issue have already been refunded"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not issue the refund"})
 		return
 	}

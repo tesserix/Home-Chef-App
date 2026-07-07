@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,7 +39,8 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, created_at DATETIME,
 			updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, name TEXT, price REAL, quantity INTEGER,
-			subtotal REAL, is_cancelled BOOLEAN DEFAULT 0, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+			subtotal REAL, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0,
+			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, issue_count INTEGER DEFAULT 0, deleted_at DATETIME)`,
 		// #498: AdminRejectIssue now fans the disputed-hold clear out to any meal-plan-day
 		// / group-order linked to the order, so those tables must exist (empty here).
@@ -232,4 +234,73 @@ func orderHold(t *testing.T, db *gorm.DB, orderID uuid.UUID) string {
 	var hold string
 	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM orders WHERE id = ?`, orderID.String()).Scan(&hold).Error)
 	return hold
+}
+
+// resolveIssueReq POSTs an admin assisted-refund resolution with the given amount.
+func resolveIssueReq(t *testing.T, adminID, issueID uuid.UUID, amount float64) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("userID", adminID); c.Next() })
+	r.POST("/admin/issues/:issueId/resolve", NewOrderIssueHandler().AdminResolveIssue)
+	body := fmt.Sprintf(`{"amount": %g}`, amount)
+	req := httptest.NewRequest(http.MethodPost, "/admin/issues/"+issueID.String()+"/resolve", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// TestAdminResolveIssue_FullyRefunded_PreCapRejects — the pre-cap (now RemainingRefundable, #624)
+// rejects an assisted refund on an order with nothing left, before any money moves.
+func TestAdminResolveIssue_FullyRefunded_PreCapRejects(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 300, 300)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	issueID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status)
+		 VALUES (?, ?, ?, ?, 'quality_issue', 'pending')`,
+		issueID.String(), orderID.String(), chefID.String(), customer.String()).Error)
+
+	w := resolveIssueReq(t, admin, issueID, 100)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	var status string
+	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
+	require.Equal(t, "pending", status, "issue untouched when there's nothing to refund")
+}
+
+// TestAdminResolveIssue_AllAffectedCancelled_Returns409 — #624 end-to-end through the handler: an
+// affected line was cancelled after the report (its money already returned), another line keeps
+// RemainingRefundable positive so the pre-cap passes, but RefundIssueToWallet's lock-time
+// exclusion zeroes the credit → the handler maps ErrNothingToRefund to 409, no double refund.
+func TestAdminResolveIssue_AllAffectedCancelled_Returns409(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	itemA, itemC := uuid.New(), uuid.New()
+	// A(200)+C(200)=400; chef cancelled A → total=200, refund_amount=200, A per-line refund 200. C live.
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 200, 200)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,?,?)`,
+		itemA.String(), orderID.String(), true, 200).Error)
+	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,?,?)`,
+		itemC.String(), orderID.String(), false, 0).Error)
+	issueID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status, affected_item_ids, requested_amount)
+		 VALUES (?, ?, ?, ?, 'missing_item', 'pending', ?, 200)`,
+		issueID.String(), orderID.String(), chefID.String(), customer.String(), "{"+itemA.String()+"}").Error)
+
+	w := resolveIssueReq(t, admin, issueID, 200)
+	require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+
+	var status string
+	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
+	require.Equal(t, "pending", status, "nothing resolved — the affected line was already refunded via the cancel")
 }

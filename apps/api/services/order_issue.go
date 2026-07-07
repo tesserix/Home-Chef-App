@@ -147,6 +147,34 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		if credit > remaining {
 			credit = remaining
 		}
+
+		// #624: an item named in THIS issue that was CANCELLED after the report was already
+		// refunded to the customer via CancelOrderItem — and PerLineRefundedTotalTx just added its
+		// value BACK into `remaining` above (the per-line add-back the #527 headroom relies on), so
+		// without this the issue would refund that line a SECOND time. Subtract the per-line refund
+		// already issued for the affected lines that are now cancelled from the issue's OWN reported
+		// value (RequestedAmount) and cap the credit to it. This is the resolve-time mirror of the
+		// #622 ReportIssue is_cancelled exclusion, evaluated here under the same order lock so it
+		// sees a per-line cancel that committed first. Only bites when an affected line was actually
+		// cancelled between report and resolve → the auto path (nothing cancelled yet) and admin
+		// discretion on an untouched issue are unchanged. A query error propagates → the tx aborts
+		// and no money moves (never over-refunds).
+		if len(issue.AffectedItemIDs) > 0 {
+			cancelledAffected, cErr := cancelledAffectedRefundTx(tx, issue.OrderID, issue.AffectedItemIDs)
+			if cErr != nil {
+				return cErr
+			}
+			if cancelledAffected > 0 {
+				issueCap := models.RoundAmount(issue.RequestedAmount - cancelledAffected)
+				if issueCap < 0 {
+					issueCap = 0
+				}
+				if credit > issueCap {
+					credit = issueCap
+				}
+			}
+		}
+
 		if credit <= 0 {
 			return ErrNothingToRefund
 		}
@@ -262,4 +290,35 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		}
 	}
 	return nil
+}
+
+// cancelledAffectedRefundTx sums the per-line refunds already issued (OrderItem.RefundAmount) for
+// the affected lines of an issue that are now CANCELLED — the portion of the issue's reported
+// value that was already returned to the customer via a per-line cancel AFTER the report (#624).
+// Read on the passed tx (under the order lock) so it reflects a cancel that committed first. An
+// empty affected list is 0. Errors are returned (not swallowed) so the enclosing refund tx aborts
+// rather than under-subtracting and risking a double refund.
+func cancelledAffectedRefundTx(tx *gorm.DB, orderID uuid.UUID, affectedIDs []string) (float64, error) {
+	if len(affectedIDs) == 0 {
+		return 0, nil
+	}
+	// order_items.id is a uuid column on Postgres; binding []string in an `id IN ?` throws
+	// "operator does not exist: uuid = text" (every other id IN ? site in this repo passes
+	// []uuid.UUID). Parse to uuid.UUID — an unparseable id can't match a uuid PK, so skip it.
+	ids := make([]uuid.UUID, 0, len(affectedIDs))
+	for _, s := range affectedIDs {
+		if id, err := uuid.Parse(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var sum float64
+	if err := tx.Model(&models.OrderItem{}).
+		Where("order_id = ? AND is_cancelled = ? AND id IN ?", orderID, true, ids).
+		Select("COALESCE(SUM(refund_amount), 0)").Scan(&sum).Error; err != nil {
+		return 0, err
+	}
+	return sum, nil
 }
