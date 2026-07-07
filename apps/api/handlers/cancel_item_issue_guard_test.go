@@ -51,7 +51,7 @@ func claimGuard(t *testing.T, db *gorm.DB, orderID, itemID uuid.UUID) (bool, err
 	t.Helper()
 	var won bool
 	err := db.Transaction(func(tx *gorm.DB) error {
-		w, e := claimOrderItemForCancel(tx, orderID, itemID, "customer_request", time.Now().UTC())
+		_, w, e := reserveOrderItemForCancel(tx, orderID, itemID, "customer_request", time.Now().UTC())
 		won = w
 		return e
 	})
