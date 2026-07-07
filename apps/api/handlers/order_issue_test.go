@@ -38,7 +38,7 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, created_at DATETIME,
 			updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, name TEXT, price REAL, quantity INTEGER,
-			subtotal REAL, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+			subtotal REAL, is_cancelled BOOLEAN DEFAULT 0, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, issue_count INTEGER DEFAULT 0, deleted_at DATETIME)`,
 		// #498: AdminRejectIssue now fans the disputed-hold clear out to any meal-plan-day
 		// / group-order linked to the order, so those tables must exist (empty here).
@@ -124,6 +124,37 @@ func TestReportIssueGuards(t *testing.T) {
 
 		w := reportIssueReq(t, attacker, orderID, "reason=missing_item")
 		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	// #622 (reverse direction): an item already cancelled+refunded via CancelOrderItem must be
+	// EXCLUDED from the issue's refundable computation — otherwise RefundIssueToWallet returns
+	// that line's money a second time (fully automatic on ordinary multi-item orders).
+	t.Run("an already-cancelled affected item is excluded from the requested refund", func(t *testing.T) {
+		db := setupOrderIssueHandlerDB(t)
+		customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(
+			`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount)
+			 VALUES (?, ?, ?, 'completed', 'delivered', 1000, 0, 1000, 0)`,
+			orderID.String(), customer.String(), chefID.String()).Error)
+		require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+			chefID.String(), uuid.New().String()).Error)
+		itemA, itemB := uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, subtotal, is_cancelled) VALUES (?,?,?,1)`,
+			itemA.String(), orderID.String(), 500).Error) // A already cancelled
+		require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, subtotal, is_cancelled) VALUES (?,?,?,0)`,
+			itemB.String(), orderID.String(), 500).Error) // B still live
+
+		// Report naming BOTH A and B.
+		w := reportIssueReq(t, customer, orderID, "reason=damaged&affectedItemIds="+itemA.String()+"&affectedItemIds="+itemB.String())
+		assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+		var requested float64
+		var affected string
+		require.NoError(t, db.Raw(`SELECT requested_amount, affected_item_ids FROM order_issues WHERE order_id = ?`,
+			orderID.String()).Row().Scan(&requested, &affected))
+		assert.Equal(t, 500.0, requested, "only the LIVE item B (500) is refundable; the cancelled A is excluded (not 1000)")
+		assert.NotContains(t, affected, itemA.String(), "the cancelled item is dropped from affected_item_ids")
+		assert.Contains(t, affected, itemB.String())
 	})
 }
 

@@ -21,6 +21,11 @@ import (
 // refund (InitiateRefund / CancelOrder claimed the order's payment_status). #620.
 var errOrderRefundInProgress = errors.New("order-level refund in progress")
 
+// errLineAlreadyRefunded signals that a per-line cancel would double-refund money already
+// returned via the customer-issue path — the whole order is refunded (refunded_at set) or a
+// resolved issue already refunded this specific line. #622.
+var errLineAlreadyRefunded = errors.New("line or order already refunded")
+
 // ChefOrderCancelHandler holds the chef-side cancellation routes.
 // Whole-order and per-line cancel both refund through Razorpay; per-
 // line additionally recomputes the order totals so subsequent
@@ -304,6 +309,12 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		if errors.Is(err, errOrderRefundInProgress) {
 			// #620: an order-level refund holds the order — don't per-line-refund on top of it.
 			c.JSON(http.StatusConflict, gin.H{"error": "an order-level refund is in progress; retry the line cancel shortly"})
+			return
+		}
+		if errors.Is(err, errLineAlreadyRefunded) {
+			// #622: this line / the whole order was already refunded via a customer issue —
+			// refunding the line again would double-refund. Route to admin for any adjustment.
+			c.JSON(http.StatusConflict, gin.H{"error": "this item or order has already been refunded via a customer issue; resolve any adjustment through admin"})
 			return
 		}
 		services.CaptureSentryError(c, err)
@@ -659,11 +670,28 @@ func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason stri
 		lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	var o models.Order
-	if err := lockTx.Select("id", "payment_status").First(&o, "id = ?", orderID).Error; err != nil {
+	if err := lockTx.Select("id", "payment_status", "refunded_at").First(&o, "id = ?", orderID).Error; err != nil {
 		return false, err
 	}
 	if o.PaymentStatus != models.PaymentCompleted {
 		return false, errOrderRefundInProgress
+	}
+	// #622: block a per-line refund that would double-refund money already returned through the
+	// customer-issue path (services.RefundIssueToWallet), which — unlike the ReserveRefund
+	// family — does NOT flip payment_status, so the #620 mutex above can't see it.
+	//   (a) A FULL issue refund stamps refunded_at (but leaves payment_status=completed): the
+	//       whole order was already refunded, so no line may be refunded again.
+	//   (b) A PARTIAL issue refund naming this line (OrderIssue.AffectedItemIDs) already
+	//       returned that line's money to the customer's wallet: refunding the line again is a
+	//       straight double-refund. Both are checked under the same order lock so a concurrent
+	//       issue refund (which also locks the order) can't slip between check and claim.
+	if o.RefundedAt != nil {
+		return false, errLineAlreadyRefunded
+	}
+	if refunded, err := lineRefundedViaIssue(tx, orderID, itemID); err != nil {
+		return false, err
+	} else if refunded {
+		return false, errLineAlreadyRefunded
 	}
 	res := tx.Model(&models.OrderItem{}).
 		Where("id = ? AND is_cancelled = ?", itemID, false).
@@ -673,6 +701,30 @@ func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason stri
 			"cancelled_at":     at,
 		})
 	return res.RowsAffected == 1, res.Error
+}
+
+// lineRefundedViaIssue reports whether a resolved/auto-refunded customer OrderIssue that
+// actually credited money (refund_amount > 0) named this order line in AffectedItemIDs — i.e.
+// the line's money was already returned to the customer via the issue path, so a per-line
+// cancel-refund on top of it would double-refund. Read on the passed tx (under the order lock)
+// so it sees a concurrent issue refund that committed first. #622.
+func lineRefundedViaIssue(tx *gorm.DB, orderID, itemID uuid.UUID) (bool, error) {
+	var issues []models.OrderIssue
+	if err := tx.Select("affected_item_ids").
+		Where("order_id = ? AND refund_amount > 0 AND status IN ?", orderID,
+			[]models.IssueStatus{models.IssueAutoRefunded, models.IssueResolved}).
+		Find(&issues).Error; err != nil {
+		return false, err
+	}
+	want := itemID.String()
+	for i := range issues {
+		for _, aid := range issues[i].AffectedItemIDs {
+			if aid == want {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func loadChefForUser(userID uuid.UUID) (models.ChefProfile, error) {

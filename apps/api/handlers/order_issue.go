@@ -99,6 +99,13 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 	var validAffected []string
 	for _, id := range affectedIDs {
 		if it, ok := itemByID[id]; ok {
+			// #622: a line already cancelled (and refunded) via CancelOrderItem must NOT be
+			// counted as refundable here — RefundIssueToWallet would return that line's money a
+			// SECOND time (the customer already got it back through the cancel gateway refund).
+			// The symmetric guard to claimOrderItemForCancel's issue-refund check.
+			if it.IsCancelled {
+				continue
+			}
 			affectedSubtotals = append(affectedSubtotals, it.Subtotal)
 			validAffected = append(validAffected, id)
 		}

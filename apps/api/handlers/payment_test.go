@@ -87,6 +87,11 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	// the table its raw query errors and silently falls back to the old formula.
 	require.NoError(t, db.Exec(`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT,
 		menu_item_id TEXT, quantity INTEGER DEFAULT 0, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0, created_at DATETIME)`).Error)
+	// order_issues — claimOrderItemForCancel (#622) checks whether a resolved customer issue
+	// already refunded the target line; the table must exist or the per-line cancel errors.
+	require.NoError(t, db.Exec(`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT,
+		customer_id TEXT, reason TEXT, affected_item_ids TEXT, requested_amount REAL DEFAULT 0,
+		refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending', created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	// #395: the completion helper stages chef.new_order + order.paid via the outbox.
