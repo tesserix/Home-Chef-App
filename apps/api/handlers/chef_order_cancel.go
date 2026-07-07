@@ -294,17 +294,20 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	}
 
 	now := time.Now().UTC()
-	// #576: CLAIM the line BEFORE the gateway call — the same order the other refund paths
-	// use (CancelOrder, InitiateRefund). A guarded is_cancelled=false→true CAS: two concurrent
-	// cancels of the SAME line both passed the stale preloaded IsCancelled check above, but
-	// only the winner flips the row and only the winner reaches CreateRefund. The loser never
-	// issues a second real refund — closing the double-refund at the source, not relying on
-	// gateway-side dedup of concurrent identical-key requests.
+	// #628/#576: RESERVE the line BEFORE the gateway call — the same atomic discipline the
+	// order-level paths use (ReserveRefund / the CancelOrder CAS). reserveOrderItemForCancel
+	// flips is_cancelled=false→true AND records the whole ledger (line.refund_amount + reduced
+	// order subtotal/tax/total + order.refund_amount increment) in one order-locked txn, so a
+	// concurrent RefundIssueToWallet immediately sees the reservation via its
+	// RemainingRefundable / cancelledAffected caps (no gateway-window where the line reads
+	// cancelled-but-unrefunded). Two concurrent cancels of the SAME line: only the winner flips
+	// the row and reaches CreateRefund; the loser (won=false) never issues a second refund.
 	var won bool
+	var reservedRefund float64
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		w, err := claimOrderItemForCancel(tx, order.ID, target.ID, string(reason), now)
-		won = w
-		return err
+		r, w, e := reserveOrderItemForCancel(tx, order.ID, target.ID, string(reason), now)
+		reservedRefund, won = r, w
+		return e
 	}); err != nil {
 		if errors.Is(err, errOrderRefundInProgress) {
 			// #620: an order-level refund holds the order — don't per-line-refund on top of it.
@@ -327,6 +330,10 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		c.JSON(http.StatusOK, order.ToChefResponse())
 		return
 	}
+	// The reservation recomputed the refund under the lock; use it for the gateway so the amount
+	// matches exactly what the ledger recorded (they agree with the pre-check by the invariant
+	// effective rate; the reserved value is authoritative).
+	amountPaise = int(roundPaise(reservedRefund))
 
 	refundResp, err := rzp.CreateRefund(order.RazorpayPaymentID, &services.RefundRequest{
 		Amount: amountPaise,
@@ -343,71 +350,33 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 		IdempotencyKey: services.RefundLineIdempotencyKey(order.ID, target.ID),
 	})
 	if err != nil {
-		// The gateway refused — revert the claim so a retry can cancel this line (no money moved).
-		if rErr := database.DB.Model(&models.OrderItem{}).Where("id = ?", target.ID).
-			Updates(map[string]interface{}{"is_cancelled": false, "cancelled_reason": "", "cancelled_at": nil}).Error; rErr != nil {
-			log.Printf("failed to revert per-line cancel claim for item %s after gateway error: %v", target.ID, rErr)
-		}
+		// The gateway refused — no money moved, so RELEASE the reservation (un-cancel the line +
+		// restore the order totals) so a retry can cancel this line cleanly.
+		releaseOrderItemCancelReservation(database.DB, order.ID, target.ID, reservedRefund)
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "refund failed at gateway; please retry"})
 		return
 	}
 
-	// Persist the line refund + recompute the order totals atomically. On failure the line
-	// stays cancelled (a retry answers idempotently) but the order ledger isn't updated — the
-	// standard gateway-succeeded-persist-failed edge; the line key makes a retry's refund dedup.
+	// Record the gateway refund id + release the line's reserved daily capacity (#48). The money
+	// ledger was already committed atomically by the reservation, so this is a non-money-critical
+	// follow-up: on failure the row is left STUCK (do NOT revert — the gateway refund succeeded
+	// and the reservation's refund_amount is already correct, so reverting would erase a real
+	// refund, the #602/#615 corruption trap). A retry hits the early is_cancelled idempotent 200;
+	// only the refund_id reference + capacity release are lost, which is money-safe.
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.OrderItem{}).Where("id = ?", target.ID).Updates(map[string]interface{}{
-			"refund_id":     refundResp.ID,
-			"refund_amount": lineRefund,
-		}).Error; err != nil {
+		if err := tx.Model(&models.OrderItem{}).Where("id = ?", target.ID).
+			Update("refund_id", refundResp.ID).Error; err != nil {
 			return err
 		}
-
-		// Release this line's reserved daily capacity (#48). Runs once — the CAS above
-		// gates it to the winning cancel.
-		if err := services.ReleaseCapacity(tx, target.MenuItemID, target.Quantity, services.CapacityDay(order.CreatedAt)); err != nil {
-			return err
-		}
-
-		// Re-read fresh order + items inside the txn so we don't race
-		// a concurrent per-line cancel.
-		var fresh models.Order
-		if err := tx.Where("id = ?", order.ID).Preload("Items").First(&fresh).Error; err != nil {
-			return err
-		}
-
-		newSubtotal, newTax, newTotal := recomputeOrderTotals(
-			fresh.Items, fresh.Subtotal, fresh.Tax,
-			fresh.DeliveryFee, fresh.ServiceFee, fresh.Tip, fresh.Discount,
-		)
-
-		return tx.Model(&fresh).Updates(map[string]interface{}{
-			"subtotal":      newSubtotal,
-			"tax":           newTax,
-			"total":         newTotal,
-			"refund_amount": fresh.RefundAmount + lineRefund,
-		}).Error
+		return services.ReleaseCapacity(tx, target.MenuItemID, target.Quantity, services.CapacityDay(order.CreatedAt))
 	})
 	if err != nil {
-		// The ledger persist failed after a successful gateway refund. REVERT the claim
-		// (is_cancelled=false) — mirroring the gateway-error revert above — so this line is
-		// retriable and doesn't drift PERMANENTLY: if it stayed is_cancelled=true with
-		// refund_amount=0 and the order totals un-recomputed, the early IsCancelled
-		// short-circuit would 200 every retry (never re-running this persist), leaving the
-		// line's money still counted as refundable by RemainingRefundable — a later full
-		// CancelOrder would then issue a SECOND real refund (its RefundFullIdempotencyKey
-		// differs from the line key, so the gateway wouldn't dedup it). With the revert a
-		// retry re-claims and re-refunds under the SAME line key (deduped, no double refund)
-		// and re-records the ledger, healing the row.
-		if rErr := database.DB.Model(&models.OrderItem{}).Where("id = ?", target.ID).
-			Updates(map[string]interface{}{"is_cancelled": false, "cancelled_reason": "", "cancelled_at": nil}).Error; rErr != nil {
-			log.Printf("failed to revert per-line cancel claim for item %s after persist error: %v", target.ID, rErr)
-		}
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}
+	lineRefund = reservedRefund // audit log uses the reserved (authoritative) amount
 
 	// Refresh + emit. Skip status flip even if every line is now
 	// cancelled — chef may intend to re-add via the customer-support
@@ -651,13 +620,24 @@ func (h *ChefOrderCancelHandler) GetOrderInvoicePDF(c *gin.Context) {
 
 // loadChefForUser returns the ChefProfile owned by the given user.
 // Wrapped so both cancel handlers can share the same not-found path.
-// claimOrderItemForCancel atomically flips one order line to cancelled, guarded on
-// is_cancelled=false, so exactly one of two concurrent per-line cancels wins (#576). It
-// claims the line BEFORE the gateway refund (like claimRefundForProcessing / the CancelOrder
-// CAS): the loser (won=false, RowsAffected==0) never reaches CreateRefund, so no second real
-// refund is issued. The refund_id / refund_amount are written afterward, once the gateway
-// call for the winning claim succeeds.
-func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason string, at time.Time) (bool, error) {
+// reserveOrderItemForCancel atomically claims one order line for cancellation AND records its
+// refund on the ledger — the line's refund_amount, the reduced order subtotal/tax/total, and the
+// order-level refund_amount increment — all in ONE transaction under the order lock. It returns
+// the line refund amount (for the gateway call) and won=false when a sibling already claimed the
+// line (idempotent, no error).
+//
+// #628 — why the whole ledger write lives in the claim: the pre-#628 flow flipped is_cancelled
+// here but wrote refund_amount + reduced orders.total only AFTER the (unlocked) gateway call. In
+// that window a concurrent services.RefundIssueToWallet locking the order read
+// PerLineRefundedTotalTx=0 and an un-reduced Total, so its RemainingRefundable / cancelledAffected
+// caps saw the cancelled line's value as STILL refundable and could refund it a second time.
+// Writing the whole reservation inside the claim (both paths lock the same orders row FOR UPDATE)
+// makes it visible to those caps the instant this commits — no window remains.
+//
+// #576: guarded is_cancelled=false→true CAS, so exactly one of two concurrent per-line cancels of
+// the SAME line wins; the loser never reaches CreateRefund. The refund_id is written afterward,
+// once the winning claim's gateway call succeeds.
+func reserveOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason string, at time.Time) (lineRefund float64, won bool, err error) {
 	// #620: serialize with the order-level refund mutex. Lock the order row FIRST (order-first
 	// ordering per #585) and require it still payment_status=completed — InitiateRefund /
 	// CancelOrder flip it to refunded while reserving, so a per-line cancel racing an
@@ -670,11 +650,12 @@ func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason stri
 		lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	var o models.Order
-	if err := lockTx.Select("id", "payment_status", "refunded_at").First(&o, "id = ?", orderID).Error; err != nil {
-		return false, err
+	if e := lockTx.Select("id", "subtotal", "tax", "total", "refund_amount", "payment_status", "refunded_at").
+		First(&o, "id = ?", orderID).Error; e != nil {
+		return 0, false, e
 	}
 	if o.PaymentStatus != models.PaymentCompleted {
-		return false, errOrderRefundInProgress
+		return 0, false, errOrderRefundInProgress
 	}
 	// #622: block a per-line refund that would double-refund money already returned through the
 	// customer-issue path (services.RefundIssueToWallet), which — unlike the ReserveRefund
@@ -686,21 +667,133 @@ func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason stri
 	//       straight double-refund. Both are checked under the same order lock so a concurrent
 	//       issue refund (which also locks the order) can't slip between check and claim.
 	if o.RefundedAt != nil {
-		return false, errLineAlreadyRefunded
+		return 0, false, errLineAlreadyRefunded
 	}
-	if refunded, err := lineRefundedViaIssue(tx, orderID, itemID); err != nil {
-		return false, err
+	if refunded, rErr := lineRefundedViaIssue(tx, orderID, itemID); rErr != nil {
+		return 0, false, rErr
 	} else if refunded {
-		return false, errLineAlreadyRefunded
+		return 0, false, errLineAlreadyRefunded
 	}
+
+	// Read the target line's subtotal under the lock (targeted Select, not a full Preload, so
+	// the reserve stays column-light for the sqlite harness). A line already cancelled is an
+	// idempotent no-op (won=false, no error) — the caller responds with the current state.
+	var item models.OrderItem
+	if e := tx.Select("id", "subtotal", "is_cancelled").First(&item, "id = ? AND order_id = ?", itemID, orderID).Error; e != nil {
+		return 0, false, e
+	}
+	if item.IsCancelled {
+		return 0, false, nil
+	}
+	lineRefund = lineRefundAmount(item.Subtotal, o.Subtotal, o.Tax)
+
+	// Guarded CAS: flip the line AND record its refund together. RowsAffected!=1 ⇒ a concurrent
+	// duplicate won → won=false, no ledger change.
 	res := tx.Model(&models.OrderItem{}).
 		Where("id = ? AND is_cancelled = ?", itemID, false).
 		Updates(map[string]interface{}{
 			"is_cancelled":     true,
 			"cancelled_reason": reason,
 			"cancelled_at":     at,
+			"refund_amount":    lineRefund,
 		})
-	return res.RowsAffected == 1, res.Error
+	if res.Error != nil {
+		return 0, false, res.Error
+	}
+	if res.RowsAffected != 1 {
+		return 0, false, nil
+	}
+
+	// Reduce the order totals via deltas. This is exactly recomputeOrderTotals with only THIS
+	// line newly cancelled (under the lock no other item changed): Total drops by lineRefund,
+	// subtotal by the line subtotal, tax by the line's proportional share — so the fees/tip/
+	// discount need not be read, and the effective tax rate is preserved. refund_amount is the
+	// same increment the old txn3 applied. All three RemainingRefundable inputs move together.
+	taxShare := lineRefund - item.Subtotal // = o.Tax * item.Subtotal / o.Subtotal
+	orderUpdates := map[string]interface{}{
+		"subtotal":      o.Subtotal - item.Subtotal,
+		"tax":           o.Tax - taxShare,
+		"total":         o.Total - lineRefund,
+		"refund_amount": o.RefundAmount + lineRefund,
+	}
+	if e := tx.Model(&models.Order{}).Where("id = ?", orderID).Updates(orderUpdates).Error; e != nil {
+		return 0, false, e
+	}
+	return lineRefund, true, nil
+}
+
+// releaseOrderItemCancelReservation undoes a winning reserveOrderItemForCancel when the
+// downstream gateway refund FAILS (the money did NOT move, so undoing the reservation is correct
+// — mirroring the gateway-error revert the order-level paths use). It is the exact inverse of the
+// reserve's ledger write: un-cancels the line + zeroes its refund_amount, adds the line back into
+// the order subtotal/tax/total, and decrements the order-level refund_amount. Best-effort; the
+// caller is already returning the gateway failure.
+//
+// It is NOT called on a post-gateway persist failure: there the gateway refund succeeded and the
+// reserve already committed the correct refund_amount, so reverting would ERASE a real refund
+// (#602/#615 corruption trap) — that row is left stuck-but-ledger-correct instead.
+//
+// SAFE-REVERT GUARD (#628 verify): the reserve commits its ledger BEFORE the (unlocked) gateway
+// call, so while that call is in flight a concurrent ORDER-LEVEL full refund can lock the order,
+// compute its remaining OFF this reservation (Total already reduced, refund_amount already bumped),
+// refund it, and mark the order terminal. If our gateway then fails, blindly reverting would
+// restore Total/refund_amount that the concurrent refund already consumed → a terminal order with
+// overstated RemainingRefundable and money silently stranded (reconciliation sees no gateway-vs-
+// refund_amount drift). So we revert ONLY while the order is still payment_status=completed AND
+// refunded_at IS NULL — the state the reserve left it. Every full-refund path (ReserveFullRefund /
+// ReserveRefund-fullRefund / RefundIssueToWallet-full / ExecuteCancellationRefund) stamps
+// refunded_at (or flips payment_status→refunded) as its claim, so this catches every terminal
+// transition; a concurrent PARTIAL refund keeps completed/NULL and its independent refund_amount
+// delta survives our arithmetic inverse cleanly. If the order has moved on we leave the reservation
+// STUCK (line cancelled + refund_amount recorded, Total reduced) and log loudly — reconciliation
+// then flags the gateway-vs-refund_amount drift for manual repair (never silently lost). Held under
+// the order lock so the check + revert can't itself race a concurrent refund.
+func releaseOrderItemCancelReservation(db *gorm.DB, orderID, itemID uuid.UUID, lineRefund float64) {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		lockTx := tx
+		if tx.Dialector.Name() == "postgres" {
+			lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		var o models.Order
+		if e := lockTx.Select("id", "subtotal", "tax", "total", "refund_amount", "payment_status", "refunded_at").
+			First(&o, "id = ?", orderID).Error; e != nil {
+			return e
+		}
+		if o.PaymentStatus != models.PaymentCompleted || o.RefundedAt != nil {
+			// A concurrent order-level refund consumed this reservation and moved the order
+			// terminal — reverting now would corrupt the ledger + strand money. Leave the
+			// reservation stuck for reconciliation to flag.
+			log.Printf("per-line cancel reservation for item %s NOT released: order %s moved terminal "+
+				"(payment_status=%s refunded_at_set=%t) during the gateway window — left stuck for reconciliation",
+				itemID, orderID, o.PaymentStatus, o.RefundedAt != nil)
+			return nil
+		}
+		var item models.OrderItem
+		if e := tx.Select("id", "subtotal", "is_cancelled").First(&item, "id = ? AND order_id = ?", itemID, orderID).Error; e != nil {
+			return e
+		}
+		if !item.IsCancelled {
+			return nil // already released — idempotent
+		}
+		if e := tx.Model(&models.OrderItem{}).Where("id = ? AND is_cancelled = ?", itemID, true).
+			Updates(map[string]interface{}{
+				"is_cancelled":     false,
+				"cancelled_reason": "",
+				"cancelled_at":     nil,
+				"refund_amount":    0,
+			}).Error; e != nil {
+			return e
+		}
+		taxShare := lineRefund - item.Subtotal
+		return tx.Model(&models.Order{}).Where("id = ?", orderID).Updates(map[string]interface{}{
+			"subtotal":      o.Subtotal + item.Subtotal,
+			"tax":           o.Tax + taxShare,
+			"total":         o.Total + lineRefund,
+			"refund_amount": o.RefundAmount - lineRefund,
+		}).Error
+	}); err != nil {
+		log.Printf("failed to release per-line cancel reservation for item %s: %v", itemID, err)
+	}
 }
 
 // lineRefundedViaIssue reports whether a resolved/auto-refunded customer OrderIssue that

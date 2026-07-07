@@ -120,11 +120,11 @@ func TestClaimOrderItemForCancel_SerializesConcurrentDuplicates(t *testing.T) {
 	now := time.Now().UTC()
 
 	// The claim runs BEFORE the gateway refund — the loser never reaches CreateRefund.
-	won1, err1 := claimOrderItemForCancel(db, orderID, itemID, "customer_request", now)
+	_, won1, err1 := reserveOrderItemForCancel(db, orderID, itemID, "customer_request", now)
 	require.NoError(t, err1)
 	require.True(t, won1, "the winner flips the line is_cancelled=false → true")
 
-	won2, err2 := claimOrderItemForCancel(db, orderID, itemID, "customer_request", now)
+	_, won2, err2 := reserveOrderItemForCancel(db, orderID, itemID, "customer_request", now)
 	require.NoError(t, err2)
 	require.False(t, won2, "a concurrent duplicate per-line cancel loses the CAS → never reaches the gateway, never double-counts")
 
@@ -151,7 +151,7 @@ func TestClaimOrderItemForCancel_LosesToInFlightOrderRefund(t *testing.T) {
 	// An order-level refund (InitiateRefund/CancelOrder) has claimed the order.
 	require.NoError(t, db.Exec(`UPDATE orders SET payment_status = 'refunded' WHERE id = ?`, orderID.String()).Error)
 
-	won, err := claimOrderItemForCancel(db, orderID, itemID, "customer_request", time.Now().UTC())
+	_, won, err := reserveOrderItemForCancel(db, orderID, itemID, "customer_request", time.Now().UTC())
 	require.ErrorIs(t, err, errOrderRefundInProgress, "the line claim reports the order-refund conflict")
 	require.False(t, won)
 

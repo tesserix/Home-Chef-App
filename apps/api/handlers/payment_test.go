@@ -86,7 +86,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	// order_items — RemainingRefundable (#560, InitiateRefund) sums cancelled lines; without
 	// the table its raw query errors and silently falls back to the old formula.
 	require.NoError(t, db.Exec(`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT,
-		menu_item_id TEXT, quantity INTEGER DEFAULT 0, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0, created_at DATETIME)`).Error)
+		menu_item_id TEXT, quantity INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0, created_at DATETIME)`).Error)
 	// order_issues — claimOrderItemForCancel (#622) checks whether a resolved customer issue
 	// already refunded the target line; the table must exist or the per-line cancel errors.
 	require.NoError(t, db.Exec(`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT,
