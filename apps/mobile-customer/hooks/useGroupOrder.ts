@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { PayoutHoldStatus } from '../lib/payout-hold';
 
 // Group / office orders (#46): shared cart + split pay + single delivery.
 
@@ -53,6 +54,10 @@ export interface GroupOrder {
   participants: GroupParticipant[];
   items: GroupItem[];
   chef?: { businessName?: string } | null;
+  // Escrow hold state (#649). Present only with the escrow flags on; drives the
+  // host's "Confirm received" CTA + confirmed/disputed state on a delivered group.
+  payoutHoldStatus?: PayoutHoldStatus;
+  customerConfirmedAt?: string;
 }
 
 export interface GroupOrderDetail {

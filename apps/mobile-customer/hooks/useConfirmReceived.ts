@@ -44,6 +44,19 @@ export function useConfirmMealPlanDayReceived() {
   });
 }
 
+/** Confirm receipt of a delivered group/office order (host only, #649/#456).
+ *  Refreshes the group-order detail cache. */
+export function useConfirmGroupOrderReceived() {
+  const qc = useQueryClient();
+  return useMutation<ConfirmReceiptResult, Error, string>({
+    mutationFn: (groupId) =>
+      api
+        .post<ConfirmReceiptResult>(`/v1/group-orders/${groupId}/confirm-received`)
+        .then((r) => r.data),
+    onSuccess: (_d, groupId) => qc.invalidateQueries({ queryKey: ['group-order', groupId] }),
+  });
+}
+
 export interface ConfirmTiffinResult {
   confirmed: number;
 }

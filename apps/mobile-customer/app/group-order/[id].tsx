@@ -27,6 +27,9 @@ import {
 } from '../../hooks/useGroupOrder';
 import { useChefMenu } from '../../hooks/useChefs';
 import { useAddresses } from '../../hooks/useAddresses';
+import { useConfirmGroupOrderReceived } from '../../hooks/useConfirmReceived';
+import { canConfirmReceipt, payoutHoldMeta } from '../../lib/payout-hold';
+import { friendlyErrorMessage } from '../../lib/errors';
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open — add items',
@@ -50,6 +53,7 @@ export default function GroupOrderHubScreen() {
   const cancelGroup = useCancelGroup(id);
   const leaveGroup = useLeaveGroup(id);
   const payShare = usePayGroupShare();
+  const confirmGroup = useConfirmGroupOrderReceived();
   const { data: addressData } = useAddresses();
   const { data: menuData } = useChefMenu(g?.chefId ?? '');
 
@@ -100,6 +104,33 @@ export default function GroupOrderHubScreen() {
     });
   }
 
+  // #649 — host confirms the group received its delivered order (escrow dual-
+  // approval). Inert while the flags are off (the hold never reaches awaiting).
+  function confirmReceived() {
+    if (!id || !g) return;
+    Alert.alert(
+      'Confirm your order?',
+      `Let us know your group received the order${
+        g.chef?.businessName ? ` from ${g.chef.businessName}` : ''
+      }. You can still report an issue if something's wrong.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Confirm received',
+          onPress: () =>
+            confirmGroup.mutate(id, {
+              onSuccess: (res) => Alert.alert('Thanks!', res.message),
+              onError: (err) =>
+                Alert.alert(
+                  'Something went wrong',
+                  friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                ),
+            }),
+        },
+      ],
+    );
+  }
+
   if (isLoading || !g || !me) {
     return (
       <SafeAreaView style={styles.centered}>
@@ -112,6 +143,10 @@ export default function GroupOrderHubScreen() {
   const open = g.status === 'open';
   const locked = g.status === 'locked';
   const placed = ['placed', 'confirmed', 'delivered'].includes(g.status);
+  // #649 — escrow: host-only confirm CTA when the delivered group awaits
+  // confirmation; otherwise a confirmed/disputed pill (visible to all).
+  const showConfirm = isHost && canConfirmReceipt(g);
+  const holdMeta = payoutHoldMeta(g.payoutHoldStatus);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -145,6 +180,26 @@ export default function GroupOrderHubScreen() {
             <Pressable onPress={() => router.replace(`/order/${g.orderId}` as never)} style={styles.primaryBtn}>
               <Text style={styles.primaryBtnText}>View order</Text>
             </Pressable>
+          ) : null}
+          {/* #649 — escrow fulfilment confirmation (host only) */}
+          {showConfirm ? (
+            <Pressable
+              onPress={confirmReceived}
+              disabled={confirmGroup.isPending}
+              style={[styles.primaryBtn, { marginTop: 12 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm your group received this order"
+            >
+              {confirmGroup.isPending ? (
+                <ActivityIndicator color={customerColors.canvas} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Confirm received</Text>
+              )}
+            </Pressable>
+          ) : holdMeta.label ? (
+            <View style={[styles.holdPill, { backgroundColor: holdMeta.bg }]}>
+              <Text style={[styles.holdPillText, { color: holdMeta.color }]}>{holdMeta.label}</Text>
+            </View>
           ) : null}
         </View>
       ) : (
@@ -404,6 +459,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   primaryBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: '#fff' },
+  // #649 — confirmed / disputed escrow pill shown once the CTA is no longer actionable.
+  holdPill: {
+    marginTop: 12,
+    borderRadius: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  holdPillText: { fontFamily: 'Inter-SemiBold', fontSize: 15 },
   bigEmoji: { fontSize: 48 },
   placedTitle: { fontFamily: 'Inter-SemiBold', fontSize: 20, color: customerColors.charcoal.DEFAULT },
   placedBody: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft, textAlign: 'center' },
