@@ -805,7 +805,13 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 		// Cap reached: money frozen. Persist the failed status via the Save below.
 	}
 
-	if err := database.DB.Save(&delivery).Error; err != nil {
+	// Persist the delivery's OWN fields only. Omit(clause.Associations) skips GORM's belongs-to
+	// auto-save, which otherwise emits a full `INSERT INTO orders (…) ON CONFLICT DO NOTHING` for
+	// the preloaded Order on every status change — a wasteful whole-row upsert, and a latent
+	// hazard: it carries the STALE preloaded Order, so the only reason it
+	// doesn't clobber the #631-guarded order status write above is the PK ON CONFLICT DO NOTHING.
+	// Not touching associations makes that guarantee structural, not incidental. #633.
+	if err := database.DB.Omit(clause.Associations).Save(&delivery).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update delivery status"})
 		return
 	}
