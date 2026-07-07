@@ -1439,16 +1439,57 @@ func (h *PaymentHandler) handleRefundProcessed(payload json.RawMessage) error {
 	refund := data.Refund.Entity
 	log.Printf("Refund processed: %s (payment: %s, amount: %d)", refund.ID, refund.PaymentID, refund.Amount)
 
-	// Idempotent: skip if we already stamped this refund_id on the order
-	// (Razorpay retries refund.processed; without this we'd re-write the
-	// refunded_at timestamp on every redelivery).
-	now := time.Now()
+	// #635: only stamp refunded_at — the WHOLE-order-refunded marker — for a FULL refund. Every
+	// per-line cancel + goodwill PARTIAL refund fires refund.processed against the same
+	// razorpay_payment_id, but a partial must leave refunded_at NULL (the release-side payout
+	// guards block the ENTIRE chef payout on refunded_at IS NOT NULL, and claimOrderItemForCancel
+	// treats it as "the whole order was refunded" — #549/#586/#622). A full refund returns the
+	// full captured amount (Total − WalletApplied, the gateway-charged portion); a partial is
+	// strictly less. App-initiated full refunds already stamp refunded_at synchronously, so this
+	// is the out-of-band (dashboard) reconciliation path — the refund_id is always recorded.
+	//
+	// capturedPaise must be the ORIGINAL checkout-captured amount, so add back the per-line
+	// refunds: reserveOrderItemForCancel reduces order.Total by each line refund IN THE SAME TX it
+	// records that refund (order_items.refund_amount = the same lineRefund), and that line's OWN
+	// refund.processed webhook arrives afterwards — comparing its amount against the already-reduced
+	// Total would double-count it and wrongly mark a partial line cancel as full (cancelling the
+	// last line drives Total to 0, so ANY refund would look full). Read Total, wallet_applied AND
+	// the per-line sum in ONE query (a consistent snapshot) — mirroring RemainingRefundable, which
+	// is single-query precisely because mixing a stale Total with a fresh per-line sum would
+	// mis-classify the refund; separate reads race a concurrent per-line cancel and, because the
+	// idempotency short-circuit locks in on refund_id, a missed stamp would be permanent.
+	var row struct {
+		ID            string
+		Total         float64
+		WalletApplied float64
+		RefundID      string
+		PerLine       float64
+	}
+	q := database.DB.Raw(`
+		SELECT o.id AS id, o.total AS total, o.wallet_applied AS wallet_applied, o.refund_id AS refund_id,
+		       COALESCE((SELECT SUM(oi.refund_amount) FROM order_items oi
+		                 WHERE oi.order_id = o.id AND oi.is_cancelled = ?), 0) AS per_line
+		FROM orders o WHERE o.razorpay_payment_id = ? LIMIT 1`, true, refund.PaymentID).Scan(&row)
+	if q.Error != nil {
+		return q.Error
+	}
+	if q.RowsAffected == 0 {
+		return nil // no order for this payment (e.g. a subscription/tip refund) — nothing to do
+	}
+	// Idempotent: Razorpay retries refund.processed; skip if we already recorded THIS refund id.
+	if row.RefundID == refund.ID {
+		return nil
+	}
+
+	capturedPaise := services.ToPaise(row.Total + row.PerLine - row.WalletApplied)
+	updates := map[string]interface{}{"refund_id": refund.ID}
+	if refund.Amount >= capturedPaise {
+		now := time.Now()
+		updates["refunded_at"] = &now
+	}
 	return database.DB.Model(&models.Order{}).
-		Where("razorpay_payment_id = ? AND (refund_id IS NULL OR refund_id <> ?)", refund.PaymentID, refund.ID).
-		Updates(map[string]interface{}{
-			"refund_id":   refund.ID,
-			"refunded_at": &now,
-		}).Error
+		Where("id = ? AND (refund_id IS NULL OR refund_id <> ?)", row.ID, refund.ID).
+		Updates(updates).Error
 }
 
 // handleSubscriptionCharged is best-effort (subscription billing, not escrow) —
