@@ -66,7 +66,7 @@ func TestCreateRefund_NoHeaderWhenKeyEmpty(t *testing.T) {
 
 func TestCreateTransfer_SetsTransferIdempotencyHeader(t *testing.T) {
 	c, seen, _ := captureHeader(t, headerTransferIdempotency, `{"id":"trf_1","status":"created"}`)
-	logical := TopupIdempotencyKey(uuid.New(), "acc_abc123")
+	logical := TopupIdempotencyKey(uuid.New(), 0, "acc_abc123")
 	_, err := c.CreateTransfer(&DirectTransferRequest{Account: "acc_abc123", Amount: 5000, Currency: "INR", IdempotencyKey: logical})
 	require.NoError(t, err)
 	require.NotEmpty(t, *seen, "X-Transfer-Idempotency header must be sent when a key is provided")
@@ -120,7 +120,7 @@ func TestGatewayIdempotencyKeys_StableAndDistinct(t *testing.T) {
 	require.Equal(t, RefundFullIdempotencyKey(o1), RefundFullIdempotencyKey(o1))
 	require.Equal(t, RefundLineIdempotencyKey(o1, line1), RefundLineIdempotencyKey(o1, line1))
 	require.Equal(t, RefundPartialIdempotencyKey(o1, 100), RefundPartialIdempotencyKey(o1, 100))
-	require.Equal(t, TopupIdempotencyKey(o1, "acc_x"), TopupIdempotencyKey(o1, "acc_x"))
+	require.Equal(t, TopupIdempotencyKey(o1, 0, ")acc_x"), TopupIdempotencyKey(o1, 0, ")acc_x"))
 	require.Equal(t, HoldPayoutIdempotencyKey("group", o1), HoldPayoutIdempotencyKey("group", o1))
 
 	// Distinct across genuinely-different operations (the anti-#549 property: a
@@ -128,7 +128,7 @@ func TestGatewayIdempotencyKeys_StableAndDistinct(t *testing.T) {
 	require.NotEqual(t, RefundFullIdempotencyKey(o1), RefundFullIdempotencyKey(o2))
 	require.NotEqual(t, RefundLineIdempotencyKey(o1, line1), RefundLineIdempotencyKey(o1, line2), "different lines of the same order must not collide")
 	require.NotEqual(t, RefundPartialIdempotencyKey(o1, 100), RefundPartialIdempotencyKey(o1, 200), "sequential partials must not collide")
-	require.NotEqual(t, TopupIdempotencyKey(o1, "acc_chef"), TopupIdempotencyKey(o1, "acc_driver"), "chef vs driver top-up must not collide")
+	require.NotEqual(t, TopupIdempotencyKey(o1, 0, ")acc_chef"), TopupIdempotencyKey(o1, 0, ")acc_driver"), "chef vs driver top-up must not collide")
 	require.NotEqual(t, HoldPayoutIdempotencyKey("group", o1), HoldPayoutIdempotencyKey("mealplanday", o1))
 	// A full-order refund and a line refund of the same order are distinct operations.
 	require.NotEqual(t, RefundFullIdempotencyKey(o1), RefundLineIdempotencyKey(o1, line1))
@@ -136,7 +136,7 @@ func TestGatewayIdempotencyKeys_StableAndDistinct(t *testing.T) {
 	// And every normalized form is gateway-valid.
 	for _, k := range []string{
 		RefundFullIdempotencyKey(o1), RefundLineIdempotencyKey(o1, line1),
-		RefundPartialIdempotencyKey(o1, 100), TopupIdempotencyKey(o1, "acc_x"),
+		RefundPartialIdempotencyKey(o1, 100), TopupIdempotencyKey(o1, 0, ")acc_x"),
 		HoldPayoutIdempotencyKey("group", o1),
 	} {
 		n := normalizeIdempotencyKey(k)
