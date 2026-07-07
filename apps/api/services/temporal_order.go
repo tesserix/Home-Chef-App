@@ -113,6 +113,19 @@ func CompensateOrderRefund(_ context.Context, orderID uuid.UUID, reason string) 
 	if err := database.DB.First(&order, "id = ?", orderID).Error; err != nil {
 		return fmt.Errorf("refund: load order %s: %w", orderID, err)
 	}
+	// #544/#394: a typed escrow order (meal-plan day / group) is refund-managed by its own flow on
+	// a DISJOINT idempotency keyspace, and its held chef payout is a DIRECT transfer this generic
+	// path can't reverse (ReverseOrderPayouts only claws the order route-split). Refunding it here
+	// (wallet key saga-refund:<orderID>) would double-pay the customer alongside the typed
+	// RefundDay/participant refund. Skip — mirror the RefundOrderForCancellation / InitiateRefund
+	// guard. Fail safe on a type-check error (don't refund a possibly-typed order).
+	switch kind, kErr := TypedRefundOrderKind(database.DB, orderID); {
+	case kErr != nil:
+		return fmt.Errorf("refund: check order type %s: %w", orderID, kErr)
+	case kind != "":
+		log.Printf("saga refund: skipping generic refund for %s order %s — refund-managed by its escrow flow", kind, orderID)
+		return nil
+	}
 	// #609/#392: atomically claim + RESERVE the REMAINING refundable under a row lock via the
 	// shared helper (the SAME two-column mutex every full-refund path uses). This replaces both
 	// the old bare claim AND the old `CreditWallet(order.Total)` / `refund_amount = order.Total`

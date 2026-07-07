@@ -25,6 +25,33 @@ func addOrdersTable(t *testing.T, db *gorm.DB) {
 		status text, payment_status text, refunded_at datetime, refund_amount real,
 		refund_reason text, created_at datetime, updated_at datetime, deleted_at datetime
 	)`).Error)
+	// #544: CompensateOrderRefund now checks TypedRefundOrderKind, which Counts these by order_id.
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`).Error)
+}
+
+// #544: the saga compensation must NOT generic-refund a typed escrow order (meal-plan day /
+// group) — its typed flow owns the refund on a disjoint keyspace. Skipping here prevents a
+// double credit (saga-refund:<orderID> alongside the typed RefundDay/participant credit).
+func TestCompensateOrderRefund_SkipsTypedOrder(t *testing.T) {
+	db := setupWalletDB(t)
+	addOrdersTable(t, db)
+	oid, cid := uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO orders (id, order_number, customer_id, total, status, payment_status)
+		VALUES (?,?,?,?,?,?)`, oid.String(), "ORD-MP", cid.String(), 500.0,
+		string(models.OrderStatusAccepted), string(models.PaymentCompleted)).Error)
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, order_id, status) VALUES (?,?,?)`,
+		uuid.NewString(), oid.String(), "active").Error)
+
+	require.NoError(t, CompensateOrderRefund(context.Background(), oid, "chef rejected"))
+
+	// No wallet credit and the order is untouched — the typed flow owns this refund.
+	w, _ := WalletBalance(db, cid)
+	require.Equal(t, 0.0, w.Balance, "no generic wallet credit on a typed order")
+	var o models.Order
+	require.NoError(t, db.First(&o, "id = ?", oid).Error)
+	require.Equal(t, models.PaymentCompleted, o.PaymentStatus, "payment_status stays completed — no generic refund claim")
+	require.Equal(t, 0.0, o.RefundAmount)
 }
 
 func TestCompensateOrderRefund_CreditsWalletAndMarksRefunded(t *testing.T) {

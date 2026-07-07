@@ -51,6 +51,9 @@ func setupCancelDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID, uuid.UUID) {
 		`CREATE TABLE platform_settings (id text PRIMARY KEY, key text, value text, type text, updated_by text, updated_at datetime)`,
 		`CREATE TABLE outbox_events (id text PRIMARY KEY, subject text, msg_id text, aggregate_type text, aggregate_id text,
 			payload text, status text, attempts int, last_error text, next_retry_at datetime, created_at datetime, updated_at datetime, published_at datetime)`,
+		// #544: RequestCancellation now checks TypedRefundOrderKind, which Counts these by order_id.
+		`CREATE TABLE meal_plan_days (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`,
+		`CREATE TABLE group_orders (id text PRIMARY KEY, order_id text, status text, deleted_at datetime)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
@@ -147,6 +150,33 @@ func TestConfirmCancellation_VendorTierRefund(t *testing.T) {
 	require.Equal(t, 30000, cr.VendorKeptPaise)  // vendor keeps ₹300 (60% of food)
 	require.Equal(t, 63000, cr.RefundTotalPaise+cr.VendorKeptPaise+cr.PlatformKeptPaise)
 	require.InDelta(t, 252.0, walletBalance(t, db, custID), 0.001)
+}
+
+// #544: a meal-plan-day / group-order shell order must NOT open a generic cancellation request —
+// it is refund-managed by its typed escrow flow on a disjoint keyspace. Refuse with 422 and open
+// no request (so ExecuteCancellationRefund / the retry sweep never touch it).
+func TestRequestCancellation_SkipsTypedOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name, table string
+	}{
+		{"meal-plan-day", "meal_plan_days"},
+		{"group-order", "group_orders"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, custID, _, chefID := setupCancelDB(t)
+			oid := seedPaidOrder(t, db, custID, chefID, "pending")
+			require.NoError(t, db.Exec(`INSERT INTO `+tc.table+` (id, order_id, status) VALUES (?,?,?)`,
+				uuid.NewString(), oid.String(), "active").Error)
+
+			w := custPost(t, custID, "/orders/"+oid.String()+"/cancel-request", map[string]any{"refundDestination": "wallet"})
+			require.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+
+			var n int64
+			db.Model(&models.CancellationRequest{}).Where("order_id = ?", oid.String()).Count(&n)
+			require.Equal(t, int64(0), n, "no cancellation request opened on a typed escrow order")
+			require.InDelta(t, 0.0, walletBalance(t, db, custID), 0.001, "no generic refund credited")
+		})
+	}
 }
 
 // A ready/dispatched order can't be cancelled here.

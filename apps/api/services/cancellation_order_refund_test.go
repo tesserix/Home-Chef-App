@@ -113,6 +113,9 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,
 			old_value TEXT, new_value TEXT, ip_address TEXT, user_agent TEXT, correlation_id TEXT, created_at DATETIME)`,
+		// #544: TypedRefundOrderKind Counts these by order_id to detect a typed escrow order.
+		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}
