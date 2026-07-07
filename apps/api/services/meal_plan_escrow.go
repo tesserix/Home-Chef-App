@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -328,6 +329,26 @@ func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reas
 	if err := tx.Model(&models.MealPlanDay{}).Where("id = ?", day.ID).
 		Update("refund_txn_id", txn.ID).Error; err != nil {
 		return err
+	}
+	// #629: mirror the refund onto the linked spawned shell Order so it can't be paid a SECOND
+	// time through a channel that keys on the Order rather than the day — notably ReportIssue /
+	// RefundIssueToWallet (key issue:<id>, disjoint from mealplan-refund:<dayID>). RefundDay
+	// otherwise leaves the shell reading paid/pending/RefundAmount=0, so ReportIssue's eligibility
+	// checks pass and it credits perDayGross a second time. Stamp it refunded (status blocks
+	// ReportIssue; refund_amount = perDayGross drives RemainingRefundable to 0). RefundDay only
+	// runs on UNDELIVERED days (undelivered/declined/failed), whose shell is never
+	// status='delivered', so this never touches the weekly statement (it selects delivered orders)
+	// and it leaves a legit quality-issue refund on a DELIVERED day — never RefundDay'd — untouched.
+	if day.OrderID != nil {
+		if err := tx.Model(&models.Order{}).Where("id = ?", *day.OrderID).Updates(map[string]any{
+			"status":              models.OrderStatusRefunded,
+			"refund_amount":       perDayGross(plan, day),
+			"refunded_at":         time.Now(),
+			"refund_reason":       reason,
+			"refund_initiated_by": "system",
+		}).Error; err != nil {
+			return fmt.Errorf("stamp linked shell order refunded for day %s: %w", day.ID, err)
+		}
 	}
 	// #498/#398: drive the day's payout hold out of the releasable set so the admin
 	// queue can't release a refunded day (double-pay). STATE-ONLY — the claw-back was
