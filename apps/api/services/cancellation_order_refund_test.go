@@ -108,7 +108,7 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 			balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT, idempotency_key TEXT UNIQUE, created_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
 			refund_amount REAL DEFAULT 0, subtotal REAL DEFAULT 0, created_at DATETIME)`,
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 		`CREATE TABLE audit_logs (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, entity_type TEXT, entity_id TEXT,

@@ -38,7 +38,7 @@ func setupHoldHandlerDB(t *testing.T) *gorm.DB {
 			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME, refund_txn_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
 			subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT, payload TEXT,

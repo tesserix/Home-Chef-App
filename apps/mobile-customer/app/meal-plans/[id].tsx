@@ -17,6 +17,7 @@ import {
   useFinalizeMealPlan,
   useMealPlan,
   useSkipMealPlanDay,
+  type MealPlanDay,
 } from '../../hooks/useMealPlans';
 import {
   useConfirmMealPlanDayReceived,
@@ -212,6 +213,13 @@ export default function MealPlanDetailScreen() {
     );
   }
 
+  // #618 — report a quality issue on a delivered day. The day's per-day fulfilment
+  // shell order is a real order, so reuse the existing order report-issue screen.
+  function reportIssue(day: MealPlanDay) {
+    if (!day.orderId) return;
+    router.push(`/order/${day.orderId}/report-issue`);
+  }
+
   // A confirmed day on a live plan can still be skipped (server enforces the cutoff).
   const canSkip =
     plan.status === 'confirmed' || plan.status === 'active';
@@ -274,6 +282,7 @@ export default function MealPlanDetailScreen() {
           skipping={skipDay.isPending}
           onConfirmReceived={confirmReceipt}
           confirming={confirmDay.isPending}
+          onReportIssue={reportIssue}
         />
 
         <View style={styles.totalRow}>

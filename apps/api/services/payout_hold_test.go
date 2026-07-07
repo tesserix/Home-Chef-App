@@ -43,7 +43,7 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 			payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,
 			currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT, value TEXT, type TEXT, updated_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT,
 			aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,

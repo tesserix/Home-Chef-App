@@ -151,6 +151,35 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 
 	requested := services.ComputeIssueRefund(order.Subtotal, order.Tax, order.Total, order.RefundAmount, affectedSubtotals)
 
+	// #618 slice 2: a quality issue on a delivered meal-plan DAY is reported against the
+	// day's per-day fulfilment SHELL order. Link the issue to the day so the admin queue
+	// can attribute it, and (below) freeze the day's payout hold so a pending report can't
+	// release the day before it's resolved. The hold lives on meal_plan_days, not the shell
+	// order. A normal food order has no linked day (record-not-found → nil, no freeze).
+	var mealPlanDayID *uuid.UUID
+	var mpDay models.MealPlanDay
+	switch err := database.DB.Select("id", "status").Where("order_id = ?", order.ID).First(&mpDay).Error; {
+	case err == nil:
+		// #618 slice 2: a quality-issue refund is valid ONLY on a DELIVERED day. A day in
+		// any other state — notably `failed` (a failed delivery already handled by the admin
+		// delivery-failure resolver, whose RefundDay is the AUTHORITATIVE refunder on a
+		// disjoint wallet key `mealplan-refund:<dayID>`) — must not also take this path's
+		// `issue:<id>` refund, or the two independent writers double-refund the customer.
+		// Rejecting keeps the issue-refund path and RefundDay on disjoint day populations.
+		if mpDay.Status != models.MealPlanDayDelivered {
+			c.JSON(http.StatusConflict, gin.H{"error": "This meal isn't eligible for a report right now — our team is handling it."})
+			return
+		}
+		mealPlanDayID = &mpDay.ID
+	case !errors.Is(err, gorm.ErrRecordNotFound):
+		// Fail CLOSED: if this IS a meal-plan-day shell we must link + freeze it, so silently
+		// falling through as a normal order would skip the day reconcile on the resulting
+		// refund (a chef-overpay window). Ask the customer to retry rather than half-file it.
+		log.Printf("order issue: meal-plan day lookup for order %s failed: %v", order.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not file your report"})
+		return
+	}
+
 	issue := models.OrderIssue{
 		OrderID:         order.ID,
 		ChefID:          order.ChefID,
@@ -161,6 +190,7 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 		AffectedItemIDs: validAffected,
 		RequestedAmount: requested,
 		Status:          models.IssuePending,
+		MealPlanDayID:   mealPlanDayID,
 	}
 	if err := database.DB.Create(&issue).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not file your report"})
@@ -170,6 +200,16 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 	// Issue rate per chef (#37) — every report counts toward the quality signal.
 	database.DB.Model(&models.ChefProfile{}).Where("id = ?", order.ChefID).
 		UpdateColumn("issue_count", gorm.Expr("issue_count + 1"))
+
+	// #618 slice 2: freeze the linked meal-plan day's payout hold to `disputed` so a pending
+	// report (or an admin reviewing it) blocks the day's release/auto-confirm before it's
+	// resolved. Idempotent (none/awaiting→disputed only, #458) and money-safe — plain DB
+	// state, runs regardless of the escrow flags. Best-effort: the report already committed.
+	if mealPlanDayID != nil {
+		if err := services.SetMealPlanDayHoldDisputed(database.DB, *mealPlanDayID); err != nil {
+			log.Printf("order issue %s: freeze meal-plan day %s hold failed: %v", issue.ID, *mealPlanDayID, err)
+		}
+	}
 
 	// Auto-refund small/clear cases instantly; otherwise leave pending for admin.
 	cfg := services.GetIssueConfig(database.DB)

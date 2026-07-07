@@ -87,6 +87,13 @@ type OrderIssue struct {
 	ResolvedAt  *time.Time `gorm:"" json:"resolvedAt,omitempty"`
 	RefundTxnID *uuid.UUID `gorm:"type:uuid" json:"-"`
 
+	// MealPlanDayID links the issue to a specific meal-plan DAY when it was
+	// reported against that day's per-day fulfilment SHELL order (#618 slice 2).
+	// nil for a normal food order. Lets the refund path freeze/reconcile the day's
+	// payout hold (which lives on meal_plan_days, not the shell order) and lets the
+	// admin queue attribute the issue to a day. AutoMigrate adds the column.
+	MealPlanDayID *uuid.UUID `gorm:"type:uuid;index" json:"mealPlanDayId,omitempty"`
+
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 }

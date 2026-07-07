@@ -269,9 +269,33 @@ func RefundIssueToWalletWithPolicy(db *gorm.DB, issue *models.OrderIssue, amount
 		// ruling (#549 over-withholding, for this path).
 		if fullRefund {
 			orderUpdates["refunded_at"] = now
+			// #618 slice 2: a fully-refunded meal-plan-day SHELL order must leave the weekly
+			// statement (statement.go selects shell orders WHERE status='delivered'). The
+			// shell isn't a customer-facing order, so terminalizing it to `refunded` is safe
+			// and consistent with the refunded_at stamped alongside. Scoped to a day shell —
+			// a normal order's status is owned by its own lifecycle.
+			if issue.MealPlanDayID != nil {
+				orderUpdates["status"] = models.OrderStatusRefunded
+			}
 		}
 		if err := tx.Model(&models.Order{}).Where("id = ?", issue.OrderID).Updates(orderUpdates).Error; err != nil {
 			return err
+		}
+
+		// #618 slice 2: reconcile the linked meal-plan DAY when this issue refund claws the
+		// chef. The day carries its payout hold on meal_plan_days (the shell order's own hold
+		// stays ''), so stamp the day's refund txn HERE — atomically with the refund — so the
+		// day model reflects the money: refund_txn_id blocks a late delivered-day resurrect
+		// (#631 MarkMealPlanDayDelivered) AND blocks releaseDisputedDayHoldIfCleared (guards
+		// refund_txn_id IS NULL) from re-releasing the day even if the post-commit hold-drive
+		// below fails. The day HOLD state is driven by the cross-guard after commit. Goodwill
+		// (clawback=false) keeps the chef's day payout → no stamp.
+		if clawback && issue.MealPlanDayID != nil {
+			if err := tx.Model(&models.MealPlanDay{}).
+				Where("id = ? AND refund_txn_id IS NULL", *issue.MealPlanDayID).
+				Update("refund_txn_id", txn.ID).Error; err != nil {
+				return err
+			}
 		}
 
 		issue.Status = status
@@ -312,6 +336,19 @@ func RefundIssueToWalletWithPolicy(db *gorm.DB, issue *models.OrderIssue, amount
 		clawErr = WithholdOrReverseOrderHoldForPartialRefund(db, issue.OrderID, ToPaise(creditApplied), reason)
 		if clawErr != nil {
 			log.Printf("payout partial cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, clawErr)
+		}
+		// #618 slice 2: the order partial-claw above is a no-op for a meal-plan-day SHELL
+		// order (no razorpay_order_id → ReverseOrderChefTransferPartial returns nil) and never
+		// fans out to the day. A single-unit day forfeits its WHOLE payout on any chef-fault
+		// refund, so withhold the day's hold via the full cross-guard (which fans
+		// meal_plan_days.order_id → withheld/reversed). This also flips the day out of
+		// `disputed` so the dispute-clear below cannot release it (the refund_txn_id stamped
+		// in-tx is the durable backstop if this best-effort drive fails). No-op for a normal
+		// order (issue.MealPlanDayID == nil).
+		if issue.MealPlanDayID != nil {
+			if hErr := WithholdOrReverseOrderHoldForRefund(db, issue.OrderID, reason); hErr != nil {
+				log.Printf("payout day cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, hErr)
+			}
 		}
 	} else {
 		LogSystemAudit(nil, "payout.hold.refund_goodwill", "order", issue.OrderID.String(), nil, map[string]any{

@@ -29,7 +29,7 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	stmts := []string{
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT, customer_id TEXT,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT,
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
@@ -44,8 +44,9 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT, issue_count INTEGER DEFAULT 0, deleted_at DATETIME)`,
 		// #498: AdminRejectIssue now fans the disputed-hold clear out to any meal-plan-day
 		// / group-order linked to the order, so those tables must exist (empty here).
-		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
-			payout_hold_status TEXT DEFAULT '', payout_settled_at DATETIME, refund_txn_id TEXT)`,
+		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT, status TEXT,
+			payout_hold_status TEXT DEFAULT '', payout_settled_at DATETIME, refund_txn_id TEXT,
+			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, status TEXT,
 			payout_hold_status TEXT DEFAULT '')`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
@@ -158,6 +159,81 @@ func TestReportIssueGuards(t *testing.T) {
 		assert.NotContains(t, affected, itemA.String(), "the cancelled item is dropped from affected_item_ids")
 		assert.Contains(t, affected, itemB.String())
 	})
+}
+
+// #618 slice 2: reporting a quality issue on a delivered meal-plan DAY (reported against
+// the day's shell order) must (a) link the issue to the day and (b) freeze the day's
+// payout hold to `disputed` so a pending report can't release the day before it's resolved.
+func TestReportIssue_MealPlanDay_FreezesHoldAndLinksDay(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	customer, orderID, chefID, dayID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 120, 0, 120, 0)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+		chefID.String(), uuid.New().String()).Error)
+	// The delivered day parked awaiting customer confirmation, linked to the shell order.
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, order_id, status, payout_hold_status)
+		VALUES (?, ?, ?, ?, ?)`, dayID.String(), uuid.New().String(), orderID.String(),
+		string(models.MealPlanDayDelivered), string(models.PayoutHoldAwaitingConfirmation)).Error)
+
+	// No affected items → requested 0 → stays pending (no auto-refund) so we isolate the freeze.
+	w := reportIssueReq(t, customer, orderID, "reason=quality_issue")
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var linkedDay string
+	require.NoError(t, db.Raw(`SELECT meal_plan_day_id FROM order_issues WHERE order_id = ?`, orderID.String()).Scan(&linkedDay).Error)
+	assert.Equal(t, dayID.String(), linkedDay, "issue links to the reported meal-plan day")
+
+	var hold string
+	require.NoError(t, db.Raw(`SELECT payout_hold_status FROM meal_plan_days WHERE id = ?`, dayID.String()).Scan(&hold).Error)
+	assert.Equal(t, string(models.PayoutHoldDisputed), hold, "reporting freezes the day's payout hold to disputed")
+}
+
+// #618 slice 2: a quality issue on a delivery-FAILED meal-plan day is rejected. That day
+// is handled by the admin delivery-failure resolver (RefundDay, a disjoint wallet key), so
+// allowing this path's refund too would double-refund the customer. No issue row is created.
+func TestReportIssue_FailedMealPlanDay_Rejected(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	customer, orderID, chefID, dayID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 120, 0, 120, 0)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+		chefID.String(), uuid.New().String()).Error)
+	// A failed day (frozen disputed by the delivery-failure path) linked to the shell.
+	require.NoError(t, db.Exec(`INSERT INTO meal_plan_days (id, meal_plan_id, order_id, status, payout_hold_status)
+		VALUES (?, ?, ?, ?, ?)`, dayID.String(), uuid.New().String(), orderID.String(),
+		string(models.MealPlanDayFailed), string(models.PayoutHoldDisputed)).Error)
+
+	w := reportIssueReq(t, customer, orderID, "reason=quality_issue")
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+
+	var issues int64
+	db.Raw(`SELECT count(*) FROM order_issues WHERE order_id = ?`, orderID.String()).Scan(&issues)
+	assert.Equal(t, int64(0), issues, "no issue row is created for a failed day")
+}
+
+// A normal food order (no linked meal-plan day) reports fine with a nil day link and no
+// day-hold side effects — the day lookup is a benign record-not-found.
+func TestReportIssue_NonMealPlanOrder_NoDayLink(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 400, 0, 400, 0)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+		chefID.String(), uuid.New().String()).Error)
+
+	w := reportIssueReq(t, customer, orderID, "reason=quality_issue")
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var linkedDay *string
+	require.NoError(t, db.Raw(`SELECT meal_plan_day_id FROM order_issues WHERE order_id = ?`, orderID.String()).Scan(&linkedDay).Error)
+	assert.Nil(t, linkedDay, "a normal order has no linked meal-plan day")
 }
 
 // rejectIssueReq POSTs an admin reject for the given issue.

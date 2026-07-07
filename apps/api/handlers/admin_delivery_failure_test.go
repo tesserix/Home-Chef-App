@@ -22,7 +22,7 @@ func setupDeliveryFailureQueueDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT, customer_id TEXT,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT, total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', deleted_at DATETIME)`,
