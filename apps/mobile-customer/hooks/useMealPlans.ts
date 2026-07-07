@@ -63,6 +63,9 @@ export interface MealPlanDay {
   status: string;
   dishName?: string;
   price: number;
+  // The day's per-day fulfilment SHELL order id (present once fulfilled). Routes a
+  // delivered day to its report-issue screen (#618). Serialized straight through.
+  orderId?: string;
   // Escrow payout-hold state (#617). Present only with the escrow flags on;
   // drives the per-day "Confirm received" action + confirmed/disputed pill. The
   // meal-plan read serializes these straight through (no re-mapper).

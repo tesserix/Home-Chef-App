@@ -36,6 +36,9 @@ export interface MealPlanDayListProps {
   onConfirmReceived?: (dayId: string) => void;
   /** Disables the confirm links while a confirm request is in flight. */
   confirming?: boolean;
+  /** When provided, a "Report an issue" link renders on a delivered day (#618).
+   *  Routes to the day's shell-order report screen; needs the day's orderId. */
+  onReportIssue?: (day: MealPlanDay) => void;
   /** Show the per-day price column (detail screen). Defaults to true. */
   showPrice?: boolean;
 }
@@ -46,6 +49,7 @@ export function MealPlanDayList({
   skipping,
   onConfirmReceived,
   confirming,
+  onReportIssue,
   showPrice = true,
 }: MealPlanDayListProps) {
   return (
@@ -115,6 +119,18 @@ export function MealPlanDayList({
                   <Text style={styles.confirmLink}>Confirm received</Text>
                 </Pressable>
               ) : null}
+              {/* #618 — report a quality issue on a delivered day. Routes to the day's
+                  shell-order report screen (needs orderId). Shown alongside Confirm. */}
+              {onReportIssue && d.status === 'delivered' && d.orderId ? (
+                <Pressable
+                  onPress={() => onReportIssue(d)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Report an issue with ${dayLabel(d)}`}
+                >
+                  <Text style={styles.reportLink}>Report an issue</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         );
@@ -148,4 +164,6 @@ const styles = StyleSheet.create({
   skipLink: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4 },
   // #617 — per-day "Confirm received" link (coral, slightly heavier than Skip).
   confirmLink: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4, textAlign: 'right' },
+  // #618 — per-day "Report an issue" link (muted secondary, below Confirm).
+  reportLink: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 6, textAlign: 'right' },
 });

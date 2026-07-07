@@ -63,7 +63,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 			role TEXT DEFAULT 'guest', display_name TEXT DEFAULT '', share_amount REAL DEFAULT 0,
 			payment_status TEXT DEFAULT 'pending', razorpay_order_id TEXT DEFAULT '',
 			razorpay_payment_id TEXT DEFAULT '', refund_txn_id TEXT, joined_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, chef_id TEXT, customer_id TEXT,
+		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT,
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
