@@ -70,8 +70,14 @@ func RetryOrTerminalizeFailedDelivery(db *gorm.DB, delivery *models.Delivery, re
 				return ErrDeliveryStateChanged
 			}
 			// Re-open the order for re-dispatch. Targeted update — never clobber the
-			// payout-hold columns (#460 race 1). No money moves on a retry.
-			if err := tx.Model(&models.Order{}).Where("id = ?", delivery.OrderID).
+			// payout-hold columns (#460 race 1). No money moves on a retry. #631: guard against a
+			// terminal order — a cancelled/refunded order can still have a live delivery, and
+			// resetting it to `ready` would let AcceptDelivery re-pick it and a fresh delivery cycle
+			// resurrect it to `delivered` → into the weekly statement. No-op on a terminal order
+			// (it stays terminal; the reset delivery is left unacceptable since AcceptDelivery
+			// requires status='ready').
+			if err := tx.Model(&models.Order{}).
+				Where("id = ? AND status NOT IN ?", delivery.OrderID, ResurrectionTerminalOrderStatuses).
 				Updates(map[string]any{"status": models.OrderStatusReady, "delivery_id": nil}).Error; err != nil {
 				return fmt.Errorf("delivery-retry: re-open order %s: %w", delivery.OrderID, err)
 			}

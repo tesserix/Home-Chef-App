@@ -285,7 +285,7 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 	if err := database.DB.Where("order_id = ?", orderID).First(&day).Error; err != nil {
 		return // not a meal-plan order
 	}
-	if day.Status == models.MealPlanDayDelivered {
+	if day.Status == models.MealPlanDayDelivered || day.RefundTxnID != nil {
 		return
 	}
 	now := time.Now()
@@ -297,8 +297,14 @@ func MarkMealPlanDayDelivered(orderID uuid.UUID) {
 		// delivered — that would orphan the disputed hold and let the plan silently
 		// complete with the day's money stuck. A failed day is resolved only by the admin
 		// day-resolution path. RowsAffected==0 → no-op.
+		//
+		// #631: ALSO exclude any day already refunded (refund_txn_id set) even if its STATUS was
+		// not terminalized — RefundUndeliveredDays/RefundDeclinedDays refund via RefundDay but
+		// leave the day status non-terminal (e.g. `confirmed`), so a status-only guard would
+		// resurrect it here and re-park a hold on money already returned. The refund_txn_id is the
+		// durable "this day was refunded" marker.
 		res := tx.Model(&models.MealPlanDay{}).
-			Where("id = ? AND status NOT IN ?", day.ID, []models.MealPlanDayStatus{
+			Where("id = ? AND refund_txn_id IS NULL AND status NOT IN ?", day.ID, []models.MealPlanDayStatus{
 				models.MealPlanDayDelivered, models.MealPlanDayCancelled,
 				models.MealPlanDaySkipped, models.MealPlanDayDeclined, models.MealPlanDayRefunded,
 				models.MealPlanDayFailed,

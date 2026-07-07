@@ -35,7 +35,7 @@ func setupHoldHandlerDB(t *testing.T) *gorm.DB {
 			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
-			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME,
+			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME, refund_txn_id TEXT,
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, created_at DATETIME, updated_at DATETIME)`,

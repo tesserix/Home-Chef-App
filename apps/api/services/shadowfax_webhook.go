@@ -10,6 +10,14 @@ import (
 	"github.com/homechef/api/models"
 )
 
+// ResurrectionTerminalOrderStatuses are the terminal order states a late/replayed delivery event
+// must never overwrite back to `delivering`/`delivered` (which would re-enter the order into the
+// weekly statement, which selects delivered orders). Shared by the 3PL + own-fleet delivery status
+// writers (#631) so the guard is defined once.
+var ResurrectionTerminalOrderStatuses = []models.OrderStatus{
+	models.OrderStatusCancelled, models.OrderStatusRefunded, models.OrderStatusRejected,
+}
+
 // parseShadowfaxCallback extracts the client order id + mapped delivery status
 // from a Shadowfax Push Callback body. Pure + testable: returns ok=false for an
 // unparseable body, a missing order_id, or an unrecognised status — the caller
@@ -80,7 +88,13 @@ func (s *ProviderService) handleShadowfaxWebhook(provider *models.DeliveryProvid
 	}
 
 	if status == models.DeliveryDelivered {
-		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+		// #631: never resurrect a terminal order. A late/replayed `delivered` callback (the
+		// customer cancelled/was refunded while the 3PL parcel was still in flight) must not flip
+		// a cancelled/refunded/rejected order back to delivered — that re-enters it into the weekly
+		// statement (which selects delivered orders). Guard the write; RowsAffected 0 on a terminal
+		// order. Mirrors the asymmetric-mirror day/group guards (#534/#393/#590).
+		database.DB.Model(&models.Order{}).
+			Where("id = ? AND status NOT IN ?", order.ID, ResurrectionTerminalOrderStatuses).
 			Update("status", models.OrderStatusDelivered)
 		// Mirror the generic 3PL path: mark meal-plan/group delivered and park the
 		// regular order's payout in a customer-confirmation hold (#387; no release).

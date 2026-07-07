@@ -148,6 +148,25 @@ func TestRetryOrTerminalize_FirstFailureRetries(t *testing.T) {
 	require.Equal(t, 1, countDeliveries(t, db, orderID), "still exactly one delivery row")
 }
 
+// #631: an order refunded/cancelled while its delivery was still in flight (the refund paths don't
+// cancel the delivery) must NOT be reset to `ready` on a delivery failure — that un-terminalizes
+// it, letting AcceptDelivery re-pick it and a fresh delivery cycle resurrect it to `delivered`
+// (which folds into the weekly statement). The delivery may reset, but the order stays terminal.
+func TestRetryOrTerminalize_RefundedOrderNotResurrected(t *testing.T) {
+	db := setupDeliveryRetryDB(t)
+	orderID := seedRetryOrder(t, db, models.OrderStatusRefunded, true)
+	partner := uuid.New()
+	delID := seedDelivery(t, db, orderID, models.DeliveryAtDropoff, 1, &partner)
+	del := loadDelivery(t, db, delID)
+	del.Status = models.DeliveryFailed
+
+	_, err := RetryOrTerminalizeFailedDelivery(db, &del, models.FailureCustomerUnavailable, "courier")
+	require.NoError(t, err)
+
+	require.Equal(t, models.OrderStatusRefunded, loadRetryOrder(t, db, orderID).Status,
+		"a refunded order is not reset to ready — no resurrection into a fresh delivery cycle")
+}
+
 func TestRetryOrTerminalize_CapReachedTerminalizes(t *testing.T) {
 	db := setupDeliveryRetryDB(t)
 	orderID := seedRetryOrder(t, db, models.OrderStatusPickedUp, true)
