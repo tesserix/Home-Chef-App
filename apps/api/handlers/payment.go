@@ -859,12 +859,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
-	// Validate refund amount against what is STILL refundable. Partial refunds
-	// via the chef-cancel path increment order.RefundAmount but leave the order
-	// "completed", so we must subtract them — otherwise a chef could partial-refund
-	// via that path and then refund the whole order total again here (and the
-	// to-wallet branch would credit that as platform-funded store credit,
-	// bypassing the gateway's cumulative-refund ceiling).
+	// Best-effort pre-lock UX validation (friendly 400s for the common non-racing case).
+	// The AUTHORITATIVE cap + claim + reserve happens under a row lock in
+	// services.ReserveRefund below. Partial refunds via the chef-cancel path increment
+	// order.RefundAmount but leave the order "completed", so RemainingRefundable subtracts
+	// them — otherwise a chef could partial-refund there and then refund the whole total again.
 	if req.Amount < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot be negative"})
 		return
@@ -872,25 +871,46 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	// #560/#527: RemainingRefundable, NOT Total − RefundAmount — after a per-line cancel
 	// the naive difference double-subtracts the refunded lines (Total was already reduced)
 	// and would wrongly cap this refund at ~0, stranding the remaining live items' money.
-	remaining := services.RemainingRefundable(&order)
-	if remaining <= 0 {
+	if pre := services.RemainingRefundable(&order); pre <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Order has already been fully refunded"})
 		return
-	}
-	refundAmount := req.Amount
-	if refundAmount == 0 {
-		refundAmount = remaining // full refund of whatever is still refundable
-	}
-	if refundAmount > remaining {
+	} else if req.Amount > pre {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Refund amount cannot exceed the remaining refundable amount"})
 		return
 	}
-	// #549: only a FULL refund (exhausting the remaining balance) is terminal. A
-	// PARTIAL refund must NOT flip status/payment_status → Refunded nor stamp
-	// refunded_at — every release-side payout guard blocks the WHOLE chef hold on
-	// `refunded_at IS NOT NULL`, so a partial that stamped it would forfeit the
-	// chef's entire payout instead of just the refunded slice.
-	fullRefund := refundAmount >= remaining
+
+	// #611: reserve the refund UNDER A ROW LOCK — the same discipline the partial path
+	// (RefundIssueToWallet) uses. ReserveRefund reads remaining + claims payment_status
+	// (completed→refunded, the concurrency mutex) + increments refund_amount atomically in
+	// ONE transaction, so a concurrent partial committing between the read and the claim can
+	// no longer over-refund live customer money or clobber the increment. This replaces the
+	// old unlocked RemainingRefundable read + separate claimRefundForProcessing + the stale
+	// `order.RefundAmount + refundAmount` read-modify-write persists below.
+	//   - reserved:      the amount reserved = min(req.Amount-or-full, fresh remaining); what we refund.
+	//   - priorRefunded: refund_amount observed UNDER THE LOCK — the prior-cumulative basis for the
+	//                    idempotency keys (replaces the stale in-memory order.RefundAmount).
+	//   - fullRefund:    true iff the reservation exhausted the remaining → the caller stamps the
+	//                    terminal marker (a PARTIAL must leave status/payment_status/refunded_at
+	//                    untouched so the payout hold stays releasable for the remainder, #549).
+	//   - won:           false ⇒ a sibling refund path claimed it first → 409.
+	reserved, priorRefunded, fullRefund, won, rErr := services.ReserveRefund(database.DB, order.ID, req.Amount)
+	if rErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+		return
+	}
+	if !won {
+		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
+		return
+	}
+	refundAmount := reserved
+	// On any downstream gateway/wallet failure, release the reservation (revert payment_status
+	// → completed AND decrement refund_amount) so a retry can re-reserve. ALWAYS releases the
+	// FULL reserved amount: the wallet-at-checkout split below lowers the gateway `refundAmount`,
+	// but the reservation covers the whole customer refund, so releasing only the lowered gateway
+	// portion would leave refund_amount inflated by the wallet slice (#609 wallet-split gotcha).
+	releaseReservation := func() {
+		services.ReleaseRefundReservation(database.DB, order.ID, reserved)
+	}
 
 	// Release reserved daily capacity (#48) only on a FULL refund of an order that
 	// hasn't been delivered yet — those dishes won't be made. Partial and
@@ -926,28 +946,6 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return nil
 	}
 
-	// SECURITY (#567): atomically claim the refund BEFORE the to-wallet / gateway
-	// split so BOTH paths serialize concurrent double-submits on this order. Flip
-	// completed→refunded in one conditional UPDATE; only the winner (RowsAffected==1)
-	// proceeds, a concurrent duplicate gets 409 — so the wallet branch can no longer
-	// lose-update refund_amount or double-claw the chef (it previously had no mutex,
-	// unlike the gateway branch). A PARTIAL refund reverts to completed once persisted
-	// so sequential partial goodwill refunds still work (#549); a FULL refund stays
-	// refunded. On any downstream failure we revertClaim so the refund can be retried.
-	won, cErr := claimRefundForProcessing(database.DB, order.ID)
-	if cErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
-		return
-	}
-	if !won {
-		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
-		return
-	}
-	revertClaim := func() {
-		database.DB.Model(&models.Order{}).Where("id = ?", order.ID).
-			Update("payment_status", models.PaymentCompleted)
-	}
-
 	// Refund-to-wallet (#33): credit the customer's store credit instead of
 	// reversing the gateway charge. Faster for the customer (no gateway round
 	// trip) and the platform keeps the cash. The idempotency key ties the credit
@@ -958,19 +956,20 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
-			refundWalletIdempotencyKey("refund", order.ID, order.RefundAmount), nil)
+			refundWalletIdempotencyKey("refund", order.ID, priorRefunded), nil)
 		if werr != nil {
 			log.Printf("refund-to-wallet failed for order %s: %v", order.OrderNumber, werr)
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
 			return
 		}
 		// Persist the refund and stage the order.refunded event atomically. Target
 		// the row by id (not the preloaded &order struct) so we don't spuriously
-		// upsert the belongs-to Chef association on a refund.
+		// upsert the belongs-to Chef association on a refund. #611: refund_amount was
+		// already incremented atomically by ReserveRefund — never re-write it here (that
+		// was the stale read-modify-write that clobbered a concurrent partial's increment).
 		refundUpdates := map[string]interface{}{
 			"refund_id":           "wallet:" + txn.ID.String(),
-			"refund_amount":       order.RefundAmount + refundAmount,
 			"refund_reason":       req.Reason,
 			"refund_initiated_by": initiatedBy,
 		}
@@ -1001,25 +1000,27 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		if persistErr != nil {
 			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, persistErr)
 			services.CaptureBackgroundError(persistErr)
-			// #567: on a PARTIAL persist failure, revert the claim so the order isn't
-			// stuck at refunded (which would block every future refund + drift from the
-			// wallet credit that DID commit). Safe here because the wallet credit is
-			// idempotent (keyed) — a retry re-credits without double-crediting. A FULL
-			// refund legitimately STAYS refunded even on persist failure: its
-			// crossGuardRefundHold below is the unconditional safety net that must block
-			// the payout. (The gateway branch does NOT revert on partial persist failure
-			// — its CreateRefund carries no idempotency key, so a retry would double-refund;
-			// stuck-then-ops is the safer side there.)
+			// #567/#611: on a PARTIAL persist failure, release the reservation (revert
+			// payment_status → completed AND decrement the refund_amount ReserveRefund
+			// incremented) so the order isn't stuck at refunded + drifted from the wallet
+			// credit that DID commit. Safe because the wallet credit is idempotent (keyed) —
+			// a retry re-reserves + re-credits without double-crediting. A FULL refund
+			// legitimately STAYS reserved even on persist failure: its crossGuardRefundHold
+			// below is the unconditional safety net that must block the payout. (The gateway
+			// branch does NOT release on partial persist failure — its CreateRefund carries no
+			// idempotency key, so a retry would double-refund; stuck-then-ops is safer there.)
 			if !fullRefund {
-				revertClaim()
+				releaseReservation()
 			}
 		}
 		// Cross-guard the payout hold (#457/#549/#568): a FULL refund drives the whole
 		// hold to withheld/reversed (unconditional); a PARTIAL refund claws back only
 		// the refunded portion from the chef's transfer and leaves the hold releasable,
-		// gated on the refund having persisted so a retry can't double-claw.
-		// Best-effort — never change the HTTP response.
-		if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund, persistErr == nil); hErr != nil {
+		// gated on the refund having persisted so a retry can't double-claw. #611: claw the
+		// full RESERVED amount (what the customer was refunded), not a wallet-split-lowered
+		// value — here they are equal (the to-wallet branch never splits), but keeping
+		// `reserved` matches the gateway branch + RefundOrder. Best-effort — never change the response.
+		if hErr := crossGuardRefundHold(order.ID, reserved, req.Reason, fullRefund, persistErr == nil); hErr != nil {
 			log.Printf("payout cross-guard failed for wallet-refunded order %s: %v", order.ID, hErr)
 			services.CaptureBackgroundError(hErr)
 		}
@@ -1054,7 +1055,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 			if _, werr := services.CreditWallet(database.DB, order.CustomerID, walletPortion,
 				models.WalletSourceRefund, &order.ID,
 				fmt.Sprintf("Wallet-portion refund for order %s: %s", order.OrderNumber, req.Reason),
-				refundWalletIdempotencyKey("refund-wallet", order.ID, order.RefundAmount), nil); werr != nil {
+				refundWalletIdempotencyKey("refund-wallet", order.ID, priorRefunded), nil); werr != nil {
 				log.Printf("wallet-portion re-credit failed order=%s: %v", order.OrderNumber, werr)
 				services.CaptureBackgroundError(werr)
 			}
@@ -1062,10 +1063,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		}
 	}
 
-	// The atomic refund claim (completed→refunded) + revertClaim were taken above,
-	// before the to-wallet / gateway split (#567), so both paths serialize concurrent
-	// double-submits. The gateway CreateRefund calls carry no idempotency key, so this
-	// mutex is what stops two concurrent requests both issuing a real gateway refund.
+	// The atomic reserve (completed→refunded + refund_amount increment) + releaseReservation
+	// were taken above, before the to-wallet / gateway split (#567/#611), so both paths
+	// serialize concurrent double-submits under a row lock. The gateway CreateRefund below
+	// also carries the #574 idempotency key, but this reserve is what stops two concurrent
+	// requests both reserving + issuing a real gateway refund.
 	var refundID, refundStatus string
 
 	switch provider {
@@ -1075,10 +1077,10 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		txn, werr := services.CreditWallet(database.DB, order.CustomerID, refundAmount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, req.Reason),
-			refundWalletIdempotencyKey("refund", order.ID, order.RefundAmount), nil)
+			refundWalletIdempotencyKey("refund", order.ID, priorRefunded), nil)
 		if werr != nil {
 			log.Printf("wallet-order refund failed order=%s: %v", order.OrderNumber, werr)
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit wallet"})
 			return
 		}
@@ -1086,13 +1088,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundStatus = "processed"
 	case "stripe":
 		if order.StripePaymentIntentID == "" {
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Stripe payment found for this order"})
 			return
 		}
 		st := services.GetStripe()
 		if st == nil {
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Stripe gateway not configured"})
 			return
 		}
@@ -1115,7 +1117,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		})
 		if err != nil {
 			log.Printf("Failed to create Stripe refund for order %s: %v", order.OrderNumber, err)
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
 			return
 		}
@@ -1123,13 +1125,13 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundStatus = r.Status
 	default: // razorpay
 		if order.RazorpayPaymentID == "" {
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No Razorpay payment found for this order"})
 			return
 		}
 		rz := services.GetRazorpay()
 		if rz == nil {
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway not configured"})
 			return
 		}
@@ -1143,14 +1145,14 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 				"initiated_by": initiatedBy,
 			},
 			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
-			// Same prior-refunded basis as the wallet branch above; the atomic refund
-			// claim (#567) serializes concurrent submits, and a retry re-derives the
-			// same key so Razorpay dedups it. #574.
-			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(order.RefundAmount)),
+			// Same prior-refunded basis as the wallet branch above (priorRefunded from the
+			// reserve, #611); the atomic reserve (#567/#611) serializes concurrent submits,
+			// and a retry re-derives the same key so Razorpay dedups it. #574.
+			IdempotencyKey: services.RefundPartialIdempotencyKey(order.ID, services.ToPaise(priorRefunded)),
 		})
 		if err != nil {
 			log.Printf("Failed to create Razorpay refund for order %s: %v", order.OrderNumber, err)
-			revertClaim()
+			releaseReservation()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
 			return
 		}
@@ -1160,10 +1162,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 
 	// Persist the refund and stage the order.refunded event atomically. Target the
 	// row by id (not the preloaded &order struct) so a refund doesn't spuriously
-	// upsert the belongs-to Chef association.
+	// upsert the belongs-to Chef association. #611: refund_amount was already incremented
+	// atomically by ReserveRefund — never re-write it here (the stale read-modify-write
+	// that clobbered a concurrent partial's increment).
 	refundUpdates := map[string]interface{}{
 		"refund_id":           refundID,
-		"refund_amount":       order.RefundAmount + refundAmount,
 		"refund_reason":       req.Reason,
 		"refund_initiated_by": initiatedBy,
 	}
@@ -1173,7 +1176,7 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		refundUpdates["status"] = models.OrderStatusRefunded
 		refundUpdates["refunded_at"] = &now
 	} else {
-		// PARTIAL (#549): the claim above flipped completed→refunded only to serialize
+		// PARTIAL (#549): the reserve above flipped completed→refunded only to serialize
 		// the gateway round-trip. Revert it to completed and leave status/refunded_at
 		// untouched so the chef's hold stays releasable for the remainder.
 		refundUpdates["payment_status"] = models.PaymentCompleted
@@ -1202,8 +1205,12 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	// Cross-guard the payout hold (#457/#549/#568): FULL → withhold/reverse the whole
 	// hold (unconditional); PARTIAL → claw back only the refunded portion, leave the
 	// hold releasable, gated on the refund having persisted so a retry can't double-claw.
-	// Best-effort — never change the HTTP response.
-	if hErr := crossGuardRefundHold(order.ID, refundAmount, req.Reason, fullRefund, persistErr == nil); hErr != nil {
+	// #611: claw the full RESERVED amount = what the customer was refunded in total, NOT the
+	// `refundAmount` the wallet-at-checkout split lowered to the gateway `capture` portion —
+	// the wallet-re-credited portion is also money returned to the customer that must come out
+	// of the chef's held transfer, so clawing only `capture` under-claws the chef (platform
+	// eats the wallet portion). Best-effort — never change the HTTP response.
+	if hErr := crossGuardRefundHold(order.ID, reserved, req.Reason, fullRefund, persistErr == nil); hErr != nil {
 		log.Printf("payout cross-guard failed for refunded order %s: %v", order.ID, hErr)
 		services.CaptureBackgroundError(hErr)
 	}
