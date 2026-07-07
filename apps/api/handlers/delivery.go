@@ -609,21 +609,32 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 	switch req.Status {
 	case models.DeliveryPickedUp:
 		delivery.PickedUpAt = &now
-		// Update order status
-		database.DB.Model(&delivery.Order).Updates(map[string]interface{}{
-			"status":       models.OrderStatusDelivering,
-			"picked_up_at": now,
-		})
+		// Update order status. #631: never resurrect a terminal order. A late own-fleet picked_up
+		// report (the order was cancelled/refunded while the driver was still en route) must not
+		// flip it back to `delivering` — that un-terminalizes it, which would then let the delivered
+		// write below (also guarded) pass and fold it into the weekly statement. Same guard as the
+		// delivered write.
+		database.DB.Model(&models.Order{}).
+			Where("id = ? AND status NOT IN ?", delivery.OrderID, services.ResurrectionTerminalOrderStatuses).
+			Updates(map[string]interface{}{
+				"status":       models.OrderStatusDelivering,
+				"picked_up_at": now,
+			})
 	case models.DeliveryInTransit:
 		// Order stays in delivering status
 	case models.DeliveryDelivered:
 		delivery.DeliveredAt = &now
 		delivery.ActualDuration = int(now.Sub(delivery.AssignedAt).Minutes())
-		// Update order status
-		database.DB.Model(&delivery.Order).Updates(map[string]interface{}{
-			"status":       models.OrderStatusDelivered,
-			"delivered_at": now,
-		})
+		// Update order status. #631: never resurrect a terminal order — a late/replayed own-fleet
+		// `delivered` on a cancelled/refunded/rejected order (customer cancelled while the driver
+		// was still out) must not flip it back to delivered (which re-enters it into the weekly
+		// statement). Guard the write; RowsAffected 0 on a terminal order. Mirrors the 3PL guard.
+		database.DB.Model(&models.Order{}).
+			Where("id = ? AND status NOT IN ?", delivery.OrderID, services.ResurrectionTerminalOrderStatuses).
+			Updates(map[string]interface{}{
+				"status":       models.OrderStatusDelivered,
+				"delivered_at": now,
+			})
 		// If this order belongs to a tiffin meal-plan day, mark the day delivered
 		// and release its held chef payout (escrow; gated). No-op otherwise.
 		services.MarkMealPlanDayDelivered(delivery.OrderID)
@@ -745,11 +756,17 @@ func (h *DeliveryHandler) UpdateDeliveryStatus(c *gin.Context) {
 	case models.DeliveryCancelled:
 		delivery.CancelledAt = &now
 		delivery.CancelReason = req.CancelReason
-		// Reset order - remove delivery assignment so another driver can pick up
-		database.DB.Model(&delivery.Order).Updates(map[string]interface{}{
-			"status":      models.OrderStatusReady,
-			"delivery_id": nil,
-		})
+		// Reset order - remove delivery assignment so another driver can pick up. #631: guard
+		// against a terminal order — a cancelled/refunded order can still have a live delivery
+		// (the refund paths don't cancel the delivery), so a delivery cancel must not reset it to
+		// `ready` (which AcceptDelivery matches on) and let a fresh delivery cycle resurrect it to
+		// `delivered` → into the weekly statement. No-op on a terminal order.
+		database.DB.Model(&models.Order{}).
+			Where("id = ? AND status NOT IN ?", delivery.OrderID, services.ResurrectionTerminalOrderStatuses).
+			Updates(map[string]interface{}{
+				"status":      models.OrderStatusReady,
+				"delivery_id": nil,
+			})
 
 	case models.DeliveryFailed, models.DeliveryReturned:
 		// Owner's 2-attempt cap (#579): the FIRST failure re-dispatches (reset the same
