@@ -547,17 +547,17 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	}
 	persistErr := database.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(refundUpdates).Error
 	if persistErr != nil {
-		// The gateway refund already succeeded but the ledger write failed. Release the
-		// reservation (payment_status→completed AND decrement the refund_amount ReserveRefund
-		// incremented) UNCONDITIONALLY — for BOTH partial AND full — so the order isn't stuck
-		// at `refunded` (which would block every future refund path) or drifted with an
-		// incremented refund_amount that has no ledger record. Reverting is safe here because
-		// the gateway idempotency key above makes a client retry dedup to the SAME refund
-		// rather than issue a second one (this is why RefundOrder can revert full where
-		// InitiateRefund's un-keyed gateway branch cannot). The cross-guard still runs below.
+		// #602: the gateway refund already succeeded and services.ReserveRefund already
+		// committed `refund_amount += reserved` in its OWN tx, so refund_amount is CORRECT
+		// here. Do NOT release the reservation: decrementing it back would ERASE a refund that
+		// actually happened → the next distinct refund over-refunds and collides the
+		// amount-based idempotency key (razorpay rejects → stuck; wallet silently
+		// under-credits). Leave the order STUCK at refunded with the ledger correct;
+		// reconcileStuckRefunds finalizes it (payment_status=refunded AND refunded_at IS NULL).
+		// The cross-guard below still blocks the payout meanwhile. (The GATEWAY-error revert
+		// above is different — there the money did NOT move, so undoing the reserve is correct.)
 		log.Printf("goodwill refund persist failed for order %s: %v", order.ID, persistErr)
 		services.CaptureBackgroundError(persistErr)
-		revertReservation()
 	}
 	// Cross-guard the payout hold (#457/#549/#568) — a FULL refund drives the whole hold to
 	// withheld/reversed (unconditional safety net, runs even on persist failure so the chef
@@ -569,8 +569,9 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		log.Printf("payout cross-guard failed for goodwill-refunded order %s: %v", order.ID, hErr)
 	}
 	if persistErr != nil {
-		// Honest retry signal: the gateway refunded but state didn't save. The claim is
-		// reverted + the key makes a retry dedup, so a re-submit heals the ledger.
+		// Honest signal: the gateway refunded but the terminal write didn't save. The reserve
+		// durably recorded refund_amount, so the order is left STUCK at refunded (ledger
+		// correct) for reconcileStuckRefunds to finalize — not reverted (#602).
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "refund completed but state save failed; see ops"})
 		return
 	}

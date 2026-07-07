@@ -47,11 +47,14 @@ func TestClaimRefundForProcessing_SerializesConcurrentDuplicates(t *testing.T) {
 	require.False(t, won4, "a refunded order cannot be claimed for another refund")
 }
 
-// #567: a PARTIAL to-wallet refund whose persist tx FAILS must REVERT the claim to
-// completed (not leave the order stuck at refunded, which would block all future
-// refunds). Safe because the wallet credit is idempotent — a retry re-credits without
-// double-crediting.
-func TestInitiateRefund_PartialToWallet_PersistFailure_RevertsClaim(t *testing.T) {
+// #602: a PARTIAL to-wallet refund whose persist tx FAILS must NOT release the reservation.
+// services.ReserveRefund already committed `refund_amount += reserved` in its own tx BEFORE
+// the wallet credit, so on a persist failure `refund_amount` is CORRECT (the customer got the
+// credit). The old code decremented it back (releaseReservation) to unstick the order —
+// erasing a refund that actually happened → the next distinct refund over-refunds / collides
+// the amount-based idempotency key. The money-safe behavior is to leave the order STUCK at
+// refunded with the ledger correct; reconcileStuckRefunds (slice 2) finalizes it later.
+func TestInitiateRefund_PartialToWallet_PersistFailure_StaysStuckLedgerCorrect(t *testing.T) {
 	db := setupPayDB(t)
 	addWalletTables(t, db)
 	cust := payUser(t, db, "customer")
@@ -64,9 +67,17 @@ func TestInitiateRefund_PartialToWallet_PersistFailure_RevertsClaim(t *testing.T
 		map[string]any{"reason": "partial", "amount": 100.0, "toWallet": true})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String()) // credit committed; persist failure best-effort
 
-	var status string
-	require.NoError(t, db.Raw(`SELECT payment_status FROM orders WHERE id = ?`, orderID.String()).Scan(&status).Error)
-	require.Equal(t, "completed", status, "a partial refund whose persist failed reverts the claim (not stuck at refunded)")
+	var row struct {
+		PaymentStatus string
+		RefundAmount  float64
+	}
+	require.NoError(t, db.Raw(`SELECT payment_status, refund_amount FROM orders WHERE id = ?`, orderID.String()).Scan(&row).Error)
+	require.Equal(t, "refunded", row.PaymentStatus, "persist failure leaves the order STUCK at refunded (NOT released) — the reserve durably recorded the refund")
+	require.Equal(t, 100.0, row.RefundAmount, "refund_amount stays CORRECT (reflects the committed wallet credit) — never decremented back")
+
+	var balance float64
+	require.NoError(t, db.Raw(`SELECT balance FROM wallets WHERE user_id = ?`, cust.String()).Scan(&balance).Error)
+	require.Equal(t, 100.0, balance, "the wallet credit committed")
 }
 
 // A FULL to-wallet refund whose persist fails legitimately STAYS refunded — its

@@ -1000,18 +1000,16 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		if persistErr != nil {
 			log.Printf("Failed to persist wallet refund + event for order %s: %v", order.ID, persistErr)
 			services.CaptureBackgroundError(persistErr)
-			// #567/#611: on a PARTIAL persist failure, release the reservation (revert
-			// payment_status → completed AND decrement the refund_amount ReserveRefund
-			// incremented) so the order isn't stuck at refunded + drifted from the wallet
-			// credit that DID commit. Safe because the wallet credit is idempotent (keyed) —
-			// a retry re-reserves + re-credits without double-crediting. A FULL refund
-			// legitimately STAYS reserved even on persist failure: its crossGuardRefundHold
-			// below is the unconditional safety net that must block the payout. (The gateway
-			// branch does NOT release on partial persist failure — its CreateRefund carries no
-			// idempotency key, so a retry would double-refund; stuck-then-ops is safer there.)
-			if !fullRefund {
-				releaseReservation()
-			}
+			// #602: do NOT release the reservation on a persist failure. services.ReserveRefund
+			// already committed `refund_amount += reserved` in its own tx BEFORE the wallet
+			// credit, so on a persist failure refund_amount is CORRECT (the customer got the
+			// credit). Decrementing it back (the old releaseReservation) would ERASE a refund
+			// that actually happened → the next distinct refund over-refunds and collides the
+			// amount-based idempotency key (razorpay rejects → stuck; wallet silently
+			// under-credits). The money-safe state is to leave the order STUCK at refunded with
+			// the ledger correct; reconcileStuckRefunds finalizes it (payment_status=refunded
+			// AND refunded_at IS NULL is the stuck-mid-refund signal). Same for FULL — its
+			// unconditional cross-guard below keeps the payout blocked meanwhile.
 		}
 		// Cross-guard the payout hold (#457/#549/#568): a FULL refund drives the whole
 		// hold to withheld/reversed (unconditional); a PARTIAL refund claws back only

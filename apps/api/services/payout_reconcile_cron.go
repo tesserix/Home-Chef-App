@@ -96,6 +96,10 @@ func runPayoutReconcileScan(_ context.Context) {
 	if rt := reconcileStrandedRetryTimeouts(); rt > 0 {
 		log.Printf("payout-reconcile: froze %d stranded retry-timeout delivery(ies)", rt)
 	}
+	// A refund whose money leg succeeded but whose terminal persist failed is left STUCK at
+	// payment_status=refunded (ledger already correct, #602). Finalizing it is plain DB state
+	// (the money already moved), so it must run with the escrow flags OFF too.
+	reconcileStuckRefunds()
 
 	if !payoutMovementEnabled() && !MealPlanEscrowActive() {
 		return // both escrow flags off → the money seam is a no-op, nothing to settle
