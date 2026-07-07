@@ -25,6 +25,7 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
+		capped := false // #644: set when the money move was capped below the snapshot; drives the breakdown re-persist
 		if refund > 0 {
 			// #392: shared refund claim — the SAME two-column mutex every full-refund
 			// path uses (payment_status completed→refunded AND refunded_at IS NULL).
@@ -55,7 +56,46 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				return tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
 					Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error
 			}
-			if cr.RefundDestination == "original" {
+			// #644: the snapshot cr.RefundTotalPaise was capped at RemainingRefundable at DECISION
+			// time — an UNLOCKED read. A RefundIssueToWallet partial (which never flips
+			// payment_status, so the claim above didn't exclude it) committing since then lowered the
+			// true remaining. Re-derive it here UNDER the row lock the winning claim just took and cap
+			// the money move, so cumulative refunds can never exceed the order total. refund_amount is
+			// read fresh (the claim didn't touch it) and is BEFORE this cancellation's own increment
+			// (added below), so remaining = Total − already-refunded + per-line (#527). The claim
+			// serializes any concurrent refund AFTER this tx (its FOR UPDATE blocks on our lock).
+			var locked models.Order
+			if e := tx.Select("total", "refund_amount").First(&locked, "id = ?", order.ID).Error; e != nil {
+				return e
+			}
+			remaining := models.RoundAmount(locked.Total - locked.RefundAmount + PerLineRefundedTotalTx(tx, order.ID))
+			if remaining < 0 {
+				remaining = 0
+			}
+			if refund > remaining {
+				refund = remaining
+				// Re-scale the WHOLE breakdown to the capped total (not just RefundTotalPaise) so the
+				// persisted cancellation_request row stays internally conserved
+				// (grand == RefundTotal + VendorKept + PlatformKept) AND the customer-facing refund
+				// figure matches what actually moved — otherwise the row would show the stale,
+				// larger snapshot the customer never received (#644 verify).
+				scaled := CancellationRefund{
+					FoodRefund: cr.FoodRefundPaise, DeliveryRefund: cr.DeliveryRefundPaise, TaxRefund: cr.TaxRefundPaise,
+					Total: cr.RefundTotalPaise, VendorKept: cr.VendorKeptPaise, PlatformKept: cr.PlatformKeptPaise,
+				}.CappedAt(ToPaise(remaining))
+				cr.FoodRefundPaise = scaled.FoodRefund
+				cr.DeliveryRefundPaise = scaled.DeliveryRefund
+				cr.TaxRefundPaise = scaled.TaxRefund
+				cr.RefundTotalPaise = scaled.Total
+				cr.VendorKeptPaise = scaled.VendorKept
+				cr.PlatformKeptPaise = scaled.PlatformKept
+				capped = true
+			}
+			if refund <= 0 {
+				// A concurrent refund already covered the whole order — nothing left to move. The
+				// claim already flipped payment_status→refunded; finalize with a zero increment.
+				cr.RefundRef = "already-refunded"
+			} else if cr.RefundDestination == "original" {
 				if order.PaymentProvider != "razorpay" || order.RazorpayPaymentID == "" {
 					return fmt.Errorf("original-method refund needs a razorpay payment")
 				}
@@ -99,8 +139,20 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 		cr.RefundExecuted = true
 		// Key by order_id (one request per order, unique) so this is robust even
 		// when the request id was assigned by the DB default.
+		finalize := map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}
+		if capped {
+			// Persist the re-scaled breakdown so the stored request reflects the amount ACTUALLY
+			// refunded, not the stale pre-cap snapshot (#644 verify). Only on cap — the un-capped
+			// path leaves the handler's already-correct breakdown untouched (no behavior change).
+			finalize["refund_total_paise"] = cr.RefundTotalPaise
+			finalize["food_refund_paise"] = cr.FoodRefundPaise
+			finalize["delivery_refund_paise"] = cr.DeliveryRefundPaise
+			finalize["tax_refund_paise"] = cr.TaxRefundPaise
+			finalize["vendor_kept_paise"] = cr.VendorKeptPaise
+			finalize["platform_kept_paise"] = cr.PlatformKeptPaise
+		}
 		if err := tx.Model(&models.CancellationRequest{}).Where("order_id = ?", order.ID).
-			Updates(map[string]any{"refund_executed": true, "refund_ref": cr.RefundRef, "resolved_at": now}).Error; err != nil {
+			Updates(finalize).Error; err != nil {
 			return err
 		}
 		// Tell the customer their cancellation is confirmed + refund issued.

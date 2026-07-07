@@ -22,7 +22,9 @@ func seedCancelExecFixtures(t *testing.T, db *gorm.DB, o *models.Order, refundTo
 	t.Helper()
 	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS cancellation_requests (
 		id TEXT PRIMARY KEY, order_id TEXT, customer_id TEXT, refund_destination TEXT DEFAULT 'wallet',
-		refund_total_paise INTEGER DEFAULT 0, refund_executed BOOLEAN DEFAULT 0, refund_ref TEXT DEFAULT '',
+		refund_total_paise INTEGER DEFAULT 0, food_refund_paise INTEGER DEFAULT 0, delivery_refund_paise INTEGER DEFAULT 0,
+		tax_refund_paise INTEGER DEFAULT 0, vendor_kept_paise INTEGER DEFAULT 0, platform_kept_paise INTEGER DEFAULT 0,
+		refund_executed BOOLEAN DEFAULT 0, refund_ref TEXT DEFAULT '',
 		resolved_at DATETIME, created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`INSERT INTO wallets (id, user_id, balance) VALUES (?,?,0)`,
 		uuid.NewString(), o.CustomerID.String()).Error)
@@ -87,4 +89,45 @@ func TestExecuteCancellationRefund_Idempotent_NoDoubleIncrement(t *testing.T) {
 
 	require.InDelta(t, after1, after2, 0.001, "a retry after the claim is lost must not double-increment refund_amount")
 	require.InDelta(t, 500, after2, 0.01)
+}
+
+// #644: the cancellation refund cap is snapshot-time only. cr.RefundTotalPaise was capped at
+// RemainingRefundable at DECISION time — an UNLOCKED read. If a RefundIssueToWallet partial (which
+// never flips payment_status, so the payment_status claim doesn't exclude it) commits between that
+// snapshot and the money move, the stale snapshot can push cumulative refunds past Total.
+// ExecuteCancellationRefund must re-derive the remaining UNDER the order lock and cap the refund.
+func TestExecuteCancellationRefund_CapsAtRemainingRefundable(t *testing.T) {
+	db := setupCancelRefundDB(t)
+	// A concurrent issue refund already returned ₹800 of the ₹1000 order — payment_status stays
+	// completed and refunded_at NULL (the issue path never flips payment_status).
+	o := seedWalletOrder(t, db, models.PaymentCompleted, 1000, 800)
+	// The cancellation was decided earlier to refund ₹500 (snapshot) — stale now that only ₹200 is left.
+	cr := seedCancelExecFixtures(t, db, o, 50000)
+	cr.FoodRefundPaise = 50000 // the decided breakdown was all-food (scales proportionally on cap)
+
+	stale := &models.Order{ID: o.ID, CustomerID: o.CustomerID, PaymentProvider: "wallet", RefundAmount: 0}
+	require.NoError(t, ExecuteCancellationRefund(stale, cr))
+
+	status, refundAmount, _, refundedAt := loadRefund(t, db, o.ID)
+	require.InDelta(t, 1000, refundAmount, 0.01,
+		"#644: capped at remaining ₹200 (Total 1000 − 800 already refunded) → 800+200, never the stale 800+500=1300")
+	require.LessOrEqual(t, refundAmount, 1000.0+0.01, "cumulative refund must never exceed Total")
+	require.Equal(t, string(models.PaymentRefunded), status)
+	require.NotNil(t, refundedAt)
+
+	// Only the capped ₹200 hit the wallet, not the stale ₹500.
+	var bal float64
+	require.NoError(t, db.Raw(`SELECT balance FROM wallets WHERE user_id = ?`, o.CustomerID.String()).Scan(&bal).Error)
+	require.InDelta(t, 200, bal, 0.01, "#644: wallet credited the capped remaining, not the stale snapshot")
+
+	// #644 verify (finding 4): the persisted request reflects the CAPPED amount + a conserved
+	// breakdown, not the stale pre-cap snapshot the customer never received.
+	var row struct {
+		RefundTotalPaise, FoodRefundPaise, VendorKeptPaise, PlatformKeptPaise int
+	}
+	require.NoError(t, db.Raw(`SELECT refund_total_paise, food_refund_paise, vendor_kept_paise, platform_kept_paise
+		FROM cancellation_requests WHERE order_id = ?`, o.ID.String()).Scan(&row).Error)
+	require.Equal(t, 20000, row.RefundTotalPaise, "persisted refund_total_paise is the capped ₹200, not the stale ₹500")
+	require.Equal(t, 50000, row.RefundTotalPaise+row.VendorKeptPaise+row.PlatformKeptPaise,
+		"breakdown stays conserved: grand (₹500) == refundTotal + vendorKept + platformKept")
 }
