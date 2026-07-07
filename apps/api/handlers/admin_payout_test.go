@@ -29,7 +29,7 @@ import (
 )
 
 const payoutOrdersDDL = `CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '',
-	customer_id TEXT, chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
+	customer_id TEXT, chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 	subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 	chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 	payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,7 +14,12 @@ import (
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// errOrderRefundInProgress signals that a per-line cancel lost to a concurrent order-level
+// refund (InitiateRefund / CancelOrder claimed the order's payment_status). #620.
+var errOrderRefundInProgress = errors.New("order-level refund in progress")
 
 // ChefOrderCancelHandler holds the chef-side cancellation routes.
 // Whole-order and per-line cancel both refund through Razorpay; per-
@@ -291,10 +297,15 @@ func (h *ChefOrderCancelHandler) CancelOrderItem(c *gin.Context) {
 	// gateway-side dedup of concurrent identical-key requests.
 	var won bool
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		w, err := claimOrderItemForCancel(tx, target.ID, string(reason), now)
+		w, err := claimOrderItemForCancel(tx, order.ID, target.ID, string(reason), now)
 		won = w
 		return err
 	}); err != nil {
+		if errors.Is(err, errOrderRefundInProgress) {
+			// #620: an order-level refund holds the order — don't per-line-refund on top of it.
+			c.JSON(http.StatusConflict, gin.H{"error": "an order-level refund is in progress; retry the line cancel shortly"})
+			return
+		}
 		services.CaptureSentryError(c, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not cancel item"})
 		return
@@ -635,7 +646,25 @@ func (h *ChefOrderCancelHandler) GetOrderInvoicePDF(c *gin.Context) {
 // CAS): the loser (won=false, RowsAffected==0) never reaches CreateRefund, so no second real
 // refund is issued. The refund_id / refund_amount are written afterward, once the gateway
 // call for the winning claim succeeds.
-func claimOrderItemForCancel(tx *gorm.DB, itemID uuid.UUID, reason string, at time.Time) (bool, error) {
+func claimOrderItemForCancel(tx *gorm.DB, orderID, itemID uuid.UUID, reason string, at time.Time) (bool, error) {
+	// #620: serialize with the order-level refund mutex. Lock the order row FIRST (order-first
+	// ordering per #585) and require it still payment_status=completed — InitiateRefund /
+	// CancelOrder flip it to refunded while reserving, so a per-line cancel racing an
+	// order-level refund on the SAME order loses here (errOrderRefundInProgress) instead of
+	// issuing a second real gateway refund and double-counting refund_amount (customer
+	// over-refund). A partial order-level refund reverts payment_status→completed, so the
+	// line cancel just retries once it settles.
+	lockTx := tx
+	if tx.Dialector.Name() == "postgres" {
+		lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var o models.Order
+	if err := lockTx.Select("id", "payment_status").First(&o, "id = ?", orderID).Error; err != nil {
+		return false, err
+	}
+	if o.PaymentStatus != models.PaymentCompleted {
+		return false, errOrderRefundInProgress
+	}
 	res := tx.Model(&models.OrderItem{}).
 		Where("id = ? AND is_cancelled = ?", itemID, false).
 		Updates(map[string]interface{}{

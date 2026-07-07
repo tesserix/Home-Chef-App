@@ -110,23 +110,54 @@ func TestClaimOrderItemForCancel_SerializesConcurrentDuplicates(t *testing.T) {
 	for _, col := range []string{"cancelled_reason TEXT DEFAULT ''", "cancelled_at DATETIME", "refund_id TEXT DEFAULT ''"} {
 		require.NoError(t, db.Exec(`ALTER TABLE order_items ADD COLUMN `+col).Error)
 	}
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x") // payment_status=completed
 	itemID := uuid.New()
 	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,0,0)`,
-		itemID.String(), uuid.NewString()).Error)
+		itemID.String(), orderID.String()).Error)
 	now := time.Now().UTC()
 
 	// The claim runs BEFORE the gateway refund — the loser never reaches CreateRefund.
-	won1, err1 := claimOrderItemForCancel(db, itemID, "customer_request", now)
+	won1, err1 := claimOrderItemForCancel(db, orderID, itemID, "customer_request", now)
 	require.NoError(t, err1)
 	require.True(t, won1, "the winner flips the line is_cancelled=false → true")
 
-	won2, err2 := claimOrderItemForCancel(db, itemID, "customer_request", now)
+	won2, err2 := claimOrderItemForCancel(db, orderID, itemID, "customer_request", now)
 	require.NoError(t, err2)
 	require.False(t, won2, "a concurrent duplicate per-line cancel loses the CAS → never reaches the gateway, never double-counts")
 
 	var cancelled bool
 	require.NoError(t, db.Raw(`SELECT is_cancelled FROM order_items WHERE id = ?`, itemID.String()).Row().Scan(&cancelled))
 	require.True(t, cancelled, "the winning claim marks the line cancelled")
+}
+
+// #620: a per-line cancel must LOSE when an order-level refund has claimed the order
+// (payment_status != completed) — otherwise it issues a second real gateway refund on top of
+// the order-level one and double-counts refund_amount (customer over-refund).
+func TestClaimOrderItemForCancel_LosesToInFlightOrderRefund(t *testing.T) {
+	db := setupPayDB(t)
+	for _, col := range []string{"cancelled_reason TEXT DEFAULT ''", "cancelled_at DATETIME", "refund_id TEXT DEFAULT ''"} {
+		require.NoError(t, db.Exec(`ALTER TABLE order_items ADD COLUMN `+col).Error)
+	}
+	cust := payUser(t, db, "customer")
+	chefUser := payUser(t, db, "chef")
+	chef := payChef(t, db, chefUser)
+	orderID := payOrder(t, db, cust, chef, "completed", 500, "rzp_o", "pay_x")
+	itemID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO order_items (id, order_id, is_cancelled, refund_amount) VALUES (?,?,0,0)`,
+		itemID.String(), orderID.String()).Error)
+	// An order-level refund (InitiateRefund/CancelOrder) has claimed the order.
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_status = 'refunded' WHERE id = ?`, orderID.String()).Error)
+
+	won, err := claimOrderItemForCancel(db, orderID, itemID, "customer_request", time.Now().UTC())
+	require.ErrorIs(t, err, errOrderRefundInProgress, "the line claim reports the order-refund conflict")
+	require.False(t, won)
+
+	var cancelled bool
+	require.NoError(t, db.Raw(`SELECT is_cancelled FROM order_items WHERE id = ?`, itemID.String()).Row().Scan(&cancelled))
+	require.False(t, cancelled, "the line is NOT cancelled — no second refund is issued")
 }
 
 // ── RefundOrder goodwill claim + gateway key ──

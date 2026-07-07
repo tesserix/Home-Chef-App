@@ -379,7 +379,7 @@ func transitionHold(db *gorm.DB, aggType string, id uuid.UUID,
 // status='delivered' but sets refunded_at), or still has a pending OrderIssue.
 func orderRefundBlocks(db *gorm.DB, orderID uuid.UUID) (bool, error) {
 	var order models.Order
-	if err := db.Select("status", "refunded_at").First(&order, "id = ?", orderID).Error; err != nil {
+	if err := db.Select("status", "payment_status", "refunded_at").First(&order, "id = ?", orderID).Error; err != nil {
 		// A missing / soft-deleted linked order has no refund to guard against — do
 		// not block a legitimate release on an unloadable row (this is a backstop;
 		// the five refund wiring sites already drove the hold at refund time).
@@ -392,6 +392,15 @@ func orderRefundBlocks(db *gorm.DB, orderID uuid.UUID) (bool, error) {
 		return true, nil
 	}
 	if order.RefundedAt != nil {
+		return true, nil
+	}
+	// #620: an order with a refund IN FLIGHT or STUCK (payment_status=refunded, refunded_at
+	// not yet stamped — the reserve→persist window, or a #602 persist-failure whose claw is
+	// deferred to reconcileStuckRefunds) must NOT release the chef payout: it would pay the
+	// chef the un-clawed amount before the refund finalizes. A finalized PARTIAL reverts
+	// payment_status→completed so it releases normally for the remainder; a finalized FULL
+	// keeps refunded (already blocked above). So this only blocks the genuinely-in-progress case.
+	if order.PaymentStatus == models.PaymentRefunded {
 		return true, nil
 	}
 	return HasOpenOrderIssue(db, orderID), nil
@@ -443,18 +452,21 @@ func releaseBlockedForAgg(db *gorm.DB, aggType string, id uuid.UUID) (bool, erro
 }
 
 // refundedOrderSubquery builds `SELECT 1 FROM orders WHERE id = ? AND (status IN
-// ('refunded','cancelled') OR refunded_at IS NOT NULL)` for a NOT EXISTS predicate.
-// Built via a NewDB Model session so (a) GORM applies the soft-delete scope
-// (`deleted_at IS NULL`) — matching orderRefundBlocks' First()-based
+// ('refunded','cancelled') OR refunded_at IS NOT NULL OR payment_status = 'refunded')` for a
+// NOT EXISTS predicate. Built via a NewDB Model session so (a) GORM applies the soft-delete
+// scope (`deleted_at IS NULL`) — matching orderRefundBlocks' First()-based
 // not-found→not-blocked parity, so a soft-deleted order never wrongly blocks — and
 // (b) it can't bleed clauses from the outer UPDATE when that UPDATE is also on
-// orders (the order aggregate). Mirrors openOrderIssueSubquery (#496).
+// orders (the order aggregate). Mirrors openOrderIssueSubquery (#496). The
+// payment_status='refunded' term (#620) blocks a release while an order-level refund is in
+// flight/stuck (SQL-level parity with orderRefundBlocks so the guarded UPDATE and the Go
+// backstop agree).
 func refundedOrderSubquery(tx *gorm.DB, orderID uuid.UUID) *gorm.DB {
 	return tx.Session(&gorm.Session{NewDB: true}).
 		Model(&models.Order{}).
 		Select("1").
-		Where("id = ? AND (status IN ? OR refunded_at IS NOT NULL)", orderID,
-			[]models.OrderStatus{models.OrderStatusRefunded, models.OrderStatusCancelled})
+		Where("id = ? AND (status IN ? OR refunded_at IS NOT NULL OR payment_status = ?)", orderID,
+			[]models.OrderStatus{models.OrderStatusRefunded, models.OrderStatusCancelled}, models.PaymentRefunded)
 }
 
 // resolveReleaseOrderID returns the order whose refund/dispute state gates a release

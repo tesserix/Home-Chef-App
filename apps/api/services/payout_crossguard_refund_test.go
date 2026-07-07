@@ -38,7 +38,7 @@ func setupCrossguardDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	for _, s := range []string{
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
-			chef_id TEXT, status TEXT, razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
+			chef_id TEXT, status TEXT, payment_status TEXT DEFAULT 'completed', razorpay_order_id TEXT DEFAULT '', total REAL DEFAULT 0,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, chef_tip REAL DEFAULT 0,
 			chef_funded_discount REAL DEFAULT 0, commission_rate REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, delivered_at DATETIME,
@@ -382,6 +382,19 @@ func TestCrossguard_ReleaseHold_BlocksRefundedStatus(t *testing.T) {
 	db := setupCrossguardDB(t)
 	id, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, string(models.OrderStatusRefunded), nil)
 	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+}
+
+// #620: a release must be blocked while an order-level refund is IN FLIGHT or STUCK —
+// payment_status='refunded' with refunded_at still NULL (the reserve→persist window, or a #602
+// persist-failure whose claw is deferred). Otherwise the chef is paid the un-clawed amount
+// before the refund finalizes.
+func TestCrossguard_ReleaseHold_BlocksInFlightPaymentRefunded(t *testing.T) {
+	flagsOff(t)
+	db := setupCrossguardDB(t)
+	id, _ := seedCrossOrder(t, db, models.PayoutHoldReleaseEligible, "delivered", nil) // refunded_at NULL
+	require.NoError(t, db.Exec(`UPDATE orders SET payment_status = 'refunded' WHERE id = ?`, id.String()).Error)
+	require.ErrorIs(t, ReleaseHold(db, aggTypeOrder, id), ErrHoldNotEligible)
+	require.Equal(t, models.PayoutHoldReleaseEligible, loadOrderHold(t, db, id), "no state change while the refund is in flight")
 }
 
 func TestCrossguard_ReleaseHold_BlocksPendingIssue(t *testing.T) {
