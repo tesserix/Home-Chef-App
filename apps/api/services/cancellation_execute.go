@@ -80,9 +80,17 @@ func ExecuteCancellationRefund(order *models.Order, cr *models.CancellationReque
 				cr.RefundRef = "wallet:cancel:" + cr.ID.String()
 			}
 		}
+		// #636: increment refund_amount ATOMICALLY in-SQL rather than persisting the caller's
+		// stale in-memory `order.RefundAmount + refund`. The claim above flips payment_status,
+		// which mutually excludes the ReserveRefund-family paths — but RefundIssueToWallet (the
+		// customer-issue refund) does NOT flip payment_status, so a partial issue refund that
+		// committed between the caller loading `order` and this write would be CLOBBERED by the
+		// stale read-modify-write (refund_amount under-counted → a later refund over-refunds).
+		// COALESCE so a NULL column increments from 0. Runs exactly once per cancellation (the
+		// payment_status claim gates re-entry; the sweep's retry loses the claim).
 		if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Updates(map[string]any{
 			"status":        models.OrderStatusCancelled,
-			"refund_amount": order.RefundAmount + refund,
+			"refund_amount": gorm.Expr("COALESCE(refund_amount, 0) + ?", refund),
 			"refunded_at":   now,
 			"refund_reason": "customer cancellation",
 		}).Error; err != nil {
