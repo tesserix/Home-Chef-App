@@ -317,6 +317,12 @@ type OrderResponse struct {
 	ReadyPhotoURL    string    `json:"readyPhotoUrl,omitempty"`
 	HandoverPhotoURL string    `json:"handoverPhotoUrl,omitempty"`
 	CreatedAt        time.Time `json:"createdAt"`
+	// Escrow payout-hold state (#387/#617). Surfaced so the customer app can render the
+	// "Confirm received" CTA on a delivered order awaiting confirmation, plus the confirmed /
+	// disputed states. Empty (and omitted) when there is no hold — i.e. whenever the escrow
+	// flags are off — so the customer CTA degrades to nothing pre-launch.
+	PayoutHoldStatus    PayoutHoldStatus `json:"payoutHoldStatus,omitempty"`
+	CustomerConfirmedAt *time.Time       `json:"customerConfirmedAt,omitempty"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -473,12 +479,14 @@ func (o *Order) ToResponse() OrderResponse {
 			State:      o.DeliveryAddressState,
 			PostalCode: o.DeliveryAddressPostalCode,
 		},
-		Chef:             chef,
-		ScheduledFor:     o.ScheduledFor,
-		DeliverySlot:     o.DeliverySlot,
-		ReadyPhotoURL:    o.ReadyPhotoURL,
-		HandoverPhotoURL: o.HandoverPhotoURL,
-		CreatedAt:        o.CreatedAt,
+		Chef:                chef,
+		ScheduledFor:        o.ScheduledFor,
+		DeliverySlot:        o.DeliverySlot,
+		ReadyPhotoURL:       o.ReadyPhotoURL,
+		HandoverPhotoURL:    o.HandoverPhotoURL,
+		CreatedAt:           o.CreatedAt,
+		PayoutHoldStatus:    o.PayoutHoldStatus,
+		CustomerConfirmedAt: o.CustomerConfirmedAt,
 	}
 }
 

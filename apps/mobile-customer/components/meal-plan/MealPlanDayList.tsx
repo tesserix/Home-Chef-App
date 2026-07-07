@@ -14,6 +14,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 
 import { type MealPlanDay } from '../../hooks/useMealPlans';
 import { mealPlanDayStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
+import { canConfirmReceipt } from '../../lib/payout-hold';
 import { CookingIndicator } from '../status/CookingIndicator';
 
 function dayLabel(d: MealPlanDay): string {
@@ -30,11 +31,23 @@ export interface MealPlanDayListProps {
   onSkip?: (dayId: string) => void;
   /** Disables the Skip links while a skip request is in flight. */
   skipping?: boolean;
+  /** When provided, a "Confirm received" link renders on a delivered day whose
+   *  escrow hold awaits confirmation (#617). Inert while the flags are off. */
+  onConfirmReceived?: (dayId: string) => void;
+  /** Disables the confirm links while a confirm request is in flight. */
+  confirming?: boolean;
   /** Show the per-day price column (detail screen). Defaults to true. */
   showPrice?: boolean;
 }
 
-export function MealPlanDayList({ days, onSkip, skipping, showPrice = true }: MealPlanDayListProps) {
+export function MealPlanDayList({
+  days,
+  onSkip,
+  skipping,
+  onConfirmReceived,
+  confirming,
+  showPrice = true,
+}: MealPlanDayListProps) {
   return (
     <View style={styles.card}>
       {days.map((d, i) => {
@@ -89,6 +102,19 @@ export function MealPlanDayList({ days, onSkip, skipping, showPrice = true }: Me
                   <Text style={styles.skipLink}>Skip</Text>
                 </Pressable>
               ) : null}
+              {/* #617 — per-day confirm receipt (delivered + awaiting confirmation).
+                  Mutually exclusive with Skip (different day statuses). */}
+              {onConfirmReceived && canConfirmReceipt(d) ? (
+                <Pressable
+                  onPress={() => onConfirmReceived(d.id)}
+                  hitSlop={8}
+                  disabled={confirming}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Confirm you received ${dayLabel(d)}`}
+                >
+                  <Text style={styles.confirmLink}>Confirm received</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         );
@@ -120,4 +146,6 @@ const styles = StyleSheet.create({
   price: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
   dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
   skipLink: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4 },
+  // #617 — per-day "Confirm received" link (coral, slightly heavier than Skip).
+  confirmLink: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4, textAlign: 'right' },
 });

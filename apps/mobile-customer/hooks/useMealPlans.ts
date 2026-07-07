@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { PayoutHoldStatus } from '../lib/payout-hold';
 
 // useMealPlans — customer-side tiffin meal-plan data (#196). Consumes the APIs
 // from #192/#194/#196:
@@ -62,6 +63,11 @@ export interface MealPlanDay {
   status: string;
   dishName?: string;
   price: number;
+  // Escrow payout-hold state (#617). Present only with the escrow flags on;
+  // drives the per-day "Confirm received" action + confirmed/disputed pill. The
+  // meal-plan read serializes these straight through (no re-mapper).
+  payoutHoldStatus?: PayoutHoldStatus;
+  customerConfirmedAt?: string;
 }
 
 export interface MealPlan {
