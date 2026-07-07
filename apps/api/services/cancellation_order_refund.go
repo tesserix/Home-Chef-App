@@ -42,6 +42,22 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 	if order.PaymentStatus != models.PaymentCompleted {
 		return nil
 	}
+	// #544/#394: an order spawned by a typed escrow flow (meal-plan day / group order) is
+	// refund-managed by THAT flow (RefundDay / participant refunds) on a DISJOINT idempotency
+	// keyspace, and its held chef payout is a DIRECT transfer the generic path can't reverse. The
+	// generic cancellation refund must never touch it: it keys refund:<orderID> (which the typed
+	// keys don't see), so the moment a gateway payment id lands on such a row it would refund the
+	// customer a SECOND time while the chef keeps the transfer. Skip here — the meal-plan / group
+	// cancellation flow is the right place. Mirrors the InitiateRefund guard (handlers/payment.go).
+	// On a type-check error, refuse the refund (fail safe: never generic-refund a possibly-typed
+	// order); the callers are best-effort + the reconcile cron's refund_mismatch check backstops.
+	switch kind, kErr := TypedRefundOrderKind(database.DB, order.ID); {
+	case kErr != nil:
+		return fmt.Errorf("cancel-refund: check order type %s: %w", order.ID, kErr)
+	case kind != "":
+		log.Printf("cancel-refund: skipping generic refund for %s order %s — refund-managed by its escrow flow", kind, order.ID)
+		return nil
+	}
 	// #609: claim + RESERVE the remaining refundable under a row lock via the shared helper —
 	// the SAME atomic discipline the partial path (RefundIssueToWallet) uses. This replaces the
 	// old unlocked read-then-claim (a partial racing this full could over-refund) AND the later

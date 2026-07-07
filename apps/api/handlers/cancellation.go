@@ -93,6 +93,24 @@ func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Only a paid order can be cancelled here"})
 		return
 	}
+	// #544/#394: an order spawned by a typed escrow flow (meal-plan day / group order) is
+	// refund-managed by THAT flow on a disjoint idempotency keyspace; its held chef payout is a
+	// DIRECT transfer this arbitration flow's generic refund (ExecuteCancellationRefund, wallet key
+	// cancel:<crID>) can't reverse. Refuse to open a cancellation request on one — cancel it via
+	// the meal-plan / group flow instead. This is the SOLE CancellationRequest creation site, so
+	// the guard here keeps ExecuteCancellationRefund (and the retry sweep) off typed orders
+	// entirely. Mirrors the InitiateRefund guard (handlers/payment.go).
+	switch kind, kErr := services.TypedRefundOrderKind(database.DB, orderID); {
+	case kErr != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check order type"})
+		return
+	case kind == services.TypedRefundMealPlanDay:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This order is part of a meal plan; cancel it through the meal-plan cancellation flow, not the generic order cancellation"})
+		return
+	case kind == services.TypedRefundGroupOrder:
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This is a group order; cancel it through the group-order cancellation flow, not the generic order cancellation"})
+		return
+	}
 	// One request per order.
 	var existing models.CancellationRequest
 	if database.DB.Where("order_id = ?", orderID).First(&existing).Error == nil {
