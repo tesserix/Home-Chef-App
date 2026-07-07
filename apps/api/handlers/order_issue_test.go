@@ -238,17 +238,72 @@ func orderHold(t *testing.T, db *gorm.DB, orderID uuid.UUID) string {
 
 // resolveIssueReq POSTs an admin assisted-refund resolution with the given amount.
 func resolveIssueReq(t *testing.T, adminID, issueID uuid.UUID, amount float64) *httptest.ResponseRecorder {
+	return resolveIssueReqPolicy(t, adminID, issueID, amount, "")
+}
+
+// resolveIssueReqPolicy posts an admin resolve with an explicit fault policy (#618).
+// An empty policy omits the field (falls back to the configured default).
+func resolveIssueReqPolicy(t *testing.T, adminID, issueID uuid.UUID, amount float64, policy string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("userID", adminID); c.Next() })
 	r.POST("/admin/issues/:issueId/resolve", NewOrderIssueHandler().AdminResolveIssue)
 	body := fmt.Sprintf(`{"amount": %g}`, amount)
+	if policy != "" {
+		body = fmt.Sprintf(`{"amount": %g, "faultPolicy": %q}`, amount, policy)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/admin/issues/"+issueID.String()+"/resolve", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
+}
+
+// #618: a platform-goodwill resolution that would FULLY refund the order is rejected
+// (422) before any money moves — goodwill can't preserve the chef payout on a full
+// refund. The admin lowers the amount or resolves with clawback.
+func TestAdminResolveIssue_GoodwillFullRefund_Returns422(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 300, 0)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	issueID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status)
+		 VALUES (?, ?, ?, ?, 'quality_issue', 'pending')`,
+		issueID.String(), orderID.String(), chefID.String(), customer.String()).Error)
+
+	// Full amount (== remaining) + goodwill → rejected before any credit.
+	w := resolveIssueReqPolicy(t, admin, issueID, 300, "platform_goodwill")
+	require.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+
+	var status string
+	require.NoError(t, db.Raw(`SELECT status FROM order_issues WHERE id = ?`, issueID.String()).Scan(&status).Error)
+	require.Equal(t, "pending", status, "issue untouched — no money moved on a rejected goodwill-full")
+	var refund float64
+	require.NoError(t, db.Raw(`SELECT refund_amount FROM orders WHERE id = ?`, orderID.String()).Scan(&refund).Error)
+	require.Equal(t, 0.0, refund)
+}
+
+// #618: an invalid fault policy is a 400 (before any lookup / money).
+func TestAdminResolveIssue_InvalidFaultPolicy_Returns400(t *testing.T) {
+	db := setupOrderIssueHandlerDB(t)
+	admin, customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, total, refund_amount)
+		 VALUES (?, ?, ?, 'completed', 'delivered', 300, 0)`,
+		orderID.String(), customer.String(), chefID.String()).Error)
+	issueID := uuid.New()
+	require.NoError(t, db.Exec(
+		`INSERT INTO order_issues (id, order_id, chef_id, customer_id, reason, status)
+		 VALUES (?, ?, ?, ?, 'quality_issue', 'pending')`,
+		issueID.String(), orderID.String(), chefID.String(), customer.String()).Error)
+
+	w := resolveIssueReqPolicy(t, admin, issueID, 100, "chef_pays_double")
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // TestAdminResolveIssue_FullyRefunded_PreCapRejects — the pre-cap (now RemainingRefundable, #624)
