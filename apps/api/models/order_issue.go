@@ -50,6 +50,19 @@ const (
 	IssueRejected     IssueStatus = "rejected"      // admin declined
 )
 
+// IssueFaultPolicy decides who bears a resolved issue's refund (#618). Default is
+// full clawback from the chef (a customer issue is the chef's fault by default);
+// the admin can override to platform goodwill (refund the customer, chef keeps
+// their payout, the platform absorbs the cost).
+type IssueFaultPolicy string
+
+const (
+	// FaultChefClawback — refund the customer AND claw back the chef's payout (default).
+	FaultChefClawback IssueFaultPolicy = "chef_clawback"
+	// FaultPlatformGoodwill — refund the customer but do NOT claw back the chef's payout.
+	FaultPlatformGoodwill IssueFaultPolicy = "platform_goodwill"
+)
+
 // OrderIssue is a customer-reported problem with one of their orders.
 type OrderIssue struct {
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`

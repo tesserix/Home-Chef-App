@@ -19,6 +19,14 @@ import (
 // issue is left pending so an admin can reject it; no money moves.
 var ErrNothingToRefund = errors.New("order has nothing left to refund")
 
+// ErrGoodwillFullRefund is returned when a platform-goodwill resolution would fully
+// refund the order (#618). Goodwill means "refund the customer, chef keeps their
+// payout" — but a FULL refund stamps refunded_at, which every release-side guard
+// treats as "block the whole chef payout", so goodwill can't preserve the payout on
+// a full refund. Rejected BEFORE any money moves; the admin lowers the amount or uses
+// clawback.
+var ErrGoodwillFullRefund = errors.New("platform goodwill applies to partial refunds only")
+
 // order_issue.go — the order-issue refund engine (#37). Reuses the wallet
 // (idempotent CreditWallet, source=refund) as the refund sink. The reward grant
 // is a plain in-tx credit — no Temporal.
@@ -61,11 +69,15 @@ func ComputeIssueRefund(orderSubtotal, orderTax, orderTotal, alreadyRefunded flo
 type IssueConfig struct {
 	Enabled        bool    `json:"enabled"`
 	AutoApproveCap float64 `json:"autoApproveCap"` // auto-refund when computed amount ≤ this; else assisted
+	// DefaultFaultPolicy seeds the admin's clawback-vs-goodwill choice at resolve time
+	// (#618). Defaults to chef clawback (today's behaviour) so nothing changes unless an
+	// admin explicitly overrides to goodwill.
+	DefaultFaultPolicy models.IssueFaultPolicy `json:"defaultFaultPolicy"`
 }
 
 // GetIssueConfig reads the policy from PlatformSettings `order_issue.*` keys.
 func GetIssueConfig(db *gorm.DB) IssueConfig {
-	cfg := IssueConfig{Enabled: true, AutoApproveCap: 300}
+	cfg := IssueConfig{Enabled: true, AutoApproveCap: 300, DefaultFaultPolicy: models.FaultChefClawback}
 	var settings []models.PlatformSettings
 	db.Where("key LIKE ?", "order_issue.%").Find(&settings)
 	for _, s := range settings {
@@ -75,6 +87,10 @@ func GetIssueConfig(db *gorm.DB) IssueConfig {
 		case "order_issue.auto_approve_cap":
 			if v, err := strconv.ParseFloat(s.Value, 64); err == nil {
 				cfg.AutoApproveCap = v
+			}
+		case "order_issue.default_fault_policy":
+			if p := models.IssueFaultPolicy(s.Value); p == models.FaultChefClawback || p == models.FaultPlatformGoodwill {
+				cfg.DefaultFaultPolicy = p
 			}
 		}
 	}
@@ -101,7 +117,22 @@ func ShouldAutoRefund(cfg IssueConfig, amount float64) bool {
 //
 // `by` is "system" (auto) or "admin" (assisted). Returns ErrNothingToRefund when
 // the order has no remaining refundable amount (issue left pending, no money moves).
+//
+// This is the CLAWBACK wrapper (the default): the customer is refunded AND the chef's
+// payout is clawed back. Every caller EXCEPT the admin resolver keeps this behaviour;
+// the admin resolver calls RefundIssueToWalletWithPolicy to offer platform goodwill (#618).
 func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, by string, resolvedBy *uuid.UUID) error {
+	return RefundIssueToWalletWithPolicy(db, issue, amount, by, resolvedBy, true)
+}
+
+// RefundIssueToWalletWithPolicy is RefundIssueToWallet with an explicit fault policy
+// (#618). `clawback=true` is the default (refund + claw back the chef). `clawback=false`
+// is platform GOODWILL: the customer is refunded but the chef KEEPS their payout and the
+// platform absorbs the cost. Goodwill is honoured only for a PARTIAL refund — a full
+// refund stamps refunded_at (which blocks the chef payout on every release-side guard), so
+// a goodwill request that would fully refund is rejected with ErrGoodwillFullRefund BEFORE
+// any money moves. All other semantics are identical to RefundIssueToWallet.
+func RefundIssueToWalletWithPolicy(db *gorm.DB, issue *models.OrderIssue, amount float64, by string, resolvedBy *uuid.UUID, clawback bool) error {
 	if amount <= 0 {
 		return fmt.Errorf("refund amount must be positive, got %v", amount)
 	}
@@ -180,6 +211,14 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		}
 		fullRefund = credit >= remaining
 		creditApplied = credit
+
+		// #618: goodwill can't preserve the chef payout on a FULL refund (refunded_at would
+		// stamp → every release-side guard blocks the whole payout). Reject here — under the
+		// lock, before the claim/credit — so NO money moves and the admin can lower the amount
+		// or use clawback. Partial goodwill is fine (leaves refunded_at NULL → chef releasable).
+		if !clawback && fullRefund {
+			return ErrGoodwillFullRefund
+		}
 
 		// CLAIM the resolution BEFORE crediting (#581). The order-row lock above serializes
 		// concurrent refunds on this order; this conditional UPDATE is the single authority
@@ -262,10 +301,25 @@ func RefundIssueToWallet(db *gorm.DB, issue *models.OrderIssue, amount float64, 
 		}
 		return nil
 	}
-	// Partial: claw back only the refunded portion; the hold stays releasable.
-	clawErr := WithholdOrReverseOrderHoldForPartialRefund(db, issue.OrderID, ToPaise(creditApplied), reason)
-	if clawErr != nil {
-		log.Printf("payout partial cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, clawErr)
+	// Partial: claw back only the refunded portion (the chef keeps the remainder) — UNLESS this
+	// is a platform-GOODWILL resolution (#618), where the chef keeps their FULL payout and the
+	// platform absorbs the refund. Goodwill SKIPS the claw and audits the decision; clawErr
+	// stays nil so the disputed-clear below still runs (a resolved dispute must make the chef's
+	// payout releasable). Reaching here means the refund was PARTIAL (goodwill-full was rejected
+	// before any money moved), so refunded_at is NULL and the chef's hold is releasable.
+	var clawErr error
+	if clawback {
+		clawErr = WithholdOrReverseOrderHoldForPartialRefund(db, issue.OrderID, ToPaise(creditApplied), reason)
+		if clawErr != nil {
+			log.Printf("payout partial cross-guard failed for order %s (issue %s): %v", issue.OrderID, issue.ID, clawErr)
+		}
+	} else {
+		LogSystemAudit(nil, "payout.hold.refund_goodwill", "order", issue.OrderID.String(), nil, map[string]any{
+			"issueId": issue.ID.String(),
+			"refund":  creditApplied,
+			"reason":  string(issue.Reason),
+			"policy":  string(models.FaultPlatformGoodwill),
+		})
 	}
 	// #586: a partial refund RESOLVES the dispute without terminally blocking the payout. If
 	// this now-resolved issue had frozen the hold to `disputed` (the customer confirmed

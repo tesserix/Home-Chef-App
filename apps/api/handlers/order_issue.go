@@ -291,9 +291,23 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 	}
 	var req struct {
 		Amount float64 `json:"amount" binding:"required"`
+		// FaultPolicy (#618): chef_clawback (default) claws back the chef's payout;
+		// platform_goodwill refunds the customer but lets the chef keep their payout.
+		// Empty → the PlatformSettings default (order_issue.default_fault_policy).
+		FaultPolicy string `json:"faultPolicy"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Amount <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "A positive amount is required"})
+		return
+	}
+
+	// Resolve the fault policy: explicit choice, else the configured default (clawback).
+	policy := models.IssueFaultPolicy(req.FaultPolicy)
+	if policy == "" {
+		policy = services.GetIssueConfig(database.DB).DefaultFaultPolicy
+	}
+	if policy != models.FaultChefClawback && policy != models.FaultPlatformGoodwill {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid fault policy"})
 		return
 	}
 
@@ -322,17 +336,28 @@ func (h *OrderIssueHandler) AdminResolveIssue(c *gin.Context) {
 		return
 	}
 
-	if err := services.RefundIssueToWallet(database.DB, &issue, req.Amount, "admin", &adminID); err != nil {
+	clawback := policy != models.FaultPlatformGoodwill
+	if err := services.RefundIssueToWalletWithPolicy(database.DB, &issue, req.Amount, "admin", &adminID, clawback); err != nil {
 		if errors.Is(err, services.ErrNothingToRefund) {
 			// #624: every affected line named on this issue was already refunded via a per-line
 			// cancel between the report and this resolve → the lock-time cap zeroed the credit.
 			c.JSON(http.StatusConflict, gin.H{"error": "The items on this issue have already been refunded"})
 			return
 		}
+		if errors.Is(err, services.ErrGoodwillFullRefund) {
+			// #618: goodwill can't fully refund (refunded_at would block the chef payout). No
+			// money moved — the admin lowers the amount or resolves with clawback instead.
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Platform goodwill applies to partial refunds only — lower the amount or claw back from the chef"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not issue the refund"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": string(issue.Status), "refundAmount": issue.RefundAmount})
+	// Audit the fault decision (#618) — both clawback and goodwill, with the admin actor.
+	services.LogAudit(c, "order_issue.resolved", "order_issue", issueID.String(), nil, gin.H{
+		"policy": string(policy), "amount": req.Amount, "refundAmount": issue.RefundAmount,
+	})
+	c.JSON(http.StatusOK, gin.H{"status": string(issue.Status), "refundAmount": issue.RefundAmount, "faultPolicy": string(policy)})
 }
 
 // AdminRejectIssue declines an issue with no refund. A rejected dispute means the
