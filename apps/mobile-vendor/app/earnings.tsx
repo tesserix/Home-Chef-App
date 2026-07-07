@@ -26,6 +26,7 @@ import {
   type WeeklyStatement,
 } from '../hooks/useWeeklyStatements';
 import { useRefunds, type RefundEntry } from '../hooks/useRefunds';
+import { payoutHoldMeta, statementStatusMeta } from '../lib/payout-hold';
 
 // ----- Types (payout account) -------------------------------------------------
 
@@ -344,6 +345,8 @@ interface OrderHistoryRowProps {
 
 function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
   const { t } = useTranslation();
+  // #617 — escrow hold pill; empty labelKey (no hold / flags off) renders nothing.
+  const hold = payoutHoldMeta(order.payoutHoldStatus);
   return (
     <Pressable
       onPress={onPress}
@@ -364,6 +367,13 @@ function OrderHistoryRow({ order, onPress }: OrderHistoryRowProps) {
             <Text style={orderRowStyles.date}>
               {fmtShortDate(order.completedAt)}
             </Text>
+            {hold.labelKey ? (
+              <View style={[orderRowStyles.holdPill, { backgroundColor: hold.bg }]}>
+                <Text style={[orderRowStyles.holdPillText, { color: hold.fg }]}>
+                  {t(hold.labelKey)}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <View style={orderRowStyles.rightBlock}>
             <Text style={orderRowStyles.netPayout}>{fmtInr(order.netPayout)}</Text>
@@ -399,6 +409,19 @@ const orderRowStyles = StyleSheet.create({
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
     fontVariant: ['tabular-nums'],
+  },
+  // #617 — escrow hold / statement-status pill (tint bg + colored text, radius.full).
+  holdPill: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: theme.radius.full,
+  },
+  holdPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 0.2,
   },
   date: {
     fontFamily: 'Inter',
@@ -443,6 +466,8 @@ interface StatementRowProps {
 
 function StatementRow({ statement, onPress }: StatementRowProps) {
   const { t } = useTranslation();
+  // #617 — disbursement pill: paid (green) vs pending (amber).
+  const status = statementStatusMeta(statement.status);
   return (
     <Pressable
       onPress={onPress}
@@ -465,6 +490,11 @@ function StatementRow({ statement, onPress }: StatementRowProps) {
                 ? t('earnings.ordersInPeriodOne', { count: statement.ordersCount })
                 : t('earnings.ordersInPeriod', { count: statement.ordersCount })}
             </Text>
+            <View style={[orderRowStyles.holdPill, { backgroundColor: status.bg }]}>
+              <Text style={[orderRowStyles.holdPillText, { color: status.fg }]}>
+                {t(status.labelKey)}
+              </Text>
+            </View>
           </View>
           <View style={orderRowStyles.rightBlock}>
             <Text style={orderRowStyles.netPayout}>
@@ -808,27 +838,31 @@ export default function EarningsScreen() {
           </View>
         );
 
-      case 'figures':
+      case 'figures': {
+        // #617 — real escrow figures. "Held" = net payout still in escrow for the
+        // period (₹0 while the flags are off, so this reads as "nothing held" pre-
+        // launch); "Last payout" = the most recent PAID weekly statement (the old
+        // fields the backend never sent, so they always showed ₹0 / "None yet").
+        const held = breakdown?.totals.held ?? 0;
+        const lastPaid = (statements ?? []).find((s) => s.status === 'paid');
         return (
           <View style={styles.figuresStrip}>
             <View style={styles.figureItem}>
-              <Text style={styles.figureLabel}>{t('earnings.figurePending')}</Text>
-              <Text style={styles.figureValue}>
-                {fmtInr(payoutData?.pendingPayout ?? 0)}
-              </Text>
+              <Text style={styles.figureLabel}>{t('earnings.figureHeld')}</Text>
+              <Text style={styles.figureValue}>{fmtInr(held)}</Text>
             </View>
             <View style={styles.figureDivider} />
-            {payoutData?.lastPayout ? (
+            {lastPaid ? (
               <View style={styles.figureItem}>
                 <Text style={styles.figureLabel}>{t('earnings.figureLastPayout')}</Text>
-                <Text style={styles.figureValue}>
-                  {fmtInr(payoutData.lastPayout.amount)}
-                </Text>
+                <Text style={styles.figureValue}>{fmtInr(lastPaid.netPayout)}</Text>
                 <Text style={styles.figureSub}>
-                  {new Date(payoutData.lastPayout.date).toLocaleDateString(
-                    'en-IN',
-                    { day: 'numeric', month: 'short' },
-                  )}
+                  {lastPaid.paidAt
+                    ? new Date(lastPaid.paidAt).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })
+                    : fmtWeekRange(lastPaid.weekStart, lastPaid.weekEnd)}
                 </Text>
               </View>
             ) : (
@@ -839,6 +873,7 @@ export default function EarningsScreen() {
             )}
           </View>
         );
+      }
 
       case 'tabBar':
         return (

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import type { PayoutHoldStatus } from '../lib/payout-hold';
 
 // ---- API contract types -------------------------------------------------------
 // Must match the backend shape exactly (GET /chef/earnings/breakdown).
@@ -19,6 +20,10 @@ export interface EarningsBreakdownTotals {
   tds: number;
   netPayout: number;
   ordersCount: number;
+  // Escrow split (#617): net payout still in escrow vs already released. Both 0
+  // while the escrow flags are off, so the vendor screen hides the split.
+  held: number;
+  released: number;
 }
 
 export interface EarningsBreakdownOrder {
@@ -35,6 +40,9 @@ export interface EarningsBreakdownOrder {
   igst: number;
   tds: number;
   netPayout: number;
+  // Escrow hold lifecycle (#617). Absent (undefined) when there is no hold —
+  // escrow flags off — so the per-order pill hides.
+  payoutHoldStatus?: PayoutHoldStatus;
 }
 
 export interface EarningsBreakdownResponse {
