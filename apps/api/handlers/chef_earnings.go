@@ -49,6 +49,10 @@ type earningsOrderRow struct {
 	// CommissionRate is the rate FROZEN on the order at checkout (#390); 0 for
 	// legacy rows → falls back to the live/default rate via rowRate.
 	CommissionRate float64 `gorm:"column:commission_rate"`
+	// PayoutHoldStatus is the escrow hold lifecycle for this order (#617). Empty
+	// for every order while the escrow flags are off, so the chef-facing held/
+	// released split degrades to zero and the per-order pill hides.
+	PayoutHoldStatus string `gorm:"column:payout_hold_status"`
 }
 
 // earningsOrderResponse is the per-order breakdown shape on the wire.
@@ -66,6 +70,10 @@ type earningsOrderResponse struct {
 	IGST               float64   `json:"igst"`
 	TDS                float64   `json:"tds"`
 	NetPayout          float64   `json:"netPayout"`
+	// PayoutHoldStatus surfaces the escrow hold lifecycle so the vendor app can
+	// pill the row (awaiting/confirmed/released/disputed). Omitted when empty
+	// (no hold — escrow flags off), so pre-launch rows render exactly as before.
+	PayoutHoldStatus models.PayoutHoldStatus `json:"payoutHoldStatus,omitempty"`
 }
 
 // earningsTotals is the aggregate totals shape.
@@ -78,6 +86,12 @@ type earningsTotals struct {
 	TDS                float64 `json:"tds"`
 	NetPayout          float64 `json:"netPayout"`
 	OrdersCount        int     `json:"ordersCount"`
+	// Held is the net payout still in escrow (awaiting confirmation / eligible /
+	// disputed); Released is the net payout the platform has released to the chef.
+	// Both are 0 while the escrow flags are off (every hold is empty), so the
+	// vendor screen shows a Held/Released split only once escrow is live (#617).
+	Held     float64 `json:"held"`
+	Released float64 `json:"released"`
 }
 
 // breakdownRates is the rates object included in the response.
@@ -105,7 +119,8 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	var rows []earningsOrderRow
 	if err := database.DB.Raw(`
 		SELECT id, order_number, delivered_at, subtotal, tax, chef_funded_discount,
-		       delivery_fee, chef_tip, delivery_address_state, commission_rate
+		       delivery_fee, chef_tip, delivery_address_state, commission_rate,
+		       payout_hold_status
 		FROM   orders
 		WHERE  chef_id       = ?
 		AND    status        = 'delivered'
@@ -138,6 +153,13 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 		totals.TDS += breakdown.TDS
 		totals.NetPayout += breakdown.NetPayout
 		totals.OrdersCount++
+
+		// Escrow split (#617): bucket the net payout by hold lifecycle.
+		if held, released := payoutBucket(breakdown.PayoutHoldStatus); held {
+			totals.Held += breakdown.NetPayout
+		} else if released {
+			totals.Released += breakdown.NetPayout
+		}
 	}
 
 	// Round totals to 2dp
@@ -148,6 +170,8 @@ func (h *ChefEarningsHandler) GetEarningsBreakdown(c *gin.Context) {
 	totals.IGST = round2(totals.IGST)
 	totals.TDS = round2(totals.TDS)
 	totals.NetPayout = round2(totals.NetPayout)
+	totals.Held = round2(totals.Held)
+	totals.Released = round2(totals.Released)
 
 	// Surface the resolved runtime commission rate the chef is charged.
 	effectiveCommission := commissionRate
@@ -200,6 +224,7 @@ func computeOrderBreakdown(row earningsOrderRow, chefState string, commissionRat
 		IGST:               e.IGST,
 		TDS:                e.TDS,
 		NetPayout:          e.NetPayout,
+		PayoutHoldStatus:   models.PayoutHoldStatus(row.PayoutHoldStatus),
 	}
 }
 
@@ -255,6 +280,23 @@ func normaliseState(s string) string { return services.NormaliseState(s) }
 // round2 delegates to services.Round2 (kept as a local alias for the totals
 // loop and the package's unit tests).
 func round2(v float64) float64 { return services.Round2(v) }
+
+// payoutBucket classifies an order's escrow hold into the chef-facing Held /
+// Released buckets for the earnings summary (#617). Held = net payout still in
+// escrow (awaiting customer confirmation / release-eligible / disputed); Released
+// = the platform has released it to the chef. withheld/reversed (the chef won't
+// receive them) and empty (no hold — escrow flags off) fall into NEITHER, so the
+// split is 0/0 pre-launch. A payout is never in both buckets.
+func payoutBucket(status models.PayoutHoldStatus) (held, released bool) {
+	switch status {
+	case models.PayoutHoldAwaitingConfirmation, models.PayoutHoldReleaseEligible, models.PayoutHoldDisputed:
+		return true, false
+	case models.PayoutHoldReleased:
+		return false, true
+	default:
+		return false, false
+	}
+}
 
 // rowRate returns the per-order FROZEN commission rate when set (>0), else the
 // resolved live/default fallback (#390). Legacy orders placed before the

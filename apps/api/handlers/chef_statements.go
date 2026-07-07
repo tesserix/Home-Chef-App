@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,6 +46,12 @@ type statementResponse struct {
 	IGST               float64   `json:"igst"`
 	TDS                float64   `json:"tds"`
 	NetPayout          float64   `json:"netPayout"`
+	// Disbursement state (#617) — the model tracked these but the DTO dropped them,
+	// so the chef couldn't tell a paid statement from a pending one. PaidAt/PayoutRef
+	// are set only once disbursed (manual weekly mark-paid at launch, RazorpayX later).
+	Status    models.PayoutStatus `json:"status"`
+	PaidAt    *time.Time          `json:"paidAt,omitempty"`
+	PayoutRef string              `json:"payoutRef,omitempty"`
 }
 
 // GetWeeklyStatements lists the chef's issued weekly statements, newest first.
@@ -91,6 +98,9 @@ func (h *ChefStatementsHandler) GetWeeklyStatements(c *gin.Context) {
 			IGST:               s.IGST,
 			TDS:                s.TDS,
 			NetPayout:          s.NetPayout,
+			Status:             s.Status,
+			PaidAt:             s.PaidAt,
+			PayoutRef:          s.PayoutRef,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"statements": out})

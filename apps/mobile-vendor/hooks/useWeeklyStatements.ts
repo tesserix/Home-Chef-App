@@ -17,6 +17,11 @@ export interface WeeklyStatement {
   igst: number;
   tds: number;
   netPayout: number;
+  // Disbursement state (#617). `paid` once the platform has settled the statement
+  // (manual weekly mark-paid at launch); paidAt/payoutRef set then.
+  status: 'pending' | 'paid';
+  paidAt?: string;
+  payoutRef?: string;
 }
 
 interface WeeklyStatementsResponse {

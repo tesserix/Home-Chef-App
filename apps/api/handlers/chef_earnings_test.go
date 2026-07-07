@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/homechef/api/models"
 )
 
 // TestComputeOrderBreakdown_IntraState verifies the earnings math for an
@@ -130,6 +132,56 @@ func TestComputeOrderBreakdown_ZeroTip(t *testing.T) {
 	wantNet := 186.00
 	if got.NetPayout != wantNet {
 		t.Errorf("NetPayout: got %.2f, want %.2f", got.NetPayout, wantNet)
+	}
+}
+
+// TestComputeOrderBreakdown_SurfacesPayoutHoldStatus verifies the per-order
+// escrow hold status is carried through to the wire response (#617), and that a
+// no-hold order (escrow flags off) surfaces the empty status so the pill hides.
+func TestComputeOrderBreakdown_SurfacesPayoutHoldStatus(t *testing.T) {
+	row := earningsOrderRow{
+		OrderID:          uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		OrderNumber:      "HC004",
+		CompletedAt:      time.Now(),
+		ItemRevenue:      300.00,
+		DeliveryState:    "Delhi",
+		PayoutHoldStatus: string(models.PayoutHoldAwaitingConfirmation),
+	}
+	if got := computeOrderBreakdown(row, "Delhi", 0).PayoutHoldStatus; got != models.PayoutHoldAwaitingConfirmation {
+		t.Errorf("PayoutHoldStatus: got %q, want awaiting_customer_confirmation", got)
+	}
+
+	noHold := earningsOrderRow{OrderID: uuid.New(), OrderNumber: "HC005", CompletedAt: time.Now(), ItemRevenue: 100, DeliveryState: "Delhi"}
+	if got := computeOrderBreakdown(noHold, "Delhi", 0).PayoutHoldStatus; got != models.PayoutHoldNone {
+		t.Errorf("no-hold order should surface empty status, got %q", got)
+	}
+}
+
+// TestPayoutBucket verifies the Held / Released classification that drives the
+// vendor earnings escrow split (#617): held = awaiting/eligible/disputed, released
+// = released, and withheld/reversed/none fall into neither. Never both.
+func TestPayoutBucket(t *testing.T) {
+	cases := []struct {
+		status            models.PayoutHoldStatus
+		wantHeld, wantRel bool
+	}{
+		{models.PayoutHoldAwaitingConfirmation, true, false},
+		{models.PayoutHoldReleaseEligible, true, false},
+		{models.PayoutHoldDisputed, true, false},
+		{models.PayoutHoldReleased, false, true},
+		{models.PayoutHoldWithheld, false, false},
+		{models.PayoutHoldReversed, false, false},
+		{models.PayoutHoldNone, false, false}, // escrow flags off
+	}
+	for _, tc := range cases {
+		held, rel := payoutBucket(tc.status)
+		if held != tc.wantHeld || rel != tc.wantRel {
+			t.Errorf("payoutBucket(%q) = (held=%v, released=%v), want (%v, %v)",
+				tc.status, held, rel, tc.wantHeld, tc.wantRel)
+		}
+		if held && rel {
+			t.Errorf("payoutBucket(%q) must never be in both buckets", tc.status)
+		}
 	}
 }
 
