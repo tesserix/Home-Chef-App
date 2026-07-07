@@ -76,3 +76,26 @@ func TestAdminResolve_DisputeTopsUpDifference(t *testing.T) {
 	// Only the DELTA (₹514.50 − ₹252 = ₹262.50) is credited now, not the whole refund again.
 	require.InDelta(t, 262.50, walletBalance(t, db, custID), 0.001, "only the top-up is credited")
 }
+
+// #642 Finding-1: with the prior ₹252 refund REFLECTED in order.refund_amount (as
+// ExecuteCancellationRefund really leaves it), the disputed re-snapshot must cap at
+// Total − OTHER refunds (RemainingRefundable + this cancellation's own refund), NOT at the bare
+// RemainingRefundable — otherwise it double-subtracts the ₹252 and silently shortchanges the
+// admin's 90% ruling (₹126 top-up instead of ₹262.50).
+func TestAdminResolve_Dispute_HonoursRulingWhenPriorRefundReflected(t *testing.T) {
+	db, custID, adminUserID, chefID := setupCancelDB(t)
+	oid := seedPaidOrder(t, db, custID, chefID, "preparing")
+	// The prior 40% cancellation refund (₹252) is reflected on the order, as it would be in prod.
+	require.NoError(t, db.Exec(`UPDATE orders SET refund_amount = 252 WHERE id = ?`, oid.String()).Error)
+	reqID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO cancellation_requests (id, order_id, customer_id, chef_id, status, refund_destination, refund_total_paise, vendor_kept_paise, platform_kept_paise, refund_executed)
+		VALUES (?,?,?,?,?,?,25200,30000,7800,1)`, reqID.String(), oid.String(), custID.String(), chefID.String(), "disputed", "wallet").Error)
+
+	w := adminPost(t, adminUserID, "/admin/cancel-requests/"+reqID.String()+"/resolve", map[string]any{"reason": "not_started"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var cr models.CancellationRequest
+	require.NoError(t, db.First(&cr, "id = ?", reqID.String()).Error)
+	require.Equal(t, 51450, cr.RefundTotalPaise, "#642: the admin's full 90% ruling is honoured (not capped low by double-subtracting the prior refund)")
+	require.InDelta(t, 262.50, walletBalance(t, db, custID), 0.001, "the full top-up is credited, not the shortchanged ₹126")
+}

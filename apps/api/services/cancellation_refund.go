@@ -73,6 +73,47 @@ type CancellationRefund struct {
 	PlatformKept   int // the platform keeps (fee + its tax + any kept delivery)
 }
 
+// CappedAt limits the customer refund to remainingPaise — the order's STILL-refundable
+// balance (Total − already-refunded). The tier model computes off the ORIGINAL order amounts,
+// oblivious to a prior partial refund on a different channel (e.g. a customer-issue
+// RefundIssueToWallet, which credits the wallet + bumps order.refund_amount without touching the
+// line items), so an early-stage cancellation could otherwise return more than what's still owed
+// → cumulative refund past the order total (#642). When the cap bites, the food/delivery/tax
+// refund components scale down proportionally so the breakdown still sums to the capped total and
+// conservation holds exactly (grand == Total + VendorKept + PlatformKept — VendorKept/PlatformKept
+// absorb the difference via the remainder). A negative remaining yields a zero refund. Pure.
+func (r CancellationRefund) CappedAt(remainingPaise int) CancellationRefund {
+	if remainingPaise < 0 {
+		remainingPaise = 0
+	}
+	if r.Total <= remainingPaise {
+		return r // still within the remaining balance — no cap needed
+	}
+	grand := r.Total + r.VendorKept + r.PlatformKept // the original order grand total (conserved)
+	foodPaise := r.FoodRefund + r.VendorKept         // original food subtotal (VendorKept = food − foodRefund)
+	food, delivery, tax := 0, 0, 0
+	if r.Total > 0 {
+		// Scale food + delivery to the capped total; give tax the residual so the three sum
+		// EXACTLY to remainingPaise (no integer-division drift).
+		food = r.FoodRefund * remainingPaise / r.Total
+		delivery = r.DeliveryRefund * remainingPaise / r.Total
+		tax = remainingPaise - food - delivery
+		if tax < 0 {
+			tax = 0
+		}
+	}
+	total := food + delivery + tax
+	vendorKept := foodPaise - food
+	return CancellationRefund{
+		FoodRefund:     food,
+		DeliveryRefund: delivery,
+		TaxRefund:      tax,
+		Total:          total,
+		VendorKept:     vendorKept,
+		PlatformKept:   grand - total - vendorKept, // remainder keeps conservation exact
+	}
+}
+
 // ComputeCancellationRefund computes the refund for a cancellation. foodRefundPct
 // comes from the vendor's chosen tier (see CancellationTiers.FoodRefundPct).
 func ComputeCancellationRefund(foodPaise, deliveryPaise, platformFeePaise, taxPaise int, dispatched bool, foodRefundPct int) CancellationRefund {

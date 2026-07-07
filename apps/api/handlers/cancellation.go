@@ -35,8 +35,10 @@ func orderDispatched(status models.OrderStatus) bool {
 	}
 }
 
-// snapshotFor computes the refund breakdown for an order at a food-refund %.
-func snapshotFor(order *models.Order, pct int) services.CancellationRefund {
+// uncappedSnapshot is the pure tiered refund breakdown at a food-refund % (no remaining-balance
+// cap). Callers apply the cap with the basis appropriate to their path (see snapshotFor and the
+// admin disputed-adjust in admin_cancellation.go).
+func uncappedSnapshot(order *models.Order, pct int) services.CancellationRefund {
 	return services.ComputeCancellationRefund(
 		services.ToPaise(order.Subtotal),    // food (vendor)
 		services.ToPaise(order.DeliveryFee), // delivery
@@ -45,6 +47,21 @@ func snapshotFor(order *models.Order, pct int) services.CancellationRefund {
 		orderDispatched(order.Status),
 		pct,
 	)
+}
+
+// remainingRefundablePaise is the order's still-refundable balance (Total − already-refunded), the
+// #642 cap basis.
+func remainingRefundablePaise(order *models.Order) int {
+	return services.ToPaise(services.RemainingRefundable(order))
+}
+
+// snapshotFor computes the refund breakdown, capped at what's STILL owed (Total − already-refunded)
+// so a cancellation after a prior partial refund (e.g. a customer-issue refund) can't return more
+// than the remaining balance (#642). For a FRESH cancellation (no prior refund OF ITS OWN yet):
+// request, vendor-confirm, and the admin-review-timeout path. The admin DISPUTED-adjust path uses
+// a different basis (it supersedes its own already-issued refund) — see admin_cancellation.go.
+func snapshotFor(order *models.Order, pct int) services.CancellationRefund {
+	return uncappedSnapshot(order, pct).CappedAt(remainingRefundablePaise(order))
 }
 
 func applySnapshot(cr *models.CancellationRequest, s services.CancellationRefund) {

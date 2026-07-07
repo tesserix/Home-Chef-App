@@ -66,11 +66,12 @@ func (h *CancellationHandler) ResolveCancellationAdmin(c *gin.Context) {
 
 	tiers, _ := services.ResolveCancellationTiers(database.DB)
 	pct := tiers.FoodRefundPct(services.CancellationReason(body.Reason))
-	newSnap := snapshotFor(&order, pct)
 	now := time.Now()
 
 	if cr.Status == models.CancelReqAdminReview {
-		// Timed out — never refunded. Set the admin's tier and issue the refund.
+		// Timed out — never refunded. Cap at the remaining balance (no prior refund of its own),
+		// set the admin's tier, and issue the refund.
+		newSnap := snapshotFor(&order, pct)
 		applySnapshot(&cr, newSnap)
 		cr.VendorReason = body.Reason
 		if err := services.ExecuteCancellationRefund(&order, &cr); err != nil {
@@ -78,8 +79,13 @@ func (h *CancellationHandler) ResolveCancellationAdmin(c *gin.Context) {
 			return
 		}
 	} else {
-		// Disputed — already refunded cr.RefundTotalPaise. If the admin's tier is
-		// more generous, top up the difference (idempotent). We never claw back.
+		// Disputed — cr.RefundTotalPaise was ALREADY refunded and is folded into order.RefundAmount.
+		// This re-snapshot SUPERSEDES that earlier refund (the top-up below is the difference), so
+		// the cap basis is Total − OTHER refunds = RemainingRefundable + this cancellation's own
+		// prior refund. Capping at the bare RemainingRefundable would double-subtract
+		// cr.RefundTotalPaise and silently shortchange the admin's ruling (#642 verify). Still
+		// money-safe: cumulative ≤ Total, and we never claw back.
+		newSnap := uncappedSnapshot(&order, pct).CappedAt(remainingRefundablePaise(&order) + cr.RefundTotalPaise)
 		delta := newSnap.Total - cr.RefundTotalPaise
 		if delta > 0 {
 			if _, err := services.CreditWallet(database.DB, order.CustomerID, float64(delta)/100.0,
