@@ -30,11 +30,11 @@ func TestClaimWalletTopUp_SecondClaimIsSkip(t *testing.T) {
 	db := setupTopUpDedupDB(t)
 	orderID := uuid.New()
 
-	first, err := ClaimWalletTopUp(db, orderID, "acc_chef")
+	first, err := ClaimWalletTopUp(db, orderID, 0, "acc_chef")
 	require.NoError(t, err)
 	require.True(t, first, "first claim transfers")
 
-	second, err := ClaimWalletTopUp(db, orderID, "acc_chef")
+	second, err := ClaimWalletTopUp(db, orderID, 0, "acc_chef")
 	require.NoError(t, err)
 	require.False(t, second, "repeat settlement skips — no double transfer")
 }
@@ -43,9 +43,9 @@ func TestClaimWalletTopUp_DistinctAccountsEachClaimOnce(t *testing.T) {
 	db := setupTopUpDedupDB(t)
 	orderID := uuid.New()
 
-	chef, err := ClaimWalletTopUp(db, orderID, "acc_chef")
+	chef, err := ClaimWalletTopUp(db, orderID, 0, "acc_chef")
 	require.NoError(t, err)
-	driver, err := ClaimWalletTopUp(db, orderID, "acc_driver")
+	driver, err := ClaimWalletTopUp(db, orderID, 0, "acc_driver")
 	require.NoError(t, err)
 	require.True(t, chef)
 	require.True(t, driver, "a distinct account is a distinct top-up")
@@ -55,14 +55,14 @@ func TestReleaseWalletTopUp_AllowsRetryAfterFailure(t *testing.T) {
 	db := setupTopUpDedupDB(t)
 	orderID := uuid.New()
 
-	first, err := ClaimWalletTopUp(db, orderID, "acc_chef")
+	first, err := ClaimWalletTopUp(db, orderID, 0, "acc_chef")
 	require.NoError(t, err)
 	require.True(t, first)
 
 	// The transfer failed → release so the retry re-attempts it.
-	ReleaseWalletTopUp(db, orderID, "acc_chef")
+	ReleaseWalletTopUp(db, orderID, 0, "acc_chef")
 
-	retry, err := ClaimWalletTopUp(db, orderID, "acc_chef")
+	retry, err := ClaimWalletTopUp(db, orderID, 0, "acc_chef")
 	require.NoError(t, err)
 	require.True(t, retry, "after release the retry re-attempts the transfer")
 }
@@ -70,9 +70,9 @@ func TestReleaseWalletTopUp_AllowsRetryAfterFailure(t *testing.T) {
 // Different orders never collide even for the same account.
 func TestClaimWalletTopUp_DistinctOrders(t *testing.T) {
 	db := setupTopUpDedupDB(t)
-	a, err := ClaimWalletTopUp(db, uuid.New(), "acc_chef")
+	a, err := ClaimWalletTopUp(db, uuid.New(), 0, "acc_chef")
 	require.NoError(t, err)
-	b, err := ClaimWalletTopUp(db, uuid.New(), "acc_chef")
+	b, err := ClaimWalletTopUp(db, uuid.New(), 0, "acc_chef")
 	require.NoError(t, err)
 	require.True(t, a)
 	require.True(t, b)

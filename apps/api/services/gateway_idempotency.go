@@ -69,8 +69,11 @@ func RefundPartialIdempotencyKey(orderID uuid.UUID, priorRefundedPaise int) stri
 // TopupIdempotencyKey keys a platform-balance top-up transfer per (order, destination
 // account) — the same (order, account) identity the processed_events claim uses (#554),
 // so a retried settlement re-derives the same key for each of the chef/driver top-ups.
-func TopupIdempotencyKey(orderID uuid.UUID, account string) string {
-	return fmt.Sprintf("topup:%s:%s", orderID, account)
+func TopupIdempotencyKey(orderID uuid.UUID, leg int, account string) string {
+	// #558: key per (order, leg-index, account). Keying on account alone silently skipped the
+	// second leg when a chef and driver share ONE Razorpay payout account (same person in both
+	// roles) — the deterministic leg index makes each leg independently idempotent.
+	return fmt.Sprintf("topup:%s:%d:%s", orderID, leg, account)
 }
 
 // HoldPayoutIdempotencyKey keys a per-aggregate on-hold chef payout (meal-plan day or

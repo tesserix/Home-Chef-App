@@ -190,7 +190,10 @@ func generateDayOrder(p *models.MealPlan, d *models.MealPlanDay, addr models.Add
 	dayTotal := d.Price
 	if MealPlanEscrowActive() {
 		policy := GetPlatformPolicy()
-		dayTax = Round2(d.Price * (policy.TaxPercent / 100.0))
+		// #540: report the SAME proportional food-GST basis the chef day-transfer is withheld on
+		// (perDayFoodGST), not a live-policy-rate recompute — so orders-based reporting
+		// (statement / earnings / Form-16A) matches withheld-TDS exactly, no sub-rupee drift.
+		dayTax = Round2(perDayFoodGST(p, d))
 		dayDelivery = Round2(policy.BaseDeliveryFee)
 		dayTotal = Round2(d.Price + dayTax + dayDelivery)
 	}

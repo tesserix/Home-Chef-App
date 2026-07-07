@@ -61,9 +61,21 @@ func perDayGross(plan *models.MealPlan, day *models.MealPlanDay) float64 {
 	if plan.Subtotal <= 0 || n == 0 {
 		return day.Price
 	}
-	tax := plan.Tax * (day.Price / plan.Subtotal)
+	tax := perDayFoodGST(plan, day)
 	delivery := (plan.Total - plan.Subtotal - plan.Tax) / float64(n)
 	return Round2(day.Price + tax + delivery)
+}
+
+// perDayFoodGST is the proportional food GST for one day — plan.Tax apportioned by the day's
+// share of the plan subtotal. THE single basis for the chef day-transfer (perDayNetPayout), the
+// customer per-day refund (perDayGross), AND the spawned order's reported tax (generateDayOrder,
+// #540), so reported-TDS == withheld-TDS exactly (no sub-rupee drift from a live-policy-rate
+// recompute). Zero when the plan has no snapshotted subtotal (food-only fallback).
+func perDayFoodGST(plan *models.MealPlan, day *models.MealPlanDay) float64 {
+	if plan.Subtotal <= 0 {
+		return 0
+	}
+	return plan.Tax * (day.Price / plan.Subtotal)
 }
 
 // perDayNetPayout is the chef's NET payout for a single day — the amount the held
@@ -83,10 +95,7 @@ func perDayNetPayout(plan *models.MealPlan, day *models.MealPlanDay, rate float6
 	if rate <= 0 || rate >= 1 {
 		rate = DefaultCommissionRate
 	}
-	dayFoodGST := 0.0
-	if plan.Subtotal > 0 {
-		dayFoodGST = plan.Tax * (day.Price / plan.Subtotal)
-	}
+	dayFoodGST := perDayFoodGST(plan, day)
 	gross := day.Price + dayFoodGST
 	commission := rate * day.Price
 	tds := RateTDS * gross

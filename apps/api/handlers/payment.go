@@ -257,13 +257,13 @@ func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
 	if rz == nil {
 		return
 	}
-	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(t services.TransferSpec) error {
+	settleWalletTopUpsWith(order.ID, order.OrderNumber, topUps, func(leg int, t services.TransferSpec) error {
 		_, err := rz.CreateTransfer(&services.DirectTransferRequest{
 			Account: t.Account, Amount: t.Amount, Currency: t.Currency, OnHold: t.OnHold, Notes: t.Notes,
-			// Per (order, account) — the same identity as the processed_events claim
-			// (#554); a retried settlement re-derives the same key so Razorpay dedups
-			// each chef/driver top-up. #574.
-			IdempotencyKey: services.TopupIdempotencyKey(order.ID, t.Account),
+			// Per (order, leg-index, account) — the same identity as the processed_events claim
+			// (#554/#558); a retried settlement re-derives the same key so Razorpay dedups each
+			// chef/driver top-up, and two legs sharing one account stay independently keyed. #574.
+			IdempotencyKey: services.TopupIdempotencyKey(order.ID, leg, t.Account),
 		})
 		return err
 	})
@@ -279,20 +279,22 @@ func settleWalletTopUps(order *models.Order, topUps []services.TransferSpec) {
 // crash between claim and a successful transfer strands that one top-up (recoverable
 // by the settlement reconcile — #398/#3), which is the safe side of the trade-off:
 // never a double transfer.
-func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []services.TransferSpec, doTransfer func(services.TransferSpec) error) {
-	for _, t := range topUps {
-		firstTime, err := services.ClaimWalletTopUp(database.DB, orderID, t.Account)
+func settleWalletTopUpsWith(orderID uuid.UUID, orderNumber string, topUps []services.TransferSpec, doTransfer func(leg int, t services.TransferSpec) error) {
+	// #558: key each leg by its index in the deterministic DirectTopUps list (stable across
+	// retries), so two legs sharing one Razorpay payout account stay independently idempotent.
+	for leg, t := range topUps {
+		firstTime, err := services.ClaimWalletTopUp(database.DB, orderID, leg, t.Account)
 		if err != nil {
-			log.Printf("wallet-topup: claim failed order=%s account=%s: %v", orderNumber, t.Account, err)
+			log.Printf("wallet-topup: claim failed order=%s leg=%d account=%s: %v", orderNumber, leg, t.Account, err)
 			continue
 		}
 		if !firstTime {
-			continue // already transferred for this (order, account) — no double
+			continue // already transferred for this (order, leg, account) — no double
 		}
-		if err := doTransfer(t); err != nil {
-			services.ReleaseWalletTopUp(database.DB, orderID, t.Account) // let a retry re-attempt
-			log.Printf("wallet-topup: direct transfer failed order=%s account=%s amount=%d: %v",
-				orderNumber, t.Account, t.Amount, err)
+		if err := doTransfer(leg, t); err != nil {
+			services.ReleaseWalletTopUp(database.DB, orderID, leg, t.Account) // let a retry re-attempt
+			log.Printf("wallet-topup: direct transfer failed order=%s leg=%d account=%s amount=%d: %v",
+				orderNumber, leg, t.Account, t.Amount, err)
 		}
 	}
 }
