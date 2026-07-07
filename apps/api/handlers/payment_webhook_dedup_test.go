@@ -61,7 +61,7 @@ func withRazorpayWebhookSecret(t *testing.T, secret string) {
 // addProcessedEventsTable adds the dedup ledger to a setupPayDB() database.
 func addProcessedEventsTable(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.Exec(`CREATE TABLE processed_events (
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS processed_events (
 		consumer TEXT NOT NULL, msg_id TEXT NOT NULL, subject TEXT DEFAULT '',
 		processed_at DATETIME, PRIMARY KEY (consumer, msg_id)
 	)`).Error)

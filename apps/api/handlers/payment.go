@@ -881,6 +881,29 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 		return
 	}
 
+	// #600: dedup a client retry-after-success. Once a PARTIAL refund fully succeeds RefundAmount
+	// advances, so an app re-submitting the identical "refund ₹X" (its HTTP response was dropped)
+	// computes a new gateway key + re-reserves → a second real refund. Claim the submission BEFORE
+	// the reserve — keyed by the caller's Idempotency-Key header when present, else the
+	// order+amount+reason within a short window. A duplicate returns idempotently without
+	// refunding. Released on any pre-commit failure (via releaseReservation) so a legit retry
+	// re-attempts; KEPT once the money moves so a retry dedups.
+	clientKey := services.NormalizeRefundClientKey(c.GetHeader("Idempotency-Key"))
+	proceed, dedupKey, dErr := services.ClaimRefundRequest(database.DB, order.ID, clientKey, int64(roundPaise(req.Amount)), req.Reason)
+	if dErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
+		return
+	}
+	if !proceed {
+		var cur models.Order
+		_ = database.DB.Where("id = ?", order.ID).First(&cur).Error
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Duplicate refund request ignored", "duplicate": true,
+			"refundAmount": cur.RefundAmount,
+		})
+		return
+	}
+
 	// #611: reserve the refund UNDER A ROW LOCK — the same discipline the partial path
 	// (RefundIssueToWallet) uses. ReserveRefund reads remaining + claims payment_status
 	// (completed→refunded, the concurrency mutex) + increments refund_amount atomically in
@@ -897,10 +920,12 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	//   - won:           false ⇒ a sibling refund path claimed it first → 409.
 	reserved, priorRefunded, fullRefund, won, rErr := services.ReserveRefund(database.DB, order.ID, req.Amount)
 	if rErr != nil {
+		services.ReleaseRefundRequestClaim(database.DB, dedupKey)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process refund"})
 		return
 	}
 	if !won {
+		services.ReleaseRefundRequestClaim(database.DB, dedupKey)
 		c.JSON(http.StatusConflict, gin.H{"error": "A refund for this order is already in progress or has completed"})
 		return
 	}
@@ -910,8 +935,11 @@ func (h *PaymentHandler) InitiateRefund(c *gin.Context) {
 	// FULL reserved amount: the wallet-at-checkout split below lowers the gateway `refundAmount`,
 	// but the reservation covers the whole customer refund, so releasing only the lowered gateway
 	// portion would leave refund_amount inflated by the wallet slice (#609 wallet-split gotcha).
+	// #600: also drop the refund-request claim so a legit retry re-attempts (money didn't move);
+	// a persisted / gateway-succeeded refund never calls this, so its claim persists → dedups.
 	releaseReservation := func() {
 		services.ReleaseRefundReservation(database.DB, order.ID, reserved)
+		services.ReleaseRefundRequestClaim(database.DB, dedupKey)
 	}
 
 	// Release reserved daily capacity (#48) only on a FULL refund of an order that

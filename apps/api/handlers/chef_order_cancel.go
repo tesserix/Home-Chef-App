@@ -470,6 +470,27 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 		return
 	}
 
+	// #600: dedup a client retry-after-success. The gateway idempotency key only covers the
+	// server↔gateway timeout window; once this goodwill refund fully succeeds, RefundAmount
+	// advances, so the chef app re-submitting the identical "refund ₹X" (its HTTP response was
+	// dropped) would compute a new key + re-reserve → a second real refund. Claim the submission
+	// BEFORE the reserve (keyed by the chef's Idempotency-Key header when present, else the
+	// order+amount+reason within a short window). A duplicate returns the current state without
+	// refunding. Released on any pre-commit failure so a legit retry re-attempts; KEPT once the
+	// money moves so a retry dedups.
+	clientKey := services.NormalizeRefundClientKey(c.GetHeader("Idempotency-Key"))
+	proceed, dedupKey, dErr := services.ClaimRefundRequest(database.DB, order.ID, clientKey, int64(roundPaise(req.Amount)), req.Reason)
+	if dErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process refund"})
+		return
+	}
+	if !proceed {
+		_ = database.DB.Preload("Items").First(&order, "id = ?", order.ID).Error
+		c.JSON(http.StatusOK, order.ToChefResponse())
+		return
+	}
+	releaseClaim := func() { services.ReleaseRefundRequestClaim(database.DB, dedupKey) }
+
 	// #611: reserve the refund UNDER A ROW LOCK (read remaining + claim payment_status +
 	// increment refund_amount atomically) instead of the old unlocked RemainingRefundable
 	// read + separate claimRefundForProcessing. A concurrent goodwill + customer refund can
@@ -478,15 +499,18 @@ func (h *ChefOrderCancelHandler) RefundOrder(c *gin.Context) {
 	// remaining. priorRefunded is the locked prior-cumulative basis for the gateway key.
 	reserved, priorRefunded, fullRefund, won, rErr := services.ReserveRefund(database.DB, order.ID, req.Amount)
 	if rErr != nil {
+		releaseClaim()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not process refund"})
 		return
 	}
 	if !won {
+		releaseClaim()
 		c.JSON(http.StatusConflict, gin.H{"error": "a refund for this order is already in progress or has completed"})
 		return
 	}
 	revertReservation := func() {
 		services.ReleaseRefundReservation(database.DB, order.ID, reserved)
+		releaseClaim()
 	}
 	amountPaise := int(roundPaise(reserved))
 	if amountPaise <= 0 {
