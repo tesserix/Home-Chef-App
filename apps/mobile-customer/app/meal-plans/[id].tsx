@@ -18,7 +18,13 @@ import {
   useMealPlan,
   useSkipMealPlanDay,
 } from '../../hooks/useMealPlans';
-import { mealPlanStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
+import {
+  useConfirmMealPlanDayReceived,
+  useConfirmTodaysTiffin,
+} from '../../hooks/useConfirmReceived';
+import { mealPlanStatusMeta, isDeclinedDayStatus, toLocalDateKey } from '../../lib/meal-plan';
+import { canConfirmReceipt } from '../../lib/payout-hold';
+import { friendlyErrorMessage } from '../../lib/errors';
 import { MealPlanDayList } from '../../components/meal-plan/MealPlanDayList';
 
 // Plan detail (#196): the booked days with per-day status. When the chef has
@@ -30,6 +36,8 @@ export default function MealPlanDetailScreen() {
   const finalize = useFinalizeMealPlan();
   const skipDay = useSkipMealPlanDay();
   const cancel = useCancelMealPlan();
+  const confirmDay = useConfirmMealPlanDayReceived();
+  const confirmTiffin = useConfirmTodaysTiffin();
   const plan = data?.mealPlan;
 
   function handleCancel() {
@@ -139,6 +147,71 @@ export default function MealPlanDetailScreen() {
     );
   }
 
+  // #617 — escrow fulfilment confirmation for delivered days awaiting the
+  // customer's confirmation. The bulk banner is scoped to TODAY's awaiting days
+  // (the `/tiffin/confirm-today` endpoint only confirms today's), so the count
+  // matches what the button does; the per-day links handle any non-today
+  // stragglers. Both are inert while the escrow flags are off (no day ever
+  // reaches awaiting).
+  const todayKey = toLocalDateKey(new Date().toISOString());
+  const todaysAwaitingCount = days.filter(
+    (d) => canConfirmReceipt(d) && toLocalDateKey(d.date) === todayKey,
+  ).length;
+
+  function confirmReceipt(dayId: string) {
+    if (!plan) return;
+    Alert.alert(
+      'Confirm this meal?',
+      "Let us know you received this meal. You can still report an issue if something's wrong.",
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Confirm received',
+          onPress: () =>
+            confirmDay.mutate(
+              { planId: plan.id, dayId },
+              {
+                onSuccess: (res) => Alert.alert('Thanks!', res.message),
+                onError: (err) =>
+                  Alert.alert(
+                    'Something went wrong',
+                    friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                  ),
+              },
+            ),
+        },
+      ],
+    );
+  }
+
+  function confirmToday() {
+    Alert.alert(
+      "Confirm today's meals?",
+      "Let us know you received today's delivered meals. You can still report an issue if something's wrong.",
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () =>
+            confirmTiffin.mutate(undefined, {
+              onSuccess: (res) =>
+                Alert.alert(
+                  'Thanks!',
+                  res.confirmed > 0
+                    ? `Confirmed ${res.confirmed} meal${res.confirmed === 1 ? '' : 's'}.`
+                    : 'Your meals are already confirmed.',
+                ),
+              onError: (err) =>
+                Alert.alert(
+                  'Something went wrong',
+                  friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                ),
+            }),
+        },
+      ],
+    );
+  }
+
   // A confirmed day on a live plan can still be skipped (server enforces the cutoff).
   const canSkip =
     plan.status === 'confirmed' || plan.status === 'active';
@@ -168,10 +241,39 @@ export default function MealPlanDetailScreen() {
           </View>
         ) : null}
 
+        {/* #617 — bulk-confirm today's delivered meals (tiffin). Shown only when
+            a day awaits confirmation; the per-day links below handle single days. */}
+        {todaysAwaitingCount > 0 ? (
+          <View style={styles.confirmBanner}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.confirmBannerTitle}>Confirm today's meals</Text>
+              <Text style={styles.confirmBannerText}>
+                {todaysAwaitingCount} delivered meal{todaysAwaitingCount === 1 ? '' : 's'} awaiting
+                your confirmation.
+              </Text>
+            </View>
+            <Pressable
+              onPress={confirmToday}
+              disabled={confirmTiffin.isPending}
+              style={styles.confirmTodayBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm today's delivered meals"
+            >
+              {confirmTiffin.isPending ? (
+                <ActivityIndicator color={customerColors.canvas} size="small" />
+              ) : (
+                <Text style={styles.confirmTodayText}>Confirm today</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
+
         <MealPlanDayList
           days={days}
           onSkip={canSkip ? confirmSkip : undefined}
           skipping={skipDay.isPending}
+          onConfirmReceived={confirmReceipt}
+          confirming={confirmDay.isPending}
         />
 
         <View style={styles.totalRow}>
@@ -288,6 +390,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: customerColors.charcoal.DEFAULT,
     lineHeight: 19,
+  },
+  // #617 — bulk-confirm banner (coral tint) above the day list.
+  confirmBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: customerColors.coral.tint,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  confirmBannerTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.coral.DEFAULT,
+  },
+  confirmBannerText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: customerColors.charcoal.DEFAULT,
+    lineHeight: 19,
+    marginTop: 2,
+  },
+  confirmTodayBtn: {
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderRadius: 8,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmTodayText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.canvas,
   },
   totalRow: {
     flexDirection: 'row',

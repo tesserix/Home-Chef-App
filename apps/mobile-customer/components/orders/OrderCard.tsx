@@ -1,7 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
+import { useConfirmOrderReceived } from '../../hooks/useConfirmReceived';
+import { canConfirmReceipt } from '../../lib/payout-hold';
+import { friendlyErrorMessage } from '../../lib/errors';
 
 interface OrderCardProps {
   order: Order;
@@ -100,11 +103,40 @@ function formatDate(dateStr: string): string {
 
 export function OrderCard({ order }: OrderCardProps) {
   const router = useRouter();
+  const confirm = useConfirmOrderReceived();
   const chip = getStatusChip(order);
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  // #617 — inline confirm affordance for a delivered order awaiting confirmation
+  // (inert while the escrow flags are off). The nested Pressable intercepts its
+  // own touch, so tapping it confirms without navigating to the detail screen.
+  const showConfirm = canConfirmReceipt(order);
 
   function handlePress() {
     router.push(`/order/${order.id}`);
+  }
+
+  function handleConfirm() {
+    Alert.alert(
+      'Confirm your order?',
+      `Let us know you received your order${
+        order.chef?.name ? ` from ${order.chef.name}` : ''
+      }. You can still report an issue if something's wrong.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Confirm received',
+          onPress: () =>
+            confirm.mutate(order.id, {
+              onSuccess: (res) => Alert.alert('Thanks!', res.message),
+              onError: (err) =>
+                Alert.alert(
+                  'Something went wrong',
+                  friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                ),
+            }),
+        },
+      ],
+    );
   }
 
   // iOS Pressable bug: visual styles live on an inner View; the Pressable is
@@ -157,6 +189,23 @@ export function OrderCard({ order }: OrderCardProps) {
               </Text>
               <Text style={styles.total}>₹{order.totalAmount.toFixed(0)}</Text>
             </View>
+
+            {/* #617 — confirm receipt inline (only while awaiting confirmation) */}
+            {showConfirm && (
+              <Pressable
+                onPress={handleConfirm}
+                disabled={confirm.isPending}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm you received this order"
+                style={styles.confirmBtn}
+              >
+                {confirm.isPending ? (
+                  <ActivityIndicator color={customerColors.canvas} size="small" />
+                ) : (
+                  <Text style={styles.confirmBtnText}>Confirm received</Text>
+                )}
+              </Pressable>
+            )}
           </View>
         </View>
       )}
@@ -265,5 +314,21 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.DEFAULT,
     // Tabular numerals so price digits are monospaced
     fontVariant: ['tabular-nums'],
+  },
+
+  // #617 — inline "Confirm received" CTA (filled coral, compact) in the card footer.
+  confirmBtn: {
+    marginTop: 12,
+    backgroundColor: customerColors.coral.DEFAULT,
+    borderRadius: 8,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  confirmBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.canvas,
   },
 });

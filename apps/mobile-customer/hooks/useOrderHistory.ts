@@ -59,6 +59,8 @@ interface ApiOrder {
   deliveryAddress?: ApiAddress;
   chef?: ApiOrderChef;
   createdAt: string;
+  payoutHoldStatus?: Order['payoutHoldStatus'];
+  customerConfirmedAt?: string;
 }
 
 interface ApiOrderListResponse {
@@ -103,6 +105,8 @@ function mapOrder(raw: ApiOrder): Order {
     tax: raw.tax,
     discount: raw.discount,
     readyPhotoUrl: raw.readyPhotoUrl,
+    payoutHoldStatus: raw.payoutHoldStatus,
+    customerConfirmedAt: raw.customerConfirmedAt,
     deliveryAddress: {
       addressLine1: raw.deliveryAddress?.line1 ?? '',
       addressLine2: raw.deliveryAddress?.line2 || undefined,

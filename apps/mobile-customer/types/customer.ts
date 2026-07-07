@@ -1,6 +1,8 @@
 // Customer app domain types matching the Go API response shapes.
 // Reference: apps/api/handlers/chefs.go, orders.go, delivery.go
 
+import type { PayoutHoldStatus } from '../lib/payout-hold';
+
 export interface Chef {
   id: string;
   name: string;
@@ -180,6 +182,11 @@ export interface Order {
   // Public URL of the chef's food-ready photo (the prepared dish), shown on the
   // order detail once the chef marks the order ready.
   readyPhotoUrl?: string;
+  // Escrow payout-hold state (#617). Present only when a hold exists — i.e. with
+  // the escrow flags on. Drives the "Confirm received" CTA + confirmed/disputed
+  // states on delivered orders; absent (undefined) when the flags are off.
+  payoutHoldStatus?: PayoutHoldStatus;
+  customerConfirmedAt?: string;
 }
 
 export interface TrackingResponse {

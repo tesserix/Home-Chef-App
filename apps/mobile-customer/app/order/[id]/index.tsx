@@ -17,6 +17,9 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
+import { useConfirmOrderReceived } from '../../../hooks/useConfirmReceived';
+import { canConfirmReceipt, payoutHoldMeta } from '../../../lib/payout-hold';
+import { friendlyErrorMessage } from '../../../lib/errors';
 import { CancellationSection } from '../../../components/orders/CancellationSection';
 import { useCartStore, makeLineId } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
@@ -155,6 +158,7 @@ export default function OrderDetailScreen() {
   // full image opens in a tap-to-dismiss overlay so it doesn't dominate the screen.
   const [photoOpen, setPhotoOpen] = React.useState(false);
   const reorder = useReorder();
+  const confirmReceived = useConfirmOrderReceived();
 
   // Tracking hooks — mirror exact wiring from track.tsx.
   // Both hooks are always called (React hook rules); they short-circuit
@@ -202,6 +206,36 @@ export default function OrderDetailScreen() {
   const order = data.data;
   const chipStyle = getStatusChipStyle(order.status);
   const isActiveOrder = ACTIVE_STATUSES.includes(order.status);
+
+  // Escrow confirmation (#617). `showConfirm` gates the "Confirm received" CTA to
+  // a delivered order awaiting confirmation (inert while the escrow flags are off);
+  // otherwise a confirmed/disputed pill is shown. When the CTA is present it is the
+  // primary action, so "Leave a Review" demotes to the secondary (outline) style.
+  const showConfirm = canConfirmReceipt(order);
+  const holdMeta = payoutHoldMeta(order.payoutHoldStatus);
+  const handleConfirmReceived = () => {
+    Alert.alert(
+      'Confirm your order?',
+      `Let us know you received your order${
+        order.chef?.name ? ` from ${order.chef.name}` : ''
+      }. You can still report an issue if something's wrong.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Confirm received',
+          onPress: () =>
+            confirmReceived.mutate(order.id, {
+              onSuccess: (res) => Alert.alert('Thanks!', res.message),
+              onError: (err) =>
+                Alert.alert(
+                  'Something went wrong',
+                  friendlyErrorMessage(err, 'Could not confirm right now. Please try again.'),
+                ),
+            }),
+        },
+      ],
+    );
+  };
 
   // Derive effective driver coords — same logic as track.tsx.
   // Prefer real-time WS position; fall back to polling coords when WS failed.
@@ -526,13 +560,47 @@ export default function OrderDetailScreen() {
         {/* Leave a review — primary action once the order is delivered (#145). */}
         {order.status === 'delivered' && (
           <View style={styles.ctaWrapper}>
+            {/* Escrow confirmation (#617) — the primary action while a delivered
+                order awaits the customer's confirmation. Inert (never rendered)
+                when the escrow flags are off, since the hold never reaches
+                awaiting. Once confirmed/disputed, a pill replaces it. */}
+            {showConfirm ? (
+              <>
+                <Pressable
+                  onPress={handleConfirmReceived}
+                  disabled={confirmReceived.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm you received this order"
+                >
+                  <View style={styles.trackButton}>
+                    {confirmReceived.isPending ? (
+                      <ActivityIndicator color={customerColors.canvas} />
+                    ) : (
+                      <Text style={styles.trackButtonText}>Confirm received</Text>
+                    )}
+                  </View>
+                </Pressable>
+                <Text style={styles.confirmHint}>
+                  Only confirm once your order has arrived.
+                </Text>
+              </>
+            ) : holdMeta.label ? (
+              <View style={[styles.confirmPill, { backgroundColor: holdMeta.bg }]}>
+                <Text style={[styles.confirmPillText, { color: holdMeta.color }]}>
+                  {holdMeta.label}
+                </Text>
+              </View>
+            ) : null}
             <Pressable
               onPress={() => router.push(`/order/${order.id}/review`)}
               accessibilityRole="button"
               accessibilityLabel="Leave a review for this order"
+              style={showConfirm ? { marginTop: 12 } : undefined}
             >
-              <View style={styles.trackButton}>
-                <Text style={styles.trackButtonText}>Leave a Review</Text>
+              <View style={showConfirm ? styles.tipButton : styles.trackButton}>
+                <Text style={showConfirm ? styles.tipButtonText : styles.trackButtonText}>
+                  Leave a Review
+                </Text>
               </View>
             </Pressable>
             {/* Tip your chef / rider (#45) — 100% pass-through. */}
@@ -1041,6 +1109,28 @@ const styles = StyleSheet.create({
   ctaWrapper: {
     paddingHorizontal: 16,
     paddingBottom: 8,
+  },
+  // #617 — helper line under the "Confirm received" CTA.
+  confirmHint: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: customerColors.charcoal.soft,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  // #617 — confirmed / disputed status pill (shown once the CTA is no longer actionable).
+  confirmPill: {
+    borderRadius: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  confirmPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
   },
   // Spec §3 primary button: coral fill, radius 8, minHeight 52, SemiBold canvas text
   trackButton: {
