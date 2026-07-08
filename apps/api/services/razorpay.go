@@ -481,6 +481,22 @@ func (c *RazorpayClient) FetchOrderTransfers(orderID string) ([]TransferResponse
 	return result.Items, nil
 }
 
+// FetchTransfer retrieves a single Route transfer by id — used by the escrow
+// conservation reconcile (#398) to read the gateway state (amount, amount_reversed,
+// on_hold, status) of a DIRECT transfer (meal-plan-day / group hold) that isn't
+// attached to a Razorpay order and so can't be found via FetchOrderTransfers.
+func (c *RazorpayClient) FetchTransfer(transferID string) (*TransferResponse, error) {
+	resp, err := c.doRequest("GET", fmt.Sprintf("/transfers/%s", transferID), nil)
+	if err != nil {
+		return nil, err
+	}
+	var result TransferResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &result, nil
+}
+
 // ReverseTransfer reverses a (settled or held) Route transfer, returning the
 // funds to the platform balance — used to claw back a chef payout when a
 // confirmed-but-not-yet-delivered day is later refunded (escrow refund path,
