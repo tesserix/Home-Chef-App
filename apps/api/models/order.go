@@ -156,9 +156,12 @@ type Order struct {
 	// at order creation time so late-switching a chef doesn't invalidate
 	// already-placed orders.
 	PaymentProvider       string     `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
-	StripePaymentIntentID string     `gorm:"" json:"-"` // Stripe PaymentIntent ID
-	RazorpayOrderID       string     `gorm:"" json:"-"` // Razorpay order ID
-	RazorpayPaymentID     string     `gorm:"" json:"-"` // Razorpay payment ID
+	// Gateway ids. Each is covered by a PARTIAL unique index (WHERE col <> '') created in
+	// database.go's postMigrate block (#395·1) — a plain GORM uniqueIndex tag can't be used
+	// because wallet-only/unpaid/Stripe/meal-plan-day-shell orders share the empty default.
+	StripePaymentIntentID string     `gorm:"" json:"-"` // Stripe PaymentIntent ID (unique when set)
+	RazorpayOrderID       string     `gorm:"" json:"-"` // Razorpay order ID (unique when set)
+	RazorpayPaymentID     string     `gorm:"" json:"-"` // Razorpay payment ID (unique when set)
 	RefundID              string     `gorm:"" json:"-"` // Gateway refund ID (if refunded)
 	RefundedAt            *time.Time `gorm:"" json:"refundedAt,omitempty"`
 	RefundAmount          float64    `gorm:"default:0" json:"refundAmount"`
