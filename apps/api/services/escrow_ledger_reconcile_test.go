@@ -34,6 +34,14 @@ func setupLedgerDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE payment_drifts (id TEXT PRIMARY KEY, agg_type TEXT, agg_id TEXT,
 		kind TEXT, detail TEXT, expected_paise INTEGER DEFAULT 0, gateway_paise INTEGER DEFAULT 0,
 		detected_at DATETIME, resolved_at DATETIME, updated_at DATETIME)`).Error)
+	// meal_plan_days / group_orders carry DIRECT chef payout transfers (PayoutTransferID),
+	// reconciled via FetchTransfer(id) — the #398 day/group slice. Only the columns the scans
+	// Select are present (neither model has a soft-delete column).
+	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, status TEXT DEFAULT '',
+		payout_hold_status TEXT DEFAULT '', payout_transfer_id TEXT DEFAULT '', refund_txn_id TEXT,
+		updated_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, status TEXT DEFAULT '',
+		payout_hold_status TEXT DEFAULT '', payout_transfer_id TEXT DEFAULT '', updated_at DATETIME)`).Error)
 	prev := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = prev })
@@ -76,19 +84,19 @@ func transfersHandler(items []map[string]any) http.HandlerFunc {
 
 func TestSummariseTransfers_Buckets(t *testing.T) {
 	l := summariseTransfers([]TransferResponse{
-		{ID: "t1", Amount: 10000, AmountReversed: 0, OnHold: true},   // held 10000
-		{ID: "t2", Amount: 8000, AmountReversed: 0, OnHold: false},   // settled 8000
+		{ID: "t1", Amount: 10000, AmountReversed: 0, OnHold: true},    // held 10000
+		{ID: "t2", Amount: 8000, AmountReversed: 0, OnHold: false},    // settled 8000
 		{ID: "t3", Amount: 5000, AmountReversed: 5000, OnHold: false}, // fully reversed
 		{ID: "t4", Amount: 4000, AmountReversed: 1000, OnHold: false}, // settled 3000 + reversed 1000
-		{ID: "", Amount: 999},                                         // no id → ignored
+		{ID: "", Amount: 999}, // no id → ignored
 	})
 	require.Equal(t, int64(6000), l.reversedPaise)
 	require.Equal(t, int64(11000), l.settledPaise) // 8000 + 3000
 	require.Equal(t, int64(10000), l.heldPaise)
 }
 
-func TestDetectOrderTransferDrift_ChefPaidOnRefund(t *testing.T) {
-	d := detectOrderTransferDrift(orderLedgerState{mustNotPay: true}, transferLedger{settledPaise: 8000})
+func TestDetectTransferDrift_ChefPaidOnRefund(t *testing.T) {
+	d := detectTransferDrift(aggLedgerState{mustNotPay: true}, transferLedger{settledPaise: 8000})
 	require.Len(t, d, 1)
 	require.Equal(t, models.DriftChefPaidOnRefund, d[0].kind)
 	require.Equal(t, int64(8000), d[0].gatewayPaise)
@@ -96,38 +104,38 @@ func TestDetectOrderTransferDrift_ChefPaidOnRefund(t *testing.T) {
 
 // Mixed chef-settled + rider-still-held on a refunded order reports the TOTAL not-yet-reversed
 // exposure (settled + held), not just the settled slice.
-func TestDetectOrderTransferDrift_ChefPaidOnRefund_MixedReportsTotalAtRisk(t *testing.T) {
-	d := detectOrderTransferDrift(orderLedgerState{mustNotPay: true}, transferLedger{settledPaise: 8000, heldPaise: 3000})
+func TestDetectTransferDrift_ChefPaidOnRefund_MixedReportsTotalAtRisk(t *testing.T) {
+	d := detectTransferDrift(aggLedgerState{mustNotPay: true}, transferLedger{settledPaise: 8000, heldPaise: 3000})
 	require.Len(t, d, 1)
 	require.Equal(t, models.DriftChefPaidOnRefund, d[0].kind)
 	require.Equal(t, int64(11000), d[0].gatewayPaise, "settled 8000 + still-held 3000 = total at risk")
 }
 
-func TestDetectOrderTransferDrift_RefundedStillHeld(t *testing.T) {
-	d := detectOrderTransferDrift(orderLedgerState{mustNotPay: true}, transferLedger{heldPaise: 8000})
+func TestDetectTransferDrift_RefundedStillHeld(t *testing.T) {
+	d := detectTransferDrift(aggLedgerState{mustNotPay: true}, transferLedger{heldPaise: 8000})
 	require.Len(t, d, 1)
 	require.Equal(t, models.DriftReversedButNotAtGateway, d[0].kind)
 }
 
-func TestDetectOrderTransferDrift_HeldButReleased(t *testing.T) {
-	d := detectOrderTransferDrift(orderLedgerState{holdStatus: models.PayoutHoldAwaitingConfirmation}, transferLedger{settledPaise: 8000})
+func TestDetectTransferDrift_HeldButReleased(t *testing.T) {
+	d := detectTransferDrift(aggLedgerState{holdStatus: models.PayoutHoldAwaitingConfirmation}, transferLedger{settledPaise: 8000})
 	require.Len(t, d, 1)
 	require.Equal(t, models.DriftHeldButReleasedAtGateway, d[0].kind)
 }
 
-func TestDetectOrderTransferDrift_ReleasedButHeld(t *testing.T) {
-	d := detectOrderTransferDrift(orderLedgerState{holdStatus: models.PayoutHoldReleased}, transferLedger{heldPaise: 8000})
+func TestDetectTransferDrift_ReleasedButHeld(t *testing.T) {
+	d := detectTransferDrift(aggLedgerState{holdStatus: models.PayoutHoldReleased}, transferLedger{heldPaise: 8000})
 	require.Len(t, d, 1)
 	require.Equal(t, models.DriftReleasedButHeldAtGateway, d[0].kind)
 }
 
-func TestDetectOrderTransferDrift_ConsistentStates_NoDrift(t *testing.T) {
+func TestDetectTransferDrift_ConsistentStates_NoDrift(t *testing.T) {
 	// released + all settled → consistent.
-	require.Empty(t, detectOrderTransferDrift(orderLedgerState{holdStatus: models.PayoutHoldReleased}, transferLedger{settledPaise: 8000}))
+	require.Empty(t, detectTransferDrift(aggLedgerState{holdStatus: models.PayoutHoldReleased}, transferLedger{settledPaise: 8000}))
 	// awaiting + all held → consistent.
-	require.Empty(t, detectOrderTransferDrift(orderLedgerState{holdStatus: models.PayoutHoldAwaitingConfirmation}, transferLedger{heldPaise: 8000}))
+	require.Empty(t, detectTransferDrift(aggLedgerState{holdStatus: models.PayoutHoldAwaitingConfirmation}, transferLedger{heldPaise: 8000}))
 	// refunded + fully reversed → consistent.
-	require.Empty(t, detectOrderTransferDrift(orderLedgerState{mustNotPay: true}, transferLedger{reversedPaise: 8000}))
+	require.Empty(t, detectTransferDrift(aggLedgerState{mustNotPay: true}, transferLedger{reversedPaise: 8000}))
 }
 
 // --- runner ---
