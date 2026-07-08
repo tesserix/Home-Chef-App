@@ -65,7 +65,9 @@ func (h *Handler) csrf(c *gin.Context) {
 		Name:     "hc_csrf",
 		Value:    tok,
 		Path:     "/",
+		Secure:   h.Mgr.cfg.Secure, // HTTPS-only in prod (env-driven, matches the session cookie); dev stays false
 		SameSite: http.SameSiteStrictMode,
+		// HttpOnly deliberately omitted — this is a double-submit CSRF token the client JS must read.
 	})
 	c.JSON(http.StatusOK, gin.H{"csrf_token": tok})
 }
