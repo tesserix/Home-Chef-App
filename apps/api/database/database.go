@@ -318,6 +318,9 @@ func Migrate() error {
 		// Reliable event backbone: transactional outbox + consumer idempotency
 		&models.OutboxEvent{},
 		&models.ProcessedEvent{},
+
+		// Escrow conservation ledger: gateway-vs-platform payout drift report (#398)
+		&models.PaymentDrift{},
 	)
 
 	if err != nil {
