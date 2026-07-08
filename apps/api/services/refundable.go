@@ -37,14 +37,27 @@ func PerLineRefundedTotal(orderID uuid.UUID) float64 {
 // (a cross-connection read is a separate DB under sqlite :memory: and a separate snapshot
 // under a Postgres tx).
 func PerLineRefundedTotalTx(db *gorm.DB, orderID uuid.UUID) float64 {
-	var sum float64
-	if err := db.Model(&models.OrderItem{}).
-		Where("order_id = ? AND is_cancelled = ?", orderID, true).
-		Select("COALESCE(SUM(refund_amount), 0)").Scan(&sum).Error; err != nil {
+	sum, err := PerLineRefundedTotalTxErr(db, orderID)
+	if err != nil {
 		log.Printf("refundable: sum per-line refunds for order %s failed (treating as 0): %v", orderID, err)
 		return 0
 	}
 	return sum
+}
+
+// PerLineRefundedTotalTxErr is PerLineRefundedTotalTx but PROPAGATES the query error instead of
+// failing open to 0. Use it wherever a 0-on-error flips the safety direction — notably when
+// reconstructing the original captured amount (Total + per-line): understating per-line there
+// UNDERSTATES captured, which could misclassify a still-live, partially-refunded order as fully
+// refunded (#640). Callers that reconstruct captured MUST use this and skip/alert on error.
+func PerLineRefundedTotalTxErr(db *gorm.DB, orderID uuid.UUID) (float64, error) {
+	var sum float64
+	if err := db.Model(&models.OrderItem{}).
+		Where("order_id = ? AND is_cancelled = ?", orderID, true).
+		Select("COALESCE(SUM(refund_amount), 0)").Scan(&sum).Error; err != nil {
+		return 0, err
+	}
+	return sum, nil
 }
 
 // RemainingRefundable is the amount still owed to the customer on an order:
