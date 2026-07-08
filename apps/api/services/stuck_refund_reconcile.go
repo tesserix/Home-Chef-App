@@ -94,7 +94,7 @@ func finalizeStuckRefund(orderID uuid.UUID) (full, healed bool, refundedPaise in
 			lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
 		var o models.Order
-		if e := lockTx.Select("id", "total", "refund_amount", "refund_id", "payment_status", "refunded_at").
+		if e := lockTx.Select("id", "status", "total", "refund_amount", "refund_id", "payment_status", "refunded_at").
 			First(&o, "id = ?", orderID).Error; e != nil {
 			return e
 		}
@@ -114,7 +114,13 @@ func finalizeStuckRefund(orderID uuid.UUID) (full, healed bool, refundedPaise in
 			updates["refund_initiated_by"] = "reconcile"
 		}
 		if full {
-			updates["status"] = models.OrderStatusRefunded
+			// Only a NON-terminal order transitions to refunded. Preserve a legitimately
+			// cancelled order's status — refunded_at alone blocks its payout, and clobbering
+			// cancelled→refunded would destroy the RTO cancelled-vs-refunded distinction
+			// (matches InitiateRefund's own terminal write, which preserves cancelled).
+			if o.Status != models.OrderStatusCancelled && o.Status != models.OrderStatusRefunded {
+				updates["status"] = models.OrderStatusRefunded
+			}
 			updates["refunded_at"] = time.Now()
 			// payment_status is already refunded — leave it.
 		} else {

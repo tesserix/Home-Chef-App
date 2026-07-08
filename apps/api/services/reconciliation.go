@@ -49,6 +49,13 @@ const (
 	DriftPaymentNotCaptured DriftKind = "payment_not_captured"
 	DriftRefundMismatch     DriftKind = "refund_mismatch"
 	DriftGatewayUnreachable DriftKind = "gateway_unreachable"
+	// DriftFullRefundUnstamped: the gateway's cumulative amount_refunded reaches the
+	// captured total, but the order's refunded_at is still NULL — so the payout release
+	// guard never blocks it (#640). Arises when a refund is full only in AGGREGATE across
+	// channels (e.g. an in-app partial + an out-of-band Razorpay-dashboard refund), which
+	// no single app event stamps. The reconcile cron self-heals this via
+	// FinalizeGatewayFullRefund; the drift is still alerted so ops can reconcile books.
+	DriftFullRefundUnstamped DriftKind = "full_refund_unstamped"
 )
 
 // Drift is a single reconciliation discrepancy.
@@ -135,10 +142,39 @@ func reconcileRazorpay(o *models.Order) []Drift {
 		drifts = append(drifts, driftFor(o, "razorpay", DriftPaymentNotCaptured,
 			fmt.Sprintf("gateway status=%q captured=false", pay.Status), o.Total, FromPaise(pay.Amount)))
 	}
+
+	// Refund cross-check on the CUMULATIVE basis. The gateway's amount_refunded is the
+	// authoritative total refunded across every channel (in-app full/partial, per-line
+	// cancels, out-of-band dashboard). Locally, the cumulative refunded is
+	// RefundAmount + per-line refunds — Order.RefundAmount alone EXCLUDES per-line
+	// cancels (tracked on order_items), so comparing against it false-positived on every
+	// partially-cancelled order.
+	//
+	// Use the error-PROPAGATING per-line read: a 0-on-error would understate captured
+	// below the gateway refund and spuriously flag DriftFullRefundUnstamped. On a DB blip
+	// we skip this order and reconcile it next run (never a false full-refund signal).
+	perLine, plErr := PerLineRefundedTotalTxErr(database.DB, o.ID)
+	if plErr != nil {
+		log.Printf("reconciliation: skip order %s — per-line refund read failed: %v", o.ID, plErr)
+		return drifts
+	}
+	localRefunded := o.RefundAmount + perLine
 	gatewayRefunded := FromPaise(pay.AmountRefunded)
-	if math.Abs(gatewayRefunded-o.RefundAmount) > reconAmountTolerance {
+	// Original gateway-captured amount: Total is mutated down by per-line cancels, so add
+	// them back; wallet-applied was never charged to the gateway, so subtract it. Matches
+	// handleRefundProcessed's capturedPaise.
+	capturedPaise := ToPaise(o.Total + perLine - o.WalletApplied)
+
+	switch {
+	case capturedPaise > 0 && pay.AmountRefunded >= capturedPaise && o.RefundedAt == nil:
+		// #640: fully refunded at the gateway (in aggregate) but not stamped locally.
+		drifts = append(drifts, driftFor(o, "razorpay", DriftFullRefundUnstamped,
+			"gateway amount_refunded >= captured but refunded_at is NULL (cumulative/out-of-band full refund)",
+			localRefunded, gatewayRefunded))
+	case math.Abs(gatewayRefunded-localRefunded) > reconAmountTolerance:
 		drifts = append(drifts, driftFor(o, "razorpay", DriftRefundMismatch,
-			"gateway amount_refunded != platform RefundAmount", o.RefundAmount, gatewayRefunded))
+			"gateway amount_refunded != platform cumulative refunded (RefundAmount + per-line)",
+			localRefunded, gatewayRefunded))
 	}
 	return drifts
 }

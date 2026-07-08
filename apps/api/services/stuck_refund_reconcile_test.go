@@ -27,9 +27,9 @@ func setupStuckRefundDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT, chef_id TEXT,
 			status TEXT, payment_status TEXT, payment_provider TEXT DEFAULT 'razorpay', total REAL DEFAULT 0,
-			refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT, refund_initiated_by TEXT,
-			refunded_at DATETIME, payout_hold_status TEXT DEFAULT '', razorpay_order_id TEXT DEFAULT '',
-			created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
+			wallet_applied REAL DEFAULT 0, refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT,
+			refund_initiated_by TEXT, refunded_at DATETIME, payout_hold_status TEXT DEFAULT '',
+			razorpay_order_id TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`,
 		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`,
@@ -91,6 +91,22 @@ func TestReconcileStuckRefunds_FullFinalizesTerminal(t *testing.T) {
 	require.Equal(t, string(models.OrderStatusRefunded), status)
 	require.Equal(t, 500.0, ra)
 	require.True(t, at, "a full stamps refunded_at")
+}
+
+// A stuck FULL refund of a CANCELLED order keeps status=cancelled — refunded_at alone blocks the
+// payout, and clobbering cancelled→refunded would destroy the RTO cancelled-vs-refunded
+// distinction (matches InitiateRefund's own terminal write, which preserves cancelled).
+func TestReconcileStuckRefunds_FullPreservesCancelledStatus(t *testing.T) {
+	db := setupStuckRefundDB(t)
+	id := seedStuckOrder(t, db, 500, 500, time.Now().Add(-time.Hour)) // full: refund_amount == total
+	require.NoError(t, db.Exec(`UPDATE orders SET status = ? WHERE id = ?`,
+		string(models.OrderStatusCancelled), id.String()).Error)
+
+	require.Equal(t, 1, reconcileStuckRefunds())
+
+	_, status, _, at := stuckRow(t, db, id)
+	require.True(t, at, "refunded_at stamped → payout blocked")
+	require.Equal(t, string(models.OrderStatusCancelled), status, "cancelled preserved, not clobbered to refunded")
 }
 
 // A fresh (not-yet-stale) mid-refund is NOT touched — the grace prevents racing an in-flight
