@@ -65,8 +65,15 @@ func expireMealPlans(now time.Time, status models.MealPlanStatus, cutoffWhere, r
 		// waiting too — notify both parties (not just the customer).
 		var chefUserID uuid.UUID
 		if status == models.MealPlanAwaitingCustomer {
+			// Pluck must target a slice — GORM does not scan a single column into a
+			// scalar uuid.UUID (it silently leaves it zero), which previously dropped
+			// the chef notification below. Take the first row (chef id is unique).
+			var ids []uuid.UUID
 			database.DB.Model(&models.ChefProfile{}).
-				Where("id = ?", p.ChefID).Pluck("user_id", &chefUserID)
+				Where("id = ?", p.ChefID).Pluck("user_id", &ids)
+			if len(ids) > 0 {
+				chefUserID = ids[0]
+			}
 		}
 		err := database.DB.Transaction(func(tx *gorm.DB) error {
 			// Guard on the current status so a concurrent customer/chef action wins.
