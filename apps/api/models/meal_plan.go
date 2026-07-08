@@ -84,6 +84,8 @@ type MealPlan struct {
 
 	// Escrow links (#194): the upfront capture that funds the held chef payouts.
 	EscrowPaymentID string `gorm:"" json:"escrowPaymentId,omitempty"`
+	// Covered by a PARTIAL unique index (WHERE razorpay_order_id <> '') in database.go's
+	// postMigrate block (#395·1) — unique when set, empty for an unpaid/handshake plan.
 	RazorpayOrderID string `gorm:"" json:"razorpayOrderId,omitempty"`
 
 	// Negotiation cutoffs — a lapse auto-cancels + fully refunds.

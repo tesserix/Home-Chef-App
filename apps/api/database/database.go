@@ -381,6 +381,32 @@ func Migrate() error {
 		}
 	}
 
+	// Payment-id uniqueness backstop (#395·1): a DB-level guard against ONE gateway
+	// payment being stamped on two orders (the app-logic binding alone can't stop it).
+	// PARTIAL indexes (WHERE col <> '') because wallet-only / unpaid / Stripe orders and
+	// meal-plan-day shell orders legitimately share the empty default — only real gateway
+	// ids must be unique. Group participants (group_order_participants) and catering
+	// (catering_requests) live in other tables and are unaffected.
+	//
+	// Applied NON-FATALLY, unlike the constraints above: those are already handler-enforced
+	// (a dup is near-impossible), but payment-id uniqueness was NEVER enforced before, so a
+	// legacy duplicate could pre-exist and would make CREATE UNIQUE INDEX fail. A duplicate
+	// payment id is a real money bug to investigate + dedup, but crash-looping the whole API
+	// over it is disproportionate — log a loud ALERT for ops instead; the settlement
+	// reconciliation cron (refund_mismatch / conservation) backstops until it's cleaned and
+	// the index is re-attempted on the next boot.
+	paymentIDIndexes := []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_order_id ON orders (razorpay_order_id) WHERE razorpay_order_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_payment_id ON orders (razorpay_payment_id) WHERE razorpay_payment_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_stripe_payment_intent_id ON orders (stripe_payment_intent_id) WHERE stripe_payment_intent_id <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_plans_razorpay_order_id ON meal_plans (razorpay_order_id) WHERE razorpay_order_id <> ''`,
+	}
+	for _, stmt := range paymentIDIndexes {
+		if err := DB.Exec(stmt).Error; err != nil {
+			log.Printf("post-migration ALERT: payment-id unique index not created — a pre-existing DUPLICATE payment id likely exists; investigate + dedup, then redeploy (%q): %v", stmt, err)
+		}
+	}
+
 	// Backfill SEO slugs for chefs created before the slug column existed (#58),
 	// so they're resolvable by slug via GET /chefs/:slug. Idempotent — only fills
 	// empty slugs; new/updated chefs get one from ChefProfile.BeforeSave.
