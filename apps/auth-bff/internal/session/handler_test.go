@@ -151,3 +151,28 @@ func TestHandler_CSRF_ReturnsTokenAndCookie(t *testing.T) {
 	assert.Contains(t, cookie, "hc_csrf="+tok)
 	assert.Contains(t, cookie, "SameSite=Strict")
 }
+
+// #671: the CSRF cookie's Secure flag must follow the manager's env-driven config — HTTPS-only in
+// prod, off in dev — mirroring the session cookie. (HttpOnly stays off: a double-submit token the
+// client JS must read.)
+func TestHandler_CSRF_CookieSecureFollowsConfig(t *testing.T) {
+	k := make([]byte, 32)
+	_, _ = rand.Read(k)
+	mgr, err := NewManager(Config{EncryptKey: k, MaxAge: time.Hour, Secure: true})
+	require.NoError(t, err)
+	prod := &Handler{Mgr: mgr}
+	r := gin.New()
+	prod.Register(r)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/csrf", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Set-Cookie"), "Secure", "prod (Secure config) → CSRF cookie is HTTPS-only")
+
+	// dev default (Secure:false) → no Secure attribute so it still works over http.
+	dev, _ := newTestHandler(t)
+	rDev := gin.New()
+	dev.Register(rDev)
+	wDev := httptest.NewRecorder()
+	rDev.ServeHTTP(wDev, httptest.NewRequest(http.MethodGet, "/auth/csrf", nil))
+	assert.NotContains(t, wDev.Header().Get("Set-Cookie"), "Secure", "dev → not Secure")
+}
