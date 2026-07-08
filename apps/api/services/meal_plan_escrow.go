@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
@@ -293,8 +294,38 @@ func isAlreadyReversedErr(err error) bool {
 // held transfer is reversed first so the chef isn't paid for a refunded day.
 // No-op when escrow is off.
 func RefundDay(tx *gorm.DB, plan *models.MealPlan, day *models.MealPlanDay, reason string) error {
-	if !MealPlanEscrowActive() || day.RefundTxnID != nil {
+	if !MealPlanEscrowActive() {
 		return nil
+	}
+	// #656: re-read refund_txn_id from the DB UNDER A ROW LOCK rather than trusting the
+	// caller's in-memory struct (loaded before this tx — possibly stale). The stamp is a
+	// SHARED idempotency signal written by multiple independent paths on DISJOINT wallet keys
+	// — this RefundDay (mealplan-refund:<dayID>) and the #618 order-issue path (issue:<id>) —
+	// so a stale nil here would credit the customer a SECOND time across keys (CreditWallet
+	// dedups only WITHIN a key). The FOR UPDATE lock serializes every writer on the day row:
+	// whoever locks first refunds + stamps; a concurrent refunder blocks, then observes the
+	// stamp and no-ops. (refund_txn_id is write-once, so a non-nil read is authoritative.)
+	// The caller's tx already spans the gateway call and — on the ResolveMealPlanDayFailure
+	// path — already holds this row (claimFailedDay), so this adds no new network-in-lock.
+	//
+	// Lock order note: RefundDay locks the DAY row here, then UPDATEs the linked shell Order
+	// (#629, below) — day-then-order. The #618 order-issue path is order-then-day, an inverse
+	// order. That is inert (no deadlock cycle) ONLY because the two paths act on DISJOINT day
+	// populations: RefundDay runs on undelivered/declined/failed days, while a quality issue
+	// can be filed only on a `delivered` day (ReportIssue), and a delivered day can never
+	// become `failed` (MarkMealPlanDayFailed excludes MealPlanDayDelivered from
+	// terminalOrFailedDayStatuses). If that invariant ever changes, revisit this lock order.
+	lockTx := tx
+	if tx.Dialector.Name() == "postgres" {
+		lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var locked models.MealPlanDay
+	if err := lockTx.Select("refund_txn_id").First(&locked, "id = ?", day.ID).Error; err != nil {
+		return fmt.Errorf("refund day %s: lock-read refund_txn_id: %w", day.ID, err)
+	}
+	if locked.RefundTxnID != nil {
+		day.RefundTxnID = locked.RefundTxnID // reconcile the caller's struct to the DB truth
+		return nil                            // already refunded by a prior/concurrent writer
 	}
 	rz := GetRazorpay()
 	if rz == nil {
