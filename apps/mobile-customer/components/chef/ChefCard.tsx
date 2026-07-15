@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 12,
     fontWeight: '600',
-    color: '#15803D', // calm trust-green; functional (matches the web success badge)
+    color: customerColors.success.DEFAULT, // functional success green (token; matches the web success badge)
     marginTop: 2,
   },
   metaRow: {

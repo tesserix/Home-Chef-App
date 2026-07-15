@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     fontSize: 13,
     fontWeight: '600',
-    color: '#15803D',
+    color: customerColors.success.DEFAULT,
     marginTop: 6,
   },
   pickupOnlyNote: {
