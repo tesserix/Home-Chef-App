@@ -5,6 +5,7 @@
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -39,9 +40,19 @@ export default function MessagesScreen() {
   const onSend = () => {
     const content = text.trim();
     if (!content || send.isPending) return;
-    setText('');
+    // Clear the input only AFTER the send succeeds. Clearing up-front lost the
+    // customer's message on any failure (network / 500 / PII block) with no error.
     send.mutate(content, {
-      onSettled: () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50),
+      onSuccess: () => {
+        setText('');
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+      },
+      onError: () => {
+        Alert.alert(
+          'Message not sent',
+          'Something went wrong sending your message. Please check your connection and try again.',
+        );
+      },
     });
   };
 

@@ -34,13 +34,16 @@ export function useOrderTrackingWS(orderId: string, enabled: boolean = true) {
   const connect = useCallback(() => {
     if (!orderId || !enabled || useFallback) return;
 
-    // Build WebSocket URL from API base URL (replace http(s) with ws(s))
-    const apiBase =
-      process.env.EXPO_PUBLIC_API_URL ?? 'https://api.homechef.app';
+    // Build WebSocket URL from API base URL (replace http(s) with ws(s)).
+    // EXPO_PUBLIC_API_URL already ends in `/api` (e.g. https://fe3dr.com/api),
+    // so the path is `/v1/...` — NOT `/api/v1/...`, which doubled to
+    // `.../api/api/v1/...` and made every WS connect fail (silent fall back to
+    // REST polling). The REST tracking hook uses `/v1/...` on the same base.
+    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'https://fe3dr.com/api';
     const wsBase = apiBase.replace(/^https?:\/\//, (match: string) =>
       match.startsWith('https') ? 'wss://' : 'ws://',
     );
-    const url = `${wsBase}/api/v1/orders/${orderId}/track/ws`;
+    const url = `${wsBase}/v1/orders/${orderId}/track/ws`;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;

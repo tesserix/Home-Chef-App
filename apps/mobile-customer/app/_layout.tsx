@@ -1,7 +1,7 @@
 import '../global.css';
 
 import { useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import { ActivityIndicator, AppState, type AppStateStatus, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack, router } from 'expo-router';
@@ -17,6 +17,13 @@ import { useAuthStore } from '../store/auth-store';
 import { useBiometricLock } from '@homechef/mobile-shared/hooks';
 import { getRawFCMToken, registerDeviceToken } from '@homechef/mobile-shared/hooks';
 import { api } from '../lib/api';
+import { useFonts } from 'expo-font';
+import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
+import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { customerColors } from '@homechef/mobile-shared/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +45,19 @@ Notifications.setNotificationHandler({
 });
 
 export default function RootLayout() {
+  // Load Geist + Inter at boot. Until they resolve, every Text falls back to the
+  // OS system font (San Francisco / Roboto) and the brand's geometric-sans
+  // identity is absent — so we hold an opaque splash over the first frames to
+  // avoid a visible System→Geist/Inter snap. Weight is encoded in the family key
+  // ('Inter-Medium') because RN doesn't reliably honor fontWeight on custom fonts.
+  const [fontsLoaded] = useFonts({
+    Geist: Geist_600SemiBold, // default Geist = 600 (display)
+    'Geist-Bold': Geist_700Bold,
+    Inter: Inter_400Regular, // default Inter = 400 (body)
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+  });
+
   const { isAuthenticated, isLoading, onboardingComplete, hydrateFromStorage } =
     useAuthStore();
   const setOnboardingComplete = useAuthStore((s) => s.setOnboardingComplete);
@@ -225,8 +245,27 @@ export default function RootLayout() {
           tenantId={process.env.EXPO_PUBLIC_GIP_TENANT_ID ?? ''}
         >
           <QueryClientProvider client={queryClient}>
-            <OfflineBanner />
-            <Stack screenOptions={{ headerShown: false }} />
+            <View style={{ flex: 1 }}>
+              <OfflineBanner />
+              <Stack screenOptions={{ headerShown: false }} />
+              {!fontsLoaded && (
+                <View
+                  pointerEvents="auto"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: customerColors.canvas,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ActivityIndicator color={customerColors.charcoal.DEFAULT} size="large" />
+                </View>
+              )}
+            </View>
           </QueryClientProvider>
         </AuthProvider>
       </BottomSheetModalProvider>

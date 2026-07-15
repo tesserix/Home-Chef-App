@@ -265,6 +265,10 @@ export default function CheckoutScreen() {
       setError('Please accept the Terms of Service and Refund Policy to continue.');
       return;
     }
+    // Guard re-entry: the button is disabled via canPlaceOrder, but a second tap
+    // can still land during the async create→pay round-trip before the disabled
+    // state applies. Without this a double-tap creates a duplicate order + charge.
+    if (isLoading) return;
 
     setIsLoading(true);
     setError(null);
@@ -295,9 +299,9 @@ export default function CheckoutScreen() {
       // Steps 2–3: create the Razorpay payment and open the NATIVE checkout
       // sheet. startOrderPayment handles the full-wallet (already-paid) shortcut
       // and routes to /payment/result, which polls the authoritative payment
-      // status. Clear loading first so the screen stays usable if the user
-      // dismisses the sheet.
-      setIsLoading(false);
+      // status. Keep the button DISABLED through payment (cleared in finally) so a
+      // second tap can't create a duplicate order during the create→pay round-trip
+      // before the native sheet appears.
       await startOrderPayment(orderId, { walletAmount: walletApplied });
     } catch (err: unknown) {
       // Surface the real reason in a modal — the inline banner sits in the
@@ -311,6 +315,9 @@ export default function CheckoutScreen() {
       }
       setError(message);
       Alert.alert('Could not place order', message);
+    } finally {
+      // Re-enable only after the whole create→pay flow settles (dismiss/cancel/
+      // error). On success startOrderPayment has already routed to /payment/result.
       setIsLoading(false);
     }
   }
