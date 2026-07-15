@@ -9,6 +9,7 @@
 // the two floating layers never overlap (see app/(tabs)/index.tsx).
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import { router } from 'expo-router';
 import Animated, { Easing, FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { ShoppingBag } from 'lucide-react-native';
@@ -47,7 +48,7 @@ export function CartFab() {
         accessibilityRole="button"
         accessibilityLabel={`View cart — ${itemCount} ${
           itemCount === 1 ? 'item' : 'items'
-        }, ₹${total.toFixed(2)}`}
+        }, ${formatMoney(total)}`}
       >
         <View style={styles.pill}>
           <View>
@@ -56,7 +57,7 @@ export function CartFab() {
               <Text style={styles.badgeText}>{itemCount}</Text>
             </View>
           </View>
-          <Text style={styles.totalText}>₹{Math.round(total)}</Text>
+          <Text style={styles.totalText}>{formatMoney(total)}</Text>
         </View>
       </Pressable>
     </Animated.View>

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { formatMoney } from '../../lib/format';
 import {
   ActivityIndicator,
   Alert,
@@ -500,7 +501,7 @@ export default function ChefDetailScreen() {
             <Pressable
               onPress={openCart}
               accessibilityRole="button"
-              accessibilityLabel={`View cart — ${cartCount} items, ₹${cartTotal.toFixed(0)}`}
+              accessibilityLabel={`View cart — ${cartCount} items, ${formatMoney(cartTotal)}`}
             >
               {({ pressed }) => (
                 <View
@@ -513,7 +514,7 @@ export default function ChefDetailScreen() {
                     Add to cart
                   </Text>
                   <Text style={styles.ctaTotal}>
-                    ₹{cartTotal.toFixed(0)}
+                    {formatMoney(cartTotal)}
                   </Text>
                 </View>
               )}
