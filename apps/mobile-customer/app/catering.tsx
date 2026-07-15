@@ -225,7 +225,7 @@ function EmptyState() {
 
 function FieldLabel({ children }: { children: string }) {
   return (
-    <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1.5 mt-4">
+    <Text className="text-xs font-semibold text-charcoal-soft mb-1.5 mt-4">
       {children}
     </Text>
   );

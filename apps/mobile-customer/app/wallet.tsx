@@ -54,7 +54,7 @@ export default function WalletScreen() {
                   <WalletIcon size={24} color={customerColors.charcoal.soft} />
                 </View>
                 <View>
-                  <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide">
+                  <Text className="text-xs font-semibold text-charcoal-soft">
                     Available balance
                   </Text>
                   <Text className="text-3xl font-bold text-charcoal">
@@ -64,7 +64,7 @@ export default function WalletScreen() {
               </View>
             </View>
 
-            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide px-1 pt-6 pb-2">
+            <Text className="text-xs font-semibold text-charcoal-soft px-1 pt-6 pb-2">
               Transactions
             </Text>
 

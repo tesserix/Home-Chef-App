@@ -98,7 +98,7 @@ export default function LoyaltyScreen() {
             {/* Points balance + tier */}
             <View className="rounded-2xl bg-canvas p-5" style={cardShadow}>
               <View className="flex-row items-center justify-between">
-                <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide">
+                <Text className="text-xs font-semibold text-charcoal-soft">
                   Points balance
                 </Text>
                 <View className="flex-row items-center rounded-full bg-coral-tint px-2.5 py-1">
@@ -155,7 +155,7 @@ export default function LoyaltyScreen() {
               )}
             </Pressable>
 
-            <Text className="px-1 pb-2 pt-6 text-xs font-semibold uppercase tracking-wide text-charcoal-soft">
+            <Text className="px-1 pb-2 pt-6 text-xs font-semibold text-charcoal-soft">
               History
             </Text>
 
