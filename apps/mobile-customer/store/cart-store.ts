@@ -6,8 +6,16 @@
 // Lines are keyed by `lineId` (#232): the same dish with different add-on
 // selections is a distinct line. For an item with no modifiers, lineId equals
 // menuItemId, so the no-modifier flow is unchanged.
+//
+// The basket is persisted to AsyncStorage: the target persona is an interrupted,
+// distracted customer, so an app kill / OS eviction mid-order must NOT silently
+// empty the cart. Only the contents (chef + items) are persisted — the derived
+// total()/totalCount() selectors are re-created from the initializer on rehydrate
+// (mirrors store/onboarding-store.ts).
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CartItem, SelectedModifier } from '../types/customer';
 
 interface ChefSummary {
@@ -56,71 +64,85 @@ interface CartState {
   totalCount: () => number;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  chefId: null,
-  chefName: null,
-  items: [],
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      chefId: null,
+      chefName: null,
+      items: [],
 
-  addItem: (item: CartItem, chef: ChefSummary): AddItemResult => {
-    const { chefId, items } = get();
+      addItem: (item: CartItem, chef: ChefSummary): AddItemResult => {
+        const { chefId, items } = get();
 
-    // Cross-chef conflict: caller must confirm clear before re-adding
-    if (chefId !== null && chefId !== chef.id) {
-      return 'cross_chef_conflict';
+        // Cross-chef conflict: caller must confirm clear before re-adding
+        if (chefId !== null && chefId !== chef.id) {
+          return 'cross_chef_conflict';
+        }
+
+        const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers);
+        const existing = items.find((i) => i.lineId === lineId);
+
+        if (existing) {
+          set({
+            items: items.map((i) =>
+              i.lineId === lineId ? { ...i, quantity: i.quantity + item.quantity } : i
+            ),
+          });
+        } else {
+          set({
+            chefId: chef.id,
+            chefName: chef.name,
+            items: [...items, { ...item, lineId }],
+          });
+        }
+
+        return 'ok';
+      },
+
+      removeItem: (lineId: string) => {
+        set({ items: get().items.filter((i) => i.lineId !== lineId) });
+      },
+
+      updateQty: (lineId: string, quantity: number) => {
+        if (quantity <= 0) {
+          get().removeItem(lineId);
+          return;
+        }
+        set({
+          items: get().items.map((i) => (i.lineId === lineId ? { ...i, quantity } : i)),
+        });
+      },
+
+      setInstructions: (lineId: string, instructions: string) => {
+        const trimmed = instructions.trim();
+        set({
+          items: get().items.map((i) =>
+            i.lineId === lineId ? { ...i, instructions: trimmed || undefined } : i
+          ),
+        });
+      },
+
+      clearCart: () => {
+        set({ chefId: null, chefName: null, items: [] });
+      },
+
+      total: () => {
+        return get().items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      },
+
+      totalCount: () => {
+        return get().items.reduce((sum, i) => sum + i.quantity, 0);
+      },
+    }),
+    {
+      name: 'customer-cart',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Persist only the basket contents, never the action/selector methods.
+      partialize: (state) => ({
+        chefId: state.chefId,
+        chefName: state.chefName,
+        items: state.items,
+      }),
     }
-
-    const lineId = item.lineId || makeLineId(item.menuItemId, item.modifiers);
-    const existing = items.find((i) => i.lineId === lineId);
-
-    if (existing) {
-      set({
-        items: items.map((i) =>
-          i.lineId === lineId ? { ...i, quantity: i.quantity + item.quantity } : i
-        ),
-      });
-    } else {
-      set({
-        chefId: chef.id,
-        chefName: chef.name,
-        items: [...items, { ...item, lineId }],
-      });
-    }
-
-    return 'ok';
-  },
-
-  removeItem: (lineId: string) => {
-    set({ items: get().items.filter((i) => i.lineId !== lineId) });
-  },
-
-  updateQty: (lineId: string, quantity: number) => {
-    if (quantity <= 0) {
-      get().removeItem(lineId);
-      return;
-    }
-    set({
-      items: get().items.map((i) => (i.lineId === lineId ? { ...i, quantity } : i)),
-    });
-  },
-
-  setInstructions: (lineId: string, instructions: string) => {
-    const trimmed = instructions.trim();
-    set({
-      items: get().items.map((i) =>
-        i.lineId === lineId ? { ...i, instructions: trimmed || undefined } : i
-      ),
-    });
-  },
-
-  clearCart: () => {
-    set({ chefId: null, chefName: null, items: [] });
-  },
-
-  total: () => {
-    return get().items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  },
-
-  totalCount: () => {
-    return get().items.reduce((sum, i) => sum + i.quantity, 0);
-  },
-}));
+  )
+);

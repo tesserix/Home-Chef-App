@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chefName: {
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: 'Geist',
     fontSize: 15,
     color: customerColors.charcoal.DEFAULT,
     letterSpacing: -0.1,

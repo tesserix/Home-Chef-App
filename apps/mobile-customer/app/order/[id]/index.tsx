@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
   },
   // #617 — helper line under the "Confirm received" CTA.
   confirmHint: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter',
     fontSize: 13,
     color: customerColors.charcoal.soft,
     textAlign: 'center',
