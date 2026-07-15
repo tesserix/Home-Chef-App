@@ -316,6 +316,7 @@ export default function OrdersScreen() {
 
       {/* ── Order list ── */}
       <FlatList<Order>
+        style={styles.list}
         data={allOrders}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <OrderCard order={item} />}
@@ -387,6 +388,13 @@ const styles = StyleSheet.create({
   },
 
   // ── List layout ──
+  // flex:1 so the FlatList fills the viewport and scrolls. Without it the list
+  // is content-sized: short filters (Active/Delivered) fit and look fine, but
+  // long ones (All/Cancelled) overflow and can't scroll — so they truncate and
+  // onEndReached never fires (no load-more).
+  list: {
+    flex: 1,
+  },
   listContent: {
     paddingTop: 8,
     paddingBottom: 32,
