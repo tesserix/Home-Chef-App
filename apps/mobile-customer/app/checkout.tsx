@@ -769,7 +769,7 @@ export default function CheckoutScreen() {
                     </Text>
                   </Pressable>
                 </View>
-                {promoError ? <Text className="text-xs text-paprika">{promoError}</Text> : null}
+                {promoError ? <Text className="text-xs text-destructive">{promoError}</Text> : null}
               </View>
             )}
 

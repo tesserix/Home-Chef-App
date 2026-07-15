@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import { useCartStore } from '../../store/cart-store';
 
 interface CartBarProps {
@@ -34,7 +35,7 @@ export function CartBar({ onPress, bottomOffset = 0 }: CartBarProps) {
     >
       <Pressable
         onPress={onPress}
-        accessibilityLabel={`View cart — ${itemCount} items, ₹${total.toFixed(2)}`}
+        accessibilityLabel={`View cart — ${itemCount} items, ${formatMoney(total)}`}
         accessibilityRole="button"
       >
         <View className="bg-canvas flex-row items-center px-5 gap-3 border-t border-hairline" style={{ height: 72 }}>
@@ -50,7 +51,7 @@ export function CartBar({ onPress, bottomOffset = 0 }: CartBarProps) {
               </Text>
               {/* Tabular figures for price */}
               <Text className="text-charcoal-soft text-xs" style={{ fontVariant: ['tabular-nums'] }}>
-                ₹{total.toFixed(2)}
+                {formatMoney(total)}
               </Text>
             </View>
           </View>

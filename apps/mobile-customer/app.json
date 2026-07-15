@@ -108,7 +108,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FA6F5C"
+        "backgroundColor": "#FF385C"
       },
       "intentFilters": [
         {
@@ -195,7 +195,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FA6F5C"
+          "backgroundColor": "#FF385C"
         }
       ],
       "expo-status-bar"

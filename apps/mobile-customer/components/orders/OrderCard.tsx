@@ -1,4 +1,5 @@
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import { useRouter } from 'expo-router';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
@@ -187,7 +188,7 @@ export function OrderCard({ order }: OrderCardProps) {
                 {'  ·  '}
                 {formatDate(order.createdAt)}
               </Text>
-              <Text style={styles.total}>₹{order.totalAmount.toFixed(0)}</Text>
+              <Text style={styles.total}>{formatMoney(order.totalAmount)}</Text>
             </View>
 
             {/* #617 — confirm receipt inline (only while awaiting confirmation) */}

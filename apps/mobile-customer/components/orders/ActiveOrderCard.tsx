@@ -8,6 +8,7 @@
 // wrapper. Opacity dim on press via `pressed` render-prop state.
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMoney } from '../../lib/format';
 import { router } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
@@ -165,7 +166,7 @@ export function ActiveOrderCard({ order, onPress }: ActiveOrderCardProps) {
                 <View style={styles.metaBadge}>
                   <Text style={styles.metaBadgeText}>
                     {itemCount} {itemCount === 1 ? 'item' : 'items'}{' '}
-                    · ₹{order.totalAmount.toFixed(0)}
+                    · {formatMoney(order.totalAmount)}
                   </Text>
                 </View>
                 <ChevronRight

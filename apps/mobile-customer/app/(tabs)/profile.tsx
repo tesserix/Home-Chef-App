@@ -303,7 +303,7 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.firstName ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  style={{ borderBottomWidth: errors.firstName ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -315,7 +315,7 @@ export default function ProfileScreen() {
               )}
             />
             {errors.firstName ? (
-              <Text className="text-xs text-coral-pressed mb-1">{errors.firstName.message}</Text>
+              <Text className="text-xs text-destructive mb-1">{errors.firstName.message}</Text>
             ) : null}
           </View>
 
@@ -332,7 +332,7 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.lastName ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  style={{ borderBottomWidth: errors.lastName ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -344,7 +344,7 @@ export default function ProfileScreen() {
               )}
             />
             {errors.lastName ? (
-              <Text className="text-xs text-coral-pressed mb-1">{errors.lastName.message}</Text>
+              <Text className="text-xs text-destructive mb-1">{errors.lastName.message}</Text>
             ) : null}
           </View>
 
@@ -361,7 +361,7 @@ export default function ProfileScreen() {
               render={({ field: { onChange, value, onBlur } }) => (
                 <TextInput
                   className="text-base text-charcoal bg-transparent pb-2"
-                  style={{ borderBottomWidth: errors.phone ? 1 : 0, borderBottomColor: customerColors.coral.pressed }}
+                  style={{ borderBottomWidth: errors.phone ? 1 : 0, borderBottomColor: customerColors.destructive.DEFAULT }}
                   value={value ?? ''}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -373,7 +373,7 @@ export default function ProfileScreen() {
               )}
             />
             {errors.phone ? (
-              <Text className="text-xs text-coral-pressed mt-1">{errors.phone.message}</Text>
+              <Text className="text-xs text-destructive mt-1">{errors.phone.message}</Text>
             ) : null}
           </View>
         </View>
