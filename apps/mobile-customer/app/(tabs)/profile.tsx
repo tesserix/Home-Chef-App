@@ -69,7 +69,7 @@ const CUISINE_OPTIONS = [
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide px-4 pt-5 pb-2">
+    <Text className="text-xs font-semibold text-charcoal-soft px-4 pt-5 pb-2">
       {children}
     </Text>
   );
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
         <View className="bg-canvas mx-4 rounded-xl overflow-hidden border border-hairline">
           {/* First Name */}
           <View className="px-4 pt-3 pb-1">
-            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
               First Name
             </Text>
             <Controller
@@ -323,7 +323,7 @@ export default function ProfileScreen() {
 
           {/* Last Name */}
           <View className="px-4 pt-3 pb-1">
-            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
               Last Name
             </Text>
             <Controller
@@ -352,7 +352,7 @@ export default function ProfileScreen() {
 
           {/* Phone */}
           <View className="px-4 pt-3 pb-3">
-            <Text className="text-xs font-semibold text-charcoal-soft uppercase tracking-wide mb-1">
+            <Text className="text-xs font-semibold text-charcoal-soft mb-1">
               Phone
             </Text>
             <Controller

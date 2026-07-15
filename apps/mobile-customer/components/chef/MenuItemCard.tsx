@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tag: {
-    backgroundColor: customerColors.coral.tint,
+    backgroundColor: customerColors.surface.soft,
     borderRadius: 9999,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 11,
     letterSpacing: 0.2,
-    color: customerColors.coral.pressed,
+    color: customerColors.charcoal.soft,
   },
   // Allergen badge — cautionary (destructive tint), distinct from diet tags.
   allergenTag: {
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
     lineHeight: 16,
-    color: customerColors.coral.pressed,
+    color: customerColors.charcoal.DEFAULT,
     marginTop: 2,
   },
 
