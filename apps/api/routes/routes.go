@@ -535,6 +535,10 @@ func SetupRouter() *gin.Engine {
 			chefDashboard.POST("/payout", chefHandler.SavePayoutDetails)
 			chefDashboard.GET("/admin-requests", approvalHandler.GetChefApprovalRequests)
 			chefDashboard.PUT("/admin-requests/:id/respond", approvalHandler.RespondToApprovalRequest)
+			// #697 — bump an unattended request. Rate-limited by a per-request
+			// cooldown in the handler, not by middleware: the limit is per
+			// approval, not per caller.
+			chefDashboard.POST("/admin-requests/:id/remind", approvalHandler.RemindApprovalRequest)
 
 			// Post-delivery tips received (#45)
 			chefDashboard.GET("/tips", tipHandler.GetChefTips)

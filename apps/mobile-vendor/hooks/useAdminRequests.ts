@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
 // Mirrors the response shape from GET /chef/admin-requests in
@@ -18,6 +18,21 @@ export interface AdminRequest {
   entityId?: string;
   createdAt: string;
   updatedAt: string;
+
+  // ── Reminders / escalation (#697) ──────────────────────────────────────────
+  /** How many times the chef has bumped this. >= 3 means escalated. */
+  reminderCount: number;
+  lastRemindedAt?: string;
+  /** Set once, when the 3rd bump escalated it. */
+  escalatedAt?: string;
+  /**
+   * When the next bump unlocks. SERVER-computed: the cadence (24h for the first
+   * three, 6h once escalated) is stated once in the API and rendered here, so it
+   * cannot drift between clients or hinge on the device clock.
+   */
+  nextRemindAt?: string;
+  /** The server's own verdict at response time — the source of truth. */
+  canRemind: boolean;
 }
 
 interface AdminRequestsResponse {
@@ -37,6 +52,30 @@ export function useAdminRequests() {
         .get<AdminRequestsResponse>('/chef/admin-requests')
         .then((r) => r.data?.data ?? []),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Bump an unattended request so an admin is notified (#697).
+ *
+ * The cooldown is enforced server-side per REQUEST (not per caller), so a 429
+ * here is a normal outcome — a client whose countdown drifted — not an error to
+ * panic about. It carries the real unlock time.
+ */
+export function useRemindAdminRequest() {
+  const qc = useQueryClient();
+  return useMutation<
+    { escalated: boolean; data: AdminRequest },
+    { response?: { status?: number; data?: { nextRemindAt?: string; error?: string } } },
+    string
+  >({
+    mutationFn: (id: string) =>
+      api.post(`/chef/admin-requests/${id}/remind`).then((r) => r.data),
+    onSettled: () => {
+      // Refetch either way: on success for the new count/cooldown, and on a 429
+      // to resync a countdown that was evidently wrong.
+      void qc.invalidateQueries({ queryKey: ['chef', 'admin-requests'] });
+    },
   });
 }
 

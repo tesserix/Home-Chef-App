@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,10 +12,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+)
+
+// Sentinels for RemindApprovalRequest's transaction: the tx body must signal a
+// refusal by returning an error (to roll back), and the caller maps it to a code.
+var (
+	errApprovalNotFound = errors.New("approval: not found")
+	errApprovalDecided  = errors.New("approval: already decided")
+	errApprovalTooSoon  = errors.New("approval: reminder cooldown not elapsed")
 )
 
 // ApprovalHandler manages admin approval workflows
@@ -95,25 +107,52 @@ func (h *ApprovalHandler) GetApprovalRequests(c *gin.Context) {
 	if search != "" {
 		query = query.Where("title ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
+	// #697 — ?escalated=true powers the admin escalation panel: requests the
+	// submitter has bumped ReminderEscalationThreshold+ times. escalated_at is
+	// stamped once and never cleared, so this is "was escalated", which is what a
+	// triage queue wants — an escalation does not stop mattering because someone
+	// finally looked at it. Pair with ?status=pending for the live backlog.
+	if c.Query("escalated") == "true" {
+		query = query.Where("escalated_at IS NOT NULL")
+	}
 
 	var total int64
 	query.Count(&total)
 
 	var approvals []models.ApprovalRequest
-	// Sort by priority (urgent first), then by created_at DESC
+	// #697: reminded requests float to the TOP, above priority.
+	//
+	// A bump is a chef saying "this has been sitting for a day and it is blocking
+	// me". If it sorted below priority it would change nothing about what an admin
+	// sees first, and the button would be theatre. Escalated (3+ bumps) outranks
+	// merely-reminded; within each band, the most-reminded first, then oldest —
+	// the one that has been ignored longest, not the one that just arrived.
+	//
+	// Everything untouched keeps the previous ordering exactly: priority, then
+	// created_at DESC.
 	query.Order(`
+		CASE WHEN escalated_at IS NOT NULL THEN 0
+		     WHEN reminder_count > 0 THEN 1
+		     ELSE 2 END ASC,
+		reminder_count DESC,
 		CASE priority
 			WHEN 'urgent' THEN 1
 			WHEN 'high' THEN 2
 			WHEN 'normal' THEN 3
 			WHEN 'low' THEN 4
 			ELSE 5
-		END ASC, created_at DESC
+		END ASC,
+		CASE WHEN reminder_count > 0 THEN created_at END ASC,
+		created_at DESC
 	`).Offset(offset).Limit(limit).Find(&approvals)
 
 	// Surface who submitted each request + which kitchen, for every type.
+	now := time.Now()
 	for i := range approvals {
 		approvals[i].PopulateDisplayFields()
+		// Admins see the same reminder state the chef does — how many times this
+		// has been chased is triage information.
+		approvals[i].PopulateReminderFields(now)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -710,6 +749,14 @@ func (h *ApprovalHandler) GetChefApprovalRequests(c *gin.Context) {
 		Order("created_at DESC").
 		Find(&requests)
 
+	// #697: the app renders a live countdown on the Remind button, so the server
+	// says when each request unlocks. Deriving it client-side would put the rule
+	// in two places and hand the decision to the device's clock.
+	now := time.Now()
+	for i := range requests {
+		requests[i].PopulateReminderFields(now)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": requests,
 		"pagination": gin.H{
@@ -798,4 +845,140 @@ func (h *ApprovalHandler) RespondToApprovalRequest(c *gin.Context) {
 		gin.H{"status": oldStatus}, gin.H{"type": string(approval.Type), "status": string(models.ApprovalPending)})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Response sent to admin"})
+}
+
+// RemindApprovalRequest lets the submitter bump a request the admin has not got
+// to yet (#697).
+//
+// POST /chef/admin-requests/:id/remind
+//
+// Before this, a chef whose request sat unattended had exactly one lever:
+// contact support. The bump is theirs to pull — on a cooldown so it stays a
+// signal rather than a spam button, and escalating if it keeps being ignored.
+//
+// The cadence lives in models.ApprovalRequest (ReminderCooldownFor /
+// NextReminderAt) so the rule is stated once and the clients render it rather
+// than re-derive it.
+func (h *ApprovalHandler) RemindApprovalRequest(c *gin.Context) {
+	userID, _ := middleware.GetUserID(c)
+	requestID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request ID"})
+		return
+	}
+
+	var chef models.ChefProfile
+	if err := database.DB.Where("user_id = ?", userID).First(&chef).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No kitchen profile found"})
+		return
+	}
+
+	now := time.Now()
+	var approval models.ApprovalRequest
+	var escalatedNow bool
+
+	// One transaction under a row lock. The cooldown check and the increment MUST
+	// be atomic: a double-tap (or two devices) would otherwise both read the same
+	// pre-bump state, both pass the check, and both increment — burning two of the
+	// three bumps that lead to escalation, and firing two admin pings. The lock is
+	// a no-op on sqlite, where the tests are deterministic anyway.
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		q := tx
+		if tx.Dialector.Name() == "postgres" {
+			q = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := q.Where("id = ? AND chef_id = ?", requestID, chef.ID).First(&approval).Error; err != nil {
+			return errApprovalNotFound
+		}
+		if !approval.AcceptsReminders() {
+			return errApprovalDecided
+		}
+		if !approval.CanRemindAt(now) {
+			return errApprovalTooSoon
+		}
+
+		approval.ReminderCount++
+		approval.LastRemindedAt = &now
+		updates := map[string]any{
+			"reminder_count":   approval.ReminderCount,
+			"last_reminded_at": &now,
+		}
+		// Stamp escalation exactly once — on the bump that crosses the threshold.
+		// COALESCE-style guard via the nil check: re-stamping on every later bump
+		// would keep moving "escalated since", which is the one thing the admin
+		// panel sorts and triages on.
+		if approval.IsEscalated() && approval.EscalatedAt == nil {
+			approval.EscalatedAt = &now
+			updates["escalated_at"] = &now
+			escalatedNow = true
+		}
+		if err := tx.Model(&models.ApprovalRequest{}).Where("id = ?", approval.ID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+
+		// Staged in the SAME tx (transactional outbox) so the admin ping cannot be
+		// lost if the process dies right after the bump commits — the entire point
+		// of the bump is that someone finds out.
+		return services.EnqueueEvent(tx, services.SubjectApprovalReminded, "approval.reminded", userID, map[string]interface{}{
+			"approval_id":    approval.ID.String(),
+			"type":           string(approval.Type),
+			"chef_id":        chef.ID.String(),
+			"title":          approval.Title,
+			"reminder_count": approval.ReminderCount,
+			"escalated":      approval.IsEscalated(),
+			"waiting_hours":  int(now.Sub(approval.CreatedAt).Hours()),
+		})
+	})
+
+	switch {
+	case errors.Is(txErr, errApprovalNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "Request not found"})
+		return
+	case errors.Is(txErr, errApprovalDecided):
+		c.JSON(http.StatusConflict, gin.H{"error": "This request has already been decided"})
+		return
+	case errors.Is(txErr, errApprovalTooSoon):
+		// 429 + the unlock time, so a client that raced its own countdown can
+		// resync instead of guessing.
+		next := approval.NextReminderAt()
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":        "You can remind again later",
+			"nextRemindAt": next,
+		})
+		return
+	case txErr != nil:
+		log.Printf("approval remind failed for %s: %v", requestID, txErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not send the reminder"})
+		return
+	}
+
+	// In-app notification for admins, mirroring the chef-responded path. Escalated
+	// bumps say so in the title: an admin triaging a list needs to see WHICH of
+	// these has been ignored for days.
+	title := "Reminder: " + approval.Title
+	if approval.IsEscalated() {
+		title = "ESCALATED: " + approval.Title
+	}
+	var admins []models.User
+	database.DB.Where("role = ?", models.RoleAdmin).Find(&admins)
+	for _, admin := range admins {
+		database.DB.Create(&models.Notification{
+			UserID: admin.ID,
+			Type:   "approval_reminded",
+			Title:  title,
+			Message: fmt.Sprintf("%s has been waiting %d day(s) — reminder #%d",
+				chef.BusinessName, int(now.Sub(approval.CreatedAt).Hours()/24), approval.ReminderCount),
+		})
+	}
+
+	services.LogAudit(c, "chef.approval.remind", "approval_request", approval.ID.String(), nil,
+		gin.H{"reminderCount": approval.ReminderCount, "escalated": approval.IsEscalated(), "escalatedNow": escalatedNow})
+
+	approval.PopulateReminderFields(now)
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Reminder sent",
+		"escalated": approval.IsEscalated(),
+		"data":      approval,
+	})
 }

@@ -63,6 +63,10 @@ const (
 	SubjectApprovalApproved      = "approvals.approved"
 	SubjectApprovalRejected      = "approvals.rejected"
 	SubjectApprovalInfoRequested = "approvals.info_requested"
+	// SubjectApprovalReminded — the submitter bumped an unattended request (#697).
+	// Carries reminderCount + escalated so a consumer can tell a nudge from a
+	// request that has been ignored for days.
+	SubjectApprovalReminded = "approvals.reminded"
 
 	// Tiffin meal plans (#193) — the request→accept→approve handshake + per-day lifecycle.
 	SubjectMealPlanCreated        = "meal_plans.created"       // → chef: new request
