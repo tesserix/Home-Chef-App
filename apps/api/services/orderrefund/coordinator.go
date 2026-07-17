@@ -47,9 +47,9 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services/refundreserve"
 )
 
 var (
@@ -60,6 +60,15 @@ var (
 	ErrNoCapturedPayment = errors.New("orderrefund: order has no captured payment")
 	// ErrExceedsRemaining — the request is larger than what is left to refund.
 	ErrExceedsRemaining = errors.New("orderrefund: amount exceeds the refundable remaining")
+	// ErrRefundInFlight — a sibling refund path holds the order's claim right now.
+	// Distinct from the errors above because it is TRANSIENT: the same command will
+	// succeed once that sibling finishes, so a caller may retry it. The other two
+	// are terminal for this order.
+	ErrRefundInFlight = errors.New("orderrefund: another refund is in flight for this order")
+
+	// errOverAsked is internal: it unwinds the reserve transaction (releasing the
+	// claim via rollback) when an explicit amount exceeded the remaining.
+	errOverAsked = errors.New("over-asked")
 )
 
 // scopeIDPattern guards the LOGICAL scope, not the gateway charset.
@@ -135,6 +144,54 @@ func toPaise(amount float64) int {
 	return int(amount*100 + 0.5)
 }
 
+// hasPendingRefund reports whether an attempt for this order is mid-gateway. Only
+// coordinator-driven refunds leave a ledger row, so a legacy path's in-flight
+// refund is invisible here and reads as terminal — conservative in the safe
+// direction (we refuse rather than race it) and self-correcting as #690 migrates
+// the remaining paths onto the ledger.
+func (c *Coordinator) hasPendingRefund(ctx context.Context, orderID uuid.UUID) (bool, error) {
+	var n int64
+	if err := c.db.WithContext(ctx).Model(&models.RefundTransaction{}).
+		Where("order_id = ? AND status = ?", orderID, models.RefundTxnPending).
+		Count(&n).Error; err != nil {
+		return false, fmt.Errorf("orderrefund: check in-flight refunds for order %s: %w", orderID, err)
+	}
+	return n > 0, nil
+}
+
+// reserveLedgerRow writes the pending ledger row for this attempt, BEFORE the
+// gateway call, and returns its id. `retryID` is set when a previous attempt for
+// this exact scope failed and we are reusing its row.
+func (c *Coordinator) reserveLedgerRow(tx *gorm.DB, cmd RefundCommand, key string, retryID uuid.UUID, amount float64, order models.Order) (uuid.UUID, error) {
+	if retryID != uuid.Nil {
+		// Reusing a FAILED row: reset it to pending for this attempt. Clearing
+		// failure_reason/completed_at matters — a stale failure on a row that then
+		// succeeds would read as "this refund failed" during reconciliation. We
+		// reuse rather than insert because idempotency_key is UNIQUE: a second row
+		// would hit the constraint and strand the refund forever.
+		if err := tx.Model(&models.RefundTransaction{}).Where("id = ?", retryID).
+			Updates(map[string]any{
+				"status":         models.RefundTxnPending,
+				"amount":         amount,
+				"failure_reason": "",
+				"completed_at":   nil,
+			}).Error; err != nil {
+			return uuid.Nil, err
+		}
+		return retryID, nil
+	}
+	row := models.RefundTransaction{
+		ID: uuid.New(), OrderID: cmd.OrderID, Provider: order.PaymentProvider,
+		ProviderPaymentID: order.RazorpayPaymentID, Amount: amount, CurrencyCode: "INR",
+		Status: models.RefundTxnPending, Reason: cmd.Reason,
+		IdempotencyKey: key, ScopeID: cmd.ScopeID, Actor: cmd.Actor,
+	}
+	if err := tx.Create(&row).Error; err != nil {
+		return uuid.Nil, err
+	}
+	return row.ID, nil
+}
+
 // Refund moves refund money for an order. Safe to retry with the same ScopeID.
 func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResult, error) {
 	if !c.enabled {
@@ -176,93 +233,90 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		return RefundResult{}, err
 	}
 
-	// ── tx#1 — lock, validate against the remaining INCLUDING in-flight, reserve
-	var (
-		ledgerID   uuid.UUID
-		amount     float64
-		fullRefund bool
-		paymentID  string
-		provider   string
-	)
-	if err := c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		lockTx := tx
-		// Postgres-only; a behaviour-preserving no-op on sqlite. Same approach as
-		// services/refund_reserve.go — the deterministic tests pin the contract.
-		if tx.Dialector.Name() == "postgres" {
-			lockTx = tx.Clauses(clause.Locking{Strength: "UPDATE"})
-		}
-
-		var o models.Order
-		if e := lockTx.Select("id", "total", "refund_amount", "payment_status", "payment_provider", "razorpay_payment_id").
-			First(&o, "id = ?", cmd.OrderID).Error; e != nil {
-			return e
-		}
-		if o.PaymentStatus != models.PaymentCompleted {
-			return ErrNoCapturedPayment
-		}
-		provider = o.PaymentProvider
-		paymentID = o.RazorpayPaymentID
-
-		// In-flight pending refunds count against the remaining. Without this,
-		// two different-scope refunds each clear the cap on a stale balance.
-		var pending float64
-		if e := tx.Model(&models.RefundTransaction{}).
-			Where("order_id = ? AND status = ?", cmd.OrderID, models.RefundTxnPending).
-			Select("COALESCE(SUM(amount), 0)").Scan(&pending).Error; e != nil {
-			return e
-		}
-
-		remaining := models.RoundAmount(o.Total - o.RefundAmount - pending)
-		if remaining <= 0 {
-			return ErrExceedsRemaining
-		}
-
-		amount = remaining
-		if cmd.Amount != nil {
-			amount = models.RoundAmount(*cmd.Amount)
-			if amount <= 0 {
-				return fmt.Errorf("orderrefund: refund amount must be positive, got %v", amount)
-			}
-			if amount > remaining {
-				return fmt.Errorf("%w: asked %v, remaining %v", ErrExceedsRemaining, amount, remaining)
-			}
-		}
-		fullRefund = models.RoundAmount(o.RefundAmount+pending+amount) >= o.Total
-
-		if retryLedgerID != uuid.Nil {
-			// Reusing a FAILED row: reset it to pending for this attempt. Clearing
-			// failure_reason/completed_at matters — a stale failure on a row that
-			// then succeeds would read as "this refund failed" during reconciliation.
-			if e := tx.Model(&models.RefundTransaction{}).Where("id = ?", retryLedgerID).
-				Updates(map[string]any{
-					"status":         models.RefundTxnPending,
-					"amount":         amount,
-					"failure_reason": "",
-					"completed_at":   nil,
-				}).Error; e != nil {
-				return e
-			}
-			ledgerID = retryLedgerID
-			return nil
-		}
-
-		row := models.RefundTransaction{
-			ID: uuid.New(), OrderID: cmd.OrderID, Provider: provider,
-			ProviderPaymentID: paymentID, Amount: amount, CurrencyCode: "INR",
-			Status: models.RefundTxnPending, Reason: cmd.Reason,
-			IdempotencyKey: key, ScopeID: cmd.ScopeID, Actor: cmd.Actor,
-		}
-		if e := tx.Create(&row).Error; e != nil {
-			return e
-		}
-		ledgerID = row.ID
-		return nil
-	}); err != nil {
-		return RefundResult{}, err
+	if cmd.Amount != nil && models.RoundAmount(*cmd.Amount) <= 0 {
+		return RefundResult{}, fmt.Errorf("orderrefund: refund amount must be positive, got %v", *cmd.Amount)
 	}
 
+	// ── reserve — the SHARED claim, not a private one ─────────────────────────
+	//
+	// This MUST be refundreserve's reservation and not a mechanism of our own.
+	// The legacy paths mutually exclude each other by claiming payment_status
+	// completed→refunded on the order row; that shared claim IS the cross-path
+	// mutex. A coordinator that reserved differently would be invisible to them:
+	// a sibling would see payment_status='completed' and an un-incremented
+	// refund_amount while we were mid-gateway, win its own claim, and refund the
+	// same money twice. That is not hypothetical — it is exactly what
+	// TestInterop_LegacyFullRefund_CannotRaceACoordinatorRefundInFlight proved
+	// against the first draft of this file. For the whole of #690's migration a
+	// migrated and an un-migrated path are concurrent, so sharing the claim is
+	// the precondition for migrating anything at all.
+	//
+	// This also replaces the pending-ledger-sum cap the first draft used: the
+	// reservation increments refund_amount UP FRONT, so an in-flight refund is
+	// already subtracted from every other path's `remaining`. The ledger stays
+	// the audit trail and the idempotency record — it is no longer the cap.
+	requested := 0.0 // <=0 means "the full remaining" to ReserveRefund
+	if cmd.Amount != nil {
+		requested = models.RoundAmount(*cmd.Amount)
+	}
+	// The reservation and its ledger row commit TOGETHER. Separately, a crash in
+	// between would leave refund_amount incremented with no ledger row: the order
+	// reads as refunded, the customer never gets the money, and nothing records
+	// that a refund was ever owed. One transaction makes that unreachable.
+	var (
+		res      refundreserve.Reservation
+		ledgerID uuid.UUID
+	)
+	if err := c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var e error
+		if res, e = refundreserve.ReserveRefundInTx(tx, cmd.OrderID, requested); e != nil {
+			return e
+		}
+		if !res.Won {
+			return nil // the caller maps the outcome to an error below
+		}
+		// An explicit amount that ReserveRefund silently capped is an over-ask, not
+		// a smaller refund. Bail before writing a ledger row for it; the rollback
+		// releases the reservation for us.
+		if cmd.Amount != nil && res.Amount < requested {
+			return errOverAsked
+		}
+		ledgerID, e = c.reserveLedgerRow(tx, cmd, key, retryLedgerID, res.Amount, res.Order)
+		return e
+	}); err != nil {
+		if errors.Is(err, errOverAsked) {
+			return RefundResult{}, fmt.Errorf("%w: asked %v, remaining %v", ErrExceedsRemaining, requested, res.Amount)
+		}
+		return RefundResult{}, fmt.Errorf("orderrefund: reserve order %s: %w", cmd.OrderID, err)
+	}
+	switch res.Outcome {
+	case refundreserve.OutcomeNotPayable:
+		return RefundResult{}, ErrNoCapturedPayment
+	case refundreserve.OutcomeNothingLeft:
+		return RefundResult{}, fmt.Errorf("%w: the order is already fully refunded", ErrExceedsRemaining)
+	case refundreserve.OutcomeLostClaim:
+		return RefundResult{}, ErrRefundInFlight
+	case refundreserve.OutcomeAlreadyRefunded:
+		// payment_status='refunded' is ambiguous: the terminal fully-refunded state,
+		// OR the short-lived mutex a partial holds while it is at the gateway. The
+		// ledger disambiguates — this is exactly what it is for. Getting it wrong
+		// means telling a caller "already refunded" (terminal, don't retry) about a
+		// refund that is merely a second away from releasing.
+		inFlight, e := c.hasPendingRefund(ctx, cmd.OrderID)
+		if e != nil {
+			return RefundResult{}, e
+		}
+		if inFlight {
+			return RefundResult{}, ErrRefundInFlight
+		}
+		return RefundResult{}, fmt.Errorf("%w: the order is already fully refunded", ErrExceedsRemaining)
+	}
+
+	amount := res.Amount
+	release := func() { refundreserve.ReleaseRefundReservation(c.db, cmd.OrderID, amount) }
+
 	// ── gateway — OUTSIDE any transaction ────────────────────────────────────
-	refundID, gwErr := c.gateway.RefundPayment(ctx, paymentID, toPaise(amount), key, map[string]string{
+	refundID, gwErr := c.gateway.RefundPayment(ctx, res.Order.RazorpayPaymentID, toPaise(amount), key, map[string]string{
 		"order_id": cmd.OrderID.String(),
 		"scope":    cmd.ScopeID,
 		"reason":   cmd.Reason,
@@ -271,9 +325,12 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 	// ── tx#2 — finalize ──────────────────────────────────────────────────────
 	now := time.Now()
 	if gwErr != nil {
-		// Mark failed and leave the order's balance untouched so a retry can
-		// re-refund. Best-effort: a failure to record must not mask the gateway
-		// error the caller needs to see.
+		// No money moved, so RELEASE the reservation — payment_status back to
+		// completed and refund_amount decremented — or the order is left looking
+		// refunded forever and every later refund path reads a remaining of 0.
+		release()
+		// Best-effort: a failure to record must not mask the gateway error the
+		// caller needs to see.
 		if e := c.db.WithContext(ctx).Model(&models.RefundTransaction{}).
 			Where("id = ?", ledgerID).Updates(map[string]any{
 			"status":         models.RefundTxnFailed,
@@ -293,10 +350,30 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		}).Error; e != nil {
 			return e
 		}
-		// COALESCE so a NULL refund_amount increments from 0 rather than
-		// collapsing to NULL (same reasoning as refund_reserve.go).
-		return tx.Model(&models.Order{}).Where("id = ?", cmd.OrderID).
-			Update("refund_amount", gorm.Expr("COALESCE(refund_amount, 0) + ?", amount)).Error
+		// refund_amount is NOT incremented here — the reservation already did it,
+		// up front, which is what made the in-flight refund visible to every other
+		// path. Incrementing again would double-count and under-refund the next
+		// caller.
+		//
+		// What IS left to us is the terminal marker, and it differs by outcome —
+		// this is the convention every legacy path re-implements (payment.go
+		// InitiateRefund, chef_order_cancel), and encapsulating it here is the
+		// point of the coordinator:
+		//
+		//   FULL    — payment_status stays 'refunded' and refunded_at is stamped.
+		//   PARTIAL — payment_status must go BACK to 'completed'. ReserveRefund
+		//             flipped it as a short-lived MUTEX, not as a state change; a
+		//             partial that leaves it 'refunded' freezes the order — the
+		//             chef's payout hold never releases and no later refund can
+		//             ever reserve again. refunded_at stays NULL for the same
+		//             reason (every release-side payout guard blocks the whole
+		//             hold on refunded_at IS NOT NULL).
+		markers := map[string]any{"payment_status": models.PaymentCompleted}
+		if res.FullRefund {
+			markers["payment_status"] = models.PaymentRefunded
+			markers["refunded_at"] = now
+		}
+		return tx.Model(&models.Order{}).Where("id = ?", cmd.OrderID).Updates(markers).Error
 	}); err != nil {
 		// Money MOVED but our books didn't record it. Never revert the ledger row
 		// here — that would invite a re-refund of money already sent. Surface it
@@ -304,5 +381,5 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		return RefundResult{}, fmt.Errorf("orderrefund: refund %s succeeded at the gateway but bookkeeping failed: %w", refundID, err)
 	}
 
-	return RefundResult{Amount: amount, FullRefund: fullRefund, ProviderRefundID: refundID}, nil
+	return RefundResult{Amount: amount, FullRefund: res.FullRefund, ProviderRefundID: refundID}, nil
 }

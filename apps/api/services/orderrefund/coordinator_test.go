@@ -141,29 +141,40 @@ func TestCoordinator_RefusesAmountAboveRemaining(t *testing.T) {
 	require.Zero(t, f.gateway.calls, "must fail BEFORE the gateway — money out is unrecoverable")
 }
 
-// THE reason the ledger exists. Two refunds with DIFFERENT scopes must not each
-// clear the cap against a stale balance. mark8ly: "Without the lock +
-// pending-sum, two distinct-scope refunds could each clear the cap on a stale
-// refunded_amount and both move real money on the gateway."
+// Two refunds with DIFFERENT scopes must never each clear the cap against a stale
+// balance and both move real money.
 //
-// HomeChef's shared idempotency keys dedup SAME-key retries at the gateway. They
-// do nothing here: these are two different logical refunds.
-func TestCoordinator_InFlightPendingCountsAgainstTheCap(t *testing.T) {
+// The MECHANISM changed in #690 and this test changed with it. It used to seed a
+// bare pending ledger row and assert the coordinator's own pending-SUM refused the
+// second refund. That cap was replaced by the shared reservation: an in-flight
+// refund has already incremented refund_amount and holds the payment_status claim,
+// so every path — coordinator or legacy — sees the money gone. The second refund is
+// now refused because it LOSES THE CLAIM, not because a sum said so.
+//
+// The old setup is also unreachable now: the reservation and the ledger row commit
+// in one transaction, so a pending row without a matching reservation cannot exist.
+// Seeding one tested a state production can't produce.
+//
+// What did NOT change is the invariant, so that is what this still pins: money in
+// flight for one scope must stop a second scope from refunding it too.
+func TestCoordinator_InFlightRefund_BlocksASecondScope(t *testing.T) {
 	f := newFixture(t)
 	o := f.seedPaidOrder(300)
 
-	// A pending row from another scope — as if a concurrent refund is mid-gateway.
-	f.seedPendingLedger(o.ID, 250, "issue:abc")
+	// A real in-flight refund from another scope: reservation taken, gateway not
+	// yet returned — exactly the window a sibling would race.
+	f.seedInFlightRefund(o.ID, 250, "issue:abc")
 
 	amount := 100.0
 	_, err := f.coord.Refund(f.ctx, RefundCommand{
 		OrderID: o.ID, Amount: &amount, Reason: "r", Actor: "admin", ScopeID: "cancel",
 	})
 
-	require.Error(t, err,
-		"₹250 is already in flight, so only ₹50 remains — ₹100 must be refused. "+
-			"Ignoring pending rows is exactly the double-refund this ledger prevents.")
-	require.Zero(t, f.gateway.calls)
+	require.ErrorIs(t, err, ErrRefundInFlight,
+		"₹250 is in flight, so ₹100 must be refused while it settles — and refused as "+
+			"TRANSIENT, since it becomes legitimate if that refund fails and releases")
+	require.Zero(t, f.gateway.calls, "must fail BEFORE the gateway — money out is unrecoverable")
+	require.Equal(t, 250.0, f.orderRefundAmount(o.ID), "the in-flight reservation is untouched")
 }
 
 // A FAILED row must NOT hold the cap — it released its money.

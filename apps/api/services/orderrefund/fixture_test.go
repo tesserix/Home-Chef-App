@@ -77,11 +77,21 @@ func newFixture(t *testing.T, opts ...fixtureOpt) *fixture {
 	// "orders.deleted_at IS NULL" to every query — same as the existing refund
 	// suites' DDL.
 	require.NoError(t, db.Exec(`CREATE TABLE orders (
-		id TEXT PRIMARY KEY, total REAL, refund_amount REAL DEFAULT 0,
+		id TEXT PRIMARY KEY, order_number TEXT DEFAULT '', customer_id TEXT,
+		total REAL, refund_amount REAL DEFAULT 0, wallet_applied REAL DEFAULT 0,
 		payment_status TEXT, payment_provider TEXT, razorpay_payment_id TEXT,
+		stripe_payment_intent_id TEXT DEFAULT '',
 		currency TEXT DEFAULT 'INR',
+		refunded_at DATETIME,
 		created_at DATETIME, updated_at DATETIME,
 		deleted_at DATETIME
+	)`).Error)
+	// The coordinator reserves through refundreserve (#690), which reads the columns
+	// above and sums per-line refunds off order_items (#527). Both are part of the
+	// shared reservation contract now, so the fixture has to model them.
+	require.NoError(t, db.Exec(`CREATE TABLE order_items (
+		id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0,
+		refund_amount REAL DEFAULT 0, subtotal REAL DEFAULT 0, created_at DATETIME
 	)`).Error)
 	// Raw DDL, not AutoMigrate: the model defaults ID to gen_random_uuid(), a
 	// Postgres function sqlite can't parse. Every existing refund test does the
@@ -146,6 +156,20 @@ func (f *fixture) seedLedger(orderID uuid.UUID, amount float64, scope string, st
 
 func (f *fixture) seedPendingLedger(orderID uuid.UUID, amount float64, scope string) {
 	f.seedLedger(orderID, amount, scope, models.RefundTxnPending)
+}
+
+// seedInFlightRefund models a refund that is mid-gateway RIGHT NOW, the way the
+// coordinator actually leaves the DB: the shared reservation is taken (refund_amount
+// incremented + the payment_status claim held) AND the pending ledger row exists —
+// both committed together. A pending row on its own is not a state production can
+// reach, so seeding one would test fiction.
+func (f *fixture) seedInFlightRefund(orderID uuid.UUID, amount float64, scope string) {
+	f.t.Helper()
+	f.seedPendingLedger(orderID, amount, scope)
+	require.NoError(f.t, f.db.Exec(
+		`UPDATE orders SET refund_amount = COALESCE(refund_amount,0) + ?, payment_status = ? WHERE id = ?`,
+		amount, string(models.PaymentRefunded), orderID.String(),
+	).Error)
 }
 
 func (f *fixture) seedFailedLedger(orderID uuid.UUID, amount float64, scope string) {
