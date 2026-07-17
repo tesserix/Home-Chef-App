@@ -48,6 +48,26 @@ export async function getRawFCMToken(): Promise<string | null> {
 }
 
 /**
+ * Resolve the device-token path for a given client.
+ *
+ * The apps mount their API client at DIFFERENT depths — customer's
+ * EXPO_PUBLIC_API_URL ends at `/api`, while vendor's and delivery's already end
+ * at `/api/v1` (their hooks call `/chef/...`, `/driver/...` with no version
+ * prefix). A hardcoded `/v1/profile/device-token` therefore resolved to
+ * `/api/v1/v1/profile/device-token` on vendor + delivery and 404'd, so their FCM
+ * token was NEVER stored — every chef/driver push then logged
+ * "Push skipped: user <id> has no FCM token" and no vendor notification could
+ * ever arrive. It failed silently because registration is best-effort.
+ *
+ * Derive the prefix from the client instead of assuming one, so this is right
+ * for every app and for any future one regardless of where it mounts.
+ */
+export function deviceTokenPath(client: AxiosInstance): string {
+  const base = (client.defaults.baseURL ?? '').replace(/\/+$/, '');
+  return /\/v1$/.test(base) ? '/profile/device-token' : '/v1/profile/device-token';
+}
+
+/**
  * Register the raw FCM token with the Go API.
  * Endpoint: PUT /api/v1/profile/device-token
  * Requires authenticated API client (Bearer token must be set).
@@ -56,14 +76,11 @@ export async function registerDeviceToken(
   client: AxiosInstance,
   token: string
 ): Promise<void> {
-  // Path is /v1/... because the client baseURL ends at /api (matches every
-  // other call, e.g. /v1/favorites/chefs) → /api/v1/profile/device-token.
-  //
   // skipAuthFailure: a 401 here (e.g. registration racing a session refresh on
   // cold start) must NOT clear the session and bounce the user to login — this
   // is a best-effort call. The client's response interceptor honours this flag.
   const config: AxiosRequestConfig & { skipAuthFailure: boolean } = {
     skipAuthFailure: true,
   };
-  await client.put('/v1/profile/device-token', { token }, config);
+  await client.put(deviceTokenPath(client), { token }, config);
 }

@@ -42,6 +42,7 @@ export function ChefMenuTab({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
             contentContainerStyle={styles.categoryRow}
           >
             {categories.map((cat) => (
@@ -133,6 +134,12 @@ const styles = StyleSheet.create({
   },
 
   // ── Category chip row (Airbnb underline style, spec §2 item 2) ───────────
+  // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1 (ScrollView.js,
+  // baseHorizontal), so a horizontal category row grows into free vertical
+  // space rather than hugging its chips. Pin it to stay content-height.
+  categoryScroll: {
+    flexGrow: 0,
+  },
   categoryRow: {
     paddingHorizontal: 20,
     paddingVertical: 0,

@@ -201,7 +201,9 @@ const styles = StyleSheet.create({
 
   // ---- Chips ----
   // Bleed the day row to the screen edge so chips scroll under the margin.
-  chipRowBleed: { marginHorizontal: -GUTTER },
+  // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1, so a horizontal row
+  // grows into free vertical space unless pinned (see orders.tsx filterRow).
+  chipRowBleed: { marginHorizontal: -GUTTER, flexGrow: 0 },
   chipRowContent: { paddingHorizontal: GUTTER, gap: 8 },
   dietRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   chip: {
@@ -234,7 +236,7 @@ const styles = StyleSheet.create({
   },
 
   // ---- Selected day's dishes ----
-  dishRowBleed: { marginHorizontal: -GUTTER, marginTop: 14 },
+  dishRowBleed: { marginHorizontal: -GUTTER, marginTop: 14, flexGrow: 0 },
   dishRowContent: { paddingHorizontal: GUTTER, gap: 12 },
   emptyDay: {
     fontFamily: 'Inter',

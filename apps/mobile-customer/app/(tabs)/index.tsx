@@ -517,6 +517,10 @@ const styles = StyleSheet.create({
   // ── Row 2: Cuisine chip row ───────────────────────────────────────────────
   chipRow: {
     marginBottom: 4,
+    // RN gives every ScrollView flexGrow: 1 (ScrollView.js — baseHorizontal), so
+    // a horizontal chip row grows into any free vertical space it is offered.
+    // Keep it content-height.
+    flexGrow: 0,
   },
   chipRowContent: {
     gap: 0,

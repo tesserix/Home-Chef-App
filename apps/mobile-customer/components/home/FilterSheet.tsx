@@ -180,6 +180,7 @@ export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
               contentContainerStyle={styles.chipRow}
             >
               {DIET_FILTER_OPTIONS.map((opt) => (
@@ -202,6 +203,7 @@ export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
               contentContainerStyle={styles.chipRow}
             >
               {PRICE_FILTER_OPTIONS.map((opt) => (
@@ -224,6 +226,7 @@ export const FilterSheet = forwardRef<BottomSheetMethods, FilterSheetProps>(
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
               contentContainerStyle={styles.chipRow}
             >
               {SORT_OPTIONS.map((opt) => (
@@ -325,6 +328,12 @@ const styles = StyleSheet.create({
   },
 
   // Horizontal chip scroll row
+  // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1 (ScrollView.js,
+  // baseHorizontal), so a horizontal chip row grows into any free vertical
+  // space rather than hugging its chips. Pin it to stay content-height.
+  chipScroll: {
+    flexGrow: 0,
+  },
   chipRow: {
     gap: 8,
     paddingRight: 8,

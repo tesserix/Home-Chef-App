@@ -446,7 +446,9 @@ const styles = StyleSheet.create({
   },
   daySection: { marginBottom: 24 },
   // Day rows bleed to the screen edge so a peeking card invites the scroll.
-  dayRow: { marginHorizontal: -16 },
+  // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1, so a horizontal row
+  // grows into free vertical space unless pinned (see orders.tsx filterRow).
+  dayRow: { marginHorizontal: -16, flexGrow: 0 },
   dayRowContent: { paddingHorizontal: 16, gap: 12 },
   footer: {
     paddingHorizontal: 16,

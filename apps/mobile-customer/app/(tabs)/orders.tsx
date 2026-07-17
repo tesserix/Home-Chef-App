@@ -359,7 +359,16 @@ const styles = StyleSheet.create({
   // ── Airbnb category-bar style filter chips ──
   // No fill, no pill border. Selected = charcoal text + 2px charcoal underline.
   filterRow: {
-    // No background; content sits on white canvas
+    // No background; content sits on white canvas.
+    //
+    // flexGrow: 0 is load-bearing. React Native gives EVERY ScrollView a base
+    // style of { flexGrow: 1, flexShrink: 1 } (ScrollView.js — baseHorizontal),
+    // so a horizontal chip row is greedy by default. Next to the FlatList below
+    // (flex: 1) the two flexGrow:1 siblings split the free space ~50/50: the
+    // chips render at the top of a half-screen-tall row and leave a huge blank
+    // gap above the list. Pinning it to 0 makes the row content-height and lets
+    // the list take the rest.
+    flexGrow: 0,
   },
   filterRowContent: {
     paddingHorizontal: 16,

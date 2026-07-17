@@ -433,6 +433,9 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        // flexGrow: 0 — RN's ScrollView base style is flexGrow: 1, so a
+        // horizontal row grows into free vertical space unless pinned.
+        style={{ flexGrow: 0 }}
         contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
       >
         {EVENT_TYPES.map((t) => {
