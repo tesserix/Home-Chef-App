@@ -50,12 +50,18 @@ type ApprovalRequest struct {
 
 	// ── Reminders / escalation (#697) ────────────────────────────────────────
 	// A chef whose request sits unattended has no lever other than contacting
-	// support. These let them bump it themselves, on a cooldown, and escalate it
-	// if it keeps being ignored.
+	// support. These let them EXPEDITE it themselves — a self-service nudge, on a
+	// cooldown so it stays a signal rather than a spam button.
+	//
+	// Escalating is explicitly not held against the chef: it is a service-level
+	// signal about US, not behaviour to police.
 
-	// ReminderCount is how many times the submitter has bumped this request.
-	// >= 1 pins it to the top of the admin queue with a warning marker;
+	// ReminderCount is how many times the submitter has asked for this to be
+	// expedited. >= 1 pins it to the top of the admin queue with a marker;
 	// >= ReminderEscalationThreshold means escalated.
+	//
+	// It is a measure of how long the ADMIN has taken, not a mark against the
+	// chef. Do not use it to throttle, deprioritise or score a chef.
 	ReminderCount int `gorm:"not null;default:0;index" json:"reminderCount"`
 	// LastRemindedAt is when the most recent bump happened. It — not CreatedAt —
 	// is the base for the NEXT cooldown.
@@ -100,8 +106,10 @@ const (
 	// ReminderEscalationThreshold bumps: a day is long enough that a bump means
 	// "genuinely unattended" rather than impatience.
 	ReminderCooldown = 24 * time.Hour
-	// ReminderCooldownEscalated is the wait once escalated. Shorter, because by
-	// then the request has been ignored for 3+ days and the chef is blocked.
+	// ReminderCooldownEscalated is the wait once escalated. Shorter so a chef who
+	// is trying to EXPEDITE something can keep pushing without waiting another
+	// full day each time. Escalating is a legitimate tool, never a strike against
+	// them — nothing anywhere may penalise or rate-limit a chef for using it.
 	ReminderCooldownEscalated = 6 * time.Hour
 )
 
@@ -110,10 +118,10 @@ func (a *ApprovalRequest) IsEscalated() bool {
 	return a.ReminderCount >= ReminderEscalationThreshold
 }
 
-// AcceptsReminders reports whether bumping is meaningful. A decided request
-// (approved/rejected/cancelled) is nobody's blocker, so reminding is refused
-// rather than silently doing nothing. info_requested stays remindable: the ball
-// can be back with the admin after the chef replies.
+// AcceptsReminders reports whether bumping is meaningful. There is nothing left
+// to expedite on a decided request (approved/rejected/cancelled), so reminding is
+// refused rather than silently doing nothing. info_requested stays remindable:
+// the ball can be back with the admin after the chef replies.
 func (a *ApprovalRequest) AcceptsReminders() bool {
 	return a.Status == ApprovalPending || a.Status == ApprovalInfoRequested
 }

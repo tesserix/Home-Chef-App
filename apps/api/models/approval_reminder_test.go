@@ -4,8 +4,11 @@ package models
 //
 // The rule, as specified: a chef can bump an unattended request 24h after
 // raising it, then 24h after each of the next two bumps. From the 4th bump on —
-// by which point the request has been escalated and ignored for 3+ days — the
-// wait drops to 6h. Three bumps means escalated.
+// once escalated — the wait drops to 6h so they can keep expediting. Three bumps
+// means escalated.
+//
+// This is a tool for the CHEF to expedite their own request. It is never a mark
+// against them, and nothing may penalise a chef for using it.
 //
 // These pin the CADENCE rather than the plumbing, because the cadence is the
 // part that is easy to get subtly wrong (base off creation instead of the last
@@ -29,7 +32,8 @@ func TestReminderCooldownFor_FirstThreeAreDaily_ThenSixHourly(t *testing.T) {
 	}
 	for _, n := range []int{4, 5, 12} {
 		require.Equal(t, 6*time.Hour, ReminderCooldownFor(n),
-			"bump #%d is past escalation — the chef is blocked, so the cadence tightens", n)
+			"bump #%d is past escalation — a chef expediting can keep pushing without "+
+				"waiting another full day", n)
 	}
 	// A caller asking about a never-reminded request is asking about bump #1.
 	require.Equal(t, 24*time.Hour, ReminderCooldownFor(0))
@@ -81,7 +85,7 @@ func TestFourthReminder_UnlocksAfterSixHours(t *testing.T) {
 
 	require.False(t, r.CanRemindAt(thirdBump.Add(5*time.Hour+59*time.Minute)))
 	require.True(t, r.CanRemindAt(thirdBump.Add(6*time.Hour)),
-		"once escalated the chef is blocked and waiting another day helps nobody")
+		"once escalated, a chef trying to expedite should not have to wait another full day")
 }
 
 func TestEscalation_AtTheThirdReminder(t *testing.T) {
