@@ -4,19 +4,118 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Heart, ChefHat } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { Heart, ChefHat, Star, ChevronRight } from 'lucide-react-native';
+import { customerColors } from '@homechef/mobile-shared/theme';
 import { useFavorites, useToggleFavorite, useFavoriteDishes } from '../../hooks/useFavorites';
 import type { FavoriteChefEntry, FavoriteDishEntry } from '../../hooks/useFavorites';
+import type { Chef } from '../../types/customer';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
-import { ChefCard } from '../../components/chef/ChefCard';
 import { MenuItemCard } from '../../components/chef/MenuItemCard';
+
+// ─── Compact saved-chef row ──────────────────────────────────────────────────
+// The Saved tab is a shortlist, not a discovery feed, so it uses a dense
+// horizontal row (thumbnail + a line of metadata) rather than the big photo card
+// from Home — more chefs per screen, less scrolling, cleaner. The thumbnail is
+// the same chef image downscaled by expo-image, and the whole row taps through to
+// the full chef page.
+
+function SavedChefRow({
+  chef,
+  onUnsave,
+  unsaving,
+}: {
+  chef: Chef;
+  onUnsave: () => void;
+  unsaving: boolean;
+}) {
+  const router = useRouter();
+  const initial = (chef.name?.trim()[0] ?? '·').toUpperCase();
+
+  return (
+    <Pressable
+      onPress={() => router.push(`/chef/${chef.id}`)}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${chef.name}`}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
+      {/* Thumbnail — downscaled from the same image the chef page shows. */}
+      <View style={styles.thumb}>
+        {chef.imageUrl ? (
+          <Image
+            source={{ uri: chef.imageUrl }}
+            style={styles.thumbImg}
+            contentFit="cover"
+            transition={150}
+          />
+        ) : (
+          <View style={[styles.thumbImg, styles.thumbFallback]}>
+            <Text style={styles.thumbInitial}>{initial}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Metadata — name, rating, cuisine, open/min on one compact stack. */}
+      <View style={styles.meta}>
+        <Text style={styles.name} numberOfLines={1}>
+          {chef.name}
+        </Text>
+        <View style={styles.ratingRow}>
+          <Star size={12} color={customerColors.charcoal.DEFAULT} fill={customerColors.charcoal.DEFAULT} />
+          <Text style={styles.rating}>
+            {chef.rating.toFixed(1)}
+            {chef.reviewCount > 0 ? ` (${chef.reviewCount})` : ''}
+          </Text>
+          {chef.cuisine ? (
+            <>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.cuisine} numberOfLines={1}>
+                {chef.cuisine}
+              </Text>
+            </>
+          ) : null}
+        </View>
+        <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.openDot,
+              chef.isOpen ? styles.openDotOpen : styles.openDotClosed,
+            ]}
+          />
+          <Text style={styles.statusText}>
+            {chef.isOpen ? 'Open' : 'Closed'}
+            {chef.minimumOrder != null ? ` · Min ₹${chef.minimumOrder}` : ''}
+          </Text>
+        </View>
+      </View>
+
+      {/* Unsave — hitSlop keeps the 44px target without bloating the row. */}
+      <Pressable
+        onPress={onUnsave}
+        disabled={unsaving}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${chef.name} from saved`}
+        style={styles.heartBtn}
+      >
+        <Heart
+          size={20}
+          color={customerColors.coral.DEFAULT}
+          fill={customerColors.coral.DEFAULT}
+        />
+      </Pressable>
+      <ChevronRight size={18} color={customerColors.charcoal.soft} />
+    </Pressable>
+  );
+}
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -262,13 +361,12 @@ export default function FavoritesScreen() {
           <FlatList<FavoriteChefEntry>
             data={visibleEntries}
             keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
             contentContainerStyle={
               visibleEntries.length === 0
                 ? { flexGrow: 1 }
-                : { paddingTop: 8, paddingBottom: dockClearance, gap: 12 }
+                : { paddingTop: 8, paddingHorizontal: 16, paddingBottom: dockClearance }
             }
+            ItemSeparatorComponent={() => <View style={styles.rowSep} />}
             refreshControl={
               <RefreshControl
                 refreshing={chefs.isRefetching}
@@ -277,9 +375,11 @@ export default function FavoritesScreen() {
               />
             }
             renderItem={({ item }) => (
-              <View className="flex-1">
-                <ChefCard chef={item.chef} />
-              </View>
+              <SavedChefRow
+                chef={item.chef}
+                onUnsave={() => handleUnfavorite(item.chefId)}
+                unsaving={removingIds.has(item.chefId)}
+              />
             )}
             ListEmptyComponent={<EmptyState />}
           />
@@ -321,3 +421,38 @@ export default function FavoritesScreen() {
 function Header() {
   return <ScreenTitle title="Saved" />;
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  rowPressed: { opacity: 0.6 },
+  rowSep: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline },
+  thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'hidden' },
+  thumbImg: { width: '100%', height: '100%' },
+  thumbFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: customerColors.surface.soft,
+  },
+  thumbInitial: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 26,
+    color: customerColors.charcoal.soft,
+  },
+  meta: { flex: 1, gap: 3 },
+  name: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rating: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.DEFAULT },
+  dot: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
+  cuisine: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, flexShrink: 1 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  openDot: { width: 7, height: 7, borderRadius: 4 },
+  openDotOpen: { backgroundColor: customerColors.success.DEFAULT },
+  openDotClosed: { backgroundColor: customerColors.charcoal.soft },
+  statusText: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft },
+  heartBtn: { padding: 2 },
+})

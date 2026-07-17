@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { mapChef } from './useChefs';
 import type { Chef, MenuItem } from '../types/customer';
 
 export interface FavoriteChefEntry {
@@ -18,8 +19,22 @@ export interface FavoritesResponse {
 export function useFavorites() {
   return useQuery<FavoritesResponse>({
     queryKey: ['favorites'],
-    queryFn: () =>
-      api.get('/v1/favorites/chefs').then((r) => r.data as FavoritesResponse),
+    queryFn: async () => {
+      const raw = (await api.get('/v1/favorites/chefs')).data as FavoritesResponse;
+      // The API returns the chef as a raw ChefProfileResponse (profileImage /
+      // bannerImage / businessName). The screen renders ChefCard, which reads the
+      // MAPPED Chef shape (imageUrl / name). Without mapChef here the card gets an
+      // undefined imageUrl and shows a blank grey box — the Saved-tab bug. mapChef
+      // is the single API→UI translation point (see useChefs); the favorites hook
+      // was the one caller bypassing it.
+      return {
+        ...raw,
+        data: (raw.data ?? []).map((entry) => ({
+          ...entry,
+          chef: mapChef(entry.chef as unknown as Parameters<typeof mapChef>[0]),
+        })),
+      };
+    },
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
