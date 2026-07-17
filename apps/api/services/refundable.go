@@ -8,6 +8,7 @@ import (
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services/refundreserve"
 )
 
 // refundable.go — #527. The single correct "how much is still owed to the customer"
@@ -37,12 +38,7 @@ func PerLineRefundedTotal(orderID uuid.UUID) float64 {
 // (a cross-connection read is a separate DB under sqlite :memory: and a separate snapshot
 // under a Postgres tx).
 func PerLineRefundedTotalTx(db *gorm.DB, orderID uuid.UUID) float64 {
-	sum, err := PerLineRefundedTotalTxErr(db, orderID)
-	if err != nil {
-		log.Printf("refundable: sum per-line refunds for order %s failed (treating as 0): %v", orderID, err)
-		return 0
-	}
-	return sum
+	return refundreserve.PerLineRefundedTotalTx(db, orderID)
 }
 
 // PerLineRefundedTotalTxErr is PerLineRefundedTotalTx but PROPAGATES the query error instead of
@@ -51,13 +47,7 @@ func PerLineRefundedTotalTx(db *gorm.DB, orderID uuid.UUID) float64 {
 // UNDERSTATES captured, which could misclassify a still-live, partially-refunded order as fully
 // refunded (#640). Callers that reconstruct captured MUST use this and skip/alert on error.
 func PerLineRefundedTotalTxErr(db *gorm.DB, orderID uuid.UUID) (float64, error) {
-	var sum float64
-	if err := db.Model(&models.OrderItem{}).
-		Where("order_id = ? AND is_cancelled = ?", orderID, true).
-		Select("COALESCE(SUM(refund_amount), 0)").Scan(&sum).Error; err != nil {
-		return 0, err
-	}
-	return sum, nil
+	return refundreserve.PerLineRefundedTotalTxErr(db, orderID)
 }
 
 // RemainingRefundable is the amount still owed to the customer on an order:
