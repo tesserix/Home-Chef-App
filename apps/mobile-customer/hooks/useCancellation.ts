@@ -16,6 +16,10 @@ export interface CancellationRequest {
   vendorRespondBy?: string | null;
 }
 
+// Where a refund landed, as reported by the server. NOT a customer choice: the
+// server derives it from the order's payment (resolveRefundDestination) and
+// refunds to the original method. 'wallet' now only appears on legacy rows, or
+// on an order with no gateway payment to refund against.
 export type RefundDestination = 'wallet' | 'original';
 
 /** The cancellation request for an order (null when none). Polls while pending. */
@@ -37,12 +41,10 @@ export function useCancellationRequest(orderId: string | undefined) {
 export function useRequestCancellation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { orderId: string; reason?: string; refundDestination: RefundDestination }) =>
+    // No refundDestination: the server decides (original payment method).
+    mutationFn: (vars: { orderId: string; reason?: string }) =>
       api
-        .post(`/v1/orders/${vars.orderId}/cancel-request`, {
-          reason: vars.reason,
-          refundDestination: vars.refundDestination,
-        })
+        .post(`/v1/orders/${vars.orderId}/cancel-request`, { reason: vars.reason })
         .then((r) => r.data),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['order', vars.orderId] });

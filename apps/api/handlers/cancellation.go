@@ -9,6 +9,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -83,6 +84,33 @@ func validVendorReason(r string) bool {
 	}
 }
 
+// resolveRefundDestination decides where a cancellation refund lands.
+//
+// Refunds go back to the ORIGINAL payment method. The customer used to pick
+// wallet-vs-original and the picker defaulted to "wallet", which quietly made
+// store credit the normal outcome of a cancellation — and store credit is
+// currently UNSPENDABLE: WalletCheckoutEnabled (WALLET_CHECKOUT_ENABLED, #141)
+// is off in production, so wallet credit cannot be applied at checkout. Money
+// refunded there is money the customer cannot use or withdraw, and no refund
+// ever reaches the gateway. Original-method is the only destination a customer
+// can actually realise, so it is no longer a choice.
+//
+// Wallet remains the fallback for the one case where the gateway genuinely
+// cannot be re-credited — no Razorpay payment to refund against (e.g. an order
+// settled entirely from store credit back when wallet checkout was on).
+// ExecuteCancellationRefund hard-errors on "original" without a Razorpay
+// payment, so resolving it here keeps that path unreachable.
+//
+// If wallet checkout is ever re-enabled AND the wallet is proven spendable
+// end-to-end, reintroducing the choice is a deliberate product decision — not
+// a default.
+func resolveRefundDestination(order *models.Order) string {
+	if strings.EqualFold(order.PaymentProvider, "razorpay") && order.RazorpayPaymentID != "" {
+		return "original"
+	}
+	return "wallet"
+}
+
 // RequestCancellation — POST /orders/:id/cancel-request (customer).
 func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 	customerID, _ := middleware.GetUserID(c)
@@ -92,14 +120,12 @@ func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Reason            string `json:"reason"`
-		RefundDestination string `json:"refundDestination"` // wallet | original
+		Reason string `json:"reason"`
+		// RefundDestination is accepted for compatibility with older clients but is
+		// no longer customer-selectable — see resolveRefundDestination.
+		RefundDestination string `json:"refundDestination"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	dest := "wallet"
-	if body.RefundDestination == "original" {
-		dest = "original"
-	}
 
 	var order models.Order
 	if err := database.DB.Where("id = ? AND customer_id = ?", orderID, customerID).First(&order).Error; err != nil {
@@ -110,6 +136,7 @@ func (h *CancellationHandler) RequestCancellation(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Only a paid order can be cancelled here"})
 		return
 	}
+	dest := resolveRefundDestination(&order)
 	// #544/#394: an order spawned by a typed escrow flow (meal-plan day / group order) is
 	// refund-managed by THAT flow on a disjoint idempotency keyspace; its held chef payout is a
 	// DIRECT transfer this arbitration flow's generic refund (ExecuteCancellationRefund, wallet key

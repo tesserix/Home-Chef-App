@@ -7,14 +7,22 @@ import {
   useDisputeCancellation,
   useRequestCancellation,
   type CancellationRequest,
-  type RefundDestination,
 } from '../../hooks/useCancellation';
 
 // Customer cancellation on the order detail (#478). If a request exists it shows
 // the vendor's decision + refund (and a dispute action); otherwise, for a still-
-// cancellable order, it offers to request one and pick where the refund lands.
+// cancellable order, it offers to request one.
 // Inline expansion — no bottom-sheet — deliberately, to avoid the modal-provider
 // class of crash.
+//
+// The refund destination is NOT a customer choice: refunds go back to the
+// original payment method. This screen used to offer a wallet-vs-card picker
+// that defaulted to WALLET, which made unspendable store credit the normal
+// outcome of a cancellation — wallet checkout (WALLET_CHECKOUT_ENABLED, #141) is
+// off in production, so that credit can't be applied to an order, and no refund
+// reached Razorpay. The server now derives the destination from the order's
+// payment (handlers/cancellation.go resolveRefundDestination), so the client
+// no longer sends one.
 const money = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
 
 export function CancellationSection({ orderId, status }: { orderId: string; status: string }) {
@@ -22,7 +30,6 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
   const req = useRequestCancellation();
   const dispute = useDisputeCancellation();
   const [expanded, setExpanded] = useState(false);
-  const [dest, setDest] = useState<RefundDestination>('wallet');
 
   if (isLoading) return null;
 
@@ -41,7 +48,7 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
 
   function onRequest() {
     req.mutate(
-      { orderId, refundDestination: dest },
+      { orderId },
       {
         onSuccess: () => {
           setExpanded(false);
@@ -63,28 +70,11 @@ export function CancellationSection({ orderId, status }: { orderId: string; stat
         </Pressable>
       ) : (
         <>
-          <Text style={styles.label}>Refund to</Text>
-          <View style={styles.destRow}>
-            {(['wallet', 'original'] as RefundDestination[]).map((d) => {
-              const active = dest === d;
-              return (
-                <Pressable
-                  key={d}
-                  onPress={() => setDest(d)}
-                  style={[styles.pill, active && styles.pillActive]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                    {d === 'wallet' ? 'Wallet · instant' : 'Card · 5–7 days'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Text style={styles.label}>Refund to your original payment method</Text>
           <Text style={styles.hint}>
-            The chef confirms and issues the right refund based on how far along the order is. The
-            platform fee isn't refundable.
+            Any refund goes back to the card or account you paid with, and can take 5–7 days to
+            appear. The chef confirms and issues the right refund based on how far along the order
+            is. The platform fee isn't refundable.
           </Text>
           <Pressable onPress={onRequest} disabled={req.isPending} style={styles.btn} accessibilityRole="button">
             {req.isPending ? (
@@ -158,18 +148,6 @@ const styles = StyleSheet.create({
   },
   link: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.coral.DEFAULT },
   label: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  destRow: { flexDirection: 'row', gap: 8 },
-  pill: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: customerColors.hairline,
-    borderRadius: 9999,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  pillActive: { borderColor: customerColors.coral.DEFAULT, backgroundColor: customerColors.coral.tint },
-  pillText: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  pillTextActive: { color: customerColors.coral.pressed, fontFamily: 'Inter-SemiBold' },
   hint: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, lineHeight: 16 },
   btn: {
     marginTop: 4,
