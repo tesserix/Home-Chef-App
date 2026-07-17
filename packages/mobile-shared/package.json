@@ -34,14 +34,18 @@
   "devDependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@types/react": "^19.2.0",
-    "axios": "^1.14.0",
+    "axios": "^1.16.0",
     "react-hook-form": "^7.56.4",
     "typescript": "^6.0.3",
-    "vitest": "^2.1.9",
+    "vitest": "^3.2.6",
     "zod": "^4.4.3"
   },
   "dependencies": {
     "@react-native-firebase/app": "^24.0.0",
     "@react-native-firebase/auth": "^24.0.0"
+  },
+  "overrides": {
+    "form-data": "^4.0.6",
+    "uuid": "^11.1.1"
   }
 }

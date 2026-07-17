@@ -1,6 +1,6 @@
 # HomeChef API Dockerfile.
 # Builds on tesserix company-owned base images:
-#   * builder: pinned upstream golang:1.26.4-alpine (stopgap — see note)
+#   * builder: pinned upstream golang:1.26.5-alpine (stopgap — see note)
 #   * runtime: base-distroless-static (no shell, ca-certs + tzdata,
 #              upstream gcr.io/distroless/static:nonroot)
 # Go's runtime handles SIGTERM directly via signal.Notify so tini is
@@ -8,14 +8,14 @@
 # mode 0755 (executable for any uid).
 #
 # Stopgap note (2026-06-09): the builder stage is pinned directly to
-# upstream golang:1.26.4-alpine instead of base-go-builder:latest so
+# upstream golang:1.26.5-alpine instead of base-go-builder:latest so
 # we pick up the Go 1.26.3/1.26.4 stdlib CVE fixes (GO-2026-4918,
 # 4971, 4980, 4982, 5037, 5039) before base-docker-images rebuilds.
 # Revert to `ghcr.io/tesserix/base-go-builder:latest` once that image
 # ships >= Go 1.26.4 (see docs/base-image-go-1.26.4.patch).
 
 # ─── builder ────────────────────────────────────────────────────────────
-FROM golang:1.26.4-alpine AS builder
+FROM golang:1.26.5-alpine AS builder
 # git for `go mod` over git+ssh, ca-certs for module proxy TLS,
 # tzdata for tests that load zoneinfo — same set base-go-builder
 # pre-installs.
