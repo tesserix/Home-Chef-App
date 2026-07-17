@@ -246,6 +246,37 @@ func (s *NotificationService) Stop() {
 	log.Println("Notification service stopped")
 }
 
+// ── Identity resolution ──────────────────────────────────────────────────────
+
+// chefUserID maps OrderEvent.ChefID — which is a **chef_profiles.id**, NOT a
+// users.id — onto the chef's user id.
+//
+// This asymmetry is the trap: Order.CustomerID references users directly
+// (models.Customer is an alias of models.User), so passing it to a user lookup
+// works. Order.ChefID references chef_profiles (models.Order.Chef has
+// `foreignKey:ChefID`), so passing THAT to a user lookup always misses —
+// `push: user <id> not found: record not found` — and every chef-facing
+// notification silently dies, retries 5x and dead-letters. Notifications are
+// best-effort, so nothing surfaces the failure to the caller: chefs simply
+// never learned an order arrived.
+//
+// Resolve here rather than adding ChefUserID to OrderEvent: the NOTIFICATIONS
+// stream is durable, so events published before this change (and any replayed
+// from a DLQ) still carry only the profile id and must keep working.
+func chefUserID(chefProfileID uuid.UUID) (uuid.UUID, error) {
+	if chefProfileID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("resolve chef user: empty chef profile id")
+	}
+	var profile models.ChefProfile
+	if err := database.DB.Select("id, user_id").First(&profile, "id = ?", chefProfileID).Error; err != nil {
+		return uuid.Nil, fmt.Errorf("resolve chef user for profile %s: %w", chefProfileID, err)
+	}
+	if profile.UserID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("resolve chef user for profile %s: profile has no user_id", chefProfileID)
+	}
+	return profile.UserID, nil
+}
+
 // ── Event handlers ───────────────────────────────────────────────────────────
 
 func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) error {
@@ -270,9 +301,18 @@ func (s *NotificationService) handleDriverOnboardingSubmitted(event Event) error
 }
 
 func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
+	// event.ChefID is a chef_profiles.id — resolve the chef's user before any
+	// user-keyed write. Returning the error (rather than skipping the chef) lets
+	// notify-dispatch retry a transient DB blip; a genuinely missing profile
+	// dead-letters loudly instead of silently dropping the chef's new-order alert.
+	chefUser, err := chefUserID(event.ChefID)
+	if err != nil {
+		return fmt.Errorf("order_created: %w", err)
+	}
+
 	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "total": event.Total})
 	if err := s.saveNotification(&models.Notification{
-		UserID:  event.ChefID,
+		UserID:  chefUser,
 		Type:    "order_created",
 		Title:   "New Order Received",
 		Message: "You have received a new order!",
@@ -284,7 +324,7 @@ func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
 	// Push to chef + emails to customer and chef (best-effort: they are durable
 	// events on the NOTIFICATIONS stream, retried independently by notify-dispatch).
 	PublishNotification(NotificationEvent{
-		UserID: event.ChefID, Type: "push",
+		UserID: chefUser, Type: "push",
 		Title: "New Order Received", Message: "You have a new order waiting to be prepared!",
 		Data: map[string]any{"order_id": event.OrderID.String()},
 	})
@@ -294,7 +334,7 @@ func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
 		Data: map[string]any{"type": "order_confirmation", "order_number": event.OrderNumber, "total": event.Total},
 	})
 	PublishNotification(NotificationEvent{
-		UserID: event.ChefID, Type: "email",
+		UserID: chefUser, Type: "email",
 		Title: "New Order Received", Message: "You have a new order to prepare!",
 		Data: map[string]any{"type": "chef_new_order", "order_number": event.OrderNumber, "total": event.Total},
 	})
@@ -327,8 +367,15 @@ func (s *NotificationService) handleOrderUpdated(event OrderEvent) error {
 }
 
 func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
+	// CustomerID is already a users.id; ChefID is a chef_profiles.id and must be
+	// mapped before it can key a notification (see chefUserID).
+	chefUser, err := chefUserID(event.ChefID)
+	if err != nil {
+		return fmt.Errorf("order_cancelled: %w", err)
+	}
+
 	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
-	for _, userID := range []uuid.UUID{event.CustomerID, event.ChefID} {
+	for _, userID := range []uuid.UUID{event.CustomerID, chefUser} {
 		if err := s.saveNotification(&models.Notification{
 			UserID:  userID,
 			Type:    "order_cancelled",
@@ -424,9 +471,15 @@ func (s *NotificationService) handleUserRegistered(event Event) error {
 }
 
 func (s *NotificationService) handleChefNewOrder(event OrderEvent) error {
+	// event.ChefID is a chef_profiles.id, not a users.id (see chefUserID).
+	chefUser, err := chefUserID(event.ChefID)
+	if err != nil {
+		return fmt.Errorf("chef_new_order: %w", err)
+	}
+
 	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "total": event.Total})
 	if err := s.saveNotification(&models.Notification{
-		UserID:  event.ChefID,
+		UserID:  chefUser,
 		Type:    "new_order",
 		Title:   "New Order!",
 		Message: "You have a new order to prepare",
