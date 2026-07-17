@@ -2,7 +2,8 @@ name: HomeChef - Ensure Image Tags & Advance Deploy
 
 # Kargo's homechef Warehouse promotes via the GIT COMMIT GRAPH: it watches the
 # `deploy` branch of this repo and the prod Stage derives image.tag =
-# main-<sha7> for ALL six services (api, web, admin-portal, vendor-portal,
+# main-<sha7> for ALL six services (api, web, admin-portal [retired — carry
+# forward only], vendor-portal,
 # delivery-portal, auth-bff). This replaced image-tag discovery, which broke
 # because the homechef-* repos have >100 main-<sha> tags and Artifact Registry
 # paginates the tag list at 100 (NewestBuild then promoted a stale page and
@@ -11,7 +12,7 @@ name: HomeChef - Ensure Image Tags & Advance Deploy
 # Because CI is path-filtered, a commit only rebuilds the services whose
 # sources changed. This workflow therefore GUARANTEES every service image
 # carries a `main-<sha>` tag for the commit BEFORE advancing `deploy`:
-#   * changed + buildable (api, admin-portal, auth-bff, web<-web-landing):
+#   * changed + buildable (api, auth-bff, web<-web-landing):
 #     wait for the service's own build workflow to push main-<sha>.
 #   * unchanged / non-built (incl. vendor-portal, delivery-portal which have
 #     no build workflow): re-tag the image carried by the previous deploy
@@ -89,7 +90,6 @@ jobs:
           changed() { printf '%s\n' "${FILES}" | grep -q "^$1" && echo true || echo false; }
           {
             echo "api=$(changed 'apps/api/')"
-            echo "admin_portal=$(changed 'apps/admin-portal/')"
             echo "auth_bff=$(changed 'apps/auth-bff/')"
             echo "web=$(changed 'apps/web-landing/')"
           } >> "$GITHUB_OUTPUT"
@@ -99,7 +99,6 @@ jobs:
           SHORT_SHA: ${{ steps.sha.outputs.short }}
           K8S_TOKEN: ${{ secrets.TESSERIX_K8S_BOT }}
           API_CHANGED: ${{ steps.changed.outputs.api }}
-          ADMIN_CHANGED: ${{ steps.changed.outputs.admin_portal }}
           AUTHBFF_CHANGED: ${{ steps.changed.outputs.auth_bff }}
           WEB_CHANGED: ${{ steps.changed.outputs.web }}
         run: |
@@ -111,7 +110,7 @@ jobs:
           # carry forward.
           declare -A POLL=(
             [homechef-api]="${API_CHANGED}"
-            [homechef-admin-portal]="${ADMIN_CHANGED}"
+            [homechef-admin-portal]="false"
             [homechef-auth-bff]="${AUTHBFF_CHANGED}"
             [homechef-web]="${WEB_CHANGED}"
             [homechef-vendor-portal]="false"

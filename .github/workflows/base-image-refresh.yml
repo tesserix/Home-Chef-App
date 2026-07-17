@@ -30,10 +30,10 @@ jobs:
         workflow:
           # homechef-web-build.yml is dispatch-only while apps/web is paused
           # (web-landing serves the homechef-web slot); vendor/delivery portal
-          # build workflows were removed. Re-add here if they return.
+          # and admin-portal build workflows were removed. Re-add here if they
+          # return.
           - homechef-api-build.yml
           - homechef-web-landing-build.yml
-          - homechef-admin-portal-build.yml
     steps:
       - name: Log trigger context
         run: |

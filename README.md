@@ -1,13 +1,12 @@
 # HomeChef
 
 [![HomeChef API](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-api-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-api-build.yml)
-[![HomeChef Admin Portal](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-admin-portal-build.yml)
 [![HomeChef Auth BFF](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-auth-bff-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-auth-bff-build.yml)
 [![HomeChef Web Landing](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-landing-build.yml/badge.svg?branch=main)](https://github.com/tesserix/Home-Chef-App/actions/workflows/homechef-web-landing-build.yml)
 
 Food-delivery platform at [fe3dr.com](https://fe3dr.com) — home chefs cook,
 drivers deliver, customers order. Go / Gin backend, a Next.js marketing site
-(`web-landing`), three React ops SPAs (admin / vendor / delivery), and three
+(`web-landing`), two React ops SPAs (vendor / delivery), and three
 Expo mobile apps — the customer storefront is mobile-first for now (the
 `apps/web` customer SPA is temporarily **disabled** / paused, planned to return;
 see `apps/web/SUNSET.md`). All deployed as Knative services on GKE behind Istio.
@@ -38,7 +37,6 @@ Home-Chef-App/
 │   ├── api/                 Go / Gin backend (port 8080)
 │   ├── web/                 Customer SPA — DISABLED / paused (planned to return; see apps/web/SUNSET.md)
 │   ├── web-landing/         Next.js marketing site — fe3dr.com
-│   ├── admin-portal/        Internal admin SPA — admin.fe3dr.com
 │   ├── vendor-portal/       Chef / vendor SPA — vendors.fe3dr.com
 │   ├── delivery-portal/     Driver SPA — delivery.fe3dr.com
 │   ├── mobile-customer/     Expo (iOS + Android) — customer storefront
@@ -86,7 +84,6 @@ Then run the frontends directly so Vite HMR works:
 
 ```bash
 pnpm dev:landing     # @homechef/web-landing  → http://localhost:5173 (fe3dr.com marketing)
-pnpm dev:admin       # @homechef/admin-portal
 pnpm dev:vendor      # @homechef/vendor-portal
 pnpm dev:delivery    # @homechef/delivery-portal
 pnpm dev:api         # Go backend (also runs in compose, this is for edits)
@@ -153,7 +150,6 @@ Deploys are driven by the build workflows under `.github/workflows/`:
 | Workflow                              | Image                                                   | Knative ksvc             |
 |---------------------------------------|---------------------------------------------------------|--------------------------|
 | `homechef-api-build.yml`              | `ghcr.io/tesserix/home-chef-app/homechef-api`           | `homechef-api`           |
-| `homechef-admin-portal-build.yml`     | `ghcr.io/tesserix/home-chef-app/homechef-admin-portal`  | `homechef-admin-portal`  |
 | `homechef-auth-bff-build.yml`         | `ghcr.io/tesserix/home-chef-app/homechef-auth-bff`      | `homechef-auth-bff`      |
 | `homechef-web-landing-build.yml`      | `ghcr.io/tesserix/home-chef-app/homechef-web-landing`   | `homechef-web` (cutover slot) |
 
@@ -197,7 +193,7 @@ without a per-image PR.
 |-----------------------------------|--------------------------------------------|
 | `fe3dr.com`, `www.fe3dr.com`      | `homechef-web`                             |
 | `vendors.fe3dr.com`               | `homechef-vendor-portal`                   |
-| `admin.fe3dr.com`                 | `homechef-admin-portal`                    |
+| `admin.fe3dr.com`                 | `homechef-admin-portal` (retired — app moved to the Tesserix admin; deployment still serves its last image) |
 | `delivery.fe3dr.com`              | `homechef-delivery-portal`                 |
 | `api.fe3dr.com`                   | `homechef-api`                             |
 

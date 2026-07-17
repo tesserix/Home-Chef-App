@@ -14,7 +14,6 @@
   "scripts": {
     "dev": "pnpm --filter @homechef/web dev",
     "dev:vendor": "pnpm --filter @homechef/vendor-portal dev",
-    "dev:admin": "pnpm --filter @homechef/admin-portal dev",
     "dev:delivery": "pnpm --filter @homechef/delivery-portal dev",
     "dev:api": "cd apps/api && go run cmd/server/main.go",
     "dev:customer": "pnpm --filter @homechef/mobile-customer start",
@@ -27,7 +26,6 @@
     "build:mobile-delivery": "pnpm --filter @homechef/mobile-delivery build:local",
     "build": "pnpm --filter @homechef/web build",
     "build:vendor": "pnpm --filter @homechef/vendor-portal build",
-    "build:admin": "pnpm --filter @homechef/admin-portal build",
     "build:delivery": "pnpm --filter @homechef/delivery-portal build",
     "build:all": "pnpm -r build",
     "lint": "pnpm -r lint",

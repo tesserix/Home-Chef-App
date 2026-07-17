@@ -79,16 +79,15 @@ sandboxctl deploy --repo .        --chart ../tesserix-k8s/charts/apps/homechef-a
 
 # 4c. Frontends (Vite SPAs, build from monorepo root)
 sandboxctl deploy --repo . --chart ../tesserix-k8s/charts/apps/homechef-web             --name homechef-web             --purge-old-tags
-sandboxctl deploy --repo . --chart ../tesserix-k8s/charts/apps/homechef-admin-portal    --name homechef-admin-portal    --purge-old-tags
 sandboxctl deploy --repo . --chart ../tesserix-k8s/charts/apps/homechef-vendor-portal   --name homechef-vendor-portal   --purge-old-tags
 sandboxctl deploy --repo . --chart ../tesserix-k8s/charts/apps/homechef-delivery-portal --name homechef-delivery-portal --purge-old-tags
 ```
 
 URLs: `https://homechef-web.sandbox.app:8443`,
-`https://homechef-admin-portal.sandbox.app:8443`, … (after `Synced + Healthy`).
+… (after `Synced + Healthy`).
 
 > Adjust each `--repo` to the actual build dir of that service in this monorepo
-> (`apps/web`, `apps/vendor-portal`, `apps/admin-portal`, `apps/delivery-portal`,
+> (`apps/web`, `apps/vendor-portal`, `apps/delivery-portal`,
 > `apps/api`). For a true one-command bring-up, add a root `sandboxctl.yaml`
 > multi-image manifest — ask and I'll generate it.
 
