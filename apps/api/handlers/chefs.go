@@ -653,11 +653,9 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Where("chef_id = ? AND created_at >= ? AND payment_status = ?", chef.ID, weekStart, models.PaymentCompleted).
 		Select("COALESCE(SUM(total), 0)").Scan(&weekRevenue)
 
-	// Recent orders for the dashboard's in-flight + history-glance section.
-	// Mobile reads `recentOrders` and filters by status client-side. Preload
-	// Customer so we can populate `customerName` (the mobile dashboard renders
-	// it on the InFlightRow and the dead-screen reassurance copy reads
-	// `lastOrderIso` from `createdAt`).
+	// Recent orders — a RECENCY GLANCE, not the source of truth for what the chef
+	// is cooking. Mobile reads `recentOrders` for the dead-screen reassurance copy
+	// (`lastOrderIso` from `createdAt`). Preload Customer for `customerName`.
 	var recent []models.Order
 	chefVisibleOrders(chef.ID).
 		Preload("Customer").
@@ -665,24 +663,43 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		Limit(10).
 		Find(&recent)
 
-	recentOrdersResp := make([]gin.H, len(recent))
-	for i, o := range recent {
-		fulfillment := o.FulfillmentType
-		if fulfillment == "" {
-			fulfillment = models.FulfillmentDelivery
-		}
-		recentOrdersResp[i] = gin.H{
-			"id": o.ID,
-			// First name only for the chef view (privacy; matches ToChefResponse).
-			"customerName": o.Customer.FirstName,
-			"total":        o.Total,
-			"status":       o.Status,
-			"createdAt":    o.CreatedAt,
-			// Drives the dashboard in-flight card's pickup-vs-delivery stepper
-			// + the chef's "Mark handed over" action on pickup orders.
-			"fulfillmentType": fulfillment,
-		}
-	}
+	// Active orders — the KITCHEN QUEUE (#695). Deliberately its own query rather
+	// than a client-side filter of `recentOrders`.
+	//
+	// THE BUG THIS FIXES: the app derived in-flight orders by filtering the 10
+	// newest orders ACROSS ALL STATUSES. Accept an order at 12:00, take ten more
+	// by 12:30, and the 12:00 order falls out of that window — off the dashboard,
+	// and (with no Active tab, and History excluding accepted/preparing/ready)
+	// out of the app entirely. Food on the stove with no ticket, no address, no
+	// customer name. A recency window can never answer "what am I cooking".
+	//
+	// picked_up is included ONLY for chef_delivery: that means the CHEF is out
+	// delivering it — still their job. For a 3PL/pickup order picked_up means the
+	// rider has it and it is out of the chef's hands, so it belongs in History.
+	// This mirrors isHistoryOrder() in the app and closes a second hole: such an
+	// order was in neither the in-flight set nor History, so it was invisible.
+	//
+	// Ordered created_at ASC — OLDEST FIRST. The queue is a work list: the order
+	// closest to breaching must be at the top. `recentOrders` stays DESC because
+	// it answers a different question ("what just happened").
+	//
+	// Limit is a runaway guard, not a window: 200 in-flight orders at once is far
+	// beyond any real home kitchen, and unlike Limit(10) it cannot silently hide
+	// live work.
+	var active []models.Order
+	chefVisibleOrders(chef.ID).
+		Preload("Customer").
+		Where(
+			"status IN ? OR (status = ? AND fulfillment_type = ?)",
+			[]models.OrderStatus{models.OrderStatusAccepted, models.OrderStatusPreparing, models.OrderStatusReady},
+			models.OrderStatusPickedUp, models.FulfillmentChefDelivery,
+		).
+		Order("created_at ASC").
+		Limit(200).
+		Find(&active)
+
+	recentOrdersResp := chefDashboardOrderRows(recent)
+	activeOrdersResp := chefDashboardOrderRows(active)
 
 	c.JSON(http.StatusOK, gin.H{
 		"todayOrders":  todayOrders,
@@ -702,7 +719,36 @@ func (h *ChefHandler) GetChefDashboard(c *gin.Context) {
 		// renew licence" banner. Same helper as the order/payout enforcement.
 		"fssaiLocked":  services.IsChefFSSAIExpired(&chef),
 		"recentOrders": recentOrdersResp,
+		// The authoritative kitchen queue (#695). Clients must read THIS for
+		// in-flight work rather than filtering recentOrders, which is a capped
+		// recency window and silently drops live orders under load.
+		"activeOrders": activeOrdersResp,
 	})
+}
+
+// chefDashboardOrderRows shapes orders for the chef dashboard. Shared by
+// recentOrders and activeOrders so the two can never drift into different
+// contracts for the same row.
+func chefDashboardOrderRows(orders []models.Order) []gin.H {
+	rows := make([]gin.H, len(orders))
+	for i, o := range orders {
+		fulfillment := o.FulfillmentType
+		if fulfillment == "" {
+			fulfillment = models.FulfillmentDelivery
+		}
+		rows[i] = gin.H{
+			"id": o.ID,
+			// First name only for the chef view (privacy; matches ToChefResponse).
+			"customerName": o.Customer.FirstName,
+			"total":        o.Total,
+			"status":       o.Status,
+			"createdAt":    o.CreatedAt,
+			// Drives the dashboard in-flight card's pickup-vs-delivery stepper
+			// + the chef's "Mark handed over" action on pickup orders.
+			"fulfillmentType": fulfillment,
+		}
+	}
+	return rows
 }
 
 // UpdateChefProfileRequest represents chef profile update.

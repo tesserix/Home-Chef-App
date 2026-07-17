@@ -105,6 +105,10 @@ function formatMinutesAgo(iso: string): string {
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 const PULSE_EASING = Easing.bezier(0.4, 0, 0.2, 1);
 
+// The dashboard shows a PREVIEW of the kitchen queue; the Active tab owns the
+// full list. Kept small deliberately — the dashboard's job is a 2-second glance.
+const IN_PROGRESS_PREVIEW = 5;
+
 const IN_FLIGHT_STATUSES = new Set<Order['status']>([
   'accepted',
   'preparing',
@@ -170,13 +174,19 @@ export default function DashboardScreen() {
   );
 
   const pendingOrders = pendingResp?.orders ?? [];
-  const inFlightOrders = useMemo(
-    () =>
-      (dashboard?.recentOrders ?? []).filter((o) =>
-        IN_FLIGHT_STATUSES.has(o.status as Order['status']),
-      ),
-    [dashboard?.recentOrders],
-  );
+  // #695: read the server's kitchen queue. It is scoped by status and ordered
+  // oldest-first, so a rush can't evict the order being cooked — which is what
+  // filtering the 10-row `recentOrders` window used to do, leaving live food with
+  // no ticket anywhere in the app.
+  //
+  // The fallback keeps an app that outran the API deploy working (with the old
+  // window's limits) rather than showing an empty kitchen.
+  const inFlightOrders = useMemo(() => {
+    if (dashboard?.activeOrders) return dashboard.activeOrders;
+    return (dashboard?.recentOrders ?? []).filter((o) =>
+      IN_FLIGHT_STATUSES.has(o.status as Order['status']),
+    );
+  }, [dashboard?.activeOrders, dashboard?.recentOrders]);
 
   // Last order timestamp across pending + recent. Drives the dead-screen
   // reassurance copy: a chef staring at an empty screen at 3am needs to
@@ -819,7 +829,7 @@ export default function DashboardScreen() {
           >
             <Text style={styles.sectionLabel}>{t('dashboard.inProgress')}</Text>
             <View style={styles.inProgressList}>
-              {inFlightOrders.slice(0, 5).map((order) => (
+              {inFlightOrders.slice(0, IN_PROGRESS_PREVIEW).map((order) => (
                 <ActiveOrderCard
                   key={order.id}
                   order={order as ActiveOrderCardOrder}
@@ -835,6 +845,25 @@ export default function DashboardScreen() {
                   }
                 />
               ))}
+              {/* The list was hard-capped at 5 with NO overflow affordance, while
+                  the pending section above has one — so orders 6+ were silently
+                  truncated with nowhere to go. Now the dashboard is an explicit
+                  preview and the Active tab holds the full queue (#695). */}
+              {inFlightOrders.length > IN_PROGRESS_PREVIEW && (
+                <Pressable
+                  onPress={() => router.push('/(tabs)/orders')}
+                  hitSlop={6}
+                  style={styles.seeMoreInline}
+                  accessibilityRole="link"
+                  accessibilityLabel={`See all ${inFlightOrders.length} orders in progress`}
+                >
+                  <Text style={styles.seeMoreInlineLabel}>
+                    {t('dashboard.seeMore', {
+                      count: inFlightOrders.length - IN_PROGRESS_PREVIEW,
+                    })}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </Animated.View>
         )}

@@ -139,7 +139,17 @@ export interface PendingUndo {
 export function useOrderAction() {
   const queryClient = useQueryClient();
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Timers are keyed BY ORDER (#695). A single shared timerRef meant accepting a
+  // second order within the 3s undo window ran clearTimeout on the FIRST order's
+  // deferred PUT — so that accept never reached the server. Trivial during a rush:
+  // the cards are stacked and the accept button is 52px tall.
+  //
+  // Worse, the dropped mutation never reached onSettled, so its id was never
+  // removed from the module-level `actionedOrderIds` — the pending query kept
+  // filtering it out for the rest of the session. The chef saw it "In Progress"
+  // and cooked it; the server still had it `pending` and the customer saw an
+  // unaccepted order.
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const mutation = useMutation({
     mutationFn: ({ orderId, action, reason }: { orderId: string; action: 'accepted' | 'rejected'; reason?: string }) =>
@@ -165,7 +175,11 @@ export function useOrderAction() {
       }
       queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
         old
-          ? { ...old, recentOrders: old.recentOrders.filter((o) => o.id !== vars.orderId) }
+          ? {
+              ...old,
+              recentOrders: old.recentOrders.filter((o) => o.id !== vars.orderId),
+              activeOrders: old.activeOrders?.filter((o) => o.id !== vars.orderId),
+            }
           : old,
       );
     },
@@ -199,7 +213,7 @@ export function useOrderAction() {
     });
     if (action === 'accepted' && accepted) {
       queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) => {
-        if (!old || old.recentOrders.some((o) => o.id === orderId)) return old;
+        if (!old) return old;
         const optimistic: RecentOrder = {
           id: accepted.id,
           customerName: accepted.customerName,
@@ -208,26 +222,57 @@ export function useOrderAction() {
           createdAt: accepted.createdAt,
           fulfillmentType: accepted.fulfillmentType,
         };
+        // The card must land wherever the dashboard READS from, or accepting makes
+        // it vanish for the whole undo window — the very bug this optimistic
+        // insert exists to prevent. The dashboard now prefers `activeOrders`
+        // (#695), so seed that when the API provides it and fall back to
+        // `recentOrders` for an app running against an older API.
+        //
+        // activeOrders is oldest-first (the kitchen queue), so a freshly accepted
+        // order belongs at the END — it is the newest work, not the most urgent.
+        if (old.activeOrders) {
+          if (old.activeOrders.some((o) => o.id === orderId)) return old;
+          return { ...old, activeOrders: [...old.activeOrders, optimistic] };
+        }
+        if (old.recentOrders.some((o) => o.id === orderId)) return old;
         return { ...old, recentOrders: [optimistic, ...old.recentOrders] };
       });
     }
+    // The snackbar still shows only the most recent action — undo is a
+    // single-slot affordance and stacking them would be worse UX. But every
+    // order now owns its own timer, so an earlier accept still fires.
     setPendingUndo({ orderId, action });
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      mutation.mutate({ orderId, action, reason });
-      setPendingUndo(null);
-    }, UNDO_DELAY_MS);
+    const existing = timersRef.current.get(orderId);
+    if (existing) clearTimeout(existing);
+    timersRef.current.set(
+      orderId,
+      setTimeout(() => {
+        timersRef.current.delete(orderId);
+        mutation.mutate({ orderId, action, reason });
+        // Only clear the snackbar if it is still showing THIS order — otherwise a
+        // later action's undo bar would disappear when an earlier timer fired.
+        setPendingUndo((cur) => (cur?.orderId === orderId ? null : cur));
+      }, UNDO_DELAY_MS),
+    );
   }
 
   function handleUndo() {
-    if (timerRef.current) clearTimeout(timerRef.current);
     if (pendingUndo) {
       const undoId = pendingUndo.orderId;
+      // Cancel only THIS order's deferred mutation. Clearing a shared timer used
+      // to silently cancel whatever other accept happened to be in flight.
+      const t = timersRef.current.get(undoId);
+      if (t) clearTimeout(t);
+      timersRef.current.delete(undoId);
       actionedOrderIds.delete(undoId);
       // Pull the order back out of "In Progress" — the accept was undone.
       queryClient.setQueryData<DashboardData>(['chef', 'dashboard'], (old) =>
         old
-          ? { ...old, recentOrders: old.recentOrders.filter((o) => o.id !== undoId) }
+          ? {
+              ...old,
+              recentOrders: old.recentOrders.filter((o) => o.id !== undoId),
+              activeOrders: old.activeOrders?.filter((o) => o.id !== undoId),
+            }
           : old,
       );
     }

@@ -12,6 +12,16 @@ export interface DashboardData {
   /** True when the chef's FSSAI licence has lapsed and they're locked out (#92). */
   fssaiLocked?: boolean;
   recentOrders: RecentOrder[];
+  /**
+   * The kitchen queue (#695) — every live order, scoped by STATUS and ordered
+   * oldest-first (most urgent at the top).
+   *
+   * Read THIS for in-flight work, never a client-side filter of `recentOrders`:
+   * that is a 10-row recency window across all statuses, so a rush silently
+   * evicted the order the chef was actually cooking. Optional because a client
+   * can outrun the API deploy; callers fall back to filtering recentOrders.
+   */
+  activeOrders?: RecentOrder[];
 }
 
 /** Durations offered by the "Back in X min" pause control. */
@@ -33,6 +43,13 @@ export function useVendorDashboard() {
     queryKey: ['chef', 'dashboard'],
     queryFn: () => api.get<DashboardData>('/chef/dashboard').then((r) => r.data),
     staleTime: 30_000,
+    // This query owns EVERY in-flight card, and nothing else refreshes them:
+    // pending orders poll (useVendorOrders) but the kitchen queue did not, so a
+    // driver marking an order picked_up left the chef's card reading "Ready ·
+    // awaiting pickup" until they manually pulled to refresh — and two devices in
+    // one kitchen never converged. 15s while foregrounded; RN pauses timers in the
+    // background, where push is the signal.
+    refetchInterval: 15_000,
   });
 }
 

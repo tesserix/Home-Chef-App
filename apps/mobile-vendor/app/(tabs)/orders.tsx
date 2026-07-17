@@ -18,12 +18,24 @@ import {
   useVendorPendingOrders,
   useVendorOrderHistory,
   useOrderAction,
+  useUpdateOrderStatus,
   type Order,
 } from '../../hooks/useVendorOrders';
+import { useVendorDashboard } from '../../hooks/useVendorDashboard';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
+import {
+  ActiveOrderCard,
+  type ActiveOrderCardOrder,
+} from '../../components/vendor/ActiveOrderCard';
 import { UndoSnackbar } from '../../components/vendor/UndoSnackbar';
 
-type ActiveTab = 'new' | 'history';
+// 'active' is the KITCHEN QUEUE. It existed, was deleted, and its consumers were
+// never updated — the comments below still referenced it, `orders.active` and
+// `orders.noCookingOrders` still shipped in both locales, and accepted orders were
+// left with no home: History excludes them, and the dashboard only showed
+// whichever survived a 10-row recency window. Restored as the authoritative,
+// unbounded surface for everything the chef is cooking (#695).
+type ActiveTab = 'new' | 'active' | 'history';
 
 // Maps order status to its key under the `orders.status` i18n namespace.
 const HISTORY_STATUS_KEY: Record<string, string> = {
@@ -200,6 +212,75 @@ function NewEmpty() {
   );
 }
 
+// ----- Active tab (the kitchen queue) ---------------------------------------
+
+function ActiveEmpty() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.emptyBlock}>
+      <Text style={styles.emptyHeadline}>{t('orders.noCookingOrders')}</Text>
+      <Text style={styles.emptyBody}>{t('orders.noCookingOrdersBody')}</Text>
+    </View>
+  );
+}
+
+function ActiveOrdersTab() {
+  const { data, isLoading, refetch } = useVendorDashboard();
+  const updateStatus = useUpdateOrderStatus();
+  const dockClearance = useDockClearance();
+
+  // Straight from the server's queue: scoped by status, oldest-first, unbounded.
+  // Deliberately NOT a filter of recentOrders — that window is what lost orders.
+  const orders = data?.activeOrders ?? [];
+
+  const [isPulling, setIsPulling] = useState(false);
+  async function onPullRefresh(): Promise<void> {
+    setIsPulling(true);
+    try {
+      await refetch();
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.skeletonStack}>
+        <Skeleton height={140} style={{ borderRadius: theme.radius.lg }} />
+        <Skeleton height={140} style={{ borderRadius: theme.radius.lg }} />
+      </View>
+    );
+  }
+
+  return (
+    <FlatList<ActiveOrderCardOrder>
+      data={orders as ActiveOrderCardOrder[]}
+      keyExtractor={(o) => o.id}
+      contentContainerStyle={[styles.tabList, { paddingBottom: dockClearance }]}
+      refreshControl={
+        <RefreshControl
+          refreshing={isPulling}
+          onRefresh={onPullRefresh}
+          tintColor={theme.colors.ink.DEFAULT}
+        />
+      }
+      ListEmptyComponent={<ActiveEmpty />}
+      renderItem={({ item }) => (
+        <ActiveOrderCard
+          order={item}
+          isPending={
+            updateStatus.isPending && updateStatus.variables?.orderId === item.id
+          }
+          onAdvance={(orderId, nextStatus) =>
+            updateStatus.mutate({ orderId, status: nextStatus })
+          }
+          onOpenDetail={(orderId) => router.push(`/orders/${orderId}`)}
+        />
+      )}
+    />
+  );
+}
+
 // ----- History tab (delivered/cancelled/rejected, paginated, date-grouped) ---
 
 interface HistoryListItem {
@@ -216,8 +297,8 @@ function HistoryTab() {
   const [page, setPage] = useState(1);
   const { data, isLoading, refetch } = useVendorOrderHistory(page);
 
-  // Filter to past/terminal statuses only — active orders appear in the
-  // Active tab instead. Client-side filter avoids an extra API parameter.
+  // Filter to past/terminal statuses only — live orders belong to the Active
+  // tab. Client-side filter avoids an extra API parameter.
   const orders = useMemo(
     () => (data?.orders ?? []).filter(isHistoryOrder),
     [data?.orders],
@@ -437,6 +518,10 @@ export default function OrdersScreen() {
   // without having to switch tabs.
   const { data: pendingData } = useVendorPendingOrders();
   const newCount = pendingData?.orders.length ?? 0;
+  // Badge the queue too — the chef should see there is food on the stove without
+  // switching tabs.
+  const { data: dashboard } = useVendorDashboard();
+  const activeCount = dashboard?.activeOrders?.length ?? 0;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -445,9 +530,8 @@ export default function OrdersScreen() {
         <Text style={styles.commandTitle}>{t('orders.title')}</Text>
       </View>
 
-      {/* Two-segment control: New / History.
-          Active/in-progress orders are managed from the Dashboard "In Progress"
-          section, which shows the full lifecycle stepper. */}
+      {/* Three segments: New (accept queue) / Active (kitchen queue) / History.
+          The dashboard shows a capped PREVIEW of Active; this is the full list. */}
       <View style={styles.segmentTrack}>
         <TabLabel
           label={t('orders.new')}
@@ -456,13 +540,19 @@ export default function OrdersScreen() {
           onPress={() => setActiveTab('new')}
         />
         <TabLabel
+          label={t('orders.active')}
+          badge={activeCount}
+          active={activeTab === 'active'}
+          onPress={() => setActiveTab('active')}
+        />
+        <TabLabel
           label={t('orders.history')}
           active={activeTab === 'history'}
           onPress={() => setActiveTab('history')}
         />
       </View>
 
-      {activeTab === 'new' ? <NewTab /> : <HistoryTab />}
+      {activeTab === 'new' ? <NewTab /> : activeTab === 'active' ? <ActiveOrdersTab /> : <HistoryTab />}
     </SafeAreaView>
   );
 }
