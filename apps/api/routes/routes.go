@@ -39,6 +39,17 @@ func bffAuthOptional(key []byte, window time.Duration) gin.HandlerFunc {
 	})
 }
 
+// bffIdentify resolves (but does not enforce) the caller's identity. Registered
+// on the /api/v1 group ahead of the rate limiter so per-user budgets can key by
+// user; enforcement stays with bffAuth on the protected subgroups.
+func bffIdentify(key []byte, window time.Duration) gin.HandlerFunc {
+	return middleware.BFFIdentify(middleware.BFFAuthConfig{
+		HMACKey:       key,
+		Window:        window,
+		BFFSessionURL: config.AppConfig.BFFSessionURL,
+	})
+}
+
 // allowedOrigins resolves the CORS allowlist. In production we ONLY trust the
 // CORS_ORIGINS env var (comma-separated, https only — matches what argocd
 // passes through to the helm chart). In dev we keep the localhost origins
@@ -248,15 +259,35 @@ func SetupRouter() *gin.Engine {
 	v1.Use(middleware.VersionCheck([]string{
 		"/api/v1/mobile/min-version",
 	}))
-	// Redis-backed rate limit on all of v1. 60req/min per
-	// authenticated user (chef), 30req/min per IP otherwise. Excluded:
-	// the min-version poll (mobile hits it every 30 min — but other
+	// Resolve identity BEFORE the rate limiter so per-user budgets actually
+	// key by user. Gin runs group middleware in registration order, so the
+	// per-subgroup bffAuth below runs too late for the limiter to see a user.
+	// This only identifies — bffAuth still enforces on protected groups.
+	v1.Use(bffIdentify(bffKey, bffWindow))
+	// Redis-backed rate limit on all of v1 — a BACKSTOP against runaway
+	// clients and scrapers, not the primary abuse defence. The real
+	// protection is the targeted limiter on each abuse-prone surface
+	// (authLimit on login/register, paymentLimit on payments, supportLimit,
+	// webhookLimit), which stay tight precisely so this one can stay
+	// generous.
+	//
+	// Budgets are deliberately well above real human usage: observed normal
+	// customer traffic peaks around ~40 req/min just browsing and checking
+	// out, so the previous 60/min sat only ~1.5x over organic load and
+	// throttled real checkouts. A human cannot sustain 5 req/s; a script
+	// trivially can, so 300/min still catches what matters.
+	//
+	// UnauthedPerMin is per-IP and must tolerate NAT: mobile carriers (CGNAT)
+	// and offices put many genuine users behind ONE address, so a tight
+	// per-IP cap throttles bystanders rather than attackers.
+	//
+	// Excluded: the min-version poll (mobile hits it every 30 min — but other
 	// clients might too, so don't count it against budgets). Fails
 	// open if Redis is unreachable — see services/redis.go +
 	// middleware/ratelimit.go for the fail-mode rationale.
 	v1.Use(middleware.RateLimitRedis(middleware.RateLimitRedisConfig{
-		AuthedPerMin:   60,
-		UnauthedPerMin: 30,
+		AuthedPerMin:   300,
+		UnauthedPerMin: 120,
 		ExcludedPaths: []string{
 			"/api/v1/mobile/min-version",
 		},

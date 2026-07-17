@@ -36,12 +36,24 @@ const (
 	CtxUserEmail = "user_email"
 	CtxUserRole  = "user_role"
 	CtxAuthPool  = "auth_pool"
+
+	// ctxBFFResolved marks that identity resolution has already run for this
+	// request (see BFFIdentify). Its value is irrelevant — presence alone tells
+	// BFFAuth not to redo the work. Resolution is expensive on the Bearer path
+	// (one HTTP round-trip to the BFF's /auth/session per call), so without
+	// this marker adding BFFIdentify would double it on every request.
+	ctxBFFResolved = "bff_identity_resolved"
 )
 
 var (
 	ErrBFFMissingSignature  = errors.New("missing X-Internal-Auth")
 	ErrBFFStaleTimestamp    = errors.New("stale X-Auth-Ts")
 	ErrBFFSignatureMismatch = errors.New("HMAC mismatch")
+	// ErrBFFBodyRead is returned when the request body can't be read for
+	// re-hashing. Kept distinct so BFFAuth can answer 400 (malformed request)
+	// rather than 401 (bad credentials), as it did before resolution was
+	// split out of enforcement.
+	ErrBFFBodyRead = errors.New("body_read_failed")
 )
 
 type BFFIdentity struct {
@@ -86,6 +98,107 @@ func BFFAuthOptional(cfg BFFAuthConfig) gin.HandlerFunc {
 	}
 }
 
+// hasBFFCredentials reports whether the request carries anything we could
+// authenticate: the BFF's HMAC signature, or a Bearer token for the
+// /auth/session fallback that mobile clients use (they call the API directly
+// rather than through the BFF proxy, so they never carry a signature).
+func hasBFFCredentials(r *http.Request) bool {
+	if r.Header.Get(HdrSignature) != "" {
+		return true
+	}
+	return strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")
+}
+
+// BFFIdentify resolves the caller's identity and populates the identity context
+// keys, WITHOUT enforcing anything: no credentials or bad credentials simply
+// continue anonymously. Enforcement stays entirely with BFFAuth on the
+// protected route groups, which still 401s an unidentified caller.
+//
+// Why this exists: Gin runs group middleware in registration order, so anything
+// attached to the /api/v1 group runs BEFORE the per-subgroup BFFAuth. That left
+// RateLimitRedis — which keys per-user budgets off c.Get("userID") — unable to
+// ever see a user, silently demoting every authenticated caller to the
+// per-IP/unauthenticated budget. Registering BFFIdentify ahead of the limiter
+// on the same group makes the caller visible in time.
+//
+// It deliberately does NOT hydrate the User row or check suspension: that stays
+// in BFFAuth so a suspended account is still rejected at the enforcement point,
+// and so public routes don't pay for a DB lookup.
+func BFFIdentify(cfg BFFAuthConfig) gin.HandlerFunc {
+	if cfg.Window == 0 {
+		cfg.Window = 60 * time.Second
+	}
+	bearerClient := &http.Client{Timeout: 5 * time.Second}
+	return func(c *gin.Context) {
+		if !hasBFFCredentials(c.Request) {
+			c.Next()
+			return
+		}
+		id, err := resolveBFFIdentity(c, cfg, bearerClient)
+		if err != nil {
+			// Bad or unverifiable credentials: stay anonymous and let BFFAuth
+			// produce the 401 on protected routes. Marking resolution as done
+			// would let a forged header skip enforcement, so we deliberately
+			// leave the marker unset here.
+			c.Next()
+			return
+		}
+		applyBFFIdentity(c, id)
+		c.Set(ctxBFFResolved, true)
+		c.Next()
+	}
+}
+
+// resolveBFFIdentity verifies the request's credentials and returns the identity
+// they attest to. It never writes to the response — that is the caller's job —
+// which is what lets BFFIdentify reuse it without 401ing public routes.
+func resolveBFFIdentity(c *gin.Context, cfg BFFAuthConfig, bearerClient *http.Client) (*BFFIdentity, error) {
+	// Read the body so we can re-hash it, then restore it for downstream handlers.
+	var body []byte
+	if c.Request.Body != nil {
+		b, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBFFBodyRead, err)
+		}
+		body = b
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	id, err := verify(c.Request, body, cfg.HMACKey, cfg.Window)
+	if err == nil {
+		return id, nil
+	}
+	// HMAC path failed. Fall back to Bearer validation against the BFF if
+	// configured (mobile/SPA clients). Production deployments that route
+	// everything through the BFF proxy leave BFFSessionURL empty.
+	if cfg.BFFSessionURL == "" {
+		return nil, err
+	}
+	return verifyBearer(c.Request, cfg.BFFSessionURL, bearerClient)
+}
+
+// applyBFFIdentity writes the verified identity onto the Gin context, seeding
+// both the new-style keys and the legacy aliases the pre-GIP handlers read.
+func applyBFFIdentity(c *gin.Context, id *BFFIdentity) {
+	// New-style context keys (raw header values).
+	c.Set(CtxUserID, id.UserID)
+	c.Set(CtxUserEmail, id.Email)
+	c.Set(CtxUserRole, id.Role)
+	c.Set(CtxAuthPool, id.Pool)
+
+	// Legacy aliases — typed exactly the way the old AuthMiddleware set
+	// them so existing helpers (GetUserID/GetUserRole/GetUser) and any
+	// handlers reading c.Get("userID") directly continue to compile and
+	// behave the same. Parse failures fall through with empty values;
+	// downstream handlers will treat that as "no user".
+	if parsed, perr := uuid.Parse(id.UserID); perr == nil {
+		c.Set("userID", parsed)
+	}
+	c.Set("userEmail", id.Email)
+	if id.Role != "" {
+		c.Set("userRole", models.UserRole(id.Role))
+	}
+}
+
 // BFFAuth returns a Gin middleware that verifies the X-Internal-Auth HMAC
 // signature applied by the BFF and, on success, populates the Gin context
 // with the user identity headers.
@@ -105,50 +218,24 @@ func BFFAuth(cfg BFFAuthConfig) gin.HandlerFunc {
 	}
 	bearerClient := &http.Client{Timeout: 5 * time.Second}
 	return func(c *gin.Context) {
-		// Read the body so we can re-hash it, then restore it for downstream handlers.
-		var body []byte
-		if c.Request.Body != nil {
-			b, err := io.ReadAll(c.Request.Body)
+		// BFFIdentify (registered on the /api/v1 group so the rate limiter can
+		// key by user) may already have verified and applied this request's
+		// identity. Reuse it: re-verifying would mean a second /auth/session
+		// round-trip on the Bearer path. The marker is only ever set after a
+		// SUCCESSFUL verification, so bad credentials still fall through to the
+		// resolve-and-401 path below. It lives in the Gin context, which no
+		// client can influence.
+		if _, resolved := c.Get(ctxBFFResolved); !resolved {
+			id, err := resolveBFFIdentity(c, cfg, bearerClient)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "body_read_failed"})
-				return
-			}
-			body = b
-			c.Request.Body = io.NopCloser(bytes.NewReader(body))
-		}
-		id, err := verify(c.Request, body, cfg.HMACKey, cfg.Window)
-		if err != nil {
-			// HMAC path failed. Fall back to Bearer validation against the
-			// BFF if configured (mobile/SPA clients). Production deployments
-			// leave BFFSessionURL empty and short-circuit here.
-			if cfg.BFFSessionURL == "" {
+				if errors.Is(err, ErrBFFBodyRead) {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "body_read_failed"})
+					return
+				}
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bff_auth_failed"})
 				return
 			}
-			bearerID, bearerErr := verifyBearer(c.Request, cfg.BFFSessionURL, bearerClient)
-			if bearerErr != nil {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "bff_auth_failed"})
-				return
-			}
-			id = bearerID
-		}
-		// New-style context keys (raw header values).
-		c.Set(CtxUserID, id.UserID)
-		c.Set(CtxUserEmail, id.Email)
-		c.Set(CtxUserRole, id.Role)
-		c.Set(CtxAuthPool, id.Pool)
-
-		// Legacy aliases — typed exactly the way the old AuthMiddleware set
-		// them so existing helpers (GetUserID/GetUserRole/GetUser) and any
-		// handlers reading c.Get("userID") directly continue to compile and
-		// behave the same. Parse failures fall through with empty values;
-		// downstream handlers will treat that as "no user".
-		if parsed, perr := uuid.Parse(id.UserID); perr == nil {
-			c.Set("userID", parsed)
-		}
-		c.Set("userEmail", id.Email)
-		if id.Role != "" {
-			c.Set("userRole", models.UserRole(id.Role))
+			applyBFFIdentity(c, id)
 		}
 
 		// Hydrate the User row from DB. This is the same lookup the old
