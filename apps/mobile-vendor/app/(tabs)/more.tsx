@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
 import { useAuthStore } from '../../store/auth-store';
 import { useDockClearance } from '../../components/navigation/Dock';
+import { CATERING_ENABLED } from '../../constants/features';
 
 interface NavRow {
   /** i18n key under the "more" namespace for the row label. */
@@ -35,7 +36,9 @@ interface NavRow {
   Icon: typeof User;
 }
 
-const NAV_ROWS: NavRow[] = [
+// Rows are filtered by feature visibility below, so a hidden feature keeps its
+// entry here (and keeps compiling) instead of being deleted and re-typed later.
+const ALL_NAV_ROWS: NavRow[] = [
   { labelKey: 'premium', caption: 'Verified-Pro badge, priority ranking, lower commission', route: '/premium', Icon: Sparkles },
   { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
   { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
@@ -62,6 +65,13 @@ const NAV_ROWS: NavRow[] = [
   { labelKey: 'legalAgreement', caption: 'Commission, payouts, food safety', route: '/chef-agreement', Icon: Scale },
   { labelKey: 'legalEula', caption: 'App licence terms', route: '/eula', Icon: ScrollText },
 ];
+
+// Catering (#55) is built and working but hidden for now — see
+// constants/features.ts. Filtering here rather than commenting the row out keeps
+// it type-checked and makes re-enabling a one-line flag flip.
+const NAV_ROWS: NavRow[] = ALL_NAV_ROWS.filter(
+  (row) => row.route !== '/catering' || CATERING_ENABLED,
+);
 
 function deriveDisplayName(
   user: { name?: string; email?: string } | null | undefined,

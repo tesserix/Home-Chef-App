@@ -15,7 +15,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
+import { CATERING_ENABLED } from '../constants/features';
 import { ChevronLeft, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
 import { Button } from '@homechef/mobile-shared/ui';
@@ -347,7 +348,23 @@ function QuoteModal({
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
-export default function VendorCateringScreen() {
+// Route guard. Hiding the More-tab row is not enough on its own — expo-router
+// registers a route for every file in app/, so /catering stays navigable by a
+// deep link or a stale nav entry. Bouncing here makes it genuinely unreachable
+// while the screen below stays intact (see constants/features.ts).
+//
+// A gate component rather than an early return inside the screen: the screen
+// calls hooks immediately, and returning before them would both break the rules
+// of hooks and still fire the catering network requests. This way nothing under
+// it ever mounts.
+export default function VendorCateringRoute() {
+  if (!CATERING_ENABLED) {
+    return <Redirect href="/(tabs)/more" />;
+  }
+  return <VendorCateringScreen />;
+}
+
+function VendorCateringScreen() {
   const [tab, setTab] = useState<TabKey>('open');
   const [quoteTarget, setQuoteTarget] = useState<CateringRequest | null>(null);
 
