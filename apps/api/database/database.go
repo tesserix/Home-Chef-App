@@ -193,6 +193,11 @@ func Migrate() error {
 		&models.Wallet{},
 		&models.WalletTxn{},
 
+		// Refund ledger (#689) — one row per gateway refund ATTEMPT, written
+		// pending BEFORE the gateway call so a crash mid-call leaves a claim a
+		// sweep can reconcile rather than money moving off our books silently.
+		&models.RefundTransaction{},
+
 		// Loyalty (points ledger + streaks, #40)
 		&models.LoyaltyAccount{},
 		&models.LoyaltyTransaction{},
