@@ -15,6 +15,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CalendarDays,
+  RefreshCw,
   ChevronRight,
   MessageSquare,
   UtensilsCrossed,
@@ -589,6 +590,17 @@ export default function ProfileScreen() {
               icon: <CalendarDays size={18} color={customerColors.charcoal.soft} />,
               label: 'My meal plans',
               route: '/meal-plans',
+            },
+            // /subscriptions was an ORPHAN route (#696): the only screen that can
+            // pause or cancel a RECURRING charge, reachable solely via a one-shot
+            // "View" button in the alert shown right after subscribing. Dismiss that
+            // alert and the customer could never find it again — they'd have to call
+            // support or charge back to stop being billed. This row is the whole fix;
+            // the screen and its API already work.
+            TIFFIN_ENABLED && {
+              icon: <RefreshCw size={18} color={customerColors.charcoal.soft} />,
+              label: 'My subscriptions',
+              route: '/subscriptions',
             },
           ].filter(Boolean) as { icon: React.ReactNode; label: string; route: string }[];
 

@@ -2,7 +2,7 @@
 // One rendering used by BOTH the full plan-detail screen and the "Show my plan"
 // sheet, so the two never drift and the day-row logic lives in one place.
 //
-// Each row shows: an accept/declined icon, the day label, a veg/non-veg dot with
+// Each row shows: an accept/declined icon, the day label, an FSSAI veg/non-veg mark with
 // the slot + dish, the live status pill for EVERY status (not just the cooking
 // ones — Scheduled / Being prepared / Delivered / Skipped / Refunded …) with the
 // animated CookingIndicator while the dish is being prepared, the price, and an
@@ -11,6 +11,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { DietIcon } from '@homechef/mobile-shared/ui';
 
 import { type MealPlanDay } from '../../hooks/useMealPlans';
 import { mealPlanDayStatusMeta, isDeclinedDayStatus } from '../../lib/meal-plan';
@@ -56,10 +57,6 @@ export function MealPlanDayList({
     <View style={styles.card}>
       {days.map((d, i) => {
         const declined = isDeclinedDayStatus(d.status);
-        const accent =
-          d.variant === 'veg'
-            ? customerColors.success.DEFAULT
-            : customerColors.destructive.DEFAULT;
         const meta = mealPlanDayStatusMeta(d.status);
         return (
           <View key={d.id} style={[styles.dayRow, i < days.length - 1 && styles.divider]}>
@@ -72,9 +69,17 @@ export function MealPlanDayList({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.dayDate, declined && styles.dim]}>{dayLabel(d)}</Text>
+              {/* Veg/non-veg was an 8px green-or-red dot: hue ONLY — no label, no
+                  a11y text, no shape difference — on the screen where you review a
+                  whole week of food. WCAG 1.4.1, and red/green is the worst pair
+                  for deuteranopia. DietIcon is the FSSAI square-outline mark the
+                  dish cards already use: it differs by GEOMETRY, not just colour.
+                  The text label makes it survive both colour-blindness and a
+                  screen reader. */}
               <View style={styles.dayMeta}>
-                <View style={[styles.dot, { backgroundColor: accent }]} />
+                <DietIcon kind={d.variant === 'veg' ? 'veg' : 'non-veg'} size={12} />
                 <Text style={[styles.daySub, declined && styles.dim]} numberOfLines={1}>
+                  {d.variant === 'veg' ? 'Veg' : 'Non-veg'} ·{' '}
                   {d.slot === 'lunch' ? 'Lunch' : 'Dinner'} · {d.dishName ?? '—'}
                 </Text>
               </View>
@@ -102,6 +107,8 @@ export function MealPlanDayList({
                   disabled={skipping}
                   accessibilityRole="button"
                   accessibilityLabel={`Skip ${dayLabel(d)}`}
+                  accessibilityState={{ disabled: !!skipping, busy: !!skipping }}
+                  style={styles.tapTarget}
                 >
                   <Text style={styles.skipLink}>Skip</Text>
                 </Pressable>
@@ -115,6 +122,8 @@ export function MealPlanDayList({
                   disabled={confirming}
                   accessibilityRole="button"
                   accessibilityLabel={`Confirm you received ${dayLabel(d)}`}
+                  accessibilityState={{ disabled: !!confirming, busy: !!confirming }}
+                  style={styles.tapTarget}
                 >
                   <Text style={styles.confirmLink}>Confirm received</Text>
                 </Pressable>
@@ -127,6 +136,7 @@ export function MealPlanDayList({
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={`Report an issue with ${dayLabel(d)}`}
+                  style={styles.tapTarget}
                 >
                   <Text style={styles.reportLink}>Report an issue</Text>
                 </Pressable>
@@ -157,10 +167,14 @@ const styles = StyleSheet.create({
   dayStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
   dayStatusPill: { borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' },
   dayStatusText: { fontFamily: 'Inter-SemiBold', fontSize: 11, letterSpacing: 0.2 },
-  dot: { width: 8, height: 8, borderRadius: 2 },
   daySub: { flex: 1, fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
   price: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
   dim: { color: customerColors.charcoal.soft, textDecorationLine: 'line-through' },
+  // WCAG 2.2 target floor. These were 12px text + hitSlop 8 -> ~32px: the
+  // most-used controls in the product (Skip / Confirm / Report) were the
+  // smallest things on the screen. hitSlop helps a mouse-free tap but does not
+  // show up as a real target, and it does not scale with system text size.
+  tapTarget: { minHeight: 44, justifyContent: 'center' },
   skipLink: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4 },
   // #617 — per-day "Confirm received" link (coral, slightly heavier than Skip).
   confirmLink: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: customerColors.coral.DEFAULT, marginTop: 4, textAlign: 'right' },

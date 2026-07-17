@@ -100,6 +100,13 @@ export function useMealSubAction() {
   return useMutation<unknown, Error, { id: string; action: 'pause' | 'resume' | 'cancel' | 'skip'; date?: string; reason?: string }>({
     mutationFn: async ({ id, action, date, reason }) =>
       (await api.post(`/v1/meal-subscriptions/${id}/${action}`, action === 'skip' ? { date } : { reason })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-subscriptions'] }),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['meal-subscriptions'] });
+      // Skip changes a DAY, not the subscription — without this the day list keeps
+      // rendering the skipped meal as "scheduled" and the customer taps Skip again
+      // on a day that is already skipped. Invalidating only the subscription (which
+      // is all this did) leaves the very list the action was taken from stale.
+      void qc.invalidateQueries({ queryKey: ['meal-fulfillments', id] });
+    },
   });
 }
