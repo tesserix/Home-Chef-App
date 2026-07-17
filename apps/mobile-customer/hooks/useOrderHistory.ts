@@ -61,6 +61,9 @@ interface ApiOrder {
   createdAt: string;
   payoutHoldStatus?: Order['payoutHoldStatus'];
   customerConfirmedAt?: string;
+  cancelReason?: string;
+  refundAmount?: number;
+  refundedAt?: string;
 }
 
 interface ApiOrderListResponse {
@@ -83,6 +86,9 @@ function mapOrder(raw: ApiOrder): Order {
     orderNumber: raw.orderNumber,
     status: raw.status,
     paymentStatus: raw.paymentStatus,
+    cancelReason: raw.cancelReason,
+    refundAmount: raw.refundAmount,
+    refundedAt: raw.refundedAt,
     // Chef is now sent by the order API (OrderChefResponse: id/name/imageUrl).
     // Fill the rest of the Chef shape with neutral defaults — the order
     // list/detail only render name (and optionally image).

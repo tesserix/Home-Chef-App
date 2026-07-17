@@ -461,7 +461,11 @@ func (s *NotificationService) handleOrderVoided(ev voidEvent) error {
 	// silently refunded reads as "they took my money and cancelled my dinner".
 	PublishNotification(NotificationEvent{
 		UserID: customerID, Type: "push", Title: title, Message: body,
-		Data: map[string]any{"order_id": ev.OrderID.String(), "type": "order_voided"},
+		// Both key casings: the customer app's deep-link handler reads camelCase
+		// `orderId`, while every other consumer + our own tests read snake_case
+		// `order_id`. Carrying both is cheaper than a coordinated rename and lets
+		// a tap on the apology open the order (#694 UI).
+		Data: map[string]any{"order_id": ev.OrderID.String(), "orderId": ev.OrderID.String(), "type": "order_voided"},
 	})
 	PublishNotification(NotificationEvent{
 		UserID: customerID, Type: "email", Title: title, Message: body,
@@ -498,12 +502,19 @@ func (s *NotificationService) handleOrderAcceptReminder(ev acceptReminderEvent) 
 		"Order %s hasn't been accepted yet. Accept it in the next %d min or it will be auto-cancelled and the customer refunded.",
 		ev.OrderNumber, ev.MinutesLeft)
 
+	// Reuse the vendor app's EXISTING new-order push contract rather than inventing
+	// a parallel one it doesn't handle: the shipped app registers the `new_order`
+	// iOS category (Accept/Reject actions) and the high-priority `new-orders`
+	// Android channel, and its tap handler + Accept action both read camelCase
+	// `orderId`. Matching them makes tap-to-accept and the actionable buttons work
+	// with NO mobile build — the app is already out there. (#694 UI)
 	data := map[string]string{
-		"order_id": ev.OrderID.String(), "type": "accept_reminder", "action": "accept_order",
+		"orderId": ev.OrderID.String(), "order_id": ev.OrderID.String(),
+		"type": "accept_reminder", "action": "accept_order",
 	}
-	// Actionable push so the chef can jump straight to the order. Best-effort by
-	// contract; the in-app row below is the durable record.
-	if err := SendActionablePush(chefUser, title, body, "orders", "ORDER_ACCEPT", data); err != nil {
+	// Actionable push so the chef can accept straight from the notification. Best-
+	// effort by contract; the in-app row below is the durable record.
+	if err := SendActionablePush(chefUser, title, body, "new-orders", "new_order", data); err != nil {
 		log.Printf("accept-reminder push failed for chef %s: %v", chefUser, err)
 	}
 

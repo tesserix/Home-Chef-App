@@ -187,6 +187,13 @@ export interface Order {
   // states on delivered orders; absent (undefined) when the flags are off.
   payoutHoldStatus?: PayoutHoldStatus;
   customerConfirmedAt?: string;
+  // Why a cancelled order was cancelled + the refund (#694). For a platform
+  // auto-void these carry the apology ("the kitchen closed before this order was
+  // accepted") and the amount refunded, so a cancelled order can explain itself
+  // instead of showing a bare grey chip.
+  cancelReason?: string;
+  refundAmount?: number;
+  refundedAt?: string;
 }
 
 export interface TrackingResponse {

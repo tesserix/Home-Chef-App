@@ -156,9 +156,18 @@ export default function RootLayout() {
             string,
             string
           >;
-          if (data?.type === 'order_update' && data?.orderId) {
-            router.push(`/order/${data.orderId}`);
-          } else if (data?.type === 'weekly_menu_published' && data?.chefId) {
+          // Accept both key casings: the backend sends snake_case `order_id` on
+          // newer notifications (order_voided, #694) and camelCase `orderId` on
+          // others. Reading either keeps a tap from silently falling through.
+          const orderId = data?.order_id ?? data?.orderId;
+          const type = data?.type ?? '';
+          // Any order-scoped notification opens the order. Previously only the
+          // (never-actually-sent) `order_update` type routed, so real order pushes
+          // — status changes, and the void apology — landed nowhere. Match on the
+          // presence of an order id + an order-ish type instead.
+          if (orderId && (type === '' || type.startsWith('order'))) {
+            router.push(`/order/${orderId}`);
+          } else if (data?.chefId && type === 'weekly_menu_published') {
             // A favorited chef dropped a new weekly menu (#239) → open the chef.
             router.push(`/chef/${data.chefId}`);
           }

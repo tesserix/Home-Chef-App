@@ -430,6 +430,32 @@ export default function OrderDetailScreen() {
           ) : null}
         </View>
 
+        {/* Auto-void apology (#694). A platform void is a cancelled + refunded
+            order with NO CancellationRequest, so CancellationSection (below)
+            never renders for it — the order would otherwise show a bare grey
+            "Cancelled" with no reason and no visible refund. This says what
+            happened and confirms the money is coming back. */}
+        {order.status === 'cancelled' &&
+        order.paymentStatus === 'refunded' &&
+        order.cancelReason ? (
+          <View style={styles.voidNotice}>
+            <Text style={styles.voidTitle}>
+              We&apos;re sorry — this order was cancelled
+            </Text>
+            <Text style={styles.voidBody}>{order.cancelReason}.</Text>
+            {order.refundAmount && order.refundAmount > 0 ? (
+              <Text style={styles.voidRefund}>
+                ₹{order.refundAmount.toFixed(0)} has been refunded to your original
+                payment method.
+              </Text>
+            ) : (
+              <Text style={styles.voidRefund}>
+                You&apos;ve been fully refunded to your original payment method.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
         {/* Cancellation with vendor arbitration (#475/#478). */}
         <CancellationSection orderId={order.id} status={order.status} />
 
@@ -833,6 +859,26 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  voidNotice: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: customerColors.coral.tint,
+    gap: 6,
+  },
+  voidTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  voidBody: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
+  voidRefund: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.coral.pressed,
+    marginTop: 2,
+  },
   // White-canvas root — spec §1
   root: {
     flex: 1,

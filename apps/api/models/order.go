@@ -333,6 +333,15 @@ type OrderResponse struct {
 	// flags are off — so the customer CTA degrades to nothing pre-launch.
 	PayoutHoldStatus    PayoutHoldStatus `json:"payoutHoldStatus,omitempty"`
 	CustomerConfirmedAt *time.Time       `json:"customerConfirmedAt,omitempty"`
+	// Cancellation + refund, surfaced so a cancelled order can explain ITSELF
+	// (#694). Without these the customer app renders an auto-void as a bare grey
+	// "Cancelled" with no reason and no visible refund — reading as "they took my
+	// money and cancelled my dinner". CancelReason carries the apology text; a
+	// non-zero RefundAmount with RefundedAt set is the "refunded ₹X" the customer
+	// is owed on screen, not just in a push.
+	CancelReason string     `json:"cancelReason,omitempty"`
+	RefundAmount float64    `json:"refundAmount,omitempty"`
+	RefundedAt   *time.Time `json:"refundedAt,omitempty"`
 }
 
 // OrderChefResponse is the minimal chef identity the customer order
@@ -497,6 +506,9 @@ func (o *Order) ToResponse() OrderResponse {
 		CreatedAt:           o.CreatedAt,
 		PayoutHoldStatus:    o.PayoutHoldStatus,
 		CustomerConfirmedAt: o.CustomerConfirmedAt,
+		CancelReason:        o.CancelReason,
+		RefundAmount:        o.RefundAmount,
+		RefundedAt:          o.RefundedAt,
 	}
 }
 
