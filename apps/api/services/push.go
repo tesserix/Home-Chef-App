@@ -3,11 +3,13 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +19,78 @@ import (
 	"github.com/homechef/api/models"
 	"golang.org/x/oauth2/google"
 )
+
+// ErrPushTokenInvalid marks a token FCM has PERMANENTLY rejected: the device
+// uninstalled, the token rotated, or the stored value isn't a token at all.
+//
+// This has to be distinguishable from a transient FCM failure. Every 4xx used
+// to surface as one opaque error, so notify-dispatch burned all 5 retries on a
+// token that could never work and dead-lettered — while the dead token stayed in
+// users.fcm_token, so every later notification for that user failed the same way
+// forever. Once a token is invalid the only correct move is to drop it and let
+// the app re-register on next launch (usePushToken registers on every cold
+// start), so callers treat this as terminal-but-handled rather than retryable.
+var ErrPushTokenInvalid = errors.New("push: fcm token invalid")
+
+// fcmErrorEnvelope is the slice of FCM's HTTP v1 error body we act on.
+type fcmErrorEnvelope struct {
+	Error struct {
+		Code    int    `json:"code"`
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Details []struct {
+			Type      string `json:"@type"`
+			ErrorCode string `json:"errorCode"`
+		} `json:"details"`
+	} `json:"error"`
+}
+
+// isInvalidTokenResponse reports whether an FCM error is a permanent verdict on
+// the TOKEN (as opposed to our auth, quota, or a bad payload).
+//
+// Two shapes matter:
+//   - 404 / UNREGISTERED — the token was valid and no longer is (uninstall,
+//     rotation). FCM's documented signal to delete it.
+//   - 400 / INVALID_ARGUMENT where the complaint is about the token itself,
+//     e.g. "The registration token is not a valid FCM registration token".
+//
+// The INVALID_ARGUMENT check is deliberately narrow: that status also covers a
+// malformed payload, which is OUR bug and must stay retryable/visible rather
+// than silently costing the user their token.
+func isInvalidTokenResponse(statusCode int, body []byte) bool {
+	var env fcmErrorEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return false
+	}
+	code := env.Error.Status
+	for _, d := range env.Error.Details {
+		if d.ErrorCode != "" {
+			code = d.ErrorCode
+			break
+		}
+	}
+	switch code {
+	case "UNREGISTERED":
+		return true
+	case "INVALID_ARGUMENT":
+		// Only when FCM names the registration token as the offender.
+		return strings.Contains(env.Error.Message, "registration token")
+	}
+	// Fall back to the status code for UNREGISTERED bodies that omit details.
+	return statusCode == http.StatusNotFound && strings.Contains(env.Error.Message, "registration token")
+}
+
+// clearInvalidFCMToken drops a token FCM has rejected so the row stops poisoning
+// every future send. Best-effort: failing to clear must not turn a handled
+// terminal case back into a retry.
+func clearInvalidFCMToken(userID uuid.UUID, reason error) {
+	log.Printf("Push: clearing invalid FCM token for user %s (%v)", userID, reason)
+	if err := database.DB.Model(&models.User{}).Where("id = ?", userID).
+		Update("fcm_token", "").Error; err != nil {
+		log.Printf("Push: failed to clear invalid FCM token for user %s: %v", userID, err)
+		CaptureBackgroundError(err)
+	}
+}
 
 // PushService handles sending push notifications via FCM HTTP v1 API
 type PushService struct {
@@ -156,6 +230,11 @@ func (s *PushService) sendFCMMessage(body *fcmMessageBody) error {
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
+		// Separate "this token is dead" from "this send failed". Only the
+		// caller knows which user owns the token, so flag it and let them prune.
+		if isInvalidTokenResponse(resp.StatusCode, respBody) {
+			return fmt.Errorf("%w (FCM %d): %s", ErrPushTokenInvalid, resp.StatusCode, string(respBody))
+		}
 		return fmt.Errorf("push: FCM returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -184,7 +263,15 @@ func SendPushNotification(userID uuid.UUID, title, body string, data map[string]
 		return nil
 	}
 
-	return GetPushService().sendToToken(user.FCMToken, title, body, data)
+	err := GetPushService().sendToToken(user.FCMToken, title, body, data)
+	if errors.Is(err, ErrPushTokenInvalid) {
+		// Terminal, and now handled: drop the dead token and report success so
+		// the consumer doesn't retry an impossible send into the DLQ. The app
+		// re-registers a fresh token on its next launch.
+		clearInvalidFCMToken(userID, err)
+		return nil
+	}
+	return err
 }
 
 // SendActionablePush sends a push notification with platform-specific action metadata.
@@ -199,7 +286,7 @@ func SendActionablePush(userID uuid.UUID, title, body, androidChannelID, iosCate
 		log.Printf("Push skipped: user %s has no FCM token", userID)
 		return nil
 	}
-	return GetPushService().sendFCMMessage(&fcmMessageBody{
+	err := GetPushService().sendFCMMessage(&fcmMessageBody{
 		Token:        user.FCMToken,
 		Notification: &fcmNotification{Title: title, Body: body},
 		Data:         data,
@@ -220,6 +307,11 @@ func SendActionablePush(userID uuid.UUID, title, body, androidChannelID, iosCate
 			},
 		},
 	})
+	if errors.Is(err, ErrPushTokenInvalid) {
+		clearInvalidFCMToken(userID, err)
+		return nil
+	}
+	return err
 }
 
 // SubscribeToFCMTopic adds the device token to a topic so it receives
@@ -299,7 +391,14 @@ func SendPushToMultiple(userIDs []uuid.UUID, title, body string, data map[string
 		if u.FCMToken == "" {
 			continue
 		}
-		if err := svc.sendToToken(u.FCMToken, title, body, data); err != nil {
+		err := svc.sendToToken(u.FCMToken, title, body, data)
+		if errors.Is(err, ErrPushTokenInvalid) {
+			// One dead token must not fail the whole fan-out (and re-drive a
+			// retry that would re-notify everyone else). Prune it and move on.
+			clearInvalidFCMToken(u.ID, err)
+			continue
+		}
+		if err != nil {
 			log.Printf("Push failed for user %s: %v", u.ID, err)
 			lastErr = err
 		}
