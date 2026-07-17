@@ -22,27 +22,62 @@ export const TOKEN_KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
 };
 
-// A Keychain read can transiently fail (e.g. a race at cold start) by THROWING
-// rather than returning null. Treating that throw as "no token" is what logs the
-// user out. Retry once, then fall back to null. (#428)
-async function readTokenResilient(key: string): Promise<string | null> {
+// In-memory fallback used when the Keychain is unavailable. Unsigned simulator
+// builds have no application-identifier entitlement, so every SecureStore call
+// throws "a required entitlement isn't present" — which would break sign-in
+// (unguarded writes) and log the user out (reads treated as null). Signed device
+// / EAS builds always take the real-Keychain path; the memory map is only ever
+// touched when the Keychain throws (dev/sim), where a per-process copy is
+// acceptable.
+const memoryStore = new Map<string, string>();
+
+// A Keychain read can also transiently fail (a race at cold start) by THROWING
+// rather than returning null — treating that as "no token" is what spuriously
+// signs the user out (#428). So: try the Keychain, retry once on throw, then
+// fall back to the in-memory copy.
+async function secureGet(key: string): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(key);
+    const v = await SecureStore.getItemAsync(key);
+    if (v != null) return v;
   } catch {
     try {
-      return await SecureStore.getItemAsync(key);
+      const v = await SecureStore.getItemAsync(key);
+      if (v != null) return v;
     } catch {
-      return null;
+      /* Keychain unavailable — fall through to the in-memory copy. */
     }
+  }
+  return memoryStore.get(key) ?? null;
+}
+
+async function secureSet(
+  key: string,
+  value: string,
+  options?: SecureStore.SecureStoreOptions
+): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(key, value, options);
+    memoryStore.delete(key); // the Keychain now owns it
+  } catch {
+    memoryStore.set(key, value);
+  }
+}
+
+async function secureDelete(key: string): Promise<void> {
+  memoryStore.delete(key);
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    /* Keychain unavailable — the in-memory copy is already cleared. */
   }
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  return readTokenResilient(STORAGE_KEYS.ACCESS_TOKEN);
+  return secureGet(STORAGE_KEYS.ACCESS_TOKEN);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return readTokenResilient(STORAGE_KEYS.REFRESH_TOKEN);
+  return secureGet(STORAGE_KEYS.REFRESH_TOKEN);
 }
 
 export async function setTokens(tokens: {
@@ -54,55 +89,39 @@ export async function setTokens(tokens: {
   // that still has one (e.g. test fixtures, legacy flows). SecureStore
   // rejects empty strings, so skip the write when refreshToken is falsy.
   const writes: Promise<void>[] = [
-    SecureStore.setItemAsync(
-      STORAGE_KEYS.ACCESS_TOKEN,
-      tokens.accessToken,
-      TOKEN_KEYCHAIN_OPTIONS
-    ),
+    secureSet(STORAGE_KEYS.ACCESS_TOKEN, tokens.accessToken, TOKEN_KEYCHAIN_OPTIONS),
   ];
   if (tokens.refreshToken) {
     writes.push(
-      SecureStore.setItemAsync(
-        STORAGE_KEYS.REFRESH_TOKEN,
-        tokens.refreshToken,
-        TOKEN_KEYCHAIN_OPTIONS
-      )
+      secureSet(STORAGE_KEYS.REFRESH_TOKEN, tokens.refreshToken, TOKEN_KEYCHAIN_OPTIONS)
     );
   } else {
     // Clear any stale refresh token from a prior session so the api client's
     // 401 handler never reads a value that no longer matches the access token.
-    writes.push(SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN));
+    writes.push(secureDelete(STORAGE_KEYS.REFRESH_TOKEN));
   }
   await Promise.all(writes);
 }
 
 export async function clearTokens(): Promise<void> {
   await Promise.all([
-    SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN),
-    SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN),
+    secureDelete(STORAGE_KEYS.ACCESS_TOKEN),
+    secureDelete(STORAGE_KEYS.REFRESH_TOKEN),
   ]);
 }
 
 export async function isBiometricsEnabled(): Promise<boolean> {
-  const val = await SecureStore.getItemAsync(STORAGE_KEYS.BIOMETRICS_ENABLED);
-  return val === 'true';
+  return (await secureGet(STORAGE_KEYS.BIOMETRICS_ENABLED)) === 'true';
 }
 
 export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
-  await SecureStore.setItemAsync(
-    STORAGE_KEYS.BIOMETRICS_ENABLED,
-    enabled ? 'true' : 'false'
-  );
+  await secureSet(STORAGE_KEYS.BIOMETRICS_ENABLED, enabled ? 'true' : 'false');
 }
 
 export async function isOnboardingComplete(): Promise<boolean> {
-  const val = await SecureStore.getItemAsync(STORAGE_KEYS.ONBOARDING_COMPLETE);
-  return val === 'true';
+  return (await secureGet(STORAGE_KEYS.ONBOARDING_COMPLETE)) === 'true';
 }
 
 export async function setOnboardingCompleteInStore(complete: boolean): Promise<void> {
-  await SecureStore.setItemAsync(
-    STORAGE_KEYS.ONBOARDING_COMPLETE,
-    complete ? 'true' : 'false'
-  );
+  await secureSet(STORAGE_KEYS.ONBOARDING_COMPLETE, complete ? 'true' : 'false');
 }

@@ -10,6 +10,44 @@ const SESSION_KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
 };
 
+// In-memory fallback for environments where the Keychain isn't available.
+// Unsigned simulator builds have no application-identifier entitlement, so
+// SecureStore throws "a required entitlement isn't present" — which, before this
+// guard, propagated out of autoLogin() AFTER a successful sign-in and surfaced as
+// the generic "We couldn't sign you in" error. Signed device / EAS builds still
+// use the real Keychain via the try path; only when it throws do we fall back to
+// process memory (session then lives until the app is killed — acceptable on a
+// dev/sim build).
+let memorySession: string | null = null;
+
+async function writeSession(token: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(SESSION_KEY, token, SESSION_KEYCHAIN_OPTIONS);
+    memorySession = null; // the Keychain now owns it
+  } catch {
+    memorySession = token;
+  }
+}
+
+async function readSession(): Promise<string | null> {
+  try {
+    const v = await SecureStore.getItemAsync(SESSION_KEY);
+    if (v != null) return v;
+  } catch {
+    /* Keychain unavailable — fall through to the in-memory copy. */
+  }
+  return memorySession;
+}
+
+async function removeSession(): Promise<void> {
+  memorySession = null;
+  try {
+    await SecureStore.deleteItemAsync(SESSION_KEY);
+  } catch {
+    /* Keychain unavailable — the in-memory copy is already cleared. */
+  }
+}
+
 export interface BFFAutoLoginResponse {
   session_token: string;
   expires_at: number;
@@ -72,7 +110,7 @@ export async function autoLogin(
     throw e;
   }
   const body: BFFAutoLoginResponse = await r.json();
-  await SecureStore.setItemAsync(SESSION_KEY, body.session_token, SESSION_KEYCHAIN_OPTIONS);
+  await writeSession(body.session_token);
   return body;
 }
 
@@ -125,11 +163,11 @@ export function resolveAuthErrorMessage(err: unknown): string {
 }
 
 export async function getStoredSession(): Promise<string | null> {
-  return SecureStore.getItemAsync(SESSION_KEY);
+  return readSession();
 }
 
 export async function clearStoredSession(): Promise<void> {
-  await SecureStore.deleteItemAsync(SESSION_KEY);
+  await removeSession();
 }
 
 export async function fetchSessionUser(bffUrl: string): Promise<BFFSessionUser | null> {
