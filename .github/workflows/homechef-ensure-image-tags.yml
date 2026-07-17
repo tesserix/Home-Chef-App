@@ -2,8 +2,7 @@ name: HomeChef - Ensure Image Tags & Advance Deploy
 
 # Kargo's homechef Warehouse promotes via the GIT COMMIT GRAPH: it watches the
 # `deploy` branch of this repo and the prod Stage derives image.tag =
-# main-<sha7> for ALL six services (api, web, admin-portal [retired — carry
-# forward only], vendor-portal,
+# main-<sha7> for ALL five services (api, web, vendor-portal,
 # delivery-portal, auth-bff). This replaced image-tag discovery, which broke
 # because the homechef-* repos have >100 main-<sha> tags and Artifact Registry
 # paginates the tag list at 100 (NewestBuild then promoted a stale page and
@@ -110,7 +109,6 @@ jobs:
           # carry forward.
           declare -A POLL=(
             [homechef-api]="${API_CHANGED}"
-            [homechef-admin-portal]="false"
             [homechef-auth-bff]="${AUTHBFF_CHANGED}"
             [homechef-web]="${WEB_CHANGED}"
             [homechef-vendor-portal]="false"
@@ -120,7 +118,6 @@ jobs:
           # carry-forward source on the very first run (no deploy branch yet).
           declare -A APPFILE=(
             [homechef-api]="argocd/prod/apps/homechef/homechef-api.yaml"
-            [homechef-admin-portal]="argocd/prod/apps/homechef/homechef-admin-portal.yaml"
             [homechef-auth-bff]="argocd/prod/apps/homechef/homechef-auth-bff.yaml"
             [homechef-web]="argocd/prod/apps/homechef/homechef-web.yaml"
             [homechef-vendor-portal]="argocd/prod/apps/homechef/homechef-vendor-portal.yaml"
@@ -164,7 +161,7 @@ jobs:
               | sed -E 's/.*value:[[:space:]]*"?([^"#]+)"?.*/\1/' | tr -d '[:space:]'
           }
 
-          for SVC in homechef-api homechef-admin-portal homechef-auth-bff homechef-web homechef-vendor-portal homechef-delivery-portal; do
+          for SVC in homechef-api homechef-auth-bff homechef-web homechef-vendor-portal homechef-delivery-portal; do
             echo "::group::${SVC}"
             if tag_exists "${SVC}"; then
               echo "${SVC}:${NEW_TAG} already present ✓"; echo "::endgroup::"; continue
