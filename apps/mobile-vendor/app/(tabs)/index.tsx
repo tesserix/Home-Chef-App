@@ -44,6 +44,7 @@ import {
 } from '../../hooks/useExpiringDocuments';
 import { useActionRequiredAdminRequests } from '../../hooks/useAdminRequests';
 import { useChefMealPlanRequests, type MealPlan } from '../../hooks/useMealPlans';
+import { useCancellationRequests } from '../../hooks/useCancellations';
 import { useAuthStore } from '../../store/auth-store';
 import { PendingOrderCard } from '../../components/vendor/PendingOrderCard';
 import { orderSourceLabel } from '../../lib/orderSource';
@@ -135,6 +136,13 @@ export default function DashboardScreen() {
   const { data: actionRequests } = useActionRequiredAdminRequests();
   const { data: mealPlanResp, refetch: refetchMealPlans } =
     useChefMealPlanRequests();
+  // Cancellation requests awaiting the chef's confirm (#475). These are
+  // time-boxed — the customer is waiting and an unanswered request auto-resolves
+  // against the chef — so they belong in ACTION REQUIRED, not only behind
+  // More → Cancellations where the chef had to go looking for them.
+  const { data: cancelResp, refetch: refetchCancellations } =
+    useCancellationRequests('pending_vendor');
+  const pendingCancellations = cancelResp?.data ?? [];
 
   // User-initiated pull-to-refresh only — avoids the stuck-spinner bug when
   // React Query's isRefetching fires for background refetches (focus, mutation
@@ -143,7 +151,12 @@ export default function DashboardScreen() {
   async function onPullRefresh(): Promise<void> {
     setIsPulling(true);
     try {
-      await Promise.all([refetch(), refetchPending(), refetchMealPlans()]);
+      await Promise.all([
+        refetch(),
+        refetchPending(),
+        refetchMealPlans(),
+        refetchCancellations(),
+      ]);
     } finally {
       setIsPulling(false);
     }
@@ -303,6 +316,7 @@ export default function DashboardScreen() {
     (minutesSinceLastOrder === null || minutesSinceLastOrder > 120);
 
   const hasAlerts =
+    pendingCancellations.length > 0 ||
     pendingMealPlans.length > 0 ||
     (actionRequests?.length ?? 0) > 0 ||
     expiringDocs.length > 0;
@@ -405,26 +419,45 @@ export default function DashboardScreen() {
               )}
             </Pressable>
           </View>
+          {/* Each stat is a doorway to the screen that explains it — a number
+              the chef can't drill into is a dead end. Earnings → payouts and
+              transactions, Orders → today's list, Rating → the reviews behind
+              it. Routes match More's menu so both surfaces agree. */}
           {showToday && (
             <View style={styles.heroStatsRow}>
-              <View style={styles.heroStatMain}>
+              <Pressable
+                onPress={() => router.push('/earnings')}
+                accessibilityRole="button"
+                accessibilityLabel={`Today's earnings: ₹${(dashboard?.todayEarnings ?? 0).toFixed(0)}. Tap to see payouts and transactions.`}
+                style={({ pressed }) => [styles.heroStatMain, pressed && styles.heroStatPressed]}
+              >
                 <Text style={styles.heroEarnings}>
                   ₹{(dashboard?.todayEarnings ?? 0).toFixed(0)}
                 </Text>
                 <Text style={styles.heroStatLabel}>{t('dashboard.todaysEarnings')}</Text>
-              </View>
-              <View style={styles.heroStatCol}>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/(tabs)/orders')}
+                accessibilityRole="button"
+                accessibilityLabel={`${dashboard?.todayOrders ?? 0} orders today. Tap to see them.`}
+                style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
+              >
                 <Text style={styles.heroStatValue}>
                   {dashboard?.todayOrders ?? 0}
                 </Text>
                 <Text style={styles.heroStatLabel}>{t('dashboard.orders')}</Text>
-              </View>
-              <View style={styles.heroStatCol}>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/reviews')}
+                accessibilityRole="button"
+                accessibilityLabel={`Rating: ${(dashboard?.rating ?? 0).toFixed(1)} out of 5. Tap to read your reviews.`}
+                style={({ pressed }) => [styles.heroStatCol, pressed && styles.heroStatPressed]}
+              >
                 <Text style={styles.heroStatValue}>
                   {(dashboard?.rating ?? 0).toFixed(1)}★
                 </Text>
                 <Text style={styles.heroStatLabel}>{t('dashboard.rating')}</Text>
-              </View>
+              </Pressable>
             </View>
           )}
         </Animated.View>
@@ -496,6 +529,51 @@ export default function DashboardScreen() {
           >
             <Text style={styles.sectionLabel}>{t('dashboard.actionRequired')}</Text>
             <View style={styles.alertCards}>
+              {/* Cancellation requests lead the stack: a customer is actively
+                  waiting, the window is time-boxed (vendorRespondBy), and not
+                  answering resolves it against the chef. Everything below is
+                  less urgent. */}
+              {pendingCancellations.length > 0 && (
+                <Pressable
+                  onPress={() => router.push('/cancel-requests')}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    pendingCancellations.length === 1
+                      ? 'A customer asked to cancel an order. Tap to review and confirm.'
+                      : `${pendingCancellations.length} customers asked to cancel orders. Tap to review.`
+                  }
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={[
+                        styles.alertCard,
+                        { borderLeftColor: theme.colors.destructive.DEFAULT },
+                        pressed && { opacity: 0.85 },
+                      ]}
+                    >
+                      <View style={styles.alertRowTop}>
+                        <View
+                          style={[
+                            styles.alertDot,
+                            { backgroundColor: theme.colors.destructive.DEFAULT },
+                          ]}
+                        />
+                        <Text style={styles.alertLabel} numberOfLines={1}>
+                          {pendingCancellations.length === 1
+                            ? 'Cancellation request'
+                            : `${pendingCancellations.length} cancellation requests`}
+                        </Text>
+                        <Text style={styles.alertCta}>Review</Text>
+                      </View>
+                      <Text style={styles.alertBody} numberOfLines={1}>
+                        {pendingCancellations.length === 1
+                          ? 'A customer wants to cancel — confirm to set the refund.'
+                          : 'Customers are waiting on your confirmation.'}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              )}
               {pendingMealPlans.length > 0 && (
                 <Pressable
                   onPress={() =>
@@ -880,6 +958,11 @@ const styles = StyleSheet.create({
   },
   heroStatMain: {
     flex: 1,
+  },
+  // Touch feedback for the stat tiles. Opacity only — the design system animates
+  // opacity/transform and nothing else.
+  heroStatPressed: {
+    opacity: 0.6,
   },
   heroEarnings: {
     fontFamily: 'Geist-Bold',
