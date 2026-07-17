@@ -15,11 +15,19 @@ import (
 
 // NATS subjects for different event types
 const (
-	SubjectOrderCreated       = "orders.created"
-	SubjectOrderUpdated       = "orders.updated"
-	SubjectOrderCancelled     = "orders.cancelled"
-	SubjectOrderDelivered     = "orders.delivered"
-	SubjectOrderIssueReported = "orders.issue_reported" // → chef: a customer reported an order issue (#37)
+	SubjectOrderCreated   = "orders.created"
+	SubjectOrderUpdated   = "orders.updated"
+	SubjectOrderCancelled = "orders.cancelled"
+	// SubjectOrderVoided — a paid order the chef never accepted before their
+	// kitchen closed (#694). Distinct from orders.cancelled on purpose: nobody
+	// chose this, the customer is owed an apology as well as their money, and the
+	// two need different copy and different reporting.
+	SubjectOrderVoided = "orders.voided"
+	// SubjectOrderAcceptReminder — an unaccepted order is inside the final two
+	// hours before the kitchen closes (#694).
+	SubjectOrderAcceptReminder = "orders.accept_reminder"
+	SubjectOrderDelivered      = "orders.delivered"
+	SubjectOrderIssueReported  = "orders.issue_reported" // → chef: a customer reported an order issue (#37)
 	// Cancellation with vendor arbitration (#475).
 	SubjectCancellationRequested = "orders.cancellation_requested" // → chef: confirm the cancellation
 	SubjectCancellationResolved  = "orders.cancellation_resolved"  // → customer: refund issued

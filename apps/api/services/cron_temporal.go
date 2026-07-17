@@ -36,6 +36,11 @@ func cronJobs() []cronJob {
 		{"meal-sub-orders", mealSubOrderScanInterval, runMealSubscriptionDailyOrders, StartMealSubscriptionOrderCron},
 		{"campaign-dispatch", campaignDispatchInterval, runCampaignDispatch, StartCampaignCron},
 		{"stale-order", staleOrderInterval, runStaleOrderScan, StartStaleOrderCron},
+		// #694 — void + refund paid orders the chef never accepted before their
+		// kitchen closed. Registered here so it runs under Temporal Schedules where
+		// they drive the crons, and as an in-process ticker where they do not: the
+		// money hole must not depend on which mode we are in.
+		{"unaccepted-order", unacceptedOrderInterval, runUnacceptedOrderScan, StartUnacceptedOrderCron},
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
 		{"cancellation-sweep", cancellationSweepInterval, runCancellationSweep, StartCancellationCron},
