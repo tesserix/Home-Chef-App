@@ -193,3 +193,46 @@ func TestAcceptReminders_NoneWhenTheDeadlineHasPassed(t *testing.T) {
 	require.Empty(t, AcceptReminderTimes(deadline, ist(2026, 7, 20, 15, 0)),
 		"nothing to remind about — the order is being voided")
 }
+
+// ── Reminders owed (the cadence a 5-min sweep must drive without double-firing) ─
+
+func TestAcceptRemindersOwed_NoneBeforeTheWindow(t *testing.T) {
+	deadline := ist(2026, 7, 20, 14, 0)
+	created := ist(2026, 7, 20, 8, 0)
+	// 11:30 — before the 12:00 window opens.
+	require.Equal(t, 0, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 11, 30), 0))
+}
+
+func TestAcceptRemindersOwed_OneDuePerSlotAsTheWindowProgresses(t *testing.T) {
+	deadline := ist(2026, 7, 20, 14, 0) // slots at 12:00, 12:30, 13:00, 13:30
+	created := ist(2026, 7, 20, 8, 0)
+
+	// 12:05 — the 12:00 slot has passed, none sent → 1 owed.
+	require.Equal(t, 1, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 12, 5), 0))
+	// Same instant, but 1 already sent → 0. This is the anti-double-fire guard:
+	// a 5-min sweep tick inside the same 30-min slot must not send again.
+	require.Equal(t, 0, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 12, 25), 1))
+	// 12:35 — two slots passed (12:00, 12:30), one sent → 1 owed.
+	require.Equal(t, 1, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 12, 35), 1))
+}
+
+// After an outage several may be owed at once; the caller sends one per tick, but
+// the count is honest so nothing is lost.
+func TestAcceptRemindersOwed_CatchesUpAfterAGap(t *testing.T) {
+	deadline := ist(2026, 7, 20, 14, 0)
+	created := ist(2026, 7, 20, 8, 0)
+	// 13:45 — all four slots passed, none sent → 4 owed.
+	require.Equal(t, 4, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 13, 45), 0))
+}
+
+// An advance order does not accrue reminders a day early — the window is anchored
+// to the deadline, not to creation.
+func TestAcceptRemindersOwed_AdvanceOrder_NoneUntilTheDayOf(t *testing.T) {
+	deadline := ist(2026, 7, 21, 22, 0) // tomorrow's dinner
+	created := ist(2026, 7, 20, 10, 0)  // placed today
+
+	require.Equal(t, 0, AcceptRemindersOwed(deadline, created, ist(2026, 7, 20, 18, 0), 0),
+		"a nudge today about tomorrow's dinner would be noise")
+	require.Equal(t, 1, AcceptRemindersOwed(deadline, created, ist(2026, 7, 21, 20, 5), 0),
+		"the first nudge lands at 20:00 tomorrow — 2h before close")
+}

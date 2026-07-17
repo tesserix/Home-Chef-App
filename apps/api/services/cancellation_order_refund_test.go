@@ -102,6 +102,7 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 			stripe_payment_intent_id TEXT DEFAULT '', total REAL DEFAULT 0, wallet_applied REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 			refund_amount REAL DEFAULT 0, refund_id TEXT DEFAULT '', refund_reason TEXT, refund_initiated_by TEXT, refunded_at DATETIME,
 			cancel_reason TEXT, cancelled_at DATETIME, delivery_slot TEXT DEFAULT '', scheduled_for DATETIME,
+			accept_reminder_count INTEGER NOT NULL DEFAULT 0, last_accept_reminder_at DATETIME,
 			payout_hold_status TEXT DEFAULT '', created_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0, currency TEXT DEFAULT 'INR',
 			created_at DATETIME, updated_at DATETIME)`,

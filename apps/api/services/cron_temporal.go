@@ -41,6 +41,9 @@ func cronJobs() []cronJob {
 		// they drive the crons, and as an in-process ticker where they do not: the
 		// money hole must not depend on which mode we are in.
 		{"unaccepted-order", unacceptedOrderInterval, runUnacceptedOrderScan, StartUnacceptedOrderCron},
+		// #694 — the pre-close nudge: remind a chef of an order they have not
+		// accepted, before the void sweep cancels it. Same durable/ticker duality.
+		{"accept-reminder", acceptReminderInterval, runAcceptReminderScan, StartAcceptReminderCron},
 		{"payout-auto-confirm", payoutAutoConfirmInterval, runPayoutAutoConfirmScan, StartPayoutAutoConfirmCron},
 		{"payout-reconcile", payoutReconcileInterval, runPayoutReconcileScan, StartPayoutReconcileCron},
 		{"cancellation-sweep", cancellationSweepInterval, runCancellationSweep, StartCancellationCron},

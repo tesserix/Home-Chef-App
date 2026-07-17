@@ -74,6 +74,12 @@ func (s *NotificationService) consumerSpecs() []ConsumerSpec {
 	return []ConsumerSpec{
 		{Stream: "ORDERS", Durable: "notify-orders", Handler: h,
 			Subjects: []string{SubjectOrderCreated, SubjectOrderUpdated, SubjectOrderCancelled, SubjectOrderDelivered}},
+		// Auto-void (#694): the customer's apology + refund confirmation, and the
+		// chef's pre-close nudge. Own durable so this flow is independent of the
+		// order-lifecycle notifications above — a backlog on one must not stall the
+		// other, and the apology in particular must always get through.
+		{Stream: "ORDERS", Durable: "notify-order-void", Handler: h,
+			Subjects: []string{SubjectOrderVoided, SubjectOrderAcceptReminder}},
 		// Order issue reported → notify the chef (#37). Own durable so the
 		// issue fan-out is independent of the order-lifecycle notifications.
 		{Stream: "ORDERS", Durable: "notify-order-issue", Handler: h,
@@ -139,6 +145,10 @@ func (s *NotificationService) handleBySubject(_ context.Context, subject string,
 		return decodeThen(data, s.handleOrderUpdated)
 	case SubjectOrderCancelled:
 		return decodeThen(data, s.handleOrderCancelled)
+	case SubjectOrderVoided:
+		return decodeThen(data, s.handleOrderVoided)
+	case SubjectOrderAcceptReminder:
+		return decodeThen(data, s.handleOrderAcceptReminder)
 	case SubjectCancellationRequested:
 		return decodeThen(data, s.handleCancellationRequested)
 	case SubjectCancellationResolved:
@@ -398,6 +408,111 @@ func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
 		Data: map[string]any{"type": "order_status", "order_number": event.OrderNumber, "status": "cancelled"},
 	})
 	return nil
+}
+
+// voidEvent is the orders.voided payload (#694). A distinct struct rather than
+// OrderEvent because a void carries WHY — the slot and deadline that explain it —
+// and the apology is only decent if it can be specific.
+type voidEvent struct {
+	OrderID        uuid.UUID `json:"order_id"`
+	OrderNumber    string    `json:"order_number"`
+	ChefID         uuid.UUID `json:"chef_id"`
+	CustomerID     uuid.UUID `json:"customer_id"`
+	Reason         string    `json:"reason"`
+	Slot           string    `json:"slot"`
+	RefundedAmount float64   `json:"refunded_amount"`
+}
+
+// handleOrderVoided apologises to the customer and confirms the refund for an
+// order the kitchen closed on. The refund itself already happened (the void cron
+// moves the money before publishing); this is the "we're sorry, here's your
+// money back" the customer is owed. NO chef notification — a void is not the
+// chef's fault to be told off for, and they already had their reminders.
+func (s *NotificationService) handleOrderVoided(ev voidEvent) error {
+	// The event carries customer_id, but fall back to the order if an older
+	// producer omitted it, so an apology is never silently skipped.
+	customerID := ev.CustomerID
+	if customerID == uuid.Nil {
+		var o models.Order
+		if err := database.DB.Select("customer_id").First(&o, "id = ?", ev.OrderID).Error; err != nil {
+			return fmt.Errorf("order_voided: resolve customer for %s: %w", ev.OrderID, err)
+		}
+		customerID = o.CustomerID
+	}
+
+	meal := ev.Slot
+	if meal == "" {
+		meal = "order"
+	}
+	title := "We're sorry — your order was cancelled"
+	body := fmt.Sprintf(
+		"No chef was able to accept your %s in time, so we've cancelled it and refunded ₹%.0f in full. We're sorry for the inconvenience.",
+		meal, ev.RefundedAmount)
+
+	data, _ := json.Marshal(map[string]any{
+		"order_id": ev.OrderID.String(), "type": "order_voided", "refunded": ev.RefundedAmount,
+	})
+	if err := s.saveNotification(&models.Notification{
+		UserID: customerID, Type: "order_voided", Title: title, Message: body, Data: string(data),
+	}); err != nil {
+		return fmt.Errorf("save order_voided notification for %s: %w", customerID, err)
+	}
+	// Push + email so the apology reaches them even with the app closed — being
+	// silently refunded reads as "they took my money and cancelled my dinner".
+	PublishNotification(NotificationEvent{
+		UserID: customerID, Type: "push", Title: title, Message: body,
+		Data: map[string]any{"order_id": ev.OrderID.String(), "type": "order_voided"},
+	})
+	PublishNotification(NotificationEvent{
+		UserID: customerID, Type: "email", Title: title, Message: body,
+		Data: map[string]any{"type": "order_voided", "order_number": ev.OrderNumber},
+	})
+	return nil
+}
+
+// acceptReminderEvent is the orders.accept_reminder payload (#694).
+type acceptReminderEvent struct {
+	OrderID     uuid.UUID `json:"order_id"`
+	OrderNumber string    `json:"order_number"`
+	ChefID      uuid.UUID `json:"chef_id"`
+	Slot        string    `json:"slot"`
+	MinutesLeft int       `json:"minutes_left"`
+	FinalCall   bool      `json:"final_call"`
+}
+
+// handleOrderAcceptReminder nudges the CHEF about an order they have not accepted
+// as their kitchen close approaches. An actionable push (not just a bell) so it
+// can act as a real prompt to open the app and accept — the whole point is to
+// prevent the void.
+func (s *NotificationService) handleOrderAcceptReminder(ev acceptReminderEvent) error {
+	chefUser, err := chefUserID(ev.ChefID)
+	if err != nil {
+		return fmt.Errorf("order_accept_reminder: %w", err)
+	}
+
+	title := "Order still needs accepting"
+	if ev.FinalCall {
+		title = "Last chance — accept before your kitchen closes"
+	}
+	body := fmt.Sprintf(
+		"Order %s hasn't been accepted yet. Accept it in the next %d min or it will be auto-cancelled and the customer refunded.",
+		ev.OrderNumber, ev.MinutesLeft)
+
+	data := map[string]string{
+		"order_id": ev.OrderID.String(), "type": "accept_reminder", "action": "accept_order",
+	}
+	// Actionable push so the chef can jump straight to the order. Best-effort by
+	// contract; the in-app row below is the durable record.
+	if err := SendActionablePush(chefUser, title, body, "orders", "ORDER_ACCEPT", data); err != nil {
+		log.Printf("accept-reminder push failed for chef %s: %v", chefUser, err)
+	}
+
+	dataJSON, _ := json.Marshal(map[string]any{
+		"order_id": ev.OrderID.String(), "type": "accept_reminder",
+	})
+	return s.saveNotification(&models.Notification{
+		UserID: chefUser, Type: "accept_reminder", Title: title, Message: body, Data: string(dataJSON),
+	})
 }
 
 func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {

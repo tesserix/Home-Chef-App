@@ -167,15 +167,37 @@ const (
 // and a "your order is waiting" push landing in the same second as "your order
 // was cancelled" is worse than silence.
 //
-// Times already in the past are skipped rather than fired late: an order placed
-// 40 minutes before close should get the reminders that are still ahead of it,
-// not an instant burst of the ones it missed.
-func AcceptReminderTimes(deadline, now time.Time) []time.Time {
+// `after` filters out times at or before it, used to skip nudges an order placed
+// mid-window already missed. Pass the order's creation time for the full
+// schedule, or `now` to get only what is still ahead.
+func AcceptReminderTimes(deadline, after time.Time) []time.Time {
 	var out []time.Time
 	for t := deadline.Add(-acceptReminderLeadIn); t.Before(deadline); t = t.Add(acceptReminderEvery) {
-		if t.After(now) {
+		if t.After(after) {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+// AcceptRemindersOwed reports how many nudges are due RIGHT NOW that have not
+// been sent yet — the count of scheduled times at or before `now`, minus the
+// `alreadySent` count the order records.
+//
+// This is what lets a 5-minute sweep drive a 30-minute cadence without
+// double-firing: the schedule is deterministic, so "how many should have gone by
+// now" minus "how many did" is exactly what is owed, regardless of how often the
+// sweep runs or whether a tick was missed. Never negative.
+func AcceptRemindersOwed(deadline, createdAt, now time.Time, alreadySent int) int {
+	shouldHaveSent := 0
+	for _, t := range AcceptReminderTimes(deadline, createdAt) {
+		if !t.After(now) {
+			shouldHaveSent++
+		}
+	}
+	owed := shouldHaveSent - alreadySent
+	if owed < 0 {
+		return 0
+	}
+	return owed
 }

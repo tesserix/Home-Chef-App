@@ -132,11 +132,18 @@ type Order struct {
 	// chef's per-slot daily capacity was reserved at order time.
 	DeliverySlot string     `gorm:"type:varchar(8)" json:"deliverySlot,omitempty"`
 	AcceptedAt   *time.Time `gorm:"" json:"acceptedAt,omitempty"`
-	PreparedAt   *time.Time `gorm:"" json:"preparedAt,omitempty"`
-	PickedUpAt   *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
-	DeliveredAt  *time.Time `gorm:"" json:"deliveredAt,omitempty"`
-	CancelledAt  *time.Time `gorm:"" json:"cancelledAt,omitempty"`
-	CancelReason string     `gorm:"" json:"cancelReason,omitempty"`
+	// AcceptReminderCount / LastAcceptReminderAt track the pre-close nudges (#694):
+	// from 2h before the kitchen closes, every 30 minutes, the chef is reminded of
+	// an order still not accepted. The count is how many have fired; the sweep uses
+	// it to know whether the next scheduled nudge is owed, so a 5-minute sweep tick
+	// cannot double-send within one 30-minute slot.
+	AcceptReminderCount  int        `gorm:"not null;default:0" json:"acceptReminderCount"`
+	LastAcceptReminderAt *time.Time `gorm:"" json:"lastAcceptReminderAt,omitempty"`
+	PreparedAt           *time.Time `gorm:"" json:"preparedAt,omitempty"`
+	PickedUpAt           *time.Time `gorm:"" json:"pickedUpAt,omitempty"`
+	DeliveredAt          *time.Time `gorm:"" json:"deliveredAt,omitempty"`
+	CancelledAt          *time.Time `gorm:"" json:"cancelledAt,omitempty"`
+	CancelReason         string     `gorm:"" json:"cancelReason,omitempty"`
 
 	// Special Instructions
 	SpecialInstructions string `gorm:"type:text" json:"specialInstructions"`
@@ -155,7 +162,7 @@ type Order struct {
 	// provider-specific ID below. Inherited from ChefProfile.PaymentProvider
 	// at order creation time so late-switching a chef doesn't invalidate
 	// already-placed orders.
-	PaymentProvider       string     `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
+	PaymentProvider string `gorm:"type:varchar(20);default:'razorpay'" json:"paymentProvider"`
 	// Gateway ids. Each is covered by a PARTIAL unique index (WHERE col <> '') created in
 	// database.go's postMigrate block (#395·1) — a plain GORM uniqueIndex tag can't be used
 	// because wallet-only/unpaid/Stripe/meal-plan-day-shell orders share the empty default.
