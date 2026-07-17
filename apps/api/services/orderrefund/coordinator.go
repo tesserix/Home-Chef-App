@@ -17,26 +17,35 @@ package orderrefund
 //
 // THE SAGA
 //
-//	tx#1  lock the order, validate against the remaining INCLUDING in-flight
-//	      pending ledger rows, reserve a pending row
-//	--    call the gateway OUTSIDE any transaction
-//	tx#2  finalize the ledger + bookkeep the order
+//	tx#1  take the SHARED reservation + write a pending ledger row, together
+//	--    deliver the money OUTSIDE any transaction
+//	tx#2  finalize the ledger + stamp the order's terminal markers
 //
 // The gateway call is outside a transaction deliberately. order_issue.go credits
 // the wallet INSIDE its tx; putting a Razorpay round-trip there would hold a row
 // lock across a network call. That is why #691 needs this coordinator rather
 // than a one-line swap.
 //
-// WHY THE PENDING SUM MATTERS
+// WHY THE RESERVATION IS SHARED (#690)
 //
-// The shared idempotency keys make the GATEWAY dedup a same-key retry. They do
-// nothing for two DIFFERENT logical refunds (say a cancellation and an order
-// issue) racing: each could read the same stale refund_amount, each clear the
-// cap, and both move real money. Counting in-flight pending rows under the row
-// lock is what closes that.
+// The reservation MUST be refundreserve's — the same claim on payment_status that
+// every legacy path takes — and not a mechanism of our own. That claim IS the
+// cross-path mutex. A coordinator that reserved differently is invisible to the
+// paths it has not replaced yet: a sibling would see payment_status='completed'
+// and an un-incremented refund_amount while we were mid-gateway, win its own
+// claim, and refund the same money twice. The first draft of this file did
+// exactly that, and services/refund_coordinator_interop_test.go proves it. Since
+// #690 migrates the call sites one at a time, a migrated and an un-migrated path
+// are concurrent for the whole migration — sharing the claim is the precondition
+// for migrating anything at all.
+//
+// The reservation increments refund_amount UP FRONT, which is what makes an
+// in-flight refund visible to every other path. So the ledger is NOT the cap: it
+// is the audit trail and the idempotency record.
 //
 // NOT A PORT of mark8ly's coordinator — same shape, different money model (Route
-// escrow + chef payouts vs store returns).
+// escrow + chef payouts vs store returns), and mark8ly's pending-sum cap does not
+// apply here because HomeChef already had a shared reservation to join.
 
 import (
 	"context"
@@ -84,14 +93,34 @@ var (
 // legitimate second refund away.
 var scopeIDPattern = regexp.MustCompile(`^\S+$`)
 
-// Gateway is the narrow surface the coordinator needs. An interface (not the
-// concrete Razorpay client) so tests can fake it while still exercising the real
-// ledger and cap logic against a DB.
+// GatewayRequest is one delivery of refund money to a customer.
+type GatewayRequest struct {
+	OrderID uuid.UUID
+	// Amount is the FULL amount owed back, in major units — not a gateway share.
+	// How it is delivered is the Gateway's business: a wallet-funded order only
+	// captured (Total − WalletApplied) at the provider, so the provider cannot
+	// refund more than that and the rest goes back as store credit (#141). That
+	// split must NOT leak into the coordinator — it would silently under-reserve.
+	Amount float64
+	// IdempotencyKey is a LOGICAL operation id; the provider client normalizes it
+	// into the provider's dedup header (#574).
+	IdempotencyKey string
+	Reason         string
+	Actor          string
+	ScopeID        string
+}
+
+// Gateway delivers refund money and returns a reference for it.
+//
+// It is deliberately ORDER-shaped rather than payment-shaped. The first draft took
+// (providerPaymentID, amountPaise), which silently assumed Razorpay: it cannot
+// express a wallet refund (no provider payment at all) or a Stripe one (a payment
+// INTENT, different id, different minor-unit rules), and #691 is precisely the bug
+// of a path that assumed one provider. Routing lives behind this interface, in
+// services, where the provider clients already are — which also keeps orderrefund
+// free of the services import that would be a cycle.
 type Gateway interface {
-	// RefundPayment refunds amountPaise against providerPaymentID and returns the
-	// provider's refund id. idempotencyKey is a LOGICAL operation id — the client
-	// normalizes it into the provider's dedup header (#574).
-	RefundPayment(ctx context.Context, providerPaymentID string, amountPaise int, idempotencyKey string, notes map[string]string) (string, error)
+	RefundPayment(ctx context.Context, req GatewayRequest) (string, error)
 }
 
 // RefundCommand is one logical refund. Amount==nil means "the full remaining".
@@ -130,6 +159,21 @@ func NewCoordinator(db *gorm.DB, gateway Gateway, enabled bool) *Coordinator {
 	return &Coordinator{db: db, gateway: gateway, enabled: enabled}
 }
 
+// Scope constants for refunds whose key must match a legacy path's byte-for-byte
+// while #690 migrates the call sites one at a time.
+const (
+	// ScopeFull is the once-per-order full cancellation refund. The scope is "full"
+	// and NOT something tidier like "cancel" for one specific reason: it makes
+	// idempotencyKey(order, ScopeFull) identical to services.RefundFullIdempotencyKey
+	// — "refund:<order>:full". That shared key is deliberate (see
+	// gateway_idempotency.go): if two cancellation paths ever both fire for one
+	// order, the GATEWAY dedups them. It is the second line of defence behind the
+	// reservation, and it only works while every path derives the same key. A
+	// migrated path with a prettier scope would quietly drop out of it, exactly
+	// while migration makes a collision most likely.
+	ScopeFull = "full"
+)
+
 // idempotencyKey builds the gateway-facing key for a logical refund. Keyed on
 // (order, scope) so a retry of the SAME logical refund reuses it and the gateway
 // dedups, while two different scopes stay distinct.
@@ -137,11 +181,10 @@ func idempotencyKey(orderID uuid.UUID, scopeID string) string {
 	return fmt.Sprintf("refund:%s:%s", orderID, scopeID)
 }
 
-// toPaise converts major units to integer minor units. Rounds rather than
-// truncates: 0.1+0.2 style float error must not silently shave a paisa off a
-// customer's refund.
-func toPaise(amount float64) int {
-	return int(amount*100 + 0.5)
+// IdempotencyKeyFor exposes the key a command WOULD use. Exported so the legacy
+// paths' shared-key invariant can be pinned by a test rather than by a comment.
+func IdempotencyKeyFor(orderID uuid.UUID, scopeID string) string {
+	return idempotencyKey(orderID, scopeID)
 }
 
 // hasPendingRefund reports whether an attempt for this order is mid-gateway. Only
@@ -255,9 +298,17 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 	// reservation increments refund_amount UP FRONT, so an in-flight refund is
 	// already subtracted from every other path's `remaining`. The ledger stays
 	// the audit trail and the idempotency record — it is no longer the cap.
-	requested := 0.0 // <=0 means "the full remaining" to ReserveRefund
+	// A nil Amount is a FULL-refund intent, and full refunds take a STRICTER claim: they must
+	// also see refunded_at IS NULL. That half of the mutex excludes the sibling paths that
+	// stamp refunded_at without flipping payment_status (cancellation_execute.go). Reserving a
+	// full refund on payment_status alone sails past an order a sibling already refunded and
+	// refunds it again — caught by TestRefundOrderForCancellation_AlreadyRefundedNoOp when
+	// this first routed everything through the partial claim.
+	requested := 0.0 // <=0 means "the full remaining"
+	intent := refundreserve.IntentFull
 	if cmd.Amount != nil {
 		requested = models.RoundAmount(*cmd.Amount)
+		intent = refundreserve.IntentPartial
 	}
 	// The reservation and its ledger row commit TOGETHER. Separately, a crash in
 	// between would leave refund_amount incremented with no ledger row: the order
@@ -269,7 +320,7 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 	)
 	if err := c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var e error
-		if res, e = refundreserve.ReserveRefundInTx(tx, cmd.OrderID, requested); e != nil {
+		if res, e = refundreserve.ReserveInTx(tx, cmd.OrderID, requested, intent); e != nil {
 			return e
 		}
 		if !res.Won {
@@ -281,7 +332,16 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		if cmd.Amount != nil && res.Amount < requested {
 			return errOverAsked
 		}
-		ledgerID, e = c.reserveLedgerRow(tx, cmd, key, retryLedgerID, res.Amount, res.Order)
+		// The provider columns are ours to read, not the reservation's to hand over: they
+		// are for the LEDGER, and making the shared reservation fetch them for us would
+		// couple every other caller to columns it never needed. Same transaction, same
+		// lock, so it is the same consistent snapshot.
+		var provider models.Order
+		if e = tx.Select("payment_provider", "razorpay_payment_id").
+			First(&provider, "id = ?", cmd.OrderID).Error; e != nil {
+			return e
+		}
+		ledgerID, e = c.reserveLedgerRow(tx, cmd, key, retryLedgerID, res.Amount, provider)
 		return e
 	}); err != nil {
 		if errors.Is(err, errOverAsked) {
@@ -313,13 +373,22 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 	}
 
 	amount := res.Amount
-	release := func() { refundreserve.ReleaseRefundReservation(c.db, cmd.OrderID, amount) }
+	// Release the claim we actually took: the full one also stamped refunded_at, and leaving
+	// that behind on a failed refund would freeze the order — every payout guard blocks the
+	// whole chef hold on refunded_at IS NOT NULL, and the next full refund would lose the
+	// claim forever.
+	release := func() {
+		if intent == refundreserve.IntentFull {
+			refundreserve.ReleaseFullRefundReservation(c.db, cmd.OrderID, amount)
+			return
+		}
+		refundreserve.ReleaseRefundReservation(c.db, cmd.OrderID, amount)
+	}
 
 	// ── gateway — OUTSIDE any transaction ────────────────────────────────────
-	refundID, gwErr := c.gateway.RefundPayment(ctx, res.Order.RazorpayPaymentID, toPaise(amount), key, map[string]string{
-		"order_id": cmd.OrderID.String(),
-		"scope":    cmd.ScopeID,
-		"reason":   cmd.Reason,
+	refundID, gwErr := c.gateway.RefundPayment(ctx, GatewayRequest{
+		OrderID: cmd.OrderID, Amount: amount, IdempotencyKey: key,
+		Reason: cmd.Reason, Actor: cmd.Actor, ScopeID: cmd.ScopeID,
 	})
 
 	// ── tx#2 — finalize ──────────────────────────────────────────────────────
@@ -371,6 +440,10 @@ func (c *Coordinator) Refund(ctx context.Context, cmd RefundCommand) (RefundResu
 		markers := map[string]any{"payment_status": models.PaymentCompleted}
 		if res.FullRefund {
 			markers["payment_status"] = models.PaymentRefunded
+			// IntentFull stamped refunded_at as part of its claim, so this only matters for a
+			// PARTIAL-intent request that turned out to exhaust the order (a concurrent refund
+			// shrank the remainder below what was asked). It still ends the order, so it still
+			// gets the terminal marker.
 			markers["refunded_at"] = now
 		}
 		return tx.Model(&models.Order{}).Where("id = ?", cmd.OrderID).Updates(markers).Error

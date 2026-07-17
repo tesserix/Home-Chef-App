@@ -90,7 +90,11 @@ func TestCoordinator_Refund_ReservesThenCallsGatewayThenFinalizes(t *testing.T) 
 	require.Equal(t, 300.0, res.Amount, "nil Amount means the full remaining")
 	require.True(t, res.FullRefund, "₹300 of ₹300 is a full refund")
 	require.Equal(t, 1, f.gateway.calls)
-	require.Equal(t, 30000, f.gateway.lastAmountPaise, "the gateway is called in PAISE")
+	// Major units, not paise: minor-unit conversion is the Gateway's job now, because
+	// it is PROVIDER-specific (Razorpay paise vs Stripe's per-currency minor units vs a
+	// wallet credit that has no minor unit at all). The coordinator speaks one currency-
+	// agnostic language and lets routing decide.
+	require.Equal(t, 300.0, f.gateway.lastAmount, "the gateway is handed the full amount owed")
 
 	rows := f.ledgerRows(o.ID)
 	require.Len(t, rows, 1, "exactly one ledger row per attempt")

@@ -24,6 +24,26 @@ import (
 	"github.com/homechef/api/services/orderrefund"
 )
 
+// The full-refund key is SHARED on purpose (gateway_idempotency.go): if two
+// cancellation paths ever both fire for one order, the gateway dedups them. It is the
+// second line of defence behind the reservation — and it only holds while every path
+// derives the same key.
+//
+// #690 migrates those paths onto the coordinator one at a time, so for the whole
+// migration a migrated path and a legacy one must still produce the SAME key. That is
+// why the scope is "full" rather than something tidier like "cancel": it makes the
+// coordinator's key byte-identical to RefundFullIdempotencyKey. Pinned here because the
+// cost of getting it wrong is invisible — a real double refund at the gateway, in the
+// exact window where a collision is most likely.
+func TestInterop_CoordinatorFullScope_MatchesTheLegacySharedRefundKey(t *testing.T) {
+	orderID := uuid.New()
+	require.Equal(t,
+		RefundFullIdempotencyKey(orderID),
+		orderrefund.IdempotencyKeyFor(orderID, orderrefund.ScopeFull),
+		"a migrated cancellation path must key its gateway refund exactly as the "+
+			"un-migrated ones do, or the two stop deduping against each other")
+}
+
 // interopGateway fakes the gateway and runs `during` at the exact moment the
 // coordinator is mid-gateway-call — reservation committed, bookkeeping not yet.
 // That instant is the whole question: it is the window a sibling path observes.
@@ -32,7 +52,7 @@ type interopGateway struct {
 	during func()
 }
 
-func (g *interopGateway) RefundPayment(_ context.Context, _ string, _ int, _ string, _ map[string]string) (string, error) {
+func (g *interopGateway) RefundPayment(_ context.Context, _ orderrefund.GatewayRequest) (string, error) {
 	g.calls++
 	if g.during != nil {
 		g.during()
@@ -58,15 +78,6 @@ func seedCoordinatorOrder(t *testing.T, db *gorm.DB, total float64) uuid.UUID {
 // the same order — the exact double-refund #687 exists to prevent.
 func TestInterop_LegacyFullRefund_CannotRaceACoordinatorRefundInFlight(t *testing.T) {
 	db := setupCancelRefundDB(t)
-	require.NoError(t, db.Exec(`CREATE TABLE refund_transactions (
-		id TEXT PRIMARY KEY, order_id TEXT NOT NULL, provider TEXT NOT NULL,
-		provider_payment_id TEXT, provider_refund_id TEXT,
-		amount REAL NOT NULL, currency_code TEXT NOT NULL DEFAULT 'INR',
-		status TEXT NOT NULL DEFAULT 'pending', reason TEXT,
-		idempotency_key TEXT NOT NULL UNIQUE, scope_id TEXT NOT NULL,
-		actor TEXT, failure_reason TEXT,
-		created_at DATETIME, updated_at DATETIME, completed_at DATETIME)`).Error)
-
 	orderID := seedCoordinatorOrder(t, db, 300)
 
 	var (

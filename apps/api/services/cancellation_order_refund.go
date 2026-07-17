@@ -23,12 +23,15 @@ package services
 // columns + drives the payout hold.
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"github.com/homechef/api/services/orderrefund"
 )
 
 // RefundOrderForCancellation issues the customer's full refund (Total − already-
@@ -58,63 +61,33 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 		log.Printf("cancel-refund: skipping generic refund for %s order %s — refund-managed by its escrow flow", kind, order.ID)
 		return nil
 	}
-	// #609: claim + RESERVE the remaining refundable under a row lock via the shared helper —
-	// the SAME atomic discipline the partial path (RefundIssueToWallet) uses. This replaces the
-	// old unlocked read-then-claim (a partial racing this full could over-refund) AND the later
-	// stale `order.RefundAmount + refundAmount` write (which clobbered a concurrent partial's
-	// increment). refundAmount is the total owed back to the customer (#527 RemainingRefundable,
-	// computed under the lock so a per-line cancel doesn't strand the live items' money).
-	reserved, won, rErr := ReserveFullRefund(database.DB, order.ID)
-	if rErr != nil {
-		return fmt.Errorf("cancel-refund: reserve order %s: %w", order.ID, rErr)
+	// #690: the reservation, the wallet-capture split, the gateway routing and the
+	// release-on-failure all used to be written out here. They now live in the coordinator
+	// and its gateway adapter — one implementation for every refund path, instead of this
+	// one and four near-copies that each had to remember the same rules.
+	//
+	// Behaviour is deliberately unchanged: ScopeFull makes the gateway key byte-identical
+	// to RefundFullIdempotencyKey (so this still dedups against the un-migrated cancellation
+	// paths), and the coordinator takes the same payment_status claim this used to take
+	// directly.
+	res, rErr := NewOrderRefundCoordinator().Refund(context.Background(), orderrefund.RefundCommand{
+		OrderID: order.ID,
+		Reason:  reason,
+		Actor:   initiatedBy,
+		ScopeID: orderrefund.ScopeFull, // nil Amount ⇒ the full remaining
+	})
+	switch {
+	// The legacy !won branch returned nil for all three of these: a sibling path already
+	// refunded, nothing is left, or the order isn't payable. This path is best-effort by
+	// contract and must not fail a cancel because the money is already handled.
+	case errors.Is(rErr, orderrefund.ErrNoCapturedPayment),
+		errors.Is(rErr, orderrefund.ErrExceedsRemaining),
+		errors.Is(rErr, orderrefund.ErrRefundInFlight):
+		return nil
+	case rErr != nil:
+		return fmt.Errorf("cancel-refund: refund order %s: %w", order.ID, rErr)
 	}
-	if !won {
-		return nil // a sibling refund path already claimed/refunded, or nothing left to refund
-	}
-	// `reserved` is the total owed back to the customer (locked into refund_amount by the
-	// reservation). The wallet-capture split below may lower the GATEWAY share (refundAmount),
-	// but the ledger — and any release-on-failure — must always use the full `reserved`.
-	refundAmount := reserved
-	// Refresh Total/WalletApplied for the wallet-capture split (these don't change the total,
-	// only how it's paid: gateway vs re-credited store credit).
-	var money struct{ Total, WalletApplied float64 }
-	if err := database.DB.Model(&models.Order{}).Select("total", "wallet_applied").
-		Where("id = ?", order.ID).Scan(&money).Error; err == nil {
-		order.Total, order.WalletApplied = money.Total, money.WalletApplied
-	}
-	revertClaim := func() {
-		ReleaseFullRefundReservation(database.DB, order.ID, reserved)
-	}
-
-	provider := strings.ToLower(order.PaymentProvider)
-	if provider == "" {
-		provider = "razorpay"
-	}
-
-	// Wallet-at-checkout (#141): a wallet-funded order only captured (Total −
-	// WalletApplied) at the gateway, so the gateway can't refund more than that.
-	// Re-credit the wallet slice as store credit and cap the gateway refund to the
-	// captured amount (parity with InitiateRefund).
-	if order.WalletApplied > 0 && provider != "wallet" {
-		capture := order.Total - order.WalletApplied
-		if refundAmount > capture {
-			walletPortion := refundAmount - capture
-			if _, werr := CreditWallet(database.DB, order.CustomerID, walletPortion,
-				models.WalletSourceRefund, &order.ID,
-				fmt.Sprintf("Wallet-portion refund for order %s: %s", order.OrderNumber, reason),
-				"refund-wallet:"+order.ID.String(), nil); werr != nil {
-				log.Printf("cancel-refund: wallet-portion re-credit failed order=%s: %v", order.OrderNumber, werr)
-				CaptureBackgroundError(werr)
-			}
-			refundAmount = capture
-		}
-	}
-
-	refundID, gerr := runCancellationGatewayRefund(order, provider, refundAmount, initiatedBy, reason)
-	if gerr != nil {
-		revertClaim()
-		return fmt.Errorf("cancel-refund: gateway refund order %s: %w", order.ID, gerr)
-	}
+	refundID := res.ProviderRefundID
 
 	// Persist the refund columns. payment_status + refunded_at + refund_amount were set
 	// atomically by the reservation; status is intentionally left to the caller (cancelled /
@@ -141,13 +114,22 @@ func RefundOrderForCancellation(order *models.Order, initiatedBy, reason string)
 
 // runCancellationGatewayRefund issues the actual gateway/wallet refund and returns
 // the refund reference. Mirrors handlers/payment.go InitiateRefund's provider switch.
-func runCancellationGatewayRefund(order *models.Order, provider string, refundAmount float64, initiatedBy, reason string) (string, error) {
+//
+// idempotencyKey is the LOGICAL operation id for this refund. It is a parameter rather
+// than derived here (#690): it used to hardcode RefundFullIdempotencyKey, which is right
+// for RefundOrderForCancellation — one full cancellation refund per order — and silently
+// WRONG for the coordinator, which drives many distinct refunds per order and keys each by
+// scope. Hardcoding it there would hand two different refunds the same key, the gateway
+// would dedup the second as a retry of the first, and the customer would never receive it:
+// no error, no trace, just missing money. The wallet branch keys its own credit off the
+// same value for the same reason.
+func runCancellationGatewayRefund(order *models.Order, provider string, refundAmount float64, initiatedBy, reason, idempotencyKey string) (string, error) {
 	switch provider {
 	case "wallet":
 		txn, werr := CreditWallet(database.DB, order.CustomerID, refundAmount,
 			models.WalletSourceRefund, &order.ID,
 			fmt.Sprintf("Refund for order %s: %s", order.OrderNumber, reason),
-			"refund:"+order.ID.String(), nil)
+			idempotencyKey, nil)
 		if werr != nil {
 			return "", werr
 		}
@@ -195,8 +177,9 @@ func runCancellationGatewayRefund(order *models.Order, provider string, refundAm
 				"reason": reason, "initiated_by": initiatedBy,
 			},
 			Receipt: fmt.Sprintf("refund-%s", order.OrderNumber),
-			// Full cancellation refund, issued once per order. #574.
-			IdempotencyKey: RefundFullIdempotencyKey(order.ID),
+			// The caller's logical key (#574/#690) — RefundFullIdempotencyKey for the
+			// cancellation path, a per-scope key when the coordinator drives this.
+			IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
 			return "", err

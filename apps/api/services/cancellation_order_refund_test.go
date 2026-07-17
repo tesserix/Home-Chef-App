@@ -116,6 +116,13 @@ func setupCancelRefundDB(t *testing.T) *gorm.DB {
 		// #544: TypedRefundOrderKind Counts these by order_id to detect a typed escrow order.
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, status TEXT, deleted_at DATETIME)`,
+		// #690: the refund ledger. RefundOrderForCancellation now moves money through the
+		// coordinator, which records every attempt here before calling the gateway.
+		`CREATE TABLE refund_transactions (id TEXT PRIMARY KEY, order_id TEXT NOT NULL, provider TEXT NOT NULL,
+			provider_payment_id TEXT, provider_refund_id TEXT, amount REAL NOT NULL,
+			currency_code TEXT NOT NULL DEFAULT 'INR', status TEXT NOT NULL DEFAULT 'pending', reason TEXT,
+			idempotency_key TEXT NOT NULL UNIQUE, scope_id TEXT NOT NULL, actor TEXT, failure_reason TEXT,
+			created_at DATETIME, updated_at DATETIME, completed_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)
 	}

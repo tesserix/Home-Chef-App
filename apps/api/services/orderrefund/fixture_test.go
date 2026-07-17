@@ -24,22 +24,22 @@ import (
 )
 
 type fakeGateway struct {
-	calls           int
-	lastAmountPaise int
-	lastKey         string
-	err             error
+	calls      int
+	lastAmount float64
+	lastKey    string
+	err        error
 	// before runs immediately before the fake "calls" the gateway — lets a test
 	// observe committed state at exactly that moment.
 	before func()
 }
 
-func (g *fakeGateway) RefundPayment(_ context.Context, paymentID string, amountPaise int, idempotencyKey string, _ map[string]string) (string, error) {
+func (g *fakeGateway) RefundPayment(_ context.Context, req GatewayRequest) (string, error) {
 	if g.before != nil {
 		g.before()
 	}
 	g.calls++
-	g.lastAmountPaise = amountPaise
-	g.lastKey = idempotencyKey
+	g.lastAmount = req.Amount
+	g.lastKey = req.IdempotencyKey
 	if g.err != nil {
 		return "", g.err
 	}

@@ -98,46 +98,16 @@ func remainingUnderLock(tx *gorm.DB, o *models.Order, orderID uuid.UUID) float64
 // claimed it (its refunded_at is set). The caller performs the gateway refund for `amount` and,
 // on failure, calls ReleaseFullRefundReservation to undo the reservation.
 func ReserveFullRefund(db *gorm.DB, orderID uuid.UUID) (amount float64, won bool, err error) {
+	var r Reservation
 	err = db.Transaction(func(tx *gorm.DB) error {
-		// Lock the order row so the amount is computed on — and reserved against — the same
-		// committed state, serialized with the partial path's own FOR UPDATE.
-		var o models.Order
-		if e := lockOrders(tx).Select("id", "total", "refund_amount", "payment_status").
-			First(&o, "id = ?", orderID).Error; e != nil {
-			return e
-		}
-		if o.PaymentStatus != models.PaymentCompleted {
-			return nil // not payable, or already refunded by a sibling — won stays false
-		}
-		remaining := remainingUnderLock(tx, &o, orderID)
-		if remaining <= 0 {
-			return nil // nothing left — a prior refund already covered the order
-		}
-		// Claim + reserve in one guarded UPDATE. The `refunded_at IS NULL` predicate loses to a
-		// sibling that claimed mid-gateway (matching every other full-refund path's mutex).
-		res := tx.Model(&models.Order{}).
-			Where("id = ? AND payment_status = ? AND refunded_at IS NULL", orderID, models.PaymentCompleted).
-			Updates(map[string]any{
-				"payment_status": models.PaymentRefunded,
-				"refunded_at":    time.Now(),
-				// COALESCE so a NULL refund_amount (never set) increments from 0 rather than
-				// collapsing the column to NULL under SQL NULL-arithmetic.
-				"refund_amount": gorm.Expr("COALESCE(refund_amount, 0) + ?", remaining),
-			})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return nil // lost the claim to a sibling
-		}
-		amount = remaining
-		won = true
-		return nil
+		var e error
+		r, e = ReserveInTx(tx, orderID, 0, IntentFull)
+		return e
 	})
 	if err != nil {
 		return 0, false, err
 	}
-	return amount, won, nil
+	return r.Amount, r.Won, nil
 }
 
 // Outcome says why a reservation did or didn't win. The legacy callers only ever needed a
@@ -185,8 +155,9 @@ type Reservation struct {
 	// Won is true for the SINGLE winner. False when the order is not payment_status=completed,
 	// nothing is left, or a sibling refund path claimed it first.
 	Won bool
-	// Order carries the columns read under the lock — provider/payment ids the caller needs
-	// to route the refund without a second, unsynchronized read.
+	// Order carries only the columns the reservation itself read under the lock (id, total,
+	// refund_amount, payment_status). Callers needing provider/payment ids read them
+	// themselves, inside the same transaction — see the note on the Select in ReserveInTx.
 	Order models.Order
 }
 
@@ -207,7 +178,7 @@ func ReserveRefund(db *gorm.DB, orderID uuid.UUID, requested float64) (Reservati
 	var r Reservation
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var e error
-		r, e = ReserveRefundInTx(tx, orderID, requested)
+		r, e = ReserveInTx(tx, orderID, requested, IntentPartial)
 		return e
 	})
 	if err != nil {
@@ -216,72 +187,100 @@ func ReserveRefund(db *gorm.DB, orderID uuid.UUID, requested float64) (Reservati
 	return r, nil
 }
 
-// ReserveRefundInTx is ReserveRefund's body, run inside a transaction the CALLER owns, for
-// callers that must commit the reservation together with their own bookkeeping. The #689
-// coordinator needs this: it writes a pending ledger row for the attempt, and if that row
-// committed separately from the reservation then a crash in between would leave refund_amount
-// incremented with NO ledger row — the order reads as refunded, the customer never gets the
-// money, and nothing records that a refund was ever owed. One transaction makes that state
-// unreachable.
+// Intent says which of the two refund claims to take. They are NOT interchangeable, and the
+// difference is a money guard rather than a detail.
+type Intent int
+
+const (
+	// IntentPartial claims `payment_status = 'completed'` only, and leaves refunded_at NULL.
+	// A partial MUST leave it NULL — every release-side payout guard blocks the WHOLE chef
+	// hold on refunded_at IS NOT NULL — so payment_status here is a short-lived mutex the
+	// caller reverts once the money has moved.
+	IntentPartial Intent = iota
+	// IntentFull claims `payment_status = 'completed' AND refunded_at IS NULL`, and stamps
+	// refunded_at as part of the claim.
+	//
+	// The refunded_at half is NOT redundant. It is the mutex against the full-refund paths
+	// that stamp refunded_at WITHOUT flipping payment_status (cancellation_execute.go:35).
+	// A full refund reserved on payment_status alone would sail straight past a sibling that
+	// had already refunded the order and refund it a SECOND time — which is exactly what
+	// happened when #690 first routed this path through the partial-aware claim, and what
+	// TestRefundOrderForCancellation_AlreadyRefundedNoOp caught.
+	IntentFull
+)
+
+// ReserveInTx is the reservation core, run inside a transaction the CALLER owns, for callers
+// that must commit the claim together with their own bookkeeping. The #689 coordinator needs
+// this: it writes a pending ledger row for the attempt, and if that row committed separately
+// from the reservation then a crash in between would leave refund_amount incremented with NO
+// ledger row — the order reads as refunded, the customer never gets the money, and nothing
+// records that a refund was ever owed. One transaction makes that state unreachable.
 //
-// Prefer ReserveRefund unless you genuinely have work to commit atomically with the claim.
-func ReserveRefundInTx(tx *gorm.DB, orderID uuid.UUID, requested float64) (Reservation, error) {
+// `requested` <= 0 means the full remaining. With IntentFull it is ignored — a full refund is
+// by definition everything that is left.
+//
+// Prefer ReserveRefund / ReserveFullRefund unless you have work to commit atomically with the
+// claim.
+func ReserveInTx(tx *gorm.DB, orderID uuid.UUID, requested float64, intent Intent) (Reservation, error) {
 	var r Reservation
-	err := func(tx *gorm.DB) error {
-		// Lock the order row so remaining is computed on — and reserved against — the same
-		// committed state, serialized with every other refund path's FOR UPDATE.
-		var o models.Order
-		if e := lockOrders(tx).
-			Select("id", "total", "refund_amount", "payment_status", "payment_provider",
-				"razorpay_payment_id", "stripe_payment_intent_id", "customer_id", "order_number",
-				"wallet_applied", "currency").
-			First(&o, "id = ?", orderID).Error; e != nil {
-			return e
+	// Lock the order row so remaining is computed on — and reserved against — the same
+	// committed state, serialized with every other refund path's FOR UPDATE.
+	// Exactly the columns the RESERVATION needs — no more. Widening this to carry
+	// provider/payment ids for one caller's convenience couples every OTHER caller to
+	// columns it never asked for (it broke CompensateOrderRefund, whose orders table is
+	// narrower). A caller that needs more reads it itself, under this same lock.
+	var o models.Order
+	if e := lockOrders(tx).Select("id", "total", "refund_amount", "payment_status").
+		First(&o, "id = ?", orderID).Error; e != nil {
+		return Reservation{}, e
+	}
+	if o.PaymentStatus != models.PaymentCompleted {
+		r.Outcome = OutcomeNotPayable
+		if o.PaymentStatus == models.PaymentRefunded {
+			// Either fully refunded, or a sibling is mid-gateway holding the mutex.
+			r.Outcome = OutcomeAlreadyRefunded
 		}
-		if o.PaymentStatus != models.PaymentCompleted {
-			r.Outcome = OutcomeNotPayable
-			if o.PaymentStatus == models.PaymentRefunded {
-				// Either fully refunded, or a sibling is mid-gateway holding the mutex.
-				r.Outcome = OutcomeAlreadyRefunded
-			}
-			return nil // Won stays false either way
-		}
-		remaining := remainingUnderLock(tx, &o, orderID)
-		if remaining <= 0 {
-			r.Outcome = OutcomeNothingLeft
-			return nil // nothing left — a prior refund already covered the order
-		}
-		reserve := remaining
+		return r, nil // Won stays false either way
+	}
+	remaining := remainingUnderLock(tx, &o, orderID)
+	if remaining <= 0 {
+		r.Outcome = OutcomeNothingLeft
+		return r, nil // nothing left — a prior refund already covered the order
+	}
+
+	reserve := remaining
+	claim := tx.Model(&models.Order{}).
+		Where("id = ? AND payment_status = ?", orderID, models.PaymentCompleted)
+	updates := map[string]any{
+		"payment_status": models.PaymentRefunded,
+		// COALESCE so a NULL refund_amount increments from 0 rather than collapsing to NULL
+		// under SQL NULL-arithmetic.
+	}
+	switch intent {
+	case IntentFull:
+		claim = claim.Where("refunded_at IS NULL")
+		updates["refunded_at"] = time.Now()
+	default:
 		if requested > 0 && requested < remaining {
 			reserve = models.RoundAmount(requested) // partial: reserve just the requested slice
 		}
-		// Claim + reserve in one guarded UPDATE. `payment_status = completed` is the mutex — a
-		// concurrent submit that already flipped it loses (RowsAffected == 0). refunded_at is
-		// deliberately NOT stamped (the caller stamps it only when FullRefund).
-		res := tx.Model(&models.Order{}).
-			Where("id = ? AND payment_status = ?", orderID, models.PaymentCompleted).
-			Updates(map[string]any{
-				"payment_status": models.PaymentRefunded,
-				// COALESCE so a NULL refund_amount increments from 0 rather than collapsing to NULL.
-				"refund_amount": gorm.Expr("COALESCE(refund_amount, 0) + ?", reserve),
-			})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			r.Outcome = OutcomeLostClaim
-			return nil // lost the claim to a sibling
-		}
-		r = Reservation{
-			Outcome: OutcomeWon, Amount: reserve, PriorRefunded: o.RefundAmount,
-			FullRefund: reserve >= remaining, Won: true, Order: o,
-		}
-		return nil
-	}(tx)
-	if err != nil {
-		return Reservation{}, err
 	}
-	return r, nil
+	updates["refund_amount"] = gorm.Expr("COALESCE(refund_amount, 0) + ?", reserve)
+
+	res := claim.Updates(updates)
+	if res.Error != nil {
+		return Reservation{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		// Lost the claim to a sibling — including, under IntentFull, a sibling that stamped
+		// refunded_at without touching payment_status.
+		r.Outcome = OutcomeLostClaim
+		return r, nil
+	}
+	return Reservation{
+		Outcome: OutcomeWon, Amount: reserve, PriorRefunded: o.RefundAmount,
+		FullRefund: reserve >= remaining, Won: true, Order: o,
+	}, nil
 }
 
 // ReleaseRefundReservation undoes a winning ReserveRefund when the downstream gateway / wallet
