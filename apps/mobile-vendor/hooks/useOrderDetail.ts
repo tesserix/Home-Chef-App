@@ -36,6 +36,11 @@ export interface OrderDetailTiming {
   preparedAt?: string | null;
   pickedUpAt?: string | null;
   deliveredAt?: string | null;
+  // Home-tiffin scheduling (#709): the customer's requested time and the chef's
+  // confirmed/proposed time + status, shown to the chef at accept + in detail.
+  requestedFulfillmentAt?: string | null;
+  confirmedFulfillmentAt?: string | null;
+  fulfillmentTimeStatus?: 'requested' | 'confirmed' | 'proposed' | 'declined' | null;
 }
 
 export interface OrderDetailPricing {
@@ -130,6 +135,9 @@ interface RawChefOrderDetailResponse {
   preparedAt?: string | null;
   pickedUpAt?: string | null;
   deliveredAt?: string | null;
+  requestedFulfillmentAt?: string | null;
+  confirmedFulfillmentAt?: string | null;
+  fulfillmentTimeStatus?: OrderDetailTiming['fulfillmentTimeStatus'];
   // Flat pricing
   subtotal?: number;
   deliveryFee?: number;
@@ -175,6 +183,9 @@ function adaptOrderDetail(raw: RawChefOrderDetailResponse): OrderDetail {
       preparedAt: raw.preparedAt ?? null,
       pickedUpAt: raw.pickedUpAt ?? null,
       deliveredAt: raw.deliveredAt ?? null,
+      requestedFulfillmentAt: raw.requestedFulfillmentAt ?? null,
+      confirmedFulfillmentAt: raw.confirmedFulfillmentAt ?? null,
+      fulfillmentTimeStatus: raw.fulfillmentTimeStatus ?? null,
     },
     pricing: {
       subtotal: raw.subtotal ?? 0,

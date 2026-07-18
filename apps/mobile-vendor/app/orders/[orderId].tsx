@@ -683,6 +683,9 @@ export default function OrderDetailScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const { data: order, isLoading, isError, refetch } = useOrderDetail(orderId);
   const { triggerAction, isLoading: actionLoading } = useOrderAction();
+  // Home-tiffin scheduling (#709): at accept the chef confirms the customer's
+  // requested time (null) or bumps it by a preset when the kitchen needs longer.
+  const [proposeOffsetMin, setProposeOffsetMin] = useState<number | null>(null);
   const updateStatus = useUpdateOrderStatus();
   const uploadPhoto = useUploadOrderPhoto();
   const cancelOrder = useCancelOrder(orderId);
@@ -1164,6 +1167,66 @@ export default function OrderDetailScreen() {
           </>
         ) : null}
 
+        {/* HOME-TIFFIN SCHEDULING (#709): the customer's requested time. For a
+            pending order the chef confirms it or proposes a later one; once
+            accepted, the confirmed/proposed time is shown. */}
+        {order.status === 'pending' ? (
+          <>
+            <SectionLabel>{isPickup ? 'PICKUP TIME' : 'DELIVERY TIME'}</SectionLabel>
+            <View style={styles.card}>
+              <View style={[styles.timingRow, styles.rowBorderBottom]}>
+                <Text style={styles.timingLabel}>Customer asked</Text>
+                <Text style={styles.timingValue}>
+                  {order.timing.requestedFulfillmentAt
+                    ? formatDateTime(order.timing.requestedFulfillmentAt)
+                    : 'As soon as ready'}
+                </Text>
+              </View>
+              <Text style={styles.proposeHint}>
+                Accept confirms this time. Kitchen busy? Propose a later one — the customer is notified.
+              </Text>
+              <View style={styles.proposeRow}>
+                {([
+                  [null, 'As asked'],
+                  [15, '+15m'],
+                  [30, '+30m'],
+                  [45, '+45m'],
+                  [60, '+1h'],
+                ] as [number | null, string][]).map(([off, label]) => {
+                  const sel = proposeOffsetMin === off;
+                  return (
+                    <Pressable
+                      key={label}
+                      onPress={() => setProposeOffsetMin(off)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: sel }}
+                      style={[styles.proposeChip, sel && styles.proposeChipSel]}
+                    >
+                      <Text style={[styles.proposeChipText, sel && styles.proposeChipTextSel]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        ) : order.timing.confirmedFulfillmentAt ? (
+          <>
+            <SectionLabel>{isPickup ? 'PICKUP TIME' : 'DELIVERY TIME'}</SectionLabel>
+            <View style={styles.card}>
+              <View style={styles.timingRow}>
+                <Text style={styles.timingLabel}>
+                  {order.timing.fulfillmentTimeStatus === 'proposed' ? 'You proposed' : 'Confirmed'}
+                </Text>
+                <Text style={styles.timingValue}>
+                  {formatDateTime(order.timing.confirmedFulfillmentAt)}
+                </Text>
+              </View>
+            </View>
+          </>
+        ) : null}
+
         {/* TIMING section */}
         <SectionLabel>TIMING</SectionLabel>
         <View style={styles.card}>
@@ -1237,7 +1300,19 @@ export default function OrderDetailScreen() {
         overRange={overReadyRange}
         selfDeliveryDistanceKm={order.selfDeliveryDistanceKm}
         selfDeliveryMaxDistanceKm={order.selfDeliveryMaxDistanceKm}
-        onAccept={() => triggerAction(order.id, 'accepted')}
+        onAccept={() => {
+          // null offset = confirm the request as-is (backend confirms/leaves ASAP).
+          // An offset proposes a later time = requested (or ~45m from now for ASAP)
+          // plus the offset (#709).
+          let confirmedAt: string | undefined;
+          if (proposeOffsetMin != null) {
+            const base = order.timing.requestedFulfillmentAt
+              ? new Date(order.timing.requestedFulfillmentAt)
+              : new Date(Date.now() + 45 * 60 * 1000);
+            confirmedAt = new Date(base.getTime() + proposeOffsetMin * 60 * 1000).toISOString();
+          }
+          triggerAction(order.id, 'accepted', undefined, confirmedAt);
+        }}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
           updateStatus.mutate({ orderId: order.id, status: 'preparing' })
@@ -1570,6 +1645,41 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     flex: 1,
+  },
+
+  // Home-tiffin scheduling (#709) — propose-time controls
+  proposeHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    marginTop: 10,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  proposeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  proposeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.bone,
+  },
+  proposeChipSel: {
+    borderColor: theme.colors.brand[500],
+    backgroundColor: theme.colors.brand[100],
+  },
+  proposeChipText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  proposeChipTextSel: {
+    color: theme.colors.brand[500],
   },
 
   // PRICING / totals

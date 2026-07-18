@@ -152,8 +152,19 @@ export function useOrderAction() {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const mutation = useMutation({
-    mutationFn: ({ orderId, action, reason }: { orderId: string; action: 'accepted' | 'rejected'; reason?: string }) =>
-      api.put(`/chef/orders/${orderId}/status`, { status: action, reason }),
+    mutationFn: ({
+      orderId,
+      action,
+      reason,
+      confirmedFulfillmentAt,
+    }: {
+      orderId: string;
+      action: 'accepted' | 'rejected';
+      reason?: string;
+      // Home-tiffin scheduling (#709): at accept, the chef confirms the customer's
+      // requested time or proposes a different one (ISO). Absent = confirm as-is.
+      confirmedFulfillmentAt?: string;
+    }) => api.put(`/chef/orders/${orderId}/status`, { status: action, reason, confirmedFulfillmentAt }),
     onMutate: async ({ orderId }) => {
       await queryClient.cancelQueries({ queryKey: ['chef', 'orders', 'pending'] });
       const previous = queryClient.getQueryData<OrdersResponse>(['chef', 'orders', 'pending']);
@@ -192,7 +203,14 @@ export function useOrderAction() {
     },
   });
 
-  function triggerAction(orderId: string, action: 'accepted' | 'rejected', reason?: string) {
+  function triggerAction(
+    orderId: string,
+    action: 'accepted' | 'rejected',
+    reason?: string,
+    // Home-tiffin scheduling (#709): a proposed/confirmed fulfilment time (ISO)
+    // the chef sets when accepting. Absent = confirm the customer's request as-is.
+    confirmedFulfillmentAt?: string,
+  ) {
     // Haptic feedback on decisive order action (accept or reject)
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -248,7 +266,7 @@ export function useOrderAction() {
       orderId,
       setTimeout(() => {
         timersRef.current.delete(orderId);
-        mutation.mutate({ orderId, action, reason });
+        mutation.mutate({ orderId, action, reason, confirmedFulfillmentAt });
         // Only clear the snackbar if it is still showing THIS order — otherwise a
         // later action's undo bar would disappear when an earlier timer fired.
         setPendingUndo((cur) => (cur?.orderId === orderId ? null : cur));
