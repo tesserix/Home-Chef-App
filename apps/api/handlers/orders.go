@@ -515,16 +515,25 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// HARD delivery-range guard (#709): a self-delivery order (delivery or
-	// chef_delivery) may not go beyond the kitchen's serviceable radius
-	// (EffectiveDeliveryMaxKm = the chef's SelfDeliveryMaxDistanceKm, else the
-	// platform default 10 km). This is the server-side backstop that stops an
-	// out-of-range customer from placing an order the chef can't fulfil — even if
-	// the app's checkout gate was bypassed. Skipped when a live 3PL covers the area
-	// (it delivers beyond the chef's own reach). Only enforced when we can measure:
-	// the drop has coordinates (set from a saved/new address or the device geo-tag).
-	if fulfillment != models.FulfillmentPickup && !services.ThirdPartyDeliveryEnabled() &&
-		(deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0) {
+	// HARD delivery-range guardrail (#709): a self-delivery order MUST be within the
+	// kitchen's serviceable radius (EffectiveDeliveryMaxKm = the chef's
+	// SelfDeliveryMaxDistanceKm, else the platform default 10 km). No exceptions —
+	// an order beyond it, OR one we can't range-check because the CUSTOMER gave no
+	// coordinates, is REJECTED. This is the server-side backstop: a far customer can
+	// never create a delivery order the chef can't fulfil, even if the app was
+	// bypassed. Skipped only when a live 3PL covers the area (it delivers beyond the
+	// chef's own reach). If the CHEF lacks coordinates we can't measure — allow it
+	// (a chef-setup edge case; the chef confirms at accept), never punishing the
+	// customer for it.
+	if fulfillment != models.FulfillmentPickup && !services.ThirdPartyDeliveryEnabled() {
+		custHasCoords := deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0
+		if !custHasCoords {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error": "Pick your delivery address on the map so we can confirm it's within the kitchen's delivery range — or choose pickup.",
+				"code":  "delivery_location_required",
+			})
+			return
+		}
 		reach := services.DeliveryReach(chef, deliveryAddr.Latitude, deliveryAddr.Longitude)
 		if reach.Known && !reach.Deliverable {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{
