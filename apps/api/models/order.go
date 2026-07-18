@@ -55,6 +55,19 @@ func ResolveAcceptFulfillmentTime(requested, chefProvided *time.Time) (*time.Tim
 	return nil, ""
 }
 
+// EffectiveDeliveryFee is the delivery fee the customer EFFECTIVELY paid — the
+// chef's chosen figure (DeliveryFeeFinal) when they lowered it at accept (#703),
+// otherwise the charged DeliveryFee. Refund, settlement, and payout paths must
+// use THIS, not the raw DeliveryFee: after #703 already refunded the (estimate −
+// final) difference, refunding the full estimate again would double-refund the
+// delivery portion, and paying the chef the full estimate would over-pay them.
+func (o *Order) EffectiveDeliveryFee() float64 {
+	if o.DeliveryFeeFinal != nil {
+		return *o.DeliveryFeeFinal
+	}
+	return o.DeliveryFee
+}
+
 type OrderStatus string
 
 const (
