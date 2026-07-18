@@ -73,6 +73,49 @@ func TestQuoteEndpoint_ReturnsDeliveryFeeAndPickupSaving(t *testing.T) {
 	require.Equal(t, true, out["offersPickup"])
 }
 
+// A self-delivering chef gets an itemised, capped estimate (#702): the response
+// carries selfDeliveryFee (the approx max ceiling) and a breakdown whose
+// components the app renders. A plain-delivery chef gets neither.
+func TestQuoteEndpoint_SelfDeliveryEstimate(t *testing.T) {
+	db := setupQuoteDB(t)
+	chefID := uuid.New()
+	// Chef in central Bangalore; base 20, free 2 km, ₹10/km, capped ₹200.
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles
+		(id, user_id, offers_self_delivery, self_delivery_base_fee, self_delivery_free_radius_km,
+		 self_delivery_per_km, self_delivery_max_fee, latitude, longitude)
+		VALUES (?,?,1,20,2,10,200,12.9716,77.5946)`,
+		chefID.String(), uuid.NewString()).Error)
+
+	// Drop ~5 km away → a real distance component beyond the free radius.
+	out := quote(t, chefID, `{"latitude":12.9352,"longitude":77.6245,"city":"Bengaluru","country":"IN"}`)
+
+	require.Equal(t, true, out["offersSelfDelivery"])
+	fee, ok := out["selfDeliveryFee"].(float64)
+	require.True(t, ok, "selfDeliveryFee present for a self-delivering chef")
+	require.Greater(t, fee, 20.0, "base + distance beyond the free radius")
+	require.LessOrEqual(t, fee, 200.0, "never above the chef's cap — the approx max")
+
+	bd, ok := out["selfDeliveryBreakdown"].(map[string]any)
+	require.True(t, ok, "breakdown present")
+	require.Equal(t, 20.0, bd["baseFee"])
+	require.Equal(t, true, bd["distanceKnown"])
+	require.Greater(t, bd["distanceComponent"].(float64), 0.0)
+}
+
+// A chef who does NOT self-deliver must not get a self-delivery estimate — the
+// order would go 3PL, so quoting one would mislead.
+func TestQuoteEndpoint_NoSelfDeliveryEstimateWhenNotOffered(t *testing.T) {
+	db := setupQuoteDB(t)
+	chefID := uuid.New()
+	require.NoError(t, db.Exec(`INSERT INTO chef_profiles (id, user_id, offers_self_delivery) VALUES (?,?,0)`,
+		chefID.String(), uuid.NewString()).Error)
+
+	out := quote(t, chefID, `{"latitude":12.9352,"longitude":77.6245}`)
+	require.Equal(t, false, out["offersSelfDelivery"])
+	_, has := out["selfDeliveryFee"]
+	require.False(t, has, "no self-delivery estimate when the chef doesn't offer it")
+}
+
 func TestQuoteEndpoint_UnknownChef_Is404(t *testing.T) {
 	setupQuoteDB(t)
 	gin.SetMode(gin.TestMode)

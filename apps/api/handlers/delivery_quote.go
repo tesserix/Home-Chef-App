@@ -67,13 +67,27 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		saving = 0
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
 		// pickupSaving is what the customer keeps by collecting. 0 when delivery is
 		// itself free — the app then shows no incentive rather than a fake one.
-		"pickupSaving": models.RoundAmount(saving),
-		"currency":     services.CurrencyForCountry(chef.PayoutCountry),
-		"offersPickup": chef.OffersPickup,
-	})
+		"pickupSaving":       models.RoundAmount(saving),
+		"currency":           services.CurrencyForCountry(chef.PayoutCountry),
+		"offersPickup":       chef.OffersPickup,
+		"offersSelfDelivery": chef.OffersSelfDelivery,
+	}
+
+	// Self-delivery estimate (#702). When the chef delivers themselves, the
+	// customer sees an itemised, CAPPED "approx max" — base + distance beyond the
+	// free radius, capped at the chef's max. selfDeliveryFee is that ceiling; the
+	// chef can only bring it DOWN at accept (#703), never above it. Only computed
+	// when the chef offers self-delivery, so plain-delivery chefs are unaffected.
+	if chef.OffersSelfDelivery {
+		b := services.ComputeSelfDeliveryFeeBreakdown(chef, req.Latitude, req.Longitude)
+		resp["selfDeliveryFee"] = models.RoundAmount(b.Fee)
+		resp["selfDeliveryBreakdown"] = b
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
