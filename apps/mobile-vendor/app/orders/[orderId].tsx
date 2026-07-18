@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -686,6 +687,9 @@ export default function OrderDetailScreen() {
   // Home-tiffin scheduling (#709): at accept the chef confirms the customer's
   // requested time (null) or bumps it by a preset when the kitchen needs longer.
   const [proposeOffsetMin, setProposeOffsetMin] = useState<number | null>(null);
+  // Chef's delivery-fee choice at accept (#703). Empty = charge the customer the
+  // recommended amount as-is; a number (0..charged) lowers it + refunds the diff.
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState('');
   const updateStatus = useUpdateOrderStatus();
   const uploadPhoto = useUploadOrderPhoto();
   const cancelOrder = useCancelOrder(orderId);
@@ -1227,6 +1231,48 @@ export default function OrderDetailScreen() {
           </>
         ) : null}
 
+        {/* DELIVERY FEE (#703): the chef sets what they'll charge for delivery at
+            accept. The customer was charged the recommended approx-max upfront; the
+            chef can lower it (or ₹0 within their free zone) and the difference is
+            refunded. Only for a pending self-delivery order that has a fee. */}
+        {order.status === 'pending' &&
+        order.fulfillmentType !== 'pickup' &&
+        order.pricing.deliveryFee > 0 ? (
+          <>
+            <SectionLabel>DELIVERY FEE</SectionLabel>
+            <View style={styles.card}>
+              <View style={styles.deliveryFeeRow}>
+                <Text style={styles.timingLabel}>You'll charge (₹)</Text>
+                <TextInput
+                  value={deliveryFeeInput}
+                  onChangeText={setDeliveryFeeInput}
+                  keyboardType="decimal-pad"
+                  placeholder={`${order.pricing.deliveryFee.toFixed(0)} (as charged)`}
+                  placeholderTextColor={theme.colors.ink.muted}
+                  style={styles.deliveryFeeInput}
+                  accessibilityLabel="Delivery fee you'll charge"
+                />
+              </View>
+            </View>
+            <Text style={styles.proposeHint}>
+              Customer was charged ₹{order.pricing.deliveryFee.toFixed(0)} (recommended by
+              distance). Lower it — or ₹0 if they're inside your free zone — and the difference
+              is refunded to them. You can't charge more than ₹
+              {order.pricing.deliveryFee.toFixed(0)}.
+            </Text>
+          </>
+        ) : order.pricing.deliveryFee > 0 && typeof order.pricing.deliveryFeeFinal === 'number' ? (
+          <>
+            <SectionLabel>DELIVERY FEE</SectionLabel>
+            <View style={styles.card}>
+              <View style={styles.timingRow}>
+                <Text style={styles.timingLabel}>You charged</Text>
+                <Text style={styles.timingValue}>₹{order.pricing.deliveryFeeFinal.toFixed(0)}</Text>
+              </View>
+            </View>
+          </>
+        ) : null}
+
         {/* TIMING section */}
         <SectionLabel>TIMING</SectionLabel>
         <View style={styles.card}>
@@ -1311,7 +1357,14 @@ export default function OrderDetailScreen() {
               : new Date(Date.now() + 45 * 60 * 1000);
             confirmedAt = new Date(base.getTime() + proposeOffsetMin * 60 * 1000).toISOString();
           }
-          triggerAction(order.id, 'accepted', undefined, confirmedAt);
+          // Chef's delivery-fee choice (#703): only send when they entered a value;
+          // clamp to [0, charged] so they can never charge above the approx-max.
+          let deliveryFee: number | undefined;
+          const parsed = parseFloat(deliveryFeeInput);
+          if (deliveryFeeInput.trim() !== '' && !Number.isNaN(parsed)) {
+            deliveryFee = Math.max(0, Math.min(parsed, order.pricing.deliveryFee));
+          }
+          triggerAction(order.id, 'accepted', undefined, confirmedAt, deliveryFee);
         }}
         onReject={() => triggerAction(order.id, 'rejected')}
         onMarkPreparing={() =>
@@ -1645,6 +1698,22 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     flex: 1,
+  },
+
+  // Delivery-fee input (#703)
+  deliveryFeeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  deliveryFeeInput: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+    textAlign: 'right',
+    minWidth: 120,
+    paddingVertical: 6,
   },
 
   // Home-tiffin scheduling (#709) — propose-time controls
