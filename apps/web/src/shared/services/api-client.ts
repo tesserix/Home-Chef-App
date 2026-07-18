@@ -163,6 +163,33 @@ class ApiClient {
     return this.request<T>('GET', endpoint, { params });
   }
 
+  /**
+   * GET a binary body (e.g. a PDF invoice) with the same auth as request(), and
+   * return the blob plus the server-suggested filename from Content-Disposition.
+   * request() always parses JSON, so a file download needs its own path.
+   */
+  async getBlob(endpoint: string): Promise<{ blob: Blob; filename: string }> {
+    const { isAuthenticated, accessToken } = await this.getAuthState();
+    const useDirectApi = isAuthenticated && !!accessToken;
+    const base = useDirectApi ? this.baseUrl : this.bffProxyBase;
+    const url = this.buildUrl(base, endpoint);
+
+    const headers: Record<string, string> = {};
+    if (accessToken) headers['X-Auth-Token'] = accessToken;
+
+    const response = await fetch(url, { method: 'GET', headers, credentials: 'include' });
+    if (!response.ok) {
+      if (response.status === 401) dispatchAuthExpired(endpoint);
+      const body = await response.json().catch(() => ({}));
+      throw Object.assign(body, { status: response.status });
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const match = /filename="?([^";]+)"?/i.exec(disposition);
+    const filename = match?.[1] ?? 'invoice.pdf';
+    return { blob: await response.blob(), filename };
+  }
+
   async post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>('POST', endpoint, {
       ...options,

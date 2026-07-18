@@ -244,20 +244,33 @@ export default function OrderDetailPage() {
   };
 
   // CW-01e: customers are legally entitled to a GST invoice under CGST Act
-  // 2017 §31 once an order is fulfilled or refunded. We surface the existing
-  // /orders/:id/invoice endpoint here; backend still owes the PDF rendering
-  // and full CGST §31/Rule 46 particulars (HSN/SAC, GST breakup, supplier).
-  // TODO(CW-01e-backend): replace the JSON fetch with a signed PDF download
-  // URL once the invoice-generation service ships.
+  // 2017 §31 once an order is fulfilled or refunded. This now downloads the real
+  // PDF the backend serves — a TAX INVOICE for a delivered sale, a PAYMENT
+  // RECEIPT for a paid-then-cancelled/refunded order — the same document and the
+  // same availability rule the mobile app uses (/orders/:id/invoice.pdf, any
+  // paid order). Kept consistent so a customer sees the same receipt on web and
+  // mobile.
   const [isInvoiceLoading, setIsInvoiceLoading] = useState(false);
+  // Money was captured → a receipt exists. Matches the mobile gate + the backend.
+  const hasReceipt =
+    order?.paymentStatus === 'completed' || order?.paymentStatus === 'refunded';
   const handleDownloadInvoice = async () => {
     if (!order || isInvoiceLoading) return;
     setIsInvoiceLoading(true);
     try {
-      await apiClient.get(`/orders/${order.id}/invoice`);
-      toast.success('Invoice generated — PDF download coming soon');
+      const { blob, filename } = await apiClient.getBlob(
+        `/orders/${order.id}/invoice.pdf`,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch {
-      toast.error('Invoice is not yet available — please contact support');
+      toast.error('Receipt is not available yet — please contact support');
     } finally {
       setIsInvoiceLoading(false);
     }
@@ -497,9 +510,12 @@ export default function OrderDetailPage() {
             </Button>
           )}
 
-          {/* CW-01e: GST invoice download — shown only once the order is in a
-              terminal state with payment captured (delivered or refunded). */}
-          {(order.status === 'delivered' || order.status === 'refunded') && (
+          {/* CW-01e: receipt / GST invoice download — for ANY order the customer
+              paid for, so a paid-then-cancelled order (status cancelled,
+              payment refunded) is covered, not just delivered. This gate was
+              status-based (delivered || refunded) and missed exactly that case;
+              it now matches the mobile app + the backend (money captured). */}
+          {hasReceipt && (
             <Button
               variant="outline"
               onClick={handleDownloadInvoice}
@@ -507,7 +523,7 @@ export default function OrderDetailPage() {
               isLoading={isInvoiceLoading}
               leftIcon={<FileText aria-hidden="true" className="h-4 w-4" />}
             >
-              Download invoice
+              Download receipt
             </Button>
           )}
 
