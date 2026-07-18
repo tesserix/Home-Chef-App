@@ -46,6 +46,13 @@ export interface DeliveryQuote {
   /** Approx-max self-delivery fee (₹). Present only when the chef self-delivers. */
   selfDeliveryFee?: number;
   selfDeliveryBreakdown?: SelfDeliveryBreakdown;
+  /** Serviceability for the drop coords (#709): whether this address is within the
+   *  kitchen's delivery range, the straight-line distance, and the range cap. */
+  deliverable: boolean;
+  distanceKm: number;
+  maxRadiusKm: number;
+  /** false when coords were missing so the distance couldn't be measured. */
+  rangeKnown: boolean;
 }
 
 /**

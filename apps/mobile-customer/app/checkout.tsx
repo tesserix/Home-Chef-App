@@ -385,6 +385,13 @@ export default function CheckoutScreen() {
     longitude: selectedAddr?.longitude,
     city: selectedAddr?.city,
   });
+  // Out-of-range guard (#709): the kitchen's delivery has a hard radius (the chef's
+  // own range, else the platform's 10 km default). When the selected address is
+  // beyond it, delivery isn't possible — block placing and tell the customer why,
+  // so they aren't confused by a server rejection. Pickup is always allowed.
+  const deliveryOutOfRange =
+    fulfillment !== 'pickup' && quote?.rangeKnown === true && quote?.deliverable === false;
+
   // Pickup is always free; delivery is the quoted fee (0 until the quote lands or
   // when delivery is genuinely free).
   const deliveryFee = fulfillment === 'pickup' ? 0 : quote?.deliveryFee ?? 0;
@@ -394,6 +401,9 @@ export default function CheckoutScreen() {
   // Promo discount (#39) — server-validated preview, clamped to the subtotal.
   const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
+  // The Place Order button is live only when the order is placeable AND not an
+  // out-of-range delivery (which the server would reject anyway).
+  const placeEnabled = canPlaceOrder && !deliveryOutOfRange;
 
   // Wallet store-credit applied at checkout (#141). Apply as much as the balance
   // and total allow; the remaining payable is what the gateway charges.
@@ -475,11 +485,44 @@ export default function CheckoutScreen() {
           </View>
         ) : null}
 
+        {/* Out-of-range notice (#709). The selected address is beyond the kitchen's
+            delivery radius — delivery can't be placed. Tell the customer the exact
+            distance + cap and point them to pickup or a closer address. */}
+        {deliveryOutOfRange ? (
+          <View className="mx-4 mt-3 rounded-xl border border-coral/40 bg-coral-tint px-4 py-3">
+            <View className="flex-row items-start gap-2">
+              <AlertTriangle size={16} color="#C2410C" style={{ marginTop: 1 }} />
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-coral-pressed">
+                  Outside delivery range
+                </Text>
+                <Text className="text-xs text-charcoal-soft mt-0.5 leading-4">
+                  This address is {(quote?.distanceKm ?? 0).toFixed(1)} km from the kitchen —
+                  beyond the {(quote?.maxRadiusKm ?? 10).toFixed(0)} km delivery range.
+                  {offersPickup ? ' Switch to pickup, or' : ' Please'} choose an address closer to
+                  the kitchen.
+                </Text>
+                {offersPickup ? (
+                  <Pressable
+                    onPress={() => setFulfillment('pickup')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Switch to pickup"
+                    className="mt-2 self-start rounded-lg bg-coral px-3 py-1.5"
+                  >
+                    <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         {/* Pickup incentive (#pickup-incentive). Shown only when the customer is
             on delivery, pickup is actually available, and it would genuinely save
             money — a real, one-tap saving, never a fabricated one. */}
         {fulfillment !== 'pickup' &&
         offersPickup &&
+        !deliveryOutOfRange &&
         pickupSaving > 0 ? (
           <Pressable
             onPress={() => setFulfillment('pickup')}
@@ -1210,14 +1253,14 @@ export default function CheckoutScreen() {
         {/* iOS Pressable inner-View pattern */}
         <Pressable
           onPress={handlePlaceOrder}
-          disabled={!canPlaceOrder}
+          disabled={!placeEnabled}
           accessibilityRole="button"
           accessibilityLabel="Place Order"
-          accessibilityState={{ disabled: !canPlaceOrder }}
+          accessibilityState={{ disabled: !placeEnabled }}
         >
           <View
             className={`w-full rounded-lg items-center justify-center flex-row gap-2 ${
-              canPlaceOrder ? 'bg-coral' : 'bg-surface-soft'
+              placeEnabled ? 'bg-coral' : 'bg-surface-soft'
             }`}
             style={{ minHeight: 52 }}
           >
@@ -1225,8 +1268,8 @@ export default function CheckoutScreen() {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text
-                className={`text-base font-semibold ${canPlaceOrder ? 'text-canvas' : 'text-charcoal-soft'}`}
-                style={canPlaceOrder ? { fontVariant: ['tabular-nums'] } : undefined}
+                className={`text-base font-semibold ${placeEnabled ? 'text-canvas' : 'text-charcoal-soft'}`}
+                style={placeEnabled ? { fontVariant: ['tabular-nums'] } : undefined}
               >
                 {isLoading ? 'Processing...' : `Place Order · ₹${payable.toFixed(2)}`}
               </Text>
