@@ -157,6 +157,12 @@ type Config struct {
 	// cached so it's paid at most once per trip); when empty, the winding-factor
 	// haversine fallback is used — so this is a pure accuracy upgrade, opt-in by key.
 	GoogleMapsAPIKey string
+
+	// GoogleWeatherAPIKey enables the Google Weather provider for weather surge in
+	// the self-delivery ESTIMATE (#706). A SEPARATE, Weather-restricted key from
+	// GoogleMapsAPIKey (independent blast radius + quota). Empty ⇒ weather factor
+	// stays neutral 1.0, so this is opt-in and never affects the charged amount.
+	GoogleWeatherAPIKey string
 }
 
 var AppConfig *Config
@@ -235,9 +241,10 @@ func Load() {
 		BFFSessionURL:      getEnv("BFF_SESSION_URL", ""),
 
 		// OAuth public IDs (secrets removed — owned by auth-bff/GIP)
-		GoogleClientID:   getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleMapsAPIKey: getEnv("GOOGLE_MAPS_API_KEY", ""),
-		FacebookAppID:    getEnv("FACEBOOK_APP_ID", ""),
+		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleMapsAPIKey:    getEnv("GOOGLE_MAPS_API_KEY", ""),
+		GoogleWeatherAPIKey: getEnv("GOOGLE_WEATHER_API_KEY", ""),
+		FacebookAppID:       getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage
 		GCSProjectID:     getEnv("GCS_PROJECT_ID", "tesseracthub-480811"),

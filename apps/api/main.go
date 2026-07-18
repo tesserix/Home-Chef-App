@@ -179,6 +179,8 @@ func main() {
 	// API key is configured (cached in Redis + Postgres so it's billed at most once
 	// per trip), else the haversine fallback. Must run after Redis + DB are up.
 	services.InitDeliveryRouter()
+	// Weather surge provider (#706) — Google Weather when keyed, else neutral.
+	services.InitWeatherProvider()
 
 	// Connect to MongoDB (in-app chat + document uploads, #53). Optional: a
 	// failure leaves the Mongo-backed features disabled without affecting the
