@@ -187,6 +187,8 @@ export interface Order {
   // Real fee breakdown from OrderResponse — render these instead of deriving
   // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
   deliveryFee?: number;
+  /** Chef's chosen delivery fee at accept (#703); the difference was refunded. */
+  deliveryFeeFinal?: number;
   serviceFee?: number;
   tax?: number;
   discount?: number;
