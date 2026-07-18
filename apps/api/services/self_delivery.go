@@ -37,6 +37,7 @@ type SelfDeliveryFeeBreakdown struct {
 	// component for the customer ESTIMATE (#704+). Both are 1.0 on the charge-basis
 	// path (ComputeSelfDeliveryFeeBreakdown) — surge never changes what's charged.
 	FuelSurge       float64 `json:"fuelSurge"`
+	WeatherSurge    float64 `json:"weatherSurge"`
 	SurgeMultiplier float64 `json:"surgeMultiplier"`
 	// Fee is the final, capped, non-negative self-delivery fee — the approx MAX
 	// the customer is quoted and the ceiling the chef can charge at accept.
@@ -72,6 +73,7 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 		MaxFee:          chef.SelfDeliveryMaxFee,
 		SurgeMultiplier: surge,
 		FuelSurge:       1.0,
+		WeatherSurge:    1.0,
 	}
 	fee := chef.SelfDeliveryBaseFee
 
@@ -109,9 +111,10 @@ func computeSelfDeliveryBreakdown(chef models.ChefProfile, dropLat, dropLng, sur
 // "approx max" shown at checkout — the chef can only bring it down at accept.
 // Never blocks: surge degrades to neutral when no signal is available.
 func EstimateSelfDeliveryFeeBreakdown(ctx context.Context, chef models.ChefProfile, dropLat, dropLng float64, country string) SelfDeliveryFeeBreakdown {
-	surge := CurrentSurge(ctx, country)
+	surge := CurrentSurge(ctx, country, dropLat, dropLng)
 	b := computeSelfDeliveryBreakdown(chef, dropLat, dropLng, surge.Combined)
 	b.FuelSurge = surge.Fuel
+	b.WeatherSurge = surge.Weather
 	return b
 }
 

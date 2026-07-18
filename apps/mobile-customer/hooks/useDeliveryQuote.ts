@@ -26,6 +26,8 @@ export interface SelfDeliveryBreakdown {
   capped: boolean;
   /** Fuel surge folded into the distance component (≥1). 1 = no surge. */
   fuelSurge: number;
+  /** Weather surge at the drop location (≥1). 1 = clear / no provider. */
+  weatherSurge: number;
   /** Combined surge multiplier applied to the estimate (≥1). */
   surgeMultiplier: number;
   fee: number;

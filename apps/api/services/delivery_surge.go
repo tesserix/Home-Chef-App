@@ -16,6 +16,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -27,6 +28,11 @@ const maxSurgeMultiplier = 2.0
 // fuelSurgeCacheTTL — fuel prices move at most daily, so a day-long cache keeps
 // the (already cheap) fuel lookup near-free and stable within a day.
 const fuelSurgeCacheTTL = 24 * time.Hour
+
+// weatherSurgeCacheTTL — weather is a LIVE signal (a storm rolls in within the
+// hour), so it's only briefly cached per location: fresh enough to be honest,
+// still cheap enough not to hit the weather API on every quote for the same area.
+const weatherSurgeCacheTTL = 20 * time.Minute
 
 // FuelIndexProvider returns the current fuel-cost multiplier for a country,
 // relative to the chef's baseline per-km rate (1.0 = baseline). Implemented over
@@ -40,6 +46,18 @@ var fuelIndexProvider FuelIndexProvider
 // SetFuelIndexProvider installs (or clears, with nil) the fuel-price source.
 func SetFuelIndexProvider(p FuelIndexProvider) { fuelIndexProvider = p }
 
+// WeatherProvider returns the current weather-condition multiplier at a drop
+// location (1.0 = clear; higher = rain/storm slows and complicates the drive).
+// Implemented over a weather API (#700 provider choice); nil disables it.
+type WeatherProvider interface {
+	WeatherMultiplier(ctx context.Context, lat, lng float64) (float64, bool)
+}
+
+var weatherProvider WeatherProvider
+
+// SetWeatherProvider installs (or clears, with nil) the weather source.
+func SetWeatherProvider(p WeatherProvider) { weatherProvider = p }
+
 // SurgeFactors is the breakdown of the current surge multipliers. Each is ≥ 1.0.
 // Traffic and Weather stay 1.0 until #705/#706 wire their providers.
 type SurgeFactors struct {
@@ -49,14 +67,14 @@ type SurgeFactors struct {
 	Combined float64 `json:"combined"`
 }
 
-// CurrentSurge resolves the live surge factors for a country. Never fails — a
-// missing/erroring provider yields a neutral 1.0. The combined multiplier is the
-// product of the factors, clamped to [1.0, maxSurgeMultiplier].
-func CurrentSurge(ctx context.Context, country string) SurgeFactors {
+// CurrentSurge resolves the live surge factors for a country + drop location.
+// Never fails — a missing/erroring provider yields a neutral 1.0. The combined
+// multiplier is the product of the factors, clamped to [1.0, maxSurgeMultiplier].
+func CurrentSurge(ctx context.Context, country string, dropLat, dropLng float64) SurgeFactors {
 	f := SurgeFactors{
 		Fuel:    fuelMultiplier(ctx, country),
 		Traffic: 1.0, // #705
-		Weather: 1.0, // #706
+		Weather: weatherMultiplier(ctx, dropLat, dropLng),
 	}
 	f.Combined = clampSurge(f.Fuel * f.Traffic * f.Weather)
 	return f
@@ -82,6 +100,34 @@ func fuelMultiplier(ctx context.Context, country string) float64 {
 	recordFuelProviderCall()
 	m = clampSurge(m)
 	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), fuelSurgeCacheTTL)
+	return m
+}
+
+// weatherMultiplier returns the clamped weather surge at a drop location, briefly
+// cached per ~1 km cell so a burst of quotes for the same area shares one live
+// reading. Neutral (1.0) without a provider or on any error.
+func weatherMultiplier(ctx context.Context, lat, lng float64) float64 {
+	if weatherProvider == nil {
+		return 1.0
+	}
+	// Coords missing → no location to check → neutral.
+	if lat == 0 && lng == 0 {
+		return 1.0
+	}
+	key := fmt.Sprintf("surge:weather:%.2f,%.2f", lat, lng) // ~1 km cell
+	hot := redisKV{}
+	if v, ok := hot.Get(ctx, key); ok {
+		if m, err := strconv.ParseFloat(v, 64); err == nil {
+			return clampSurge(m)
+		}
+	}
+	m, ok := weatherProvider.WeatherMultiplier(ctx, lat, lng)
+	if !ok {
+		return 1.0
+	}
+	RecordWeatherProviderCall()
+	m = clampSurge(m)
+	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), weatherSurgeCacheTTL)
 	return m
 }
 
