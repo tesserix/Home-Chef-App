@@ -223,14 +223,27 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 		rows = append(rows, totalRow("Delivery", order.DeliveryFee, false))
 	}
 	if order.ServiceFee > 0 {
-		rows = append(rows, totalRow("Service fee", order.ServiceFee, false))
+		rows = append(rows, totalRow("Platform fee", order.ServiceFee, false))
 	}
 	if order.Tax > 0 {
-		taxLabel := order.TaxName
-		if taxLabel == "" {
-			taxLabel = "Tax"
+		// GST-compliant split (#invoice): an Indian tax invoice must show CGST+SGST
+		// for an intra-state supply, or IGST for inter-state — never a single "GST".
+		// Non-IN keeps the configured tax name.
+		if strings.EqualFold(order.DeliveryAddressCountry, "IN") {
+			b := SplitIndiaGST(order.Tax, order.TaxRate, order.Chef.State, order.DeliveryAddressState)
+			if b.Intra {
+				rows = append(rows, totalRow(fmt.Sprintf("CGST @ %.2g%%", b.CGSTRate), b.CGST, false))
+				rows = append(rows, totalRow(fmt.Sprintf("SGST @ %.2g%%", b.SGSTRate), b.SGST, false))
+			} else {
+				rows = append(rows, totalRow(fmt.Sprintf("IGST @ %.2g%%", b.IGSTRate), b.IGST, false))
+			}
+		} else {
+			taxLabel := order.TaxName
+			if taxLabel == "" {
+				taxLabel = "Tax"
+			}
+			rows = append(rows, totalRow(taxLabel, order.Tax, false))
 		}
-		rows = append(rows, totalRow(taxLabel, order.Tax, false))
 	}
 	if order.Discount > 0 {
 		rows = append(rows, totalRow("Discount", -order.Discount, false))

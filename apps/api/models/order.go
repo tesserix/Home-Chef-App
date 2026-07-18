@@ -426,6 +426,9 @@ type OrderChefResponse struct {
 	ImageURL           string `json:"imageUrl,omitempty"`
 	FSSAILicenseNumber string `json:"fssaiLicenseNumber,omitempty"`
 	GSTIN              string `json:"gstin,omitempty"`
+	// State is the chef's (supplier's) state — the receipt uses it vs the delivery
+	// state to split GST into CGST+SGST (intra) or IGST (inter) for compliance.
+	State string `json:"state,omitempty"`
 }
 
 type OrderItemResponse struct {
@@ -542,6 +545,7 @@ func (o *Order) ToResponse() OrderResponse {
 			ImageURL:           image,
 			FSSAILicenseNumber: o.Chef.FSSAILicenseNumber,
 			GSTIN:              o.Chef.GSTIN,
+			State:              o.Chef.State,
 		}
 	}
 

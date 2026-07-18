@@ -95,6 +95,10 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"taxRatePercent": taxRule.Rate,
 		"taxName":        taxRule.TaxName,
 		"taxInclusive":   taxRule.Inclusive,
+		// GST compliance (#invoice): intra-state → the client shows CGST+SGST, else
+		// IGST. Based on the chef's state vs the delivery state.
+		"taxCountry":    country,
+		"taxIntraState": services.IsIntraStateSupply(chef.State, req.State),
 		// pickupSaving is what the customer keeps by collecting. 0 when delivery is
 		// itself free — the app then shows no incentive rather than a fake one.
 		"pickupSaving":       models.RoundAmount(saving),
