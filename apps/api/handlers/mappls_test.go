@@ -57,7 +57,22 @@ func TestMapplsToRow(t *testing.T) {
 	if s.Country != "IN" || s.Line1 != "Asima Residency" {
 		t.Errorf("bad mapping: country=%q line1=%q", s.Country, s.Line1)
 	}
-	if r.geo != "Kalarahanga, Bhubaneswar, Odisha 751024" {
+	if r.geo != "Kalarahanga, Bhubaneswar, Odisha, 751024" {
 		t.Errorf("bad geo key: %q", r.geo)
+	}
+}
+
+func TestMapplsLocalityKey(t *testing.T) {
+	cases := []struct{ addr, want string }{
+		// Building-level input → locality-level key (drops premise tokens).
+		{"Ashima Residency, Asima Residency Road, Nandan Vihar, Patia, Bhubaneswar, Odisha, 751024", "Patia, Bhubaneswar, Odisha, 751024"},
+		{"Kalarahanga, Bhubaneswar, Odisha, 751024", "Kalarahanga, Bhubaneswar, Odisha, 751024"},
+	}
+	for _, tc := range cases {
+		city, region, postal := parseIndianAddressTail(tc.addr)
+		got := mapplsLocalityKey(tc.addr, city, region, postal)
+		if got != tc.want {
+			t.Errorf("mapplsLocalityKey(%q) = %q, want %q", tc.addr, got, tc.want)
+		}
 	}
 }

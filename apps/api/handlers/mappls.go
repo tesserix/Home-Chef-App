@@ -233,13 +233,34 @@ func mapplsToRow(loc mapplsLocation) mapplsRow {
 	}
 	s.Description = desc
 
-	// The coordinate-lookup key: Mappls's clean locality string (placeAddress) is
-	// exactly what Photon can geocode, unlike the customer's raw flat-level input.
-	geo := strings.TrimSpace(loc.PlaceAddress)
-	if geo == "" {
-		geo = strings.TrimSpace(strings.Join(nonEmptyStrings(city, region, postal), ", "))
-	}
+	// Coordinate-lookup key: a LOCALITY-level string ("<locality>, <city>, <state>,
+	// <PIN>"), NOT the full building-level placeAddress. Photon can't geocode a
+	// building-level string (that's the very failure Mappls fixes), but it resolves
+	// the locality reliably. Rows in the same locality collapse to one lookup, and
+	// the enrichment broadens to the PIN/city centroid if even the locality is too
+	// specific — so every row still gets a real point to price delivery on.
+	geo := mapplsLocalityKey(loc.PlaceAddress, city, region, postal)
 	return mapplsRow{s: s, geo: geo}
+}
+
+// mapplsLocalityKey builds a coarse, Photon-geocodable "<locality>, <city>,
+// <state>, <PIN>" string from a Mappls placeAddress. The locality is the comma
+// token immediately before the city; leading building/premise tokens are dropped.
+func mapplsLocalityKey(placeAddress, city, region, postal string) string {
+	locality := ""
+	parts := strings.Split(placeAddress, ",")
+	for i, p := range parts {
+		p = strings.TrimSpace(p)
+		if city != "" && strings.EqualFold(p, city) && i > 0 {
+			locality = strings.TrimSpace(parts[i-1])
+			break
+		}
+	}
+	key := strings.Join(nonEmptyStrings(locality, city, region, postal), ", ")
+	if key == "" {
+		key = strings.TrimSpace(placeAddress)
+	}
+	return key
 }
 
 // coordEntry caches a resolved locality coordinate.
@@ -310,11 +331,20 @@ func enrichCoordsFromPhoton(reqCtx context.Context, rows []mapplsRow) {
 			}
 			ctx, cancel := context.WithTimeout(reqCtx, coordLookupTimeout)
 			defer cancel()
-			out, err := fetchPhotonSuggestions(ctx, rows[idxs[0]].geo)
-			if err != nil || len(out) == 0 {
-				return
+			// Broaden progressively (locality → city+state → PIN/city) until Photon
+			// resolves, so a too-specific locality still lands the PIN centroid
+			// rather than leaving the row without a point.
+			var lat, lon float64
+			for _, variant := range photonQueryVariants(rows[idxs[0]].geo) {
+				out, err := fetchPhotonSuggestions(ctx, variant)
+				if err != nil || len(out) == 0 {
+					continue
+				}
+				if out[0].Lat != 0 || out[0].Lon != 0 {
+					lat, lon = out[0].Lat, out[0].Lon
+					break
+				}
 			}
-			lat, lon := out[0].Lat, out[0].Lon
 			if lat == 0 && lon == 0 {
 				return
 			}
