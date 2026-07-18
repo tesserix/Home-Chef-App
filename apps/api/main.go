@@ -181,6 +181,8 @@ func main() {
 	services.InitDeliveryRouter()
 	// Weather surge provider (#706) — Google Weather when keyed, else neutral.
 	services.InitWeatherProvider()
+	// Traffic surge provider (#705) — reuses the Routes key, else neutral.
+	services.InitTrafficProvider()
 
 	// Connect to MongoDB (in-app chat + document uploads, #53). Optional: a
 	// failure leaves the Mongo-backed features disabled without affecting the
