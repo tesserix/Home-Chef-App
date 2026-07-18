@@ -393,6 +393,13 @@ export default function CheckoutScreen() {
   // so they aren't confused by a server rejection. Pickup is always allowed.
   const deliveryOutOfRange =
     fulfillment !== 'pickup' && quote?.rangeKnown === true && quote?.deliverable === false;
+  // A delivery order needs a LOCATED address so the 10 km range can be checked —
+  // the server hard-blocks a delivery order with no coordinates (#709). Mirror
+  // that here: an address without lat/lng can't be delivered to; require the map.
+  const deliveryNeedsLocation =
+    fulfillment !== 'pickup' &&
+    !!selectedAddressId &&
+    !(selectedAddr?.latitude && selectedAddr?.longitude);
 
   // Pickup is always free; delivery is the quoted fee (0 until the quote lands or
   // when delivery is genuinely free).
@@ -405,7 +412,7 @@ export default function CheckoutScreen() {
   const total = Math.max(0, subtotal + deliveryFee - discount);
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
-  const placeEnabled = canPlaceOrder && !deliveryOutOfRange;
+  const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
 
   // Wallet store-credit applied at checkout (#141). Apply as much as the balance
   // and total allow; the remaining payable is what the gateway charges.
@@ -490,6 +497,33 @@ export default function CheckoutScreen() {
         {/* Out-of-range notice (#709). The selected address is beyond the kitchen's
             delivery radius — delivery can't be placed. Tell the customer the exact
             distance + cap and point them to pickup or a closer address. */}
+        {deliveryNeedsLocation ? (
+          <View className="mx-4 mt-3 rounded-xl border border-coral/40 bg-coral-tint px-4 py-3">
+            <View className="flex-row items-start gap-2">
+              <AlertTriangle size={16} color="#C2410C" style={{ marginTop: 1 }} />
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-coral-pressed">
+                  Address location needed
+                </Text>
+                <Text className="text-xs text-charcoal-soft mt-0.5 leading-4">
+                  This address has no map location, so we can't confirm it's within the kitchen's
+                  delivery range. Edit it and pick it on the map,{offersPickup ? ' or switch to pickup.' : ' please.'}
+                </Text>
+                {offersPickup ? (
+                  <Pressable
+                    onPress={() => setFulfillment('pickup')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Switch to pickup"
+                    className="mt-2 self-start rounded-lg bg-coral px-3 py-1.5"
+                  >
+                    <Text className="text-xs font-semibold text-canvas">Switch to pickup</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         {deliveryOutOfRange ? (
           <View className="mx-4 mt-3 rounded-xl border border-coral/40 bg-coral-tint px-4 py-3">
             <View className="flex-row items-start gap-2">
