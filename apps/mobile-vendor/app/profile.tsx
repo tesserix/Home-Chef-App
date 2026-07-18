@@ -911,21 +911,21 @@ export default function ProfileScreen() {
                 deliver for free.
               </Text>
 
-              <Text style={styles.sectionLabel}>SELF-DELIVERY RANGE</Text>
+              <Text style={styles.sectionLabel}>DELIVERY RANGE</Text>
               <View style={styles.hairlineGroup}>
                 <EditableField
-                  label="Comfortable range (km)"
+                  label="Deliver within (km)"
                   value={selfDeliveryMaxDistance}
                   onChangeText={setSelfDeliveryMaxDistance}
                   keyboardType="decimal-pad"
-                  placeholder="0 = no limit"
+                  placeholder="Blank = 10 km default"
                   hasBorderBottom={false}
                 />
               </View>
               <Text style={styles.fieldGroupHint}>
-                A soft heads-up only. If an order is farther than this you'll see
-                a warning and can choose to deliver or cancel — customers can
-                still pick chef delivery at any distance.
+                How far you'll deliver. Customers beyond this can't place a delivery
+                order (they'll be offered pickup). Leave blank to use the platform's
+                10 km default — raise or lower it to suit your kitchen.
               </Text>
             </>
           ) : null}
