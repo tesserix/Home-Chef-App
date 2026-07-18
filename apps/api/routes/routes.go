@@ -398,6 +398,9 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/daily-menu", chefHandler.GetPublicDailyMenu)       // #405 per-date menu
 			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)        // #280 tiffin offer
 			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
+			// Per-mode delivery-fee preview so checkout can show the real fee +
+			// pickup's saving. Same computation CreateOrder charges.
+			chefs.POST("/:id/delivery-quote", orderHandler.QuoteDeliveryFee)
 		}
 
 		// Dish search across chefs (#36) — its own path so it doesn't collide

@@ -27,6 +27,7 @@ import { useCartStore } from '../store/cart-store';
 import { useCreateOrder } from '../hooks/useOrderCheckout';
 import { useChef } from '../hooks/useChefs';
 import { useCustomerCoords } from '../hooks/useCustomerCoords';
+import { useDeliveryQuote } from '../hooks/useDeliveryQuote';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
 import { useWinback } from '../hooks/useWinback';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
@@ -339,7 +340,24 @@ export default function CheckoutScreen() {
   }
 
   const subtotal = cartStore.total();
-  const deliveryFee = 0; // free for v1
+
+  // The delivery fee the SERVER will charge, previewed so checkout shows the real
+  // number and pickup's saving (#pickup-incentive). Keyed to the selected drop
+  // address so the distance fee re-quotes as it changes. This replaces the old
+  // `deliveryFee = 0 // free for v1`, which both hid the fee and could show a
+  // "Free" total the server then charged a fee on.
+  const selectedAddr = addresses.find((a) => a.id === selectedAddressId);
+  const { data: quote } = useDeliveryQuote(cartStore.chefId ?? undefined, {
+    latitude: selectedAddr?.latitude,
+    longitude: selectedAddr?.longitude,
+    city: selectedAddr?.city,
+  });
+  // Pickup is always free; delivery is the quoted fee (0 until the quote lands or
+  // when delivery is genuinely free).
+  const deliveryFee = fulfillment === 'pickup' ? 0 : quote?.deliveryFee ?? 0;
+  // What the customer would save by switching to pickup — only real when delivery
+  // actually costs something. Drives the incentive nudge; 0 shows nothing.
+  const pickupSaving = quote?.pickupSaving ?? 0;
   // Promo discount (#39) — server-validated preview, clamped to the subtotal.
   const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
@@ -422,6 +440,30 @@ export default function CheckoutScreen() {
               </Pressable>
             ))}
           </View>
+        ) : null}
+
+        {/* Pickup incentive (#pickup-incentive). Shown only when the customer is
+            on delivery, pickup is actually available, and it would genuinely save
+            money — a real, one-tap saving, never a fabricated one. */}
+        {fulfillment !== 'pickup' &&
+        offersPickup &&
+        pickupSaving > 0 ? (
+          <Pressable
+            onPress={() => setFulfillment('pickup')}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to pickup and save ₹${pickupSaving.toFixed(0)}`}
+            className="mx-4 mt-3 flex-row items-center justify-between rounded-lg bg-coral-tint px-4 py-3"
+          >
+            <View className="flex-1 pr-3">
+              <Text className="text-sm font-semibold text-coral-pressed">
+                Pick up & save ₹{pickupSaving.toFixed(0)}
+              </Text>
+              <Text className="text-xs text-charcoal-soft mt-0.5">
+                Collect from the kitchen — no delivery fee.
+              </Text>
+            </View>
+            <Text className="text-sm font-semibold text-coral-pressed">Switch →</Text>
+          </Pressable>
         ) : null}
 
         {/* ── Delivery Address ── */}
@@ -721,9 +763,18 @@ export default function CheckoutScreen() {
               </Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-sm text-charcoal-soft">Delivery fee</Text>
-              {/* "Free" in success green per spec */}
-              <Text className="text-sm text-success font-medium">Free</Text>
+              <Text className="text-sm text-charcoal-soft">
+                {fulfillment === 'pickup' ? 'Pickup' : 'Delivery fee'}
+              </Text>
+              {/* Free (green) when the fee is 0 — pickup, or a chef who delivers
+                  free; otherwise the real amount the server will charge. */}
+              {deliveryFee > 0 ? (
+                <Text className="text-sm text-charcoal font-medium" style={{ fontVariant: ['tabular-nums'] }}>
+                  ₹{deliveryFee.toFixed(2)}
+                </Text>
+              ) : (
+                <Text className="text-sm text-success font-medium">Free</Text>
+              )}
             </View>
 
             {/* Promo code (#39) */}

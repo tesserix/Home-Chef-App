@@ -458,19 +458,12 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		deliveryCountry = "IN"
 	}
 
-	// Live 3PL delivery quote, computed now that the drop address is known.
-	// Pickup orders pay no delivery fee and skip the 3PL quote entirely.
-	// For delivery, falls back to the flat policy fee (already in deliveryFee)
-	// when the address has no coordinates yet or no provider can serve the leg,
-	// so checkout never blocks on the quote.
-	if fulfillment == models.FulfillmentPickup {
-		deliveryFee = 0
-	} else if fulfillment == models.FulfillmentChefDelivery {
-		// Chef delivers themselves — distance-based self-delivery fee, no 3PL quote.
-		deliveryFee = services.ComputeSelfDeliveryFee(chef, deliveryAddr.Latitude, deliveryAddr.Longitude)
-	} else if fee, ok := services.QuoteCheckoutDeliveryFee(chef, deliveryAddr.City, deliveryCountry, deliveryAddr.Latitude, deliveryAddr.Longitude); ok {
-		deliveryFee = fee
-	}
+	// The delivery fee is computed by the ONE shared function the checkout quote
+	// endpoint also calls, so the number the customer agreed to at checkout is the
+	// number charged here — they cannot drift (services/delivery_fee.go). Pickup is
+	// 0, chef_delivery is the self-delivery fee, delivery is a 3PL quote falling
+	// back to the flat policy fee.
+	deliveryFee = services.QuoteOrderDeliveryFee(chef, fulfillment, deliveryAddr.Latitude, deliveryAddr.Longitude, deliveryAddr.City, deliveryCountry)
 
 	taxRule := services.ResolveTaxRate(deliveryCountry, deliveryAddr.State)
 	// Tax base: subtotal + deliveryFee + serviceFee, after promo discount.
