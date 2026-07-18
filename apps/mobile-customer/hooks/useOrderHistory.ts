@@ -40,7 +40,11 @@ interface ApiOrderItem {
 interface ApiOrderChef {
   id: string;
   name: string;
+  businessName?: string;
+  ownerName?: string;
   imageUrl?: string;
+  fssaiLicenseNumber?: string;
+  gstin?: string;
 }
 
 interface ApiOrder {
@@ -107,6 +111,10 @@ function mapOrder(raw: ApiOrder): Order {
       ? {
           id: raw.chef.id,
           name: raw.chef.name,
+          businessName: raw.chef.businessName,
+          ownerName: raw.chef.ownerName,
+          fssaiLicenseNumber: raw.chef.fssaiLicenseNumber,
+          gstin: raw.chef.gstin,
           imageUrl: raw.chef.imageUrl,
           cuisine: '',
           rating: 0,

@@ -6,6 +6,12 @@ import type { PayoutHoldStatus } from '../lib/payout-hold';
 export interface Chef {
   id: string;
   name: string;
+  /** Official receipt fields (#receipt): the kitchen's registered business name,
+   *  the proprietor (home chef), and regulatory IDs printed for the customer. */
+  businessName?: string;
+  ownerName?: string;
+  fssaiLicenseNumber?: string;
+  gstin?: string;
   cuisine: string;
   rating: number;
   reviewCount: number;

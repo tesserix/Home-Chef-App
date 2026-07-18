@@ -70,6 +70,18 @@ export default function OrderReceiptScreen() {
   const isTaxInvoice = order?.status === 'delivered' && (order?.refundAmount ?? 0) <= 0;
   const docTitle = isTaxInvoice ? 'Tax Invoice' : 'Payment Receipt';
 
+  // Robust deliver-to lines: skip empty fields so we never render a stray comma
+  // (the old bug), and drop the whole block when no address is present.
+  const addr = order?.deliveryAddress;
+  const deliveryAddressLines = [
+    [addr?.addressLine1, addr?.addressLine2].filter(Boolean).join(', '),
+    [[addr?.city, addr?.state].filter(Boolean).join(', '), addr?.pincode]
+      .filter(Boolean)
+      .join(' '),
+  ]
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
   const subtotal = (order?.items ?? []).reduce((s, it) => s + it.price * it.quantity, 0);
   const deliveryFee = order?.deliveryFee ?? 0;
   const serviceFee = order?.serviceFee ?? 0;
@@ -85,8 +97,18 @@ export default function OrderReceiptScreen() {
     const lines = [
       `${docTitle} — Home Chef`,
       `Order ${order.orderNumber}`,
-      order.chef?.name ? `Kitchen: ${order.chef.name}` : '',
       `Date: ${formatDateTime(order.createdAt)}`,
+      '',
+      'Sold by:',
+      order.chef?.businessName || order.chef?.name || '',
+      order.chef?.ownerName ? `Chef ${order.chef.ownerName}` : '',
+      order.chef?.fssaiLicenseNumber ? `FSSAI Lic. No. ${order.chef.fssaiLicenseNumber}` : '',
+      order.chef?.gstin ? `GSTIN ${order.chef.gstin}` : '',
+      order.fulfillmentType === 'pickup'
+        ? 'Fulfilment: Pickup from the kitchen'
+        : deliveryAddressLines.length > 0
+          ? `Deliver to: ${deliveryAddressLines.join(', ')}`
+          : '',
       '',
       ...(order.items ?? []).map((it) => `${it.quantity} × ${it.name}  ${money(it.price * it.quantity)}`),
       '',
@@ -141,24 +163,39 @@ export default function OrderReceiptScreen() {
 
             <View style={styles.rule} />
 
-            {/* Parties */}
-            {order.chef?.name ? (
+            {/* Parties — official seller block: business, proprietor, FSSAI, GSTIN */}
+            {order.chef ? (
               <View style={styles.party}>
-                <Text style={styles.partyLabel}>From</Text>
-                <Text style={styles.partyValue}>{order.chef.name}</Text>
+                <Text style={styles.partyLabel}>Sold by</Text>
+                <Text style={styles.sellerName}>
+                  {order.chef.businessName || order.chef.name}
+                </Text>
+                {order.chef.ownerName ? (
+                  <Text style={styles.partyValue}>Chef {order.chef.ownerName}</Text>
+                ) : null}
+                {order.chef.fssaiLicenseNumber ? (
+                  <Text style={styles.regLine}>FSSAI Lic. No. {order.chef.fssaiLicenseNumber}</Text>
+                ) : null}
+                {order.chef.gstin ? (
+                  <Text style={styles.regLine}>GSTIN {order.chef.gstin}</Text>
+                ) : null}
               </View>
             ) : null}
-            {order.deliveryAddress ? (
+
+            {/* Deliver to (delivery orders) / Pickup (collection orders) */}
+            {order.fulfillmentType === 'pickup' ? (
+              <View style={styles.party}>
+                <Text style={styles.partyLabel}>Fulfilment</Text>
+                <Text style={styles.partyValue}>Pickup from the kitchen</Text>
+              </View>
+            ) : deliveryAddressLines.length > 0 ? (
               <View style={styles.party}>
                 <Text style={styles.partyLabel}>Deliver to</Text>
-                <Text style={styles.partyValue}>
-                  {[order.deliveryAddress.addressLine1, order.deliveryAddress.addressLine2]
-                    .filter(Boolean)
-                    .join(', ')}
-                  {'\n'}
-                  {order.deliveryAddress.city}, {order.deliveryAddress.state}{' '}
-                  {order.deliveryAddress.pincode}
-                </Text>
+                {deliveryAddressLines.map((l, i) => (
+                  <Text key={i} style={styles.partyValue}>
+                    {l}
+                  </Text>
+                ))}
               </View>
             ) : null}
 
@@ -274,9 +311,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline, marginVertical: 14 },
-  party: { marginBottom: 10 },
+  party: { marginBottom: 12 },
   partyLabel: { fontFamily: 'Inter-SemiBold', fontSize: 11, color: customerColors.charcoal.soft, textTransform: 'uppercase', letterSpacing: 0.4 },
   partyValue: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, marginTop: 2, lineHeight: 20 },
+  sellerName: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT, marginTop: 3, lineHeight: 20 },
+  regLine: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 3, letterSpacing: 0.2 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 5 },
   itemName: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, flex: 1 },
   itemAmount: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
