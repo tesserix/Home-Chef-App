@@ -135,9 +135,19 @@ type mapplsSearchResponse struct {
 	SuggestedLocations []mapplsLocation `json:"suggestedLocations"`
 }
 
-// fetchMapplsSuggestions runs a Mappls Text Search for India and maps results to
-// coordinate-bearing AddressSuggestions. Any transport/parse/auth error is
-// returned so the caller can fall back to Photon.
+// mapplsRow pairs a mapped suggestion with the clean locality string used to
+// resolve its coordinates (Mappls's OAuth tier returns accurate addresses but no
+// lat/lng — see enrichCoordsFromPhoton).
+type mapplsRow struct {
+	s   AddressSuggestion
+	geo string // clean "locality, city, state, PIN" for coordinate lookup
+}
+
+// fetchMapplsSuggestions runs a Mappls Text Search for India (accurate flat-level
+// matching + address normalization) and enriches each result with coordinates via
+// Photon (Mappls's OAuth tier returns no lat/lng, but its normalized locality
+// string is clean enough for Photon to geocode reliably). Any transport/parse/auth
+// error is returned so the caller can fall back to Photon directly.
 func fetchMapplsSuggestions(reqCtx context.Context, q string) ([]AddressSuggestion, error) {
 	token, err := getMapplsToken(reqCtx)
 	if err != nil {
@@ -182,22 +192,28 @@ func fetchMapplsSuggestions(reqCtx context.Context, q string) ([]AddressSuggesti
 		return nil, err
 	}
 
-	out := make([]AddressSuggestion, 0, len(body.SuggestedLocations))
+	rows := make([]mapplsRow, 0, len(body.SuggestedLocations))
 	for _, loc := range body.SuggestedLocations {
-		s := mapplsToSuggestion(loc)
-		if s.Description == "" || (s.Lat == 0 && s.Lon == 0) {
-			continue // no usable point → an unlocatable row can't price delivery.
+		r := mapplsToRow(loc)
+		if r.s.Description == "" {
+			continue
 		}
-		out = append(out, s)
+		rows = append(rows, r)
+	}
+	enrichCoordsFromPhoton(reqCtx, rows)
+
+	out := make([]AddressSuggestion, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.s)
 	}
 	return out, nil
 }
 
-// mapplsToSuggestion maps a Mappls location to our AddressSuggestion. Mappls
-// returns a flat placeAddress string (no structured components), so city/state/
-// postcode are parsed best-effort from the trailing comma-separated tokens
-// ("<area>, <city>, <state> <PIN>").
-func mapplsToSuggestion(loc mapplsLocation) AddressSuggestion {
+// mapplsToRow maps a Mappls location to a suggestion + its coordinate-lookup key.
+// Mappls returns a flat placeAddress string (no structured components), so city/
+// state/postcode are parsed best-effort from the trailing comma-separated tokens
+// ("<area>, <city>, <state> <PIN>"). If Mappls ever does send a point, we keep it.
+func mapplsToRow(loc mapplsLocation) mapplsRow {
 	lat, lon := float64(loc.Latitude), float64(loc.Longitude)
 	if lat == 0 && lon == 0 { // some POI rows carry only the entry point.
 		lat, lon = float64(loc.EntryLatitude), float64(loc.EntryLongitude)
@@ -216,7 +232,104 @@ func mapplsToSuggestion(loc mapplsLocation) AddressSuggestion {
 		desc = strings.TrimSpace(loc.PlaceAddress)
 	}
 	s.Description = desc
-	return s
+
+	// The coordinate-lookup key: Mappls's clean locality string (placeAddress) is
+	// exactly what Photon can geocode, unlike the customer's raw flat-level input.
+	geo := strings.TrimSpace(loc.PlaceAddress)
+	if geo == "" {
+		geo = strings.TrimSpace(strings.Join(nonEmptyStrings(city, region, postal), ", "))
+	}
+	return mapplsRow{s: s, geo: geo}
+}
+
+// coordEntry caches a resolved locality coordinate.
+type coordEntry struct {
+	lat, lon float64
+	at       time.Time
+}
+
+var localityCoordCache sync.Map // key: lowercased locality string → coordEntry
+
+const (
+	coordCacheTTL      = 24 * time.Hour
+	maxCoordLookups    = 4 // bound the Photon fan-out per search; the rest ride the cache.
+	coordLookupTimeout = 3 * time.Second
+)
+
+// enrichCoordsFromPhoton fills each row's coordinates by geocoding its clean
+// locality string through Photon. Rows sharing a locality resolve from one lookup
+// (deduped), and resolved localities are cached ~24h, so a typical search costs
+// 0–1 Photon calls. Rows that don't resolve keep their (accurate) address text —
+// an address with no point is still selectable; it just can't price delivery until
+// coordinates are known.
+func enrichCoordsFromPhoton(reqCtx context.Context, rows []mapplsRow) {
+	if len(rows) == 0 {
+		return
+	}
+	now := time.Now()
+
+	// Rows that already carry a point (defensive: future Mappls tiers) need nothing.
+	byKey := map[string][]int{}
+	var order []string
+	for i := range rows {
+		if rows[i].s.Lat != 0 || rows[i].s.Lon != 0 {
+			continue
+		}
+		key := strings.ToLower(rows[i].geo)
+		if key == "" {
+			continue
+		}
+		if _, seen := byKey[key]; !seen {
+			order = append(order, key)
+		}
+		byKey[key] = append(byKey[key], i)
+	}
+
+	var toFetch []string
+	for _, key := range order {
+		if v, ok := localityCoordCache.Load(key); ok {
+			if e := v.(coordEntry); now.Sub(e.at) < coordCacheTTL {
+				assignCoord(rows, byKey[key], e.lat, e.lon)
+				continue
+			}
+		}
+		toFetch = append(toFetch, key)
+	}
+	if len(toFetch) > maxCoordLookups {
+		toFetch = toFetch[:maxCoordLookups]
+	}
+
+	var wg sync.WaitGroup
+	for _, key := range toFetch {
+		wg.Add(1)
+		go func(key string) {
+			defer wg.Done()
+			idxs := byKey[key]
+			if len(idxs) == 0 {
+				return
+			}
+			ctx, cancel := context.WithTimeout(reqCtx, coordLookupTimeout)
+			defer cancel()
+			out, err := fetchPhotonSuggestions(ctx, rows[idxs[0]].geo)
+			if err != nil || len(out) == 0 {
+				return
+			}
+			lat, lon := out[0].Lat, out[0].Lon
+			if lat == 0 && lon == 0 {
+				return
+			}
+			localityCoordCache.Store(key, coordEntry{lat: lat, lon: lon, at: now})
+			assignCoord(rows, idxs, lat, lon)
+		}(key)
+	}
+	wg.Wait()
+}
+
+func assignCoord(rows []mapplsRow, idxs []int, lat, lon float64) {
+	for _, i := range idxs {
+		rows[i].s.Lat = lat
+		rows[i].s.Lon = lon
+	}
 }
 
 // parseIndianAddressTail pulls city / state / 6-digit PIN out of a Mappls flat

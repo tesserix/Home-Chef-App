@@ -39,15 +39,16 @@ func TestFlexFloatUnmarshal(t *testing.T) {
 	}
 }
 
-func TestMapplsToSuggestion(t *testing.T) {
+func TestMapplsToRow(t *testing.T) {
 	loc := mapplsLocation{
 		PlaceName:    "Asima Residency",
 		PlaceAddress: "Kalarahanga, Bhubaneswar, Odisha 751024",
 		Latitude:     20.2961,
 		Longitude:    85.8245,
 	}
-	s := mapplsToSuggestion(loc)
-	if s.Lat == 0 || s.Lon == 0 {
+	r := mapplsToRow(loc)
+	s := r.s
+	if s.Lat == 0 || s.Lon == 0 { // Mappls sent a point here, so it's kept.
 		t.Fatalf("expected coordinates, got %+v", s)
 	}
 	if s.City != "Bhubaneswar" || s.Region != "Odisha" || s.Postal != "751024" {
@@ -55,5 +56,8 @@ func TestMapplsToSuggestion(t *testing.T) {
 	}
 	if s.Country != "IN" || s.Line1 != "Asima Residency" {
 		t.Errorf("bad mapping: country=%q line1=%q", s.Country, s.Line1)
+	}
+	if r.geo != "Kalarahanga, Bhubaneswar, Odisha 751024" {
+		t.Errorf("bad geo key: %q", r.geo)
 	}
 }
