@@ -28,6 +28,8 @@ export interface SelfDeliveryBreakdown {
   fuelSurge: number;
   /** Weather surge at the drop location (≥1). 1 = clear / no provider. */
   weatherSurge: number;
+  /** Traffic surge at the drop location (≥1). 1 = free-flowing / no provider. */
+  trafficSurge: number;
   /** Combined surge multiplier applied to the estimate (≥1). */
   surgeMultiplier: number;
   fee: number;

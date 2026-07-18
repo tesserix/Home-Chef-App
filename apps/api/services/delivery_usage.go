@@ -23,6 +23,7 @@ type deliveryUsageCounters struct {
 	distanceDurableHits   int64 // served from Postgres/CNPG — free
 	weatherProviderCalls  int64 // weather API calls (short-TTL / uncached by design)
 	fuelProviderCalls     int64 // fuel-index API calls (cached daily, so rare)
+	trafficProviderCalls  int64 // traffic API calls (very short TTL — live signal)
 }
 
 var deliveryUsage deliveryUsageCounters
@@ -35,7 +36,8 @@ func recordDistanceDurableHit()   { atomic.AddInt64(&deliveryUsage.distanceDurab
 // it wherever it lives, keeping all delivery cost telemetry in one place.
 func RecordWeatherProviderCall() { atomic.AddInt64(&deliveryUsage.weatherProviderCalls, 1) }
 
-func recordFuelProviderCall() { atomic.AddInt64(&deliveryUsage.fuelProviderCalls, 1) }
+func recordFuelProviderCall()    { atomic.AddInt64(&deliveryUsage.fuelProviderCalls, 1) }
+func recordTrafficProviderCall() { atomic.AddInt64(&deliveryUsage.trafficProviderCalls, 1) }
 
 // DeliveryUsageSnapshot is a point-in-time read of the live counters plus the
 // derived cache-hit ratio and estimated spend, for the admin cost view.
@@ -46,6 +48,7 @@ type DeliveryUsageSnapshot struct {
 	DistanceCacheHitRatio float64 `json:"distanceCacheHitRatio"` // hits / (hits + provider calls)
 	WeatherProviderCalls  int64   `json:"weatherProviderCalls"`
 	FuelProviderCalls     int64   `json:"fuelProviderCalls"`
+	TrafficProviderCalls  int64   `json:"trafficProviderCalls"`
 
 	// Cost estimate in USD, using the configured per-call prices. This is the
 	// spend SINCE THE LAST RESTART; the all-time distance spend is derived by the
@@ -63,6 +66,7 @@ func GetDeliveryUsageSnapshot() DeliveryUsageSnapshot {
 	durable := atomic.LoadInt64(&deliveryUsage.distanceDurableHits)
 	weather := atomic.LoadInt64(&deliveryUsage.weatherProviderCalls)
 	fuel := atomic.LoadInt64(&deliveryUsage.fuelProviderCalls)
+	traffic := atomic.LoadInt64(&deliveryUsage.trafficProviderCalls)
 
 	hits := hot + durable
 	ratio := 0.0
@@ -73,8 +77,9 @@ func GetDeliveryUsageSnapshot() DeliveryUsageSnapshot {
 	distPrice := config.AppConfig.DeliveryDistancePricePerCallUSD
 	wxPrice := config.AppConfig.DeliveryWeatherPricePerCallUSD
 
-	// Fuel is cached daily so its call volume is tiny; it's priced at the same
-	// cheap map-data rate as weather rather than adding another config knob.
+	// Fuel/traffic are cached (daily / minutes) so their volume is tiny; they're
+	// priced at the same cheap map-data rate as weather rather than adding more
+	// config knobs.
 	return DeliveryUsageSnapshot{
 		DistanceProviderCalls: calls,
 		DistanceHotHits:       hot,
@@ -82,8 +87,9 @@ func GetDeliveryUsageSnapshot() DeliveryUsageSnapshot {
 		DistanceCacheHitRatio: ratio,
 		WeatherProviderCalls:  weather,
 		FuelProviderCalls:     fuel,
+		TrafficProviderCalls:  traffic,
 		DistancePricePerCall:  distPrice,
 		WeatherPricePerCall:   wxPrice,
-		EstimatedSpendUSD:     float64(calls)*distPrice + float64(weather+fuel)*wxPrice,
+		EstimatedSpendUSD:     float64(calls)*distPrice + float64(weather+fuel+traffic)*wxPrice,
 	}
 }

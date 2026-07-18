@@ -44,13 +44,53 @@ func (w *fakeWeather) WeatherMultiplier(_ context.Context, _, _ float64) (float6
 	return w.mult, w.ok
 }
 
-func TestFuelSurge_DefaultsToNeutralWithoutProvider(t *testing.T) {
+// fakeTraffic is a test TrafficProvider returning a fixed multiplier.
+type fakeTraffic struct {
+	mult float64
+	ok   bool
+	hits int
+}
+
+func (tr *fakeTraffic) TrafficMultiplier(_ context.Context, _, _ float64) (float64, bool) {
+	tr.hits++
+	return tr.mult, tr.ok
+}
+
+func clearSurgeProviders() {
 	SetFuelIndexProvider(nil)
 	SetWeatherProvider(nil)
+	SetTrafficProvider(nil)
+}
+
+func TestFuelSurge_DefaultsToNeutralWithoutProvider(t *testing.T) {
+	clearSurgeProviders()
 	s := CurrentSurge(context.Background(), "IN", surgeLat, surgeLng)
 	require.Equal(t, 1.0, s.Fuel, "no provider → no surge")
 	require.Equal(t, 1.0, s.Weather)
+	require.Equal(t, 1.0, s.Traffic)
 	require.Equal(t, 1.0, s.Combined)
+}
+
+// Traffic surge combines with the others; heavy traffic raises the estimate. Same
+// neutral-default + clamp guarantees.
+func TestTrafficSurge_UsesProviderClampsAndCombines(t *testing.T) {
+	t.Cleanup(clearSurgeProviders)
+	clearSurgeProviders()
+
+	SetTrafficProvider(&fakeTraffic{mult: 1.4, ok: true})
+	s := CurrentSurge(context.Background(), "IN", surgeLat, surgeLng)
+	require.InDelta(t, 1.4, s.Traffic, 1e-9)
+	require.InDelta(t, 1.4, s.Combined, 1e-9)
+
+	// Light traffic never discounts; gridlock is capped.
+	SetTrafficProvider(&fakeTraffic{mult: 0.6, ok: true})
+	require.Equal(t, 1.0, CurrentSurge(context.Background(), "IN", surgeLat, surgeLng).Traffic)
+	SetTrafficProvider(&fakeTraffic{mult: 9, ok: true})
+	require.Equal(t, maxSurgeMultiplier, CurrentSurge(context.Background(), "IN", surgeLat, surgeLng).Traffic)
+
+	// A provider that can't answer degrades to neutral.
+	SetTrafficProvider(&fakeTraffic{ok: false})
+	require.Equal(t, 1.0, CurrentSurge(context.Background(), "IN", surgeLat, surgeLng).Traffic)
 }
 
 // Weather surge multiplies alongside fuel; bad weather raises the estimate. Same

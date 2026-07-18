@@ -34,6 +34,10 @@ const fuelSurgeCacheTTL = 24 * time.Hour
 // still cheap enough not to hit the weather API on every quote for the same area.
 const weatherSurgeCacheTTL = 20 * time.Minute
 
+// trafficSurgeCacheTTL — traffic shifts within minutes, so it's cached only very
+// briefly, just to dedupe a burst of quotes for the same area.
+const trafficSurgeCacheTTL = 5 * time.Minute
+
 // FuelIndexProvider returns the current fuel-cost multiplier for a country,
 // relative to the chef's baseline per-km rate (1.0 = baseline). Implemented over
 // a real fuel-price source (#700 provider choice); nil disables fuel surge.
@@ -58,6 +62,18 @@ var weatherProvider WeatherProvider
 // SetWeatherProvider installs (or clears, with nil) the weather source.
 func SetWeatherProvider(p WeatherProvider) { weatherProvider = p }
 
+// TrafficProvider returns the current traffic-congestion multiplier for a drop
+// location (1.0 = free-flowing; higher = the drive takes longer at peak/gridlock).
+// Implemented over a traffic-aware routing/traffic API (#700); nil disables it.
+type TrafficProvider interface {
+	TrafficMultiplier(ctx context.Context, lat, lng float64) (float64, bool)
+}
+
+var trafficProvider TrafficProvider
+
+// SetTrafficProvider installs (or clears, with nil) the traffic source.
+func SetTrafficProvider(p TrafficProvider) { trafficProvider = p }
+
 // SurgeFactors is the breakdown of the current surge multipliers. Each is ≥ 1.0.
 // Traffic and Weather stay 1.0 until #705/#706 wire their providers.
 type SurgeFactors struct {
@@ -73,7 +89,7 @@ type SurgeFactors struct {
 func CurrentSurge(ctx context.Context, country string, dropLat, dropLng float64) SurgeFactors {
 	f := SurgeFactors{
 		Fuel:    fuelMultiplier(ctx, country),
-		Traffic: 1.0, // #705
+		Traffic: trafficMultiplier(ctx, dropLat, dropLng),
 		Weather: weatherMultiplier(ctx, dropLat, dropLng),
 	}
 	f.Combined = clampSurge(f.Fuel * f.Traffic * f.Weather)
@@ -128,6 +144,34 @@ func weatherMultiplier(ctx context.Context, lat, lng float64) float64 {
 	RecordWeatherProviderCall()
 	m = clampSurge(m)
 	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), weatherSurgeCacheTTL)
+	return m
+}
+
+// trafficMultiplier returns the clamped traffic surge at a drop location. Traffic
+// shifts fast (a jam clears in minutes), so it's cached even more briefly than
+// weather — just long enough to share a reading across a burst of quotes for the
+// same area. Neutral (1.0) without a provider or on any error.
+func trafficMultiplier(ctx context.Context, lat, lng float64) float64 {
+	if trafficProvider == nil {
+		return 1.0
+	}
+	if lat == 0 && lng == 0 {
+		return 1.0
+	}
+	key := fmt.Sprintf("surge:traffic:%.2f,%.2f", lat, lng) // ~1 km cell
+	hot := redisKV{}
+	if v, ok := hot.Get(ctx, key); ok {
+		if m, err := strconv.ParseFloat(v, 64); err == nil {
+			return clampSurge(m)
+		}
+	}
+	m, ok := trafficProvider.TrafficMultiplier(ctx, lat, lng)
+	if !ok {
+		return 1.0
+	}
+	recordTrafficProviderCall()
+	m = clampSurge(m)
+	hot.Set(ctx, key, strconv.FormatFloat(m, 'f', 4, 64), trafficSurgeCacheTTL)
 	return m
 }
 
