@@ -515,20 +515,28 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// Self-delivery reach guard: a chef who delivers their own orders can only
-	// serve addresses inside their delivery radius. Reject an out-of-range
-	// chef-delivery order server-side — the mirror of the discovery filter that
-	// hides out-of-range delivery-only chefs, so a crafted request can't create
-	// an undeliverable order. Only enforced when the chef set a radius and the
-	// drop address has real coordinates (otherwise we can't range-check, matching
-	// the zones-off behaviour above).
-	if fulfillment == models.FulfillmentChefDelivery && chef.DeliveryRadius > 0 &&
-		(deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0) &&
-		!services.ChefDeliversTo(chef, deliveryAddr.Latitude, deliveryAddr.Longitude) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": "This chef doesn't deliver to that address. Try pickup, or choose an address closer to the kitchen.",
-		})
-		return
+	// HARD delivery-range guard (#709): a self-delivery order (delivery or
+	// chef_delivery) may not go beyond the kitchen's serviceable radius
+	// (EffectiveDeliveryMaxKm = the chef's SelfDeliveryMaxDistanceKm, else the
+	// platform default 10 km). This is the server-side backstop that stops an
+	// out-of-range customer from placing an order the chef can't fulfil — even if
+	// the app's checkout gate was bypassed. Skipped when a live 3PL covers the area
+	// (it delivers beyond the chef's own reach). Only enforced when we can measure:
+	// the drop has coordinates (set from a saved/new address or the device geo-tag).
+	if fulfillment != models.FulfillmentPickup && !services.ThirdPartyDeliveryEnabled() &&
+		(deliveryAddr.Latitude != 0 || deliveryAddr.Longitude != 0) {
+		reach := services.DeliveryReach(chef, deliveryAddr.Latitude, deliveryAddr.Longitude)
+		if reach.Known && !reach.Deliverable {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error": fmt.Sprintf(
+					"This address is %.1f km from the kitchen — beyond the %.0f km delivery range. Choose pickup, or an address closer to the kitchen.",
+					reach.DistanceKm, reach.MaxRadiusKm),
+				"code":        "outside_delivery_range",
+				"distanceKm":  models.RoundAmount(reach.DistanceKm),
+				"maxRadiusKm": reach.MaxRadiusKm,
+			})
+			return
+		}
 	}
 
 	// Generate order number

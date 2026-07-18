@@ -67,6 +67,13 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		saving = 0
 	}
 
+	// Serviceability (#709): auto-calculated distance from the chef to the drop and
+	// whether it's within the kitchen's delivery range. The app uses this to block
+	// delivery + warn BEFORE the customer tries to place an out-of-range order.
+	// Skipped as a hard gate when a live 3PL covers the area.
+	reach := services.DeliveryReach(chef, req.Latitude, req.Longitude)
+	deliverable := reach.Deliverable || services.ThirdPartyDeliveryEnabled()
+
 	resp := gin.H{
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
@@ -76,6 +83,11 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 		"currency":           services.CurrencyForCountry(chef.PayoutCountry),
 		"offersPickup":       chef.OffersPickup,
 		"offersSelfDelivery": chef.OffersSelfDelivery,
+		// Delivery serviceability for the drop coords the app sent.
+		"deliverable": deliverable,
+		"distanceKm":  models.RoundAmount(reach.DistanceKm),
+		"maxRadiusKm": reach.MaxRadiusKm,
+		"rangeKnown":  reach.Known,
 	}
 
 	// Self-delivery estimate (#702). When the chef delivers themselves, the

@@ -163,6 +163,13 @@ type Config struct {
 	// GoogleMapsAPIKey (independent blast radius + quota). Empty ⇒ weather factor
 	// stays neutral 1.0, so this is opt-in and never affects the charged amount.
 	GoogleWeatherAPIKey string
+
+	// DeliveryDefaultMaxRadiusKm is the platform's default serviceable self-delivery
+	// radius (#709): the max straight-line distance from the chef a delivery order
+	// may go when the chef has NOT set their own SelfDeliveryMaxDistanceKm. Enforced
+	// at checkout (Delivery hidden beyond it) and hard at order creation (rejected).
+	// Default 10 km; override with DELIVERY_DEFAULT_MAX_RADIUS_KM.
+	DeliveryDefaultMaxRadiusKm float64
 }
 
 var AppConfig *Config
@@ -184,6 +191,7 @@ func Load() {
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
+	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -299,6 +307,7 @@ func Load() {
 		GroupOrdersEnabled:              groupOrders,
 		DeliveryDistancePricePerCallUSD: distancePricePerCall,
 		DeliveryWeatherPricePerCallUSD:  weatherPricePerCall,
+		DeliveryDefaultMaxRadiusKm:      deliveryMaxRadiusKm,
 		OrderPayoutAutoReleaseEnabled:   orderPayoutAutoRelease,
 		CateringDepositEnabled:          cateringDeposit,
 		OrderSagaEnabled:                orderSaga,

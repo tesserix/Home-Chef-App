@@ -3,6 +3,7 @@ package services
 import (
 	"math"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/models"
 )
 
@@ -73,19 +74,53 @@ func DeliverableToYou(chef models.ChefProfile, custLat, custLng float64, tplEnab
 		return true // a live 3PL covers the whole area.
 	}
 	if chef.OffersSelfDelivery {
-		// A self-delivering chef's reach is their SELF-DELIVERY max distance
-		// (SelfDeliveryMaxDistanceKm on the vendor profile) — NOT the legacy
-		// DeliveryRadius (bug #709: a chef whose self-delivery max is 0 = "no limit"
-		// was wrongly gated by a stale delivery_radius, hiding Delivery at checkout).
-		// 0 = no self-imposed limit (the common case): always deliverable — the chef
-		// confirms or declines the drop at accept (#709), with the distance warning
-		// the vendor app already shows. Missing chef coords → also defer to accept.
-		if chef.SelfDeliveryMaxDistanceKm <= 0 || !hasRealCoords(chef.Latitude, chef.Longitude) {
-			return true
-		}
-		return PlanarDistanceKm(chef.Latitude, chef.Longitude, custLat, custLng) <= chef.SelfDeliveryMaxDistanceKm
+		reach := DeliveryReach(chef, custLat, custLng)
+		return reach.Deliverable
 	}
 	return false // not self-delivering and no 3PL → pickup only.
+}
+
+// EffectiveDeliveryMaxKm is the serviceable self-delivery radius for a chef (#709):
+// the chef's own SelfDeliveryMaxDistanceKm when they set one, else the platform
+// default (DELIVERY_DEFAULT_MAX_RADIUS_KM, 10 km). This is the single source of
+// truth for "how far will this kitchen deliver" — used at checkout AND at the
+// hard order-creation guard so they can never disagree.
+func EffectiveDeliveryMaxKm(chef models.ChefProfile) float64 {
+	if chef.SelfDeliveryMaxDistanceKm > 0 {
+		return chef.SelfDeliveryMaxDistanceKm
+	}
+	if config.AppConfig != nil && config.AppConfig.DeliveryDefaultMaxRadiusKm > 0 {
+		return config.AppConfig.DeliveryDefaultMaxRadiusKm
+	}
+	return 10 // safe fallback if config isn't loaded (tests).
+}
+
+// DeliveryReachResult is the serviceability answer for a (chef → drop) pair.
+type DeliveryReachResult struct {
+	Deliverable bool    `json:"deliverable"`
+	DistanceKm  float64 `json:"distanceKm"`  // straight-line chef → drop; 0 when unknown
+	MaxRadiusKm float64 `json:"maxRadiusKm"` // the serviceable cap enforced
+	Known       bool    `json:"known"`       // false when coords are missing (can't range-check)
+}
+
+// DeliveryReach computes whether a self-delivering chef can serve a drop and by
+// how much margin. The rule (#709): a drop within EffectiveDeliveryMaxKm of the
+// chef is deliverable; beyond it is NOT (hard cap — no order). When either the
+// chef's or the customer's coordinates are missing we can't measure, so Known is
+// false and Deliverable defaults true (the caller decides; the checkout requires
+// coords for delivery, so this only affects legacy/coordless paths).
+func DeliveryReach(chef models.ChefProfile, custLat, custLng float64) DeliveryReachResult {
+	maxKm := EffectiveDeliveryMaxKm(chef)
+	if !hasRealCoords(chef.Latitude, chef.Longitude) || (custLat == 0 && custLng == 0) {
+		return DeliveryReachResult{Deliverable: true, MaxRadiusKm: maxKm, Known: false}
+	}
+	dist := PlanarDistanceKm(chef.Latitude, chef.Longitude, custLat, custLng)
+	return DeliveryReachResult{
+		Deliverable: dist <= maxKm,
+		DistanceKm:  dist,
+		MaxRadiusKm: maxKm,
+		Known:       true,
+	}
 }
 
 // DeliveryAreaKeepSQL returns a SQL predicate (and its ordered bind vars) that

@@ -65,26 +65,56 @@ func TestChefDeliversTo_RespectsRadiusCoordsAndMode(t *testing.T) {
 }
 
 func TestDeliverableToYou_SelfDeliveryReach(t *testing.T) {
-	custLat, custLng := 19.0760, 72.8777
+	// Chef in central Bangalore. config.AppConfig is nil in this test, so
+	// EffectiveDeliveryMaxKm falls back to the 10 km platform default.
+	chefLat, chefLng := 12.9716, 77.5946
+	nearLat, nearLng := 12.98, 77.60 // ~1.3 km — inside 10 km
+	farLat, farLng := 13.25, 77.95   // ~50 km — outside 10 km
 
-	// A live 3PL covers the whole area regardless of anything else.
-	far := models.ChefProfile{OffersSelfDelivery: true, SelfDeliveryMaxDistanceKm: 1, Latitude: 20.0, Longitude: 73.5}
-	assert.True(t, DeliverableToYou(far, custLat, custLng, true), "3PL live → deliverable regardless")
+	self := models.ChefProfile{OffersSelfDelivery: true, Latitude: chefLat, Longitude: chefLng}
 
-	// A chef with an EXPLICIT self-delivery max distance, out of reach → gated.
-	assert.False(t, DeliverableToYou(far, custLat, custLng, false),
-		"3PL dark + explicit self-delivery max, customer out of reach → not deliverable")
+	// A live 3PL covers the whole area regardless of distance.
+	assert.True(t, DeliverableToYou(self, farLat, farLng, true), "3PL live → deliverable regardless of distance")
 
-	// No self-delivery max set (0) = NO self-imposed limit — the common home-tiffin
-	// case (#709). Deliverable even far away; the chef confirms/declines at accept.
-	// (This is the Dum Alooo Kitchen case: opted-in self-delivery, max distance 0.)
-	noLimit := models.ChefProfile{OffersSelfDelivery: true, SelfDeliveryMaxDistanceKm: 0, DeliveryRadius: 10, Latitude: 20.0, Longitude: 73.5}
-	assert.True(t, DeliverableToYou(noLimit, custLat, custLng, false),
-		"self-delivery max 0 = no limit → deliverable; the legacy DeliveryRadius must NOT gate it")
+	// max 0 → platform default 10 km cap (#709). Within → deliverable, beyond → NOT.
+	assert.True(t, DeliverableToYou(self, nearLat, nearLng, false), "within the 10 km default cap → deliverable")
+	assert.False(t, DeliverableToYou(self, farLat, farLng, false), "beyond the 10 km default cap → not deliverable")
 
-	// Not self-delivering and no 3PL → truly pickup only.
-	noSelf := models.ChefProfile{OffersSelfDelivery: false, Latitude: 20.0, Longitude: 73.5}
-	assert.False(t, DeliverableToYou(noSelf, custLat, custLng, false), "no self-delivery + no 3PL → not deliverable")
+	// A chef who set a SMALLER explicit max is gated by it.
+	tight := self
+	tight.SelfDeliveryMaxDistanceKm = 0.5
+	assert.False(t, DeliverableToYou(tight, nearLat, nearLng, false), "1.3 km with a 0.5 km max → not deliverable")
+
+	// A chef who set a LARGER explicit max reaches further.
+	wide := self
+	wide.SelfDeliveryMaxDistanceKm = 100
+	assert.True(t, DeliverableToYou(wide, farLat, farLng, false), "50 km with a 100 km max → deliverable")
+
+	// Not self-delivering and no 3PL → pickup only.
+	noSelf := models.ChefProfile{OffersSelfDelivery: false, Latitude: chefLat, Longitude: chefLng}
+	assert.False(t, DeliverableToYou(noSelf, nearLat, nearLng, false), "no self-delivery + no 3PL → not deliverable")
+}
+
+func TestDeliveryReach_DistanceAndCap(t *testing.T) {
+	chef := models.ChefProfile{OffersSelfDelivery: true, Latitude: 12.9716, Longitude: 77.5946}
+
+	// Within the 10 km default: deliverable, distance measured.
+	in := DeliveryReach(chef, 12.98, 77.60)
+	assert.True(t, in.Known)
+	assert.True(t, in.Deliverable)
+	assert.InDelta(t, 10.0, in.MaxRadiusKm, 1e-9)
+	assert.Less(t, in.DistanceKm, 10.0)
+
+	// Beyond the cap: not deliverable, with the distance for the error message.
+	out := DeliveryReach(chef, 13.25, 77.95)
+	assert.True(t, out.Known)
+	assert.False(t, out.Deliverable)
+	assert.Greater(t, out.DistanceKm, 10.0)
+
+	// No customer coords → unmeasurable: Known false, defaults deliverable.
+	unknown := DeliveryReach(chef, 0, 0)
+	assert.False(t, unknown.Known)
+	assert.True(t, unknown.Deliverable)
 }
 
 func TestDeliveryAreaKeepSQL_HybridFilter(t *testing.T) {
