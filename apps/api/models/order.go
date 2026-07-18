@@ -104,10 +104,17 @@ type Order struct {
 	FulfillmentType FulfillmentType `gorm:"type:varchar(16);default:'delivery'" json:"fulfillmentType"`
 
 	// Pricing
-	Subtotal    float64 `gorm:"not null" json:"subtotal"`
+	Subtotal float64 `gorm:"not null" json:"subtotal"`
+	// DeliveryFee is the amount CHARGED upfront (the recommended self-delivery
+	// approx-max, #703). It stays frozen as the billed figure on the invoice.
 	DeliveryFee float64 `gorm:"default:0" json:"deliveryFee"`
-	ServiceFee  float64 `gorm:"default:0" json:"serviceFee"`
-	Tax         float64 `gorm:"default:0" json:"tax"`
+	// DeliveryFeeFinal is the fee the CHEF chose at accept (#703): 0 ≤ it ≤
+	// DeliveryFee. When set below DeliveryFee, the difference was refunded to the
+	// customer (tracked in RefundAmount) and the chef is settled on this figure.
+	// Nil = the chef confirmed the charged fee as-is.
+	DeliveryFeeFinal *float64 `gorm:"" json:"deliveryFeeFinal,omitempty"`
+	ServiceFee       float64  `gorm:"default:0" json:"serviceFee"`
+	Tax              float64  `gorm:"default:0" json:"tax"`
 	// TaxRate / TaxName freeze the rule applied when the order was placed so
 	// that later edits to TaxRate rows don't retroactively change historical
 	// invoices. TaxName is the label shown on the invoice ("GST", "VAT", ...).
@@ -337,21 +344,24 @@ type OrderResponse struct {
 	// Customer relation (e.g. chef order list, chef order detail). They are
 	// intentionally absent from the base DTO so customer-facing endpoints
 	// cannot accidentally return chef-side data.
-	CustomerName    string              `json:"customerName,omitempty"`
-	CustomerPhone   string              `json:"customerPhone,omitempty"`
-	Subtotal        float64             `json:"subtotal"`
-	DeliveryFee     float64             `json:"deliveryFee"`
-	ServiceFee      float64             `json:"serviceFee"`
-	Tax             float64             `json:"tax"`
-	TaxRate         float64             `json:"taxRate"`
-	TaxName         string              `json:"taxName,omitempty"`
-	Tip             float64             `json:"tip"`
-	ChefTip         float64             `json:"chefTip,omitempty"`
-	DriverTip       float64             `json:"driverTip,omitempty"`
-	Discount        float64             `json:"discount"`
-	Total           float64             `json:"total"`
-	Items           []OrderItemResponse `json:"items"`
-	DeliveryAddress AddressResponse     `json:"deliveryAddress"`
+	CustomerName  string  `json:"customerName,omitempty"`
+	CustomerPhone string  `json:"customerPhone,omitempty"`
+	Subtotal      float64 `json:"subtotal"`
+	DeliveryFee   float64 `json:"deliveryFee"`
+	// DeliveryFeeFinal is the chef's chosen fee at accept (#703) when they reduced
+	// it; the difference vs DeliveryFee was refunded. Nil = charged as-is.
+	DeliveryFeeFinal *float64            `json:"deliveryFeeFinal,omitempty"`
+	ServiceFee       float64             `json:"serviceFee"`
+	Tax              float64             `json:"tax"`
+	TaxRate          float64             `json:"taxRate"`
+	TaxName          string              `json:"taxName,omitempty"`
+	Tip              float64             `json:"tip"`
+	ChefTip          float64             `json:"chefTip,omitempty"`
+	DriverTip        float64             `json:"driverTip,omitempty"`
+	Discount         float64             `json:"discount"`
+	Total            float64             `json:"total"`
+	Items            []OrderItemResponse `json:"items"`
+	DeliveryAddress  AddressResponse     `json:"deliveryAddress"`
 	// Chef is populated when the handler preloads the Chef relation
 	// (customer order list/detail). Omitted otherwise so chef-facing
 	// endpoints don't carry a redundant self-reference.
@@ -532,21 +542,22 @@ func (o *Order) ToResponse() OrderResponse {
 			}
 			return o.FulfillmentType
 		}(),
-		PaymentStatus:   o.PaymentStatus,
-		PaymentProvider: o.PaymentProvider,
-		Currency:        currency,
-		Subtotal:        o.Subtotal,
-		DeliveryFee:     o.DeliveryFee,
-		ServiceFee:      o.ServiceFee,
-		Tax:             o.Tax,
-		TaxRate:         o.TaxRate,
-		TaxName:         o.TaxName,
-		Tip:             o.Tip,
-		ChefTip:         o.ChefTip,
-		DriverTip:       o.DriverTip,
-		Discount:        o.Discount,
-		Total:           o.Total,
-		Items:           items,
+		PaymentStatus:    o.PaymentStatus,
+		PaymentProvider:  o.PaymentProvider,
+		Currency:         currency,
+		Subtotal:         o.Subtotal,
+		DeliveryFee:      o.DeliveryFee,
+		DeliveryFeeFinal: o.DeliveryFeeFinal,
+		ServiceFee:       o.ServiceFee,
+		Tax:              o.Tax,
+		TaxRate:          o.TaxRate,
+		TaxName:          o.TaxName,
+		Tip:              o.Tip,
+		ChefTip:          o.ChefTip,
+		DriverTip:        o.DriverTip,
+		Discount:         o.Discount,
+		Total:            o.Total,
+		Items:            items,
 		DeliveryAddress: AddressResponse{
 			Line1:      o.DeliveryAddressLine1,
 			Line2:      o.DeliveryAddressLine2,

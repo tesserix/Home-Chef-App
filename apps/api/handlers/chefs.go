@@ -1124,6 +1124,10 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// requested time or proposes a different ready/arrival time. Nil at accept =
 		// confirm the customer's request as-is (or "as soon as ready" if none).
 		ConfirmedFulfillmentAt *time.Time `json:"confirmedFulfillmentAt"`
+		// Delivery fee the chef chooses at ACCEPT (#703): 0 ≤ it ≤ the charged
+		// approx-max. Nil = confirm the charged fee as-is. A lower value refunds the
+		// difference to the customer. Ignored for non-delivery orders.
+		DeliveryFee *float64 `json:"deliveryFee"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1313,6 +1317,21 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	switch order.Status {
 	case models.OrderStatusAccepted:
 		services.SignalOrderChefDecision(order.ID, true, "")
+		// Chef's delivery-fee decision (#703): only for a self-delivery order, only
+		// on the FIRST accept, and only when the chef actually sent a fee. Brings the
+		// charged approx-max DOWN to the chef's number and refunds the difference to
+		// the customer; the accept notification below tells them their order was
+		// accepted, and the order detail shows the reduced fee + refund.
+		if priorStatus == models.OrderStatusPending &&
+			order.FulfillmentType != models.FulfillmentPickup && req.DeliveryFee != nil {
+			finalFee, refunded, adjErr := services.AdjustDeliveryFeeAtAccept(c.Request.Context(), &order, *req.DeliveryFee)
+			if adjErr != nil {
+				log.Printf("delivery-fee-adjust failed order=%s: %v", order.ID, adjErr)
+			} else if refunded > 0 {
+				log.Printf("delivery-fee reduced by chef order=%s finalFee=%.2f refunded=%.2f", order.ID, finalFee, refunded)
+				services.NotifyDeliveryFeeRefund(order, finalFee, refunded)
+			}
+		}
 	case models.OrderStatusReady:
 		services.SignalOrderReady(order.ID)
 	case models.OrderStatusDelivered:

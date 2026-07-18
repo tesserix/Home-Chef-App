@@ -34,9 +34,17 @@ func QuoteOrderDeliveryFee(chef models.ChefProfile, fulfillment models.Fulfillme
 		return 0
 	case models.FulfillmentChefDelivery:
 		return ComputeSelfDeliveryFee(chef, dropLat, dropLng)
-	default: // FulfillmentDelivery (3PL)
+	default: // FulfillmentDelivery
+		// A live 3PL provider quotes the leg it will carry.
 		if fee, ok := QuoteCheckoutDeliveryFee(chef, city, country, dropLat, dropLng); ok {
 			return fee
+		}
+		// 3PL dark → the chef self-delivers this order, so charge the SELF-DELIVERY
+		// fee (the recommended amount by distance, capped at the chef's max — #703).
+		// This is the "approx max" taken upfront; the chef can bring it DOWN at
+		// accept and the difference is refunded to the customer.
+		if chef.OffersSelfDelivery {
+			return ComputeSelfDeliveryFee(chef, dropLat, dropLng)
 		}
 		return GetPlatformPolicy().BaseDeliveryFee
 	}
