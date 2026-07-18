@@ -777,6 +777,71 @@ export default function CheckoutScreen() {
               )}
             </View>
 
+            {/* Self-delivery estimate (#702). When the chef delivers themselves,
+                show the itemised approx-MAX fee. It's a ceiling the chef can only
+                bring DOWN at accept — never a surprise increase — so we label it
+                clearly as an estimate rather than the charged amount. */}
+            {fulfillment !== 'pickup' &&
+            quote?.offersSelfDelivery &&
+            quote?.selfDeliveryBreakdown ? (
+              <View className="rounded-lg border border-hairline bg-canvas px-3 py-2 gap-1">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-semibold text-charcoal">
+                    If chef self-delivers · up to
+                  </Text>
+                  {quote.selfDeliveryBreakdown.fee > 0 ? (
+                    <Text
+                      className="text-xs font-semibold text-charcoal"
+                      style={{ fontVariant: ['tabular-nums'] }}
+                    >
+                      ₹{quote.selfDeliveryBreakdown.fee.toFixed(2)}
+                    </Text>
+                  ) : (
+                    <Text className="text-xs font-semibold text-success">Free</Text>
+                  )}
+                </View>
+                {/* Itemised so the number is honest, not a black box. */}
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[11px] text-charcoal-soft">Base fee</Text>
+                  <Text
+                    className="text-[11px] text-charcoal-soft"
+                    style={{ fontVariant: ['tabular-nums'] }}
+                  >
+                    ₹{quote.selfDeliveryBreakdown.baseFee.toFixed(2)}
+                  </Text>
+                </View>
+                {quote.selfDeliveryBreakdown.distanceKnown &&
+                quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[11px] text-charcoal-soft">
+                      Distance ·{' '}
+                      {quote.selfDeliveryBreakdown.billableKm.toFixed(1)} km beyond{' '}
+                      {quote.selfDeliveryBreakdown.freeRadiusKm.toFixed(0)} km free
+                    </Text>
+                    <Text
+                      className="text-[11px] text-charcoal-soft"
+                      style={{ fontVariant: ['tabular-nums'] }}
+                    >
+                      ₹{quote.selfDeliveryBreakdown.distanceComponent.toFixed(2)}
+                    </Text>
+                  </View>
+                ) : null}
+                {quote.selfDeliveryBreakdown.withinFreeZone ? (
+                  <Text className="text-[11px] text-success">
+                    Within the chef's free-delivery radius
+                  </Text>
+                ) : null}
+                {quote.selfDeliveryBreakdown.capped ? (
+                  <Text className="text-[11px] text-charcoal-soft">
+                    Capped at the chef's ₹{quote.selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
+                  </Text>
+                ) : null}
+                <Text className="text-[11px] text-charcoal-soft">
+                  Estimate — the chef sets the final fee at accept and can only lower it.
+                </Text>
+              </View>
+            ) : null}
+
             {/* Promo code (#39) */}
             {appliedPromo ? (
               <View className="flex-row items-center justify-between">

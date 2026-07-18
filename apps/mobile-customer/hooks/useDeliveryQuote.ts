@@ -7,6 +7,26 @@ import { api } from '../lib/api';
 // checkout shows the real number and the pickup saving — and never displays a
 // total different from what CreateOrder bills.
 
+/**
+ * Itemised, capped self-delivery estimate (#702). Present only when the chef
+ * self-delivers. `fee` is the approx MAX the chef can charge — at accept the chef
+ * can only bring it down (#703), never above it.
+ */
+export interface SelfDeliveryBreakdown {
+  baseFee: number;
+  distanceKnown: boolean;
+  distanceKm: number;
+  freeRadiusKm: number;
+  billableKm: number;
+  perKm: number;
+  distanceComponent: number;
+  /** Drop is inside the chef's free radius — no distance charge. */
+  withinFreeZone: boolean;
+  maxFee: number;
+  capped: boolean;
+  fee: number;
+}
+
 export interface DeliveryQuote {
   deliveryFee: number;
   pickupFee: number;
@@ -14,6 +34,10 @@ export interface DeliveryQuote {
   pickupSaving: number;
   currency: string;
   offersPickup: boolean;
+  offersSelfDelivery: boolean;
+  /** Approx-max self-delivery fee (₹). Present only when the chef self-delivers. */
+  selfDeliveryFee?: number;
+  selfDeliveryBreakdown?: SelfDeliveryBreakdown;
 }
 
 /**
