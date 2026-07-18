@@ -53,6 +53,12 @@ export interface DeliveryQuote {
   maxRadiusKm: number;
   /** false when coords were missing so the distance couldn't be measured. */
   rangeKnown: boolean;
+  /** Platform (service) fee for the sent subtotal, and the tax rule to apply —
+   *  so checkout shows the same total the order is charged (#fee-transparency). */
+  serviceFee: number;
+  taxRatePercent: number;
+  taxName: string;
+  taxInclusive: boolean;
 }
 
 /**
@@ -64,12 +70,19 @@ export interface DeliveryQuote {
  */
 export function useDeliveryQuote(
   chefId: string | undefined,
-  drop: { latitude?: number; longitude?: number; city?: string; country?: string },
+  drop: {
+    latitude?: number;
+    longitude?: number;
+    city?: string;
+    country?: string;
+    state?: string;
+    subtotal?: number;
+  },
 ) {
-  const { latitude, longitude, city, country } = drop;
+  const { latitude, longitude, city, country, state, subtotal } = drop;
   return useQuery<DeliveryQuote>({
-    // Keyed on the coords so moving the drop address re-quotes the distance fee.
-    queryKey: ['delivery-quote', chefId, latitude, longitude, city],
+    // Keyed on the coords + subtotal so the fee/tax re-quote as they change.
+    queryKey: ['delivery-quote', chefId, latitude, longitude, city, state, subtotal],
     queryFn: async () =>
       (
         await api.post(`/v1/chefs/${chefId}/delivery-quote`, {
@@ -77,6 +90,8 @@ export function useDeliveryQuote(
           longitude,
           city,
           country,
+          state,
+          subtotal,
         })
       ).data as DeliveryQuote,
     enabled: !!chefId,

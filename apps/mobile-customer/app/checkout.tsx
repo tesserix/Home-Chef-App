@@ -386,6 +386,8 @@ export default function CheckoutScreen() {
     latitude: selectedAddr?.latitude,
     longitude: selectedAddr?.longitude,
     city: selectedAddr?.city,
+    state: selectedAddr?.state,
+    subtotal,
   });
   // Out-of-range guard (#709): the kitchen's delivery has a hard radius (the chef's
   // own range, else the platform's 10 km default). When the selected address is
@@ -409,7 +411,18 @@ export default function CheckoutScreen() {
   const pickupSaving = quote?.pickupSaving ?? 0;
   // Promo discount (#39) — server-validated preview, clamped to the subtotal.
   const discount = appliedPromo ? Math.min(appliedPromo.discount, subtotal) : 0;
-  const total = Math.max(0, subtotal + deliveryFee - discount);
+  // Platform (service) fee + tax — shown so the total is honest, computed the SAME
+  // way CreateOrder does (#fee-transparency). serviceFee is a % of subtotal; tax is
+  // the rate on (subtotal+delivery+service−discount), backed out when inclusive.
+  const serviceFee = quote?.serviceFee ?? 0;
+  const taxRate = quote?.taxRatePercent ?? 0;
+  const taxInclusive = quote?.taxInclusive ?? false;
+  const taxName = quote?.taxName || 'Tax';
+  const taxBase = Math.max(0, subtotal + deliveryFee + serviceFee - discount);
+  const tax = taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * (taxRate / 100);
+  const total = taxInclusive
+    ? Math.max(0, subtotal + deliveryFee + serviceFee - discount)
+    : Math.max(0, subtotal + deliveryFee + serviceFee + tax - discount);
   // The Place Order button is live only when the order is placeable AND not an
   // out-of-range delivery (which the server would reject anyway).
   const placeEnabled = canPlaceOrder && !deliveryOutOfRange && !deliveryNeedsLocation;
@@ -888,6 +901,35 @@ export default function CheckoutScreen() {
                 <Text className="text-sm text-success font-medium">Free</Text>
               )}
             </View>
+
+            {/* Platform (service) fee — shown so the total is honest (#fee-transparency). */}
+            {serviceFee > 0 ? (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-charcoal-soft">Platform fee</Text>
+                <Text
+                  className="text-sm text-charcoal font-medium"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  ₹{serviceFee.toFixed(2)}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Tax (GST etc.) — the same rate CreateOrder applies. */}
+            {tax > 0 ? (
+              <View className="flex-row justify-between">
+                <Text className="text-sm text-charcoal-soft">
+                  {taxName}
+                  {taxInclusive ? ' (incl.)' : ''}
+                </Text>
+                <Text
+                  className="text-sm text-charcoal font-medium"
+                  style={{ fontVariant: ['tabular-nums'] }}
+                >
+                  ₹{tax.toFixed(2)}
+                </Text>
+              </View>
+            ) : null}
 
             {/* Self-delivery estimate (#702). When the chef delivers themselves,
                 show the itemised approx-MAX fee. It's a ceiling the chef can only
