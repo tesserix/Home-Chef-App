@@ -151,6 +151,12 @@ type Config struct {
 	// (Routes ~$5 / 1000 = $0.005; Weather ~$0.001 / call). Override per provider.
 	DeliveryDistancePricePerCallUSD float64
 	DeliveryWeatherPricePerCallUSD  float64
+
+	// GoogleMapsAPIKey enables the real Google Routes distance provider (#701/#700).
+	// When set, self-delivery distances come from the Routes API (road distance,
+	// cached so it's paid at most once per trip); when empty, the winding-factor
+	// haversine fallback is used — so this is a pure accuracy upgrade, opt-in by key.
+	GoogleMapsAPIKey string
 }
 
 var AppConfig *Config
@@ -229,8 +235,9 @@ func Load() {
 		BFFSessionURL:      getEnv("BFF_SESSION_URL", ""),
 
 		// OAuth public IDs (secrets removed — owned by auth-bff/GIP)
-		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
-		FacebookAppID:  getEnv("FACEBOOK_APP_ID", ""),
+		GoogleClientID:   getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleMapsAPIKey: getEnv("GOOGLE_MAPS_API_KEY", ""),
+		FacebookAppID:    getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage
 		GCSProjectID:     getEnv("GCS_PROJECT_ID", "tesseracthub-480811"),

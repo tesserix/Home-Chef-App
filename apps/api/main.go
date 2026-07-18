@@ -175,6 +175,11 @@ func main() {
 		defer redisClient.Close()
 	}
 
+	// Install the delivery distance router (#701). Uses Google Routes when a Maps
+	// API key is configured (cached in Redis + Postgres so it's billed at most once
+	// per trip), else the haversine fallback. Must run after Redis + DB are up.
+	services.InitDeliveryRouter()
+
 	// Connect to MongoDB (in-app chat + document uploads, #53). Optional: a
 	// failure leaves the Mongo-backed features disabled without affecting the
 	// rest of the API.
