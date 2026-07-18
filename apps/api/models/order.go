@@ -26,6 +26,35 @@ func (i *OrderItem) ParsedModifiers() []OrderItemModifier {
 	return parseOrderItemModifiers(i.Modifiers)
 }
 
+// ResolveAcceptFulfillmentTime computes the chef's response to a customer's
+// requested fulfilment time at accept (#709):
+//   - chef supplied a time that differs from the request by >10 min → PROPOSED
+//   - chef supplied a matching time (or the customer gave none) → CONFIRMED
+//   - chef supplied no time but the customer requested one → CONFIRMED as-is
+//   - neither → ("", nil): the order stays "as soon as ready"
+//
+// Pure + deterministic so the accept handshake is unit-testable.
+func ResolveAcceptFulfillmentTime(requested, chefProvided *time.Time) (*time.Time, string) {
+	if chefProvided != nil {
+		t := chefProvided.UTC()
+		if requested != nil {
+			d := t.Sub(requested.UTC())
+			if d < 0 {
+				d = -d
+			}
+			if d > 10*time.Minute {
+				return &t, "proposed"
+			}
+		}
+		return &t, "confirmed"
+	}
+	if requested != nil {
+		r := requested.UTC()
+		return &r, "confirmed"
+	}
+	return nil, ""
+}
+
 type OrderStatus string
 
 const (
@@ -130,8 +159,18 @@ type Order struct {
 	// for (#51): "" (ASAP / unscheduled), "lunch", or "dinner". When set,
 	// ScheduledFor holds the slot window start on the chosen IST day and the
 	// chef's per-slot daily capacity was reserved at order time.
-	DeliverySlot string     `gorm:"type:varchar(8)" json:"deliverySlot,omitempty"`
-	AcceptedAt   *time.Time `gorm:"" json:"acceptedAt,omitempty"`
+	DeliverySlot string `gorm:"type:varchar(8)" json:"deliverySlot,omitempty"`
+	// Home-tiffin scheduling handshake (#709). Unlike a restaurant with fixed
+	// slots, a home cook cooks to order: the customer SUGGESTS a time and the chef
+	// APPROVES or PROPOSES a different one at accept.
+	//   RequestedFulfillmentAt — the time the customer asked for (delivery arrival
+	//     or pickup collection). Nil = "as soon as ready" (let the chef decide).
+	//   ConfirmedFulfillmentAt — the time the chef agreed to / proposed at accept.
+	//   FulfillmentTimeStatus  — requested | confirmed | proposed | declined.
+	RequestedFulfillmentAt *time.Time `gorm:"" json:"requestedFulfillmentAt,omitempty"`
+	ConfirmedFulfillmentAt *time.Time `gorm:"" json:"confirmedFulfillmentAt,omitempty"`
+	FulfillmentTimeStatus  string     `gorm:"type:varchar(12)" json:"fulfillmentTimeStatus,omitempty"`
+	AcceptedAt             *time.Time `gorm:"" json:"acceptedAt,omitempty"`
 	// AcceptReminderCount / LastAcceptReminderAt track the pre-close nudges (#694):
 	// from 2h before the kitchen closes, every 30 minutes, the chef is reminded of
 	// an order still not accepted. The count is how many have fired; the sweep uses
@@ -322,6 +361,11 @@ type OrderResponse struct {
 	// when the order is unscheduled (ASAP).
 	ScheduledFor *time.Time `json:"scheduledFor,omitempty"`
 	DeliverySlot string     `json:"deliverySlot,omitempty"`
+	// Home-tiffin scheduling handshake (#709): the customer's requested time, the
+	// chef's confirmed/proposed time, and the status the order detail renders.
+	RequestedFulfillmentAt *time.Time `json:"requestedFulfillmentAt,omitempty"`
+	ConfirmedFulfillmentAt *time.Time `json:"confirmedFulfillmentAt,omitempty"`
+	FulfillmentTimeStatus  string     `json:"fulfillmentTimeStatus,omitempty"`
 	// Lifecycle photos (public URLs) — the food-ready photo is shown to the
 	// customer; the handover photo is dispute evidence for pickup orders.
 	ReadyPhotoURL    string    `json:"readyPhotoUrl,omitempty"`
@@ -510,17 +554,20 @@ func (o *Order) ToResponse() OrderResponse {
 			State:      o.DeliveryAddressState,
 			PostalCode: o.DeliveryAddressPostalCode,
 		},
-		Chef:                chef,
-		ScheduledFor:        o.ScheduledFor,
-		DeliverySlot:        o.DeliverySlot,
-		ReadyPhotoURL:       o.ReadyPhotoURL,
-		HandoverPhotoURL:    o.HandoverPhotoURL,
-		CreatedAt:           o.CreatedAt,
-		PayoutHoldStatus:    o.PayoutHoldStatus,
-		CustomerConfirmedAt: o.CustomerConfirmedAt,
-		CancelReason:        o.CancelReason,
-		RefundAmount:        o.RefundAmount,
-		RefundedAt:          o.RefundedAt,
+		Chef:                   chef,
+		ScheduledFor:           o.ScheduledFor,
+		DeliverySlot:           o.DeliverySlot,
+		RequestedFulfillmentAt: o.RequestedFulfillmentAt,
+		ConfirmedFulfillmentAt: o.ConfirmedFulfillmentAt,
+		FulfillmentTimeStatus:  o.FulfillmentTimeStatus,
+		ReadyPhotoURL:          o.ReadyPhotoURL,
+		HandoverPhotoURL:       o.HandoverPhotoURL,
+		CreatedAt:              o.CreatedAt,
+		PayoutHoldStatus:       o.PayoutHoldStatus,
+		CustomerConfirmedAt:    o.CustomerConfirmedAt,
+		CancelReason:           o.CancelReason,
+		RefundAmount:           o.RefundAmount,
+		RefundedAt:             o.RefundedAt,
 	}
 }
 

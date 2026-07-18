@@ -89,6 +89,11 @@ type CreateOrderRequest struct {
 	// IST (empty = today, bounded by the booking horizon).
 	DeliverySlot string `json:"deliverySlot"`
 	DeliveryDate string `json:"deliveryDate"`
+	// RequestedFulfillmentAt is the home-tiffin customer's SUGGESTED time (#709):
+	// when they'd like delivery to arrive, or when they'll come to collect (pickup).
+	// Nil = "as soon as ready" (let the chef decide). The chef confirms/proposes at
+	// accept; this is a request, not a guarantee.
+	RequestedFulfillmentAt *time.Time `json:"requestedFulfillmentAt"`
 	// FulfillmentType is "delivery" (default, 3PL), "pickup" (customer collects),
 	// or "chef_delivery" (reserved for Phase 2). Empty defaults to delivery.
 	FulfillmentType string `json:"fulfillmentType"`
@@ -580,6 +585,17 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	// A resolved slot window is authoritative over any client-sent ScheduledFor.
 	if slotScheduledFor != nil {
 		order.ScheduledFor = slotScheduledFor
+	}
+	// Home-tiffin suggested time (#709): record only a sane FUTURE request (within
+	// a week); the chef confirms or proposes a different time at accept. Nil or an
+	// out-of-range value ⇒ "as soon as ready", the chef decides.
+	if req.RequestedFulfillmentAt != nil {
+		t := req.RequestedFulfillmentAt.UTC()
+		now := time.Now().UTC()
+		if t.After(now) && t.Before(now.Add(7*24*time.Hour)) {
+			order.RequestedFulfillmentAt = &t
+			order.FulfillmentTimeStatus = "requested"
+		}
 	}
 
 	// Start transaction

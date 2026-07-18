@@ -1121,6 +1121,10 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		// Optional carrier choice the chef makes at Mark Ready (self-delivery
 		// chefs only): "chef_delivery" = I'll deliver, "delivery" = hand to a rider.
 		Carrier string `json:"carrier"`
+		// Home-tiffin scheduling (#709): at ACCEPT the chef confirms the customer's
+		// requested time or proposes a different ready/arrival time. Nil at accept =
+		// confirm the customer's request as-is (or "as soon as ready" if none).
+		ConfirmedFulfillmentAt *time.Time `json:"confirmedFulfillmentAt"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -1180,6 +1184,17 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 		if order.AcceptedAt == nil {
 			order.AcceptedAt = &now
 		}
+		// Home-tiffin time handshake (#709): resolve the chef's response to the
+		// customer's requested time. A chef-supplied time that differs from the
+		// request (>10 min) is a PROPOSAL; otherwise (or matching, or none) it's a
+		// CONFIRMATION. With no chef time, confirm the customer's request as-is.
+		if order.FulfillmentTimeStatus != "confirmed" && order.FulfillmentTimeStatus != "proposed" {
+			confirmed, status := models.ResolveAcceptFulfillmentTime(order.RequestedFulfillmentAt, req.ConfirmedFulfillmentAt)
+			if status != "" {
+				order.ConfirmedFulfillmentAt = confirmed
+				order.FulfillmentTimeStatus = status
+			}
+		}
 	case models.OrderStatusReady:
 		if order.PreparedAt == nil {
 			order.PreparedAt = &now
@@ -1224,6 +1239,11 @@ func (h *ChefHandler) UpdateOrderStatus(c *gin.Context) {
 	switch order.Status {
 	case models.OrderStatusAccepted:
 		orderUpdates["accepted_at"] = order.AcceptedAt
+		// Persist the resolved home-tiffin time handshake (#709).
+		if order.FulfillmentTimeStatus != "" {
+			orderUpdates["confirmed_fulfillment_at"] = order.ConfirmedFulfillmentAt
+			orderUpdates["fulfillment_time_status"] = order.FulfillmentTimeStatus
+		}
 	case models.OrderStatusReady:
 		orderUpdates["prepared_at"] = order.PreparedAt
 	case models.OrderStatusPickedUp:
