@@ -179,7 +179,7 @@ func (h *GroupOrderHandler) CreateGroupOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"groupOrder": g,
+		"groupOrder": g.EnsureSlices(),
 		"joinToken":  g.JoinToken,
 		"joinUrl":    fmt.Sprintf("homechef-customer://group/%s", g.JoinToken),
 	})
@@ -247,7 +247,7 @@ func (h *GroupOrderHandler) JoinGroupOrder(c *gin.Context) {
 	}
 	for i := range g.Participants {
 		if g.Participants[i].UserID == userID {
-			c.JSON(http.StatusOK, gin.H{"groupOrder": g, "alreadyJoined": true})
+			c.JSON(http.StatusOK, gin.H{"groupOrder": g.EnsureSlices(), "alreadyJoined": true})
 			return
 		}
 	}
@@ -302,7 +302,7 @@ func (h *GroupOrderHandler) GetGroupOrder(c *gin.Context) {
 		return
 	}
 	scrubGroupChef(&g)
-	resp := gin.H{"groupOrder": g, "me": me}
+	resp := gin.H{"groupOrder": g.EnsureSlices(), "me": me}
 	// Only the host gets the invite token/link.
 	if me.Role == models.GroupRoleHost {
 		resp["joinToken"] = g.JoinToken
@@ -616,7 +616,7 @@ func (h *GroupOrderHandler) LockGroupOrder(c *gin.Context) {
 	// Reload for the response.
 	g, _, _ = loadGroupForParticipant(id, userID)
 	scrubGroupChef(&g)
-	c.JSON(http.StatusOK, gin.H{"groupOrder": g})
+	c.JSON(http.StatusOK, gin.H{"groupOrder": g.EnsureSlices()})
 }
 
 // ───────────────────────── Pay + consolidate ─────────────────────────

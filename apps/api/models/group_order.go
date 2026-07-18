@@ -128,9 +128,24 @@ type GroupOrder struct {
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 
-	Participants []GroupOrderParticipant `gorm:"foreignKey:GroupOrderID" json:"participants,omitempty"`
-	Items        []GroupOrderItem        `gorm:"foreignKey:GroupOrderID" json:"items,omitempty"`
+	// participants/items are NOT omitempty and are normalised to [] before every
+	// response (EnsureSlices): a freshly created group has zero items, and an
+	// omitted/null array crashes clients that do items.filter/map (mobile #46).
+	Participants []GroupOrderParticipant `gorm:"foreignKey:GroupOrderID" json:"participants"`
+	Items        []GroupOrderItem        `gorm:"foreignKey:GroupOrderID" json:"items"`
 	Chef         *ChefProfile            `gorm:"foreignKey:ChefID" json:"chef,omitempty"`
+}
+
+// EnsureSlices guarantees participants/items serialise as [] (never null/omitted)
+// so clients can safely call .filter/.map/.length on a freshly created group.
+func (g *GroupOrder) EnsureSlices() *GroupOrder {
+	if g.Participants == nil {
+		g.Participants = []GroupOrderParticipant{}
+	}
+	if g.Items == nil {
+		g.Items = []GroupOrderItem{}
+	}
+	return g
 }
 
 type GroupOrderParticipant struct {
