@@ -80,6 +80,17 @@ function mapOrderItem(i: ApiOrderItem): OrderItem {
   };
 }
 
+/**
+ * Fetch a short-lived signed URL for the order's receipt PDF (#receipt parity).
+ * The mobile app can't save an authenticated blob (no file-system module), so it
+ * opens this self-authenticating URL in the in-app browser instead — where iOS
+ * gives the customer save / share / print for free.
+ */
+export async function fetchInvoiceDownloadUrl(orderId: string): Promise<string> {
+  const res = await api.get(`/v1/orders/${orderId}/invoice-link`);
+  return (res.data as { url: string }).url;
+}
+
 function mapOrder(raw: ApiOrder): Order {
   return {
     id: raw.id,

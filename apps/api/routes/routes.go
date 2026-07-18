@@ -311,6 +311,9 @@ func SetupRouter() *gin.Engine {
 		// Mobile-only routes (public — no auth)
 		mobileHandler := handlers.NewMobileHandler()
 		v1.GET("/mobile/min-version", mobileHandler.GetMinVersion)
+		// Public receipt download by signed token (#receipt parity) — the token is
+		// the authorisation (order+user scoped, minutes-lived), so no session auth.
+		v1.GET("/invoice/:token", orderHandler.DownloadInvoiceByToken)
 
 		// Location reference routes (public)
 		locations := v1.Group("/locations")
@@ -594,6 +597,9 @@ func SetupRouter() *gin.Engine {
 			// PDF tax invoice — customer-facing. Streams directly back as
 			// application/pdf with Content-Disposition: attachment.
 			orders.GET("/:id/invoice.pdf", orderHandler.GetOrderInvoicePDF)
+			// Short-lived signed link so the mobile in-app browser can open the
+			// receipt PDF without the app's Bearer auth (#receipt parity).
+			orders.GET("/:id/invoice-link", orderHandler.GetInvoiceDownloadLink)
 			// Order-specific chat rooms
 			orders.GET("/:id/chat/:type", chatHandler.GetOrCreateChatRoom)
 		}

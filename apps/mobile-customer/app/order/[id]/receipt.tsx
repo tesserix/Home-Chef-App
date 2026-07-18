@@ -8,12 +8,23 @@
 // unrefunded delivery; a PAYMENT RECEIPT otherwise — so the app and the
 // downloadable PDF never disagree about what the document is.
 
-import { Share, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Share2 } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { ChevronLeft, Download, Share2 } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
-import { useOrder } from '../../../hooks/useOrderHistory';
+import { useOrder, fetchInvoiceDownloadUrl } from '../../../hooks/useOrderHistory';
 
 function money(n: number): string {
   return `₹${n.toFixed(2)}`;
@@ -34,6 +45,26 @@ export default function OrderReceiptScreen() {
   const router = useRouter();
   const { data, isLoading, isError } = useOrder(id ?? '');
   const order = data?.data;
+  const [openingPdf, setOpeningPdf] = useState(false);
+
+  // Open the official PDF (the same document web downloads) in the in-app
+  // browser, via a short-lived signed URL — iOS then offers save/share/print.
+  // This is how mobile reaches parity without a file-system module.
+  async function onOpenPdf() {
+    if (!order || openingPdf) return;
+    setOpeningPdf(true);
+    try {
+      const url = await fetchInvoiceDownloadUrl(order.id);
+      await WebBrowser.openBrowserAsync(url);
+    } catch {
+      Alert.alert(
+        "Couldn't open the PDF",
+        'The receipt could not be opened right now. Please try again in a moment.',
+      );
+    } finally {
+      setOpeningPdf(false);
+    }
+  }
 
   // Same rule as the backend PDF: a tax invoice is only for a completed sale.
   const isTaxInvoice = order?.status === 'delivered' && (order?.refundAmount ?? 0) <= 0;
@@ -162,6 +193,25 @@ export default function OrderReceiptScreen() {
               signature.
             </Text>
           </View>
+
+          {/* The official PDF — same document the web downloads. Opens in the
+              in-app browser (iOS save/share/print), the mobile route to parity. */}
+          <Pressable
+            onPress={onOpenPdf}
+            disabled={openingPdf}
+            accessibilityRole="button"
+            accessibilityLabel="Open the PDF receipt"
+            style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.7 }]}
+          >
+            {openingPdf ? (
+              <ActivityIndicator size="small" color={customerColors.canvas} />
+            ) : (
+              <>
+                <Download size={18} color={customerColors.canvas} />
+                <Text style={styles.pdfBtnText}>Open PDF receipt</Text>
+              </>
+            )}
+          </Pressable>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -236,4 +286,15 @@ const styles = StyleSheet.create({
   totalBold: { fontFamily: 'Inter-SemiBold', color: customerColors.charcoal.DEFAULT },
   refundText: { color: customerColors.coral.pressed },
   footer: { fontFamily: 'Inter', fontSize: 11, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 16 },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: customerColors.coral.DEFAULT,
+  },
+  pdfBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.canvas },
 });
