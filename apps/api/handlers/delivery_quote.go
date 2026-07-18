@@ -28,6 +28,10 @@ type deliveryQuoteRequest struct {
 	Longitude float64 `json:"longitude"`
 	City      string  `json:"city"`
 	Country   string  `json:"country"`
+	// Subtotal + State let the preview return the SAME service fee + tax the order
+	// will be charged, so checkout shows an honest total (not just items+delivery).
+	Subtotal float64 `json:"subtotal"`
+	State    string  `json:"state"`
 }
 
 // QuoteDeliveryFee returns the per-mode delivery fee for a chef + drop address,
@@ -74,9 +78,23 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	reach := services.DeliveryReach(chef, req.Latitude, req.Longitude)
 	deliverable := reach.Deliverable || services.ThirdPartyDeliveryEnabled()
 
+	// Service fee (platform fee) + tax rule — computed exactly as CreateOrder does
+	// so the checkout total matches what's charged (#fee-transparency). serviceFee
+	// is a % of subtotal; tax is left for the client to apply on the discounted
+	// base (it knows the promo), using taxRatePercent + taxInclusive.
+	policy := services.GetPlatformPolicy()
+	serviceFee := req.Subtotal * (policy.ServiceFeePercent / 100.0)
+	taxRule := services.ResolveTaxRate(country, req.State)
+
 	resp := gin.H{
 		"deliveryFee": models.RoundAmount(deliveryFee),
 		"pickupFee":   pickupFee,
+		"serviceFee":  models.RoundAmount(serviceFee),
+		// The client computes tax = taxRatePercent% of (subtotal+delivery+service−discount),
+		// backing it out when inclusive — the same math as CreateOrder.
+		"taxRatePercent": taxRule.Rate,
+		"taxName":        taxRule.TaxName,
+		"taxInclusive":   taxRule.Inclusive,
 		// pickupSaving is what the customer keeps by collecting. 0 when delivery is
 		// itself free — the app then shows no incentive rather than a fake one.
 		"pickupSaving":       models.RoundAmount(saving),

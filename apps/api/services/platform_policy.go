@@ -48,7 +48,10 @@ type PlatformPolicy struct {
 // before this policy existed, so upgrading is a no-op for existing traffic.
 func DefaultPlatformPolicy() PlatformPolicy {
 	return PlatformPolicy{
-		ServiceFeePercent:   10.0,
+		// Customer-facing platform fee: a nominal 4.99% of subtotal — enough to
+		// cover the payment gateway (~2%) + a small margin, without over-charging
+		// customers. Runtime-tunable via the admin (SavePlatformPolicy).
+		ServiceFeePercent:   4.99,
 		TaxPercent:          8.0,
 		BaseDeliveryFee:     2.99,
 		PerKmDeliveryFee:    0.0,
