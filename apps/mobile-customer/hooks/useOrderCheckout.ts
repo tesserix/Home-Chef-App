@@ -22,6 +22,10 @@ interface CreateOrderPayload {
   // reserves the chef's per-slot daily capacity. Absent = ASAP.
   deliverySlot?: string;
   deliveryDate?: string;
+  // Home-tiffin suggested time (#709) — ISO 8601. The customer's PREFERRED
+  // delivery-arrival (delivery) or pickup-collection (pickup) time; the chef
+  // confirms or proposes a different one at accept. Absent = "as soon as ready".
+  requestedFulfillmentAt?: string;
   // Applied promo code (#39). The server re-validates and computes the discount;
   // an invalid/exhausted code is rejected so the client can't fake a discount.
   promoCode?: string;

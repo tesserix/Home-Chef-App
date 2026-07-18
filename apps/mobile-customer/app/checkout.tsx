@@ -4,7 +4,7 @@
 // which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
 // routes to /payment/result. No WebView, no visible web page load.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -74,6 +74,22 @@ function slotDayLabel(dateStr: string): string {
   if (diff <= 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// Home-tiffin suggested-time chips (#709): a time-of-day label ("8:00 PM") and a
+// relative day label ("Today" / "Tomorrow").
+function timeChipLabel(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function dayChipLabel(d: Date): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return day.toLocaleDateString(undefined, { weekday: 'short' });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -176,6 +192,21 @@ export default function CheckoutScreen() {
   const { data: slotsData } = useDeliverySlots(cartStore.chefId ?? undefined);
   const [selectedSlot, setSelectedSlot] = useState<{ slot: string; date: string } | null>(null);
   const availableSlots = (slotsData?.slots ?? []).filter((s) => s.available);
+  // Windowed (restaurant-style) chefs keep the #51 slot picker; everyone else —
+  // the home-tiffin default — uses the suggested-time handshake (#709).
+  const useSlotPicker = !!slotsData?.slotsEnabled && availableSlots.length > 0;
+
+  // Home-tiffin suggested time (#709): the customer PROPOSES a preferred time and
+  // the chef confirms/proposes at accept. null = "as soon as ready".
+  const [requestedTime, setRequestedTime] = useState<Date | null>(null);
+  // Upcoming half-hour options starting ~1h out (prep headroom), spanning ~5h.
+  const timeOptions = useMemo(() => {
+    const start = new Date(Date.now() + 60 * 60 * 1000); // +1h
+    // Round up to the next :00 / :30.
+    start.setSeconds(0, 0);
+    start.setMinutes(start.getMinutes() <= 30 ? 30 : 60);
+    return Array.from({ length: 10 }, (_, i) => new Date(start.getTime() + i * 30 * 60 * 1000));
+  }, []);
 
   // Dietary & allergen conflict warning (#41) — checks the cart's items against
   // the customer's saved profile server-side. Non-blocking.
@@ -290,6 +321,8 @@ export default function CheckoutScreen() {
         specialInstructions: note.trim() || undefined,
         deliverySlot: selectedSlot?.slot,
         deliveryDate: selectedSlot?.date,
+        // Home-tiffin suggested time (#709) — the chef confirms/proposes at accept.
+        requestedFulfillmentAt: requestedTime?.toISOString(),
         promoCode: appliedPromo?.code,
       });
 
@@ -959,8 +992,11 @@ export default function CheckoutScreen() {
           </View>
         )}
 
-        {/* ── Delivery time / scheduled slot (#51) ── */}
-        {slotsData?.slotsEnabled && (
+        {/* ── Preferred time ──
+            Window chefs (#51) keep the slot picker; the home-tiffin default is
+            the suggested-time handshake (#709): the customer proposes a time and
+            the chef confirms or proposes a different one at accept. */}
+        {useSlotPicker ? (
           <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
             <Text className="text-sm font-medium text-charcoal-soft mb-3">Delivery time</Text>
             <View className="flex-row flex-wrap gap-2">
@@ -1009,11 +1045,64 @@ export default function CheckoutScreen() {
                 );
               })}
             </View>
-            {availableSlots.length === 0 && (
-              <Text className="text-xs text-charcoal-soft mt-1">
-                No delivery windows are open right now — your order will be delivered ASAP.
-              </Text>
-            )}
+          </View>
+        ) : (
+          <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+            <Text className="text-sm font-medium text-charcoal mb-0.5">
+              {fulfillment === 'pickup' ? 'Preferred pickup time' : 'Preferred delivery time'}
+            </Text>
+            <Text className="text-xs text-charcoal-soft mb-3 leading-4">
+              {fulfillment === 'pickup'
+                ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
+                : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {/* As soon as ready (default) — let the chef decide */}
+              <Pressable
+                onPress={() => setRequestedTime(null)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: requestedTime === null }}
+                accessibilityLabel="As soon as ready"
+              >
+                <View
+                  className={`px-3 py-2 rounded-xl border ${
+                    requestedTime === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                  }`}
+                >
+                  <Text className={`text-sm font-medium ${requestedTime === null ? 'text-coral' : 'text-charcoal'}`}>
+                    As soon as ready
+                  </Text>
+                  <Text className="text-xs text-charcoal-soft">Chef decides</Text>
+                </View>
+              </Pressable>
+
+              {timeOptions.map((t) => {
+                const sel = requestedTime?.getTime() === t.getTime();
+                return (
+                  <Pressable
+                    key={t.toISOString()}
+                    onPress={() => setRequestedTime(t)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: sel }}
+                    accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${timeChipLabel(t)} ${dayChipLabel(t)}`}
+                  >
+                    <View
+                      className={`px-3 py-2 rounded-xl border ${
+                        sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                      }`}
+                    >
+                      <Text
+                        className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {timeChipLabel(t)}
+                      </Text>
+                      <Text className="text-xs text-charcoal-soft">{dayChipLabel(t)}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         )}
 

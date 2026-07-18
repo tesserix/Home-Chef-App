@@ -120,6 +120,25 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
+// formatFulfillmentTime renders an ISO time as "Today 8:00 PM" / "Tomorrow 12:30 PM"
+// / "Mon, 22 Jun 8:00 PM" for the home-tiffin scheduling section (#709).
+function formatFulfillmentTime(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  const dayLabel =
+    diff <= 0
+      ? 'Today'
+      : diff === 1
+        ? 'Tomorrow'
+        : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${dayLabel} ${time}`;
+}
+
 // Human-readable inline status line for the map badge overlay. Pickup orders
 // have no driver/route, so they use the shared pickup wording; delivery keeps
 // its location-flavored copy.
@@ -771,6 +790,28 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
         )}
+
+        {/* Home-tiffin scheduling (#709): the time the customer requested and the
+            chef's confirmation / proposal. Shown once either side has set a time. */}
+        {order.requestedFulfillmentAt || order.confirmedFulfillmentAt ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{isPickup ? 'Pickup time' : 'Delivery time'}</Text>
+            <Text style={styles.addressText}>
+              You requested:{' '}
+              {order.requestedFulfillmentAt
+                ? formatFulfillmentTime(order.requestedFulfillmentAt)
+                : 'As soon as ready'}
+            </Text>
+            {order.confirmedFulfillmentAt ? (
+              <Text style={styles.addressText}>
+                {order.fulfillmentTimeStatus === 'proposed' ? 'Chef proposed: ' : 'Chef confirmed: '}
+                {formatFulfillmentTime(order.confirmedFulfillmentAt)}
+              </Text>
+            ) : (
+              <Text style={styles.pickupHint}>Awaiting the chef’s confirmation of your time.</Text>
+            )}
+          </View>
+        ) : null}
 
         {/* Hairline divider */}
         <View style={styles.sectionDivider} />

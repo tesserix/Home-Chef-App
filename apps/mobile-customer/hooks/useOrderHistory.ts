@@ -62,6 +62,9 @@ interface ApiOrder {
   items?: ApiOrderItem[];
   deliveryAddress?: ApiAddress;
   chef?: ApiOrderChef;
+  requestedFulfillmentAt?: string;
+  confirmedFulfillmentAt?: string;
+  fulfillmentTimeStatus?: Order['fulfillmentTimeStatus'];
   createdAt: string;
   payoutHoldStatus?: Order['payoutHoldStatus'];
   customerConfirmedAt?: string;
@@ -125,6 +128,9 @@ function mapOrder(raw: ApiOrder): Order {
     items: (raw.items ?? []).map(mapOrderItem),
     totalAmount: raw.total ?? 0,
     fulfillmentType: raw.fulfillmentType,
+    requestedFulfillmentAt: raw.requestedFulfillmentAt,
+    confirmedFulfillmentAt: raw.confirmedFulfillmentAt,
+    fulfillmentTimeStatus: raw.fulfillmentTimeStatus,
     deliveryFee: raw.deliveryFee,
     serviceFee: raw.serviceFee,
     tax: raw.tax,

@@ -179,6 +179,11 @@ export interface Order {
   // How the order reaches the customer (backend OrderResponse.fulfillmentType).
   // 'pickup' → no delivery address/fee; collect from the chef.
   fulfillmentType?: 'delivery' | 'chef_delivery' | 'pickup';
+  // Home-tiffin scheduling handshake (#709): the customer's requested time, the
+  // chef's confirmed/proposed time (ISO), and the status the detail screen shows.
+  requestedFulfillmentAt?: string;
+  confirmedFulfillmentAt?: string;
+  fulfillmentTimeStatus?: 'requested' | 'confirmed' | 'proposed' | 'declined';
   // Real fee breakdown from OrderResponse — render these instead of deriving
   // "delivery fee" as (total − subtotal), which mislabels service fee + tax.
   deliveryFee?: number;
