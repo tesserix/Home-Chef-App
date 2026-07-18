@@ -59,7 +59,11 @@ func GenerateOrderInvoicePDF(orderID uuid.UUID) ([]byte, string, error) {
 	if _, err := buf.Write(doc.GetBytes()); err != nil {
 		return nil, "", fmt.Errorf("buffer pdf: %w", err)
 	}
-	filename := fmt.Sprintf("invoice-%s.pdf", order.OrderNumber)
+	docKind := "invoice"
+	if !orderInvoiceIsTaxInvoice(&order) {
+		docKind = "receipt"
+	}
+	filename := fmt.Sprintf("%s-%s.pdf", docKind, order.OrderNumber)
 	return buf.Bytes(), filename, nil
 }
 
@@ -84,10 +88,23 @@ func loadInvoiceItemMeta(items []models.OrderItem) map[uuid.UUID]string {
 	return meta
 }
 
+// orderInvoiceIsTaxInvoice reports whether the document is a formal GSTIN TAX
+// INVOICE (a completed, delivered sale) versus a PAYMENT RECEIPT. A tax invoice
+// must not be issued for an order that was refunded or never delivered — that
+// would claim a taxable sale that did not complete. Both documents are otherwise
+// identical (the refund line already shows on a refunded order).
+func orderInvoiceIsTaxInvoice(order *models.Order) bool {
+	return order.Status == models.OrderStatusDelivered && order.RefundAmount <= 0
+}
+
 func addInvoiceHeader(m core.Maroto, order *models.Order) {
+	title := "TAX INVOICE"
+	if !orderInvoiceIsTaxInvoice(order) {
+		title = "PAYMENT RECEIPT"
+	}
 	m.AddRow(12,
 		col.New(8).Add(
-			text.New("TAX INVOICE", props.Text{
+			text.New(title, props.Text{
 				Top: 2, Size: 16, Style: fontstyle.Bold,
 			}),
 		),
@@ -222,9 +239,18 @@ func addInvoiceTotals(m core.Maroto, order *models.Order) {
 
 func addInvoiceFooter(m core.Maroto, order *models.Order) {
 	m.AddRow(15, col.New(12).Add(spacer()))
+	// A receipt (refunded / not delivered) must say so — it is not a tax invoice.
+	if !orderInvoiceIsTaxInvoice(order) {
+		m.AddRow(5,
+			col.New(12).Add(text.New(
+				"This is a payment receipt, not a tax invoice.",
+				props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Bold},
+			)),
+		)
+	}
 	m.AddRow(5,
 		col.New(12).Add(text.New(
-			"This is a computer-generated invoice and does not require a physical signature.",
+			"This is a computer-generated document and does not require a physical signature.",
 			props.Text{Size: 7, Align: align.Center, Color: &props.Color{Red: 120, Green: 120, Blue: 120}, Style: fontstyle.Italic},
 		)),
 	)

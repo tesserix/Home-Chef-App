@@ -968,6 +968,13 @@ func (h *OrderHandler) TrackOrder(c *gin.Context) {
 }
 
 // GetOrderInvoice returns the invoice for an order, generating it on the fly if needed
+// orderHasReceipt reports whether money was captured for the order, so a
+// receipt/invoice is meaningful. Completed = paid; refunded = paid then refunded
+// (still a real payment record). A pending/failed order has nothing to receipt.
+func orderHasReceipt(order models.Order) bool {
+	return order.PaymentStatus == models.PaymentCompleted || order.PaymentStatus == models.PaymentRefunded
+}
+
 func (h *OrderHandler) GetOrderInvoice(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	orderID := c.Param("id")
@@ -1014,8 +1021,13 @@ func (h *OrderHandler) GetOrderInvoicePDF(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
-	if order.Status != models.OrderStatusDelivered {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invoice available after delivery"})
+	// Available for any order the customer actually PAID for — a delivered order
+	// gets a tax invoice, a paid-then-cancelled/refunded order gets a payment
+	// receipt (services.GenerateOrderInvoicePDF picks the right one). The old gate
+	// was delivered-only, so a customer could never pull a receipt for an order
+	// they paid for and had cancelled — exactly the case reported.
+	if !orderHasReceipt(order) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A receipt is available once payment is completed"})
 		return
 	}
 

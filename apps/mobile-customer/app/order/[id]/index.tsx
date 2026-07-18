@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Receipt, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
@@ -816,6 +816,22 @@ export default function OrderDetailScreen() {
               ₹{order.totalAmount.toFixed(2)}
             </Text>
           </View>
+
+          {/* View receipt (#receipt) — for any order the customer actually paid
+              for (completed or refunded), so a paid-then-cancelled order can be
+              referenced, not just a delivered one. */}
+          {order.paymentStatus === 'completed' ||
+          order.paymentStatus === 'refunded' ? (
+            <Pressable
+              onPress={() => router.push(`/order/${order.id}/receipt`)}
+              accessibilityRole="button"
+              accessibilityLabel="View receipt"
+              style={({ pressed }) => [styles.receiptLink, pressed && { opacity: 0.6 }]}
+            >
+              <Receipt size={16} color={customerColors.coral.pressed} />
+              <Text style={styles.receiptLinkText}>View receipt</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Order date — small caption, centred */}
@@ -859,6 +875,19 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  receiptLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    minHeight: 44,
+  },
+  receiptLinkText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.coral.pressed,
+  },
   voidNotice: {
     marginHorizontal: 16,
     marginTop: 12,
