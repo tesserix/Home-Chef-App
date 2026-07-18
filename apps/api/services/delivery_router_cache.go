@@ -135,17 +135,20 @@ func (c *cachedRouter) RoadDistanceKm(ctx context.Context, fromLat, fromLng, toL
 	// 1. Redis hot layer — fastest, no DB round-trip.
 	if v, ok := c.hot.Get(ctx, key); ok {
 		if km, err := strconv.ParseFloat(v, 64); err == nil && km >= 0 {
+			recordDistanceHotHit()
 			return km, true
 		}
 	}
 	// 2. Postgres durable layer — survives a Redis flush; warm the hot layer on hit.
 	if c.store != nil {
 		if km, ok := c.store.lookup(ctx, key); ok && km >= 0 {
+			recordDistanceDurableHit()
 			c.hot.Set(ctx, key, strconv.FormatFloat(km, 'f', 3, 64), c.ttl)
 			return km, true
 		}
 	}
 	// 3. The provider — the only path that costs money; write through to both tiers.
+	recordDistanceProviderCall()
 	km, ok := c.inner.RoadDistanceKm(ctx, fromLat, fromLng, toLat, toLng)
 	if ok && km >= 0 {
 		c.hot.Set(ctx, key, strconv.FormatFloat(km, 'f', 3, 64), c.ttl)

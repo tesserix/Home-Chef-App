@@ -948,6 +948,9 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/delivery/providers/:id/test", providerHandler.TestConnection)
 			admin.GET("/delivery/providers/:id/stats", providerHandler.GetProviderStats)
 
+			// Delivery-intelligence cost/usage (#699) — requests, tiers, expenses.
+			admin.GET("/delivery/intelligence", adminHandler.GetDeliveryIntelligence)
+
 			// Delivery zone management
 			admin.GET("/delivery/zones", deliveryHandler.ListZones)
 			admin.POST("/delivery/zones", deliveryHandler.CreateZone)

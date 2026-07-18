@@ -143,6 +143,14 @@ type Config struct {
 	// re-runs safely. Closes the gap where a crash mid-approval left a chef
 	// "approved" but never actually verified/activated.
 	OnboardingWorkflowEnabled bool
+
+	// DeliveryDistancePricePerCallUSD / DeliveryWeatherPricePerCallUSD are the
+	// per-call prices of the metered delivery-intelligence providers (#699), used
+	// ONLY to estimate spend for the admin cost view — they don't affect what a
+	// customer is charged. Defaults track Google Maps Platform list pricing
+	// (Routes ~$5 / 1000 = $0.005; Weather ~$0.001 / call). Override per provider.
+	DeliveryDistancePricePerCallUSD float64
+	DeliveryWeatherPricePerCallUSD  float64
 }
 
 var AppConfig *Config
@@ -162,6 +170,8 @@ func Load() {
 	cateringDeposit, _ := strconv.ParseBool(getEnv("CATERING_DEPOSIT_ENABLED", "false"))
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
+	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
+	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	env := getEnv("ENVIRONMENT", "development")
 	isProd := env == "production"
 
@@ -268,15 +278,17 @@ func Load() {
 		ExchangeRatesAPIKey:    getEnv("EXCHANGERATES_API_KEY", ""),
 
 		// Feature Flags
-		EnableMockMode:                enableMock,
-		WalletCheckoutEnabled:         walletCheckout,
-		MealPlanEscrowEnabled:         mealPlanEscrow,
-		MealSubscriptionAutoActivate:  mealSubAutoActivate,
-		GroupOrdersEnabled:            groupOrders,
-		OrderPayoutAutoReleaseEnabled: orderPayoutAutoRelease,
-		CateringDepositEnabled:        cateringDeposit,
-		OrderSagaEnabled:              orderSaga,
-		OnboardingWorkflowEnabled:     onboardingWorkflow,
+		EnableMockMode:                  enableMock,
+		WalletCheckoutEnabled:           walletCheckout,
+		MealPlanEscrowEnabled:           mealPlanEscrow,
+		MealSubscriptionAutoActivate:    mealSubAutoActivate,
+		GroupOrdersEnabled:              groupOrders,
+		DeliveryDistancePricePerCallUSD: distancePricePerCall,
+		DeliveryWeatherPricePerCallUSD:  weatherPricePerCall,
+		OrderPayoutAutoReleaseEnabled:   orderPayoutAutoRelease,
+		CateringDepositEnabled:          cateringDeposit,
+		OrderSagaEnabled:                orderSaga,
+		OnboardingWorkflowEnabled:       onboardingWorkflow,
 	}
 }
 
