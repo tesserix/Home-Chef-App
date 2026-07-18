@@ -139,7 +139,11 @@ export default function GroupOrderHubScreen() {
     );
   }
 
-  const itemsByParticipant = (pid: string) => g.items.filter((it) => it.participantId === pid);
+  // A freshly created group has no items yet, and the API serialises an empty
+  // has-many as null — so default to [] to avoid a crash on .filter/.map/.length.
+  const items = g.items ?? [];
+  const participants = g.participants ?? [];
+  const itemsByParticipant = (pid: string) => items.filter((it) => it.participantId === pid);
   const open = g.status === 'open';
   const locked = g.status === 'locked';
   const placed = ['placed', 'confirmed', 'delivered'].includes(g.status);
@@ -206,7 +210,7 @@ export default function GroupOrderHubScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           {/* Shared cart — everyone's items grouped by participant */}
           <Text style={styles.sectionLabel}>Shared cart</Text>
-          {g.participants.map((p) => (
+          {participants.map((p) => (
             <ParticipantBlock
               key={p.id}
               participant={p}
@@ -277,8 +281,8 @@ export default function GroupOrderHubScreen() {
             <Text style={styles.waiting}>You're paid — waiting on the rest of the group…</Text>
           ) : null}
           {open && isHost ? (
-            <Pressable onPress={lock} disabled={lockGroup.isPending || g.items.length === 0} style={[styles.cta, g.items.length === 0 && styles.ctaDisabled]}>
-              <Text style={styles.ctaText}>{g.items.length === 0 ? 'Add items to continue' : 'Lock & collect payment'}</Text>
+            <Pressable onPress={lock} disabled={lockGroup.isPending || items.length === 0} style={[styles.cta, items.length === 0 && styles.ctaDisabled]}>
+              <Text style={styles.ctaText}>{items.length === 0 ? 'Add items to continue' : 'Lock & collect payment'}</Text>
             </Pressable>
           ) : null}
           {open && !isHost ? (
