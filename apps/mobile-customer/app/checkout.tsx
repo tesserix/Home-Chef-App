@@ -252,10 +252,14 @@ export default function CheckoutScreen() {
     },
   });
 
-  // Address autocomplete (Photon/OpenStreetMap via backend) — fills the form
-  // fields below, which stay editable. Same UX as the onboarding address step.
+  // Address autocomplete (Mappls + Photon via backend) — fills the form fields
+  // below, which stay editable. Same UX as the onboarding address step.
   const [addrQuery, setAddrQuery] = useState('');
   const [showAddrSuggestions, setShowAddrSuggestions] = useState(false);
+  // Coordinates of the picked suggestion. WITHOUT these the saved address has no
+  // point, so the delivery quote can't measure the distance from the chef and the
+  // km / fee never calculate — the onboarding form persists them, so must this.
+  const [addrCoords, setAddrCoords] = useState<{ lat: number; lon: number } | null>(null);
   const { data: addrSuggestions = [], isFetching: addrSearching } =
     useAddressAutocomplete(addrQuery);
 
@@ -264,6 +268,11 @@ export default function CheckoutScreen() {
     if (s.city) setAddrValue('city', s.city, { shouldValidate: true });
     if (s.region) setAddrValue('state', s.region, { shouldValidate: true });
     if (s.postal) setAddrValue('pincode', s.postal, { shouldValidate: true });
+    setAddrCoords(
+      typeof s.lat === 'number' && typeof s.lon === 'number' && (s.lat !== 0 || s.lon !== 0)
+        ? { lat: s.lat, lon: s.lon }
+        : null,
+    );
     setAddrQuery('');
     setShowAddrSuggestions(false);
     Keyboard.dismiss();
@@ -278,12 +287,16 @@ export default function CheckoutScreen() {
         city: values.city,
         state: values.state,
         pincode: values.pincode,
+        // Persist the picked drop point so delivery distance/fee can be computed.
+        latitude: addrCoords?.lat,
+        longitude: addrCoords?.lon,
         isDefault: values.isDefault,
       });
       if (result.data.id) {
         setSelectedAddressId(result.data.id);
       }
       resetAddrForm();
+      setAddrCoords(null);
       setShowAddressForm(false);
     } catch {
       // Error displayed inline by mutation state if needed
