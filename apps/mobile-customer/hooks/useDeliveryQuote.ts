@@ -24,6 +24,10 @@ export interface SelfDeliveryBreakdown {
   withinFreeZone: boolean;
   maxFee: number;
   capped: boolean;
+  /** Fuel surge folded into the distance component (≥1). 1 = no surge. */
+  fuelSurge: number;
+  /** Combined surge multiplier applied to the estimate (≥1). */
+  surgeMultiplier: number;
   fee: number;
 }
 

@@ -826,6 +826,13 @@ export default function CheckoutScreen() {
                     </Text>
                   </View>
                 ) : null}
+                {quote.selfDeliveryBreakdown.surgeMultiplier > 1 &&
+                quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
+                  <Text className="text-[11px] text-charcoal-soft">
+                    Includes ×{quote.selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
+                    (fuel/peak conditions)
+                  </Text>
+                ) : null}
                 {quote.selfDeliveryBreakdown.withinFreeZone ? (
                   <Text className="text-[11px] text-success">
                     Within the chef's free-delivery radius
