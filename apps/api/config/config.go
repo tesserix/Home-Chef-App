@@ -164,6 +164,15 @@ type Config struct {
 	// stays neutral 1.0, so this is opt-in and never affects the charged amount.
 	GoogleWeatherAPIKey string
 
+	// MapplsClientID / MapplsClientSecret enable Mappls (MapmyIndia) as the primary
+	// address-autocomplete provider (#address-search). Mappls is India-native and has
+	// flat/house-level data + precise coordinates ("eLoc") that Photon (OSM) lacks, so
+	// a real drop point → the RIGHT delivery distance/fee — and it's cheaper + more
+	// durable than Google Places for India. OAuth2 client-credentials (token cached
+	// ~24h). Both empty ⇒ fall back to Photon.
+	MapplsClientID     string
+	MapplsClientSecret string
+
 	// DeliveryDefaultMaxRadiusKm is the platform's default serviceable self-delivery
 	// radius (#709): the max straight-line distance from the chef a delivery order
 	// may go when the chef has NOT set their own SelfDeliveryMaxDistanceKm. Enforced
@@ -252,6 +261,8 @@ func Load() {
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleMapsAPIKey:    getEnv("GOOGLE_MAPS_API_KEY", ""),
 		GoogleWeatherAPIKey: getEnv("GOOGLE_WEATHER_API_KEY", ""),
+		MapplsClientID:      getEnv("MAPPLS_CLIENT_ID", ""),
+		MapplsClientSecret:  getEnv("MAPPLS_CLIENT_SECRET", ""),
 		FacebookAppID:       getEnv("FACEBOOK_APP_ID", ""),
 
 		// GCS Storage

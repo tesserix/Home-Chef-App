@@ -255,15 +255,21 @@ type AddressSuggestion struct {
 	Lon         float64 `json:"lon,omitempty"`
 }
 
-// AutocompleteAddresses proxies the Photon (OpenStreetMap-backed)
-// geocoder so the mobile address picker has world-coverage autocomplete
-// suggestions on top of our seeded PIN registry. Photon is free,
-// requires no API key, and is the same backend mark8ly's address
-// fieldset uses.
+// AutocompleteAddresses powers the mobile address picker's autocomplete on top
+// of our seeded PIN registry.
 //
-// Country is forced to "IN" since HomeChef serves only India today —
-// surfacing foreign matches would let chefs pick an unusable address.
-// The mobile client doesn't get a knob to override.
+// Provider order (India-only — HomeChef serves only India today, so surfacing
+// foreign matches would let a customer pick an unusable drop point):
+//  1. Mappls (MapmyIndia) when credentials are set — India-native, flat/house-
+//     level accuracy + precise coordinates, so a real drop resolves to the RIGHT
+//     delivery distance/fee. This is why an accurate geocoder matters: the
+//     coordinates it returns are what the delivery-fee quote is priced on.
+//  2. Photon (OpenStreetMap) fallback — free, no key. It indexes streets/POIs,
+//     not flat numbers, so we try progressively-broader query variants to still
+//     land the customer on a real area to refine.
+//
+// A provider that errors or returns nothing degrades to the next; an empty final
+// result keeps the seeded /postcodes/search fallback usable.
 func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	if len(q) < 3 {
@@ -271,12 +277,19 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 		return
 	}
 
-	// Photon indexes streets/POIs, not flat numbers, and barely fuzzy-matches — so
-	// a full "Flat 104 Asima Residency Kalarahanga Bhubaneswar Odisha" returns
-	// NOTHING, which reads as "search is broken". Try progressively-simpler
-	// variants (strip the flat/house number, then fall back to the trailing
-	// city/state) until one finds the area — the customer still gets a real,
-	// coordinate-bearing match to refine, instead of an empty box (#address-search).
+	// Primary: Mappls. One call returns flat-level matches with coordinates.
+	if mapplsConfigured() {
+		if out, err := fetchMapplsSuggestions(c.Request.Context(), q); err == nil && len(out) > 0 {
+			c.JSON(http.StatusOK, dataEnvelope{Data: out})
+			return
+		}
+		// Mappls errored or found nothing — fall through to Photon.
+	}
+
+	// Fallback: Photon. Try progressively-simpler variants (strip the flat/house
+	// number, then fall back to the trailing city/state) until one finds the area,
+	// so a full "Flat 104 Asima Residency Kalarahanga Bhubaneswar Odisha" still
+	// yields a real, coordinate-bearing match instead of an empty box.
 	for _, variant := range photonQueryVariants(q) {
 		out, err := fetchPhotonSuggestions(c.Request.Context(), variant)
 		if err != nil {
@@ -287,8 +300,8 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 			return
 		}
 	}
-	// Nothing matched (or Photon is down) — empty so the seeded /postcodes/search
-	// fallback stays usable.
+	// Nothing matched (or both providers are down) — empty so the seeded
+	// /postcodes/search fallback stays usable.
 	c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
 }
 
