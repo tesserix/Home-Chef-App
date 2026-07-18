@@ -216,7 +216,7 @@ function ReviewRow({ review, first, last }: ReviewRowProps) {
         ]}
       >
         <Pressable
-          onPress={() => router.push(`/review/${review.id}` as `${string}`)}
+          onPress={() => router.push({ pathname: '/review/[reviewId]', params: { reviewId: review.id } })}
           accessibilityRole="button"
           accessibilityLabel={`Review by ${review.customerName}, ${review.rating} stars. Tap to reply.`}
         >
