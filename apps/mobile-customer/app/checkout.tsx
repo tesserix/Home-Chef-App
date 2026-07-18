@@ -105,12 +105,14 @@ export default function CheckoutScreen() {
   // delivering chef this is false, so we offer pickup only (no unfulfillable
   // delivery order). Default true so an older API without the field still works.
   const offersDelivery = chefData?.data?.offersDelivery ?? true;
-  // Delivery-area reach: even if the chef offers delivery, a self-delivering
-  // chef the customer is outside the radius of comes back deliverableToYou=false
-  // — the app must offer pickup only. Undefined (no coords) keeps delivery
-  // available; the server order guard is the final backstop.
-  const deliverableHere = chefData?.data?.deliverableToYou !== false;
-  const deliveryAvailable = offersDelivery && deliverableHere;
+  // Show the Delivery choice whenever the chef offers delivery — the toggle must
+  // NOT disappear just because the customer's DEVICE location is out of range
+  // (that hid delivery entirely and left only pickup, with no explanation). The
+  // actual range check runs against the SELECTED delivery address via the quote
+  // (deliveryOutOfRange below): if that address is beyond the kitchen's radius we
+  // show an "outside delivery range" banner and block Place Order, and the server
+  // 422 is the final backstop. This keeps the choice visible and the reason clear.
+  const deliveryAvailable = offersDelivery;
   const createAddress = useCreateAddress();
   const { data: addressData, isLoading: addressLoading } = useAddresses();
   const { data: wallet } = useWallet();
@@ -137,10 +139,10 @@ export default function CheckoutScreen() {
     'delivery' | 'pickup' | 'chef_delivery'
   >('delivery');
   // The customer only chooses delivery vs pickup. WHO delivers (the chef
-  // themselves vs a 3PL rider) is the chef's decision, resolved server-side
-  // from the chef's "I deliver myself" setting — never a customer choice.
-  // Delivery only appears when it's actually fulfillable AND reaches the
-  // customer (deliveryAvailable = offersDelivery && within the chef's range).
+  // themselves vs a 3PL rider) is the chef's decision, resolved server-side.
+  // Delivery appears whenever the chef offers it; if the SELECTED address is
+  // beyond the kitchen's range, the out-of-range banner + Place-Order block
+  // (deliveryOutOfRange) handle it — the choice itself stays visible.
   const fulfillmentModes: Array<'delivery' | 'pickup' | 'chef_delivery'> = [
     ...(deliveryAvailable ? (['delivery'] as const) : []),
     ...(offersPickup ? (['pickup'] as const) : []),
@@ -858,12 +860,13 @@ export default function CheckoutScreen() {
                 bring DOWN at accept — never a surprise increase — so we label it
                 clearly as an estimate rather than the charged amount. */}
             {fulfillment !== 'pickup' &&
+            !deliveryOutOfRange &&
             quote?.offersSelfDelivery &&
             quote?.selfDeliveryBreakdown ? (
               <View className="rounded-lg border border-hairline bg-canvas px-3 py-2 gap-1">
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs font-semibold text-charcoal">
-                    If chef self-delivers · up to
+                    Delivery fee breakdown · up to
                   </Text>
                   {quote.selfDeliveryBreakdown.fee > 0 ? (
                     <Text
