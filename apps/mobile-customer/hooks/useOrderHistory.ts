@@ -45,6 +45,7 @@ interface ApiOrderChef {
   imageUrl?: string;
   fssaiLicenseNumber?: string;
   gstin?: string;
+  state?: string;
 }
 
 interface ApiOrder {
@@ -58,6 +59,7 @@ interface ApiOrder {
   deliveryFeeFinal?: number;
   serviceFee?: number;
   tax?: number;
+  taxRate?: number;
   discount?: number;
   readyPhotoUrl?: string;
   items?: ApiOrderItem[];
@@ -119,6 +121,7 @@ function mapOrder(raw: ApiOrder): Order {
           ownerName: raw.chef.ownerName,
           fssaiLicenseNumber: raw.chef.fssaiLicenseNumber,
           gstin: raw.chef.gstin,
+          state: raw.chef.state,
           imageUrl: raw.chef.imageUrl,
           cuisine: '',
           rating: 0,
@@ -136,6 +139,7 @@ function mapOrder(raw: ApiOrder): Order {
     deliveryFeeFinal: raw.deliveryFeeFinal,
     serviceFee: raw.serviceFee,
     tax: raw.tax,
+    taxRate: raw.taxRate,
     discount: raw.discount,
     readyPhotoUrl: raw.readyPhotoUrl,
     payoutHoldStatus: raw.payoutHoldStatus,

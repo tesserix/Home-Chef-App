@@ -12,6 +12,8 @@ export interface Chef {
   ownerName?: string;
   fssaiLicenseNumber?: string;
   gstin?: string;
+  /** Supplier state — receipt splits GST into CGST+SGST (intra) or IGST (inter). */
+  state?: string;
   cuisine: string;
   rating: number;
   reviewCount: number;
@@ -191,6 +193,8 @@ export interface Order {
   deliveryFeeFinal?: number;
   serviceFee?: number;
   tax?: number;
+  /** Frozen tax rate % — for the receipt CGST/SGST/IGST rate labels (#invoice). */
+  taxRate?: number;
   discount?: number;
   // Public URL of the chef's food-ready photo (the prepared dish), shown on the
   // order detail once the chef marks the order ready.

@@ -915,21 +915,29 @@ export default function CheckoutScreen() {
               </View>
             ) : null}
 
-            {/* Tax (GST etc.) — the same rate CreateOrder applies. */}
-            {tax > 0 ? (
-              <View className="flex-row justify-between">
-                <Text className="text-sm text-charcoal-soft">
-                  {taxName}
-                  {taxInclusive ? ' (incl.)' : ''}
-                </Text>
-                <Text
-                  className="text-sm text-charcoal font-medium"
-                  style={{ fontVariant: ['tabular-nums'] }}
-                >
-                  ₹{tax.toFixed(2)}
-                </Text>
-              </View>
-            ) : null}
+            {/* Tax — GST-compliant: an Indian intra-state supply shows CGST+SGST,
+                inter-state shows IGST; other countries keep a single tax line. */}
+            {tax > 0
+              ? (quote?.taxCountry === 'IN'
+                  ? quote?.taxIntraState
+                    ? [
+                        { label: `CGST (${(taxRate / 2).toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax / 2 },
+                        { label: `SGST (${(taxRate / 2).toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax - tax / 2 },
+                      ]
+                    : [{ label: `IGST (${taxRate.toFixed(2).replace(/\.?0+$/, '')}%)`, amt: tax }]
+                  : [{ label: taxInclusive ? `${taxName} (incl.)` : taxName, amt: tax }]
+                ).map((row) => (
+                  <View key={row.label} className="flex-row justify-between">
+                    <Text className="text-sm text-charcoal-soft">{row.label}</Text>
+                    <Text
+                      className="text-sm text-charcoal font-medium"
+                      style={{ fontVariant: ['tabular-nums'] }}
+                    >
+                      ₹{row.amt.toFixed(2)}
+                    </Text>
+                  </View>
+                ))
+              : null}
 
             {/* Self-delivery estimate (#702). When the chef delivers themselves,
                 show the itemised approx-MAX fee. It's a ceiling the chef can only

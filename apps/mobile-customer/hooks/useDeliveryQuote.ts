@@ -59,6 +59,9 @@ export interface DeliveryQuote {
   taxRatePercent: number;
   taxName: string;
   taxInclusive: boolean;
+  /** GST compliance: 'IN' + intra-state → show CGST+SGST; inter-state → IGST. */
+  taxCountry: string;
+  taxIntraState: boolean;
 }
 
 /**

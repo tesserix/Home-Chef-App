@@ -86,6 +86,26 @@ export default function OrderReceiptScreen() {
   const deliveryFee = order?.deliveryFee ?? 0;
   const serviceFee = order?.serviceFee ?? 0;
   const tax = order?.tax ?? 0;
+  // GST-compliant split (#invoice): an Indian supply shows CGST+SGST (intra-state:
+  // chef state == delivery state) or IGST (inter-state); no chef state → single
+  // "Tax" line. rate labels come from the frozen order tax rate.
+  const taxRate = order?.taxRate ?? 0;
+  const chefState = (order?.chef?.state ?? '').trim().toLowerCase();
+  const dropState = (order?.deliveryAddress?.state ?? '').trim().toLowerCase();
+  const isIndiaTax = !!chefState; // chef state present ⇒ IN supplier
+  const taxIntra = !chefState || !dropState || chefState === dropState;
+  const trimPct = (n: number) => n.toFixed(2).replace(/\.?0+$/, '');
+  const taxLines: Array<{ label: string; amt: number }> =
+    tax <= 0
+      ? []
+      : isIndiaTax
+        ? taxIntra
+          ? [
+              { label: `CGST (${trimPct(taxRate / 2)}%)`, amt: tax / 2 },
+              { label: `SGST (${trimPct(taxRate / 2)}%)`, amt: tax - tax / 2 },
+            ]
+          : [{ label: `IGST (${trimPct(taxRate)}%)`, amt: tax }]
+        : [{ label: 'Tax', amt: tax }];
   const discount = order?.discount ?? 0;
   const refund = order?.refundAmount ?? 0;
 
@@ -217,7 +237,9 @@ export default function OrderReceiptScreen() {
             <Line label="Subtotal" value={money(subtotal)} />
             {deliveryFee > 0 ? <Line label="Delivery" value={money(deliveryFee)} /> : null}
             {serviceFee > 0 ? <Line label="Service fee" value={money(serviceFee)} /> : null}
-            {tax > 0 ? <Line label={'Tax'} value={money(tax)} /> : null}
+            {taxLines.map((t) => (
+              <Line key={t.label} label={t.label} value={money(t.amt)} />
+            ))}
             {discount > 0 ? <Line label="Discount" value={`-${money(discount)}`} /> : null}
             <Line label="Total" value={money(order.totalAmount)} bold />
             {refund > 0 ? (
