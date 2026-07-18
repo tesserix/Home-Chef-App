@@ -348,9 +348,17 @@ type OrderResponse struct {
 // list/detail render (business name + image). Kept small on purpose — the
 // full chef profile is fetched separately when a detail view needs it.
 type OrderChefResponse struct {
-	ID       uuid.UUID `json:"id"`
-	Name     string    `json:"name"`
-	ImageURL string    `json:"imageUrl,omitempty"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	// BusinessName is the kitchen's registered name; Name mirrors it for
+	// backward-compat. OwnerName is the proprietor (the actual home chef), shown
+	// on the official receipt alongside the business. Regulatory IDs (FSSAI, GSTIN)
+	// are printed on the customer's receipt for their records (see chef.go).
+	BusinessName       string `json:"businessName,omitempty"`
+	OwnerName          string `json:"ownerName,omitempty"`
+	ImageURL           string `json:"imageUrl,omitempty"`
+	FSSAILicenseNumber string `json:"fssaiLicenseNumber,omitempty"`
+	GSTIN              string `json:"gstin,omitempty"`
 }
 
 type OrderItemResponse struct {
@@ -460,9 +468,13 @@ func (o *Order) ToResponse() OrderResponse {
 			image = o.Chef.BannerImage
 		}
 		chef = &OrderChefResponse{
-			ID:       o.Chef.ID,
-			Name:     o.Chef.BusinessName,
-			ImageURL: image,
+			ID:                 o.Chef.ID,
+			Name:               o.Chef.BusinessName,
+			BusinessName:       o.Chef.BusinessName,
+			OwnerName:          strings.TrimSpace(o.Chef.User.FirstName + " " + o.Chef.User.LastName),
+			ImageURL:           image,
+			FSSAILicenseNumber: o.Chef.FSSAILicenseNumber,
+			GSTIN:              o.Chef.GSTIN,
 		}
 	}
 

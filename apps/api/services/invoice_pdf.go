@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,7 +29,7 @@ import (
 // HTTP or uploaded to GCS for archival.
 func GenerateOrderInvoicePDF(orderID uuid.UUID) ([]byte, string, error) {
 	var order models.Order
-	if err := database.DB.Preload("Items").Preload("Chef").Preload("Customer").
+	if err := database.DB.Preload("Items").Preload("Chef").Preload("Chef.User").Preload("Customer").
 		First(&order, orderID).Error; err != nil {
 		return nil, "", fmt.Errorf("order not found: %w", err)
 	}
@@ -134,15 +135,25 @@ func addInvoiceParties(m core.Maroto, order *models.Order) {
 		text.New("FROM (Supplier)", props.Text{Size: 8, Style: fontstyle.Bold, Color: &props.Color{Red: 90, Green: 90, Blue: 90}}),
 		text.New(chef.BusinessName, props.Text{Top: 4, Size: 11, Style: fontstyle.Bold}),
 	}
+	// Running vertical offset so optional lines (proprietor, address, GSTIN, FSSAI)
+	// stack cleanly with no gaps when any is absent.
+	top := 9.0
+	if owner := strings.TrimSpace(chef.User.FirstName + " " + chef.User.LastName); owner != "" {
+		chefBlock = append(chefBlock, text.New("Chef: "+owner, props.Text{Top: top, Size: 9}))
+		top += 5
+	}
 	addrLine := joinNonEmpty([]string{chef.AddressLine1, chef.AddressLine2, chef.City, chef.State, chef.PostalCode}, ", ")
 	if addrLine != "" {
-		chefBlock = append(chefBlock, text.New(addrLine, props.Text{Top: 9, Size: 9}))
+		chefBlock = append(chefBlock, text.New(addrLine, props.Text{Top: top, Size: 9}))
+		top += 5
 	}
 	if chef.GSTIN != "" {
-		chefBlock = append(chefBlock, text.New("GSTIN: "+chef.GSTIN, props.Text{Top: 14, Size: 9, Style: fontstyle.Bold}))
+		chefBlock = append(chefBlock, text.New("GSTIN: "+chef.GSTIN, props.Text{Top: top, Size: 9, Style: fontstyle.Bold}))
+		top += 5
 	}
 	if chef.FSSAILicenseNumber != "" {
-		chefBlock = append(chefBlock, text.New("FSSAI: "+chef.FSSAILicenseNumber, props.Text{Top: 18, Size: 9}))
+		chefBlock = append(chefBlock, text.New("FSSAI: "+chef.FSSAILicenseNumber, props.Text{Top: top, Size: 9}))
+		top += 5
 	}
 
 	custBlock := []core.Component{

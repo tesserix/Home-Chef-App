@@ -781,7 +781,9 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	orderID := c.Param("id")
 
 	var order models.Order
-	if err := database.DB.Preload("Items").Preload("Chef").Preload("Delivery").
+	// Preload Chef.User so the receipt can print the proprietor (owner) name
+	// alongside the business name + FSSAI/GSTIN (official document, #receipt).
+	if err := database.DB.Preload("Items").Preload("Chef").Preload("Chef.User").Preload("Delivery").
 		Where("id = ? AND customer_id = ?", orderID, userID).
 		First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
