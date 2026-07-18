@@ -69,7 +69,23 @@ func ChefDeliversTo(chef models.ChefProfile, custLat, custLng float64) bool {
 // enabled, every chef is deliverable (the provider covers the area), so the
 // radius gate is bypassed.
 func DeliverableToYou(chef models.ChefProfile, custLat, custLng float64, tplEnabled bool) bool {
-	return tplEnabled || ChefDeliversTo(chef, custLat, custLng)
+	if tplEnabled {
+		return true // a live 3PL covers the whole area.
+	}
+	if chef.OffersSelfDelivery {
+		// A self-delivering chef's reach is their SELF-DELIVERY max distance
+		// (SelfDeliveryMaxDistanceKm on the vendor profile) — NOT the legacy
+		// DeliveryRadius (bug #709: a chef whose self-delivery max is 0 = "no limit"
+		// was wrongly gated by a stale delivery_radius, hiding Delivery at checkout).
+		// 0 = no self-imposed limit (the common case): always deliverable — the chef
+		// confirms or declines the drop at accept (#709), with the distance warning
+		// the vendor app already shows. Missing chef coords → also defer to accept.
+		if chef.SelfDeliveryMaxDistanceKm <= 0 || !hasRealCoords(chef.Latitude, chef.Longitude) {
+			return true
+		}
+		return PlanarDistanceKm(chef.Latitude, chef.Longitude, custLat, custLng) <= chef.SelfDeliveryMaxDistanceKm
+	}
+	return false // not self-delivering and no 3PL → pickup only.
 }
 
 // DeliveryAreaKeepSQL returns a SQL predicate (and its ordered bind vars) that

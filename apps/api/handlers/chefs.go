@@ -210,9 +210,8 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	responses := make([]models.ChefProfileResponse, len(chefs))
 	for i, chef := range chefs {
 		responses[i] = chef.ToResponse()
-		// Delivery capability: whether the customer can pick "Delivery" at all
-		// (chef self-delivers OR a 3PL is live), mirroring GetChef so cards and the
-		// detail screen agree.
+		// Delivery capability: the chef opted into self-delivery OR a 3PL is live.
+		// Mirrors GetChef so cards and the detail screen agree.
 		responses[i].OffersDelivery = chef.OffersSelfDelivery || tplEnabled
 		// Per-customer reach: only when the request carried coordinates. A false
 		// here on a listed chef means "shown for pickup only — outside delivery
@@ -353,9 +352,9 @@ func (h *ChefHandler) GetChef(c *gin.Context) {
 
 	resp := chef.ToPublicResponse(schedules)
 	resp.ProBadge = services.IsChefPremium(chef.ID) // Verified-Pro badge (#44)
-	// Whether the customer can pick "Delivery" at all: the chef self-delivers OR
-	// a 3PL provider is live. With 3PL dark and a non-self-delivering chef this is
-	// false, so the checkout offers pickup only — no unfulfillable delivery order.
+	// Delivery capability: the chef opted into self-delivery OR a 3PL is live. When
+	// on, DeliverableToYou (below) decides per-customer reach using the chef's
+	// self-delivery radius — not the legacy DeliveryRadius, which this chef never set.
 	tplEnabled := services.ThirdPartyDeliveryEnabled()
 	resp.OffersDelivery = chef.OffersSelfDelivery || tplEnabled
 	// Per-customer reach: if the request carried the customer's coordinates,

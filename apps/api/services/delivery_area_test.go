@@ -64,13 +64,27 @@ func TestChefDeliversTo_RespectsRadiusCoordsAndMode(t *testing.T) {
 	assert.False(t, ChefDeliversTo(noCoords, custLat, custLng), "unset (0,0) coords are not deliverable")
 }
 
-func TestDeliverableToYou_LiveTPLBypassesRadius(t *testing.T) {
+func TestDeliverableToYou_SelfDeliveryReach(t *testing.T) {
 	custLat, custLng := 19.0760, 72.8777
-	// A far, tiny-radius self-delivering chef: out of own-fleet reach.
-	far := models.ChefProfile{OffersSelfDelivery: true, DeliveryRadius: 1, Latitude: 20.0, Longitude: 73.5}
 
-	assert.False(t, DeliverableToYou(far, custLat, custLng, false), "3PL dark → gated by radius (out of reach)")
-	assert.True(t, DeliverableToYou(far, custLat, custLng, true), "3PL live → deliverable regardless of radius")
+	// A live 3PL covers the whole area regardless of anything else.
+	far := models.ChefProfile{OffersSelfDelivery: true, SelfDeliveryMaxDistanceKm: 1, Latitude: 20.0, Longitude: 73.5}
+	assert.True(t, DeliverableToYou(far, custLat, custLng, true), "3PL live → deliverable regardless")
+
+	// A chef with an EXPLICIT self-delivery max distance, out of reach → gated.
+	assert.False(t, DeliverableToYou(far, custLat, custLng, false),
+		"3PL dark + explicit self-delivery max, customer out of reach → not deliverable")
+
+	// No self-delivery max set (0) = NO self-imposed limit — the common home-tiffin
+	// case (#709). Deliverable even far away; the chef confirms/declines at accept.
+	// (This is the Dum Alooo Kitchen case: opted-in self-delivery, max distance 0.)
+	noLimit := models.ChefProfile{OffersSelfDelivery: true, SelfDeliveryMaxDistanceKm: 0, DeliveryRadius: 10, Latitude: 20.0, Longitude: 73.5}
+	assert.True(t, DeliverableToYou(noLimit, custLat, custLng, false),
+		"self-delivery max 0 = no limit → deliverable; the legacy DeliveryRadius must NOT gate it")
+
+	// Not self-delivering and no 3PL → truly pickup only.
+	noSelf := models.ChefProfile{OffersSelfDelivery: false, Latitude: 20.0, Longitude: 73.5}
+	assert.False(t, DeliverableToYou(noSelf, custLat, custLng, false), "no self-delivery + no 3PL → not deliverable")
 }
 
 func TestDeliveryAreaKeepSQL_HybridFilter(t *testing.T) {
