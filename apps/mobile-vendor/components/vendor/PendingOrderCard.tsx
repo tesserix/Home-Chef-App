@@ -126,6 +126,14 @@ export function PendingOrderCard({
               </Text>
             </View>
           ) : null}
+          {/* Pickup vs delivery, at a glance on the INCOMING card — a pickup order
+              means no packing for a rider and the customer collects, so the chef
+              needs to know before accepting, not only after opening the detail. */}
+          {order.fulfillmentType === "pickup" ? (
+            <View style={styles.pickupBadge}>
+              <Text style={styles.pickupBadgeText}>PICKUP</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.total}>₹{order.total.toFixed(0)}</Text>
       </View>
@@ -263,6 +271,18 @@ const styles = StyleSheet.create({
   sourceBadgeText: {
     fontFamily: "Inter-SemiBold",
     fontSize: 11,
+  },
+  pickupBadge: {
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    backgroundColor: theme.colors.ink.DEFAULT,
+  },
+  pickupBadgeText: {
+    fontFamily: "Inter-SemiBold",
+    fontSize: 10,
+    letterSpacing: 0.4,
+    color: theme.colors.paper,
   },
   metaRow: {
     flexDirection: "row",
