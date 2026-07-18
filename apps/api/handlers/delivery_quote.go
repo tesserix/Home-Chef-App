@@ -84,7 +84,10 @@ func (h *OrderHandler) QuoteDeliveryFee(c *gin.Context) {
 	// chef can only bring it DOWN at accept (#703), never above it. Only computed
 	// when the chef offers self-delivery, so plain-delivery chefs are unaffected.
 	if chef.OffersSelfDelivery {
-		b := services.ComputeSelfDeliveryFeeBreakdown(chef, req.Latitude, req.Longitude)
+		// Estimate (not charge basis): folds current surge — fuel now (#704),
+		// traffic/weather later — into the distance component, still capped at the
+		// chef's max. Degrades to neutral when no surge signal is configured.
+		b := services.EstimateSelfDeliveryFeeBreakdown(c.Request.Context(), chef, req.Latitude, req.Longitude, country)
 		resp["selfDeliveryFee"] = models.RoundAmount(b.Fee)
 		resp["selfDeliveryBreakdown"] = b
 	}
