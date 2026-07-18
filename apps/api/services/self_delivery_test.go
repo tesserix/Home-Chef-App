@@ -33,10 +33,13 @@ func TestComputeSelfDeliveryFee(t *testing.T) {
 			want: 20, tol: 0,
 		},
 		{
-			name: "distance-based beyond free radius",
-			// base 20 + (~4.4km − 2km free) × 10 ≈ 20 + ~24 = ~44
+			name: "distance-based beyond free radius (ROAD distance, #701)",
+			// ROAD distance = haversine (~5.2 km) × 1.3 winding factor ≈ 6.7 km.
+			// base 20 + (6.7 − 2 free) × 10 ≈ 20 + 47 = ~67. The road factor makes
+			// this ~30% higher than the old straight-line ~52 — the intended fix so
+			// the chef is paid for the distance actually driven.
 			chef: models.ChefProfile{Latitude: chefLat, Longitude: chefLng, SelfDeliveryBaseFee: 20, SelfDeliveryFreeRadiusKm: 2, SelfDeliveryPerKm: 10},
-			want: 44, tol: 8,
+			want: 67, tol: 4,
 		},
 		{
 			name: "capped at max fee",

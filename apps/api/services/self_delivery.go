@@ -13,7 +13,10 @@ import "github.com/homechef/api/models"
 func ComputeSelfDeliveryFee(chef models.ChefProfile, dropLat, dropLng float64) float64 {
 	fee := chef.SelfDeliveryBaseFee
 	if chef.Latitude != 0 && chef.Longitude != 0 && dropLat != 0 && dropLng != 0 {
-		distKm := haversineDistance(chef.Latitude, chef.Longitude, dropLat, dropLng)
+		// Road distance, not straight line (#701): the chef drives roads, so the
+		// per-km fee should reflect the driven distance. RoadDistanceKm uses a real
+		// router when configured, else a winding-factor fallback — never blocks.
+		distKm := RoadDistanceKm(chef.Latitude, chef.Longitude, dropLat, dropLng)
 		if extra := distKm - chef.SelfDeliveryFreeRadiusKm; extra > 0 {
 			fee += extra * chef.SelfDeliveryPerKm
 		}
