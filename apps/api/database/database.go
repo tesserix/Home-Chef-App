@@ -197,6 +197,9 @@ func Migrate() error {
 		// pending BEFORE the gateway call so a crash mid-call leaves a claim a
 		// sweep can reconcile rather than money moving off our books silently.
 		&models.RefundTransaction{},
+		// Durable road-distance cache (#699) — a (chef → address) distance is paid
+		// for once, ever; repeat orders reuse it across restarts / Redis flushes.
+		&models.DeliveryDistanceCache{},
 
 		// Loyalty (points ledger + streaks, #40)
 		&models.LoyaltyAccount{},
