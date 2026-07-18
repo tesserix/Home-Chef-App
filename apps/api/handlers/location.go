@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -270,12 +271,74 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 		return
 	}
 
-	// Build the Photon request. limit=8 mirrors mark8ly; any more and
-	// the mobile dropdown starts feeling overwhelming.
+	// Photon indexes streets/POIs, not flat numbers, and barely fuzzy-matches — so
+	// a full "Flat 104 Asima Residency Kalarahanga Bhubaneswar Odisha" returns
+	// NOTHING, which reads as "search is broken". Try progressively-simpler
+	// variants (strip the flat/house number, then fall back to the trailing
+	// city/state) until one finds the area — the customer still gets a real,
+	// coordinate-bearing match to refine, instead of an empty box (#address-search).
+	for _, variant := range photonQueryVariants(q) {
+		out, err := fetchPhotonSuggestions(c.Request.Context(), variant)
+		if err != nil {
+			continue // Photon hiccup on this variant — try the next.
+		}
+		if len(out) > 0 {
+			c.JSON(http.StatusOK, dataEnvelope{Data: out})
+			return
+		}
+	}
+	// Nothing matched (or Photon is down) — empty so the seeded /postcodes/search
+	// fallback stays usable.
+	c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
+}
+
+// photonNoisePrefix matches a leading flat/house-number token ("Flat 104",
+// "No. 5", "H.No 3", "Plot 12", "#7") that Photon can't match on.
+var photonNoisePrefix = regexp.MustCompile(`(?i)^(flat|plot|house|door|shop|h\.?\s*no\.?|no\.?|#)\.?\s*\d*[a-z]?[-/]?\d*\b[\s,]*`)
+
+// photonQueryVariants returns the query plus up to a few progressively-broader
+// fallbacks (most-specific first): drop a leading flat/house number, then the
+// trailing city+state, then just the city. First non-empty wins in the caller.
+func photonQueryVariants(q string) []string {
+	norm := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+	q = norm(q)
+	seen := map[string]bool{}
+	var out []string
+	add := func(s string) {
+		s = norm(s)
+		k := strings.ToLower(s)
+		if len(s) >= 3 && !seen[k] {
+			seen[k] = true
+			out = append(out, s)
+		}
+	}
+	add(q)
+	stripped := norm(photonNoisePrefix.ReplaceAllString(q, ""))
+	add(stripped)
+	// Area fallbacks from the trailing tokens (usually "<city> <state>", then "<city>").
+	tokens := strings.Fields(stripped)
+	if len(tokens) >= 3 {
+		add(strings.Join(tokens[len(tokens)-3:], " "))
+	}
+	if len(tokens) >= 2 {
+		add(strings.Join(tokens[len(tokens)-2:], " "))
+	}
+	if len(tokens) >= 1 {
+		add(tokens[len(tokens)-1])
+	}
+	if len(out) > 5 {
+		out = out[:5]
+	}
+	return out
+}
+
+// fetchPhotonSuggestions queries Photon for one term and returns India-only,
+// coordinate-bearing suggestions. Any transport/parse error is returned so the
+// caller can try the next variant.
+func fetchPhotonSuggestions(reqCtx context.Context, q string) ([]AddressSuggestion, error) {
 	pu, err := url.Parse(photonAPI)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "photon_url", "message": err.Error()})
-		return
+		return nil, err
 	}
 	qs := pu.Query()
 	qs.Set("q", q)
@@ -283,39 +346,31 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 	qs.Set("lang", "en")
 	pu.RawQuery = qs.Encode()
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(reqCtx, 4*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pu.String(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "photon_request", "message": err.Error()})
-		return
+		return nil, err
 	}
 	req.Header.Set("User-Agent", photonUserAgent)
 
 	resp, err := photonClient.Do(req)
 	if err != nil {
-		// Photon outages shouldn't break our search box — return empty
-		// so the seeded /postcodes/search results stay usable.
-		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
-		return
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
-		return
+		return nil, fmt.Errorf("photon status %d", resp.StatusCode)
 	}
-
 	var body photonResponse
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		c.JSON(http.StatusOK, dataEnvelope{Data: []AddressSuggestion{}})
-		return
+		return nil, err
 	}
 
 	out := make([]AddressSuggestion, 0, len(body.Features))
 	for _, f := range body.Features {
 		p := f.Properties
-		// India-only guard.
-		if !strings.EqualFold(p.CountryCode, "IN") {
+		if !strings.EqualFold(p.CountryCode, "IN") { // India-only guard.
 			continue
 		}
 		s := AddressSuggestion{
@@ -329,15 +384,13 @@ func (h *LocationHandler) AutocompleteAddresses(c *gin.Context) {
 		if s.Description == "" || (s.Line1 == "" && s.City == "") {
 			continue
 		}
-		// GeoJSON coordinates are [lon, lat]; surface them so the client can
-		// persist real coordinates on the address.
-		if len(f.Geometry.Coordinates) >= 2 {
+		if len(f.Geometry.Coordinates) >= 2 { // GeoJSON [lon, lat].
 			s.Lon = f.Geometry.Coordinates[0]
 			s.Lat = f.Geometry.Coordinates[1]
 		}
 		out = append(out, s)
 	}
-	c.JSON(http.StatusOK, dataEnvelope{Data: out})
+	return out, nil
 }
 
 func buildPhotonLine1(p photonProperties) string {
