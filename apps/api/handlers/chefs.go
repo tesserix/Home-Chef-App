@@ -81,6 +81,11 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 
 	query := database.DB.Model(&models.ChefProfile{}).
 		Where("is_active = ?", true).
+		// Only admin-approved kitchens are discoverable. Onboarding sets is_active
+		// true immediately, but is_verified stays false until an admin approves —
+		// so without this a pending, unreviewed kitchen would surface on the
+		// customer homepage.
+		Where("is_verified = ?", true).
 		Scopes(services.ExcludeFSSAILocked) // FSSAI lockout (#91): hide lapsed-licence India chefs
 
 	// Search filter
@@ -279,6 +284,7 @@ func (h *ChefHandler) SearchDishes(c *gin.Context) {
 	// rule ListChefs applies (FSSAI lockout #91 included).
 	visibleChefs := database.DB.Model(&models.ChefProfile{}).
 		Where("is_active = ?", true).
+		Where("is_verified = ?", true). // admin-approved only — mirrors ListChefs
 		Scopes(services.ExcludeFSSAILocked).
 		Select("id")
 
