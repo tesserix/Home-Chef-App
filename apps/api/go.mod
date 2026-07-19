@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	cloud.google.com/go/kms v1.32.0
 	cloud.google.com/go/vision v1.2.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.34.0
 	github.com/alicebob/miniredis/v2 v2.38.0

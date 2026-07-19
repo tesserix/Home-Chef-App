@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/homechef/api/config"
+	"github.com/homechef/api/piicrypto"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/handlers"
 	"github.com/homechef/api/internal/observability"
@@ -132,6 +133,16 @@ func main() {
 		log.Println("Vendor payment secrets will be unavailable")
 	} else {
 		defer services.CloseSecretManager()
+	}
+
+	// PII column encryption (#710). Off by default; when enabled, unwrap the DEK
+	// (GCP KMS) + load the blind-index key at boot. Fatal if it can't init while
+	// enabled — an enabled-but-uninitialised state would silently store plaintext.
+	if config.AppConfig.PIIEncryptionEnabled {
+		if err := piicrypto.Init(context.Background(), config.AppConfig.GCSProjectID); err != nil {
+			log.Fatalf("PII encryption enabled but failed to initialize: %v", err)
+		}
+		log.Println("PII column encryption initialized")
 	}
 
 	// Warm up the Razorpay client. Credentials are fetched lazily from GCP
