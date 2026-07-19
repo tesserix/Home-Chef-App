@@ -82,6 +82,7 @@ export default function OperationsScreen() {
     <OnboardingScaffold
       step={3}
       total={6}
+      stepName={t('onboarding.stepOperations')}
       title={t('onboarding.operationsTitle')}
       subtitle={t('onboarding.operationsSubtitle')}
       primaryLabel={t('onboarding.continue')}

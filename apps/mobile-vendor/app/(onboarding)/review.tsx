@@ -190,6 +190,7 @@ export default function ReviewScreen() {
     <OnboardingScaffold
       step={6}
       total={6}
+      stepName={t('onboarding.stepReview')}
       title={t('onboarding.reviewTitle')}
       subtitle={t('onboarding.reviewSubtitle')}
       primaryLabel={submitting ? '' : t('onboarding.submitApplication')}

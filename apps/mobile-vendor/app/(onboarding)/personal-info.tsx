@@ -60,6 +60,7 @@ export default function PersonalInfoScreen() {
     <OnboardingScaffold
       step={1}
       total={6}
+      stepName={t('onboarding.stepPersonal')}
       title={t('onboarding.personalTitle')}
       subtitle={t('onboarding.personalSubtitle')}
       primaryLabel={t('onboarding.continue')}

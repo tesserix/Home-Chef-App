@@ -71,6 +71,7 @@ export default function PoliciesScreen() {
     <OnboardingScaffold
       step={5}
       total={6}
+      stepName={t('onboarding.stepPolicies')}
       title={t('onboarding.policiesTitle')}
       subtitle={t('onboarding.policiesSubtitle')}
       primaryLabel={t('onboarding.continue')}

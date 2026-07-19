@@ -155,6 +155,12 @@
   "onboarding": {
     "continue": "Continue",
     "checkDetails": "Check your details",
+    "stepPersonal": "Your details",
+    "stepKitchen": "Kitchen",
+    "stepOperations": "Operations",
+    "stepDocuments": "Documents",
+    "stepPolicies": "Policies",
+    "stepReview": "Review",
     "personalTitle": "Tell us about you",
     "personalSubtitle": "Your customers will see your name and contact details.",
     "identity": "IDENTITY",

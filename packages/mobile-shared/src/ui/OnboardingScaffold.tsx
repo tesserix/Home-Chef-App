@@ -17,6 +17,10 @@ interface OnboardingScaffoldProps {
   step: number;
   /** Total steps. Used for both progress dots and the "Step N of M" label. */
   total: number;
+  /** Short phase name for this step (e.g. "Your details", "Documents"). When
+   *  provided, shown as an eyebrow above the title so the user knows which phase
+   *  of the journey they're in, not just a number. */
+  stepName?: string;
   /** Geist headline — sentence case, no exclamation. */
   title: string;
   /** Inter body subtitle — one sentence explaining *why* this step. */
@@ -55,6 +59,7 @@ interface OnboardingScaffoldProps {
 export function OnboardingScaffold({
   step,
   total,
+  stepName,
   title,
   subtitle,
   children,
@@ -79,15 +84,19 @@ export function OnboardingScaffold({
           ) : (
             <View />
           )}
-          <Text style={styles.stepLabel}>
-            Step {step}{' '}
-            <Text style={styles.stepDivider}>·</Text>
-            <Text> {total}</Text>
+          <Text style={styles.stepLabel} accessibilityLabel={`Step ${step} of ${total}`}>
+            Step {step} of {total}
           </Text>
         </View>
 
-        {/* Progress dots */}
-        <View style={styles.progressRow}>
+        {/* Progress bar — one segment per step: done = ink, current = persimmon
+            ("you are here"), upcoming = mist. The single accent segment makes the
+            position obvious at a glance. */}
+        <View
+          style={styles.progressRow}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: total, now: step }}
+        >
           {Array.from({ length: total }).map((_, i) => {
             const isDone = i < step - 1;
             const isCurrent = i === step - 1;
@@ -110,6 +119,7 @@ export function OnboardingScaffold({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {stepName ? <Text style={styles.eyebrow}>{stepName}</Text> : null}
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           <View style={styles.form}>{children}</View>
@@ -163,17 +173,26 @@ const styles = StyleSheet.create({
   },
   dot: {
     flex: 1,
-    height: 3,
-    borderRadius: 1.5,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: theme.colors.mist.DEFAULT,
   },
   dotDone: { backgroundColor: theme.colors.ink.DEFAULT },
-  dotCurrent: { backgroundColor: theme.colors.ink.DEFAULT },
+  // Current step in persimmon — the single "you are here" accent.
+  dotCurrent: { backgroundColor: theme.colors.herb.DEFAULT },
 
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: theme.spacing[6],
     paddingBottom: theme.spacing[8],
+  },
+  eyebrow: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.herb.DEFAULT,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: theme.spacing[2],
   },
   title: {
     fontFamily: 'Geist',

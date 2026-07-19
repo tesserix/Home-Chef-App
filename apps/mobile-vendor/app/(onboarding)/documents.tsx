@@ -371,6 +371,7 @@ export default function DocumentsScreen() {
     <OnboardingScaffold
       step={4}
       total={6}
+      stepName={t('onboarding.stepDocuments')}
       title={t('onboarding.documentsTitle')}
       subtitle={t('onboarding.documentsSubtitle')}
       primaryLabel={t('onboarding.continue')}

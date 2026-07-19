@@ -295,6 +295,7 @@ export default function KitchenDetailsScreen() {
     <OnboardingScaffold
       step={2}
       total={6}
+      stepName={t('onboarding.stepKitchen')}
       title={t('onboarding.kitchenTitle')}
       subtitle={t('onboarding.kitchenSubtitle')}
       primaryLabel={t('onboarding.continue')}

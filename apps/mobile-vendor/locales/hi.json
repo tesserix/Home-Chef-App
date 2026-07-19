@@ -155,6 +155,12 @@
   "onboarding": {
     "continue": "जारी रखें",
     "checkDetails": "अपने विवरण जाँचें",
+    "stepPersonal": "आपकी जानकारी",
+    "stepKitchen": "रसोई",
+    "stepOperations": "संचालन",
+    "stepDocuments": "दस्तावेज़",
+    "stepPolicies": "नीतियाँ",
+    "stepReview": "समीक्षा",
     "personalTitle": "हमें अपने बारे में बताएँ",
     "personalSubtitle": "आपके ग्राहक आपका नाम और संपर्क विवरण देखेंगे।",
     "identity": "पहचान",
