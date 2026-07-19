@@ -194,6 +194,10 @@ func (h *CustomerHandler) GetOnboardingStatus(c *gin.Context) {
 func (h *CustomerHandler) CompleteOnboarding(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
+	if !EnsureLoginEmailVerified(c, userID) {
+		return
+	}
+
 	var req struct {
 		FirstName          string   `json:"firstName"`
 		LastName           string   `json:"lastName"`

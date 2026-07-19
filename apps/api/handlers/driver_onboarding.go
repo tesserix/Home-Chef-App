@@ -396,6 +396,10 @@ func (h *DriverOnboardingHandler) DriverOnboardingPayout(c *gin.Context) {
 func (h *DriverOnboardingHandler) DriverOnboardingSubmit(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 
+	if !EnsureLoginEmailVerified(c, userID) {
+		return
+	}
+
 	var req struct {
 		TermsAccepted bool `json:"termsAccepted" binding:"required"`
 	}

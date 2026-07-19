@@ -5,12 +5,39 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
+	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
 )
+
+// EnsureLoginEmailVerified requires the user's account email to be OTP-verified
+// before onboarding can complete. No-op when the feature flag is off. Writes the
+// response and returns false when the email is unverified. Used by onboarding
+// flows (customer, delivery) where the email is the account email, not re-typed.
+func EnsureLoginEmailVerified(c *gin.Context, userID uuid.UUID) bool {
+	if config.AppConfig == nil || !config.AppConfig.EmailOTPEnabled {
+		return true
+	}
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return false
+	}
+	email := services.NormalizeEmail(user.Email)
+	if !services.IsValidEmailFormat(email) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Your account email is invalid. Please contact support.", "field": "email"})
+		return false
+	}
+	if !services.IsEmailOTPVerified(c.Request.Context(), userID.String(), email) {
+		c.JSON(http.StatusPreconditionRequired, gin.H{"error": "Please verify your email with the 6-digit code we sent before continuing.", "field": "email"})
+		return false
+	}
+	return true
+}
 
 type EmailOTPHandler struct{}
 

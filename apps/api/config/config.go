@@ -150,8 +150,7 @@ type Config struct {
 	// KMS key + secrets (prod-homechef-pii-*) to be reachable at boot.
 	PIIEncryptionEnabled bool
 	// EmailOTPEnabled gates enforcing a 6-digit email OTP before onboarding.
-	// Default off so the API can deploy ahead of the OTP UI in the frontends;
-	// flip EMAIL_OTP_ENABLED=true once the onboarding apps ship the code entry.
+	// On by default; set EMAIL_OTP_ENABLED=false to disable enforcement.
 	EmailOTPEnabled bool
 
 	// DeliveryDistancePricePerCallUSD / DeliveryWeatherPricePerCallUSD are the
@@ -209,7 +208,7 @@ func Load() {
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
-	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "false"))
+	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
