@@ -55,8 +55,15 @@ var (
 	mrzLineRe    = regexp.MustCompile(`(?m)^[A-Z0-9<]{40,44}$`)
 )
 
+// idProofType is a generic "any recognised ID" claim used by onboarding flows
+// that collect a single ID proof rather than a specific PAN/Aadhaar/passport.
+const idProofType = "id_proof"
+
 // IsVerifiable reports whether a document type has genuineness signals we check.
 func IsVerifiable(docType string) bool {
+	if docType == idProofType {
+		return true
+	}
 	_, ok := anchors[docType]
 	return ok
 }
@@ -97,6 +104,9 @@ func ClassifyType(ocrText string) []string {
 // identifying number's format/checksum validates. Non-verifiable types return
 // StatusUnknown (nothing to check).
 func Assess(claimedType, ocrText string) Verdict {
+	if claimedType == idProofType {
+		return assessAnyID(ocrText)
+	}
 	v := Verdict{ClaimedType: claimedType, Signals: map[string]bool{}}
 	if !IsVerifiable(claimedType) {
 		v.Status = StatusUnknown
@@ -137,6 +147,28 @@ func Assess(claimedType, ocrText string) Verdict {
 		v.Status = StatusRejected
 		v.Reason = "the " + pretty(claimedType) + " number could not be validated on the image"
 	}
+	return v
+}
+
+// assessAnyID passes when the image looks like any recognised Indian ID
+// (PAN, Aadhaar, or passport) — used for a generic "id_proof" upload.
+func assessAnyID(ocrText string) Verdict {
+	v := Verdict{ClaimedType: idProofType, Signals: map[string]bool{}}
+	if strings.TrimSpace(ocrText) == "" {
+		v.Status = StatusUnknown
+		v.Reason = "no readable text in the image"
+		return v
+	}
+	for _, t := range []string{"pan_card", "aadhaar_card", "passport"} {
+		if sub := Assess(t, ocrText); sub.Status == StatusGenuine {
+			v.Status = StatusGenuine
+			v.DetectedType = t
+			v.Signals = sub.Signals
+			return v
+		}
+	}
+	v.Status = StatusRejected
+	v.Reason = "this does not look like a recognised ID document (PAN, Aadhaar, or passport)"
 	return v
 }
 

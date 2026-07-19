@@ -77,6 +77,27 @@ func TestAssess_Passport(t *testing.T) {
 	}
 }
 
+func TestAssess_IDProof(t *testing.T) {
+	// A genuine PAN uploaded as the generic "id_proof" passes, detected as PAN.
+	pan := "INCOME TAX DEPARTMENT Permanent Account Number ABCDE1234F"
+	v := Assess("id_proof", pan)
+	if v.Status != StatusGenuine || v.DetectedType != "pan_card" {
+		t.Errorf("id_proof PAN: got %s detected=%q (%s)", v.Status, v.DetectedType, v.Reason)
+	}
+	// A genuine Aadhaar as id_proof also passes.
+	aadhaar := "Government of India Aadhaar 9999 9999 0019 UIDAI"
+	if v := Assess("id_proof", aadhaar); v.Status != StatusGenuine || v.DetectedType != "aadhaar_card" {
+		t.Errorf("id_proof Aadhaar: got %s detected=%q", v.Status, v.DetectedType)
+	}
+	// A random image as id_proof is rejected.
+	if v := Assess("id_proof", "cute cat photo 2026"); v.Status != StatusRejected {
+		t.Errorf("id_proof random image should be rejected, got %s", v.Status)
+	}
+	if !IsVerifiable("id_proof") {
+		t.Error("id_proof must be verifiable")
+	}
+}
+
 func TestAssess_NonVerifiableType(t *testing.T) {
 	if v := Assess("cancelled_cheque", "any text"); v.Status != StatusUnknown {
 		t.Errorf("non-verifiable type should be unknown, got %s", v.Status)
