@@ -141,6 +141,8 @@ const OrderStatusBadge = forwardRef<HTMLSpanElement, OrderStatusBadgeProps>(
       delivering: { variant: 'brand', label: 'Delivering' },
       delivered: { variant: 'default', label: 'Delivered' },
       cancelled: { variant: 'destructive', label: 'Cancelled' },
+      rejected: { variant: 'destructive', label: 'Rejected' },
+      refunded: { variant: 'default', label: 'Refunded' },
     };
 
     const config = statusConfig[status] || { variant: 'default', label: status };
