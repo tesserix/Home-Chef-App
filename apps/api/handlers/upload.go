@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/homechef/api/middleware"
 	"github.com/homechef/api/models"
 	"github.com/homechef/api/services"
+	"github.com/homechef/api/services/docverify"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
@@ -152,6 +154,12 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 	}
 	if !isPhoto && !services.IsDocContentType(sniffed) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed file type."})
+		return
+	}
+
+	// Genuineness gate: for identity/licence images, confirm the upload looks
+	// like a real document of the claimed type before it reaches the admin.
+	if !h.runAuthenticityGate(c, file, sniffed, docType) {
 		return
 	}
 
@@ -1305,6 +1313,75 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	// Refresh + return so the client sees the new expiry + status.
 	_ = database.DB.First(&doc, "id = ?", doc.ID).Error
 	c.JSON(http.StatusOK, doc.ToResponse())
+}
+
+// runAuthenticityGate OCRs an identity/licence image and, when the doc looks
+// fake for its claimed type, blocks the upload (only when DOC_AUTHENTICITY_ENABLED;
+// otherwise it just logs). Non-image/PDF or non-verifiable types pass through,
+// and any OCR failure fails open so a Vision outage can't block onboarding.
+func (h *UploadHandler) runAuthenticityGate(c *gin.Context, file multipart.File, sniffed string, docType models.DocumentType) bool {
+	if config.AppConfig == nil || !config.AppConfig.DocAuthenticityEnabled {
+		return true // disabled: no OCR cost/latency on the upload path
+	}
+	if !docverify.IsVerifiable(string(docType)) || !services.IsImageContentType(sniffed) {
+		return true
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return true
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return true
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return true // rewind so the full file still uploads
+	}
+	verdict, err := services.AssessDocumentImage(c.Request.Context(), data, string(docType))
+	if err != nil {
+		log.Printf("doc-authenticity: assess failed (fail-open) type=%s: %v", docType, err)
+		return true
+	}
+	if verdict.Status == docverify.StatusRejected {
+		log.Printf("doc-authenticity: %s upload rejected: %s", docType, verdict.Reason)
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": verdict.Reason, "field": "file", "authenticity": verdict})
+		return false
+	}
+	return true
+}
+
+// VerifyDocumentAuthenticity OCRs an image and returns a genuineness verdict for
+// the claimed document type, without storing anything. Lets the client check a
+// document before (or independently of) uploading it.
+// POST /chef/documents/verify — multipart: file (image), type
+func (h *UploadHandler) VerifyDocumentAuthenticity(c *gin.Context) {
+	docType := c.PostForm("type")
+	if docType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document type is required"})
+		return
+	}
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+	if header.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+		return
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Could not read file"})
+		return
+	}
+	verdict, err := services.AssessDocumentImage(c.Request.Context(), data, docType)
+	if err != nil {
+		// Soft-fail: treat as "unknown" so the client doesn't hard-block on a Vision outage.
+		log.Printf("doc-authenticity check failed (non-fatal): %v", err)
+		c.JSON(http.StatusOK, docverify.Verdict{Status: docverify.StatusUnknown, ClaimedType: docType, Reason: "could not read the document"})
+		return
+	}
+	c.JSON(http.StatusOK, verdict)
 }
 
 // OCRDocument runs Cloud Vision OCR on an image and returns the detected

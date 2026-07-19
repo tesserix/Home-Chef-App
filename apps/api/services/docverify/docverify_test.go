@@ -1,0 +1,90 @@
+package docverify
+
+import "testing"
+
+func TestVerhoeff(t *testing.T) {
+	// 999999990019 is a documented valid Verhoeff/Aadhaar-format number.
+	if !Verhoeff("999999990019") {
+		t.Error("expected 999999990019 to be a valid Verhoeff number")
+	}
+	// Corrupting the check digit must fail.
+	if Verhoeff("999999990018") {
+		t.Error("expected corrupted number to fail Verhoeff")
+	}
+	// Transposition should be caught by Verhoeff.
+	if Verhoeff("123456789012") {
+		t.Error("expected random 12 digits to fail Verhoeff")
+	}
+	if Verhoeff("99999999001") || Verhoeff("abcd99990019") {
+		t.Error("wrong length / non-digit must fail")
+	}
+}
+
+func TestAssess_PAN(t *testing.T) {
+	genuine := "INCOME TAX DEPARTMENT GOVT. OF INDIA\nPermanent Account Number\nABCDE1234F\nRAHUL SHARMA"
+	if v := Assess("pan_card", genuine); v.Status != StatusGenuine {
+		t.Errorf("genuine PAN: got %s (%s)", v.Status, v.Reason)
+	}
+	// Right anchors but no PAN-format number → rejected.
+	noNum := "INCOME TAX DEPARTMENT Permanent Account Number RAHUL"
+	if v := Assess("pan_card", noNum); v.Status != StatusRejected {
+		t.Errorf("PAN without number should be rejected, got %s", v.Status)
+	}
+	// A random selfie's OCR (garbage) → rejected, no anchor.
+	if v := Assess("pan_card", "happy birthday to you"); v.Status != StatusRejected {
+		t.Errorf("random image should be rejected, got %s", v.Status)
+	}
+}
+
+func TestAssess_WrongTypeDetected(t *testing.T) {
+	// User claims PAN but uploads an Aadhaar.
+	aadhaar := "Government of India\nAadhaar\n9999 9999 0019\nUnique Identification Authority"
+	v := Assess("pan_card", aadhaar)
+	if v.Status != StatusRejected {
+		t.Fatalf("expected rejected, got %s", v.Status)
+	}
+	if v.DetectedType != "aadhaar_card" {
+		t.Errorf("expected detectedType aadhaar_card, got %q", v.DetectedType)
+	}
+}
+
+func TestAssess_Aadhaar(t *testing.T) {
+	genuine := "Government of India\nAadhaar\n9999 9999 0019\nUIDAI"
+	if v := Assess("aadhaar_card", genuine); v.Status != StatusGenuine {
+		t.Errorf("genuine Aadhaar: got %s (%s)", v.Status, v.Reason)
+	}
+	// Anchors present but the 12-digit number fails Verhoeff → rejected.
+	badChecksum := "Government of India Aadhaar 1234 5678 9012 UIDAI"
+	if v := Assess("aadhaar_card", badChecksum); v.Status != StatusRejected {
+		t.Errorf("bad Aadhaar checksum should be rejected, got %s", v.Status)
+	}
+}
+
+func TestAssess_FSSAI(t *testing.T) {
+	genuine := "Food Safety and Standards Authority of India\nLicense No. 12345678901234\nValid Upto 01/01/2027"
+	if v := Assess("fssai_license", genuine); v.Status != StatusGenuine {
+		t.Errorf("genuine FSSAI: got %s (%s)", v.Status, v.Reason)
+	}
+	if v := Assess("fssai_license", "FSSAI license number missing here"); v.Status != StatusRejected {
+		t.Errorf("FSSAI without 14-digit number should be rejected, got %s", v.Status)
+	}
+}
+
+func TestAssess_Passport(t *testing.T) {
+	genuine := "REPUBLIC OF INDIA\nPASSPORT\nA1234567\nP<INDSHARMA<<RAHUL<<<<<<<<<<<<<<<<<<<<<<<<<<"
+	if v := Assess("passport", genuine); v.Status != StatusGenuine {
+		t.Errorf("genuine passport: got %s (%s)", v.Status, v.Reason)
+	}
+}
+
+func TestAssess_NonVerifiableType(t *testing.T) {
+	if v := Assess("cancelled_cheque", "any text"); v.Status != StatusUnknown {
+		t.Errorf("non-verifiable type should be unknown, got %s", v.Status)
+	}
+}
+
+func TestAssess_NoText(t *testing.T) {
+	if v := Assess("pan_card", "   "); v.Status != StatusUnknown {
+		t.Errorf("empty OCR should be unknown, got %s", v.Status)
+	}
+}

@@ -152,6 +152,10 @@ type Config struct {
 	// EmailOTPEnabled gates enforcing a 6-digit email OTP before onboarding.
 	// On by default; set EMAIL_OTP_ENABLED=false to disable enforcement.
 	EmailOTPEnabled bool
+	// DocAuthenticityEnabled gates rejecting document uploads that fail the
+	// genuineness check (wrong type / invalid number). Default off; the check
+	// always runs and is returned, only hard-rejection is gated.
+	DocAuthenticityEnabled bool
 
 	// DeliveryDistancePricePerCallUSD / DeliveryWeatherPricePerCallUSD are the
 	// per-call prices of the metered delivery-intelligence providers (#699), used
@@ -209,6 +213,7 @@ func Load() {
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
 	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "true"))
+	docAuthenticity, _ := strconv.ParseBool(getEnv("DOC_AUTHENTICITY_ENABLED", "false"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
@@ -336,6 +341,7 @@ func Load() {
 		OnboardingWorkflowEnabled:       onboardingWorkflow,
 		PIIEncryptionEnabled:            piiEncryption,
 		EmailOTPEnabled:                 emailOTP,
+		DocAuthenticityEnabled:          docAuthenticity,
 	}
 }
 

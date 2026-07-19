@@ -446,6 +446,8 @@ func SetupRouter() *gin.Engine {
 			chefOnboarding.POST("/banner-image", uploadHandler.UploadBannerImage)
 			// OCR a document image → detected FSSAI number + expiry (pre-fill).
 			chefOnboarding.POST("/documents/ocr", uploadHandler.OCRDocument)
+			// Genuineness check for a document image without storing it.
+			chefOnboarding.POST("/documents/verify", uploadHandler.VerifyDocumentAuthenticity)
 			chefOnboarding.POST("/kitchen-photos", uploadHandler.UploadKitchenPhoto)
 			chefOnboarding.DELETE("/kitchen-photos", uploadHandler.DeleteKitchenPhoto)
 		}

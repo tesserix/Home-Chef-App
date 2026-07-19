@@ -10,6 +10,8 @@ import (
 	"time"
 
 	vision "cloud.google.com/go/vision/apiv1"
+
+	"github.com/homechef/api/services/docverify"
 )
 
 // visionClient is the Cloud Vision OCR client. Initialised at startup via
@@ -56,31 +58,50 @@ var monthAbbrev = map[string]int{
 	"jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
 
+// DetectText runs document-text OCR on an image and returns the raw text.
+func DetectText(ctx context.Context, imageBytes []byte) (string, error) {
+	if visionClient == nil {
+		return "", fmt.Errorf("vision client not initialised")
+	}
+	img, err := vision.NewImageFromReader(bytes.NewReader(imageBytes))
+	if err != nil {
+		return "", fmt.Errorf("invalid image: %w", err)
+	}
+	ann, err := visionClient.DetectDocumentText(ctx, img, nil)
+	if err != nil {
+		return "", fmt.Errorf("vision OCR failed: %w", err)
+	}
+	if ann == nil {
+		return "", nil
+	}
+	return ann.GetText(), nil
+}
+
 // DetectDocumentFields runs document-text OCR on an image and extracts the
 // FSSAI number + expiry date. Returns a zero-value result (no error) when the
 // fields aren't found, so the caller can degrade to manual entry.
 func DetectDocumentFields(ctx context.Context, imageBytes []byte) (OCRResult, error) {
 	var res OCRResult
-	if visionClient == nil {
-		return res, fmt.Errorf("vision client not initialised")
-	}
-	img, err := vision.NewImageFromReader(bytes.NewReader(imageBytes))
+	text, err := DetectText(ctx, imageBytes)
 	if err != nil {
-		return res, fmt.Errorf("invalid image: %w", err)
+		return res, err
 	}
-	ann, err := visionClient.DetectDocumentText(ctx, img, nil)
-	if err != nil {
-		return res, fmt.Errorf("vision OCR failed: %w", err)
-	}
-	if ann == nil {
-		return res, nil
-	}
-	text := ann.GetText()
 	if m := fssaiRe.FindString(text); m != "" {
 		res.FSSAINumber = m
 	}
 	res.ExpiryDate = extractExpiry(text)
 	return res, nil
+}
+
+// AssessDocumentImage OCRs an image and returns a genuineness verdict for the
+// claimed document type. Errors when OCR is unavailable so the caller can
+// decide to fail open.
+func AssessDocumentImage(ctx context.Context, imageBytes []byte, claimedType string) (docverify.Verdict, error) {
+	text, err := DetectText(ctx, imageBytes)
+	if err != nil {
+		return docverify.Verdict{}, err
+	}
+	return docverify.Assess(claimedType, text), nil
 }
 
 type dateMatch struct {
