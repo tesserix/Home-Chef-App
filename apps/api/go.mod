@@ -39,6 +39,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0
 	go.temporal.io/sdk v1.46.0
 	go.uber.org/automaxprocs v1.6.0
+	golang.org/x/image v0.43.0
 	golang.org/x/oauth2 v0.36.0
 	gorm.io/driver/sqlite v1.6.0
 )
@@ -146,7 +147,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/arch v0.27.0 // indirect
-	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect

@@ -98,6 +98,33 @@ func TestAssess_IDProof(t *testing.T) {
 	}
 }
 
+func TestICAOCheckDigit(t *testing.T) {
+	// Standard ICAO 9303 example: passport number L898902C3 → check digit 6.
+	if got := icaoCheckDigit("L898902C3"); got != 6 {
+		t.Errorf("icaoCheckDigit(L898902C3) = %d, want 6", got)
+	}
+	// Date 740812 → 2 (documented ICAO example).
+	if got := icaoCheckDigit("740812"); got != 2 {
+		t.Errorf("icaoCheckDigit(740812) = %d, want 2", got)
+	}
+	if got := icaoCheckDigit("bad!"); got != -1 {
+		t.Errorf("invalid char should return -1, got %d", got)
+	}
+}
+
+func TestMRZPassportCheck(t *testing.T) {
+	// Genuine ICAO line 2 — passport L898902C3 + check digit 6.
+	line2 := "L898902C36UTO7408122F1204159ZE184226B<<<<<10"
+	if !mrzPassportCheckOK([]string{line2}) {
+		t.Error("expected valid MRZ line to pass the check digit")
+	}
+	// Corrupt the check digit.
+	bad := "L898902C30UTO7408122F1204159ZE184226B<<<<<10"
+	if mrzPassportCheckOK([]string{bad}) {
+		t.Error("corrupted MRZ check digit must fail")
+	}
+}
+
 func TestAssess_NonVerifiableType(t *testing.T) {
 	if v := Assess("cancelled_cheque", "any text"); v.Status != StatusUnknown {
 		t.Errorf("non-verifiable type should be unknown, got %s", v.Status)

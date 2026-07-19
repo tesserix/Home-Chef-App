@@ -187,13 +187,60 @@ func assessNumber(claimedType, ocrText string, signals map[string]bool) bool {
 	case "fssai_license", "food_safety_cert":
 		return fssaiRe.MatchString(ocrText)
 	case "passport":
-		hasNo := passportNoRe.MatchString(strings.ToUpper(ocrText))
-		hasMRZ := mrzLineRe.MatchString(strings.ToUpper(ocrText))
+		up := strings.ToUpper(ocrText)
+		hasNo := passportNoRe.MatchString(up)
+		mrzLines := mrzLineRe.FindAllString(up, -1)
+		hasMRZ := len(mrzLines) > 0
 		signals["mrz"] = hasMRZ
+		signals["mrzCheckDigit"] = mrzPassportCheckOK(mrzLines)
 		return hasNo || hasMRZ
 	default:
 		return false
 	}
+}
+
+// icaoCheckDigit computes the ICAO 9303 MRZ check digit for a field (weights
+// 7,3,1; digit = value, A-Z = 10..35, filler '<' = 0; sum mod 10). Returns -1
+// on an invalid character.
+func icaoCheckDigit(s string) int {
+	weights := [3]int{7, 3, 1}
+	sum := 0
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		var v int
+		switch {
+		case ch >= '0' && ch <= '9':
+			v = int(ch - '0')
+		case ch >= 'A' && ch <= 'Z':
+			v = int(ch-'A') + 10
+		case ch == '<':
+			v = 0
+		default:
+			return -1
+		}
+		sum += v * weights[i%3]
+	}
+	return sum % 10
+}
+
+// mrzPassportCheckOK returns true if any MRZ line's first 9 characters (the
+// passport number) match the check digit in position 10 — a strong signal the
+// MRZ is a genuine, uncorrupted machine-readable zone.
+func mrzPassportCheckOK(lines []string) bool {
+	for _, ln := range lines {
+		if len(ln) < 10 {
+			continue
+		}
+		field := ln[0:9]
+		check := ln[9]
+		if check < '0' || check > '9' {
+			continue
+		}
+		if cd := icaoCheckDigit(field); cd >= 0 && cd == int(check-'0') {
+			return true
+		}
+	}
+	return false
 }
 
 func otherTypes(ocrText, exclude string) []string {

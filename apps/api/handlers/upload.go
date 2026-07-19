@@ -157,9 +157,11 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
-	// Genuineness gate: for identity/licence images, confirm the upload looks
-	// like a real document of the claimed type before it reaches the admin.
-	if !h.runAuthenticityGate(c, file, sniffed, docType) {
+	// Genuineness + reuse gate: for identity/licence images, confirm the upload
+	// looks like a real document of the claimed type and isn't a document already
+	// submitted by another account. Returns the image's perceptual hash to store.
+	imagePHash, ok := h.runDocChecks(c, file, sniffed, docType, chef.ID)
+	if !ok {
 		return
 	}
 
@@ -202,6 +204,7 @@ func (h *UploadHandler) UploadDocument(c *gin.Context) {
 		FileSize:    header.Size,
 		Status:      models.DocStatusPending,
 		ExpiryDate:  expiryDate,
+		ImagePHash:  imagePHash,
 	}
 
 	if err := database.DB.Create(&doc).Error; err != nil {
@@ -1315,38 +1318,73 @@ func (h *UploadHandler) ReplaceDocument(c *gin.Context) {
 	c.JSON(http.StatusOK, doc.ToResponse())
 }
 
-// runAuthenticityGate OCRs an identity/licence image and, when the doc looks
-// fake for its claimed type, blocks the upload (only when DOC_AUTHENTICITY_ENABLED;
-// otherwise it just logs). Non-image/PDF or non-verifiable types pass through,
-// and any OCR failure fails open so a Vision outage can't block onboarding.
-func (h *UploadHandler) runAuthenticityGate(c *gin.Context, file multipart.File, sniffed string, docType models.DocumentType) bool {
-	if config.AppConfig == nil || !config.AppConfig.DocAuthenticityEnabled {
-		return true // disabled: no OCR cost/latency on the upload path
-	}
+// runDocChecks computes an identity/licence image's perceptual hash, blocks
+// documents already submitted by another account, and — when
+// DOC_AUTHENTICITY_ENABLED — blocks images that don't look like a genuine
+// document of the claimed type. The hash is always computed (cheap, no network)
+// so reuse detection works even with enforcement off; OCR genuineness runs only
+// when enforcing. Any decode/OCR failure fails open. Returns (phashHex, proceed).
+func (h *UploadHandler) runDocChecks(c *gin.Context, file multipart.File, sniffed string, docType models.DocumentType, chefID uuid.UUID) (string, bool) {
 	if !docverify.IsVerifiable(string(docType)) || !services.IsImageContentType(sniffed) {
-		return true
+		return "", true // nothing to check (non-image / PDF / unsupported type)
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return true
+		return "", true
 	}
 	data, err := io.ReadAll(file)
 	if err != nil {
-		return true
+		return "", true
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return true // rewind so the full file still uploads
+		return "", true // rewind so the full file still uploads
 	}
-	verdict, err := services.AssessDocumentImage(c.Request.Context(), data, string(docType))
-	if err != nil {
-		log.Printf("doc-authenticity: assess failed (fail-open) type=%s: %v", docType, err)
-		return true
+
+	enforce := config.AppConfig != nil && config.AppConfig.DocAuthenticityEnabled
+
+	var phash string
+	if hv, err := docverify.DHash(data); err == nil {
+		phash = docverify.HashHex(hv)
+		if owner, found := findReusedDocument(chefID, hv); found {
+			log.Printf("doc-authenticity: %s image reused (matches chef=%s)", docType, owner)
+			if enforce {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "This document image has already been submitted by another account.", "field": "file"})
+				return "", false
+			}
+		}
 	}
-	if verdict.Status == docverify.StatusRejected {
-		log.Printf("doc-authenticity: %s upload rejected: %s", docType, verdict.Reason)
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": verdict.Reason, "field": "file", "authenticity": verdict})
-		return false
+
+	if enforce {
+		verdict, err := services.AssessDocumentImage(c.Request.Context(), data, string(docType))
+		if err != nil {
+			log.Printf("doc-authenticity: assess failed (fail-open) type=%s: %v", docType, err)
+		} else if verdict.Status == docverify.StatusRejected {
+			log.Printf("doc-authenticity: %s upload rejected: %s", docType, verdict.Reason)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": verdict.Reason, "field": "file", "authenticity": verdict})
+			return "", false
+		}
 	}
-	return true
+	return phash, true
+}
+
+// findReusedDocument reports whether another chef already uploaded a
+// perceptually-identical document image (Hamming distance within threshold).
+func findReusedDocument(chefID uuid.UUID, hash uint64) (uuid.UUID, bool) {
+	var rows []struct {
+		ChefID     uuid.UUID
+		ImagePHash string
+	}
+	if err := database.DB.Model(&models.ChefDocument{}).
+		Select("chef_id", "image_phash").
+		Where("image_phash <> '' AND chef_id <> ?", chefID).
+		Find(&rows).Error; err != nil {
+		return uuid.Nil, false
+	}
+	for _, r := range rows {
+		if v, ok := docverify.ParseHashHex(r.ImagePHash); ok && docverify.Hamming(hash, v) <= docverify.ReuseThreshold {
+			return r.ChefID, true
+		}
+	}
+	return uuid.Nil, false
 }
 
 // VerifyDocumentAuthenticity OCRs an image and returns a genuineness verdict for

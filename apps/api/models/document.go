@@ -46,8 +46,12 @@ type ChefDocument struct {
 	// Composite index idx_chef_doc_fssai (type, status, chef_id, expiry_date)
 	// backs the FSSAI lockout hot path (ExcludeFSSAILocked / IsChefFSSAIExpired).
 	ExpiryDate *time.Time `gorm:"index:idx_chef_doc_fssai,priority:4" json:"expiryDate,omitempty"`
-	CreatedAt  time.Time  `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt  time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+	// ImagePHash is the perceptual (difference) hash of an uploaded document
+	// image, hex-encoded — used to detect the same document reused across
+	// accounts. Empty for PDFs and pre-existing rows.
+	ImagePHash string    `gorm:"type:varchar(16);index" json:"-"`
+	CreatedAt  time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Chef ChefProfile `gorm:"foreignKey:ChefID" json:"-"`
 }
