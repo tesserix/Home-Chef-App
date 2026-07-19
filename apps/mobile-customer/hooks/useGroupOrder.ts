@@ -50,6 +50,8 @@ export interface GroupOrder {
   deliveryFee: number;
   serviceFee: number;
   tax: number;
+  taxRate?: number;
+  taxName?: string;
   total: number;
   participants: GroupParticipant[];
   items: GroupItem[];

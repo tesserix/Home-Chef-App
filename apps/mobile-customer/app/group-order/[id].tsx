@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Plus, Share2, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Minus, Plus, Share2, Users } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import {
   useAddGroupItem,
@@ -22,6 +22,7 @@ import {
   useLockGroup,
   usePayGroupShare,
   useRemoveGroupItem,
+  type GroupItem,
   type GroupOrder,
   type GroupParticipant,
 } from '../../hooks/useGroupOrder';
@@ -144,6 +145,10 @@ export default function GroupOrderHubScreen() {
   const items = g.items ?? [];
   const participants = g.participants ?? [];
   const itemsByParticipant = (pid: string) => items.filter((it) => it.participantId === pid);
+  // Running totals for the summary — item subtotals are known the moment items are
+  // added (fees + tax are computed server-side at lock).
+  const itemsSubtotal = items.reduce((sum, it) => sum + it.subtotal, 0);
+  const totalUnits = items.reduce((sum, it) => sum + it.quantity, 0);
   const open = g.status === 'open';
   const locked = g.status === 'locked';
   const placed = ['placed', 'confirmed', 'delivered'].includes(g.status);
@@ -208,58 +213,100 @@ export default function GroupOrderHubScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
+          {/* Group context — people + item counts at a glance */}
+          <View style={styles.countRow}>
+            <View style={styles.countChip}>
+              <Users size={13} color={customerColors.charcoal.soft} />
+              <Text style={styles.countChipText}>
+                {participants.length} {participants.length === 1 ? 'person' : 'people'}
+              </Text>
+            </View>
+            <View style={styles.countChip}>
+              <Text style={styles.countChipText}>
+                {totalUnits} {totalUnits === 1 ? 'item' : 'items'}
+              </Text>
+            </View>
+          </View>
+
           {/* Shared cart — everyone's items grouped by participant */}
           <Text style={styles.sectionLabel}>Shared cart</Text>
-          {participants.map((p) => (
-            <ParticipantBlock
-              key={p.id}
-              participant={p}
-              items={itemsByParticipant(p.id)}
-              isMe={p.id === me.id}
-              canEdit={open}
-              currency={g.currency}
-              onRemove={(itemId) => removeItem.mutate(itemId)}
-              showShare={locked}
-            />
-          ))}
+          {items.length === 0 ? (
+            <View style={styles.emptyCart}>
+              <Text style={styles.emptyCartTitle}>No items yet</Text>
+              <Text style={styles.emptyCartBody}>
+                {isHost
+                  ? 'Add dishes below, or share the invite so your group can add theirs.'
+                  : 'Add your items from the menu below.'}
+              </Text>
+            </View>
+          ) : (
+            participants
+              .filter((p) => p.id === me.id || itemsByParticipant(p.id).length > 0)
+              .map((p) => (
+                <ParticipantBlock
+                  key={p.id}
+                  participant={p}
+                  items={itemsByParticipant(p.id)}
+                  isMe={p.id === me.id}
+                  canEdit={open}
+                  onRemove={(itemId) => removeItem.mutate(itemId)}
+                  onAdd={(menuItemId, notes) => addItem.mutate({ menuItemId, quantity: 1, notes })}
+                  showShare={locked}
+                />
+              ))
+          )}
+
+          {/* Order summary — subtotal now, full fee/tax breakdown once locked */}
+          {items.length > 0 ? (
+            <OrderSummary g={g} itemsSubtotal={itemsSubtotal} locked={locked} myShare={me.shareAmount} />
+          ) : null}
 
           {/* Add from the chef's menu (open only) */}
           {open ? (
             <>
-              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Add your items</Text>
-              <FlatList
-                scrollEnabled={false}
-                data={menuItems}
-                keyExtractor={(m) => m.id}
-                renderItem={({ item }) => (
-                  <View style={styles.menuRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.menuName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.menuPrice}>
-                        ₹{item.price.toFixed(0)}
-                        {item.soldOut
-                          ? ' · Sold out'
-                          : item.remainingToday != null && item.remainingToday > 0
-                            ? ` · ${item.remainingToday} left`
-                            : ''}
-                      </Text>
-                    </View>
-                    {item.soldOut ? (
-                      <View style={[styles.addBtn, styles.addBtnDisabled]}>
-                        <Plus size={18} color="#fff" strokeWidth={2.5} />
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Add items</Text>
+              <View style={styles.menuCard}>
+                <FlatList
+                  scrollEnabled={false}
+                  data={menuItems}
+                  keyExtractor={(m) => m.id}
+                  ItemSeparatorComponent={() => <View style={styles.menuSep} />}
+                  renderItem={({ item }) => {
+                    const inCart = items
+                      .filter((it) => it.participantId === me.id && it.menuItemId === item.id)
+                      .reduce((s, it) => s + it.quantity, 0);
+                    return (
+                      <View style={styles.menuRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.menuName} numberOfLines={1}>{item.name}</Text>
+                          <Text style={styles.menuPrice}>
+                            ₹{item.price.toFixed(0)}
+                            {item.soldOut
+                              ? ' · Sold out'
+                              : item.remainingToday != null && item.remainingToday > 0
+                                ? ` · ${item.remainingToday} left`
+                                : ''}
+                          </Text>
+                        </View>
+                        {inCart > 0 ? <Text style={styles.inCartBadge}>{inCart} in cart</Text> : null}
+                        {item.soldOut ? (
+                          <View style={[styles.addBtn, styles.addBtnDisabled]}>
+                            <Plus size={18} color="#fff" strokeWidth={2.5} />
+                          </View>
+                        ) : (
+                          <Pressable
+                            onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
+                            style={styles.addBtn}
+                            accessibilityLabel={`Add ${item.name}`}
+                          >
+                            <Plus size={18} color="#fff" strokeWidth={2.5} />
+                          </Pressable>
+                        )}
                       </View>
-                    ) : (
-                      <Pressable
-                        onPress={() => addItem.mutate({ menuItemId: item.id, quantity: 1 })}
-                        style={styles.addBtn}
-                        accessibilityLabel={`Add ${item.name}`}
-                      >
-                        <Plus size={18} color="#fff" strokeWidth={2.5} />
-                      </Pressable>
-                    )}
-                  </View>
-                )}
-              />
+                    );
+                  }}
+                />
+              </View>
             </>
           ) : null}
         </ScrollView>
@@ -282,7 +329,9 @@ export default function GroupOrderHubScreen() {
           ) : null}
           {open && isHost ? (
             <Pressable onPress={lock} disabled={lockGroup.isPending || items.length === 0} style={[styles.cta, items.length === 0 && styles.ctaDisabled]}>
-              <Text style={styles.ctaText}>{items.length === 0 ? 'Add items to continue' : 'Lock & collect payment'}</Text>
+              <Text style={styles.ctaText}>
+                {items.length === 0 ? 'Add items to continue' : `Lock & collect · ₹${itemsSubtotal.toFixed(0)}`}
+              </Text>
             </Pressable>
           ) : null}
           {open && !isHost ? (
@@ -309,53 +358,192 @@ export default function GroupOrderHubScreen() {
   );
 }
 
+// ConsolidatedItem folds the separate per-add GroupItem rows for the same dish
+// (same menu item + note) into one line with a total quantity, so a cart with
+// four "Test Menu" adds reads as "Test Menu ×4" instead of four delete rows.
+interface ConsolidatedItem {
+  key: string;
+  menuItemId: string;
+  name: string;
+  quantity: number;
+  subtotal: number;
+  notes?: string;
+  itemIds: string[];
+}
+
+function consolidateItems(items: GroupItem[]): ConsolidatedItem[] {
+  const byKey = new Map<string, ConsolidatedItem>();
+  for (const it of items) {
+    const key = `${it.menuItemId}|${it.notes ?? ''}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.quantity += it.quantity;
+      existing.subtotal += it.subtotal;
+      existing.itemIds.push(it.id);
+    } else {
+      byKey.set(key, {
+        key,
+        menuItemId: it.menuItemId,
+        name: it.name,
+        quantity: it.quantity,
+        subtotal: it.subtotal,
+        notes: it.notes,
+        itemIds: [it.id],
+      });
+    }
+  }
+  return [...byKey.values()];
+}
+
+function initial(name?: string): string {
+  const n = (name ?? '').trim();
+  return n ? n[0]!.toUpperCase() : 'G';
+}
+
 function ParticipantBlock({
   participant,
   items,
   isMe,
   canEdit,
-  currency,
   onRemove,
+  onAdd,
   showShare,
 }: {
   participant: GroupParticipant;
-  items: GroupOrder['items'];
+  items: GroupItem[];
   isMe: boolean;
   canEdit: boolean;
-  currency: string;
   onRemove: (itemId: string) => void;
+  onAdd: (menuItemId: string, notes?: string) => void;
   showShare: boolean;
 }) {
+  const lines = consolidateItems(items);
+  const subtotal = items.reduce((s, it) => s + it.subtotal, 0);
+  const paid = participant.paymentStatus === 'completed';
   return (
     <View style={styles.pBlock}>
       <View style={styles.pHeader}>
-        <Text style={styles.pName}>
-          {participant.displayName ?? 'Guest'}
-          {isMe ? ' (you)' : ''}
-          {participant.role === 'host' ? ' · host' : ''}
-        </Text>
-        {showShare ? (
-          <Text style={[styles.pShare, participant.paymentStatus === 'completed' && styles.pPaid]}>
-            {participant.paymentStatus === 'completed' ? '✓ paid' : `₹${participant.shareAmount.toFixed(0)}`}
+        <View style={[styles.pAvatar, isMe && styles.pAvatarMe]}>
+          <Text style={[styles.pAvatarText, isMe && styles.pAvatarTextMe]}>{initial(participant.displayName)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pName} numberOfLines={1}>
+            {participant.displayName ?? 'Guest'}
+            {isMe ? ' (you)' : ''}
+            {participant.role === 'host' ? ' · host' : ''}
           </Text>
-        ) : null}
+          {showShare ? (
+            <Text style={[styles.pShareLine, paid && styles.pPaid]}>
+              {paid ? '✓ Paid' : `Share · ₹${participant.shareAmount.toFixed(0)}`}
+            </Text>
+          ) : null}
+        </View>
+        <Text style={styles.pSubtotal}>₹{subtotal.toFixed(0)}</Text>
       </View>
-      {items.length === 0 ? (
+      {lines.length === 0 ? (
         <Text style={styles.pEmpty}>No items yet</Text>
       ) : (
-        items.map((it) => (
-          <View key={it.id} style={styles.itemRow}>
-            <Text style={styles.itemName} numberOfLines={1}>
-              {it.quantity}× {it.name}
-            </Text>
-            <Text style={styles.itemPrice}>₹{it.subtotal.toFixed(0)}</Text>
+        lines.map((ci) => (
+          <View key={ci.key} style={styles.itemRow}>
+            <Text style={styles.itemName} numberOfLines={1}>{ci.name}</Text>
             {isMe && canEdit ? (
-              <Pressable onPress={() => onRemove(it.id)} hitSlop={8} accessibilityLabel="Remove item">
-                <Trash2 size={16} color={customerColors.destructive.DEFAULT} />
-              </Pressable>
-            ) : null}
+              <View style={styles.stepper}>
+                <Pressable
+                  onPress={() => onRemove(ci.itemIds[ci.itemIds.length - 1]!)}
+                  hitSlop={6}
+                  style={styles.stepperBtn}
+                  accessibilityLabel={`Remove one ${ci.name}`}
+                >
+                  <Minus size={15} color={customerColors.charcoal.DEFAULT} strokeWidth={2.5} />
+                </Pressable>
+                <Text style={styles.stepperQty}>{ci.quantity}</Text>
+                <Pressable
+                  onPress={() => onAdd(ci.menuItemId, ci.notes)}
+                  hitSlop={6}
+                  style={styles.stepperBtn}
+                  accessibilityLabel={`Add one ${ci.name}`}
+                >
+                  <Plus size={15} color={customerColors.charcoal.DEFAULT} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={styles.itemQty}>×{ci.quantity}</Text>
+            )}
+            <Text style={styles.itemPrice}>₹{ci.subtotal.toFixed(0)}</Text>
           </View>
         ))
+      )}
+    </View>
+  );
+}
+
+// OrderSummary shows the running item subtotal while the group is open (fees + tax
+// are only computed server-side at lock), and the full compliant breakdown —
+// subtotal, delivery, platform fee, GST, total — once locked.
+function OrderSummary({
+  g,
+  itemsSubtotal,
+  locked,
+  myShare,
+}: {
+  g: GroupOrder;
+  itemsSubtotal: number;
+  locked: boolean;
+  myShare: number;
+}) {
+  const money = (n: number) => `₹${n.toFixed(0)}`;
+  const gstLabel = g.taxName || 'GST';
+  return (
+    <View style={styles.summaryCard}>
+      {!locked ? (
+        <>
+          <View style={styles.sumRow}>
+            <Text style={styles.sumLabel}>Items subtotal</Text>
+            <Text style={styles.sumValue}>{money(itemsSubtotal)}</Text>
+          </View>
+          <Text style={styles.sumNote}>
+            Delivery, platform fee &amp; {gstLabel} are calculated when you lock the order.
+          </Text>
+        </>
+      ) : (
+        <>
+          <View style={styles.sumRow}>
+            <Text style={styles.sumLabel}>Subtotal</Text>
+            <Text style={styles.sumValue}>{money(g.subtotal)}</Text>
+          </View>
+          {g.deliveryFee > 0 ? (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Delivery</Text>
+              <Text style={styles.sumValue}>{money(g.deliveryFee)}</Text>
+            </View>
+          ) : null}
+          {g.serviceFee > 0 ? (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Platform fee</Text>
+              <Text style={styles.sumValue}>{money(g.serviceFee)}</Text>
+            </View>
+          ) : null}
+          {g.tax > 0 ? (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>
+                {gstLabel}
+                {g.taxRate ? ` (${g.taxRate}%)` : ''}
+              </Text>
+              <Text style={styles.sumValue}>{money(g.tax)}</Text>
+            </View>
+          ) : null}
+          <View style={styles.sumDivider} />
+          <View style={styles.sumRow}>
+            <Text style={styles.sumTotalLabel}>Total</Text>
+            <Text style={styles.sumTotalValue}>{money(g.total)}</Text>
+          </View>
+          {myShare > 0 ? (
+            <View style={styles.sumShareRow}>
+              <Text style={styles.sumShareLabel}>Your share</Text>
+              <Text style={styles.sumShareValue}>{money(myShare)}</Text>
+            </View>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -383,6 +571,17 @@ const styles = StyleSheet.create({
   chefName: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT },
   statusText: { fontFamily: 'Inter', fontSize: 13, color: customerColors.coral.DEFAULT },
   scroll: { padding: 16, paddingBottom: 24 },
+  countRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  countChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: customerColors.surface.soft,
+  },
+  countChipText: { fontFamily: 'Inter-Medium', fontSize: 12.5, color: customerColors.charcoal.soft },
   sectionLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 13,
@@ -391,29 +590,98 @@ const styles = StyleSheet.create({
     color: customerColors.charcoal.soft,
     marginBottom: 10,
   },
+  emptyCart: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    borderRadius: 12,
+    padding: 20,
+    gap: 4,
+    alignItems: 'center',
+  },
+  emptyCartTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  emptyCartBody: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, textAlign: 'center', lineHeight: 18 },
   pBlock: {
-    backgroundColor: customerColors.surface.soft,
+    backgroundColor: customerColors.canvas,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
   },
-  pHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  pHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  pAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: customerColors.surface.soft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pAvatarMe: { backgroundColor: customerColors.coral.tint },
+  pAvatarText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: customerColors.charcoal.soft },
+  pAvatarTextMe: { color: customerColors.coral.DEFAULT },
   pName: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  pShare: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  pPaid: { color: customerColors.success.DEFAULT },
+  pShareLine: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, marginTop: 1 },
+  pSubtotal: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
+  pPaid: { color: customerColors.success.DEFAULT, fontFamily: 'Inter-SemiBold' },
   pEmpty: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   itemName: { flex: 1, fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.DEFAULT },
-  itemPrice: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT },
+  itemQty: { fontFamily: 'Inter-Medium', fontSize: 13, color: customerColors.charcoal.soft, fontVariant: ['tabular-nums'] },
+  itemPrice: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT, minWidth: 52, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    borderRadius: 999,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  stepperBtn: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  stepperQty: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.charcoal.DEFAULT, minWidth: 14, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  summaryCard: {
+    marginTop: 16,
+    backgroundColor: customerColors.surface.soft,
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sumLabel: { fontFamily: 'Inter', fontSize: 14, color: customerColors.charcoal.soft },
+  sumValue: { fontFamily: 'Inter-Medium', fontSize: 14, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
+  sumNote: { fontFamily: 'Inter', fontSize: 12, color: customerColors.charcoal.soft, lineHeight: 16 },
+  sumDivider: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline, marginVertical: 2 },
+  sumTotalLabel: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.charcoal.DEFAULT },
+  sumTotalValue: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.charcoal.DEFAULT, fontVariant: ['tabular-nums'] },
+  sumShareRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: customerColors.hairline,
+  },
+  sumShareLabel: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: customerColors.coral.DEFAULT },
+  sumShareValue: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: customerColors.coral.DEFAULT, fontVariant: ['tabular-nums'] },
+  menuCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  menuSep: { height: StyleSheet.hairlineWidth, backgroundColor: customerColors.hairline },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: customerColors.hairline,
+    gap: 10,
+    paddingVertical: 12,
   },
+  inCartBadge: { fontFamily: 'Inter-Medium', fontSize: 12, color: customerColors.coral.DEFAULT },
   menuName: { fontFamily: 'Inter-Medium', fontSize: 15, color: customerColors.charcoal.DEFAULT },
-  menuPrice: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2 },
+  menuPrice: { fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginTop: 2, fontVariant: ['tabular-nums'] },
   addBtn: {
     width: 32,
     height: 32,
