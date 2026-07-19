@@ -384,7 +384,7 @@ func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
 		return fmt.Errorf("order_cancelled: %w", err)
 	}
 
-	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "status": string(models.OrderStatusCancelled)})
 	for _, userID := range []uuid.UUID{event.CustomerID, chefUser} {
 		if err := s.saveNotification(&models.Notification{
 			UserID:  userID,
@@ -541,7 +541,7 @@ func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
 		log.Printf("meal fulfillment delivered transition failed for order %s: %v", event.OrderID, err)
 	}
 
-	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String()})
+	data, _ := json.Marshal(map[string]any{"order_id": event.OrderID.String(), "status": string(models.OrderStatusDelivered)})
 	if err := s.saveNotification(&models.Notification{
 		UserID:  event.CustomerID,
 		Type:    "order_delivered",
