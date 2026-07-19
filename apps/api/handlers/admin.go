@@ -682,6 +682,11 @@ func (h *AdminHandler) VerifyChef(c *gin.Context) {
 		"is_verified": true,
 		"verified_at": &now,
 		"is_active":   true,
+		// Kitchen starts CLOSED on approval: the chef finishes setup (menu, photos,
+		// hours) then opens it themselves, or lets their schedule auto-open it.
+		// Going live open the instant an admin approves risks orders before the
+		// kitchen is actually ready.
+		"accepting_orders": false,
 	})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
