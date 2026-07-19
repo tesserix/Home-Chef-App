@@ -750,6 +750,88 @@ func (h *AdminHandler) SuspendChef(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Chef suspended"})
 }
 
+// GetChefDocuments returns a chef's compliance documents (viewable/downloadable
+// URLs, signed for private docs) plus the kitchen photos/video, for admin review.
+// GET /admin/chefs/:id/documents
+func (h *AdminHandler) GetChefDocuments(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef ID"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.First(&chef, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+
+	var docs []models.ChefDocument
+	database.DB.Where("chef_id = ?", id).Order("created_at DESC").Find(&docs)
+	out := make([]models.ChefDocumentResponse, len(docs))
+	for i, doc := range docs {
+		resp := doc.ToResponse()
+		if models.IsPrivateDoc(doc.Type) {
+			if url, err := services.GenerateSignedURL(c.Request.Context(), doc.FilePath, 15*time.Minute); err == nil {
+				resp.FileURL = url
+			}
+		} else {
+			resp.FileURL = doc.FilePath
+		}
+		out[i] = resp
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"documents":     out,
+		"kitchenPhotos": []string(chef.KitchenPhotos),
+	})
+}
+
+// VerifyChefDocument marks a single document verified or rejected. The vendor
+// sees the new status on their next /chef/documents fetch and gets a push.
+// PUT /admin/documents/:docId/verify  body: {verified: bool, reason?: string}
+func (h *AdminHandler) VerifyChefDocument(c *gin.Context) {
+	docID, err := uuid.Parse(c.Param("docId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid document ID"})
+		return
+	}
+	var req struct {
+		Verified bool   `json:"verified"`
+		Reason   string `json:"reason"`
+	}
+	c.ShouldBindJSON(&req)
+
+	var doc models.ChefDocument
+	if err := database.DB.First(&doc, "id = ?", docID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	status := models.DocStatusVerified
+	reason := ""
+	if !req.Verified {
+		status = models.DocStatusRejected
+		reason = req.Reason
+	}
+	database.DB.Model(&models.ChefDocument{}).Where("id = ?", docID).
+		Updates(map[string]interface{}{"status": status, "rejection_reason": reason})
+
+	var chef models.ChefProfile
+	if database.DB.Select("user_id").First(&chef, "id = ?", doc.ChefID).Error == nil {
+		title := "Document verified"
+		body := fmt.Sprintf("Your %s was verified.", strings.ReplaceAll(string(doc.Type), "_", " "))
+		if !req.Verified {
+			title = "Document needs attention"
+			body = fmt.Sprintf("Your %s was rejected. Please re-upload.", strings.ReplaceAll(string(doc.Type), "_", " "))
+		}
+		_ = services.SendPushNotification(chef.UserID, title, body,
+			map[string]string{"type": "document_reviewed", "docId": docID.String(), "status": string(status)})
+	}
+
+	services.LogAudit(c, "chef.document.review", "chef_document", docID.String(), nil, map[string]any{"status": status})
+	c.JSON(http.StatusOK, gin.H{"message": "Document " + string(status), "status": status})
+}
+
 // GetAllOrders returns paginated orders for admin
 func (h *AdminHandler) GetAllOrders(c *gin.Context) {
 	db := database.DB

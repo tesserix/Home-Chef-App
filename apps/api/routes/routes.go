@@ -917,6 +917,8 @@ func SetupRouter() *gin.Engine {
 			admin.PUT("/chefs/:id/verify", adminHandler.VerifyChef)
 			admin.PUT("/chefs/:id/reject", adminHandler.RejectChef)
 			admin.PUT("/chefs/:id/suspend", adminHandler.SuspendChef)
+			admin.GET("/chefs/:id/documents", adminHandler.GetChefDocuments)
+			admin.PUT("/documents/:docId/verify", adminHandler.VerifyChefDocument)
 
 			// Order management
 			admin.GET("/orders", adminHandler.GetAllOrders)
