@@ -201,7 +201,10 @@ export function useOrder(id: string, opts: { pollUntilPaid?: boolean } = {}) {
       const active = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering'].includes(
         o.status,
       );
-      return active ? 15000 : false;
+      // Fallback cadence: the notification WebSocket (useOrderStatusWS) flips the
+      // status within ~1s; this poll only covers a dropped socket, so 5s is a
+      // safe floor without being real-time-dependent.
+      return active ? 5000 : false;
     },
   });
 }

@@ -27,6 +27,7 @@ import { CookingIndicator } from '../../../components/status/CookingIndicator';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
+import { useOrderStatusWS } from '../../../hooks/useOrderStatusWS';
 import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
 import type { Order } from '../../../types/customer';
 
@@ -188,6 +189,11 @@ export default function OrderDetailScreen() {
     isFocused,
   );
   const { data: trackingData } = useOrderTracking(orderId, isFocused);
+
+  // Real-time status: flips pending→accepted→preparing→ready→… the instant the
+  // chef acts, via the notification WebSocket (poll is only the fallback).
+  const activeStatuses = ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivering'];
+  useOrderStatusWS(orderId, isFocused && !!data && activeStatuses.includes(data.data.status));
 
   if (isLoading) {
     return (
