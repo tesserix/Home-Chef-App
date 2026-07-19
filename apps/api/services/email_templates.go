@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"html"
+	"strings"
 )
 
 // esc HTML-escapes user-controlled free text before it is interpolated into an
@@ -94,6 +95,27 @@ func WelcomeEmailHTML(firstName string) (subject, html string) {
           <p class="muted">If you didn't create this account, please ignore this email.</p>
 `, esc(firstName))
 	html = emailBase(subject, "Welcome to Fe3dr — discover home-cooked meals near you", body)
+	return
+}
+
+// EmailOTPHTML returns the 6-digit email verification code email.
+func EmailOTPHTML(firstName, code string) (subject, html string) {
+	subject = "Your Fe3dr verification code"
+	greeting := "there"
+	if strings.TrimSpace(firstName) != "" {
+		greeting = esc(firstName)
+	}
+	body := fmt.Sprintf(`
+          <h2>Verify your email, %s</h2>
+          <p>Use this 6-digit code to verify your email and continue setting up your account.</p>
+          <div style="text-align:center;margin:8px 0 24px 0;">
+            <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#111827;background:#FFF7ED;border:1px solid #FDBA74;border-radius:8px;padding:16px 28px;">%s</span>
+          </div>
+          <div class="info-box">
+            <p>This code expires in 10 minutes. If you didn't request it, you can safely ignore this email.</p>
+          </div>
+`, greeting, esc(code))
+	html = emailBase(subject, "Your Fe3dr email verification code", body)
 	return
 }
 

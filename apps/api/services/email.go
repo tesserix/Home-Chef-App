@@ -236,6 +236,12 @@ func (s *EmailService) SendEmailVerification(to, firstName, verifyURL string) er
 	return s.send(to, subject, html)
 }
 
+// SendEmailOTP sends a 6-digit email verification code.
+func (s *EmailService) SendEmailOTP(to, firstName, code string) error {
+	subject, html := EmailOTPHTML(firstName, code)
+	return s.send(to, subject, html)
+}
+
 // SendAccountReminderEmail tells an existing user that someone (possibly
 // them) tried to register with their email. The message is intentionally
 // neutral so the recipient learns about it without confirming to a

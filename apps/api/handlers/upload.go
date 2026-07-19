@@ -571,6 +571,29 @@ func normalizeKitchenType(kt string) (string, bool) {
 
 const notHomeKitchenMsg = "Fe3dr is for individual home chefs only — cloud kitchens, shared or commercial kitchens cannot be onboarded."
 
+// ensureEmailVerified requires a valid, OTP-verified contact email before
+// onboarding can proceed. When allowUnchanged is true (resubmits) an email that
+// already matches the account's stored email passes without re-verification.
+func (h *UploadHandler) ensureEmailVerified(c *gin.Context, userID uuid.UUID, email string, allowUnchanged bool) bool {
+	email = services.NormalizeEmail(email)
+	if !services.IsValidEmailFormat(email) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid email address", "field": "email"})
+		return false
+	}
+	if allowUnchanged {
+		var user models.User
+		if err := database.DB.Where("id = ?", userID).First(&user).Error; err == nil &&
+			services.NormalizeEmail(user.Email) == email {
+			return true
+		}
+	}
+	if !services.IsEmailOTPVerified(c.Request.Context(), userID.String(), email) {
+		c.JSON(http.StatusPreconditionRequired, gin.H{"error": "Please verify your email with the 6-digit code we sent before continuing.", "field": "email"})
+		return false
+	}
+	return true
+}
+
 func (h *UploadHandler) Onboarding(c *gin.Context) {
 	userID, _ := middleware.GetUserID(c)
 	log.Printf("[onboarding] POST /chef/onboarding user=%s", userID)
@@ -639,6 +662,10 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "This phone number is already registered with another account.", "field": "phone"})
 			return
 		}
+	}
+
+	if !h.ensureEmailVerified(c, userID, req.Email, false) {
+		return
 	}
 
 	chef := models.ChefProfile{
@@ -787,6 +814,10 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 			c.JSON(http.StatusConflict, gin.H{"error": "This phone number is already registered with another account.", "field": "phone"})
 			return
 		}
+	}
+
+	if req.Email != "" && !h.ensureEmailVerified(c, chef.UserID, req.Email, true) {
+		return
 	}
 
 	chef.BusinessName = req.BusinessName

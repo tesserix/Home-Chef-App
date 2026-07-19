@@ -159,6 +159,7 @@ func SetupRouter() *gin.Engine {
 	orderHandler := handlers.NewOrderHandler()
 	healthHandler := handlers.NewHealthHandler()
 	uploadHandler := handlers.NewUploadHandler()
+	emailOTPHandler := handlers.NewEmailOTPHandler()
 	menuHandler := handlers.NewMenuHandler()
 	locationHandler := handlers.NewLocationHandler()
 	reviewHandler := handlers.NewReviewHandler()
@@ -413,6 +414,15 @@ func SetupRouter() *gin.Engine {
 		search.Use(bffAuthOptional(bffKey, bffWindow))
 		{
 			search.GET("/dishes", chefHandler.SearchDishes)
+		}
+
+		// Email verification via 6-digit OTP. Authenticated (any pool) so every
+		// onboarding flow can require a valid, verified email before continuing.
+		account := v1.Group("/account")
+		account.Use(bffAuth(bffKey, bffWindow), middleware.RateLimitByUser(1, 3))
+		{
+			account.POST("/email/otp/request", emailOTPHandler.RequestOTP)
+			account.POST("/email/otp/verify", emailOTPHandler.VerifyOTP)
 		}
 
 		// Chef onboarding (authenticated, but no chef role required — user is
