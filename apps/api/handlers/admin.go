@@ -593,19 +593,22 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 	// Enrich with stats
 	type ChefWithStats struct {
 		models.ChefProfile
-		OwnerName     string  `json:"ownerName"`
-		OwnerEmail    string  `json:"ownerEmail"`
-		OwnerPhone    string  `json:"ownerPhone"`
-		TotalOrders   int     `json:"totalOrders"`
-		TotalRevenue  float64 `json:"totalRevenue"`
-		MenuItemCount int     `json:"menuItemCount"`
-		DocumentCount int     `json:"documentCount"`
-		OnlineStatus  string  `json:"onlineStatus"`
+		// Admin UI reads `isVerified`; the embedded model only marshals `verified`.
+		IsVerifiedAlias bool    `json:"isVerified"`
+		OwnerName       string  `json:"ownerName"`
+		OwnerEmail      string  `json:"ownerEmail"`
+		OwnerPhone      string  `json:"ownerPhone"`
+		TotalOrders     int     `json:"totalOrders"`
+		TotalRevenue    float64 `json:"totalRevenue"`
+		MenuItemCount   int     `json:"menuItemCount"`
+		DocumentCount   int     `json:"documentCount"`
+		OnlineStatus    string  `json:"onlineStatus"`
 	}
 
 	var response []ChefWithStats
 	for _, ch := range chefs {
 		cws := ChefWithStats{ChefProfile: ch}
+		cws.IsVerifiedAlias = ch.IsVerified
 		cws.OwnerName = ch.User.FirstName + " " + ch.User.LastName
 		cws.OwnerEmail = ch.User.Email
 		cws.OwnerPhone = ch.User.Phone
