@@ -793,8 +793,6 @@ export default function DashboardScreen() {
                   order={order}
                   disabled={orderActionLoading}
                   onOpenDetail={() => router.push(`/orders/${order.id}`)}
-                  onAccept={() => triggerAction(order.id, 'accepted')}
-                  onReject={() => triggerAction(order.id, 'rejected')}
                 />
               ))}
               {pendingOrders.length > 3 && (

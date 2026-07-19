@@ -3,10 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
-  useAnimatedStyle,
   useReducedMotion,
-  useSharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import { theme } from "@homechef/mobile-shared/theme";
 import type { Order } from "../../hooks/useVendorOrders";
@@ -38,11 +35,10 @@ interface PendingOrderCardProps {
   /** When true (Orders tab), surface `specialInstructions` as a
    *  persimmon-tint callout. When false (dashboard), keep terse. */
   showInstructions?: boolean;
-  /** When provided, the customer/total header becomes tappable and opens
-   *  the detail screen. Accept/Reject still work as before. */
-  onOpenDetail?: () => void;
-  onAccept: () => void;
-  onReject: () => void;
+  /** Tapping the card opens the detail screen, where the chef reviews the
+   *  pickup time + pricing before accepting or rejecting. Accept/Reject are
+   *  deliberately NOT on this card — the chef must open the order first. */
+  onOpenDetail: () => void;
 }
 
 /**
@@ -62,8 +58,6 @@ export function PendingOrderCard({
   disabled,
   showInstructions = false,
   onOpenDetail,
-  onAccept,
-  onReject,
 }: PendingOrderCardProps) {
   // Live clock — ticks every 45 s so the age label and urgency colour
   // update without hammering the JS thread. Clears on unmount (T-grk-02).
@@ -73,23 +67,7 @@ export function PendingOrderCard({
     return () => clearInterval(id);
   }, []);
 
-  // Press feedback — 0.97 scale on the Accept bar (150 ms state-change
-  // timing, no bounce). Skipped entirely under reduced motion.
   const reduceMotion = useReducedMotion();
-  const acceptScale = useSharedValue(1);
-  const acceptPressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: acceptScale.value }],
-  }));
-  function onAcceptPressIn(): void {
-    if (!reduceMotion) {
-      acceptScale.value = withTiming(0.97, { duration: 150 });
-    }
-  }
-  function onAcceptPressOut(): void {
-    if (!reduceMotion) {
-      acceptScale.value = withTiming(1, { duration: 150 });
-    }
-  }
 
   const ageMins = Math.max(
     0,
@@ -152,85 +130,41 @@ export function PendingOrderCard({
 
   return (
     <Animated.View
-      style={styles.root}
       entering={
         reduceMotion
           ? undefined
           : FadeInDown.duration(250).easing(ENTRANCE_EASING)
       }
     >
-      {onOpenDetail ? (
-        <Pressable
-          onPress={onOpenDetail}
-          accessibilityRole="button"
-          accessibilityLabel={`Open order details for ${order.customerName}`}
-        >
-          {({ pressed }) => (
-            // Inner-View pattern — iOS strips flex on Pressable function-style
-            // sometimes. The topRow already has its own flexDirection so we
-            // wrap it in a minimal opacity layer instead of restyling.
-            <View style={pressed ? { opacity: 0.85 } : undefined}>
-              {topRowContent}
+      {/* The whole card is the tap target — it opens the detail screen where
+          the chef reviews pickup time + pricing and then accepts/rejects.
+          No inline accept/reject here by design (they can't decide blind). */}
+      <Pressable
+        onPress={onOpenDetail}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={`Review order from ${order.customerName}, ₹${order.total.toFixed(0)}`}
+        accessibilityHint="Opens the order to review and respond"
+      >
+        {({ pressed }) => (
+          <View style={[styles.root, pressed && { opacity: 0.9 }]}>
+            {topRowContent}
+
+            {showInstructions && order.specialInstructions ? (
+              <View style={styles.instructionsPill}>
+                <Text style={styles.instructionsText} numberOfLines={2}>
+                  {order.specialInstructions}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.ctaRow}>
+              <Text style={styles.ctaLabel}>Review & respond</Text>
+              <Text style={styles.ctaChevron}>›</Text>
             </View>
-          )}
-        </Pressable>
-      ) : (
-        topRowContent
-      )}
-
-      {showInstructions && order.specialInstructions ? (
-        <View style={styles.instructionsPill}>
-          <Text style={styles.instructionsText} numberOfLines={2}>
-            {order.specialInstructions}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.buttonRow}>
-        {/* Ghost button. Visual styles (bg, border) live on the inner
-            View — same iOS Pressable rule as Accept below. The outer
-            Pressable returns a plain OBJECT (never an array) from the
-            function-style prop. */}
-        <Pressable
-          onPress={onReject}
-          disabled={disabled}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
-          })}
-          accessibilityRole="button"
-          accessibilityLabel={`Reject order from ${order.customerName}`}
-        >
-          <View style={styles.rejectBtn}>
-            <Text style={styles.rejectLabel}>Reject</Text>
           </View>
-        </Pressable>
-        {/* flex:1 lives on a PLAIN wrapper View — never on the Pressable's
-            function-style prop and never on the visual inner View (iOS
-            drops flex from the former and the latter fights the row's
-            cross-axis alignment → squashed bar).
-            See feedback_ios_pressable_array_style.md. */}
-        <View style={styles.acceptWrap}>
-          <Pressable
-            onPress={onAccept}
-            onPressIn={onAcceptPressIn}
-            onPressOut={onAcceptPressOut}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel={`Accept ₹${order.total.toFixed(0)} order from ${order.customerName}`}
-          >
-            <Animated.View
-              style={[
-                styles.acceptBtn,
-                acceptPressStyle,
-                disabled && { opacity: 0.4 },
-              ]}
-            >
-              <Text style={styles.acceptLabel}>Accept</Text>
-            </Animated.View>
-          </Pressable>
-        </View>
-      </View>
+        )}
+      </Pressable>
     </Animated.View>
   );
 }
@@ -323,41 +257,24 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: theme.colors.ink.DEFAULT,
   },
-  buttonRow: {
+  ctaRow: {
     flexDirection: "row",
-    gap: theme.spacing[2],
-    alignItems: "stretch",
-  },
-  acceptWrap: {
-    flex: 1,
-  },
-  rejectBtn: {
-    width: 96,
-    minHeight: 48,
-    backgroundColor: theme.colors.paper,
-    borderWidth: 1,
-    borderColor: theme.colors.mist.strong,
-    borderRadius: theme.radius.md,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    marginTop: theme.spacing[1],
+    paddingTop: theme.spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.mist.DEFAULT,
   },
-  rejectLabel: {
+  ctaLabel: {
     fontFamily: "Inter-SemiBold",
     fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  ctaChevron: {
+    fontFamily: "Inter-SemiBold",
+    fontSize: 22,
+    lineHeight: 22,
     color: theme.colors.ink.soft,
-  },
-  acceptBtn: {
-    width: "100%",
-    backgroundColor: theme.colors.ink.DEFAULT,
-    borderRadius: theme.radius.md,
-    minHeight: 52,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  acceptLabel: {
-    fontFamily: "Inter-SemiBold",
-    fontSize: theme.typography.size.bodySm.size,
-    color: theme.colors.paper,
-    letterSpacing: 0.3,
   },
 });

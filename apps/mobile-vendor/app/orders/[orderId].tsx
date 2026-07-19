@@ -1185,32 +1185,35 @@ export default function OrderDetailScreen() {
                     : 'As soon as ready'}
                 </Text>
               </View>
-              <Text style={styles.proposeHint}>
-                Accept confirms this time. Kitchen busy? Propose a later one — the customer is notified.
-              </Text>
-              <View style={styles.proposeRow}>
-                {([
-                  [null, 'As asked'],
-                  [15, '+15m'],
-                  [30, '+30m'],
-                  [45, '+45m'],
-                  [60, '+1h'],
-                ] as [number | null, string][]).map(([off, label]) => {
-                  const sel = proposeOffsetMin === off;
-                  return (
-                    <Pressable
-                      key={label}
-                      onPress={() => setProposeOffsetMin(off)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: sel }}
-                      style={[styles.proposeChip, sel && styles.proposeChipSel]}
-                    >
-                      <Text style={[styles.proposeChipText, sel && styles.proposeChipTextSel]}>
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+              <View style={styles.proposeBlock}>
+                <Text style={styles.proposeTitle}>Confirm or propose a new time</Text>
+                <Text style={styles.proposeHint}>
+                  Accept confirms the requested time. Kitchen busy? Propose a later one — the customer is notified.
+                </Text>
+                <View style={styles.proposeRow}>
+                  {([
+                    [null, 'As asked'],
+                    [15, '+15m'],
+                    [30, '+30m'],
+                    [45, '+45m'],
+                    [60, '+1h'],
+                  ] as [number | null, string][]).map(([off, label]) => {
+                    const sel = proposeOffsetMin === off;
+                    return (
+                      <Pressable
+                        key={label}
+                        onPress={() => setProposeOffsetMin(off)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: sel }}
+                        style={[styles.proposeChip, sel && styles.proposeChipSel]}
+                      >
+                        <Text style={[styles.proposeChipText, sel && styles.proposeChipTextSel]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             </View>
           </>
@@ -1253,7 +1256,7 @@ export default function OrderDetailScreen() {
                 />
               </View>
             </View>
-            <Text style={styles.proposeHint}>
+            <Text style={styles.deliveryHint}>
               Customer was charged ₹{order.pricing.deliveryFee.toFixed(0)} (recommended by
               distance). Lower it — or ₹0 if they're inside your free zone — and the difference
               is refunded to them. You can't charge more than ₹
@@ -1704,7 +1707,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    minHeight: 44,
+    gap: theme.spacing[3],
   },
   deliveryFeeInput: {
     fontFamily: 'Inter-SemiBold',
@@ -1714,28 +1720,52 @@ const styles = StyleSheet.create({
     minWidth: 120,
     paddingVertical: 6,
   },
+  // Explanatory copy that sits BELOW a card — aligned to the card gutter.
+  deliveryHint: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.soft,
+    lineHeight: 16,
+    marginHorizontal: theme.spacing[4],
+    marginTop: -theme.spacing[2],
+    marginBottom: theme.spacing[4],
+  },
 
-  // Home-tiffin scheduling (#709) — propose-time controls
+  // Home-tiffin scheduling (#709) — propose-time controls. The controls sit in
+  // their own padded block below the "Customer asked" row (hairline-separated)
+  // so they align with the inset row instead of running to the card edge.
+  proposeBlock: {
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
+  proposeTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.bodySm.size,
+    color: theme.colors.ink.DEFAULT,
+  },
   proposeHint: {
     fontFamily: 'Inter',
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.soft,
-    marginTop: 10,
-    marginBottom: 8,
     lineHeight: 16,
   },
   proposeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
   },
   proposeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    minWidth: 60,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 10,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.bone,
+    alignItems: 'center',
   },
   proposeChipSel: {
     borderColor: theme.colors.brand[500],

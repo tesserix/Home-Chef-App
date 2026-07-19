@@ -190,8 +190,6 @@ function NewTab() {
             showInstructions
             disabled={actionLoading}
             onOpenDetail={() => router.push(`/orders/${item.id}`)}
-            onAccept={() => triggerAction(item.id, 'accepted')}
-            onReject={() => triggerAction(item.id, 'rejected')}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: theme.spacing[2] }} />}
