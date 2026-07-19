@@ -1605,6 +1605,33 @@ func (h *ChefHandler) GetChefDeliverySlots(c *gin.Context) {
 	})
 }
 
+// GetChefFulfillmentTimes — GET /chefs/:id/fulfillment-times (PUBLIC). Returns
+// realistic "preferred delivery/pickup time" suggestions for the home-tiffin
+// handshake (#709): the chef's own meal windows, bounded by their open hours and
+// prep headroom, rolling forward across days. Replaces the old "now + 1h" list
+// that proposed times no home kitchen serves. Same suggestions for delivery and
+// pickup — the difference is only who carries it, not when the food is ready.
+func (h *ChefHandler) GetChefFulfillmentTimes(c *gin.Context) {
+	chefID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chef id"})
+		return
+	}
+	var chef models.ChefProfile
+	if err := database.DB.Select("id", "prep_time").First(&chef, "id = ?", chefID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
+		return
+	}
+	cap := services.GetChefCapacitySettings(chefID)
+	var schedules []models.ChefSchedule
+	database.DB.Where("chef_id = ?", chefID).Find(&schedules)
+
+	times := services.BuildSuggestedFulfillmentTimes(
+		cap, schedules, services.ParsePrepMinutes(chef.PrepTime), time.Now(), 12,
+	)
+	c.JSON(http.StatusOK, gin.H{"times": times})
+}
+
 // GetOrderDetail returns a single order's full detail for the authenticated chef.
 // The chef must own the order (order.chef_id == authenticated chef ID); returns 404
 // when the order doesn't exist or belongs to a different chef.

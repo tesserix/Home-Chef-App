@@ -4,7 +4,7 @@
 // which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
 // routes to /payment/result. No WebView, no visible web page load.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +31,7 @@ import { useDeliveryQuote } from '../hooks/useDeliveryQuote';
 import { useValidatePromo, promoErrorMessage, type PromoValidationResult } from '../hooks/usePromoCode';
 import { useWinback } from '../hooks/useWinback';
 import { useDeliverySlots, type DeliverySlot } from '../hooks/useDeliverySlots';
+import { useFulfillmentTimes } from '../hooks/useFulfillmentTimes';
 import { useDietaryCheck } from '../hooks/useDietaryConflicts';
 import { useWallet } from '../hooks/useWallet';
 import { useAddresses, useCreateAddress } from '../hooks/useAddresses';
@@ -74,22 +75,6 @@ function slotDayLabel(dateStr: string): string {
   if (diff <= 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-// Home-tiffin suggested-time chips (#709): a time-of-day label ("8:00 PM") and a
-// relative day label ("Today" / "Tomorrow").
-function timeChipLabel(d: Date): string {
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-function dayChipLabel(d: Date): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const day = new Date(d);
-  day.setHours(0, 0, 0, 0);
-  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
-  if (diff <= 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  return day.toLocaleDateString(undefined, { weekday: 'short' });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -201,14 +186,11 @@ export default function CheckoutScreen() {
   // Home-tiffin suggested time (#709): the customer PROPOSES a preferred time and
   // the chef confirms/proposes at accept. null = "as soon as ready".
   const [requestedTime, setRequestedTime] = useState<Date | null>(null);
-  // Upcoming half-hour options starting ~1h out (prep headroom), spanning ~5h.
-  const timeOptions = useMemo(() => {
-    const start = new Date(Date.now() + 60 * 60 * 1000); // +1h
-    // Round up to the next :00 / :30.
-    start.setSeconds(0, 0);
-    start.setMinutes(start.getMinutes() <= 30 ? 30 : 60);
-    return Array.from({ length: 10 }, (_, i) => new Date(start.getTime() + i * 30 * 60 * 1000));
-  }, []);
+  // Realistic proposable times come from the server, derived from the CHEF's meal
+  // windows + open hours + prep headroom — NOT "now + 1h" (which proposed 9am for a
+  // 6am order). Same list for delivery and pickup.
+  const { data: fulfillmentTimesData } = useFulfillmentTimes(cartStore.chefId ?? undefined);
+  const fulfillmentTimes = fulfillmentTimesData?.times ?? [];
 
   // Dietary & allergen conflict warning (#41) — checks the cart's items against
   // the customer's saved profile server-side. Non-blocking.
@@ -1219,15 +1201,15 @@ export default function CheckoutScreen() {
                 </View>
               </Pressable>
 
-              {timeOptions.map((t) => {
-                const sel = requestedTime?.getTime() === t.getTime();
+              {fulfillmentTimes.map((t) => {
+                const sel = requestedTime?.toISOString() === new Date(t.at).toISOString();
                 return (
                   <Pressable
-                    key={t.toISOString()}
-                    onPress={() => setRequestedTime(t)}
+                    key={t.at}
+                    onPress={() => setRequestedTime(new Date(t.at))}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: sel }}
-                    accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${timeChipLabel(t)} ${dayChipLabel(t)}`}
+                    accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
                   >
                     <View
                       className={`px-3 py-2 rounded-xl border ${
@@ -1238,9 +1220,11 @@ export default function CheckoutScreen() {
                         className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}
                         style={{ fontVariant: ['tabular-nums'] }}
                       >
-                        {timeChipLabel(t)}
+                        {t.label}
                       </Text>
-                      <Text className="text-xs text-charcoal-soft">{dayChipLabel(t)}</Text>
+                      <Text className="text-xs text-charcoal-soft">
+                        {t.day} · {t.meal}
+                      </Text>
                     </View>
                   </Pressable>
                 );

@@ -400,7 +400,8 @@ func SetupRouter() *gin.Engine {
 			chefs.GET("/:id/weekly-menu", chefHandler.GetPublicWeeklyMenu)     // #192 tiffin menu
 			chefs.GET("/:id/daily-menu", chefHandler.GetPublicDailyMenu)       // #405 per-date menu
 			chefs.GET("/:id/subscription", mealSubHandler.GetChefOffer)        // #280 tiffin offer
-			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots) // #51 scheduled slots
+			chefs.GET("/:id/delivery-slots", chefHandler.GetChefDeliverySlots)       // #51 scheduled slots
+			chefs.GET("/:id/fulfillment-times", chefHandler.GetChefFulfillmentTimes) // #709 home-tiffin suggested times
 			// Per-mode delivery-fee preview so checkout can show the real fee +
 			// pickup's saving. Same computation CreateOrder charges.
 			chefs.POST("/:id/delivery-quote", orderHandler.QuoteDeliveryFee)
