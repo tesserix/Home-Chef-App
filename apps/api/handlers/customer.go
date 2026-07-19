@@ -109,6 +109,10 @@ func (h *CustomerHandler) UpdateCustomerProfile(c *gin.Context) {
 		user.LastName = *req.LastName
 	}
 	if req.Phone != nil {
+		if *req.Phone != "" && !services.IsValidPhone("IN", *req.Phone) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
+			return
+		}
 		userUpdates["phone"] = *req.Phone
 		user.Phone = *req.Phone
 	}
@@ -231,6 +235,10 @@ func (h *CustomerHandler) CompleteOnboarding(c *gin.Context) {
 		userUpdates["last_name"] = req.LastName
 	}
 	if req.Phone != "" {
+		if !services.IsValidPhone("IN", req.Phone) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
+			return
+		}
 		userUpdates["phone"] = req.Phone
 	}
 	if len(userUpdates) > 0 {

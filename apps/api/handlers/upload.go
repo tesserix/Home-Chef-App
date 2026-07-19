@@ -617,6 +617,10 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		}
 	}
 	if req.Phone != "" {
+		if !services.IsValidPhone("IN", req.Phone) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
+			return
+		}
 		var existingByPhone models.User
 		if err := database.DB.Where("phone = ? AND id != ?", req.Phone, userID).First(&existingByPhone).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "This phone number is already registered with another account.", "field": "phone"})
@@ -758,6 +762,10 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 		}
 	}
 	if req.Phone != "" {
+		if !services.IsValidPhone("IN", req.Phone) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid 10-digit mobile number", "field": "phone"})
+			return
+		}
 		var existingByPhone models.User
 		if err := database.DB.Where("phone = ? AND id != ?", req.Phone, chef.UserID).First(&existingByPhone).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "This phone number is already registered with another account.", "field": "phone"})
