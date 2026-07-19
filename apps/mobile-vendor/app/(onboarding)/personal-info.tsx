@@ -31,13 +31,16 @@ export default function PersonalInfoScreen() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    // Seed from the persisted draft so editing this step from Review (or
-    // resuming after the app was backgrounded) shows the saved values instead
-    // of a blank form. RHF captures defaultValues once at mount, which is what
-    // we want here — each Edit tap mounts a fresh instance.
+    // Seed from the persisted draft first, then fall back to the details the
+    // vendor already gave at sign-up (name / phone / email captured on the user),
+    // so this step arrives pre-filled instead of blank — they shouldn't have to
+    // retype what they just entered. RHF captures defaultValues once at mount,
+    // which is what we want here — each Edit tap mounts a fresh instance.
     defaultValues: {
-      fullName: personalInfo.fullName,
-      phone: personalInfo.phone,
+      fullName:
+        personalInfo.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' '),
+      phone: personalInfo.phone || (user?.phone ?? ''),
       email: personalInfo.email || (user?.email ?? ''),
     },
   });
