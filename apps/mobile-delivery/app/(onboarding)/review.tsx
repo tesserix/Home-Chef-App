@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -10,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/auth-store';
 import { useDriverOnboardingStore } from '../../store/onboarding-store';
 
 interface SummaryRowProps {
@@ -37,6 +39,52 @@ export default function ReviewScreen() {
   const { personalInfo, vehicleDetails, documents, payoutDetails, subscriptionInfo, reset } =
     useDriverOnboardingStore();
 
+  const email = useAuthStore((s) => s.user?.email) ?? '';
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const apiError = (err: unknown, fallback: string): string => {
+    const e = err as { response?: { data?: { error?: string } } };
+    return e?.response?.data?.error || fallback;
+  };
+
+  const sendCode = async (): Promise<void> => {
+    if (sending || cooldown > 0 || !email) return;
+    setSending(true);
+    try {
+      await api.post('/account/email/otp/request', { email });
+      setOtpSent(true);
+      setCooldown(60);
+    } catch (err) {
+      Alert.alert('Verify email', apiError(err, "Couldn't send the code. Please try again."));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const confirmCode = async (): Promise<void> => {
+    if (verifying || code.length !== 6) return;
+    setVerifying(true);
+    try {
+      await api.post('/account/email/otp/verify', { email, code });
+      setEmailVerified(true);
+    } catch (err) {
+      Alert.alert('Verify email', apiError(err, 'That code is incorrect or expired.'));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const docsUploaded =
     [documents.drivingLicenseUri, documents.idProofUri].filter(Boolean).length;
   const totalDocsRequired = 2;
@@ -49,6 +97,10 @@ export default function ReviewScreen() {
   const handleSubmit = async () => {
     if (!termsAccepted) {
       Alert.alert('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
+      return;
+    }
+    if (!emailVerified) {
+      Alert.alert('Verify email', 'Please verify your email before submitting.');
       return;
     }
     setIsSubmitting(true);
@@ -123,6 +175,63 @@ export default function ReviewScreen() {
           <SummaryRow label="Selected Plan" value={subscriptionInfo.planName || '—'} />
         </View>
 
+        {/* Email verification */}
+        <View className="bg-paper rounded-xl px-4 py-4 mb-6">
+          <Text className="text-base font-semibold text-ink mb-2">Verify Email</Text>
+          <View className="flex-row items-center justify-between mb-1">
+            <Text className="text-ink-muted text-sm flex-1" numberOfLines={1}>{email}</Text>
+            {emailVerified && (
+              <Text className="text-herb text-xs font-semibold ml-2">Verified ✓</Text>
+            )}
+          </View>
+          {!emailVerified &&
+            (!otpSent ? (
+              <TouchableOpacity
+                onPress={sendCode}
+                disabled={sending || !email}
+                className="mt-2 py-3 rounded-lg border border-herb items-center"
+              >
+                <Text className="text-herb font-semibold text-sm">
+                  {sending ? 'Sending…' : 'Send verification code'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View className="mt-2">
+                <Text className="text-ink-muted text-[13px] mb-2">
+                  Enter the 6-digit code we emailed you.
+                </Text>
+                <TextInput
+                  className="h-12 bg-bone rounded-lg px-4 text-base text-ink tracking-[8px] mb-2 border border-mist"
+                  placeholder="000000"
+                  value={code}
+                  onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  onPress={confirmCode}
+                  disabled={verifying || code.length !== 6}
+                  className={`py-3 rounded-lg items-center ${
+                    code.length === 6 && !verifying ? 'bg-herb' : 'bg-mist-strong'
+                  }`}
+                >
+                  <Text className="text-paper font-semibold text-sm">
+                    {verifying ? 'Verifying…' : 'Verify code'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={sendCode}
+                  disabled={cooldown > 0 || sending}
+                  className="mt-2 items-center"
+                >
+                  <Text className="text-ink-muted text-[13px]">
+                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+        </View>
+
         {/* Terms Checkbox */}
         <TouchableOpacity
           onPress={() => setTermsAccepted((prev: boolean) => !prev)}
@@ -148,9 +257,9 @@ export default function ReviewScreen() {
       <View className="px-6 py-4 border-t border-mist">
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={!termsAccepted || isSubmitting}
+          disabled={!termsAccepted || !emailVerified || isSubmitting}
           className={`w-full py-4 rounded-xl items-center ${
-            termsAccepted && !isSubmitting ? 'bg-herb' : 'bg-mist-strong'
+            termsAccepted && emailVerified && !isSubmitting ? 'bg-herb' : 'bg-mist-strong'
           }`}
         >
           {isSubmitting ? (
