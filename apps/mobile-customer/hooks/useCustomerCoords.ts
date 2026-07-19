@@ -19,39 +19,40 @@ export function hasUsableCoords(a: Address): boolean {
 }
 
 /**
- * Picks the address that drives chef discovery + delivery-reach checks: the
- * default address among those with usable coordinates, else the first address
- * that has coordinates. Returns undefined when no address has usable coords.
+ * Picks the customer's ACTIVE address — the one shown in the home-screen switcher
+ * and used as the delivery target: the default address, else the first saved.
  *
- * Exported (not just used internally by useCustomerCoords) so the home-screen
- * address switcher (components/address/AddressSwitcher.tsx) can display the
- * SAME address that is actually driving discovery — the two must never
- * disagree on "which address is active."
+ * This must honour the customer's explicit choice. It deliberately does NOT
+ * filter on coordinates: when the customer switches to an address that has no
+ * saved map location, the switcher still shows THAT address (with a "no location"
+ * hint) rather than silently reverting to a different, coordinate-bearing one.
+ * Coordinates for discovery are handled separately in useCustomerCoords, which
+ * degrades to un-located discovery when the active address has no point — never
+ * mis-locates to another address.
  */
 export function pickActiveAddress(addresses: Address[]): Address | undefined {
-  const withCoords = addresses.filter(hasUsableCoords);
-  if (withCoords.length === 0) return undefined;
-  return withCoords.find((a) => a.isDefault) ?? withCoords[0];
+  if (addresses.length === 0) return undefined;
+  return addresses.find((a) => a.isDefault) ?? addresses[0];
 }
 
 /**
  * The customer's active location for discovery + delivery-reach checks.
  *
- * Sourced from the saved delivery addresses: the default address's coordinates,
- * else the first address that has real coordinates. Returns null when no address
- * has usable coordinates — callers then omit lat/lng and the API falls back to
- * un-located discovery (all nearby chefs, no delivery-area gate). Coordinates are
- * captured when the customer picks an address from the geocoder, so a customer
- * who only typed a raw address stays un-located rather than mis-located.
+ * Sourced from the ACTIVE address (see pickActiveAddress) — the same address the
+ * switcher shows. Returns its coordinates when it has a usable point; returns null
+ * when it doesn't, so callers omit lat/lng and the API falls back to un-located
+ * discovery (all nearby chefs, no delivery-area gate). It never borrows another
+ * address's coordinates, so a customer who switched to a not-yet-located address
+ * stays un-located rather than mis-located to a different city.
  */
 export function useCustomerCoords(): Coords | null {
   const { data } = useAddresses();
   const addresses = data?.data ?? [];
 
   return useMemo(() => {
-    const preferred = pickActiveAddress(addresses);
-    if (!preferred) return null;
-    return { lat: preferred.latitude as number, lng: preferred.longitude as number };
+    const active = pickActiveAddress(addresses);
+    if (!active || !hasUsableCoords(active)) return null;
+    return { lat: active.latitude as number, lng: active.longitude as number };
   }, [addresses]);
 }
 
