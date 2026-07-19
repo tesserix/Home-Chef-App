@@ -463,6 +463,12 @@ function AppNavigator() {
     '/review',
   ];
 
+  // Screens in the (auth) group. When unauthenticated the expectedPath is the
+  // login screen, but the user must be free to reach register / forgot-password
+  // too — otherwise the guard below replaces every non-login auth screen back to
+  // login, making "Create account" impossible (it bounces straight to login).
+  const AUTH_SCREENS = ['/login', '/register', '/forgot-password'];
+
   // Single routing effect — fires on every pathname / expectedPath
   // change. If the user is where they should be we update routedFor
   // and lift the splash. If they've drifted (back gesture, deep link,
@@ -491,9 +497,11 @@ function AppNavigator() {
       ? !here.startsWith('/login') &&
         !here.startsWith('/personal-info') &&
         !here.startsWith('/pending')
-      : ONBOARDING_STEPS.includes(target) && ONBOARDING_STEPS.includes(here)
-        ? true // any onboarding step counts as "on track" while wizard is mid-flight
-        : here === target;
+      : target === '/login'
+        ? AUTH_SCREENS.includes(here) // unauth: any auth screen (register / forgot-password) is on track
+        : ONBOARDING_STEPS.includes(target) && ONBOARDING_STEPS.includes(here)
+          ? true // any onboarding step counts as "on track" while wizard is mid-flight
+          : here === target;
     if (matched) {
       routedFor.current = authKey;
     } else {
