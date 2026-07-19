@@ -579,8 +579,10 @@ func (h *AdminHandler) GetChefs(c *gin.Context) {
 		switch status {
 		case "submitted", "pending":
 			query = query.Where("is_verified = ?", false)
-		case "approved":
-			query = query.Where("is_verified = ?", true)
+		case "approved", "verified":
+			query = query.Where("is_verified = ? AND is_active = ?", true, true)
+		case "suspended":
+			query = query.Where("is_verified = ? AND is_active = ?", true, false)
 		}
 	}
 
@@ -738,8 +740,7 @@ func (h *AdminHandler) SuspendChef(c *gin.Context) {
 	}
 
 	result := database.DB.Model(&models.ChefProfile{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"is_active":   false,
-		"is_verified": false,
+		"is_active": false,
 	})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chef not found"})
