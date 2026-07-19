@@ -24,6 +24,8 @@ import { CancellationSection } from '../../../components/orders/CancellationSect
 import { useCartStore, makeLineId } from '../../../store/cart-store';
 import { startOrderPayment } from '../../../lib/payment';
 import { CookingIndicator } from '../../../components/status/CookingIndicator';
+import { StageIcon } from '../../../components/status/StageIcon';
+import { OrderProgressBar } from '../../../components/orders/OrderProgressBar';
 import { DeliveryMap } from '../../../components/tracking/DeliveryMap';
 import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
@@ -431,10 +433,9 @@ export default function OrderDetailScreen() {
         {/* Status chip + ETA — spec §2.7 + §0 chip pattern */}
         <View style={styles.statusSection}>
           <View style={styles.statusChipRow}>
-            {/* Live cooking animation while the chef is preparing the order (#50) */}
-            {order.status === 'preparing' ? (
-              <CookingIndicator size={20} color={customerColors.coral.DEFAULT} />
-            ) : null}
+            {/* Per-stage animated icon — pot while preparing, chef when ready,
+                scooter on the way, etc. (#717) */}
+            <StageIcon status={order.status} size={20} />
             <View style={[styles.statusChip, { backgroundColor: chipStyle.bg }]}>
               <Text style={[styles.statusChipText, { color: chipStyle.text }]}>
                 {order.status === 'preparing'
@@ -454,6 +455,14 @@ export default function OrderDetailScreen() {
             </Text>
           ) : null}
         </View>
+
+        {/* Live fulfillment-aware progress bar (#717) — full width, below the
+            status chip; hidden once the order is cancelled/rejected/refunded. */}
+        {!['cancelled', 'rejected', 'refunded'].includes(order.status) ? (
+          <View style={styles.progressWrap}>
+            <OrderProgressBar status={order.status} fulfillmentType={order.fulfillmentType} />
+          </View>
+        ) : null}
 
         {/* Auto-void apology (#694). A platform void is a cancelled + refunded
             order with NO CancellationRequest, so CancellationSection (below)
@@ -1047,6 +1056,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  progressWrap: {
+    marginBottom: 8,
   },
   statusChipRow: {
     flexDirection: 'row',
