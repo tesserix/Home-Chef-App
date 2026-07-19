@@ -115,6 +115,9 @@ func (h *ApprovalHandler) GetApprovalRequests(c *gin.Context) {
 	if c.Query("escalated") == "true" {
 		query = query.Where("escalated_at IS NOT NULL")
 	}
+	if c.Query("reminded") == "true" {
+		query = query.Where("reminder_count > 0")
+	}
 
 	var total int64
 	query.Count(&total)
