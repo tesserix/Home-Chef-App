@@ -13,6 +13,7 @@ import {
   UtensilsCrossed,
   TrendingUp,
 } from 'lucide-react';
+import { formatCurrency } from '@/shared/utils/format';
 import { Badge, OrderStatusBadge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
 
@@ -53,14 +54,6 @@ interface Order {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();

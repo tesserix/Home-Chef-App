@@ -257,6 +257,7 @@ export type OrderStatus =
   | 'delivering'
   | 'delivered'
   | 'cancelled'
+  | 'rejected'
   | 'refunded';
 
 export interface Order {

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/shared/services/api-client';
+import { formatCurrency } from '@/shared/utils/format';
 import { Button } from '@/shared/components/ui/Button';
 import { Card } from '@/shared/components/ui/Card';
 import { OrderStatusBadge } from '@/shared/components/ui/Badge';
@@ -72,7 +73,7 @@ export default function LiveOrdersPage() {
   };
 
   const handleReject = (orderId: string) => {
-    updateStatusMutation.mutate({ orderId, status: 'cancelled' });
+    updateStatusMutation.mutate({ orderId, status: 'rejected' });
   };
 
   const handleStatusAdvance = (orderId: string, nextStatus: OrderStatus) => {
@@ -230,7 +231,7 @@ export default function LiveOrdersPage() {
                             {item.quantity}x {item.name}
                           </span>
                           <span className="font-medium text-foreground">
-                            ${(item.subtotal ?? 0).toFixed(2)}
+                            {formatCurrency(item.subtotal ?? 0)}
                           </span>
                         </div>
                       ))}
@@ -242,14 +243,62 @@ export default function LiveOrdersPage() {
                     )}
                   </div>
 
-                  {/* Total */}
-                  <div className="flex items-center justify-between border-t border-border pt-3">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {(order.items ?? []).length} item{(order.items ?? []).length !== 1 ? 's' : ''} total
-                    </span>
-                    <span className="text-lg font-medium text-foreground">
-                      ${(order.total ?? 0).toFixed(2)}
-                    </span>
+                  {/* Scheduled time — so the chef sees when it's due before accepting */}
+                  {order.scheduledFor && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Scheduled for</span>
+                      <span className="font-medium text-foreground">
+                        {new Date(order.scheduledFor).toLocaleString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Fee breakdown — the chef reviews cost + delivery fee before
+                      accepting (only lines that apply are shown). */}
+                  <div className="space-y-1 border-t border-border pt-3 text-sm">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(order.subtotal ?? 0)}</span>
+                    </div>
+                    {order.serviceFee > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Service fee</span>
+                        <span>{formatCurrency(order.serviceFee)}</span>
+                      </div>
+                    )}
+                    {order.deliveryFee > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Delivery fee</span>
+                        <span>{formatCurrency(order.deliveryFee)}</span>
+                      </div>
+                    )}
+                    {order.tax > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Tax</span>
+                        <span>{formatCurrency(order.tax)}</span>
+                      </div>
+                    )}
+                    {order.discount > 0 && (
+                      <div className="flex items-center justify-between text-herb">
+                        <span>Discount</span>
+                        <span>−{formatCurrency(order.discount)}</span>
+                      </div>
+                    )}
+                    {order.tip > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Tip</span>
+                        <span>{formatCurrency(order.tip)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t border-border pt-2 text-base font-semibold text-foreground">
+                      <span>Total</span>
+                      <span>{formatCurrency(order.total ?? 0)}</span>
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -279,7 +328,7 @@ export default function LiveOrdersPage() {
                           isLoading={
                             updateStatusMutation.isPending &&
                             updateStatusMutation.variables?.orderId === order.id &&
-                            updateStatusMutation.variables?.status === 'cancelled'
+                            updateStatusMutation.variables?.status === 'rejected'
                           }
                         >
                           Reject

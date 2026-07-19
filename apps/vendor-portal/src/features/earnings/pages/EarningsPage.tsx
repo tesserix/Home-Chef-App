@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiClient } from '@/shared/services/api-client';
+import { formatCurrency } from '@/shared/utils/format';
 import { Card } from '@/shared/components/ui/Card';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -48,14 +49,6 @@ interface EarningsData {
   recentPayouts: Payout[];
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function getPayoutStatusVariant(status: string) {
   switch (status) {
