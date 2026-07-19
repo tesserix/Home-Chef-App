@@ -4,7 +4,7 @@ import { useOnboardingStore } from '@/app/store/onboarding-store';
 import { Input } from '@/shared/components/ui/Input';
 import { Card } from '@/shared/components/ui/Card';
 import { FileUpload } from '@tesserix/web';
-import { User, Phone, Mail, MapPin, Camera, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, MapPin, Camera, Loader2, Check } from 'lucide-react';
 import { uploadProfileImage } from '@/shared/services/upload-service';
 import { apiClient } from '@/shared/services/api-client';
 
@@ -44,6 +44,54 @@ export function StepPersonalInfo({ errors }: Props) {
   const [cities, setCities] = useState<City[]>([]);
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
+
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const id = setInterval(() => setOtpCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [otpCooldown]);
+
+  function apiErr(err: unknown, fallback: string): string {
+    const e = err as { message?: string; response?: { data?: { error?: string } } };
+    return e?.response?.data?.error || e?.message || fallback;
+  }
+
+  async function sendEmailOtp() {
+    if (sendingOtp || otpCooldown > 0 || !data.email) return;
+    setSendingOtp(true);
+    try {
+      await apiClient.post('/account/email/otp/request', { email: data.email });
+      setOtpSent(true);
+      setOtpCooldown(60);
+      toast.success('Verification code sent to your email');
+    } catch (err) {
+      toast.error(apiErr(err, "Couldn't send the code. Please try again."));
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
+  async function verifyEmailOtp() {
+    if (verifyingOtp || code.length !== 6) return;
+    setVerifyingOtp(true);
+    try {
+      await apiClient.post('/account/email/otp/verify', { email: data.email, code });
+      updateData({ emailVerified: true });
+      setOtpSent(false);
+      setCode('');
+      toast.success('Email verified');
+    } catch (err) {
+      toast.error(apiErr(err, 'That code is incorrect or expired.'));
+    } finally {
+      setVerifyingOtp(false);
+    }
+  }
 
   // Fetch countries on mount
   useEffect(() => {
@@ -182,16 +230,61 @@ export function StepPersonalInfo({ errors }: Props) {
               leftIcon={<Phone className="h-4 w-4" />}
               error={errors.phone}
             />
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="meena@example.com"
-              value={data.email}
-              onChange={(e) => updateData({ email: e.target.value })}
-              leftIcon={<Mail className="h-4 w-4" />}
-              error={errors.email}
-              hint="Pre-filled from your login"
-            />
+            <div className="space-y-2">
+              <Input
+                label="Email Address"
+                type="email"
+                placeholder="meena@example.com"
+                value={data.email}
+                onChange={(e) => updateData({ email: e.target.value, emailVerified: false })}
+                leftIcon={<Mail className="h-4 w-4" />}
+                error={errors.email}
+                hint="We'll send a 6-digit code to confirm this email"
+              />
+              {data.emailVerified ? (
+                <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                  <Check className="h-4 w-4" /> Email verified
+                </p>
+              ) : !otpSent ? (
+                <button
+                  type="button"
+                  onClick={sendEmailOtp}
+                  disabled={sendingOtp || !data.email}
+                  className="inline-flex items-center gap-1.5 rounded-lg border-2 border-primary/30 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingOtp && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Send verification code
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-end gap-2">
+                  <Input
+                    label="Verification code"
+                    inputMode="numeric"
+                    placeholder="000000"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-32"
+                  />
+                  <button
+                    type="button"
+                    onClick={verifyEmailOtp}
+                    disabled={verifyingOtp || code.length !== 6}
+                    className="inline-flex h-[42px] items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {verifyingOtp && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Verify
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sendEmailOtp}
+                    disabled={otpCooldown > 0 || sendingOtp}
+                    className="h-[42px] px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Card>

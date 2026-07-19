@@ -1,12 +1,14 @@
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { User, Phone, Mail } from 'lucide-react-native';
-import { Input, OnboardingScaffold } from '@homechef/mobile-shared/ui';
+import { User, Phone, Mail, Check } from 'lucide-react-native';
+import { Input, Button, OnboardingScaffold } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
+import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth-store';
 import { useVendorOnboardingStore } from '../../store/onboarding-store';
 
@@ -45,8 +47,59 @@ export default function PersonalInfoScreen() {
     },
   });
 
+  const email = personalInfo.email || user?.email || '';
+  const [emailVerified, setEmailVerified] = useState(personalInfo.emailVerified ?? false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  function apiError(err: unknown, fallback: string): string {
+    const e = err as { response?: { data?: { error?: string } } };
+    return e?.response?.data?.error || fallback;
+  }
+
+  async function sendCode(): Promise<void> {
+    if (sending || cooldown > 0) return;
+    setSending(true);
+    try {
+      await api.post('/account/email/otp/request', { email });
+      setOtpSent(true);
+      setCooldown(60);
+    } catch (err) {
+      Alert.alert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpSendFailed')));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function confirmCode(): Promise<void> {
+    if (verifying || code.length !== 6) return;
+    setVerifying(true);
+    try {
+      await api.post('/account/email/otp/verify', { email, code });
+      setEmailVerified(true);
+      updatePersonalInfo({ emailVerified: true });
+    } catch (err) {
+      Alert.alert(t('onboarding.emailVerifyTitle'), apiError(err, t('onboarding.emailOtpWrong')));
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   function onSubmit(data: FormValues): void {
-    updatePersonalInfo(data);
+    if (!emailVerified) {
+      Alert.alert(t('onboarding.emailVerifyTitle'), t('onboarding.emailVerifyRequired'));
+      return;
+    }
+    updatePersonalInfo({ ...data, emailVerified: true });
     setStep(2);
     router.push('/(onboarding)/kitchen-details');
   }
@@ -131,11 +184,61 @@ export default function PersonalInfoScreen() {
               </View>
               <View style={styles.lockedField}>
                 <Text style={styles.lockedValue} numberOfLines={1}>{value}</Text>
-                <View style={styles.lockedBadge}>
-                  <Text style={styles.lockedBadgeText}>{t('onboarding.locked')}</Text>
-                </View>
+                {emailVerified ? (
+                  <View style={styles.verifiedBadge}>
+                    <Check size={11} color={theme.colors.paper} strokeWidth={3} />
+                    <Text style={styles.verifiedBadgeText}>{t('onboarding.emailVerified')}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.lockedBadge}>
+                    <Text style={styles.lockedBadgeText}>{t('onboarding.locked')}</Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.lockedHint}>{t('onboarding.emailLockedHint')}</Text>
+
+              {!emailVerified && (
+                <View style={styles.verifyBlock}>
+                  {!otpSent ? (
+                    <>
+                      <Text style={styles.lockedHint}>{t('onboarding.emailVerifyPrompt')}</Text>
+                      <Button
+                        label={t('onboarding.emailSendCode')}
+                        variant="secondary"
+                        loading={sending}
+                        onPress={sendCode}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.lockedHint}>{t('onboarding.emailCodeSent')}</Text>
+                      <Input
+                        label={t('onboarding.emailCodeLabel')}
+                        placeholder="000000"
+                        value={code}
+                        onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+                      <Button
+                        label={t('onboarding.emailConfirmCode')}
+                        loading={verifying}
+                        disabled={code.length !== 6}
+                        onPress={confirmCode}
+                      />
+                      <Button
+                        label={cooldown > 0 ? t('onboarding.emailResendIn', { s: cooldown }) : t('onboarding.emailResend')}
+                        variant="ghost"
+                        disabled={cooldown > 0 || sending}
+                        onPress={sendCode}
+                      />
+                    </>
+                  )}
+                </View>
+              )}
+
+              {emailVerified && (
+                <Text style={styles.lockedHint}>{t('onboarding.emailLockedHint')}</Text>
+              )}
             </View>
           )}
         />
@@ -238,6 +341,26 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.size.caption.size,
     color: theme.colors.ink.muted,
     paddingHorizontal: theme.spacing[1],
+  },
+
+  verifyBlock: {
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[2],
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 3,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.herb.DEFAULT,
+  },
+  verifiedBadgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: theme.colors.paper,
   },
 
   bottomSpacer: {

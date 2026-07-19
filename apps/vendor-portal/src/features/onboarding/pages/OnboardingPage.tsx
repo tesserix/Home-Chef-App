@@ -44,6 +44,7 @@ function validateStep(step: number, data: ReturnType<typeof useOnboardingStore.g
     if (!data.fullName.trim()) errors.fullName = 'Full name is required';
     if (!data.phone.trim()) errors.phone = 'Phone number is required';
     if (!data.email.trim()) errors.email = 'Email is required';
+    else if (!data.emailVerified) errors.email = 'Please verify your email with the code we sent';
     if (!data.kitchenAddress.line1.trim()) errors['kitchenAddress.line1'] = 'Address is required';
     if (!data.kitchenAddress.city.trim()) errors['kitchenAddress.city'] = 'City is required';
     if (!data.kitchenAddress.state.trim()) errors['kitchenAddress.state'] = 'State is required';

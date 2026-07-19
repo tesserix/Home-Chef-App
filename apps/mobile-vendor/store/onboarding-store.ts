@@ -8,6 +8,7 @@ interface PersonalInfo {
   fullName: string;
   phone: string;
   email: string;
+  emailVerified?: boolean;
 }
 
 interface KitchenDetails {

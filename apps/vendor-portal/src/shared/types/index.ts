@@ -109,6 +109,7 @@ export interface OnboardingData {
   fullName: string;
   phone: string;
   email: string;
+  emailVerified?: boolean;
   kitchenAddress: KitchenAddress;
 
   // Step 2: Kitchen Details
