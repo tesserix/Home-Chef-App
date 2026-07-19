@@ -141,6 +141,8 @@ export default function ReviewScreen() {
         },
         prepTime: operations.prepTime,
         serviceRadius: operations.serviceRadius,
+        offersPickup: operations.offersPickup,
+        offersSelfDelivery: operations.offersSelfDelivery,
         operatingHours: operations.operatingHours,
         acceptedTerms: policies.acceptedTerms,
         cancellationPolicy: policies.cancellationPolicy,
@@ -235,8 +237,23 @@ export default function ReviewScreen() {
         <RowItem label={t('onboarding.openDays')} value={openDaysShort.length > 0 ? openDaysShort : '—'} />
         <RowItem label={t('onboarding.prepTimeLabel')} value={operations.prepTime || '—'} />
         <RowItem
+          label={t('onboarding.fulfillmentLabel')}
+          value={
+            [
+              operations.offersPickup ? t('onboarding.pickupTitle') : null,
+              operations.offersSelfDelivery ? t('onboarding.selfDeliveryTitle') : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || '—'
+          }
+        />
+        <RowItem
           label={t('onboarding.radius')}
-          value={operations.serviceRadius > 0 ? t('onboarding.radiusKm', { count: operations.serviceRadius }) : '—'}
+          value={
+            operations.offersSelfDelivery && operations.serviceRadius > 0
+              ? t('onboarding.radiusKm', { count: operations.serviceRadius })
+              : '—'
+          }
           isLast
         />
       </Section>

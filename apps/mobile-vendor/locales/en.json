@@ -155,6 +155,13 @@
   "onboarding": {
     "continue": "Continue",
     "checkDetails": "Check your details",
+    "fulfillmentLabel": "HOW CUSTOMERS GET THEIR FOOD",
+    "fulfillmentHint": "Offer at least one — this is required before your kitchen can go live.",
+    "pickupTitle": "Pickup",
+    "pickupSub": "Customers collect from your kitchen",
+    "selfDeliveryTitle": "I deliver myself",
+    "selfDeliverySub": "You drop orders to customers in your area",
+    "fulfillmentError": "Choose at least one — pickup or delivery.",
     "stepPersonal": "Your details",
     "stepKitchen": "Kitchen",
     "stepOperations": "Operations",

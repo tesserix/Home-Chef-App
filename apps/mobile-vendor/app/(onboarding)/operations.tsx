@@ -52,6 +52,10 @@ export default function OperationsScreen() {
   const [serviceRadius, setServiceRadius] = useState<string>(
     String(operations.serviceRadius),
   );
+  const [offersPickup, setOffersPickup] = useState<boolean>(operations.offersPickup);
+  const [offersSelfDelivery, setOffersSelfDelivery] = useState<boolean>(
+    operations.offersSelfDelivery,
+  );
 
   function updateDay(day: Day, field: 'open' | 'close', value: string): void {
     setHours((prev) => ({
@@ -68,12 +72,25 @@ export default function OperationsScreen() {
   }
 
   function onNext(): void {
+    // At least one fulfillment method — a kitchen offering neither can't be
+    // activated by admin, so block it here with a clear reason instead.
+    if (!offersPickup && !offersSelfDelivery) {
+      Alert.alert(t('onboarding.validationError'), t('onboarding.fulfillmentError'));
+      return;
+    }
+    // Radius only matters when the chef self-delivers.
     const radius = parseInt(serviceRadius, 10);
-    if (Number.isNaN(radius) || radius < 1 || radius > 50) {
+    if (offersSelfDelivery && (Number.isNaN(radius) || radius < 1 || radius > 50)) {
       Alert.alert(t('onboarding.validationError'), t('onboarding.radiusError'));
       return;
     }
-    updateOperations({ operatingHours: hours, prepTime, serviceRadius: radius });
+    updateOperations({
+      operatingHours: hours,
+      prepTime,
+      serviceRadius: Number.isNaN(radius) ? operations.serviceRadius : radius,
+      offersPickup,
+      offersSelfDelivery,
+    });
     setStep(4);
     router.push('/(onboarding)/documents');
   }
@@ -189,25 +206,70 @@ export default function OperationsScreen() {
         })}
       </View>
 
-      {/* ── HOW FAR ────────────────────────────────────────────── */}
+      {/* ── HOW CUSTOMERS GET THEIR FOOD ───────────────────────── */}
       <View style={styles.hairline} />
 
       <View style={styles.sectionLabel}>
         <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
-        <Text style={styles.sectionLabelText}>{t('onboarding.deliveryArea')}</Text>
+        <Text style={styles.sectionLabelText}>{t('onboarding.fulfillmentLabel')}</Text>
+      </View>
+      <View style={styles.sectionHint}>
+        <Text style={styles.hintText}>{t('onboarding.fulfillmentHint')}</Text>
       </View>
 
       <View style={styles.fieldCard}>
-        <Input
-          label={t('onboarding.serviceRadius')}
-          placeholder={t('onboarding.serviceRadiusPlaceholder')}
-          value={serviceRadius}
-          onChangeText={setServiceRadius}
-          keyboardType="number-pad"
-          maxLength={2}
-          helper={t('onboarding.serviceRadiusHelper')}
-        />
+        <View style={styles.fulfillRow}>
+          <View style={styles.fulfillText}>
+            <Text style={styles.fulfillTitle}>{t('onboarding.pickupTitle')}</Text>
+            <Text style={styles.fulfillSub}>{t('onboarding.pickupSub')}</Text>
+          </View>
+          <Switch
+            value={offersPickup}
+            onValueChange={setOffersPickup}
+            trackColor={{ false: theme.colors.mist.strong, true: theme.colors.ink.DEFAULT }}
+            thumbColor={theme.colors.paper}
+            ios_backgroundColor={theme.colors.mist.strong}
+          />
+        </View>
+
+        <View style={styles.innerHairline} />
+
+        <View style={styles.fulfillRow}>
+          <View style={styles.fulfillText}>
+            <Text style={styles.fulfillTitle}>{t('onboarding.selfDeliveryTitle')}</Text>
+            <Text style={styles.fulfillSub}>{t('onboarding.selfDeliverySub')}</Text>
+          </View>
+          <Switch
+            value={offersSelfDelivery}
+            onValueChange={setOffersSelfDelivery}
+            trackColor={{ false: theme.colors.mist.strong, true: theme.colors.ink.DEFAULT }}
+            thumbColor={theme.colors.paper}
+            ios_backgroundColor={theme.colors.mist.strong}
+          />
+        </View>
       </View>
+
+      {/* ── HOW FAR — only relevant when the chef self-delivers ──── */}
+      {offersSelfDelivery ? (
+        <>
+          <View style={styles.hairline} />
+          <View style={styles.sectionLabel}>
+            <MapPin size={12} color={theme.colors.ink.muted} strokeWidth={2} />
+            <Text style={styles.sectionLabelText}>{t('onboarding.deliveryArea')}</Text>
+          </View>
+          <View style={styles.fieldCard}>
+            <Input
+              label={t('onboarding.serviceRadius')}
+              placeholder={t('onboarding.serviceRadiusPlaceholder')}
+              value={serviceRadius}
+              onChangeText={setServiceRadius}
+              keyboardType="number-pad"
+              maxLength={2}
+              helper={t('onboarding.serviceRadiusHelper')}
+            />
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
@@ -231,6 +293,29 @@ const styles = StyleSheet.create({
 
   sectionHint: {
     marginBottom: theme.spacing[2],
+  },
+  fulfillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+  },
+  innerHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.mist.DEFAULT,
+    marginVertical: theme.spacing[3],
+  },
+  fulfillText: { flex: 1, gap: 2 },
+  fulfillTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.DEFAULT,
+  },
+  fulfillSub: {
+    fontFamily: 'Inter',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
   },
   hintText: {
     fontFamily: 'Inter',

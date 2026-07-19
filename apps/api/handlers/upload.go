@@ -638,6 +638,8 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		MinimumOrder:   req.MinimumOrder,
 		DeliveryRadius: req.ServiceRadius,
 		ServiceRadius:  req.ServiceRadius,
+		OffersPickup:       req.OffersPickup,
+		OffersSelfDelivery: req.OffersSelfDelivery,
 		AddressLine1:   req.KitchenAddress.Line1,
 		AddressLine2:   req.KitchenAddress.Line2,
 		City:           req.KitchenAddress.City,
@@ -781,6 +783,8 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.MinimumOrder = req.MinimumOrder
 	chef.DeliveryRadius = req.ServiceRadius
 	chef.ServiceRadius = req.ServiceRadius
+	chef.OffersPickup = req.OffersPickup
+	chef.OffersSelfDelivery = req.OffersSelfDelivery
 	chef.AddressLine1 = req.KitchenAddress.Line1
 	chef.AddressLine2 = req.KitchenAddress.Line2
 	chef.City = req.KitchenAddress.City
@@ -1050,6 +1054,12 @@ type OnboardingRequest struct {
 	ServiceRadius  float64                 `json:"serviceRadius"`
 	MinimumOrder   float64                 `json:"minimumOrder"`
 	DeliveryFee    float64                 `json:"deliveryFee"`
+	// Fulfillment — how customers get their food. At least one must be true or the
+	// kitchen can't be activated (the admin verify gate rejects it). The onboarding
+	// wizard requires the chef to pick at least one, so a completed application
+	// always satisfies the gate.
+	OffersPickup       bool                `json:"offersPickup"`
+	OffersSelfDelivery bool                `json:"offersSelfDelivery"`
 	OperatingHours map[string]*DayHoursReq `json:"operatingHours"`
 	PanNumber      string                  `json:"panNumber"`
 	FSSAINumber    string                  `json:"fssaiLicenseNumber"`

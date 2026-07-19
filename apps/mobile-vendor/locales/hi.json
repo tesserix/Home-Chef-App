@@ -155,6 +155,13 @@
   "onboarding": {
     "continue": "जारी रखें",
     "checkDetails": "अपने विवरण जाँचें",
+    "fulfillmentLabel": "ग्राहक खाना कैसे लेंगे",
+    "fulfillmentHint": "कम से कम एक चुनें — रसोई शुरू करने के लिए यह ज़रूरी है।",
+    "pickupTitle": "पिकअप",
+    "pickupSub": "ग्राहक आपकी रसोई से लेंगे",
+    "selfDeliveryTitle": "मैं खुद पहुँचाता/पहुँचाती हूँ",
+    "selfDeliverySub": "आप अपने क्षेत्र में ऑर्डर पहुँचाते हैं",
+    "fulfillmentError": "कम से कम एक चुनें — पिकअप या डिलीवरी।",
     "stepPersonal": "आपकी जानकारी",
     "stepKitchen": "रसोई",
     "stepOperations": "संचालन",

@@ -666,6 +666,13 @@ func (h *AdminHandler) VerifyChef(c *gin.Context) {
 	// to activate it so verification never produces an active/discoverable
 	// chef with no fulfillment method (mirrors the guard in UpdateChefProfile).
 	if !chef.OffersPickup && !chef.OffersSelfDelivery {
+		// Tell the chef what's blocking them — from the vendor side a "Pending"
+		// kitchen with no reason is a dead end. New applications collect this in
+		// onboarding, so this mainly reaches chefs who onboarded before that.
+		_ = services.SendPushNotification(chef.UserID,
+			"One step to go live",
+			"Choose how customers get their food — offer pickup or delivery in your kitchen settings — so we can activate your kitchen.",
+			map[string]string{"type": "chef_action_required", "reason": "fulfillment_required"})
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chef must offer pickup or delivery before it can be activated"})
 		return
 	}

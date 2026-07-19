@@ -25,6 +25,10 @@ interface Operations {
   operatingHours: Record<string, DayHours>;
   prepTime: string;
   serviceRadius: number;
+  // How customers get their food. At least one is required to finish onboarding
+  // (a kitchen offering neither can't be activated).
+  offersPickup: boolean;
+  offersSelfDelivery: boolean;
 }
 
 interface Documents {
@@ -95,6 +99,8 @@ const initialState = {
     operatingHours: DEFAULT_HOURS,
     prepTime: '30min',
     serviceRadius: 10,
+    offersPickup: true,
+    offersSelfDelivery: false,
   },
   documents: {
     idProofUri: null,
