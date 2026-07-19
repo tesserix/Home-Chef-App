@@ -226,6 +226,30 @@ export default function SettingsScreen() {
     DEFAULT_NOTIFICATION_PREFS,
   );
   const [acceptingOrders, setAcceptingOrders] = useState(false);
+  const [autoSchedule, setAutoSchedule] = useState(false);
+
+  // Auto open/close reads/writes the chef profile (not /chef/settings), via the
+  // pointer-based PUT /chef/profile so it never disturbs other settings.
+  const { data: profileData } = useQuery<{ autoScheduleEnabled?: boolean }>({
+    queryKey: ['chef', 'profile', 'auto-schedule'],
+    queryFn: () => api.get<{ autoScheduleEnabled?: boolean }>('/chef/profile').then((r) => r.data),
+  });
+  useEffect(() => {
+    if (profileData) setAutoSchedule(profileData.autoScheduleEnabled ?? false);
+  }, [profileData]);
+  const autoScheduleMutation = useMutation({
+    mutationFn: (value: boolean) => api.put('/chef/profile', { autoScheduleEnabled: value }),
+  });
+  function handleAutoScheduleToggle(value: boolean) {
+    const previous = autoSchedule;
+    setAutoSchedule(value);
+    autoScheduleMutation.mutate(value, {
+      onError: () => {
+        setAutoSchedule(previous);
+        showToast({ message: 'Could not update auto open/close. Try again.', tone: 'error' });
+      },
+    });
+  }
 
   useEffect(() => {
     if (!data) return;
@@ -431,8 +455,16 @@ export default function SettingsScreen() {
               label="Accepting orders"
               caption="Persists across sessions — use dashboard button for quick toggle"
               value={acceptingOrders}
-              disabled={updateMutation.isPending}
+              disabled={updateMutation.isPending || autoSchedule}
               onValueChange={handleAcceptingOrdersToggle}
+              hasBorderBottom
+            />
+            <ToggleRow
+              label="Auto open/close by hours"
+              caption="Open and close your kitchen automatically to match your operating hours"
+              value={autoSchedule}
+              disabled={autoScheduleMutation.isPending}
+              onValueChange={handleAutoScheduleToggle}
               hasBorderBottom={false}
             />
           </View>
