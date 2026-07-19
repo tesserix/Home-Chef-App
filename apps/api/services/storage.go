@@ -105,3 +105,11 @@ func IsDocContentType(ct string) bool {
 	ct = strings.ToLower(ct)
 	return ct == "image/jpeg" || ct == "image/png" || ct == "application/pdf"
 }
+
+// IsVideoContentType checks if a content type is an allowed video type. Used by
+// the kitchen-media upload so chefs can attach a short kitchen walkthrough clip
+// alongside their photos.
+func IsVideoContentType(ct string) bool {
+	ct = strings.ToLower(ct)
+	return ct == "video/mp4" || ct == "video/quicktime" || ct == "video/webm"
+}

@@ -26,6 +26,8 @@ import {
   X,
   ShieldCheck,
   CreditCard,
+  Video,
+  Film,
 } from 'lucide-react-native';
 import { OnboardingScaffold, useToast } from '@homechef/mobile-shared/ui';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -56,6 +58,7 @@ export default function DocumentsScreen() {
 
   const [idUpload, setIdUpload] = useState<UploadState>({ uploading: false, error: null });
   const [fssaiUpload, setFssaiUpload] = useState<UploadState>({ uploading: false, error: null });
+  const [kitchenUpload, setKitchenUpload] = useState<UploadState>({ uploading: false, error: null });
 
   function setUploadState(docType: DocumentType, state: UploadState): void {
     if (docType === 'id_proof') {
@@ -201,6 +204,113 @@ export default function DocumentsScreen() {
     }
   }
 
+  // ── Kitchen compliance media ────────────────────────────────
+  // A photo of the kitchen AND a short walkthrough video are mandatory so
+  // admins can review the space before approving. Each item is uploaded to
+  // GCS via /chef/kitchen-photos (mirrors the uploadFile flow) and its
+  // returned URL is collected in the store; both kinds submit together as
+  // the `kitchenPhotos` array on /chef/onboarding.
+  async function uploadKitchenMedia(uri: string, mediaType: 'image' | 'video'): Promise<void> {
+    setKitchenUpload({ uploading: true, error: null });
+    try {
+      const formData = new FormData();
+      const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+      const fallbackName = mediaType === 'video' ? 'kitchen.mp4' : 'kitchen.jpg';
+      const filename = uri.split('/').pop() ?? fallbackName;
+      formData.append('file', { uri, name: filename, type: mimeType } as unknown as Blob);
+
+      const res = await api.post('/chef/kitchen-photos', formData, multipartConfig());
+      const url: string | undefined = res.data?.url;
+      if (!url) throw new Error(t('onboarding.uploadFailed'));
+
+      updateDocuments({
+        kitchenMedia: [...documents.kitchenMedia, { url, type: mediaType }],
+      });
+      setKitchenUpload({ uploading: false, error: null });
+      showToast({ message: t('onboarding.kitchenMediaUploaded'), tone: 'success' });
+    } catch (error: unknown) {
+      const serverError =
+        (error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error;
+      const message =
+        serverError ?? (error instanceof Error ? error.message : t('onboarding.uploadFailed'));
+      setKitchenUpload({ uploading: false, error: message });
+      showToast({ message, tone: 'error' });
+    }
+  }
+
+  function removeKitchenMedia(url: string): void {
+    updateDocuments({
+      kitchenMedia: documents.kitchenMedia.filter((m) => m.url !== url),
+    });
+  }
+
+  async function handleKitchenPhoto(): Promise<void> {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: t('onboarding.cameraDenied'), tone: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets[0]) {
+        await uploadKitchenMedia(result.assets[0].uri, 'image');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('onboarding.cameraUnavailable');
+      showToast({ message, tone: 'error' });
+    }
+  }
+
+  async function handleKitchenVideo(): Promise<void> {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: t('onboarding.cameraDenied'), tone: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['videos'],
+        videoMaxDuration: 30,
+      });
+      if (!result.canceled && result.assets[0]) {
+        await uploadKitchenMedia(result.assets[0].uri, 'video');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('onboarding.cameraUnavailable');
+      showToast({ message, tone: 'error' });
+    }
+  }
+
+  async function handleKitchenGallery(): Promise<void> {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: t('onboarding.galleryDenied'), tone: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.85,
+        videoMaxDuration: 30,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const mediaType: 'image' | 'video' = asset.type === 'video' ? 'video' : 'image';
+        await uploadKitchenMedia(asset.uri, mediaType);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('onboarding.galleryFailed');
+      showToast({ message, tone: 'error' });
+    }
+  }
+
+  const hasKitchenPhoto = documents.kitchenMedia.some((m) => m.type === 'image');
+  const hasKitchenVideo = documents.kitchenMedia.some((m) => m.type === 'video');
+  const kitchenMediaComplete = hasKitchenPhoto && hasKitchenVideo;
+
   function onNext(): void {
     if (!documents.idProofUri || !documents.fssaiUri) {
       Alert.alert(
@@ -209,11 +319,20 @@ export default function DocumentsScreen() {
       );
       return;
     }
+    if (!kitchenMediaComplete) {
+      Alert.alert(
+        t('onboarding.kitchenMediaRequired'),
+        t('onboarding.kitchenMediaError'),
+      );
+      return;
+    }
     setStep(5);
     router.push('/(onboarding)/policies');
   }
 
-  const bothUploaded = Boolean(documents.idProofUri && documents.fssaiUri);
+  const bothUploaded = Boolean(
+    documents.idProofUri && documents.fssaiUri && kitchenMediaComplete,
+  );
 
   function renderUploadTile(
     title: string,
@@ -486,6 +605,139 @@ export default function DocumentsScreen() {
         </View>
       </View>
 
+      {/* ── KITCHEN PHOTOS & VIDEO (mandatory) ──────────────────── */}
+      <View style={styles.kitchenSectionLabel}>
+        <Text style={styles.sectionLabelText}>{t('onboarding.kitchenMediaLabel')}</Text>
+      </View>
+
+      <View style={styles.tile}>
+        <View style={styles.tileHeader}>
+          <View style={styles.tileIconWrap}>
+            <Video size={18} color={theme.colors.ink.soft} strokeWidth={1.5} />
+          </View>
+          <View style={styles.tileTitleGroup}>
+            <Text style={styles.tileTitle}>{t('onboarding.kitchenMediaLabel')}</Text>
+            <Text style={styles.tileSubtitle}>{t('onboarding.kitchenMediaHint')}</Text>
+          </View>
+        </View>
+
+        {/* Requirement checklist — needs at least one photo AND one video */}
+        <View style={styles.kitchenReqRow}>
+          <View style={styles.kitchenReqItem}>
+            <CheckCircle
+              size={14}
+              color={hasKitchenPhoto ? theme.colors.success.DEFAULT : theme.colors.ink.muted}
+              strokeWidth={2}
+            />
+            <Text
+              style={[styles.kitchenReqLabel, hasKitchenPhoto && styles.kitchenReqLabelDone]}
+            >
+              {t('onboarding.kitchenReqPhoto')}
+            </Text>
+          </View>
+          <View style={styles.kitchenReqItem}>
+            <CheckCircle
+              size={14}
+              color={hasKitchenVideo ? theme.colors.success.DEFAULT : theme.colors.ink.muted}
+              strokeWidth={2}
+            />
+            <Text
+              style={[styles.kitchenReqLabel, hasKitchenVideo && styles.kitchenReqLabelDone]}
+            >
+              {t('onboarding.kitchenReqVideo')}
+            </Text>
+          </View>
+        </View>
+
+        {/* Uploaded media thumbnails */}
+        {documents.kitchenMedia.length > 0 ? (
+          <View style={styles.kitchenGrid}>
+            {documents.kitchenMedia.map((m) => (
+              <View key={m.url} style={styles.kitchenThumb}>
+                {m.type === 'image' ? (
+                  <Image
+                    source={{ uri: m.url }}
+                    style={styles.kitchenThumbImage}
+                    resizeMode="cover"
+                    accessibilityLabel={t('onboarding.kitchenReqPhoto')}
+                  />
+                ) : (
+                  <View style={styles.kitchenThumbVideo}>
+                    <Film size={22} color={theme.colors.ink.soft} strokeWidth={1.5} />
+                    <Text style={styles.kitchenThumbVideoLabel}>
+                      {t('onboarding.kitchenReqVideo')}
+                    </Text>
+                  </View>
+                )}
+                <Pressable
+                  onPress={() => removeKitchenMedia(m.url)}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.kitchenThumbRemove,
+                    pressed && styles.removeBtnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${m.type}`}
+                >
+                  <X size={12} color={theme.colors.paper} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.dashedZone}>
+            <Text style={styles.dashedZoneHint}>{t('onboarding.tapToUpload')}</Text>
+          </View>
+        )}
+
+        {kitchenUpload.uploading ? (
+          <View style={styles.uploadingRow}>
+            <ActivityIndicator size="small" color={theme.colors.ink.DEFAULT} />
+            <Text style={styles.uploadingLabel}>{t('onboarding.uploading')}</Text>
+          </View>
+        ) : (
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={handleKitchenPhoto}
+              style={({ pressed }) => [styles.actionBtnPrimary, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={t('onboarding.kitchenPhotoAction')}
+            >
+              <Camera size={15} color={theme.colors.paper} strokeWidth={2} />
+              <Text style={styles.actionBtnPrimaryLabel}>{t('onboarding.kitchenPhotoAction')}</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleKitchenVideo}
+              style={({ pressed }) => [
+                styles.actionBtnSecondary,
+                pressed && styles.actionBtnSecondaryPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('onboarding.kitchenVideoAction')}
+            >
+              <Video size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+              <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.kitchenVideoAction')}</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleKitchenGallery}
+              style={({ pressed }) => [
+                styles.actionBtnSecondary,
+                pressed && styles.actionBtnSecondaryPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('onboarding.gallery')}
+            >
+              <ImageIcon size={15} color={theme.colors.ink.soft} strokeWidth={2} />
+              <Text style={styles.actionBtnSecondaryLabel}>{t('onboarding.gallery')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {kitchenUpload.error ? (
+          <Text style={styles.errorText}>{kitchenUpload.error}</Text>
+        ) : null}
+      </View>
+
       <View style={styles.bottomSpacer} />
     </OnboardingScaffold>
   );
@@ -551,6 +803,74 @@ const styles = StyleSheet.create({
   // Section caps label
   sectionLabel: {
     marginBottom: theme.spacing[2],
+  },
+  kitchenSectionLabel: {
+    marginTop: theme.spacing[5],
+    marginBottom: theme.spacing[2],
+  },
+
+  // Kitchen media — requirement checklist + thumbnail grid
+  kitchenReqRow: {
+    flexDirection: 'row',
+    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[3],
+  },
+  kitchenReqItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+  },
+  kitchenReqLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: theme.typography.size.caption.size,
+    color: theme.colors.ink.muted,
+  },
+  kitchenReqLabelDone: {
+    color: theme.colors.ink.DEFAULT,
+  },
+  kitchenGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[3],
+  },
+  kitchenThumb: {
+    width: 88,
+    height: 88,
+    borderRadius: theme.radius.sm,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.bone,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.mist.strong,
+  },
+  kitchenThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  kitchenThumbVideo: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  kitchenThumbVideoLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: theme.colors.ink.soft,
+  },
+  kitchenThumbRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(24, 24, 24, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionLabelText: {
     fontFamily: 'Inter-SemiBold',

@@ -349,9 +349,9 @@ func (h *UploadHandler) UploadKitchenPhoto(c *gin.Context) {
 		return
 	}
 
-	// Check current count
-	if len(chef.KitchenPhotos) >= 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 5 kitchen photos allowed. Remove one before adding another."})
+	// Check current count. Allows a handful of photos plus a walkthrough video.
+	if len(chef.KitchenPhotos) >= 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 8 kitchen media items allowed. Remove one before adding another."})
 		return
 	}
 
@@ -362,20 +362,33 @@ func (h *UploadHandler) UploadKitchenPhoto(c *gin.Context) {
 	}
 	defer file.Close()
 
-	if header.Size > 5*1024*1024 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
-		return
-	}
-
 	contentType := header.Header.Get("Content-Type")
-	if !services.IsImageContentType(contentType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP."})
-		return
-	}
-	sniffed, serr := sniffContentType(file)
-	if serr != nil || !services.IsImageContentType(sniffed) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
-		return
+	isVideo := services.IsVideoContentType(contentType)
+
+	// Videos (a ~30s kitchen walkthrough) legitimately exceed the photo cap,
+	// so allow them a larger ceiling while keeping images at 5 MB.
+	if isVideo {
+		if header.Size > 50*1024*1024 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Video too large. Maximum 50 MB."})
+			return
+		}
+	} else {
+		if header.Size > 5*1024*1024 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Maximum 5 MB."})
+			return
+		}
+		if !services.IsImageContentType(contentType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: JPEG, PNG, WebP, MP4."})
+			return
+		}
+		// Byte-sniff images so a spoofed Content-Type can't slip a payload
+		// through. mp4 magic-byte detection in Go is unreliable, so videos
+		// are validated on their declared type only (checked above).
+		sniffed, serr := sniffContentType(file)
+		if serr != nil || !services.IsImageContentType(sniffed) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File contents don't match an allowed image type."})
+			return
+		}
 	}
 
 	folder := fmt.Sprintf("chefs/%s/kitchen", chef.ID.String())
@@ -652,6 +665,7 @@ func (h *UploadHandler) Onboarding(c *gin.Context) {
 		PanNumber:          req.PanNumber,
 		FSSAILicenseNumber: req.FSSAINumber,
 		GSTIN:              req.GSTIN,
+		KitchenPhotos:      pq.StringArray(req.KitchenPhotos),
 		KitchenType:        kitchenType,
 		IsActive:           true,
 		AcceptingOrders:    false,
@@ -790,6 +804,12 @@ func (h *UploadHandler) updateOnboarding(c *gin.Context, chef *models.ChefProfil
 	chef.City = req.KitchenAddress.City
 	chef.State = req.KitchenAddress.State
 	chef.PostalCode = req.KitchenAddress.PostalCode
+	// Only overwrite kitchen media when this partial update actually carries
+	// some, so a later step that re-submits without the media (e.g. an
+	// address-only edit) doesn't wipe the compliance photos/video.
+	if len(req.KitchenPhotos) > 0 {
+		chef.KitchenPhotos = pq.StringArray(req.KitchenPhotos)
+	}
 	chef.KitchenType = kitchenType
 	chef.IsActive = true
 
@@ -1066,8 +1086,14 @@ type OnboardingRequest struct {
 	// GSTIN is optional — chefs below the GST threshold don't need one.
 	// When provided, persisted to chef_profiles.gstin and printed on
 	// customer invoices alongside the FSSAI number.
-	GSTIN         string `json:"gstin"`
-	AcceptedTerms bool   `json:"acceptedTerms"`
+	GSTIN string `json:"gstin"`
+	// KitchenPhotos are the uploaded GCS URLs for the mandatory kitchen
+	// compliance media (photos + a walkthrough video). The video is just
+	// another URL in this same array — there is no separate video column.
+	// Persisted to chef_profiles.kitchen_photos so admins can review the
+	// kitchen before approving the onboarding.
+	KitchenPhotos []string `json:"kitchenPhotos"`
+	AcceptedTerms bool     `json:"acceptedTerms"`
 }
 
 type KitchenAddressReq struct {

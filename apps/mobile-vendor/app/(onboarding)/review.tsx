@@ -152,6 +152,10 @@ export default function ReviewScreen() {
         // only validates length when provided.
         fssaiLicenseNumber: documents.fssaiLicenseNumber,
         gstin: documents.gstin || undefined,
+        // Kitchen compliance media — both photo and video URLs go in this one
+        // array (the video is just another URL); backend persists them to
+        // chef_profiles.kitchen_photos for admin review.
+        kitchenPhotos: documents.kitchenMedia.map((m) => m.url),
       });
       // Optimistically flip the cached onboarding/status to pending_review
       // so the global routing effect in _layout.tsx sees the user as
@@ -186,7 +190,18 @@ export default function ReviewScreen() {
   // Document status pills
   const idStatus = documents.idProofUri ? t('onboarding.uploaded') : t('onboarding.missing');
   const fssaiStatus = documents.fssaiUri ? t('onboarding.uploaded') : t('onboarding.missing');
-  const docsComplete = Boolean(documents.idProofUri && documents.fssaiUri);
+  const kitchenPhotoCount = documents.kitchenMedia.filter((m) => m.type === 'image').length;
+  const kitchenVideoCount = documents.kitchenMedia.filter((m) => m.type === 'video').length;
+  const kitchenMediaComplete = kitchenPhotoCount > 0 && kitchenVideoCount > 0;
+  const kitchenStatus = kitchenMediaComplete
+    ? t('onboarding.kitchenMediaCount', {
+        photos: kitchenPhotoCount,
+        videos: kitchenVideoCount,
+      })
+    : t('onboarding.missing');
+  const docsComplete = Boolean(
+    documents.idProofUri && documents.fssaiUri && kitchenMediaComplete,
+  );
 
   return (
     <OnboardingScaffold
@@ -261,7 +276,8 @@ export default function ReviewScreen() {
       {/* ── DOCUMENTS ────────────────────────────────────────── */}
       <Section title={t('onboarding.documents')} editRoute="/(onboarding)/documents">
         <RowItem label={t('onboarding.idProof')} value={idStatus} />
-        <RowItem label={t('onboarding.fssaiLicense')} value={fssaiStatus} isLast />
+        <RowItem label={t('onboarding.fssaiLicense')} value={fssaiStatus} />
+        <RowItem label={t('onboarding.kitchenMediaLabel')} value={kitchenStatus} isLast />
       </Section>
 
       {/* ── POLICIES ─────────────────────────────────────────── */}

@@ -49,6 +49,12 @@ interface Documents {
   // (currently ₹20L turnover) don't need one. When set, printed on
   // customer invoices and used by the chef to claim input tax credit.
   gstin: string;
+  // Kitchen compliance media — uploaded GCS URLs (not local uris) for the
+  // kitchen photos + walkthrough video the admin reviews. At least one
+  // photo AND one video are mandatory to finish the documents step. Both
+  // kinds are submitted together as the `kitchenPhotos` array on
+  // /chef/onboarding (the video is just another URL — no separate field).
+  kitchenMedia: Array<{ url: string; type: 'image' | 'video' }>;
 }
 
 interface Policies {
@@ -110,6 +116,7 @@ const initialState = {
     fssaiLicenseNumber: '',
     fssaiExpiryDate: '',
     gstin: '',
+    kitchenMedia: [],
   },
   policies: { acceptedTerms: false, cancellationPolicy: '' },
 };
