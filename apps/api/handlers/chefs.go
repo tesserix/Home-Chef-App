@@ -794,8 +794,9 @@ type UpdateChefProfileRequest struct {
 	PrepTime        *string  `json:"prepTime"`
 	MinimumOrder    *float64 `json:"minimumOrder"`
 	ServiceRadius   *float64 `json:"serviceRadius"`
-	AcceptingOrders *bool    `json:"acceptingOrders"`
-	OffersPickup    *bool    `json:"offersPickup"`
+	AcceptingOrders     *bool `json:"acceptingOrders"`
+	AutoScheduleEnabled *bool `json:"autoScheduleEnabled"`
+	OffersPickup        *bool `json:"offersPickup"`
 	// Chef self-delivery offering + pricing (Phase 2).
 	OffersSelfDelivery        *bool                      `json:"offersSelfDelivery"`
 	SelfDeliveryBaseFee       *float64                   `json:"selfDeliveryBaseFee"`
@@ -869,6 +870,9 @@ func (h *ChefHandler) UpdateChefProfile(c *gin.Context) {
 	}
 	if req.AcceptingOrders != nil {
 		chef.AcceptingOrders = *req.AcceptingOrders
+	}
+	if req.AutoScheduleEnabled != nil {
+		chef.AutoScheduleEnabled = *req.AutoScheduleEnabled
 	}
 	if req.OffersPickup != nil {
 		chef.OffersPickup = *req.OffersPickup

@@ -50,6 +50,11 @@ type ChefProfile struct {
 	VerifiedAt      *time.Time `gorm:"" json:"verifiedAt"`
 	IsActive        bool       `gorm:"default:true" json:"isActive"`
 	AcceptingOrders bool       `gorm:"default:true" json:"acceptingOrders"`
+	// AutoScheduleEnabled opts the kitchen into schedule-driven open/close: when
+	// true, a cron flips AcceptingOrders on/off to match the chef's operating
+	// hours (ChefSchedule) for the current IST day, so the chef doesn't have to
+	// toggle it manually. Default false — the chef manages open/close by hand.
+	AutoScheduleEnabled bool `gorm:"default:false" json:"autoScheduleEnabled"`
 	// PausedUntil powers "Back in {15,30,60} min": when set in the future the
 	// kitchen is temporarily closed (AcceptingOrders is flipped false alongside
 	// it). The auto-resume cron clears it + reopens once the time passes.
@@ -276,7 +281,8 @@ type ChefProfileResponse struct {
 	ProBadge        bool                   `json:"proBadge"`
 	IsFeatured      bool                   `json:"isFeatured"`
 	IsOnline        bool                   `json:"isOnline"`
-	AcceptingOrders bool                   `json:"acceptingOrders"`
+	AcceptingOrders     bool               `json:"acceptingOrders"`
+	AutoScheduleEnabled bool               `json:"autoScheduleEnabled"`
 	PausedUntil     *time.Time             `json:"pausedUntil,omitempty"`
 	KitchenPhotos   []string               `json:"kitchenPhotos"`
 	KitchenType     string                 `json:"kitchenType"`
@@ -363,6 +369,7 @@ func (c *ChefProfile) ToResponse() ChefProfileResponse {
 		IsFeatured:                c.IsFeatured && c.FeaturedUntil != nil && c.FeaturedUntil.After(time.Now()),
 		IsOnline:                  c.AcceptingOrders,
 		AcceptingOrders:           c.AcceptingOrders,
+		AutoScheduleEnabled:       c.AutoScheduleEnabled,
 		PausedUntil:               c.PausedUntil,
 		KitchenPhotos:             kitchenPhotos,
 		KitchenType:               kitchenType,

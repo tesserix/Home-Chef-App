@@ -28,6 +28,9 @@ func cronJobs() []cronJob {
 		{"reconciliation", reconciliationInterval, runReconciliationScan, StartReconciliationCron},
 		{"fssai-reminder", fssaiReminderInterval, runFSSAIReminderScan, StartFSSAIReminderCron},
 		{"availability-resume", availabilityResumeInterval, runAvailabilityResumeScan, StartAvailabilityResumeCron},
+		// Schedule-driven auto open/close: flip AcceptingOrders to match the chef's
+		// operating hours for opted-in kitchens (AutoScheduleEnabled).
+		{"kitchen-schedule", kitchenScheduleInterval, runKitchenScheduleScan, StartKitchenScheduleCron},
 		{"audit-retention", auditRetentionInterval, runAuditRetentionScan, StartAuditRetentionCron},
 		{"meal-plan-sweep", mealPlanSweepInterval, runMealPlanSweep, StartMealPlanCron},
 		{"meal-plan-fulfillment", mealPlanFulfillmentInterval, runMealPlanFulfillment, StartMealPlanFulfillmentCron},
