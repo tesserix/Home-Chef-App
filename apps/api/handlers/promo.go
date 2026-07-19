@@ -124,7 +124,7 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 		MaxDiscount    float64    `json:"maxDiscount"`
 		UsageLimit     int        `json:"usageLimit"`
 		PerUserLimit   int        `json:"perUserLimit"`
-		ValidFrom      time.Time  `json:"validFrom" binding:"required"`
+		ValidFrom      *time.Time `json:"validFrom"`
 		ValidUntil     *time.Time `json:"validUntil"`
 		ApplicableTo   string     `json:"applicableTo"`
 		FundingSource  string     `json:"fundingSource"`
@@ -134,6 +134,10 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if req.ValidFrom == nil {
+		now := time.Now()
+		req.ValidFrom = &now
 	}
 
 	if req.DiscountType != "percentage" && req.DiscountType != "fixed" {
@@ -199,7 +203,7 @@ func (h *PromoHandler) AdminCreatePromo(c *gin.Context) {
 		MaxDiscount:    req.MaxDiscount,
 		UsageLimit:     req.UsageLimit,
 		PerUserLimit:   req.PerUserLimit,
-		ValidFrom:      req.ValidFrom,
+		ValidFrom:      *req.ValidFrom,
 		ValidUntil:     req.ValidUntil,
 		IsActive:       true,
 		ApplicableTo:   applicableTo,
