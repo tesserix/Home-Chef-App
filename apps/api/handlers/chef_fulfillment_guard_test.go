@@ -50,6 +50,7 @@ const chefProfilesGuardDDL = `CREATE TABLE chef_profiles (
 	issue_count integer DEFAULT 0,
 	is_verified integer DEFAULT 0, verified_at datetime,
 	is_active integer DEFAULT 1, accepting_orders integer DEFAULT 1, paused_until datetime,
+	auto_schedule_enabled integer DEFAULT 0,
 	kitchen_photos text DEFAULT '{}', kitchen_type text DEFAULT 'home_kitchen',
 	address_line1 text DEFAULT '', address_line2 text DEFAULT '',
 	city text DEFAULT '', state text DEFAULT '', postal_code text DEFAULT '',
