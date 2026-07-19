@@ -5,11 +5,14 @@ import {
   FileText,
   Wallet,
   CheckCircle,
+  Check,
+  Mail,
   Pencil,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
 import { apiClient } from '@/shared/services/api-client';
+import { useAuthStore } from '@/app/store/auth-store';
 import { toast } from 'sonner';
 
 interface OnboardingStatus {
@@ -58,6 +61,55 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const email = useAuthStore((s) => s.user?.email) ?? '';
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const id = setInterval(() => setOtpCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [otpCooldown]);
+
+  const otpError = (err: unknown, fallback: string): string => {
+    const e = err as { message?: string; response?: { data?: { error?: string } } };
+    return e?.response?.data?.error || e?.message || fallback;
+  };
+
+  const sendEmailOtp = async () => {
+    if (sendingOtp || otpCooldown > 0 || !email) return;
+    setSendingOtp(true);
+    try {
+      await apiClient.post('/account/email/otp/request', { email });
+      setOtpSent(true);
+      setOtpCooldown(60);
+      toast.success('Verification code sent to your email');
+    } catch (err) {
+      toast.error(otpError(err, "Couldn't send the code. Please try again."));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const verifyEmailOtp = async () => {
+    if (verifyingOtp || code.length !== 6) return;
+    setVerifyingOtp(true);
+    try {
+      await apiClient.post('/account/email/otp/verify', { email, code });
+      setEmailVerified(true);
+      setOtpSent(false);
+      toast.success('Email verified');
+    } catch (err) {
+      toast.error(otpError(err, 'That code is incorrect or expired.'));
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -80,6 +132,10 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
   const handleSubmit = async () => {
     if (!termsAccepted) {
       toast.error('Please accept the terms and conditions');
+      return;
+    }
+    if (!emailVerified) {
+      toast.error('Please verify your email before submitting');
       return;
     }
 
@@ -286,6 +342,61 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
         </div>
       </div>
 
+      {/* Email verification */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Mail className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Verify Email</h3>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground truncate">{email}</span>
+          {emailVerified && (
+            <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600">
+              <Check className="h-4 w-4" /> Verified
+            </span>
+          )}
+        </div>
+        {!emailVerified &&
+          (!otpSent ? (
+            <button
+              type="button"
+              onClick={sendEmailOtp}
+              disabled={sendingOtp || !email}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border-2 border-primary/30 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sendingOtp && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Send verification code
+            </button>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                inputMode="numeric"
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-28 rounded-lg border-2 border-input bg-background px-3 py-2 text-sm tracking-[6px] focus:border-ring focus:outline-none focus:ring-4 focus:ring-ring/20"
+              />
+              <button
+                type="button"
+                onClick={verifyEmailOtp}
+                disabled={verifyingOtp || code.length !== 6}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {verifyingOtp && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Verify
+              </button>
+              <button
+                type="button"
+                onClick={sendEmailOtp}
+                disabled={otpCooldown > 0 || sendingOtp}
+                className="px-2 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend'}
+              </button>
+            </div>
+          ))}
+      </div>
+
       {/* Terms */}
       <div className="rounded-xl border border-border bg-card p-5">
         <label className="flex items-start gap-3 cursor-pointer">
@@ -315,7 +426,7 @@ export function StepReview({ onComplete, onBack, onGoToStep }: StepReviewProps) 
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={submitting || !termsAccepted}
+          disabled={submitting || !termsAccepted || !emailVerified}
           className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           {submitting ? 'Submitting...' : 'Submit Application'}
