@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { useCreateTip } from '../../../hooks/useTip';
 import { friendlyErrorMessage } from '../../../lib/errors';
 
@@ -63,7 +63,7 @@ export default function TipScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.intro}>
           Say thanks with a tip — 100% goes straight to your chef and rider, with
           no platform cut.
@@ -80,7 +80,7 @@ export default function TipScreen() {
           amount={riderAmount}
           onChange={setRiderAmount}
         />
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <View style={styles.totalRow}>

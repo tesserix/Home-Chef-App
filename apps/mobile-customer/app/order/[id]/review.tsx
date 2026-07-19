@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -13,6 +12,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Star } from 'lucide-react-native';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useCreateReview } from '../../../hooks/useCreateReview';
 
@@ -157,7 +157,7 @@ export default function OrderReviewScreen() {
           You can review this order once it’s delivered.
         </Text>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           <Text style={{ fontFamily: 'Inter', fontSize: 13, color: customerColors.charcoal.soft, marginBottom: 16 }}>
             How was order #{order.orderNumber}?
           </Text>
@@ -234,7 +234,7 @@ export default function OrderReviewScreen() {
               )}
             </View>
           </Pressable>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
     </SafeAreaView>
   );

@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   Share,
   Text,
   TextInput,
@@ -18,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { Download, ShieldAlert } from 'lucide-react-native';
 
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useProfile } from '../hooks/useProfile';
 import { useExportMyData, useDeleteAccount } from '../hooks/useDataPrivacy';
@@ -97,7 +97,7 @@ export default function DataPrivacyScreen() {
       {/* Pushed screen — headerShown is false app-wide, so draw the back
           affordance ourselves (this screen shipped without one). */}
       <ScreenHeader title="Your Data" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View className="px-4 pt-3 pb-2">
           <Text className="text-sm text-charcoal-soft">
             Access or delete the personal data we hold, per India's DPDP Act 2023.
@@ -186,7 +186,7 @@ export default function DataPrivacyScreen() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

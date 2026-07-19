@@ -19,7 +19,7 @@ import { Redirect, router } from 'expo-router';
 import { CATERING_ENABLED } from '../constants/features';
 import { ChevronLeft, X } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import {
   useAvailableCateringRequests,
   useCateringBookings,
@@ -246,7 +246,7 @@ function QuoteModal({
             <X size={24} color={theme.colors.ink.DEFAULT} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.caption}>
             {request.eventType} · {request.guestCount} guests · {fmtDate(request.eventDate)}
           </Text>
@@ -340,7 +340,7 @@ function QuoteModal({
           <View style={{ marginTop: theme.spacing[5] }}>
             <Button label="Send quote" variant="primary" loading={submit.isPending} onPress={onSubmit} />
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </Modal>
   );

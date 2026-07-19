@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { ChevronLeft, Plus, Trash2 } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { ComboComposer } from '../../components/vendor/ComboComposer';
 import { useVendorMenu } from '../../hooks/useVendorMenu';
 import {
@@ -164,7 +164,7 @@ export default function DailyMenuScreen() {
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: theme.spacing[6] }} color={theme.colors.ink.DEFAULT} />
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           {rows.length === 0 ? (
             <Text style={styles.empty}>No dishes for this day yet. Add what you're cooking.</Text>
           ) : null}
@@ -229,7 +229,7 @@ export default function DailyMenuScreen() {
           <View style={styles.publishRow}>
             <Text style={styles.publishLabel}>{isPublished ? 'Published — customers can book this day' : 'Draft — not visible to customers'}</Text>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
 
       <View style={styles.footer}>

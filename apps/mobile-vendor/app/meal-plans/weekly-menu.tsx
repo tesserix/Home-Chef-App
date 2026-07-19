@@ -16,7 +16,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { getServerErrorMessage } from '@homechef/mobile-shared/api';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import {
   useSaveWeeklyMenu,
   useWeeklyMenu,
@@ -264,10 +264,7 @@ export default function WeeklyMenuEditorScreen() {
         })}
       </ScrollView>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.dayHeadingRow}>
           <Text style={styles.dayHeading}>{day.long}</Text>
           <Pressable onPress={copyDayToAll} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy this day to all days">
@@ -328,7 +325,7 @@ export default function WeeklyMenuEditorScreen() {
             trackColor={{ true: theme.colors.herb.DEFAULT }}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button

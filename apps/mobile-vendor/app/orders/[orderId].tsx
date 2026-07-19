@@ -4,7 +4,6 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Skeleton, useToast } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, Skeleton, useToast } from '@homechef/mobile-shared/ui';
 import { DietIcon } from '../../components/vendor/DietIcon';
 import {
   useOrderDetail,
@@ -971,7 +970,7 @@ export default function OrderDetailScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -1326,7 +1325,7 @@ export default function OrderDetailScreen() {
 
         {/* Bottom padding for footer */}
         <View style={{ height: theme.spacing[10] }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <FooterActions
         status={order.status}

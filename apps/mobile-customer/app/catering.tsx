@@ -28,6 +28,7 @@ import type { CateringRequest } from '../hooks/useCatering';
 import { friendlyErrorMessage } from '../lib/errors';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 
 // Threat model T-02-05-02: Zod validates required fields before POST
 const cateringSchema = z.object({
@@ -424,9 +425,8 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
-      keyboardShouldPersistTaps="handled"
     >
       {/* Event Type chips — horizontal scroll */}
       <FieldLabel>Event Type *</FieldLabel>
@@ -707,7 +707,7 @@ function RequestForm({ onSuccess }: { onSuccess: () => void }) {
           </View>
         )}
       </Pressable>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { StatusBar, StyleSheet, View } from 'react-native';
 import {
   SafeAreaView,
   type Edge,
   type SafeAreaViewProps,
 } from 'react-native-safe-area-context';
 import { theme } from '../theme/tokens';
+import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 
 interface ScreenProps {
   children: ReactNode;
@@ -63,20 +64,12 @@ export function Screen({
         backgroundColor={background}
       />
       {scroll ? (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-          // Keyboard avoidance: inset the scroll by the keyboard height and scroll
-          // the focused field into view, so tapping a lower field (password /
-          // confirm / CTA) never leaves it hidden behind the keyboard. iOS-native;
-          // on Android the window's adjustResize handles the same.
-          automaticallyAdjustKeyboardInsets
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           {content}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : (
         content
       )}

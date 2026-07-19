@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -14,7 +13,7 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { useToast } from '@homechef/mobile-shared/ui';
+import { KeyboardAwareScrollView, useToast } from '@homechef/mobile-shared/ui';
 import { api } from '../lib/api';
 
 // Matches the backend shape from GET /chef/notification-preferences (see
@@ -193,10 +192,9 @@ export default function NotificationPreferencesScreen() {
         <Text style={styles.commandTitle}>Notifications</Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.sectionLabel}>CATEGORIES</Text>
         <View style={styles.card}>
@@ -277,7 +275,7 @@ export default function NotificationPreferencesScreen() {
           Times are interpreted in your local timezone ({prefs.timezone}).
           Changes save automatically.
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -8,7 +8,6 @@ import {
   Alert,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +19,7 @@ import { ChevronLeft, Camera, Check } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useFormDraft } from '@homechef/mobile-shared/hooks';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReportIssue, type IssueReason } from '../../../hooks/useReportIssue';
 
@@ -183,7 +183,7 @@ export default function ReportIssueScreen() {
           <ActivityIndicator color={customerColors.coral.DEFAULT} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.sectionLabel}>What went wrong?</Text>
           <View style={styles.reasonWrap}>
             {REASONS.map((r) => {
@@ -275,7 +275,7 @@ export default function ReportIssueScreen() {
               )}
             </View>
           </Pressable>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
     </SafeAreaView>
   );

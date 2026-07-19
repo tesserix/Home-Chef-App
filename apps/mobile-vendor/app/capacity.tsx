@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -14,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { theme } from '@homechef/mobile-shared/theme';
-import { Button } from '@homechef/mobile-shared/ui';
+import { Button, KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import {
   useCapacitySettings,
   useSetItemCapacity,
@@ -157,7 +156,7 @@ export default function CapacityScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
         {/* Cutoffs */}
         <View style={styles.card}>
           <View style={styles.rowBetween}>
@@ -296,7 +295,7 @@ export default function CapacityScreen() {
             })
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

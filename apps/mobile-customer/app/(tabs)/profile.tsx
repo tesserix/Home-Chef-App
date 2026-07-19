@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -38,6 +37,7 @@ import {
 } from '../../lib/features';
 import { useAuthStore } from '../../store/auth-store';
 import { customerColors } from '@homechef/mobile-shared/theme';
+import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { DIET_OPTIONS, ALLERGEN_OPTIONS } from '@homechef/mobile-shared/dietary';
 import { useDockClearance } from '../../components/navigation/Dock';
 import { ScreenTitle } from '../../components/shared/ScreenTitle';
@@ -252,7 +252,9 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: dockClearance }}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ paddingBottom: dockClearance }}
+      >
 
         <ScreenTitle title="Profile" />
 
@@ -692,7 +694,7 @@ export default function ProfileScreen() {
           )}
         </Pressable>
 
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
