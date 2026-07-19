@@ -575,6 +575,9 @@ const notHomeKitchenMsg = "Fe3dr is for individual home chefs only — cloud kit
 // onboarding can proceed. When allowUnchanged is true (resubmits) an email that
 // already matches the account's stored email passes without re-verification.
 func (h *UploadHandler) ensureEmailVerified(c *gin.Context, userID uuid.UUID, email string, allowUnchanged bool) bool {
+	if config.AppConfig == nil || !config.AppConfig.EmailOTPEnabled {
+		return true
+	}
 	email = services.NormalizeEmail(email)
 	if !services.IsValidEmailFormat(email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Enter a valid email address", "field": "email"})

@@ -149,6 +149,10 @@ type Config struct {
 	// the *_enc/*_bidx columns + backfill are in place; flipping it on requires the
 	// KMS key + secrets (prod-homechef-pii-*) to be reachable at boot.
 	PIIEncryptionEnabled bool
+	// EmailOTPEnabled gates enforcing a 6-digit email OTP before onboarding.
+	// Default off so the API can deploy ahead of the OTP UI in the frontends;
+	// flip EMAIL_OTP_ENABLED=true once the onboarding apps ship the code entry.
+	EmailOTPEnabled bool
 
 	// DeliveryDistancePricePerCallUSD / DeliveryWeatherPricePerCallUSD are the
 	// per-call prices of the metered delivery-intelligence providers (#699), used
@@ -205,6 +209,7 @@ func Load() {
 	orderSaga, _ := strconv.ParseBool(getEnv("ORDER_SAGA_ENABLED", "false"))
 	onboardingWorkflow, _ := strconv.ParseBool(getEnv("ONBOARDING_WORKFLOW_ENABLED", "false"))
 	piiEncryption, _ := strconv.ParseBool(getEnv("PII_ENCRYPTION_ENABLED", "false"))
+	emailOTP, _ := strconv.ParseBool(getEnv("EMAIL_OTP_ENABLED", "false"))
 	distancePricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_DISTANCE_PRICE_PER_CALL_USD", "0.005"), 64)
 	weatherPricePerCall, _ := strconv.ParseFloat(getEnv("DELIVERY_WEATHER_PRICE_PER_CALL_USD", "0.001"), 64)
 	deliveryMaxRadiusKm, _ := strconv.ParseFloat(getEnv("DELIVERY_DEFAULT_MAX_RADIUS_KM", "10"), 64)
@@ -331,6 +336,7 @@ func Load() {
 		OrderSagaEnabled:                orderSaga,
 		OnboardingWorkflowEnabled:       onboardingWorkflow,
 		PIIEncryptionEnabled:            piiEncryption,
+		EmailOTPEnabled:                 emailOTP,
 	}
 }
 
