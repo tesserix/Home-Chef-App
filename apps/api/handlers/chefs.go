@@ -27,6 +27,11 @@ func NewChefHandler() *ChefHandler {
 	return &ChefHandler{}
 }
 
+// maxDiscoveryRadiusKm caps the customer "near me" radius so a home kitchen is
+// only discoverable to nearby customers — a home cook can't serve another city,
+// let alone another state. Also a backstop against a bad/huge radius value.
+const maxDiscoveryRadiusKm = 30.0
+
 // chefBoundingBox returns the lat/lng rectangle around (lat,lng) covering
 // radiusKm, used as a cheap SQL-side "near me" prefilter (#36). ~1° latitude ≈
 // 111 km; longitude degrees shrink by cos(lat). A rectangle is a good-enough
@@ -46,6 +51,7 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	search := c.Query("search")
+	stateFilter := strings.TrimSpace(c.Query("state"))
 	cuisine := c.Query("cuisine")
 	dietary := c.Query("dietary")
 	isOpen := c.Query("isOpen")
@@ -87,6 +93,13 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 		// customer homepage.
 		Where("is_verified = ?", true).
 		Scopes(services.ExcludeFSSAILocked) // FSSAI lockout (#91): hide lapsed-licence India chefs
+
+	// Region gate: when the customer's selected delivery address carries a state,
+	// hide kitchens in other states outright — a home cook in Maharashtra is never
+	// relevant to a customer ordering to Odisha, regardless of the distance box.
+	if stateFilter != "" {
+		query = query.Where("LOWER(state) = LOWER(?)", stateFilter)
+	}
 
 	// Search filter
 	if search != "" {
@@ -140,6 +153,17 @@ func (h *ChefHandler) ListChefs(c *gin.Context) {
 			if r, err := strconv.ParseFloat(rS, 64); err == nil && r > 0 {
 				radiusKm = r
 			}
+		}
+		// The client has historically sent metres (e.g. 20000 = 20 km) while the
+		// box math is in km — read as-is that put the radius at 20,000 km, i.e. the
+		// whole planet, so the near-me filter did nothing and kitchens from other
+		// states surfaced. Treat an implausibly large value as metres, then cap it
+		// so no value can disable local filtering.
+		if radiusKm > 500 {
+			radiusKm /= 1000
+		}
+		if radiusKm > maxDiscoveryRadiusKm {
+			radiusKm = maxDiscoveryRadiusKm
 		}
 		minLat, maxLat, minLng, maxLng := chefBoundingBox(geoLat, geoLng, radiusKm)
 		query = query.Where("latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",

@@ -47,7 +47,7 @@ import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/typ
 import { useActiveOrder } from '../../hooks/useActiveOrder';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
-import { useCustomerCoords } from '../../hooks/useCustomerCoords';
+import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
 
 // Entrance easing — ease-out-quart, matches the app-wide motion spec.
 const ENTRANCE_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -122,6 +122,7 @@ export default function HomeScreen() {
   // by the delivery-area gate, not a fixed circle around the customer (otherwise
   // a customer with no chef within 15km sees an empty feed).
   const coords = useCustomerCoords();
+  const { address: activeAddress } = useActiveAddress();
   const filters: ChefFilters = {
     cuisine: selectedCuisine !== 'All' ? selectedCuisine : undefined,
     dietary: selectedDiet || undefined,
@@ -130,7 +131,11 @@ export default function HomeScreen() {
     sort,
     lat: coords?.lat,
     lng: coords?.lng,
-    radius: coords ? 20000 : undefined,
+    // Real near-me radius (km) — the API caps it. Keeps the feed to nearby
+    // kitchens instead of surfacing ones in other cities/states.
+    radius: coords ? 25 : undefined,
+    // Hard region gate: only kitchens in the delivery address's state.
+    state: activeAddress?.state || undefined,
     limit: 20,
   };
 
