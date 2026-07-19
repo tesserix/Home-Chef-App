@@ -10,7 +10,6 @@ import {
   Wallet,
   ChevronRight,
   Check,
-  X,
   UtensilsCrossed,
   TrendingUp,
 } from 'lucide-react';
@@ -181,15 +180,7 @@ function WeeklyRevenueChart({
   );
 }
 
-function PendingOrderCard({
-  order,
-  onAccept,
-  onReject,
-}: {
-  order: Order;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-}) {
+function PendingOrderCard({ order }: { order: Order }) {
   return (
     <motion.div
       variants={fadeInUp}
@@ -229,26 +220,15 @@ function PendingOrderCard({
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2">
-        <Button
-          size="sm"
-          variant="default"
-          className="flex-1"
-          leftIcon={<Check className="h-4 w-4" />}
-          onClick={() => onAccept(order.id)}
-        >
-          Accept
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1"
-          leftIcon={<X className="h-4 w-4" />}
-          onClick={() => onReject(order.id)}
-        >
-          Reject
-        </Button>
-      </div>
+      {/* Review before responding — no accept/reject here; the chef opens the
+          order to see pickup time + pricing, then accepts or rejects. */}
+      <Link
+        to="/orders"
+        className="mt-4 flex items-center justify-between border-t border-amber/20 pt-3 text-sm font-semibold text-ink transition-opacity hover:opacity-80"
+      >
+        Review &amp; respond
+        <ChevronRight className="h-4 w-4 text-ink-soft" />
+      </Link>
     </motion.div>
   );
 }
@@ -462,15 +442,6 @@ export default function DashboardPage() {
   const pendingOrders = orders?.filter((o) => o.status === 'pending') ?? [];
   const recentOrders = orders?.slice(0, 8) ?? [];
 
-  // Action handlers (would call mutation in production)
-  const handleAcceptOrder = (_orderId: string) => {
-    // TODO: useMutation to PATCH /chef/orders/:id/accept
-  };
-
-  const handleRejectOrder = (_orderId: string) => {
-    // TODO: useMutation to PATCH /chef/orders/:id/reject
-  };
-
   // Loading skeleton
   if (statsLoading || ordersLoading) {
     return (
@@ -608,12 +579,7 @@ export default function DashboardPage() {
           {pendingOrders.length > 0 ? (
             <div className="space-y-3">
               {pendingOrders.slice(0, 3).map((order) => (
-                <PendingOrderCard
-                  key={order.id}
-                  order={order}
-                  onAccept={handleAcceptOrder}
-                  onReject={handleRejectOrder}
-                />
+                <PendingOrderCard key={order.id} order={order} />
               ))}
               {pendingOrders.length > 3 && (
                 <Link
