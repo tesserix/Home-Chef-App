@@ -18,25 +18,52 @@ import { Input } from '../ui/Input';
 import { theme } from '../theme/tokens';
 import { resolveAuthErrorMessage } from '../auth/bff-session';
 import { SocialIconButton, GoogleGlyph, AppleGlyph } from './_socialIcons';
+import {
+  getPhoneRule,
+  sanitizePhoneInput,
+  DEFAULT_PHONE_COUNTRY,
+  type PhoneRule,
+} from '../validation/phone';
+import { isStrongPassword, passwordCheckResults } from '../validation/password';
 
-const registerSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Enter a valid email'),
-  // Phone stays optional at sign-up (onboarding makes it required), but when a
-  // value IS entered it must match the same 10-digit Indian-mobile rule the
-  // onboarding step enforces — otherwise a malformed number (e.g. 9 digits)
-  // sails through here and only gets rejected later on the onboarding screen.
-  phone: z
-    .string()
-    .optional()
-    .refine((v) => !v || /^[6-9]\d{9}$/.test(v), {
-      message: 'Enter a valid 10-digit Indian mobile number',
-    }),
-  password: z.string().min(8, 'Minimum 8 characters'),
-});
+// The form shape is stable regardless of country; only the phone rule inside the
+// schema changes. Kept explicit so the onRegister prop type doesn't shift.
+interface RegisterFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  password: string;
+  confirmPassword: string;
+}
 
-type RegisterFormData = z.infer<typeof registerSchema>;
+// Country-aware so a future non-India market just supplies a different phone
+// rule (length + pattern) — the rest of the form is unchanged.
+function makeRegisterSchema(rule: PhoneRule) {
+  return z
+    .object({
+      firstName: z.string().min(1, 'First name is required'),
+      lastName: z.string().min(1, 'Last name is required'),
+      email: z.string().email('Enter a valid email'),
+      // Phone stays optional at sign-up (onboarding makes it required), but when a
+      // value IS entered it must be a complete national number for the country —
+      // the input already hard-caps the digit count, this catches "too short".
+      phone: z
+        .string()
+        .optional()
+        .refine((v) => !v || rule.pattern.test(v), {
+          message: `Enter a valid ${rule.length}-digit mobile number`,
+        }),
+      password: z
+        .string()
+        .refine(isStrongPassword, 'Meet all the password requirements below'),
+      confirmPassword: z.string().min(1, 'Re-enter your password to confirm'),
+    })
+    .refine((d) => d.password === d.confirmPassword, {
+      message: 'Passwords do not match',
+      path: ['confirmPassword'],
+    });
+}
 
 interface RegisterScreenProps {
   onRegister: (data: RegisterFormData) => Promise<void>;
@@ -56,6 +83,9 @@ interface RegisterScreenProps {
   /** Optional accent colour for the primary CTA + links. Customer passes its
    *  Airbnb coral; vendor/driver omit it and keep the ink palette. */
   accent?: string;
+  /** ISO country for the phone rule (digit length + format). Defaults to India;
+   *  a future market passes its own code. */
+  phoneCountry?: string;
 }
 
 export function RegisterScreen({
@@ -67,19 +97,29 @@ export function RegisterScreen({
   subtitle = 'A few details to get you cooking',
   brand,
   accent,
+  phoneCountry = DEFAULT_PHONE_COUNTRY,
 }: RegisterScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const errorOpacity = useRef(new Animated.Value(0)).current;
   const errorTranslate = useRef(new Animated.Value(-8)).current;
 
+  const phoneRule = getPhoneRule(phoneCountry);
+  const registerSchema = React.useMemo(() => makeRegisterSchema(phoneRule), [phoneRule]);
+
   const {
     control,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', phone: '', password: '' },
+    defaultValues: { firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '' },
   });
+
+  // Live password-requirement checklist. Only shown once the user starts typing
+  // a password, so an untouched form isn't nagging.
+  const passwordValue = watch('password') ?? '';
+  const passwordChecks = passwordCheckResults(passwordValue);
 
   useEffect(() => {
     Animated.parallel([
@@ -205,14 +245,18 @@ export function RegisterScreen({
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
             label="Phone (optional)"
-            placeholder="9876543210"
-            keyboardType="phone-pad"
+            placeholder={phoneRule.example}
+            keyboardType="number-pad"
             autoComplete="tel"
+            // Hard guard: strip non-digits and cap at the country's national
+            // length, so the user physically cannot type an extra digit.
+            // maxLength backs this up at the native TextInput level.
+            maxLength={phoneRule.length}
             onBlur={onBlur}
-            onChangeText={onChange}
+            onChangeText={(text) => onChange(sanitizePhoneInput(text, phoneCountry))}
             value={value ?? ''}
             error={errors.phone?.message}
-            helper="We use this only for order issues — never shared."
+            helper={`${phoneRule.dialCode} · ${phoneRule.length}-digit mobile. Only for order issues — never shared.`}
           />
         )}
       />
@@ -223,7 +267,7 @@ export function RegisterScreen({
         render={({ field: { onChange, onBlur, value } }) => (
           <Input
             label="Password"
-            placeholder="At least 8 characters"
+            placeholder="Create a strong password"
             secureTextEntry
             passwordPeek
             autoComplete="new-password"
@@ -231,7 +275,44 @@ export function RegisterScreen({
             onChangeText={onChange}
             value={value}
             error={errors.password?.message}
-            helper="At least 8 characters. Mix letters and numbers."
+          />
+        )}
+      />
+
+      {/* Live password-requirement checklist — turns green as each rule is met.
+          Only appears once the user starts typing, so it guides rather than nags. */}
+      {passwordValue.length > 0 ? (
+        <View style={styles.pwChecklist}>
+          {passwordChecks.map((c) => (
+            <View key={c.id} style={styles.pwCheckRow}>
+              <Text
+                style={[styles.pwCheckMark, c.met ? styles.pwCheckMarkMet : null]}
+                accessibilityLabel={c.met ? 'met' : 'not met'}
+              >
+                {c.met ? '✓' : '○'}
+              </Text>
+              <Text style={[styles.pwCheckLabel, c.met ? styles.pwCheckLabelMet : null]}>
+                {c.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <Controller
+        control={control}
+        name="confirmPassword"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Confirm password"
+            placeholder="Re-enter your password"
+            secureTextEntry
+            passwordPeek
+            autoComplete="new-password"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            error={errors.confirmPassword?.message}
           />
         )}
       />
@@ -294,6 +375,23 @@ export function RegisterScreen({
 const styles = StyleSheet.create({
   topGap: { height: theme.spacing[6] },
   bottomGap: { height: theme.spacing[8] },
+
+  pwChecklist: {
+    marginBottom: theme.spacing[4],
+    gap: theme.spacing[1],
+    paddingLeft: theme.spacing[1],
+  },
+  pwCheckRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  pwCheckMark: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    width: 16,
+    textAlign: 'center',
+    color: theme.colors.ink.muted,
+  },
+  pwCheckMarkMet: { color: theme.colors.success.DEFAULT },
+  pwCheckLabel: { fontFamily: 'Inter', fontSize: 13, color: theme.colors.ink.muted },
+  pwCheckLabelMet: { color: theme.colors.ink.soft },
 
   brand: {
     fontFamily: 'Inter-SemiBold',
