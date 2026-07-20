@@ -16,6 +16,7 @@ import (
 	"github.com/homechef/api/config"
 	"github.com/homechef/api/database"
 	"github.com/homechef/api/models"
+	"gorm.io/gorm"
 )
 
 // NotificationService consumes domain events from durable JetStream consumers
@@ -331,22 +332,12 @@ func (s *NotificationService) handleOrderCreated(event OrderEvent) error {
 		return fmt.Errorf("save order_created notification: %w", err)
 	}
 
-	// Push to chef + emails to customer and chef (best-effort: they are durable
-	// events on the NOTIFICATIONS stream, retried independently by notify-dispatch).
+	// Push to chef only. Order lifecycle notifications are push + in-app only; the
+	// delivered GST invoice is the sole order email (owner decision 2026-07-20).
 	PublishNotification(NotificationEvent{
 		UserID: chefUser, Type: "push",
 		Title: "New Order Received", Message: "You have a new order waiting to be prepared!",
 		Data: map[string]any{"order_id": event.OrderID.String()},
-	})
-	PublishNotification(NotificationEvent{
-		UserID: event.CustomerID, Type: "email",
-		Title: "Order Confirmed", Message: "Your order has been placed successfully!",
-		Data: map[string]any{"type": "order_confirmation", "order_number": event.OrderNumber, "total": event.Total},
-	})
-	PublishNotification(NotificationEvent{
-		UserID: chefUser, Type: "email",
-		Title: "New Order Received", Message: "You have a new order to prepare!",
-		Data: map[string]any{"type": "chef_new_order", "order_number": event.OrderNumber, "total": event.Total},
 	})
 	return nil
 }
@@ -363,15 +354,12 @@ func (s *NotificationService) handleOrderUpdated(event OrderEvent) error {
 		return fmt.Errorf("save order_status notification: %w", err)
 	}
 
+	// Status changes are push + in-app only — no email per transition (owner
+	// decision 2026-07-20). This removes ~5 redundant emails per order lifecycle.
 	PublishNotification(NotificationEvent{
 		UserID: event.CustomerID, Type: "push",
 		Title: "Order Update", Message: getOrderStatusMessage(event.Status),
 		Data: map[string]any{"order_id": event.OrderID.String(), "status": event.Status},
-	})
-	PublishNotification(NotificationEvent{
-		UserID: event.CustomerID, Type: "email",
-		Title: "Order Update", Message: getOrderStatusMessage(event.Status),
-		Data: map[string]any{"type": "order_status", "order_number": event.OrderNumber, "status": event.Status},
 	})
 	return nil
 }
@@ -401,12 +389,7 @@ func (s *NotificationService) handleOrderCancelled(event OrderEvent) error {
 			Data: map[string]any{"order_id": event.OrderID.String()},
 		})
 	}
-
-	PublishNotification(NotificationEvent{
-		UserID: event.CustomerID, Type: "email",
-		Title: "Order Cancelled", Message: "Your order has been cancelled",
-		Data: map[string]any{"type": "order_status", "order_number": event.OrderNumber, "status": "cancelled"},
-	})
+	// No cancellation email — push + in-app only (owner decision 2026-07-20).
 	return nil
 }
 
@@ -457,8 +440,10 @@ func (s *NotificationService) handleOrderVoided(ev voidEvent) error {
 	}); err != nil {
 		return fmt.Errorf("save order_voided notification for %s: %w", customerID, err)
 	}
-	// Push + email so the apology reaches them even with the app closed — being
-	// silently refunded reads as "they took my money and cancelled my dinner".
+	// Push so the apology reaches them even with the app closed — being silently
+	// refunded reads as "they took my money and cancelled my dinner". Email
+	// intentionally dropped: order emails are push + in-app only, invoice excepted
+	// (owner decision 2026-07-20).
 	PublishNotification(NotificationEvent{
 		UserID: customerID, Type: "push", Title: title, Message: body,
 		// Both key casings: the customer app's deep-link handler reads camelCase
@@ -466,10 +451,6 @@ func (s *NotificationService) handleOrderVoided(ev voidEvent) error {
 		// `order_id`. Carrying both is cheaper than a coordinated rename and lets
 		// a tap on the apology open the order (#694 UI).
 		Data: map[string]any{"order_id": ev.OrderID.String(), "orderId": ev.OrderID.String(), "type": "order_voided"},
-	})
-	PublishNotification(NotificationEvent{
-		UserID: customerID, Type: "email", Title: title, Message: body,
-		Data: map[string]any{"type": "order_voided", "order_number": ev.OrderNumber},
 	})
 	return nil
 }
@@ -560,15 +541,22 @@ func (s *NotificationService) handleOrderDelivered(event OrderEvent) error {
 
 	// Wave 3: auto-email the GST tax invoice PDF to the customer shortly after
 	// delivery. Kept off the worker hot path (PDF render is ~hundreds of ms).
-	go emailDeliveredInvoice(event)
+	// Capture the DB handle at spawn time rather than reading the global inside
+	// the detached goroutine: the handler returns immediately, and the global can
+	// be swapped/torn down out from under the goroutine (nil-deref panic in tests
+	// that reset database.DB between cases).
+	go emailDeliveredInvoice(database.DB, event)
 	return nil
 }
 
 // emailDeliveredInvoice resolves the customer's email and dispatches the PDF
 // invoice. Best-effort: the in-app + push confirmations above are authoritative.
-func emailDeliveredInvoice(event OrderEvent) {
+func emailDeliveredInvoice(db *gorm.DB, event OrderEvent) {
+	if db == nil {
+		return
+	}
 	var customer models.User
-	if err := database.DB.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
+	if err := db.First(&customer, "id = ?", event.CustomerID).Error; err != nil {
 		log.Printf("invoice-email skipped: customer %s lookup failed: %v", event.CustomerID, err)
 		return
 	}

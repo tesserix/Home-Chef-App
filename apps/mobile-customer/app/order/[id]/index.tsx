@@ -915,10 +915,15 @@ export default function OrderDetailScreen() {
               onPress={() => router.push(`/order/${order.id}/receipt`)}
               accessibilityRole="button"
               accessibilityLabel="View receipt"
-              style={({ pressed }) => [styles.receiptLink, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}
             >
-              <Receipt size={16} color={customerColors.coral.pressed} />
-              <Text style={styles.receiptLinkText}>View receipt</Text>
+              {/* Layout lives on this inner View, not the Pressable: a function-
+                  style Pressable returning an array drops flex props on iOS, which
+                  collapsed the row and stacked the icon above the label. */}
+              <View style={styles.receiptLink}>
+                <Receipt size={16} color={customerColors.coral.pressed} />
+                <Text style={styles.receiptLinkText}>View receipt</Text>
+              </View>
             </Pressable>
           ) : null}
         </View>
