@@ -664,18 +664,7 @@ export default function OrderDetailScreen() {
                 </Text>
               </View>
             </Pressable>
-            {/* Tip your chef / rider (#45) — 100% pass-through. */}
-            <Pressable
-              onPress={() => router.push(`/order/${order.id}/tip`)}
-              accessibilityRole="button"
-              accessibilityLabel="Tip your chef or rider"
-              style={{ marginTop: 12 }}
-            >
-              <View style={styles.tipButton}>
-                <Text style={styles.tipButtonText}>Tip your chef / rider</Text>
-              </View>
-            </Pressable>
-            {/* Reorder (#238) — re-add these items to the cart. */}
+            {/* Reorder (#238) — outline secondary, re-adds these items to the cart. */}
             <Pressable
               onPress={handleReorder}
               disabled={reorder.isPending}
@@ -691,16 +680,27 @@ export default function OrderDetailScreen() {
                 )}
               </View>
             </Pressable>
-            {/* Back to Home — clear exit once the order is complete. Replaces the
-                stack so the back gesture doesn't return to the finished order. */}
-            <Pressable
-              onPress={() => router.replace('/(tabs)')}
-              accessibilityRole="button"
-              accessibilityLabel="Back to home"
-              style={{ marginTop: 12 }}
-            >
-              <Text style={styles.homeLink}>Back to Home</Text>
-            </Pressable>
+            {/* Tip + Back to Home — quiet text links, side by side, so they don't
+                compete with the primary Review / Reorder actions above. */}
+            <View style={styles.quietLinkRow}>
+              <Pressable
+                onPress={() => router.push(`/order/${order.id}/tip`)}
+                accessibilityRole="button"
+                accessibilityLabel="Tip your chef or rider"
+                hitSlop={8}
+              >
+                <Text style={styles.quietLink}>Tip your chef / rider</Text>
+              </Pressable>
+              <Text style={styles.quietLinkDot}>·</Text>
+              <Pressable
+                onPress={() => router.replace('/(tabs)')}
+                accessibilityRole="button"
+                accessibilityLabel="Back to home"
+                hitSlop={8}
+              >
+                <Text style={styles.quietLink}>Back to Home</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -1384,6 +1384,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 8,
   },
+  // Quiet secondary links (Tip · Back to Home) in a centered row below the
+  // primary Review / Reorder actions.
+  quietLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  quietLink: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.coral.pressed,
+    paddingVertical: 4,
+  },
+  quietLinkDot: { color: customerColors.charcoal.soft, fontSize: 14 },
   // Report an issue (#37) — quiet text link below the primary actions.
   reportWrapper: { paddingHorizontal: 20, marginTop: 16, alignItems: 'center' },
   reportLink: {

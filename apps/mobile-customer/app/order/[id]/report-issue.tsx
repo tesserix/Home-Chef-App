@@ -22,6 +22,7 @@ import { customerColors } from '@homechef/mobile-shared/theme';
 import { KeyboardAwareScrollView } from '@homechef/mobile-shared/ui';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReportIssue, type IssueReason } from '../../../hooks/useReportIssue';
+import { friendlyErrorMessage } from '../../../lib/errors';
 
 const REASONS: { value: IssueReason; label: string }[] = [
   { value: 'missing_item', label: 'Missing item' },
@@ -163,7 +164,11 @@ export default function ReportIssueScreen() {
             Alert.alert('Thanks for reporting', res.message, [{ text: 'OK', onPress: () => router.back() }]);
           }
         },
-        onError: () => Alert.alert('Could not report', 'Please try again in a moment.'),
+        onError: (err) =>
+          Alert.alert(
+            'Could not report',
+            friendlyErrorMessage(err, 'Please try again in a moment.'),
+          ),
       },
     );
   }
@@ -271,7 +276,14 @@ export default function ReportIssueScreen() {
               {report.isPending ? (
                 <ActivityIndicator color={customerColors.canvas} />
               ) : (
-                <Text style={styles.submitText}>Submit report</Text>
+                <Text
+                  style={[
+                    styles.submitText,
+                    !reason && styles.submitTextDisabled,
+                  ]}
+                >
+                  Submit report
+                </Text>
               )}
             </View>
           </Pressable>
@@ -383,4 +395,7 @@ const styles = StyleSheet.create({
   },
   submitDisabled: { backgroundColor: customerColors.surface.soft, borderWidth: 1, borderColor: customerColors.hairline },
   submitText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
+  // Disabled (no reason picked) uses the light surface bg, so the white label is
+  // invisible — switch to muted charcoal so "Submit report" stays readable.
+  submitTextDisabled: { color: customerColors.charcoal.soft },
 });
