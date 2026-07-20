@@ -49,6 +49,39 @@ export function getStepLabels(
   return isPickupFulfillment(fulfillment) ? PICKUP_STEPS : DELIVERY_STEPS;
 }
 
+// The status each step represents, so anything rendering a per-step icon
+// (StageIcon in the timeline) derives it from here instead of re-deriving the
+// delivery/pickup split. Index-aligned with getStepLabels.
+//
+// Step 2 is the pivot, mirroring getStepIndex: delivery is in motion
+// ("On the way" → delivering → scooter), pickup is waiting to be collected
+// ("Ready for pickup" → ready → chef).
+const DELIVERY_STEP_STATUSES = [
+  'accepted',
+  'preparing',
+  'delivering',
+  'delivered',
+] as const satisfies readonly OrderStatus[];
+
+const PICKUP_STEP_STATUSES = [
+  'accepted',
+  'preparing',
+  'ready',
+  'delivered',
+] as const satisfies readonly OrderStatus[];
+
+/**
+ * The representative status for each step, index-aligned with getStepLabels.
+ * Used to pick a per-step icon without duplicating the fulfillment split.
+ */
+export function getStepStatuses(
+  fulfillment: Order['fulfillmentType'],
+): readonly OrderStatus[] {
+  return isPickupFulfillment(fulfillment)
+    ? PICKUP_STEP_STATUSES
+    : DELIVERY_STEP_STATUSES;
+}
+
 /**
  * The active step index (0-based) for a status. Returns -1 for statuses with
  * no place on the bar (pending before confirm, cancelled, refunded).

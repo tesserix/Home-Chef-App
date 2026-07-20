@@ -14,7 +14,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
 import { getStepIndex, getStepLabels, getStatusLine } from '../../lib/orderSteps';
-import { CookingIndicator } from '../status/CookingIndicator';
+import { StageIcon } from '../status/StageIcon';
 
 interface ActiveOrderCardProps {
   order: Order;
@@ -119,7 +119,6 @@ export function ActiveOrderCard({ order, onPress }: ActiveOrderCardProps) {
   const label = getStatusLine(order.status, order.fulfillmentType);
   // Clamp -1 (pending) to 0 so the first segment reads as active.
   const step = Math.max(0, getStepIndex(order.status, order.fulfillmentType));
-  const isPreparing = order.status === 'preparing';
 
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -146,13 +145,17 @@ export function ActiveOrderCard({ order, onPress }: ActiveOrderCardProps) {
             {/* Top row: chef name + chevron */}
             <View style={styles.topRow}>
               <View style={styles.leftCol}>
-                {isPreparing ? (
-                  <CookingIndicator
+                {/* Every active stage gets its icon, not just preparing —
+                    same status→icon mapping as the detail hero and the
+                    tracker. StageIcon returns null for terminal statuses, and
+                    this card only renders for non-terminal orders anyway. */}
+                <View style={styles.stageIcon}>
+                  <StageIcon
+                    status={order.status}
                     size={16}
                     color={customerColors.coral.DEFAULT}
-                    style={styles.cookingIcon}
                   />
-                ) : null}
+                </View>
                 <View style={styles.textCol}>
                   <Text style={styles.chefName} numberOfLines={1}>
                     {order.chef?.name ?? 'Your order'}
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginRight: 8,
   },
-  cookingIcon: {
+  stageIcon: {
     marginTop: -2,
   },
   textCol: {

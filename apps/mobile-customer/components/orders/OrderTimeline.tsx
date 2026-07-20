@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import type { Order } from '../../types/customer';
-import { getStepIndex, getStepLabels } from '../../lib/orderSteps';
+import { getStepIndex, getStepLabels, getStepStatuses } from '../../lib/orderSteps';
+import { StageIcon } from '../status/StageIcon';
 
 interface OrderTimelineProps {
   status: Order['status'];
@@ -16,6 +17,8 @@ export function OrderTimeline({
 }: OrderTimelineProps) {
   const STEPS = getStepLabels(fulfillmentType);
   const currentIndex = getStepIndex(status, fulfillmentType);
+  // Index-aligned with STEPS — gives the current step its own animated icon.
+  const STEP_STATUSES = getStepStatuses(fulfillmentType);
 
   return (
     <View style={styles.container}>
@@ -51,9 +54,16 @@ export function OrderTimeline({
               <View style={styles.stepContent}>
                 {/* Step dot/circle */}
                 {isCurrent ? (
-                  // Current step: coral ring with filled center
+                  // Current step carries the animated stage icon — the one
+                  // moving element in the timeline. The container keeps the
+                  // 16px footprint (and -2 offset) of the old coral ring so the
+                  // connector line and labels stay aligned.
                   <View style={styles.dotCurrentOuter}>
-                    <View style={styles.dotCurrentInner} />
+                    <StageIcon
+                      status={STEP_STATUSES[index] ?? status}
+                      size={14}
+                      color={customerColors.coral.DEFAULT}
+                    />
                   </View>
                 ) : (
                   // Completed = coral filled dot; future = hairline dot
@@ -144,23 +154,16 @@ const styles = StyleSheet.create({
     borderColor: customerColors.hairline,
   },
 
-  // Current step: coral outer ring + smaller coral filled center
+  // Current step: holds the animated StageIcon. Same 16px footprint and -2
+  // offset as the coral ring it replaced, so the connector (left: 5) and the
+  // label column stay aligned. No border — the icon is the affordance.
   dotCurrentOuter: {
     width: 16,
     height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: customerColors.coral.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
     // Compensate for the extra 4px so step content stays aligned
     marginLeft: -2,
-  },
-  dotCurrentInner: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: customerColors.coral.DEFAULT,
   },
 
   // Labels
