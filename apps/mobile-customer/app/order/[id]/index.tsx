@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter, useIsFocused } from 'expo-router';
-import { ChevronLeft, ChevronRight, Receipt, X } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Receipt, X } from 'lucide-react-native';
 import { customerColors } from '@homechef/mobile-shared/theme';
 import { useOrder } from '../../../hooks/useOrderHistory';
 import { useReorder } from '../../../hooks/useReorder';
@@ -646,12 +646,18 @@ export default function OrderDetailScreen() {
                 </Text>
               </>
             ) : holdMeta.label ? (
-              <View style={[styles.confirmPill, { backgroundColor: holdMeta.bg }]}>
-                <Text style={[styles.confirmPillText, { color: holdMeta.color }]}>
+              // Quiet inline confirmation — a status, not an action, so it stays
+              // a small centered mark rather than a full-width pill competing
+              // with the primary CTA below.
+              <View style={styles.statusRow}>
+                <Check size={16} color={holdMeta.color} strokeWidth={2.5} />
+                <Text style={[styles.statusText, { color: holdMeta.color }]}>
                   {holdMeta.label}
                 </Text>
               </View>
             ) : null}
+            {/* Single primary action: Leave a Review. Everything else drops to
+                quiet links so one accent leads the eye (brand: restraint). */}
             <Pressable
               onPress={() => router.push(`/order/${order.id}/review`)}
               accessibilityRole="button"
@@ -664,32 +670,27 @@ export default function OrderDetailScreen() {
                 </Text>
               </View>
             </Pressable>
-            {/* Reorder (#238) — outline secondary, re-adds these items to the cart. */}
-            <Pressable
-              onPress={handleReorder}
-              disabled={reorder.isPending}
-              accessibilityRole="button"
-              accessibilityLabel="Reorder these items"
-              style={{ marginTop: 12 }}
-            >
-              <View style={styles.reorderButton}>
-                {reorder.isPending ? (
-                  <ActivityIndicator color={customerColors.coral.DEFAULT} />
-                ) : (
-                  <Text style={styles.reorderButtonText}>Reorder</Text>
-                )}
-              </View>
-            </Pressable>
-            {/* Tip + Back to Home — quiet text links, side by side, so they don't
-                compete with the primary Review / Reorder actions above. */}
+            {/* Reorder · Tip · Back to Home — quiet text links below the primary. */}
             <View style={styles.quietLinkRow}>
+              <Pressable
+                onPress={handleReorder}
+                disabled={reorder.isPending}
+                accessibilityRole="button"
+                accessibilityLabel="Reorder these items"
+                hitSlop={8}
+              >
+                <Text style={styles.quietLink}>
+                  {reorder.isPending ? 'Reordering…' : 'Reorder'}
+                </Text>
+              </Pressable>
+              <Text style={styles.quietLinkDot}>·</Text>
               <Pressable
                 onPress={() => router.push(`/order/${order.id}/tip`)}
                 accessibilityRole="button"
                 accessibilityLabel="Tip your chef or rider"
                 hitSlop={8}
               >
-                <Text style={styles.quietLink}>Tip your chef / rider</Text>
+                <Text style={styles.quietLink}>Tip chef</Text>
               </Pressable>
               <Text style={styles.quietLinkDot}>·</Text>
               <Pressable
@@ -1384,10 +1385,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 8,
   },
-  // Quiet secondary links (Tip · Back to Home) in a centered row below the
-  // primary Review / Reorder actions.
+  // Quiet inline "Received" confirmation — a status mark, not a filled pill.
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  statusText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+  },
+  // Quiet secondary links (Reorder · Tip · Back to Home) below the primary CTA.
   quietLinkRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
