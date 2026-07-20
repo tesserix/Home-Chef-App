@@ -100,10 +100,12 @@ function CartItemRow({ item }: CartItemRowProps) {
           setNote(t);
           setInstructions(item.lineId, t);
         }}
-        placeholder="Add a note (e.g. no onions)"
+        placeholder="Add a note (e.g. no onions, less spicy)"
         placeholderTextColor="#717171"
         maxLength={140}
-        className="bg-surface-soft rounded-lg px-3 py-2 text-xs text-charcoal"
+        multiline
+        textAlignVertical="top"
+        className="bg-surface-soft rounded-lg px-3 py-2.5 text-sm text-charcoal min-h-[60px]"
         accessibilityLabel={`Special instructions for ${item.name}`}
       />
     </View>
