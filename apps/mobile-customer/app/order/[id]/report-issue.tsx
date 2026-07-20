@@ -271,7 +271,14 @@ export default function ReportIssueScreen() {
               {report.isPending ? (
                 <ActivityIndicator color={customerColors.canvas} />
               ) : (
-                <Text style={styles.submitText}>Submit report</Text>
+                <Text
+                  style={[
+                    styles.submitText,
+                    !reason && styles.submitTextDisabled,
+                  ]}
+                >
+                  Submit report
+                </Text>
               )}
             </View>
           </Pressable>
@@ -383,4 +390,7 @@ const styles = StyleSheet.create({
   },
   submitDisabled: { backgroundColor: customerColors.surface.soft, borderWidth: 1, borderColor: customerColors.hairline },
   submitText: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: customerColors.canvas },
+  // Disabled (no reason picked) uses the light surface bg, so the white label is
+  // invisible — switch to muted charcoal so "Submit report" stays readable.
+  submitTextDisabled: { color: customerColors.charcoal.soft },
 });

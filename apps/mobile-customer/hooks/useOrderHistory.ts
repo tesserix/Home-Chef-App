@@ -31,6 +31,7 @@ interface ApiAddress {
 }
 
 interface ApiOrderItem {
+  id?: string;
   menuItemId: string;
   name: string;
   price: number;
@@ -83,6 +84,10 @@ interface ApiOrderListResponse {
 
 function mapOrderItem(i: ApiOrderItem): OrderItem {
   return {
+    // The API sends a per-line `id`; carrying it through is what makes the
+    // report-issue "which items?" checkboxes selectable (they're disabled
+    // without an id).
+    id: i.id,
     menuItemId: i.menuItemId,
     name: i.name,
     price: i.price,
