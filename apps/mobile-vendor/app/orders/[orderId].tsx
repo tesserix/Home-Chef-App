@@ -345,12 +345,13 @@ function FooterActions({
       <Text style={styles.cancelLinkLabel}>Cancel order</Text>
     </Pressable>
   ) : null;
-  // "Couldn't deliver" — only a self-delivery chef, and only once the order is
-  // on its way (ready / out for delivery). Mirrors chefMayReportDeliveryFailure
-  // on the backend. Quiet destructive link so the primary "delivered" action
-  // stays the hero.
+  // "Couldn't deliver" — only a self-delivery chef, and only once they're
+  // actually OUT FOR DELIVERY (status 'picked_up'/en route). At 'ready' the food
+  // hasn't left the kitchen — that's what "Cancel order" is for; you can't fail a
+  // delivery you haven't started. Quiet destructive link so the primary
+  // "Mark delivered" action stays the hero.
   const deliveryFailLink =
-    isChefDelivery && (status === 'ready' || status === 'picked_up') ? (
+    isChefDelivery && status === 'picked_up' ? (
       <Pressable
         onPress={onReportDeliveryFailure}
         disabled={disabled}
@@ -593,7 +594,6 @@ function FooterActions({
               <Text style={styles.switchLinkLabel}>Hand to a rider instead</Text>
             </Pressable>
           ) : null}
-          {deliveryFailLink}
           {cancelLink}
         </View>
       );
