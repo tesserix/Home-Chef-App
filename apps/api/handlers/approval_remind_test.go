@@ -29,7 +29,7 @@ func setupRemindDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1)`,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, is_active integer DEFAULT 1)`,
 		`CREATE TABLE approval_requests (
 			id text PRIMARY KEY, type text, status text, priority text DEFAULT 'normal',
 			chef_id text, partner_id text, submitted_by_id text, reviewed_by_id text,
@@ -37,7 +37,7 @@ func setupRemindDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 			submitted_data text, admin_notes text, reviewed_at datetime, expires_at datetime,
 			reminder_count integer NOT NULL DEFAULT 0, last_reminded_at datetime, escalated_at datetime,
 			created_at datetime, updated_at datetime)`,
-		`CREATE TABLE users (id text PRIMARY KEY, email text, first_name text, last_name text, role text)`,
+		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id text PRIMARY KEY, email text, first_name text, last_name text, role text)`,
 		`CREATE TABLE notifications (id text PRIMARY KEY, user_id text, type text, title text,
 			message text, is_read integer DEFAULT 0, created_at datetime, updated_at datetime)`,
 		outboxDDL, auditDDL,

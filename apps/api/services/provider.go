@@ -384,6 +384,18 @@ func (s *ProviderService) HandleProviderWebhook(providerCode string, payload []b
 		updates["rider_longitude"] = lng
 	}
 
+	// Rider name/phone are third-party courier PII. Map-based Updates skips the
+	// Delivery BeforeSave hook, so mirror them into their companions here (#710 P1).
+	plain := map[string]string{}
+	for _, col := range []string{"rider_name", "rider_phone"} {
+		if v, ok := updates[col].(string); ok {
+			plain[col] = v
+		}
+	}
+	for k, v := range models.PIIUpdates(plain) {
+		updates[k] = v
+	}
+
 	if err := database.DB.Model(&delivery).Updates(updates).Error; err != nil {
 		return fmt.Errorf("failed to update delivery: %w", err)
 	}

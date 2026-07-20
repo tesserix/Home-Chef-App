@@ -40,13 +40,13 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 
-	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (
+	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (emergency_contact_enc text DEFAULT '', emergency_phone_enc text DEFAULT '', emergency_phone_bidx text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, total_deliveries INTEGER DEFAULT 0,
 		current_latitude REAL DEFAULT 0, current_longitude REAL DEFAULT 0,
 		stripe_account_id TEXT DEFAULT '', stripe_payouts_enabled INTEGER DEFAULT 0,
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE deliveries (
+	require.NoError(t, db.Exec(`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_id TEXT, delivery_partner_id TEXT, status TEXT DEFAULT 'pending',
 		pickup_address_line1 TEXT DEFAULT '', pickup_address_city TEXT DEFAULT '',
 		pickup_latitude REAL DEFAULT 0, pickup_longitude REAL DEFAULT 0,
@@ -63,7 +63,7 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 		assigned_at DATETIME, picked_up_at DATETIME, delivered_at DATETIME,
 		cancelled_at DATETIME, cancel_reason TEXT DEFAULT ''
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, total REAL DEFAULT 0,
@@ -74,7 +74,7 @@ func setupDeliveryStatusDB(t *testing.T) *gorm.DB {
 	// meal_plan_days / group_orders: only touched on the DELIVERED path (not driven), but present
 	// so any stray classification probe is a clean empty read rather than a missing-table error.
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT, deleted_at DATETIME)`).Error)
 
 	prev := database.DB
 	database.DB = db

@@ -31,7 +31,7 @@ func setupInvoiceLinkDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: glogger.Default.LogMode(glogger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (id text PRIMARY KEY, order_number text, customer_id text,
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id text PRIMARY KEY, order_number text, customer_id text,
 		status text, payment_status text, total real, refund_amount real DEFAULT 0,
 		created_at datetime, updated_at datetime, deleted_at datetime)`).Error)
 	orig := database.DB

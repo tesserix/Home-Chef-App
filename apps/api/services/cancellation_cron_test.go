@@ -23,7 +23,7 @@ func setupSweepDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: gormlogger.Default.LogMode(gormlogger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id text PRIMARY KEY, customer_id text, chef_id text, status text, payment_status text,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id text PRIMARY KEY, customer_id text, chef_id text, status text, payment_status text,
 			payment_provider text DEFAULT '', razorpay_payment_id text DEFAULT '', subtotal real DEFAULT 0,
 			delivery_fee real DEFAULT 0, service_fee real DEFAULT 0, tax real DEFAULT 0, total real DEFAULT 0,
 			refund_amount real DEFAULT 0, refund_reason text, refunded_at datetime, created_at datetime, updated_at datetime, deleted_at datetime)`,

@@ -73,6 +73,9 @@ type ChefProfile struct {
 	// Address
 	AddressLine1 string  `gorm:"" json:"addressLine1"`
 	AddressLine2 string  `gorm:"" json:"addressLine2"`
+	// PII companions (#710 P1) — addresses are not searched, ciphertext only.
+	AddressLine1Enc EncryptedString `gorm:"column:address_line1_enc;type:text" json:"-"`
+	AddressLine2Enc EncryptedString `gorm:"column:address_line2_enc;type:text" json:"-"`
 	City         string  `gorm:"" json:"city"`
 	State        string  `gorm:"" json:"state"`
 	PostalCode   string  `gorm:"" json:"postalCode"`
@@ -213,6 +216,9 @@ func (c *ChefProfile) BeforeSave(*gorm.DB) error {
 	if c.Slug == "" && c.BusinessName != "" {
 		c.Slug = ChefSlug(c.BusinessName)
 	}
+	// Mirror the address lines into their encrypted companions (#710 P1).
+	c.AddressLine1Enc = encOf(c.AddressLine1)
+	c.AddressLine2Enc = encOf(c.AddressLine2)
 	return nil
 }
 

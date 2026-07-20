@@ -28,7 +28,7 @@ func setupDailyMenuDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	stmts := []string{
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text, business_name text, slug text,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, slug text,
 			is_active integer DEFAULT 1, created_at datetime, updated_at datetime, deleted_at datetime)`,
 		`CREATE TABLE daily_menus (id text PRIMARY KEY, chef_id text, date datetime, is_published integer DEFAULT 0,
 			published_at datetime, created_at datetime, updated_at datetime)`,

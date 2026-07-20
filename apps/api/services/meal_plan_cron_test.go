@@ -41,7 +41,7 @@ func setupMealPlanCronDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, order_id TEXT,
 		status TEXT, payout_transfer_id TEXT, price REAL, payout_hold_status TEXT, refund_txn_id TEXT,
 		date DATETIME, created_at DATETIME, updated_at DATETIME)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (id TEXT PRIMARY KEY, user_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, user_id TEXT)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
 		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,
 		next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`).Error)

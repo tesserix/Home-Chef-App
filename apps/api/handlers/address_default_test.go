@@ -37,6 +37,7 @@ import (
 const addressesDDL = `CREATE TABLE addresses (
 	id text PRIMARY KEY, user_id text, label text DEFAULT '',
 	line1 text, line2 text DEFAULT '', city text, state text, postal_code text,
+	line1_enc text DEFAULT '', line2_enc text DEFAULT '',
 	country text DEFAULT 'US', latitude real DEFAULT 0, longitude real DEFAULT 0,
 	is_default integer DEFAULT 0,
 	created_at datetime, updated_at datetime)`

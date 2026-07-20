@@ -60,6 +60,14 @@ type CateringRequest struct {
 	ContactName  string `gorm:"" json:"contactName"`
 	ContactPhone string `gorm:"" json:"contactPhone"`
 	ContactEmail string `gorm:"" json:"contactEmail"`
+	// PII companions (#710 P1).
+	AddressLine1Enc  EncryptedString `gorm:"column:address_line1_enc;type:text" json:"-"`
+	AddressLine2Enc  EncryptedString `gorm:"column:address_line2_enc;type:text" json:"-"`
+	ContactNameEnc   EncryptedString `gorm:"column:contact_name_enc;type:text" json:"-"`
+	ContactPhoneEnc  EncryptedString `gorm:"column:contact_phone_enc;type:text" json:"-"`
+	ContactPhoneBidx string          `gorm:"column:contact_phone_bidx;type:text;index" json:"-"`
+	ContactEmailEnc  EncryptedString `gorm:"column:contact_email_enc;type:text" json:"-"`
+	ContactEmailBidx string          `gorm:"column:contact_email_bidx;type:text;index" json:"-"`
 
 	// Deadline for quotes
 	QuoteDeadline *time.Time `gorm:"" json:"quoteDeadline,omitempty"`
@@ -284,4 +292,17 @@ func (q *CateringQuote) ToResponse() CateringQuoteResponse {
 	}
 
 	return response
+}
+
+// BeforeSave mirrors the catering contact + address PII into their encrypted
+// companions (#710 P1).
+func (r *CateringRequest) BeforeSave(*gorm.DB) error {
+	r.AddressLine1Enc = encOf(r.AddressLine1)
+	r.AddressLine2Enc = encOf(r.AddressLine2)
+	r.ContactNameEnc = encOf(r.ContactName)
+	r.ContactPhoneEnc = encOf(r.ContactPhone)
+	r.ContactPhoneBidx = bidxOf(r.ContactPhone)
+	r.ContactEmailEnc = encOf(r.ContactEmail)
+	r.ContactEmailBidx = bidxOf(r.ContactEmail)
+	return nil
 }

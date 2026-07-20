@@ -27,7 +27,7 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, status TEXT,
 			razorpay_order_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			payout_settled_at DATETIME, payout_settle_attempts INTEGER DEFAULT 0,
 			customer_confirmed_at DATETIME, delivered_at DATETIME, refunded_at DATETIME,
@@ -38,7 +38,7 @@ func setupHoldDB(t *testing.T) *gorm.DB {
 			customer_confirmed_at DATETIME, delivered_at DATETIME, date DATETIME,
 			created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, status TEXT)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, order_id TEXT,
 			status TEXT, payout_transfer_id TEXT DEFAULT '', payout_hold_status TEXT DEFAULT '',
 			customer_confirmed_at DATETIME, delivered_at DATETIME, payout_settled_at DATETIME,
 			payout_settle_attempts INTEGER DEFAULT 0, subtotal REAL DEFAULT 0, tax REAL DEFAULT 0,

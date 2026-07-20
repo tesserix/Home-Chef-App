@@ -61,7 +61,7 @@ func setupIssueDB(t *testing.T) *gorm.DB {
 			reason TEXT, description TEXT, photo_urls TEXT, affected_item_ids TEXT,
 			requested_amount REAL DEFAULT 0, refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending',
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, total REAL, refund_amount REAL DEFAULT 0, refund_reason TEXT,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, total REAL, refund_amount REAL DEFAULT 0, refund_reason TEXT,
 			refund_initiated_by TEXT, refunded_at DATETIME, updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, is_cancelled BOOLEAN DEFAULT 0, refund_amount REAL DEFAULT 0)`,
 		`CREATE TABLE wallets (id TEXT PRIMARY KEY, user_id TEXT UNIQUE, balance REAL DEFAULT 0, currency TEXT DEFAULT 'INR', created_at DATETIME, updated_at DATETIME)`,

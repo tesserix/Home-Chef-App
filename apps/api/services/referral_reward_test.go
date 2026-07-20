@@ -24,7 +24,7 @@ func setupRewardDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	stmts := []string{
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, payment_status TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, customer_id TEXT, payment_status TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE referrals (id TEXT PRIMARY KEY, referrer_user_id TEXT, referee_user_id TEXT UNIQUE, code TEXT,
 			status TEXT, order_id TEXT, referrer_reward REAL DEFAULT 0, referee_reward REAL DEFAULT 0,
 			rewarded_at DATETIME, referee_device TEXT, referee_ip TEXT, created_at DATETIME, updated_at DATETIME)`,
@@ -33,7 +33,7 @@ func setupRewardDB(t *testing.T) *gorm.DB {
 			amount REAL, balance_after REAL, currency TEXT, order_id TEXT, reason TEXT, created_by TEXT,
 			idempotency_key TEXT UNIQUE, created_at DATETIME)`,
 		`CREATE TABLE platform_settings (id TEXT PRIMARY KEY, key TEXT UNIQUE, value TEXT, type TEXT, updated_by TEXT, updated_at DATETIME)`,
-		`CREATE TABLE users (id TEXT PRIMARY KEY, fcm_token TEXT, deleted_at DATETIME)`,
+		`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', id TEXT PRIMARY KEY, fcm_token TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT, aggregate_type TEXT, aggregate_id TEXT,
 			payload TEXT, status TEXT, attempts INT, last_error TEXT, next_retry_at DATETIME, created_at DATETIME, updated_at DATETIME, published_at DATETIME)`,
 	}

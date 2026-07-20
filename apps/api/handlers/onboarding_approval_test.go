@@ -34,11 +34,11 @@ func setupApprovalDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	// users carries gorm.DeletedAt → needs the column.
-	require.NoError(t, db.Exec(`CREATE TABLE users (
+	require.NoError(t, db.Exec(`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', 
 		id TEXT PRIMARY KEY, email TEXT, role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		is_verified INTEGER DEFAULT 0, verified_at DATETIME, is_active INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', fssai_override_until DATETIME,

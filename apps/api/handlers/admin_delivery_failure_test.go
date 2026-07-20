@@ -24,12 +24,12 @@ func setupDeliveryFailureQueueDB(t *testing.T) *gorm.DB {
 	for _, s := range []string{
 		`CREATE TABLE order_issues (id TEXT PRIMARY KEY, order_id TEXT, meal_plan_day_id TEXT, chef_id TEXT, customer_id TEXT,
 			reason TEXT, description TEXT, status TEXT DEFAULT 'pending', created_at DATETIME)`,
-		`CREATE TABLE orders (id TEXT PRIMARY KEY, order_number TEXT, total REAL DEFAULT 0,
+		`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_number TEXT, total REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', deleted_at DATETIME)`,
 		`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, meal_plan_id TEXT, status TEXT, price REAL DEFAULT 0,
 			payout_hold_status TEXT DEFAULT '', date DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE meal_plans (id TEXT PRIMARY KEY, meal_plan_number TEXT, customer_id TEXT, chef_id TEXT)`,
-		`CREATE TABLE group_orders (id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, status TEXT,
+		`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, host_id TEXT, chef_id TEXT, status TEXT,
 			subtotal REAL DEFAULT 0, tax REAL DEFAULT 0, payout_hold_status TEXT DEFAULT '', updated_at DATETIME)`,
 	} {
 		require.NoError(t, db.Exec(s).Error)

@@ -117,6 +117,17 @@ func (h *CustomerHandler) UpdateCustomerProfile(c *gin.Context) {
 		user.Phone = *req.Phone
 	}
 	if len(userUpdates) > 0 {
+		// Map-based Updates skips the User BeforeSave hook, so mirror the PII
+		// columns into their companions here (#710 P1).
+		plain := map[string]string{}
+		for _, col := range []string{"first_name", "last_name", "phone"} {
+			if v, ok := userUpdates[col].(string); ok {
+				plain[col] = v
+			}
+		}
+		for k, v := range models.PIIUpdates(plain) {
+			userUpdates[k] = v
+		}
 		database.DB.Model(&user).Updates(userUpdates)
 	}
 
@@ -246,6 +257,17 @@ func (h *CustomerHandler) CompleteOnboarding(c *gin.Context) {
 		userUpdates["phone"] = req.Phone
 	}
 	if len(userUpdates) > 0 {
+		// Map-based Updates skips the User BeforeSave hook, so mirror the PII
+		// columns into their companions here (#710 P1).
+		plain := map[string]string{}
+		for _, col := range []string{"first_name", "last_name", "phone"} {
+			if v, ok := userUpdates[col].(string); ok {
+				plain[col] = v
+			}
+		}
+		for k, v := range models.PIIUpdates(plain) {
+			userUpdates[k] = v
+		}
 		database.DB.Model(&user).Updates(userUpdates)
 	}
 

@@ -39,18 +39,18 @@ func setupPayDB(t *testing.T) *gorm.DB {
 
 	// users + orders carry gorm.DeletedAt → GORM appends `deleted_at IS NULL`;
 	// the column must exist or the (preloaded) order load errors → spurious 404.
-	require.NoError(t, db.Exec(`CREATE TABLE users (
+	require.NoError(t, db.Exec(`CREATE TABLE users (email_enc text DEFAULT '', email_bidx text DEFAULT '', first_name_enc text DEFAULT '', last_name_enc text DEFAULT '', phone_enc text DEFAULT '', phone_bidx text DEFAULT '', 
 		id TEXT PRIMARY KEY, email TEXT, first_name TEXT DEFAULT '', last_name TEXT DEFAULT '',
 		phone TEXT DEFAULT '', role TEXT DEFAULT 'customer', is_active INTEGER DEFAULT 1,
 		created_at DATETIME, updated_at DATETIME, deleted_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (
+	require.NoError(t, db.Exec(`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, business_name TEXT DEFAULT '',
 		payment_provider TEXT DEFAULT 'razorpay', razorpay_account_id TEXT DEFAULT '',
 		stripe_account_id TEXT DEFAULT '', stripe_charges_enabled INTEGER DEFAULT 0,
 		payout_country TEXT DEFAULT 'IN', created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE orders (
+	require.NoError(t, db.Exec(`CREATE TABLE orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_number TEXT, customer_id TEXT, chef_id TEXT, delivery_id TEXT,
 		status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'pending',
 		payment_method TEXT DEFAULT '', payment_provider TEXT DEFAULT 'razorpay',
@@ -72,11 +72,11 @@ func setupPayDB(t *testing.T) *gorm.DB {
 	)`).Error)
 	// CreateOrderPayment preloads Delivery.DeliveryPartner — the tables must
 	// exist (no rows in these tests, so the nested scan stays empty).
-	require.NoError(t, db.Exec(`CREATE TABLE deliveries (
+	require.NoError(t, db.Exec(`CREATE TABLE deliveries (rider_name_enc text DEFAULT '', rider_phone_enc text DEFAULT '', 
 		id TEXT PRIMARY KEY, order_id TEXT, delivery_partner_id TEXT, status TEXT DEFAULT 'pending',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (
+	require.NoError(t, db.Exec(`CREATE TABLE delivery_partners (emergency_contact_enc text DEFAULT '', emergency_phone_enc text DEFAULT '', emergency_phone_bidx text DEFAULT '', 
 		id TEXT PRIMARY KEY, user_id TEXT, razorpay_account_id TEXT DEFAULT '',
 		created_at DATETIME, updated_at DATETIME
 	)`).Error)
@@ -93,7 +93,7 @@ func setupPayDB(t *testing.T) *gorm.DB {
 		customer_id TEXT, reason TEXT, affected_item_ids TEXT, requested_amount REAL DEFAULT 0,
 		refund_amount REAL DEFAULT 0, status TEXT DEFAULT 'pending', created_at DATETIME, updated_at DATETIME)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE meal_plan_days (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
-	require.NoError(t, db.Exec(`CREATE TABLE group_orders (id TEXT PRIMARY KEY, order_id TEXT)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE group_orders (delivery_address_line1_enc text DEFAULT '', delivery_address_line2_enc text DEFAULT '', id TEXT PRIMARY KEY, order_id TEXT)`).Error)
 	// #395: the completion helper stages chef.new_order + order.paid via the outbox.
 	require.NoError(t, db.Exec(`CREATE TABLE outbox_events (id TEXT PRIMARY KEY, subject TEXT, msg_id TEXT,
 		aggregate_type TEXT, aggregate_id TEXT, payload TEXT, status TEXT, attempts INT, last_error TEXT,

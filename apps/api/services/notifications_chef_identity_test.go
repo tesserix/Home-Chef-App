@@ -27,7 +27,7 @@ func setupChefNotifDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupNotifDB(t)
 	require.NoError(t, db.Exec(
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text)`,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text)`,
 	).Error)
 	return db
 }

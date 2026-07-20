@@ -32,7 +32,7 @@ func setupBookingDB(t *testing.T) (*gorm.DB, uuid.UUID, uuid.UUID) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	for _, s := range []string{
-		`CREATE TABLE chef_profiles (id text PRIMARY KEY, user_id text, business_name text, slug text,
+		`CREATE TABLE chef_profiles (address_line1_enc text DEFAULT '', address_line2_enc text DEFAULT '', id text PRIMARY KEY, user_id text, business_name text, slug text,
 			payout_country text DEFAULT '', is_active integer DEFAULT 1, deleted_at datetime)`,
 		`CREATE TABLE weekly_menus (id text PRIMARY KEY, chef_id text, is_published integer DEFAULT 0,
 			published_at datetime, created_at datetime, updated_at datetime)`,

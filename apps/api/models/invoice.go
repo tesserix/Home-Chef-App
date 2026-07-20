@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gorm.io/gorm"
 	"encoding/json"
 	"time"
 
@@ -49,6 +50,17 @@ type OrderInvoice struct {
 	CustomerAddress string `gorm:"type:text" json:"customerAddress"`
 	ChefName        string `gorm:"" json:"chefName"`
 	ChefAddress     string `gorm:"type:text" json:"chefAddress"`
+	// PII companions (#710 P1). This table is a denormalized copy of customer
+	// and chef PII frozen at invoice time — it must be encrypted in lockstep
+	// with users, or it stays a plaintext replica of the same data.
+	CustomerNameEnc    EncryptedString `gorm:"column:customer_name_enc;type:text" json:"-"`
+	CustomerEmailEnc   EncryptedString `gorm:"column:customer_email_enc;type:text" json:"-"`
+	CustomerEmailBidx  string          `gorm:"column:customer_email_bidx;type:text;index" json:"-"`
+	CustomerPhoneEnc   EncryptedString `gorm:"column:customer_phone_enc;type:text" json:"-"`
+	CustomerPhoneBidx  string          `gorm:"column:customer_phone_bidx;type:text;index" json:"-"`
+	CustomerAddressEnc EncryptedString `gorm:"column:customer_address_enc;type:text" json:"-"`
+	ChefNameEnc        EncryptedString `gorm:"column:chef_name_enc;type:text" json:"-"`
+	ChefAddressEnc     EncryptedString `gorm:"column:chef_address_enc;type:text" json:"-"`
 
 	// Company details (Fe3dr)
 	CompanyName    string `gorm:"" json:"companyName"`
@@ -159,4 +171,18 @@ func (inv *OrderInvoice) ToResponse() OrderInvoiceResponse {
 		IssuedAt:           inv.IssuedAt,
 		CreatedAt:          inv.CreatedAt,
 	}
+}
+
+// BeforeSave mirrors the invoice PII snapshot into its encrypted companions
+// (#710 P1).
+func (i *OrderInvoice) BeforeSave(*gorm.DB) error {
+	i.CustomerNameEnc = encOf(i.CustomerName)
+	i.CustomerEmailEnc = encOf(i.CustomerEmail)
+	i.CustomerEmailBidx = bidxOf(i.CustomerEmail)
+	i.CustomerPhoneEnc = encOf(i.CustomerPhone)
+	i.CustomerPhoneBidx = bidxOf(i.CustomerPhone)
+	i.CustomerAddressEnc = encOf(i.CustomerAddress)
+	i.ChefNameEnc = encOf(i.ChefName)
+	i.ChefAddressEnc = encOf(i.ChefAddress)
+	return nil
 }

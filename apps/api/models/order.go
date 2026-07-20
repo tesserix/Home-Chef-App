@@ -162,6 +162,9 @@ type Order struct {
 	// Delivery Address
 	DeliveryAddressLine1      string `gorm:"" json:"deliveryAddressLine1"`
 	DeliveryAddressLine2      string `gorm:"" json:"deliveryAddressLine2"`
+	// PII companions (#710 P1) — the address snapshot frozen at order time.
+	DeliveryAddressLine1Enc EncryptedString `gorm:"column:delivery_address_line1_enc;type:text" json:"-"`
+	DeliveryAddressLine2Enc EncryptedString `gorm:"column:delivery_address_line2_enc;type:text" json:"-"`
 	DeliveryAddressCity       string `gorm:"" json:"deliveryAddressCity"`
 	DeliveryAddressState      string `gorm:"" json:"deliveryAddressState"`
 	DeliveryAddressPostalCode string `gorm:"" json:"deliveryAddressPostalCode"`
@@ -639,4 +642,12 @@ func (o *Order) ToChefResponse() OrderResponse {
 	resp.CustomerName = o.Customer.FirstName
 	resp.CustomerPhone = ""
 	return resp
+}
+
+// BeforeSave mirrors the delivery address snapshot into its encrypted
+// companions (#710 P1).
+func (o *Order) BeforeSave(*gorm.DB) error {
+	o.DeliveryAddressLine1Enc = encOf(o.DeliveryAddressLine1)
+	o.DeliveryAddressLine2Enc = encOf(o.DeliveryAddressLine2)
+	return nil
 }
