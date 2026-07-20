@@ -29,6 +29,10 @@ type OrderIssueHandler struct{}
 
 func NewOrderIssueHandler() *OrderIssueHandler { return &OrderIssueHandler{} }
 
+// IssueReportWindow is how long after delivery a customer may still report an
+// issue (#37). Beyond it the order is closed to disputes — a late-claim guard.
+const IssueReportWindow = 48 * time.Hour
+
 // ReportIssue creates an order issue and, when eligible, instantly refunds the
 // affected items to the customer's wallet.
 // POST /orders/:id/report-issue — multipart: reason, description, affectedItemIds[], photo?
@@ -61,6 +65,16 @@ func (h *OrderIssueHandler) ReportIssue(c *gin.Context) {
 	// Already fully refunded (status may still read 'completed') — nothing left.
 	if order.RefundAmount >= order.Total {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This order has already been fully refunded"})
+		return
+	}
+	// #37: reports are accepted only within IssueReportWindow of delivery. Beyond
+	// that the order is closed to disputes — a late-claim / abuse guard. Only
+	// enforced once the order has actually been delivered (DeliveredAt set); an
+	// undelivered paid order isn't time-bound here.
+	if order.DeliveredAt != nil && time.Since(*order.DeliveredAt) > IssueReportWindow {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error": "The 48-hour window to report an issue on this order has passed.",
+		})
 		return
 	}
 

@@ -35,7 +35,7 @@ func setupOrderIssueHandlerDB(t *testing.T) *gorm.DB {
 			resolved_by TEXT, resolved_at DATETIME, refund_txn_id TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE orders (id TEXT PRIMARY KEY, customer_id TEXT, chef_id TEXT, payment_status TEXT,
 			status TEXT, subtotal REAL, tax REAL, total REAL, refund_amount REAL DEFAULT 0,
-			refund_reason TEXT, refund_initiated_by TEXT, refunded_at DATETIME,
+			refund_reason TEXT, refund_initiated_by TEXT, refunded_at DATETIME, delivered_at DATETIME,
 			payout_hold_status TEXT DEFAULT '', customer_confirmed_at DATETIME, created_at DATETIME,
 			updated_at DATETIME, deleted_at DATETIME)`,
 		`CREATE TABLE order_items (id TEXT PRIMARY KEY, order_id TEXT, name TEXT, price REAL, quantity INTEGER,
@@ -103,6 +103,40 @@ func TestReportIssueGuards(t *testing.T) {
 		db.Raw(`SELECT issue_count FROM chef_profiles WHERE id = ?`, chefID.String()).Scan(&issueCount)
 		assert.Equal(t, int64(1), issues)
 		assert.Equal(t, int64(1), issueCount)
+	})
+
+	t.Run("report after the 48h delivery window is rejected (422)", func(t *testing.T) {
+		db := setupOrderIssueHandlerDB(t)
+		customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(
+			`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount, delivered_at)
+			 VALUES (?, ?, ?, 'completed', 'delivered', 400, 0, 400, 0, ?)`,
+			orderID.String(), customer.String(), chefID.String(), time.Now().Add(-49*time.Hour)).Error)
+		require.NoError(t, db.Exec(
+			`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+			chefID.String(), uuid.New().String()).Error)
+
+		w := reportIssueReq(t, customer, orderID, "reason=missing_item")
+		assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+
+		var issues int64
+		db.Raw(`SELECT count(*) FROM order_issues WHERE order_id = ?`, orderID.String()).Scan(&issues)
+		assert.Equal(t, int64(0), issues, "no issue row created for an out-of-window report")
+	})
+
+	t.Run("report within the 48h delivery window is allowed", func(t *testing.T) {
+		db := setupOrderIssueHandlerDB(t)
+		customer, orderID, chefID := uuid.New(), uuid.New(), uuid.New()
+		require.NoError(t, db.Exec(
+			`INSERT INTO orders (id, customer_id, chef_id, payment_status, status, subtotal, tax, total, refund_amount, delivered_at)
+			 VALUES (?, ?, ?, 'completed', 'delivered', 400, 0, 400, 0, ?)`,
+			orderID.String(), customer.String(), chefID.String(), time.Now().Add(-1*time.Hour)).Error)
+		require.NoError(t, db.Exec(
+			`INSERT INTO chef_profiles (id, user_id, issue_count) VALUES (?, ?, 0)`,
+			chefID.String(), uuid.New().String()).Error)
+
+		w := reportIssueReq(t, customer, orderID, "reason=missing_item")
+		assert.Equal(t, http.StatusCreated, w.Code)
 	})
 
 	t.Run("report on an unpaid order is rejected", func(t *testing.T) {
