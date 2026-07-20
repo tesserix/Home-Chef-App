@@ -370,8 +370,6 @@
   },
   "more": {
     "title": "और",
-    "account": "खाता",
-    "premium": "प्रीमियम",
     "profile": "प्रोफ़ाइल",
     "mealPlans": "मील प्लान",
     "capacity": "क्षमता और कटऑफ",
@@ -385,14 +383,19 @@
     "documents": "दस्तावेज़",
     "notifications": "सूचनाएं",
     "support": "सहायता और समर्थन",
-    "help": "सहायता और समर्थन",
     "legalPrivacy": "गोपनीयता नीति",
     "legalTerms": "सेवा की शर्तें",
     "legalAgreement": "शेफ और विक्रेता समझौता",
     "legalEula": "एंड यूज़र लाइसेंस",
-    "signOut": "साइन आउट",
     "logOut": "लॉग आउट",
-    "cancellations": "रद्दीकरण"
+    "cancellations": "रद्दीकरण",
+    "sections": {
+      "kitchen": "रसोई",
+      "money": "कमाई",
+      "requests": "अनुरोध",
+      "account": "खाता"
+    },
+    "legal": "कानूनी"
   },
   "language": {
     "title": "भाषा",

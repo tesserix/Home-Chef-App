@@ -10,17 +10,15 @@ import {
   ChevronRight,
   DollarSign,
   FileText,
-  Inbox,
   Languages,
   LifeBuoy,
   LogOut,
   Scale,
-  ScrollText,
   Settings,
-  Shield,
-  Sparkles,
+  ShieldCheck,
   Star,
   User,
+  XCircle,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -36,42 +34,66 @@ interface NavRow {
   Icon: typeof User;
 }
 
-// Rows are filtered by feature visibility below, so a hidden feature keeps its
-// entry here (and keeps compiling) instead of being deleted and re-typed later.
-const ALL_NAV_ROWS: NavRow[] = [
-  { labelKey: 'premium', caption: 'Verified-Pro badge, priority ranking, lower commission', route: '/premium', Icon: Sparkles },
-  { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
-  { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
-  { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },
-  { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
-  { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
-  { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
-  { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
-  { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: Inbox },
-  // Wave 2 additions — surfaced from the More tab so they're
-  // discoverable beyond the dashboard cards / settings deep links.
-  { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
-  { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
-  { labelKey: 'notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
-  // Support — raise a platform issue or feature request; threaded with the
-  // support team (wired to the existing /support/tickets API).
-  { labelKey: 'support', caption: 'Report an issue or request a feature', route: '/support', Icon: LifeBuoy },
-  // Wave 4 — language picker (English / हिन्दी).
-  { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
-  { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
-  // Legal — template policy screens reachable from the More tab (PROD-READINESS W3/W6).
-  { labelKey: 'legalPrivacy', caption: 'How we handle your data', route: '/privacy', Icon: Shield },
-  { labelKey: 'legalTerms', caption: 'Using the vendor app', route: '/terms', Icon: FileText },
-  { labelKey: 'legalAgreement', caption: 'Commission, payouts, food safety', route: '/chef-agreement', Icon: Scale },
-  { labelKey: 'legalEula', caption: 'App licence terms', route: '/eula', Icon: ScrollText },
+interface NavSection {
+  /** i18n key under "more.sections" for the ALL-CAPS group header. */
+  titleKey: string;
+  rows: NavRow[];
+}
+
+// Rows are grouped into labelled sections so the More tab reads as a small set
+// of related groups rather than one long flat list. Feature-gated rows keep
+// their entry here (filtered below) so a hidden feature stays type-checked and
+// re-enabling is a one-line flag flip.
+const ALL_SECTIONS: NavSection[] = [
+  {
+    titleKey: 'kitchen',
+    rows: [
+      { labelKey: 'mealPlans', caption: 'Weekly menu and tiffin requests', route: '/meal-plans', Icon: CalendarDays },
+      { labelKey: 'capacity', caption: 'Daily caps and order cutoffs', route: '/capacity', Icon: Gauge },
+      { labelKey: 'catering', caption: 'Event requests, quotes, bookings', route: '/catering', Icon: ChefHat },
+      { labelKey: 'reviews', caption: 'Ratings and customer replies', route: '/reviews', Icon: Star },
+    ],
+  },
+  {
+    titleKey: 'money',
+    rows: [
+      { labelKey: 'earnings', caption: 'Payouts and transactions', route: '/earnings', Icon: DollarSign },
+      { labelKey: 'analytics', caption: 'Orders, revenue, trends', route: '/analytics', Icon: BarChart2 },
+    ],
+  },
+  {
+    titleKey: 'requests',
+    rows: [
+      { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: XCircle },
+      { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: ShieldCheck },
+      { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
+    ],
+  },
+  {
+    titleKey: 'account',
+    rows: [
+      { labelKey: 'profile', caption: 'Name, kitchen details, cuisines', route: '/profile', Icon: User },
+      { labelKey: 'notifications', caption: 'Categories and quiet hours', route: '/notification-preferences', Icon: Bell },
+      { labelKey: 'language', caption: 'English · हिन्दी', route: '/language', Icon: Languages },
+      { labelKey: 'settings', caption: 'Account, auto-accept, advanced', route: '/settings', Icon: Settings },
+      { labelKey: 'support', caption: 'Report an issue or request a feature', route: '/support', Icon: LifeBuoy },
+      // Legal docs are collapsed behind one row (rarely opened) — the /legal
+      // hub screen lists Privacy, Terms, Chef agreement, and EULA.
+      { labelKey: 'legal', caption: 'Privacy, terms, agreement, licence', route: '/legal', Icon: Scale },
+    ],
+  },
 ];
 
 // Catering (#55) is built and working but hidden for now — see
-// constants/features.ts. Filtering here rather than commenting the row out keeps
-// it type-checked and makes re-enabling a one-line flag flip.
-const NAV_ROWS: NavRow[] = ALL_NAV_ROWS.filter(
-  (row) => row.route !== '/catering' || CATERING_ENABLED,
-);
+// constants/features.ts. Filtering here (rather than deleting the row) keeps it
+// type-checked; empty sections after filtering are dropped so no header floats
+// over a blank card.
+const NAV_SECTIONS: NavSection[] = ALL_SECTIONS.map((section) => ({
+  ...section,
+  rows: section.rows.filter(
+    (row) => row.route !== '/catering' || CATERING_ENABLED,
+  ),
+})).filter((section) => section.rows.length > 0);
 
 function deriveDisplayName(
   user: { name?: string; email?: string } | null | undefined,
@@ -133,7 +155,7 @@ export default function MoreScreen() {
       >
         {/* Zone A — Command bar (matches dashboard/orders/menu) */}
         <View style={styles.commandBar}>
-          <Text style={styles.commandTitle}>{t('more.account')}</Text>
+          <Text style={styles.commandTitle}>{t('more.title')}</Text>
         </View>
 
         {/* Identity block — white group card on the bone canvas (spec §1) */}
@@ -155,19 +177,26 @@ export default function MoreScreen() {
           </View>
         </View>
 
-        {/* Nav rows — one white group card, inset hairline separators
-            between rows (last row has none). spec §1 / §9. */}
-        <View style={styles.card}>
-          <View style={styles.cardInner}>
-            {NAV_ROWS.map((row, index) => (
-              <NavRowItem
-                key={row.route}
-                row={row}
-                isLast={index === NAV_ROWS.length - 1}
-              />
-            ))}
+        {/* Grouped nav — one ALL-CAPS header + white group card per section,
+            with inset hairline separators between rows (spec §1 / §9). */}
+        {NAV_SECTIONS.map((section) => (
+          <View key={section.titleKey}>
+            <Text style={styles.sectionLabel}>
+              {t(`more.sections.${section.titleKey}`).toUpperCase()}
+            </Text>
+            <View style={styles.card}>
+              <View style={styles.cardInner}>
+                {section.rows.map((row, index) => (
+                  <NavRowItem
+                    key={row.route}
+                    row={row}
+                    isLast={index === section.rows.length - 1}
+                  />
+                ))}
+              </View>
+            </View>
           </View>
-        </View>
+        ))}
 
         {/* Log out — its own group card so it doesn't read as an orphaned
             text link. Differentiated as an action (not navigation) by
@@ -281,6 +310,19 @@ const styles = StyleSheet.create({
     marginLeft: SEPARATOR_INSET,
   },
 
+  // Section label — ALL-CAPS caption-spaced group header. paddingTop supplies
+  // the inter-section rhythm, so group cards carry no bottom margin. Matches
+  // the section headers in Settings.
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.caption.size,
+    letterSpacing: 1.4,
+    color: theme.colors.ink.muted,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[6],
+    paddingBottom: theme.spacing[2],
+  },
+
   // Zone A — Command bar
   commandBar: {
     paddingHorizontal: theme.spacing[4],
@@ -295,9 +337,10 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.DEFAULT,
   },
 
-  // Identity card
+  // Identity card — sits above the first section label, which supplies the
+  // gap below it (hence no bottom margin here).
   identityCard: {
-    marginBottom: theme.spacing[6],
+    marginBottom: 0,
   },
   identityRow: {
     flexDirection: 'row',
@@ -363,8 +406,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Logout — separate group card below the nav card so the section reads
-  // as a distinct action surface, not a tail of the nav.
+  // Logout — separate group card below the nav sections so it reads as a
+  // distinct action surface, not a tail of the nav.
   logoutCard: {
     marginTop: theme.spacing[6],
   },

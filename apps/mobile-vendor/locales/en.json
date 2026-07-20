@@ -370,8 +370,6 @@
   },
   "more": {
     "title": "More",
-    "account": "Account",
-    "premium": "Premium",
     "profile": "Profile",
     "mealPlans": "Meal plans",
     "capacity": "Capacity & cutoffs",
@@ -385,14 +383,19 @@
     "documents": "Documents",
     "notifications": "Notifications",
     "support": "Help & support",
-    "help": "Help & support",
     "legalPrivacy": "Privacy Policy",
     "legalTerms": "Terms of Service",
     "legalAgreement": "Chef & Vendor Agreement",
     "legalEula": "End User Licence",
-    "signOut": "Sign out",
     "logOut": "Log out",
-    "cancellations": "Cancellations"
+    "cancellations": "Cancellations",
+    "sections": {
+      "kitchen": "Kitchen",
+      "money": "Money",
+      "requests": "Requests",
+      "account": "Account"
+    },
+    "legal": "Legal"
   },
   "language": {
     "title": "Language",
