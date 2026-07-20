@@ -224,6 +224,32 @@ function SectionLabel({ children }: SectionLabelProps) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
+interface ChipProps {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  /** Fill the row evenly with its siblings (the offset row). */
+  grow?: boolean;
+}
+
+/**
+ * Single-select chip for the propose-a-time control (#715). Kept local next to
+ * SectionLabel/TotalRow — same convention as the rest of this screen's small
+ * pieces. 44px min height so it clears the vendor touch-target floor.
+ */
+function Chip({ label, selected, onPress, grow }: ChipProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      style={[styles.chip, grow && styles.chipGrow, selected && styles.chipSelected]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 interface TotalRowProps {
   label: string;
   value: number;
@@ -1290,29 +1316,31 @@ export default function OrderDetailScreen() {
                 <Text style={styles.proposeHint}>
                   Accept confirms the requested time. Kitchen busy? Propose a later one — the customer is notified.
                 </Text>
+
+                {/* Split by meaning rather than wrapping five chips raggedly:
+                    "As asked" confirms what the customer requested, the offsets
+                    propose a later slot. Five equal chips never fit one row, so
+                    flexWrap left a lone orphan on row two. */}
+                <Chip
+                  label="As asked"
+                  selected={proposeOffsetMin === null}
+                  onPress={() => setProposeOffsetMin(null)}
+                />
                 <View style={styles.proposeRow}>
                   {([
-                    [null, 'As asked'],
                     [15, '+15m'],
                     [30, '+30m'],
                     [45, '+45m'],
                     [60, '+1h'],
-                  ] as [number | null, string][]).map(([off, label]) => {
-                    const sel = proposeOffsetMin === off;
-                    return (
-                      <Pressable
-                        key={label}
-                        onPress={() => setProposeOffsetMin(off)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: sel }}
-                        style={[styles.proposeChip, sel && styles.proposeChipSel]}
-                      >
-                        <Text style={[styles.proposeChipText, sel && styles.proposeChipTextSel]}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  ] as [number, string][]).map(([off, label]) => (
+                    <Chip
+                      key={label}
+                      label={label}
+                      selected={proposeOffsetMin === off}
+                      onPress={() => setProposeOffsetMin(off)}
+                      grow
+                    />
+                  ))}
                 </View>
               </View>
             </View>
@@ -1344,16 +1372,22 @@ export default function OrderDetailScreen() {
             <SectionLabel>DELIVERY FEE</SectionLabel>
             <View style={styles.card}>
               <View style={styles.deliveryFeeRow}>
-                <Text style={styles.timingLabel}>You'll charge (₹)</Text>
-                <TextInput
-                  value={deliveryFeeInput}
-                  onChangeText={setDeliveryFeeInput}
-                  keyboardType="decimal-pad"
-                  placeholder={`${order.pricing.deliveryFee.toFixed(0)} (as charged)`}
-                  placeholderTextColor={theme.colors.ink.muted}
-                  style={styles.deliveryFeeInput}
-                  accessibilityLabel="Delivery fee you'll charge"
-                />
+                <Text style={styles.timingLabel}>You'll charge</Text>
+                {/* Bordered field with a ₹ prefix. The bare right-aligned input
+                    read as static text, so the chef had no cue it was editable
+                    — the one control in this block that must invite a tap. */}
+                <View style={styles.deliveryFeeField}>
+                  <Text style={styles.deliveryFeePrefix}>₹</Text>
+                  <TextInput
+                    value={deliveryFeeInput}
+                    onChangeText={setDeliveryFeeInput}
+                    keyboardType="decimal-pad"
+                    placeholder={order.pricing.deliveryFee.toFixed(0)}
+                    placeholderTextColor={theme.colors.ink.muted}
+                    style={styles.deliveryFeeInput}
+                    accessibilityLabel="Delivery fee you'll charge"
+                  />
+                </View>
               </View>
             </View>
             <Text style={styles.deliveryHint}>
@@ -1851,13 +1885,33 @@ const styles = StyleSheet.create({
     minHeight: 44,
     gap: theme.spacing[3],
   },
+  // Bordered container so the field reads as editable; matches the chip radius
+  // and hairline so the two control blocks look like one system.
+  deliveryFeeField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.mist.DEFAULT,
+    backgroundColor: theme.colors.bone,
+  },
+  deliveryFeePrefix: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: theme.typography.size.body.size,
+    color: theme.colors.ink.soft,
+  },
   deliveryFeeInput: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.body.size,
     color: theme.colors.ink.DEFAULT,
     textAlign: 'right',
-    minWidth: 120,
+    minWidth: 84,
     paddingVertical: 6,
+    // Tabular figures — this sits directly above the pricing rows.
+    fontVariant: ['tabular-nums'],
   },
   // Explanatory copy that sits BELOW a card — aligned to the card gutter.
   deliveryHint: {
@@ -1875,9 +1929,11 @@ const styles = StyleSheet.create({
   // so they align with the inset row instead of running to the card edge.
   proposeBlock: {
     paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
+    // More room above than the old spacing[3] so the control group reads as its
+    // own sub-section under the "Customer asked" summary, not a continuation.
+    paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[4],
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
   },
   proposeTitle: {
     fontFamily: 'Inter-SemiBold',
@@ -1890,32 +1946,38 @@ const styles = StyleSheet.create({
     color: theme.colors.ink.soft,
     lineHeight: 16,
   },
+  // The four offset chips share one row and divide it evenly (chipGrow), so
+  // there is no wrapping and no ragged trailing chip.
   proposeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: theme.spacing[2],
-    marginTop: theme.spacing[1],
   },
-  proposeChip: {
-    minWidth: 60,
+  chip: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    // 44px floor — the vendor touch-target minimum.
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.mist.DEFAULT,
     backgroundColor: theme.colors.bone,
     alignItems: 'center',
   },
-  proposeChipSel: {
+  chipGrow: {
+    flex: 1,
+  },
+  // Selected reads as filled, not just tinted — a 1px border swap was too quiet
+  // to scan at a glance in a kitchen.
+  chipSelected: {
     borderColor: theme.colors.brand[500],
     backgroundColor: theme.colors.brand[100],
   },
-  proposeChipText: {
+  chipText: {
     fontFamily: 'Inter-SemiBold',
     fontSize: theme.typography.size.bodySm.size,
     color: theme.colors.ink.DEFAULT,
   },
-  proposeChipTextSel: {
+  chipTextSelected: {
     color: theme.colors.brand[500],
   },
 
