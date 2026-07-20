@@ -23,20 +23,32 @@ interface NotificationWSMessage {
 }
 
 /**
- * Subscribes to the user's real-time notification stream and flips the given
- * order's cached status the moment the chef accepts / advances a stage — so the
- * customer sees "Confirmed" / "Preparing" / "Ready" instantly instead of waiting
- * for the poll. The `useOrder` poll (5s while active) remains the fallback if the
- * socket can't connect or drops.
+ * Subscribes to the user's real-time notification stream and flips cached order
+ * status the moment the chef accepts / advances a stage — so the customer sees
+ * "Confirmed" / "Preparing" / "Ready" instantly instead of waiting for the poll.
+ * The polls (`useOrder` on the detail screen, `useActiveOrder` on Home) remain
+ * the fallback if the socket can't connect or drops.
+ *
+ * Pass an `orderId` to track one order (detail screen): its `['order', id]`
+ * cache is flipped optimistically, then reconciled.
+ *
+ * Omit it to track *every* active order (Home): the stream is user-scoped, so
+ * one socket covers the whole ActiveOrderStack — any order notification just
+ * invalidates `['orders']`, which is what useActiveOrder reads. Refetching is
+ * enough here because the card renders from that list, and it avoids
+ * hand-patching a paginated cache shape.
  */
-export function useOrderStatusWS(orderId: string, enabled: boolean = true): void {
+export function useOrderStatusWS(
+  orderId?: string | null,
+  enabled: boolean = true,
+): void {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const failureCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
-    if (!orderId || !enabled) return;
+    if (!enabled) return;
     const token = useAuthStore.getState().accessToken;
     if (!token) return;
 
@@ -63,16 +75,23 @@ export function useOrderStatusWS(orderId: string, enabled: boolean = true): void
         const msg = JSON.parse(event.data as string) as NotificationWSMessage;
         if (msg.type !== 'new_notification' || !msg.data) return;
         const payload = JSON.parse(msg.data) as { order_id?: string; status?: Order['status'] };
-        if (payload.order_id !== orderId) return;
+        // Non-order notifications carry no order_id — ignore them in both modes.
+        if (!payload.order_id) return;
+        // Single-order mode: ignore other orders. Any-order mode (no orderId)
+        // takes every one, which is how the Home stack stays live.
+        if (orderId && payload.order_id !== orderId) return;
 
         // Optimistic flip so the chip/tracker move immediately, then refetch the
-        // full order (prices, times) to reconcile.
-        if (payload.status) {
+        // full order (prices, times) to reconcile. Only meaningful when we know
+        // which order's detail cache to patch.
+        if (orderId && payload.status) {
           queryClient.setQueryData<{ data: Order }>(['order', orderId], (prev) =>
             prev ? { data: { ...prev.data, status: payload.status as Order['status'] } } : prev,
           );
         }
-        void queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+        // Always refresh the notified order's own cache — on Home this keeps a
+        // detail screen the customer opens next from showing a stale status.
+        void queryClient.invalidateQueries({ queryKey: ['order', payload.order_id] });
         void queryClient.invalidateQueries({ queryKey: ['orders'] });
       } catch {
         // Ignore malformed / non-order messages (e.g. the initial unread_count).

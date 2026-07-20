@@ -1503,14 +1503,21 @@ func (s *NotificationService) saveNotification(notification *models.Notification
 
 // getOrderStatusMessage returns a customer-friendly status message.
 func getOrderStatusMessage(status string) string {
+	// Keys MUST be models.OrderStatus values. "confirmed" and "on_the_way" used
+	// to sit here and matched nothing — the real statuses are "accepted" and
+	// "delivering" — so those two stages, plus "rejected" which was missing
+	// entirely, fell through to the raw-status fallback and pushed
+	// "Your order status has been updated to: accepted" at the customer (#716).
 	messages := map[string]string{
-		"confirmed":  "Your order has been confirmed by the chef!",
-		"preparing":  "Your order is being prepared",
-		"ready":      "Your order is ready for pickup/delivery",
-		"picked_up":  "Your order has been picked up by the delivery partner",
-		"on_the_way": "Your order is on its way!",
-		"delivered":  "Your order has been delivered. Enjoy!",
-		"cancelled":  "Your order has been cancelled",
+		string(models.OrderStatusAccepted):   "Your order has been confirmed by the chef!",
+		string(models.OrderStatusPreparing):  "Your order is being prepared",
+		string(models.OrderStatusReady):      "Your order is ready for pickup/delivery",
+		string(models.OrderStatusPickedUp):   "Your order has been picked up by the delivery partner",
+		string(models.OrderStatusDelivering): "Your order is on its way!",
+		string(models.OrderStatusDelivered):  "Your order has been delivered. Enjoy!",
+		string(models.OrderStatusCancelled):  "Your order has been cancelled",
+		string(models.OrderStatusRejected):   "The chef couldn't take this order. Any payment is being refunded.",
+		string(models.OrderStatusRefunded):   "Your order has been refunded",
 	}
 	if msg, ok := messages[status]; ok {
 		return msg

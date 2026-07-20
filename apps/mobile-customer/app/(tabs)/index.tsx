@@ -45,6 +45,7 @@ import { FilterSheet } from '../../components/home/FilterSheet';
 import { CATERING_ENABLED, SOCIAL_ENABLED } from '../../lib/features';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useActiveOrder } from '../../hooks/useActiveOrder';
+import { useOrderStatusWS } from '../../hooks/useOrderStatusWS';
 import { useChefs } from '../../hooks/useChefs';
 import type { ChefFilters } from '../../hooks/useChefs';
 import { useCustomerCoords, useActiveAddress } from '../../hooks/useCustomerCoords';
@@ -108,6 +109,12 @@ export default function HomeScreen() {
   // Stack up to 3 active-order cards in the floating anchor; more than that is
   // rare and would bury the feed. Each card is ~106px tall (incl. its margin).
   const visibleActiveOrders = activeOrders.slice(0, 3);
+
+  // Live stage changes on the active-order card (#716). The notification stream
+  // is user-scoped, so one socket covers every card in the stack — no orderId.
+  // Only while an order is actually in flight, so we don't hold a socket open
+  // on an idle Home screen; useActiveOrder's poll stays as the fallback.
+  useOrderStatusWS(undefined, activeOrders.length > 0);
 
   // Ref for opening the FilterSheet imperatively on Filters pill tap.
   const filterSheetRef = useRef<BottomSheetMethods>(null);
