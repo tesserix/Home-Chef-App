@@ -370,7 +370,6 @@
   },
   "more": {
     "title": "More",
-    "account": "Account",
     "profile": "Profile",
     "mealPlans": "Meal plans",
     "capacity": "Capacity & cutoffs",
@@ -384,12 +383,10 @@
     "documents": "Documents",
     "notifications": "Notifications",
     "support": "Help & support",
-    "help": "Help & support",
     "legalPrivacy": "Privacy Policy",
     "legalTerms": "Terms of Service",
     "legalAgreement": "Chef & Vendor Agreement",
     "legalEula": "End User Licence",
-    "signOut": "Sign out",
     "logOut": "Log out",
     "cancellations": "Cancellations",
     "sections": {

@@ -10,14 +10,15 @@ import {
   ChevronRight,
   DollarSign,
   FileText,
-  Inbox,
   Languages,
   LifeBuoy,
   LogOut,
   Scale,
   Settings,
+  ShieldCheck,
   Star,
   User,
+  XCircle,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { theme } from '@homechef/mobile-shared/theme';
@@ -63,8 +64,8 @@ const ALL_SECTIONS: NavSection[] = [
   {
     titleKey: 'requests',
     rows: [
-      { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: Inbox },
-      { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: Inbox },
+      { labelKey: 'cancellations', caption: 'Confirm customer cancellations', route: '/cancel-requests', Icon: XCircle },
+      { labelKey: 'adminRequests', caption: 'Verification and info requests', route: '/admin-requests', Icon: ShieldCheck },
       { labelKey: 'documents', caption: 'Renew or re-upload expired docs', route: '/documents/renew', Icon: FileText },
     ],
   },
