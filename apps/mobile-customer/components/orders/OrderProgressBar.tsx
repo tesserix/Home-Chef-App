@@ -18,8 +18,13 @@ export function OrderProgressBar({
   fulfillmentType,
 }: OrderProgressBarProps) {
   const STEPS = getStepLabels(fulfillmentType);
-  // Clamp -1 (pending/cancelled) to 0 so the first segment reads as active.
-  const activeIndex = Math.max(0, getStepIndex(status, fulfillmentType));
+  // getStepIndex returns -1 for a `pending` order (placed, but the chef hasn't
+  // confirmed — and it may not even be paid yet). Do NOT clamp that up to 0: that
+  // lit the first "Confirmed" step for an unconfirmed order, contradicting the
+  // "Payment pending / awaiting confirmation" state shown elsewhere on the screen
+  // and in the orders list. A pending order shows an un-started bar; step 0 fills
+  // only once the chef accepts (status 'accepted').
+  const activeIndex = getStepIndex(status, fulfillmentType);
 
   return (
     <View style={styles.container}>
