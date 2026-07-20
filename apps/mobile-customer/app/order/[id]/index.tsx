@@ -31,6 +31,7 @@ import { useOrderTracking } from '../../../hooks/useOrderTracking';
 import { useOrderTrackingWS } from '../../../hooks/useOrderTrackingWS';
 import { useOrderStatusWS } from '../../../hooks/useOrderStatusWS';
 import { getChipLabel, getStatusLine } from '../../../lib/orderSteps';
+import { MESSAGING_ENABLED } from '../../../lib/features';
 import type { Order } from '../../../types/customer';
 
 const ACTIVE_STATUSES: Order['status'][] = [
@@ -703,26 +704,35 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* Report an issue (#37) — on a paid, non-cancelled order (active or
-            delivered). Mirrors the API guard. The server decides the
-            instant/assisted refund. */}
-        {order.paymentStatus === 'completed' && order.status !== 'cancelled' && (
+        {/* Message support about this order (#53) — admin-mediated chat. Hidden
+            until MongoDB-backed messaging is provisioned in prod (the endpoints
+            503 otherwise). Flip MESSAGING_ENABLED once infra is ready. */}
+        {MESSAGING_ENABLED &&
+          order.paymentStatus === 'completed' &&
+          order.status !== 'cancelled' && (
+            <View style={styles.reportWrapper}>
+              <Pressable
+                onPress={() => router.push(`/order/${order.id}/messages` as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Message support about this order"
+                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.secondaryButtonText}>Message support about this order</Text>
+              </Pressable>
+            </View>
+          )}
+
+        {/* Report an issue (#37) — only once the order is delivered. The server
+            decides the instant/assisted refund. */}
+        {order.paymentStatus === 'completed' && order.status === 'delivered' && (
           <View style={styles.reportWrapper}>
-            {/* Message support about this order (#53) — admin-mediated chat. */}
-            <Pressable
-              onPress={() => router.push(`/order/${order.id}/messages` as never)}
-              accessibilityRole="button"
-              accessibilityLabel="Message support about this order"
-            >
-              <Text style={styles.reportLink}>Message support about this order</Text>
-            </Pressable>
             <Pressable
               onPress={() => router.push(`/order/${order.id}/report-issue` as never)}
               accessibilityRole="button"
               accessibilityLabel="Report an issue with this order"
-              style={{ marginTop: 10 }}
+              style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.6 }]}
             >
-              <Text style={styles.reportLink}>Report an issue with this order</Text>
+              <Text style={styles.secondaryButtonText}>Report an issue with this order</Text>
             </Pressable>
           </View>
         )}
@@ -865,13 +875,36 @@ export default function OrderDetailScreen() {
               <Text style={styles.priceValue}>−₹{discount.toFixed(2)}</Text>
             </View>
           ) : null}
-          {/* Total row — hairline rule above, heavier weight */}
+          {/* Total row — hairline rule above, heavier weight. Total stays the
+              amount charged; refund + retained lines below reconcile it. */}
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>
               ₹{order.totalAmount.toFixed(2)}
             </Text>
           </View>
+
+          {/* Refund transparency (#refund) — on a cancelled/refunded order, show
+              what came back and what the policy retained so the math reconciles
+              with the original Total (which is what was charged). */}
+          {order.refundAmount && order.refundAmount > 0 ? (
+            <>
+              <View style={[styles.priceRow, { marginTop: 8 }]}>
+                <Text style={styles.priceLabel}>Refunded</Text>
+                <Text style={[styles.priceValue, styles.refundValue]}>
+                  −₹{order.refundAmount.toFixed(2)}
+                </Text>
+              </View>
+              {order.totalAmount - order.refundAmount > 0.5 ? (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Retained (fees + cancellation charge)</Text>
+                  <Text style={styles.priceValue}>
+                    ₹{(order.totalAmount - order.refundAmount).toFixed(2)}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
           {/* View receipt (#receipt) — for any order the customer actually paid
               for (completed or refunded), so a paid-then-cancelled order can be
@@ -936,8 +969,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 14,
+    marginTop: 16,
     minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  // Quiet, full-width secondary action (View receipt, Report an issue) — a
+  // bordered pill reads clearly tappable without competing with the primary CTA.
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'stretch',
+    minHeight: 48,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: customerColors.hairline,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: customerColors.charcoal.DEFAULT,
+  },
+  refundValue: {
+    color: customerColors.success.DEFAULT,
   },
   receiptLinkText: {
     fontFamily: 'Inter-SemiBold',

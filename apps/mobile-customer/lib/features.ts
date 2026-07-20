@@ -31,3 +31,10 @@ export const REFERRAL_ENABLED: boolean = false;
 
 /** Social feed / community (stub — no real data yet, v2-deferred). */
 export const SOCIAL_ENABLED: boolean = false;
+
+/**
+ * In-app messaging / "Message support about this order" (#53). Backed by
+ * MongoDB, which is NOT provisioned in prod yet, so the endpoints 503. Hidden
+ * until MONGODB_URI is set on the backend — flip to true then.
+ */
+export const MESSAGING_ENABLED: boolean = false;

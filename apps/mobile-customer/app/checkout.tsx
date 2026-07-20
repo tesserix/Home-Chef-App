@@ -4,7 +4,7 @@
 // which opens the NATIVE Razorpay checkout sheet (react-native-razorpay) and
 // routes to /payment/result. No WebView, no visible web page load.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -191,6 +191,18 @@ export default function CheckoutScreen() {
   // 6am order). Same list for delivery and pickup.
   const { data: fulfillmentTimesData } = useFulfillmentTimes(cartStore.chefId ?? undefined);
   const fulfillmentTimes = fulfillmentTimesData?.times ?? [];
+  // Group suggested times by "day · meal" so the picker reads as a few labelled
+  // clusters (Today · Lunch, Today · Dinner …) instead of a wall of chips.
+  const fulfillmentTimeGroups = useMemo(() => {
+    const groups: { key: string; times: typeof fulfillmentTimes }[] = [];
+    for (const t of fulfillmentTimesData?.times ?? []) {
+      const key = `${t.day} · ${t.meal}`;
+      const existing = groups.find((g) => g.key === key);
+      if (existing) existing.times.push(t);
+      else groups.push({ key, times: [t] });
+    }
+    return groups;
+  }, [fulfillmentTimesData]);
 
   // Dietary & allergen conflict warning (#41) — checks the cart's items against
   // the customer's saved profile server-side. Non-blocking.
@@ -588,7 +600,7 @@ export default function CheckoutScreen() {
 
         {/* ── Delivery Address ── */}
         {fulfillment !== 'pickup' ? (
-        <View className="mx-4 mt-4 bg-canvas rounded-2xl overflow-hidden border border-hairline">
+        <View className="bg-canvas border-t border-hairline">
           <View className="flex-row items-center px-4 pt-4 pb-2 gap-2">
             <MapPin size={18} color="#FF385C" />
             <Text className="text-base font-semibold text-charcoal">Delivery Address</Text>
@@ -842,7 +854,7 @@ export default function CheckoutScreen() {
         ) : null}
 
         {/* ── Order Summary ── */}
-        <View className="mx-4 mt-4 bg-canvas rounded-2xl overflow-hidden border border-hairline">
+        <View className="bg-canvas border-t border-hairline">
           <Text className="text-base font-semibold text-charcoal px-4 pt-4 pb-2">Order Summary</Text>
           <FlatList
             data={cartStore.items}
@@ -942,66 +954,68 @@ export default function CheckoutScreen() {
             !deliveryOutOfRange &&
             quote?.offersSelfDelivery &&
             quote?.selfDeliveryBreakdown ? (
-              <View className="rounded-lg border border-hairline bg-canvas px-3 py-2 gap-1">
+              <View className="rounded-xl border border-hairline bg-surface-soft px-3.5 py-3 gap-2">
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs font-semibold text-charcoal">
-                    Delivery fee breakdown · up to
+                    Delivery fee breakdown
                   </Text>
                   {quote.selfDeliveryBreakdown.fee > 0 ? (
                     <Text
                       className="text-xs font-semibold text-charcoal"
                       style={{ fontVariant: ['tabular-nums'] }}
                     >
-                      ₹{quote.selfDeliveryBreakdown.fee.toFixed(2)}
+                      up to ₹{quote.selfDeliveryBreakdown.fee.toFixed(2)}
                     </Text>
                   ) : (
                     <Text className="text-xs font-semibold text-success">Free</Text>
                   )}
                 </View>
                 {/* Itemised so the number is honest, not a black box. */}
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-[11px] text-charcoal-soft">Base fee</Text>
-                  <Text
-                    className="text-[11px] text-charcoal-soft"
-                    style={{ fontVariant: ['tabular-nums'] }}
-                  >
-                    ₹{quote.selfDeliveryBreakdown.baseFee.toFixed(2)}
-                  </Text>
-                </View>
-                {quote.selfDeliveryBreakdown.distanceKnown &&
-                quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
+                <View className="gap-1.5">
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-[11px] text-charcoal-soft">
-                      Distance ·{' '}
-                      {quote.selfDeliveryBreakdown.billableKm.toFixed(1)} km beyond{' '}
-                      {quote.selfDeliveryBreakdown.freeRadiusKm.toFixed(0)} km free
-                    </Text>
+                    <Text className="text-xs text-charcoal-soft">Base fee</Text>
                     <Text
-                      className="text-[11px] text-charcoal-soft"
+                      className="text-xs text-charcoal-soft"
                       style={{ fontVariant: ['tabular-nums'] }}
                     >
-                      ₹{quote.selfDeliveryBreakdown.distanceComponent.toFixed(2)}
+                      ₹{quote.selfDeliveryBreakdown.baseFee.toFixed(2)}
                     </Text>
                   </View>
-                ) : null}
-                {quote.selfDeliveryBreakdown.surgeMultiplier > 1 &&
-                quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
-                  <Text className="text-[11px] text-charcoal-soft">
-                    Includes ×{quote.selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
-                    (fuel/peak conditions)
-                  </Text>
-                ) : null}
-                {quote.selfDeliveryBreakdown.withinFreeZone ? (
-                  <Text className="text-[11px] text-success">
-                    Within the chef's free-delivery radius
-                  </Text>
-                ) : null}
-                {quote.selfDeliveryBreakdown.capped ? (
-                  <Text className="text-[11px] text-charcoal-soft">
-                    Capped at the chef's ₹{quote.selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
-                  </Text>
-                ) : null}
-                <Text className="text-[11px] text-charcoal-soft">
+                  {quote.selfDeliveryBreakdown.distanceKnown &&
+                  quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
+                    <View className="flex-row items-start justify-between gap-3">
+                      <Text className="text-xs text-charcoal-soft flex-1 leading-4">
+                        Distance ·{' '}
+                        {quote.selfDeliveryBreakdown.billableKm.toFixed(1)} km beyond{' '}
+                        {quote.selfDeliveryBreakdown.freeRadiusKm.toFixed(0)} km free
+                      </Text>
+                      <Text
+                        className="text-xs text-charcoal-soft"
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        ₹{quote.selfDeliveryBreakdown.distanceComponent.toFixed(2)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {quote.selfDeliveryBreakdown.surgeMultiplier > 1 &&
+                  quote.selfDeliveryBreakdown.distanceComponent > 0 ? (
+                    <Text className="text-xs text-charcoal-soft leading-4">
+                      Includes ×{quote.selfDeliveryBreakdown.surgeMultiplier.toFixed(2)} surge
+                      (fuel/peak conditions)
+                    </Text>
+                  ) : null}
+                  {quote.selfDeliveryBreakdown.withinFreeZone ? (
+                    <Text className="text-xs text-success leading-4">
+                      Within the chef's free-delivery radius
+                    </Text>
+                  ) : null}
+                  {quote.selfDeliveryBreakdown.capped ? (
+                    <Text className="text-xs text-charcoal-soft leading-4">
+                      Capped at the chef's ₹{quote.selfDeliveryBreakdown.maxFee.toFixed(0)} maximum
+                    </Text>
+                  ) : null}
+                </View>
+                <Text className="text-xs text-charcoal-soft leading-4 pt-2 border-t border-hairline">
                   Estimate — the chef sets the final fee at accept and can only lower it.
                 </Text>
               </View>
@@ -1122,7 +1136,7 @@ export default function CheckoutScreen() {
             the suggested-time handshake (#709): the customer proposes a time and
             the chef confirms or proposes a different one at accept. */}
         {useSlotPicker ? (
-          <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+          <View className="bg-canvas border-t border-hairline p-4">
             <Text className="text-sm font-medium text-charcoal-soft mb-3">Delivery time</Text>
             <View className="flex-row flex-wrap gap-2">
               {/* ASAP (default) */}
@@ -1172,7 +1186,7 @@ export default function CheckoutScreen() {
             </View>
           </View>
         ) : (
-          <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+          <View className="bg-canvas border-t border-hairline p-4">
             <Text className="text-sm font-medium text-charcoal mb-0.5">
               {fulfillment === 'pickup' ? 'Preferred pickup time' : 'Preferred delivery time'}
             </Text>
@@ -1181,8 +1195,9 @@ export default function CheckoutScreen() {
                 ? "When will you come to collect? It's a home kitchen — the chef confirms once they accept."
                 : "Suggest when you'd like it. It's a home kitchen, not a restaurant — the chef confirms or proposes a time when they accept."}
             </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {/* As soon as ready (default) — let the chef decide */}
+            <View className="gap-3">
+              {/* As soon as ready (default) — recommended, full-width so it reads
+                  as the primary choice above the specific-time clusters. */}
               <Pressable
                 onPress={() => setRequestedTime(null)}
                 accessibilityRole="radio"
@@ -1190,45 +1205,60 @@ export default function CheckoutScreen() {
                 accessibilityLabel="As soon as ready"
               >
                 <View
-                  className={`px-3 py-2 rounded-xl border ${
+                  className={`flex-row items-center justify-between px-3.5 py-3 rounded-xl border ${
                     requestedTime === null ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
                   }`}
                 >
-                  <Text className={`text-sm font-medium ${requestedTime === null ? 'text-coral' : 'text-charcoal'}`}>
-                    As soon as ready
-                  </Text>
-                  <Text className="text-xs text-charcoal-soft">Chef decides</Text>
+                  <View className="flex-1">
+                    <Text className={`text-sm font-semibold ${requestedTime === null ? 'text-coral' : 'text-charcoal'}`}>
+                      As soon as ready
+                    </Text>
+                    <Text className="text-xs text-charcoal-soft mt-0.5">Chef decides when to start</Text>
+                  </View>
+                  <View
+                    className={`h-5 w-5 items-center justify-center rounded-full border ${
+                      requestedTime === null ? 'border-coral bg-coral' : 'border-hairline bg-canvas'
+                    }`}
+                  >
+                    {requestedTime === null ? <Check size={13} color="#FFFFFF" /> : null}
+                  </View>
                 </View>
               </Pressable>
 
-              {fulfillmentTimes.map((t) => {
-                const sel = requestedTime?.toISOString() === new Date(t.at).toISOString();
-                return (
-                  <Pressable
-                    key={t.at}
-                    onPress={() => setRequestedTime(new Date(t.at))}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: sel }}
-                    accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
-                  >
-                    <View
-                      className={`px-3 py-2 rounded-xl border ${
-                        sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}
-                        style={{ fontVariant: ['tabular-nums'] }}
-                      >
-                        {t.label}
-                      </Text>
-                      <Text className="text-xs text-charcoal-soft">
-                        {t.day} · {t.meal}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {/* Specific times, grouped into scannable day·meal clusters. Chips
+                  show just the clock label — the cluster header carries day+meal. */}
+              {fulfillmentTimeGroups.map((group) => (
+                <View key={group.key} className="gap-2">
+                  <Text className="text-xs font-semibold text-charcoal-soft">{group.key}</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {group.times.map((t) => {
+                      const sel = requestedTime?.toISOString() === new Date(t.at).toISOString();
+                      return (
+                        <Pressable
+                          key={t.at}
+                          onPress={() => setRequestedTime(new Date(t.at))}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: sel }}
+                          accessibilityLabel={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} around ${t.label}, ${t.day} ${t.meal}`}
+                        >
+                          <View
+                            className={`min-w-[72px] items-center px-3 py-2 rounded-xl border ${
+                              sel ? 'border-coral bg-coral-tint' : 'border-hairline bg-surface-soft'
+                            }`}
+                          >
+                            <Text
+                              className={`text-sm font-medium ${sel ? 'text-coral' : 'text-charcoal'}`}
+                              style={{ fontVariant: ['tabular-nums'] }}
+                            >
+                              {t.label}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -1236,7 +1266,7 @@ export default function CheckoutScreen() {
         {/* ── Payment & delivery (concise; detail behind policy links) ── */}
         {/* CW-01d / RBI PA MD §8: keeps the required PA + refund-window disclosure
             as one line; full cancellation rules live behind the Refund Policy link. */}
-        <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4 gap-2.5">
+        <View className="bg-canvas border-t border-hairline p-4 gap-2.5">
           <View className="flex-row items-start gap-2">
             <Clock size={16} color="#FF385C" style={{ marginTop: 1 }} />
             <Text className="text-sm text-charcoal-soft flex-1 leading-5">
@@ -1291,7 +1321,7 @@ export default function CheckoutScreen() {
         </View>
 
         {/* ── Note (optional) ── */}
-        <View className="mx-4 mt-4 bg-canvas rounded-2xl border border-hairline p-4">
+        <View className="bg-canvas border-t border-hairline p-4">
           <Text className="text-sm font-medium text-charcoal-soft mb-2">Note to chef (optional)</Text>
           <TextInput
             value={note}
